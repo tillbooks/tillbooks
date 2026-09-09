@@ -64,7 +64,7 @@
     "build:mcpb": "node scripts/build-mcpb.mjs"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.3.0",
     "jsqr": "^1.4.0",
     "typescript": "^5.7.2"
