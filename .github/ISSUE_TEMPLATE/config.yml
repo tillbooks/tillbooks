@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/tillbooks/tillbooks/security/advisories/new
+    about: Report it privately, never in a public issue (see SECURITY.md). Or email security@tillbooks.ch.
+  - name: Ask a question or share an idea
+    url: https://github.com/tillbooks/tillbooks/discussions
+    about: Use Discussions for questions and ideas.
+  - name: Read the documentation
+    url: https://docs.tillbooks.ch
+    about: The product guides and the capability reference may already answer it.

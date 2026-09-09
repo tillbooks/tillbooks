@@ -1,0 +1,77 @@
+/* J06, Inventory -> Bestandesbewertung & Abstimmung. The header, tab strip, tables, drawer and button
+   set now come from the shared primitives (SurfaceHeader, Tabs, DataTable, DetailDrawer, Modal), so
+   what remains here is genuinely surface-specific: the pane/toolbar layout, the status badges, and the
+   quiet total line. One accent, no new colour token (design-canon); every badge is a bordered label
+   rather than a colour so it survives a monochrome render. Drift is the one status that also carries
+   weight, because an unreconciled balance sheet is the thing this surface exists to catch. */
+
+.valrun {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.valrun-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.valrun-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.valrun-draft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.valrun-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  font-size: 0.85em;
+}
+
+/* Posted and balanced are positive status, so they wear the success token, never the accent. Each
+   badge carries its word label too, so the state never rides on colour alone (WCAG 2.2). */
+.valrun-badge--posted,
+.valrun-badge--balanced {
+  border-color: var(--t-success);
+  color: var(--t-success);
+}
+
+.valrun-badge--drift {
+  border-color: var(--t-danger);
+  color: var(--t-danger);
+  font-weight: 600;
+}
+
+.valrun-badge--reversed,
+.valrun-badge--unposted {
+  color: var(--t-text-dim);
+}
+
+/* Row-level state hooks passed to DataTable's `rowClassName`; the primitive ships no state CSS. */
+.valrun-row--reversed {
+  color: var(--t-text-dim);
+}
+
+.valrun-row--drift td {
+  font-weight: 600;
+}
+
+.valrun-total {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.valrun-confirm-body {
+  margin: 0 0 var(--t-space-1);
+}

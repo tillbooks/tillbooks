@@ -1,0 +1,455 @@
+/* Dateien surface styles (E00). Tokens only, no hex, no new colours, 8-pt grid.
+   Depth is one border plus a background step, never a shadow, matching the shell (global.css).
+   The teal accent appears on the ACTIVE FOLDER and the focus ring, and nowhere else: one accent. */
+
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 1100px;
+}
+
+/* A visually hidden label that a screen reader still reads. */
+.files-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A file input is styled through its label: the input itself is offscreen rather than
+   `display: none`, so it stays focusable and the label stays keyboard-operable. Upload therefore
+   never requires drag-and-drop. */
+.files-file-label {
+  position: relative;
+  cursor: pointer;
+}
+
+.files-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  inset-inline-start: 0;
+  inset-block-start: 0;
+}
+
+.files-file-label:focus-within {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+/* Search and filter chips. */
+.files-search {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.files-input {
+  flex: 0 1 280px;
+  min-width: 180px;
+  padding: var(--t-space-1);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text);
+  font: inherit;
+}
+
+.files-input:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 1px;
+}
+
+.files-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-0-5) var(--t-space-1);
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Two columns: the tree, then the list. Collapses to one on a narrow viewport, tree first, because
+   the tree is what tells you where you are. */
+.files-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .files-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The folder tree. */
+.files-tree {
+  padding: var(--t-space-1);
+}
+
+.files-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.files-tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.files-tree-name {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  background: none;
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.files-tree-name > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-tree-name:hover {
+  background: var(--t-bg-elev);
+}
+
+.files-tree-name:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 1px;
+}
+
+/* The one accent on this surface, plus the search focus ring. */
+.files-tree-name--active {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+.files-tree-count {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-dim);
+}
+
+.files-tree-actions {
+  display: flex;
+  gap: var(--t-space-0-5);
+}
+
+.files-tree-new {
+  margin-top: var(--t-space-1);
+  width: 100%;
+}
+
+.files-tree-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--t-space-0-5);
+  background: var(--t-bg);
+  border: 1px solid var(--t-accent);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font: inherit;
+}
+
+.files-icon-btn {
+  padding: var(--t-space-0-5);
+  background: none;
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.files-icon-btn:hover:not(:disabled) {
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+}
+
+.files-icon-btn:disabled {
+  color: var(--t-text-faint);
+  cursor: not-allowed;
+}
+
+.files-icon-btn:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 1px;
+}
+
+/* The list. The table itself is the shared DataTable primitive (D118 B2); what stays here is the
+   name cell (a button that opens the drawer) and the in-cell badges the primitive does not own. */
+.files-list-wrap {
+  min-width: 0;
+}
+
+/* The first column: the name button and, beside it, the pending-delete badge. */
+.files-title-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.files-row-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--t-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.files-row-name:hover {
+  color: var(--t-accent);
+}
+
+.files-row-name:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+/* Every number column is tabular so the columns line up down the page. */
+.files-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.files-muted {
+  color: var(--t-text-dim);
+}
+
+/* Status: glyph AND text, so it survives a screen reader and a colour-blind viewer alike. */
+.files-badge,
+.files-retention-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.files-badge {
+  margin-inline-start: var(--t-space-1);
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text-dim);
+  font-size: 12px;
+}
+
+/* D34: the truncation notice above the table. Dim and quiet: it is a fact about the list, not a problem
+   with it, so it must not look like the error banner sitting a few pixels above. */
+.files-truncated {
+  margin: 0 0 var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+/* F7: the padlock that stands where the download control would be for a role without
+   `read_file_content`. Deliberately NOT styled as a disabled button: a greyed-out button invites a
+   click and reads as a temporary state, while this is a standing fact about the actor's rights. */
+.files-download-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* The drawer shell (scrim, panel, header/body/foot split, focus trap, Escape) is the shared
+   DetailDrawer primitive (D118 B2). What stays here is the E00 content laid out inside its body. */
+
+/* The scrolling body's own content column: the fields, sections and version chain, evenly spaced.
+   DetailDrawer's body owns the padding and the scroll; this owns only the rhythm between blocks. */
+.files-drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* Delete is pushed to the far edge of the DetailDrawer foot (which packs its actions to the end),
+   so the destructive control never sits directly beside the new-version action. */
+.files-delete {
+  margin-inline-end: auto;
+}
+
+.files-meta {
+  display: grid;
+  grid-template-columns: minmax(100px, auto) 1fr;
+  gap: var(--t-space-0-5) var(--t-space-2);
+  margin: 0;
+}
+
+.files-meta dt {
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.files-meta dd {
+  margin: 0;
+  min-width: 0;
+}
+
+/* The whole checksum, wrapped rather than truncated: a cut hash cannot be compared with anything. */
+.files-hash {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  color: var(--t-text-dim);
+}
+
+.files-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding-top: var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+}
+
+.files-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.files-field {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.files-label {
+  flex: 1 1 100%;
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.files-retention-state {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+}
+
+.files-provenance {
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.files-versions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.files-version {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-0-5) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.files-version:last-child {
+  border-bottom: 0;
+}
+
+.files-version-date {
+  flex: 1 1 auto;
+  color: var(--t-text-dim);
+}
+
+/* The pending-deletion panel. A status and not an alert: nothing failed, a human is being asked. */
+.files-pending {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-md);
+}
+
+.files-pending-text {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.files-pending-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* The shared linked-files panel, mounted on any entity detail view. */
+.files-linked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.files-linked-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.files-linked-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.files-linked-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-1) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.files-linked-row:last-child {
+  border-bottom: 0;
+}
+
+.files-linked-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

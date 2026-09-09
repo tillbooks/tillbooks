@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest an idea for TILL.
+title: "[feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that TILL does not support today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: >-
+        What you would like to see. TILL ships every capability on both faces (an
+        MCP verb and its REST twin), so a new write capability has to land on both.
+        Corrections to posted entries are reversing entries, never destructive
+        edits, so anything that mutates the ledger has to respect that.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you thought about.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else, links, or examples. If it is Swiss-statutory, cite the rule.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: My request keeps posted entries append-only (corrections are reversing entries)
+          required: true

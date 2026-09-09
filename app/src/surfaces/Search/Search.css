@@ -1,0 +1,399 @@
+/* G07 Suche: one accent (the active chip and the active palette row), elevated panels, no blur. */
+
+.search-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The search box and scope chips, below the shared SurfaceHeader (D118 B2). */
+.search-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.search-form {
+  display: flex;
+  gap: var(--t-space-1);
+  max-width: 40rem;
+}
+
+.search-input {
+  flex: 1;
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text);
+  font: inherit;
+}
+
+.search-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  color: var(--t-text-dim);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.search-chip--active {
+  border-color: var(--t-accent);
+  color: var(--t-accent);
+}
+
+.search-chip--clear {
+  border-style: dashed;
+}
+
+.search-saved {
+  padding: var(--t-space-2);
+}
+
+.search-saved-title {
+  margin: 0 0 var(--t-space-1);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--t-text-dim);
+}
+
+.search-saved-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.search-saved-item {
+  padding: 0.25rem 0.625rem;
+  background: none;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.search-partial {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.search-group {
+  padding: var(--t-space-2);
+}
+
+.search-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0 0 var(--t-space-1);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.search-hit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  width: 100%;
+  padding: var(--t-space-1);
+  background: none;
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.search-hit:hover {
+  background: var(--t-bg-soft);
+}
+
+.search-hit-title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.search-hit-snippet {
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+}
+
+.search-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.search-save-form {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.search-save-name {
+  padding: 0.25rem var(--t-space-1);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+/* --- The palette overlay (elevated panel, deliberately NOT glass/blur) ------------------------ */
+
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  background: var(--t-bg-code);
+}
+
+.palette {
+  width: min(560px, calc(100vw - var(--t-space-4)));
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+}
+
+.palette-input {
+  width: 100%;
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text);
+  font: inherit;
+}
+
+.palette-hint {
+  margin: var(--t-space-1) 0 0;
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.palette-list {
+  list-style: none;
+  margin: var(--t-space-1) 0 0;
+  padding: 0;
+}
+
+.palette-group {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: var(--t-space-1) 0 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: none;
+  color: var(--t-text-dim);
+}
+
+.palette-overflow {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: var(--t-text-dim);
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* G17's Begriffe overflow: an inert narrow-the-query line. Not a button, not a row, no route to
+   point at, never the default selection (design row 2.3). */
+.palette-narrow {
+  margin: 0;
+  padding: 2px 10px 4px;
+  color: var(--t-text-dim);
+  font-size: 0.75rem;
+}
+
+.palette-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+}
+
+.palette-row--active {
+  background: var(--t-bg-soft);
+  color: var(--t-accent);
+}
+
+.palette-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-row-snippet {
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+}
+
+.palette-foot {
+  margin-top: var(--t-space-1);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* --- G16 command palette additions (sections, verb rows, footer token, result region) --------- */
+.palette-count {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: 11px;
+  color: var(--t-text-faint);
+}
+.palette-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+.palette-section {
+  list-style: none;
+}
+/* C1: the "Frag den Agenten" tail lane, set off from the command sections by a hairline so the two
+   lanes of the one omnibox read as distinct without a second input. Quiet: no accent, no fill. */
+.palette-section--ask {
+  margin-top: var(--t-space-1);
+  padding-top: var(--t-space-1);
+  border-top: 1px solid var(--t-border);
+}
+.palette-section-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* A verb row: the human label, a kind hint (open/run), and, when denied, the required capability.
+   The hint tells the operator whether Enter runs the verb inline or opens its surface (US-G16.5), so
+   it carries meaning and uses --t-text-dim, not --t-text-faint (which the design law reserves for
+   text with none, and which measured 3.6:1 / 3.15:1 here, under the 4.5:1 AA floor). */
+.palette-row-kind {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--t-text-dim);
+  text-transform: lowercase;
+}
+.palette-row-denied {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--t-text-dim);
+}
+.palette-row--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* The active row's verb NAME, a persistent dim monospace token in the footer (US-G16.7). */
+.palette-verb-token {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--t-text-dim);
+}
+/* The footer legend ("Enter to act, Esc to close"). It is instructional AND is the third leg the
+   no-visible-label palette input leans on (§6), so it must be legible: --t-text-dim, not the
+   sub-AA --t-text-faint it measured at 3.6:1 / 3.15:1. */
+.palette-legend {
+  font-size: 11px;
+  color: var(--t-text-dim);
+  margin-right: auto;
+}
+.palette-result {
+  margin-top: var(--t-space-1);
+  padding: var(--t-space-1) var(--t-space-2);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+.palette-result--error {
+  color: var(--t-danger);
+}
+.palette-foot {
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+/* --- The shortcut sheet (a read surface, same panel ground as the palette) -------------------- */
+.shortcut-heading {
+  margin: 0 0 var(--t-space-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.shortcut-group {
+  margin-bottom: var(--t-space-2);
+}
+/* A shortcut-sheet group header (Global / Navigation / Overlay): it names a group, so it carries
+   meaning and uses --t-text-dim rather than the sub-AA --t-text-faint (DESIGN.md: faint carries no
+   essential meaning). */
+.shortcut-group-label {
+  margin: 0 0 var(--t-space-0-5);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--t-text-dim);
+}
+.shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--t-space-0-5) 0;
+}
+.shortcut-keys {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--t-text-dim);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: 0 var(--t-space-0-5);
+}

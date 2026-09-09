@@ -1,0 +1,70 @@
+{
+  "costing": {
+    "tab": { "title": "Projekterfolg" },
+    "card": {
+      "revenue": "Ertrag",
+      "cost": "Kosten",
+      "margin": "Marge",
+      "marginPct": "Marge %"
+    },
+    "component": {
+      "time": "Zeitaufwand",
+      "expenses": "Spesen",
+      "purchases": "Einkäufe",
+      "accrued_purchases": "Abgegrenzte Einkäufe",
+      "committed": "Bestellt (offen)",
+      "revenue": "Ertrag"
+    },
+    "basis": {
+      "label": "Bewertungsbasis",
+      "bill": "Zu Verrechnungssätzen",
+      "cost": "Zu Kostensätzen"
+    },
+    "hint": {
+      "costRateMissing": "Kein Kostensatz hinterlegt; Verrechnungssatz verwendet.",
+      "unattributable": "Einzelne Kostenkomponenten können noch keinem Projekt zugeordnet werden; ihre Nullen sind fehlende Zuordnung, keine Messwerte."
+    },
+    "budget": {
+      "title": "Budgetvergleich",
+      "budget": "Budget",
+      "costToDate": "Kosten bis heute",
+      "remaining": "Verbleibendes Budget",
+      "consumed": "Verbraucht",
+      "hours": "Stunden",
+      "overBudget": "Budget überschritten"
+    },
+    "drill": {
+      "title": "Belege",
+      "component": "Komponente",
+      "date": "Datum",
+      "source": "Quelle",
+      "detail": "Detail",
+      "amount": "Betrag",
+      "minutes": "{minutes} Min.",
+      "timeEntry": "Zeiteintrag",
+      "invoiceLine": "Rechnungsposition",
+      "creditNoteLine": "Gutschriftsposition",
+      "vendorBill": "Kreditorenrechnung",
+      "poLine": "Bestellposition",
+      "empty": "Keine Positionen in dieser Komponente.",
+      "aria": "Belege des Projekterfolgs"
+    },
+    "empty": "Noch keine Kosten oder Erträge.",
+    "denied": "Kein Zugriff auf den Projekterfolg.",
+    "list": { "margin": "Marge" },
+    "noMarginPct": "–"
+  },
+  "errors": {
+    "fx_base_missing": "Einigen Einträgen fehlt der CHF-Basisbetrag; der Projekterfolg kann nicht gemischt gerechnet werden.",
+    "invalid_component": "Diese Auswertungskomponente gibt es nicht.",
+    "field_not_found": "Dieses Gruppierungsfeld gibt es nicht oder es ist kein Auswahlfeld."
+  },
+  "help": {
+    "Costing": {
+      "title": "Projekterfolg",
+      "body": "Der Projekterfolg zeigt Ertrag, Kosten und Marge eines Projekts, berechnet aus erfassten Zeiten, Spesen und Einkäufen. Der Vergleich von Budget und Ist und die Aufschlüsselung nach Komponenten zeigen, woher jede Zahl kommt. Fehlt ein Kostensatz, sagt die Ansicht das, statt mit null zu rechnen; ohne Ertrag bleibt die Marge leer statt falsch.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

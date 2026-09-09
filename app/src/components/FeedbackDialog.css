@@ -1,0 +1,229 @@
+/* G08 §6, the feedback dialog.
+ *
+ * Tokens only, 8-pt spacing, no border around everything: the panel separates itself from the page
+ * by the background step it already carries (`.panel` is `--t-bg-elev` on `--t-bg`). The width cap
+ * is the spec's: `min(560px, calc(100vw - var(--t-space-4)))`, so the dialog cannot overflow a
+ * narrow window. The Studio has no breakpoints and no mobile target (its fixed rail is a desktop
+ * layout by construction), so this file invents none.
+ *
+ * Nothing here spends the accent. The one accent in this dialog is `.btn--primary` on the single
+ * primary action, which comes from the shared control system in `global.css`.
+ */
+
+.fb-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--t-space-2);
+  background: var(--t-bg-code);
+}
+
+.fb-dialog {
+  width: min(560px, calc(100vw - var(--t-space-4)));
+  max-height: calc(100vh - var(--t-space-4));
+  overflow-y: auto;
+  padding: var(--t-space-3);
+}
+
+.fb-title {
+  margin: 0 0 var(--t-space-2);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.fb-subtitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.fb-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.fb-body p {
+  margin: 0;
+  max-width: 72ch;
+  line-height: 1.5;
+}
+
+/* The three kinds. A real fieldset with a real legend: the group needs a name, and a styled div
+   would give a screen reader three unrelated radios. */
+.fb-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fb-legend {
+  padding: 0;
+  margin: 0 0 var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.fb-kind,
+.fb-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  cursor: pointer;
+}
+
+.fb-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.fb-field > label {
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.fb-field .field {
+  width: 100%;
+}
+
+/* The inline denial reason (D15). Danger colour AND a text sentence: the colour is never the
+   carrier, it only reinforces what the words already say. */
+.fb-problem {
+  margin: 0;
+  color: var(--t-danger);
+  font-size: 13px;
+}
+
+.fb-diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+}
+
+/* Exactly what would travel, rendered by the same function that writes the artifact. It scrolls
+   inside its own box so a long stack never widens the dialog. */
+.fb-preview {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-code);
+  color: var(--t-text-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.fb-none,
+.fb-notice {
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.fb-path code {
+  padding: 2px var(--t-space-0-5);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-code);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.fb-copied {
+  margin: 0;
+  color: var(--t-success);
+  font-size: 13px;
+}
+
+.fb-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+  padding-top: var(--t-space-1);
+}
+
+/* The rail footer now holds two controls (Send feedback, then the theme toggle) where it held one.
+   The rule lives here rather than in `global.css` because this change owns the second control and
+   not the shell stylesheet; this file is statically imported by `FeedbackProvider`, so it is in the
+   bundle wherever the button is. */
+.rail-footer {
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* "Report this error" inside an error banner. A quiet link, deliberately: an accent on every error
+   banner would spend the accent on every screen at once. */
+.error-report {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.error-report:hover {
+  color: var(--t-text);
+}
+
+/* The crash panel. It is a page, not a dialog: the router below it is gone, so there is nothing to
+   sit on top of. The danger glyph is paired with the heading text, never colour alone. */
+.crash-panel {
+  max-width: 560px;
+  margin: var(--t-space-6) auto;
+  padding: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.crash-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.crash-glyph {
+  flex: 0 0 auto;
+  color: var(--t-danger);
+}
+
+.crash-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.crash-body {
+  margin: 0;
+  max-width: 72ch;
+  line-height: 1.5;
+}
+
+.crash-foot {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fb-dialog,
+  .fb-overlay {
+    transition: none;
+  }
+}

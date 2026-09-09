@@ -1,0 +1,200 @@
+{
+  "nav": {
+    "reports": "Reports"
+  },
+  "reports": {
+    "title": "Reports",
+    "loading": "Loading the report",
+    "tablist": "Choose a report",
+    "headerActions": "More exports",
+    "delta": "Δ",
+    "account": "Account",
+    "total": "Total",
+    "subtotal": "Subtotal",
+    "aktiven": "Assets",
+    "passiven": "Liabilities and equity",
+    "totalAktiven": "Total assets",
+    "totalPassiven": "Total liabilities and equity",
+    "reingewinn": "Annual profit",
+    "reinverlust": "Annual loss",
+    "reingewinnOderReinverlust": "Annual profit or annual loss",
+    "openingBalance": "Opening balance",
+    "closingBalance": "Closing balance",
+    "lineCount": "{n} lines",
+    "rowActionsFor": "Open the general ledger for {account}",
+    "openEntry": "Open the entry",
+    "noOpening": "No opening",
+    "asOf": "As of",
+    "currencyNote": "All amounts in {currency}",
+    "tab": {
+      "trialBalance": "Trial balance",
+      "balanceSheet": "Balance sheet",
+      "incomeStatement": "Income statement",
+      "generalLedger": "General ledger"
+    },
+    "heading": {
+      "trialBalance": "Trial balance {from} to {to}",
+      "balanceSheet": "Balance sheet as of {date}",
+      "incomeStatement": "Income statement {from} to {to}",
+      "generalLedger": "General ledger {account} {from} to {to}"
+    },
+    "period": {
+      "from": "From",
+      "to": "To"
+    },
+    "compare": {
+      "label": "Compare",
+      "none": "none",
+      "priorPeriod": "Prior period",
+      "priorYear": "Prior year",
+      "columnBalance": "Balance as of {date}",
+      "archive": "Prior system (archive)"
+    },
+    "picker": {
+      "pick": "Choose an account",
+      "search": "Search accounts",
+      "showArchived": "Show archived",
+      "archived": "Archived",
+      "list": "Accounts",
+      "loading": "Loading the accounts",
+      "noMatch": "No account matches this search.",
+      "clearSearch": "Clear the search"
+    },
+    "column": {
+      "opening": "Opening",
+      "debit": "Debit",
+      "credit": "Credit",
+      "balance": "Balance",
+      "date": "Date",
+      "ref": "Reference",
+      "description": "Description",
+      "source": "Source",
+      "name": "Name",
+      "number": "Account"
+    },
+    "source": {
+      "close": "Year-end close",
+      "invoice": "Invoice",
+      "payment": "Payment",
+      "reversal": "Reversal",
+      "import": "Import",
+      "agent": "Agent",
+      "fx": "FX difference",
+      "purchase": "Vendor bill",
+      "dunning": "Dunning fee",
+      "credit_note": "Credit note",
+      "camt": "Bank statement (camt)",
+      "stock": "Stock valuation",
+      "landed_cost": "Landed cost",
+      "expense_claim": "Expense claim",
+      "asset_acquisition": "Asset acquisition",
+      "asset_depreciation": "Depreciation",
+      "asset_disposal": "Asset disposal",
+      "inventory_valuation": "Inventory valuation"
+    },
+    "export": {
+      "pdf": "Export as PDF",
+      "csv": "Export as CSV",
+      "working": "Preparing",
+      "needsAccount": "Choose an account first, then you can export the general ledger.",
+      "notArchival": "The PDF is a print file, not a PDF/A.",
+      "archiveCompare": "The prior-system comparative is a screen column; export it without the comparison."
+    },
+    "empty": {
+      "trialBalance": "No entries in this period. Once you post, every account and its balance appears here.",
+      "trialBalanceAction": "Record an entry",
+      "structure": "No entries in this period. The structure still stands, with 0.00 on every position.",
+      "structureAction": "Record an entry",
+      "ledgerNoMovement": "Nothing moved on this account in this period. The opening and closing balances are above and below.",
+      "noAccountPicked": "Choose an account to see every entry on it with a running balance.",
+      "noWorkspaceHint": "Set up a workspace first, then you can run reports."
+    },
+    "reconciled": {
+      "trial": "Matches the journal",
+      "balance": "Assets and liabilities and equity agree, and the journal nets out.",
+      "ledger": "The closing balance matches the journal",
+      "hintLabel": "What the reconciliation checks",
+      "hintTitle": "What was compared",
+      "hintBody": "Two derivations over the same entries were compared: this report's totals and an independent query against the journal. That checks the period boundaries and the coverage. It does not check whether an account sits in the right section."
+    },
+    "mismatch": {
+      "title": "This report does not match the journal.",
+      "action": "Open the journal",
+      "debitEqualsCredit": "Debit and credit are not equal. This cannot happen in a book written through TILL, so the file most likely came from an import or a restore.",
+      "closingTiesToLedger": "The computed closing balance differs from the journal query. A period boundary is the usual cause.",
+      "everyAccountRenderedOnce": "Accounts are missing from this report, or one appears twice. The totals can still add up.",
+      "aktivenEqualPassiven": "Assets and liabilities and equity differ. That is an error in how accounts map to sections, not in your entries.",
+      "ledgerNetsToZero": "The journal does not net to zero. That is about the database itself, not about this report.",
+      "everyAccountClassifiedOnce": "Not every account landed in exactly one section.",
+      "resultTiesToLedger": "The positions do not sum to the same value as the query by account type."
+    },
+    "balanceSheet": {
+      "coverage": "The sections are groupings over your chart of accounts, not the position names of OR Art. 959a.",
+      "coverageLabel": "What the structure covers",
+      "coverageTitle": "OR Art. 959a and this balance sheet",
+      "coverageHint": "OR Art. 959a requires 24 individually named positions in a fixed order. TILL models the seven top-level groupings and lists your accounts under them by number. With the shipped Kontenrahmen KMU that gives the right order. If you renumber your accounts the order no longer holds, and no reconciliation check detects it."
+    },
+    "computedEquity": {
+      "label": "Why these positions have no account",
+      "title": "Computed positions",
+      "hint": "These two positions are computed from the result, they are not posted to an account. That is why there is nothing to open here."
+    },
+    "incomeStatement": {
+      "signNote": "Every position is shown as its contribution to profit: income positive, expense negative.",
+      "closedYearLabel": "The closing entry and this statement",
+      "closedYearTitle": "A closed year",
+      "closedYearHint": "The year-end closing entry is excluded here and included on the balance sheet. So a closed year shows its real result here and the same result inside equity there."
+    },
+    "generalLedger": {
+      "naturalSideLabel": "The sign on this account",
+      "naturalSideTitle": "Debit or credit",
+      "naturalSide": {
+        "debit": "This account normally sits on the debit side.",
+        "credit": "This account normally sits on the credit side, so the balance is negative here and positive on the balance sheet."
+      },
+      "signFromStatement": "The general ledger shows the balance the way the journal holds it. The income statement inverts the sign, because every position there is shown as its contribution to profit.",
+      "closedYearNote": "This period contains a year-end closing entry. It appears here and not in the income statement, so the closing balance can be zero even though the account moved during the year."
+    },
+    "trialBalance": {
+      "totalsLabel": "Why this reads zero",
+      "totalsTitle": "Opening and balance in the total row",
+      "totalsNetToZero": "A book that adds up nets to zero in the opening and balance columns. Anything other than 0.00 there means something is wrong."
+    },
+    "kmuClass": {
+      "unclassifiedLabel": "Accounts with no class",
+      "unclassifiedTitle": "Outside the chart's ranges",
+      "unclassifiedHint": "These accounts sit outside the Kontenrahmen KMU number ranges. On the balance sheet they land under \"Other assets\" or \"Other liabilities\"."
+    },
+    "error": {
+      "transport": "The report could not be loaded.",
+      "transportRetry": "Try again",
+      "needsChart": "Your workspace has no chart of accounts yet. Without accounts there is nothing to report on.",
+      "needsChartAction": "Open the chart",
+      "invalidPeriod": "The end date is before the start date.",
+      "invalidDate": "That is not a valid date. Format: DD.MM.YYYY.",
+      "accountNotFound": "This account is no longer in your chart. Choose another one.",
+      "export": "The file could not be created. Nothing was downloaded.",
+      "exportRetry": "Try again",
+      "permissionDenied": "You do not have permission to view reports.",
+      "accountList": "The accounts could not be loaded."
+    },
+    "comparative": {
+      "prior": "Prior system {system}, {from} to {to}",
+      "noData": "No data in the archive for this window",
+      "partialPeriod": "Window only partially covered by the archive"
+    },
+    "cite": {
+      "citeLabel": "Legal basis for {section}",
+      "citeBody": "This position follows the statutory structure."
+    }
+  },
+  "help": {
+    "Reports": {
+      "title": "Financial statements",
+      "body": "Balance sheet, income statement, trial balance and account sheet, computed from the journal in its statutory structure. Every position carries its legal basis as a citation. The figures stay traceable: clicking a position opens the account sheet showing every entry behind it. The export renders the same computation, so screen and file can never disagree.",
+      "concepts": [
+        "verrechnungssteuer"
+      ]
+    }
+  }
+}

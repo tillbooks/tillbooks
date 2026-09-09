@@ -1,0 +1,68 @@
+/* OverflowMenu (D15/C2).
+   The popup borrows the existing drawer-overflow treatment: an elevated ground and a real border,
+   no shadow and no gradient, per the design law. Everything the shared control system already
+   provides (`.btn`, `.btn--menu`, `.btn--danger`) is reused, so only the positioning, the popup
+   ground and the touch-target geometry live here. */
+
+.overflow-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+/* The trigger stays visually quiet at the 36px control size so a dense row does not grow, while
+   the pointer/touch target is expanded to 44px square by a centred pseudo-element. The glyph is a
+   decoration: the accessible name comes from aria-label on the button. */
+.overflow-menu-trigger {
+  position: relative;
+}
+
+.overflow-menu-trigger::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.overflow-menu-glyph {
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+/* Right-aligned, because the trigger sits at the trailing edge of a row: a left-aligned popup
+   would hang off the table. z-index clears the row and the sticky group headers. */
+.overflow-menu-list {
+  position: absolute;
+  top: calc(100% + var(--t-space-0-5));
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  padding: var(--t-space-0-5);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+}
+
+/* Every menu row is a full 44px touch target. `min-height` clamps the 28px that `.btn--sm` sets,
+   so the compact padding and type size survive while the target does not. */
+.overflow-menu-list .btn--menu {
+  min-height: 44px;
+  padding: 0 var(--t-space-1);
+}
+
+/* A disabled item is announced through aria-disabled and stays focusable (APG), so it is dimmed
+   here rather than given the `disabled` attribute that would remove it from the tab order. */
+.overflow-menu-list .btn--menu[aria-disabled='true'] {
+  color: var(--t-text-faint);
+  cursor: default;
+}
+
+.overflow-menu-list .btn--menu[aria-disabled='true']:hover {
+  background: transparent;
+  color: var(--t-text-faint);
+}

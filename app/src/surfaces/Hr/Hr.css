@@ -1,0 +1,74 @@
+/* Personal (E02) + Lohn (A34). The tablist, page header and every list table now come from the
+   shared Studio primitives (Tabs, SurfaceHeader, DataTable); only genuinely surface-specific styling
+   lives here. Tokens only, no hardcoded colour. */
+
+.hr { display: flex; flex-direction: column; gap: var(--t-space-2); }
+
+/* The inline add-employee form: a quiet wrap of fields and its two buttons. */
+.hr-form { display: flex; flex-wrap: wrap; gap: var(--t-space-1); align-items: center; }
+
+/* The one primary-action button treatment on this surface. */
+.hr-cta {
+  background: var(--t-accent);
+  color: var(--t-on-accent);
+  border: none;
+  border-radius: var(--t-radius-sm);
+  padding: 0 var(--t-space-2);
+  height: var(--t-control-h);
+  cursor: pointer;
+}
+
+/* Per-tab content wrapper inside a tab panel: stacks the optional action and the table. */
+.hr-panel { display: flex; flex-direction: column; gap: var(--t-space-2); }
+
+/* Status glyphs read at a slightly larger size than the surrounding label. */
+.hr-glyph { font-size: 1.1rem; }
+
+/* A masked AHV number is dim, not hidden, so the restriction reads as a state and not an error. */
+.hr-restricted { color: var(--t-text-dim); }
+
+/* A cancelled absence row is struck through and dimmed (state via glyph + line, never colour alone). */
+.hr-cancelled { opacity: 0.55; text-decoration: line-through; }
+
+.hr-tag { font-size: 0.8rem; color: var(--t-text-dim); }
+.hr-hint { color: var(--t-text-dim); font-size: 0.9rem; }
+
+/* --- Lohn (A34) hand-off cards --- */
+
+.payroll { gap: var(--t-space-3); }
+
+.payroll-oss { margin: 0; }
+
+/* Each hand-off step is a bordered card on the elevated ground, so the export, the wage buchung and
+   the history read as three distinct panels. */
+.payroll-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-3);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+}
+
+.payroll-card h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.payroll-card p { margin: 0; }
+
+.payroll-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  max-width: 16rem;
+}
+
+.payroll-field span { color: var(--t-text-dim); font-size: 0.9rem; }
+
+.payroll-restricted { color: var(--t-text-dim); }
+
+.payroll-preview { display: flex; flex-direction: column; gap: var(--t-space-2); }

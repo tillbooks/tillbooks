@@ -1,0 +1,476 @@
+/* A02 Journal surface. Tokens only, no hex. 8-pt grid. Depth is one border plus one background
+   step, never a shadow. The single teal accent is reserved for the primary Post action; the danger
+   colour appears only in the credit sign and the error state, never as a filled row. */
+
+/* The page header (`.journal-head`/`.journal-title`) is now the shared SurfaceHeader and the LIVE
+   list is the shared DataTable, so the head block and the drawer chrome (`.journal-drawer` panel,
+   scrim, head, close) were deleted here. The `.journal-table`/`.journal-num` block below is RETAINED
+   because the Archiv tab (`ArchiveTab`, a hard G13 partition with its own row model) still hand-rolls
+   its table on it; the live list no longer uses it. What else remains is the filter bar, the
+   Journal-specific cell content (ref button, base-currency second figure, status pill, reversal
+   badges), and the EntryDrawer body that rides inside the shared DetailDrawer. */
+
+/* Filter bar. */
+.journal-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  margin-bottom: var(--t-space-2);
+}
+
+.journal-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+.journal-field input,
+.journal-field select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--t-text);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-0-5) var(--t-space-1);
+  min-height: 32px;
+}
+
+.journal-filter-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* The ledger table. */
+.journal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.journal-table th,
+.journal-table td {
+  text-align: left;
+  padding: var(--t-space-1) var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.journal-table thead th {
+  color: var(--t-text-dim);
+  font-weight: 600;
+  background: var(--t-bg-soft);
+}
+
+.journal-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+}
+
+/* The base-currency total under the transaction figure on a foreign entry. A step dimmer than the
+   figure it qualifies, never the brand accent (money never takes the accent, brand/DESIGN.md), and
+   tabular like every other number in the column so the two lines align digit for digit.
+   --t-text-dim is the same token the equivalent Documents row uses and clears the Tier-1 4.5:1
+   floor at this size, where --t-text-faint does not. */
+.journal-base-total {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.journal-row-open {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--t-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Status pill: glyph plus text, never colour alone. */
+.journal-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  white-space: nowrap;
+}
+
+.journal-status-posted {
+  color: var(--t-success);
+}
+
+.journal-status-draft {
+  color: var(--t-warn);
+}
+
+.journal-status-text {
+  color: var(--t-text);
+}
+
+/* Reversal badges. A Storno and the entry it corrects must never read as two ordinary postings of
+   the same amount, so each carries a glyph AND a word; the colour only reinforces what the text
+   already says. Both are buttons that jump to the other half of the pair. */
+.journal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin-left: var(--t-space-1);
+  padding: 1px var(--t-space-0-5);
+  border: 1px solid currentColor;
+  border-radius: var(--t-radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+button.journal-badge {
+  cursor: pointer;
+}
+
+button.journal-badge:hover {
+  background: var(--t-bg-soft);
+}
+
+/* The correcting entry. */
+.journal-badge-reversal {
+  color: var(--t-danger);
+}
+
+/* The original that has since been corrected. */
+.journal-badge-reversed {
+  color: var(--t-text-dim);
+}
+
+/* A faint tint so the pair is scannable at a glance; the badges carry the actual meaning. */
+.journal-row-reversal > td {
+  background: var(--t-bg-soft);
+}
+
+/* The EntryDrawer body content. The overlay, scrim, header and close control are now the shared
+   DetailDrawer (`.drawer*`); only the body's own field/line/balance styling lives here. The drawer
+   body is a flex column via DetailDrawer's `.drawer-body`, and these blocks lay out inside it. */
+.journal-drawer-body-spacing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.journal-drawer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+.journal-drawer-meta .journal-field {
+  flex: 1 1 160px;
+}
+
+.journal-drawer-meta input {
+  font: inherit;
+  font-size: 14px;
+  color: var(--t-text);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-0-5) var(--t-space-1);
+  min-height: 32px;
+}
+
+/* The line grid. */
+.journal-drawer-lines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.journal-drawer-lines th,
+.journal-drawer-lines td {
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.journal-drawer-lines th {
+  color: var(--t-text-dim);
+  font-weight: 600;
+}
+
+.journal-drawer-lines select,
+.journal-drawer-lines input {
+  font: inherit;
+  font-size: 14px;
+  color: var(--t-text);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-0-5) var(--t-space-1);
+  min-height: 32px;
+  width: 100%;
+}
+
+.journal-drawer-amount input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Credit carries the danger colour in the label glyph only, never a filled row. */
+.journal-drawer-credit-mark {
+  color: var(--t-danger);
+}
+
+.journal-drawer-line-remove {
+  background: transparent;
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  font: inherit;
+}
+
+.journal-drawer-view-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+}
+
+/* Balance summary. */
+.journal-drawer-balance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+  padding: var(--t-space-1) 0;
+}
+
+/* The §H-FX disclosure under a converted entry's lines: one dim sentence, no new column and no
+   badge. It carries figures, so it takes the same tabular numerals as every other amount. */
+.journal-drawer-fx {
+  margin: var(--t-space-2) 0 0;
+  color: var(--t-text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.journal-drawer-balance dt {
+  color: var(--t-text-dim);
+  font-size: 12px;
+}
+
+.journal-drawer-balance dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.journal-drawer-unbalanced {
+  color: var(--t-danger);
+}
+
+.journal-drawer-balanced {
+  color: var(--t-success);
+}
+
+/* Footer actions. These ride inside the shared DetailDrawer foot (`.drawer-foot`), which already
+   supplies the top border, padding and right alignment, so this row only lays its own controls out
+   full width: OverflowMenu at the left, a spacer, then the buttons pushed to the right edge. */
+.journal-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  width: 100%;
+}
+
+.journal-drawer-actions .journal-spacer {
+  flex: 1 1 auto;
+}
+
+
+/* The reversal confirm. It sits above the drawer it belongs to, so the entry being corrected stays
+   on screen behind it and the operator can still read what they are about to mirror. */
+.journal-drawer-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  /* Above the DetailDrawer scrim (z-index 1000) so the nested confirm sits over the drawer it
+     belongs to, with the entry still visible behind both. */
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--t-space-2);
+  background: rgb(0 0 0 / 0.32);
+}
+
+.journal-drawer-confirm {
+  width: min(420px, 100%);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.journal-drawer-confirm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.journal-drawer-confirm-body {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.journal-drawer-confirm-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-0-5);
+}
+
+.journal-drawer-hint {
+  color: var(--t-text-dim);
+  font-size: 12px;
+  margin: 0;
+}
+
+.journal-drawer-requires {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-warn);
+  font-size: 12px;
+}
+
+/* --- G13, the Archiv tab (spec §6). Muted ink plus glyph, never colour alone; the provenance
+   band is a neutral elevated strip with no second accent; 44px targets throughout. The muted ink
+   is --t-text-dim, which the design tokens hold at AA contrast in both themes (muted must not
+   mean failing). --- */
+
+.journal-tabs {
+  display: flex;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+  margin-bottom: var(--t-space-2);
+}
+
+.journal-tab {
+  min-height: 44px;
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  color: var(--t-text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.journal-tab--on {
+  border-color: var(--t-accent);
+  color: var(--t-text);
+  background: var(--t-accent-soft);
+}
+
+.journal-archive-band {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0 0 var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.journal-archive-table .journal-archive-row td {
+  color: var(--t-text-dim);
+}
+
+.journal-archive-open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-height: 44px;
+}
+
+.journal-archive-flag {
+  color: var(--t-warn);
+  border: 1px solid currentColor;
+  border-radius: var(--t-radius-sm);
+  padding: 0 var(--t-space-0-5);
+  font-size: 12px;
+  margin-right: var(--t-space-0-5);
+}
+
+.journal-archive-detail {
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.journal-archive-periods {
+  margin-bottom: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+.journal-archive-periods-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.journal-archive-subtitle {
+  margin: 0;
+  font-size: 15px;
+}
+
+.journal-archive-overflow {
+  position: relative;
+}
+
+.journal-archive-purge {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  min-width: 260px;
+}
+
+.journal-archive-purge-result {
+  margin: var(--t-space-1) 0 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.journal-archive-pager {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-2);
+  color: var(--t-text-dim);
+  font-size: 13px;
+}

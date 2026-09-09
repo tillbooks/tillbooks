@@ -1,0 +1,138 @@
+{
+  "nav": {
+    "attention": "Pendenzen"
+  },
+  "attention": {
+    "title": "Pendenzen",
+    "loading": "Deine Pendenzen werden geladen",
+    "retry": "Erneut versuchen",
+    "refresh": "Aktualisieren",
+    "stand": "Stand {time}",
+    "incomplete": "unvollständig",
+    "subtitle": {
+      "work": "Wartet auf dich"
+    },
+    "error": {
+      "total": "Die Pendenzen konnten nicht geladen werden."
+    },
+    "padlock": {
+      "title": "Hier gibt es nichts zu zeigen",
+      "body": "Du hast für keine der Arbeitslisten eine Leseberechtigung, darum steht hier nichts. Bitte eine Besitzerin des Workspace, dir eine zu geben.",
+      "ask": "Frage stellen"
+    },
+    "empty": {
+      "title": "Alles erledigt.",
+      "hint": "Sobald eine Zahlung, eine Mahnung oder ein Beleg eine Entscheidung von dir braucht, erscheint sie hier. Die Liste leert sich nur, wenn du handelst, nie durch Verstecken."
+    },
+    "area": {
+      "bank": "Bank",
+      "sales": "Verkauf",
+      "system": "System",
+      "accounting": "Buchhaltung"
+    },
+    "areaIndex": {
+      "title": "Nach Bereich"
+    },
+    "allAreas": "Alle Bereiche",
+    "singleAreaEmpty": "In {area} wartet nichts.",
+    "new": "neu",
+    "providerFailed": "{queue} konnte nicht geladen werden.",
+    "urgency": {
+      "overdue": "überfällig",
+      "due": "fällig",
+      "open": "offen"
+    },
+    "queue": {
+      "qrMatch": "Abgleich",
+      "dunningRun": "Mahnwesen",
+      "reviewFlag": "Markierungen"
+    },
+    "queueLabel": {
+      "qr_match": "Abgleich",
+      "dunning_run": "Mahnwesen",
+      "agent_action": "Vorschläge",
+      "review_flag": "Markierungen"
+    },
+    "collapsedWith": "auch in {queue}",
+    "overflow": {
+      "label": "Aktionen für {title}",
+      "copyRef": "Referenz kopieren",
+      "createTask": "Aufgabe erstellen"
+    },
+    "item": {
+      "qrMatch": {
+        "title": "Zahlung ohne Zuordnung",
+        "subtitle": "{bank}"
+      },
+      "dunningRun": {
+        "title": "Mahnlauf wartet auf Freigabe",
+        "subtitle": "{count} Rechnungen, Vorschlag vom {date}"
+      },
+      "reviewFlag": {
+        "title": "Buchung beanstandet",
+        "subtitle": "{date} · {description}",
+        "reason": "Markiert von {reviewer}: {reason}",
+        "reasonByAgent": "Markiert durch den Agenten: {reason}",
+        "reasonByStudio": "Markiert im Studio: {reason}",
+        "reasonByUnknown": "Markiert: {reason}",
+        "reasonSelf": "Von dir markiert: {reason}"
+      }
+    },
+    "events": {
+      "title": "Ereignisse",
+      "showAll": "Alle anzeigen",
+      "collapse": "Weniger anzeigen",
+      "loading": "Wird geladen",
+      "error": "Ereignisse konnten nicht geladen werden.",
+      "empty": "Noch keine Benachrichtigungen."
+    },
+    "rail": {
+      "loading": "Anzahl Pendenzen wird geladen",
+      "error": "Die Anzahl Pendenzen konnte nicht geladen werden",
+      "count": "{count} offen"
+    },
+    "act": {
+      "openReconciliation": "Im Abgleich öffnen",
+      "openDunning": "Mahnlauf öffnen",
+      "openEntry": "Buchung öffnen",
+      "resolveFlag": "Als geprüft freigeben",
+      "issueDunningRun": "Mahnlauf ausstellen",
+      "suggested": "Vorschlag: {number}",
+      "reasonLabel": "Grund",
+      "reasonPlaceholder": "Warum lehnst du ab?",
+      "rejectConfirm": "Ja, ablehnen",
+      "rejectKeep": "Behalten",
+      "busy": "Wird ausgeführt",
+      "dismissFeedback": "Ausblenden",
+      "taskCreated": "Aufgabe erstellt.",
+      "done": {
+        "apply": "Zahlung übernommen und gebucht.",
+        "dismiss": "Abgelegt: keine Kundenzahlung.",
+        "approve": "Vorschlag genehmigt und ausgeführt.",
+        "approve_allow": "Vorschlag genehmigt. Diese Art führt der Agent künftig direkt aus.",
+        "reject": "Vorschlag abgelehnt. Gebucht wurde nichts.",
+        "resolve": "Markierung erledigt, Buchung freigegeben.",
+        "issue": "Mahnlauf ausgestellt."
+      },
+      "error": {
+        "generic": "Das hat nicht geklappt. Die Zeile bleibt stehen: versuche es noch einmal oder öffne die Seite, zu der sie gehört.",
+        "period_locked": "Die Periode ist gesperrt: dort kann nichts mehr gebucht werden.",
+        "permission_denied": "Dafür fehlt dir die Berechtigung.",
+        "cannot_self_approve": "Der eigene Vorschlag braucht eine zweite Person zur Freigabe.",
+        "already_applied": "Diese Zahlung wurde inzwischen zugeordnet.",
+        "already_paid": "Diese Rechnung ist bereits beglichen.",
+        "currency_mismatch": "Die Währungen stimmen nicht überein: erfasse die Zahlung mit Umrechnung unter Zahlungen.",
+        "already_executed": "Dieser Vorschlag wurde inzwischen ausgeführt.",
+        "not_found": "Diese Zeile gibt es nicht mehr. Die Liste wird neu geladen."
+      }
+    }
+  },
+  "help": {
+    "Attention": {
+      "title": "Pendenzen",
+      "body": "Pendenzen ist der eine Ort, der zeigt, was auf eine Entscheidung von dir wartet: die dringendsten Punkte zuoberst, danach ein Index pro Bereich und die jüngsten Ereignisse. Jede Zeile trägt ihre Entscheidung: die zwei oder drei Knöpfe, die auch die zuständige Seite anbietet, den Grund, warum sie wartet, und den Satz, was die Buchung bewirkt. Nur der schwierige Fall öffnet die Seite. Bereiche, die du nicht lesen darfst, erscheinen gar nicht, und wartet nichts, sagt die Liste das ausdrücklich.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

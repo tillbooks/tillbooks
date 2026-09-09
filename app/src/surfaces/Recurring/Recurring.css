@@ -1,0 +1,208 @@
+/*
+ * A12 Serien. Separation comes from the background step and from spacing, never from a border
+ * around every card (DESIGN.md, the forbidden list). The one accent spend is the single primary
+ * action, Neue Serie; the tick and every row control stay secondary.
+ *
+ * AN ENDED SERIE IS DIMMED, NOT COLOURED. Ending a schedule is a resolved state somebody chose, and
+ * painting it in an alarm colour would make the screen read as broken every time a retainer runs
+ * out. The glyph and the words carry the state (never colour or shape alone), which also keeps it
+ * legible to a screen reader and to anyone who does not see the hue.
+ *
+ * ## BUILT ON THE SHARED UI PRIMITIVES (D118 B2, 2026-08-24)
+ *
+ * The schedule list and the per-schedule run history are the shared `DataTable` now (frame overflow,
+ * sticky header, density and the five states in one place), the page header is `SurfaceHeader`, and
+ * the auto-issue confirm is the shared `Modal` (see `RecurringEditor.tsx`). The per-surface CSS that
+ * duplicated all of that (the `.recurring__table` rules, the numeric alias, the confirm scrim/panel,
+ * the bespoke header type and the redundant input/focus rules) is deleted. What remains here is only
+ * what is genuinely Recurring-specific: the panel/actions layout, the inline editor form fields, the
+ * schedule badges and reason prose, the name-as-link cell, and the inline run-history detail panel.
+ */
+
+.recurring {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.recurring__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.recurring__actions {
+  display: flex;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.recurring__skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.recurring__feedback {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.recurring__feedback--error {
+  color: var(--t-danger);
+}
+
+.recurring__hint {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: 0.9rem;
+  max-width: 62ch;
+}
+
+/* --- The editor ------------------------------------------------------------------------------ */
+
+.recurring__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+}
+
+.recurring__form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.recurring__form label span {
+  color: var(--t-text-dim);
+  font-size: 0.9rem;
+}
+
+/* The controls themselves are the shared `.field` class (global.css); only the vertical resize is
+   surface-specific here. */
+.recurring__form textarea {
+  resize: vertical;
+}
+
+.recurring__formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--t-space-2);
+}
+
+.recurring__lines {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.recurring__lines legend {
+  color: var(--t-text-dim);
+  font-size: 0.9rem;
+  padding: 0;
+  margin-bottom: var(--t-space-0-5);
+}
+
+.recurring__lineRow {
+  display: grid;
+  grid-template-columns: minmax(12rem, 2fr) minmax(5rem, 1fr) minmax(7rem, 1fr) minmax(11rem, 1.5fr) auto;
+  gap: var(--t-space-1);
+  align-items: end;
+}
+
+/* The A06 picker slot (C15): aligned with the inputs beside it. */
+.recurring__lineVat {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* Inline on the field that owns it, never a toast: the P9 error is part of the form's own state. */
+.recurring__fieldError {
+  color: var(--t-danger);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.recurring__autoIssue {
+  display: flex;
+  flex-direction: row !important;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.recurring__formActions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* --- The list and the history ---------------------------------------------------------------- */
+
+/* Dimmed, never coloured: ended is a resolved state, not a fault. Applied to a DataTable row via the
+   `rowClassName` hook (DataTable ships no state CSS, the consumer owns it). */
+.data-table-row.recurring-row--ended td {
+  color: var(--t-text-dim);
+}
+
+/* The name opens the history: a real button styled as the row's link, so it is keyboard-reachable. */
+.recurring__nameLink {
+  border: 0;
+  background: none;
+  color: var(--t-text);
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* A small NEUTRAL badge, no new colour (spec §6): auto-issue is a fact, not a warning. */
+.recurring__badge {
+  margin-left: var(--t-space-0-5);
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  color: var(--t-text-dim);
+  font-size: 0.8em;
+}
+
+.recurring__controls {
+  display: flex;
+  gap: var(--t-space-0-5);
+  flex-wrap: wrap;
+}
+
+.recurring__reason {
+  color: var(--t-text-dim);
+}
+
+.recurring__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+}
+
+.recurring__detail h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.recurring__historyEmpty {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.recurring__detail .btn {
+  align-self: flex-start;
+}

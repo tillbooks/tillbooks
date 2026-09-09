@@ -1,0 +1,81 @@
+{
+  "nav": {
+    "procurementAnalytics": "Auswertungen"
+  },
+  "procurement": {
+    "analytics": {
+      "title": "Einkaufs-Auswertungen",
+      "subtitle": "Offene Verpflichtungen, Abgleich-Ausnahmen, Ausgaben, Lieferanten-Scorecards und GR/IR-Abgrenzung, aus einem strukturierten Aufruf.",
+      "reportsLabel": "Standard-Auswertungen",
+      "noWorkspace": "Wähle einen Mandanten, um die Einkaufs-Auswertungen zu sehen.",
+      "emptyTitle": "Nichts anzuzeigen",
+      "emptyHint": "Keine passende Einkaufsaktivität für diese Auswertung und diesen Filter.",
+      "from": "Von",
+      "to": "Bis",
+      "run": "Ausführen",
+      "report": {
+        "openCommitments": "Offene Verpflichtungen",
+        "matchStatus": "Abgleich-Ausnahmen",
+        "spendSummary": "Ausgaben-Übersicht",
+        "supplierScorecard": "Lieferanten-Scorecards",
+        "requisitionPipeline": "Bestellanforderungen",
+        "grirClearing": "GR/IR-Abgrenzung",
+        "landedCostVariance": "Landed-Cost-Abweichung",
+        "poCycle": "Durchlaufzeiten",
+        "anomalies": "Anomalien"
+      },
+      "col": {
+        "po": "Bestellung",
+        "supplier": "Lieferant",
+        "openQty": "Offene Menge",
+        "openValue": "Offener Wert",
+        "aging": "Alter",
+        "status": "Status",
+        "priceVariance": "Preisabweichung",
+        "nextAction": "Nächster Schritt",
+        "group": "Gruppe",
+        "docs": "Belege",
+        "ordered": "Bestellt",
+        "received": "Erhalten",
+        "billed": "Berechnet",
+        "score": "Score",
+        "onTime": "Termintreue %",
+        "spend": "Ausgaben",
+        "requisition": "Anforderung",
+        "daysInStatus": "Tage im Status",
+        "estimated": "Geschätzt",
+        "side": "Seite",
+        "count": "Anzahl",
+        "residual": "Restwert",
+        "voucher": "Beleg",
+        "date": "Datum",
+        "planned": "Geplant",
+        "capitalized": "Aktiviert",
+        "variance": "Abweichung",
+        "completed": "Abgeschlossen",
+        "toReceipt": "Bestellung bis Eingang (Tage)",
+        "toMatch": "Bestellung bis Abgleich (Tage)",
+        "severity": "Schweregrad",
+        "type": "Typ",
+        "summary": "Zusammenfassung"
+      },
+      "total": {
+        "count": "Offene Zeilen",
+        "openValue": "Offener Wert",
+        "matchStatus": "Abgleich-Status",
+        "billed": "Berechnet total",
+        "conversion": "Umwandlungsquote",
+        "netExposure": "Netto GR/IR-Exposure",
+        "grirStatus": "GR/IR-Status"
+      }
+    }
+  },
+  "help": {
+    "ProcurementAnalytics": {
+      "title": "Einkaufs-Auswertungen",
+      "body": "Auswertungen über deinen Einkauf, jede eine reine Abfrage aus der Engine: offene Bestellwerte, Abgleich-Ausnahmen, Ausgaben, Lieferantenbewertungen, die Anforderungs-Pipeline, das Verrechnungskonto zwischen Wareneingang und Rechnung, Landkosten-Abweichungen, Durchlaufzeiten und Auffälligkeiten. Links wählst du den Bericht, rechts grenzt du den Zeitraum ein und liest die Summen und die Vorschau. Berechnet wird hier nichts: Die Seite zeigt, was die Engine liefert.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

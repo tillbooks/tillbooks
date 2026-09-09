@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "inventoryAdjustments": "Adjustments"
+  },
+  "adjustments": {
+    "title": "Stock adjustments",
+    "new": "New adjustment",
+    "post": "Post adjustment",
+    "reverse": "Reverse",
+    "reversed": "Reversed",
+    "close": "Close",
+    "search": "Search adjustments",
+    "searchPlaceholder": "Item, location or reason",
+    "clear": "Clear",
+    "noWorkspace": "Select a workspace to post stock adjustments.",
+    "noReasonsHint": "Create at least one reason code before posting an adjustment.",
+    "col": {
+      "date": "Date",
+      "item": "Item",
+      "location": "Location",
+      "qty": "Quantity",
+      "reason": "Reason",
+      "note": "Note",
+      "actions": "Actions"
+    },
+    "form": {
+      "title": "New adjustment",
+      "choose": "Choose...",
+      "item": "Item",
+      "location": "Location",
+      "qty": "Quantity change",
+      "qtyHint": "Signed: a positive value adds stock, a negative value removes it.",
+      "reason": "Reason",
+      "noteRequiredHint": "This reason requires a note.",
+      "note": "Note",
+      "unitCost": "Unit cost (Rappen, optional)",
+      "date": "Effective date"
+    },
+    "reverseForm": {
+      "title": "Reverse adjustment",
+      "reason": "Reversal reason",
+      "note": "Note",
+      "confirm": "Post reversal"
+    },
+    "empty": {
+      "title": "No adjustments yet",
+      "hint": "Post a reason-coded adjustment to record shrinkage, damage, found stock or a correction."
+    },
+    "error": {
+      "transport": "The adjustments could not be loaded."
+    },
+    "errors": {
+      "reason_inactive": "That reason code is archived. Choose an active reason.",
+      "no_active_reasons": "There are no active reason codes. Create one first.",
+      "note_required": "This reason requires a note.",
+      "insufficient_stock": "Not enough stock on hand for this reduction.",
+      "invalid_qty": "Enter a non-zero quantity.",
+      "period_locked": "That period is locked. Choose an open effective date.",
+      "already_reversed": "This adjustment has already been reversed."
+    }
+  },
+  "help": {
+    "Adjustments": {
+      "title": "Stock adjustments",
+      "body": "Stock adjustments are reason-coded manual changes to on-hand quantities: breakage, shrinkage, found stock or counting errors. Every adjustment carries a reason and is posted as its own stock movement; the quantity itself is never overwritten directly. A wrong adjustment is undone by a reversing adjustment that points back to the original. Who changed what, when and why stays traceable.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

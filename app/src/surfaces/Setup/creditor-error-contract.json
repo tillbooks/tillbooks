@@ -1,0 +1,10 @@
+{
+  "_doc": "The rejection codes set_creditor_profile can emit, mapped to the Studio's field-level i18n keys. This file is the SHARED contract: CompanyProfile.tsx imports it as its error map, and test/setup/creditor-error-contract.test.mjs pins it to the live engine (every code here must really be emitted, and every err() code in the engine verb must appear here). Written because the Studio mapped not_a_qr_iban, a code the engine stopped emitting, and the app suite mocked that same dead code so nothing failed.",
+  "verb": "set_creditor_profile",
+  "codes": {
+    "invalid_name": "company.err.invalidName",
+    "needs_structured_address": "company.err.needsStructuredAddress",
+    "invalid_iban": "company.err.invalidIban",
+    "illegal_character": "company.err.illegalCharacter"
+  }
+}

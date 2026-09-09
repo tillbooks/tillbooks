@@ -1,0 +1,75 @@
+/* F01 Berichte. The list table, the page header and the dialog chrome are the shared primitives
+   (DataTable, SurfaceHeader, Modal) now; what remains here is genuinely F01-specific. */
+.reportbuilder {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+/* The dialog form body: a quiet vertical stack, since the Modal owns the panel chrome. */
+.rb-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.rb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.rb-badge {
+  font-size: 0.8em;
+  opacity: 0.8;
+  margin-left: 0.35rem;
+}
+.rb-badge--warn {
+  color: var(--t-warn);
+}
+.rb-runok {
+  margin-left: 0.5rem;
+  font-size: 0.85em;
+}
+.rb-danger {
+  border-color: var(--t-danger);
+}
+.rb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.rb-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+.rb-columns-group {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+  opacity: 0.75;
+}
+.rb-preview {
+  overflow-x: auto;
+}
+.rb-preview table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.rb-preview th,
+.rb-preview td {
+  border: 1px solid var(--t-border);
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+}
+.rb-preview-count {
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+.rb-error {
+  color: var(--t-danger);
+}
+.rb-cloud {
+  font-size: 0.85em;
+  opacity: 0.8;
+}

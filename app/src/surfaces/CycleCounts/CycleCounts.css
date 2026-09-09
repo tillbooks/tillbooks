@@ -1,0 +1,171 @@
+/* J04, Inventory -> Cycle Counts / Inventur. What remains after the D118 B2 primitive adoption is
+   genuinely surface-specific: the master split and its session picker list, the per-session action
+   bar, the status badges, the review/committed banners, the variance +/- colouring and the create
+   form fields. The page header, the line table chrome, the drawer chrome and the button set now come
+   from SurfaceHeader, DataTable, DetailDrawer and the shared `.btn`/`.field` classes. No new colour
+   token (design-canon): every value reuses a --t- token. */
+
+.cc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.cc-split {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .cc-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cc-pane {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-1);
+}
+
+.cc-detail {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.cc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cc-list-item {
+  width: 100%;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border: none;
+  background: none;
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.cc-list-item:hover {
+  background: var(--t-bg-soft);
+}
+
+.cc-list-item-selected {
+  background: var(--t-bg-soft);
+  font-weight: 600;
+}
+
+.cc-li-main {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.cc-li-type {
+  font-size: 0.85rem;
+}
+
+.cc-li-sub {
+  font-size: 0.75rem;
+  color: var(--t-text-dim);
+}
+
+.cc-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.cc-detail-title {
+  margin: 0;
+}
+
+.cc-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+/* Variance sign colouring inside the DataTable's numeric cell: over/under carries weight, never
+   colour alone (the +/- sign and the badge carry the meaning; WCAG 2.2 AA). */
+.cc-pos {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.cc-neg {
+  color: var(--t-text-dim);
+  font-weight: 600;
+}
+
+/* The narrow whole-unit count input. Chrome comes from the shared `.field`; this only sizes it and
+   right-aligns the figure to sit under the numeric column header. */
+.cc-count-input {
+  width: 5rem;
+  text-align: right;
+}
+
+.cc-badge {
+  display: inline-block;
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font-size: 0.75rem;
+  color: var(--t-text-dim);
+}
+
+.cc-badge-committed,
+.cc-badge-line-approved {
+  border-color: var(--t-accent);
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.cc-badge-review,
+.cc-badge-line-review_required {
+  border-style: dashed;
+  font-weight: 600;
+}
+
+.cc-muted {
+  color: var(--t-text-dim);
+}
+
+.cc-row-actions {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.cc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cc-field label {
+  font-size: 0.85rem;
+  color: var(--t-text-dim);
+}
+
+.cc-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: 0.9rem;
+}

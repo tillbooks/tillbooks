@@ -1,0 +1,240 @@
+{
+  "nav": {
+    "time": "Time",
+    "group": {
+      "projects": "Projects"
+    }
+  },
+  "time": {
+    "route": {
+      "title": "Time"
+    },
+    "tableCaption": "Time entries",
+    "loading": "Loading time entries",
+    "empty": {
+      "title": "No time recorded yet.",
+      "body": "Start the timer or log time on a project.",
+      "noProjects": {
+        "title": "No projects yet.",
+        "body": "Time is tracked against a project. Create one first.",
+        "cta": "Create a project"
+      }
+    },
+    "timer": {
+      "start": "Start",
+      "stop": "Stop",
+      "running": "Timer running on {project}",
+      "badge": "running"
+    },
+    "action": {
+      "log": "Log time",
+      "edit": "Edit",
+      "delete": "Delete",
+      "submit": "Submit",
+      "approve": "Approve",
+      "lock": "Lock period"
+    },
+    "editor": {
+      "save": "Save",
+      "discard": "Discard",
+      "label": "Edit time entry"
+    },
+    "field": {
+      "project": "Project",
+      "projectPlaceholder": "Choose a project",
+      "date": "Date",
+      "minutes": "Minutes",
+      "billable": "Billable",
+      "notes": "Notes"
+    },
+    "col": {
+      "date": "Date",
+      "project": "Project",
+      "user": "Person",
+      "duration": "Duration",
+      "rate": "Rate",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "open": "Open",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "locked": "Locked",
+      "billed": "Billed"
+    },
+    "totals": {
+      "minutes": "Total",
+      "billable": "Billable"
+    },
+    "period": {
+      "label": "Period"
+    },
+    "view": {
+      "label": "Saved view",
+      "all": "All entries"
+    },
+    "rates": {
+      "title": "Rate cards",
+      "tableCaption": "Configured rate cards",
+      "empty": "No rates set up yet.",
+      "add": "Add rate",
+      "addDefault": "Add default rate",
+      "col": {
+        "scope": "Scope",
+        "ref": "Applies to",
+        "rate": "Rate / h",
+        "validity": "Validity"
+      },
+      "field": {
+        "rate": "Rate per hour (CHF)",
+        "validFrom": "Valid from",
+        "validTo": "Valid to"
+      },
+      "scope": {
+        "default": "Default",
+        "employee": "Employee",
+        "project": "Project",
+        "client": "Client"
+      },
+      "action": {
+        "end": "End"
+      }
+    },
+    "error": {
+      "transport": "Time entries could not be loaded.",
+      "permissionDenied": {
+        "read": "You do not have permission to view time entries.",
+        "write": "You do not have permission to do that."
+      },
+      "timer_already_running": "A timer is already running.",
+      "timer_not_running": "This timer is not running.",
+      "entry_locked": "Locked time cannot be edited.",
+      "invalid_minutes": "Minutes must be between 1 and 1440.",
+      "no_rate_defined": "Please set up a rate first.",
+      "nothing_to_submit": "Nothing to submit in this period.",
+      "nothing_to_lock": "Nothing to lock in this period.",
+      "rate_card_overlap": "Validity periods must not overlap.",
+      "invalid_rate_card": "This rate card is not valid.",
+      "rate_card_already_ended": "This rate card is already ended.",
+      "invalid_transition": "This entry is not in a state that allows that.",
+      "project_not_found": "This project does not exist."
+    }
+  },
+  "billing": {
+    "section": {
+      "title": "Time to bill"
+    },
+    "tab": {
+      "unbilled": "Unbilled"
+    },
+    "loading": "Loading unbilled time",
+    "total": "Unbilled total",
+    "selected": "Selected",
+    "noContact": "No customer",
+    "empty": {
+      "unbilled": "No unbilled time",
+      "hint": "Approved billable time appears here, ready to invoice."
+    },
+    "col": {
+      "select": "Select",
+      "selectEntry": "Select time on {project}",
+      "item": "Item",
+      "duration": "Duration",
+      "value": "Value",
+      "project": "Project"
+    },
+    "action": {
+      "generate_draft": "Create draft invoice"
+    },
+    "success": {
+      "draft_created": "Draft invoice created."
+    },
+    "status": {
+      "billed": "Billed"
+    },
+    "savedView": {
+      "label": "Saved view"
+    },
+    "error": {
+      "permissionDenied": "No permission to read billing.",
+      "transport": "Could not load unbilled time. Please retry.",
+      "mixed_contacts": "Select time for a single customer per invoice.",
+      "already_billed": "Some entries are already billed. Selection refreshed.",
+      "currency_mismatch": "The rate currency does not match the invoice currency.",
+      "invoice_not_draft": "Only draft invoices can release time.",
+      "empty_selection": "Select at least one entry."
+    },
+    "wip": {
+      "title": "Work in progress",
+      "tableCaption": "WIP by project",
+      "empty": "No WIP.",
+      "oldest": "Oldest entry",
+      "days": "days"
+    }
+  },
+  "retainer": {
+    "tab": { "title": "Retainers" },
+    "tableCaption": "Retainer list",
+    "emptyTitle": "No retainers yet.",
+    "emptyHint": "A retainer bills a fixed periodic fee, draws included hours down against approved time, and invoices anything over the cap.",
+    "loading": "Loading retainers",
+    "action": {
+      "create": "New retainer",
+      "generate": "Generate invoice",
+      "runDue": "Run all due",
+      "close": "End retainer",
+      "cancel": "Cancel"
+    },
+    "field": {
+      "contact": "Client",
+      "contactPlaceholder": "Pick a client",
+      "project": "Project",
+      "projectAll": "All of the client's projects",
+      "periodLabel": "Billing period",
+      "period": { "monthly": "Monthly", "quarterly": "Quarterly" },
+      "fee": "Retainer fee",
+      "included": "Included hours",
+      "cap": "Cap",
+      "startsOn": "Starts on",
+      "rollover": "Roll over unused hours",
+      "genPeriod": "Period to bill"
+    },
+    "col": {
+      "contact": "Client",
+      "period": "Period",
+      "fee": "Fee",
+      "burndown": "Burn-down",
+      "status": "Status",
+      "actions": "Actions",
+      "since": "since"
+    },
+    "status": { "draft": "Draft", "active": "Active", "ended": "Ended" },
+    "burndown": { "carryover": "carried over", "overcap": "over cap" },
+    "warning": {
+      "cap_below_included": "Cap is below the value of the included hours."
+    },
+    "error": {
+      "permissionDenied": "No permission to manage retainers.",
+      "transport": "Could not load retainers. Please retry.",
+      "invalid_fee": "The fee must be greater than zero.",
+      "invalid_hours": "Included hours cannot be negative.",
+      "period_not_closed": "The period has not ended yet.",
+      "period_pending": "Generate or skip the final period first.",
+      "retainer_not_found": "Retainer not found.",
+      "retainer_not_active": "This retainer is not active.",
+      "invalid_period_key": "That period does not match this retainer.",
+      "currency_mismatch": "Some time is in another currency than the retainer.",
+      "retainer_has_draws": "This field is frozen once a period has been billed.",
+      "retainer_ended": "This retainer has ended."
+    }
+  },
+  "help": {
+    "Time": {
+      "title": "Time",
+      "body": "Time capture with a running timer and a timesheet: you start a timer or enter hours later, assign them to project and phase, and submit the sheet for approval. Approved time can be locked so billed hours stop moving. Rates live in the card below; without a rate there is no silent zero, only a note asking for one.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

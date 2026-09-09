@@ -1,0 +1,87 @@
+{
+  "nav": {
+    "inventoryValuationRuns": "Valuation runs"
+  },
+  "invRun": {
+    "title": "Inventory valuation and reconciliation",
+    "noWorkspace": "Pick a workspace to value its inventory and reconcile it to the ledger.",
+    "reverseReason": "Reversed from the valuation runs screen",
+    "newRun": "New run",
+    "reverse": "Reverse",
+    "asOf": "Cut-off date",
+    "period": "Period",
+    "calculate": "Calculate",
+    "compute": "Compute",
+    "cancel": "Cancel",
+    "close": "Close",
+    "post": "Post to the ledger",
+    "runCheck": "Run reconciliation",
+    "proposedTotal": "Proposed inventory value:",
+    "proposedDelta": "Adjustment to post:",
+    "confirmPostTitle": "Post inventory to the ledger?",
+    "confirmPostBody": "This posts the adjusting entry into the general ledger. The entry is immutable once posted and can only be undone by a reversing entry.",
+    "caption": {
+      "runs": "Valuation runs",
+      "lines": "Proposed valuation lines",
+      "report": "Inventory value by control account",
+      "recon": "Reconciliation by control account"
+    },
+    "tab": {
+      "runs": "Runs",
+      "report": "Report",
+      "reconciliation": "Reconciliation"
+    },
+    "empty": {
+      "title": "No valuation runs yet",
+      "hint": "Create a run to value inventory at a cut-off and post it to the balance sheet."
+    },
+    "report": {
+      "title": "Valuation report",
+      "hint": "Pick a cut-off and compute the live inventory value, grouped by control account.",
+      "total": "Total inventory value:"
+    },
+    "recon": {
+      "title": "Reconciliation",
+      "hint": "Pick a period and check that the sub-ledger valuation agrees with the ledger."
+    },
+    "col": {
+      "asOf": "Cut-off",
+      "method": "Method",
+      "status": "Status",
+      "total": "Value",
+      "delta": "Delta",
+      "actions": "Actions",
+      "item": "Item",
+      "qty": "Quantity",
+      "unitCost": "Unit cost",
+      "value": "Value",
+      "account": "Control account",
+      "lines": "Lines",
+      "subLedger": "Sub-ledger",
+      "glBalance": "Ledger balance"
+    },
+    "status": {
+      "draft": "Draft",
+      "posted": "Posted",
+      "reversed": "Reversed"
+    },
+    "reconStatus": {
+      "balanced": "Balanced",
+      "drift": "Drift",
+      "unposted": "Unposted"
+    },
+    "method": {
+      "weighted_average": "Weighted average",
+      "fifo": "FIFO",
+      "standard_cost": "Standard cost"
+    }
+  },
+  "help": {
+    "ValuationRuns": {
+      "title": "Inventory valuation and reconciliation",
+      "body": "Here inventory is valued, posted into the books and reconciled against the general ledger. A run: pick a cut-off, calculate, review the lines and the proposed adjusting entry, then post or reverse. The report shows the authoritative valuation at a cut-off per control account, read straight from the engine. The reconciliation sets sub-ledger against general ledger and names every difference; the period close runs the same check.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

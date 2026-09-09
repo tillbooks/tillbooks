@@ -1,0 +1,102 @@
+{
+  "nav": { "requisitions": "Requisitions" },
+  "requisitions": {
+    "title": "Requisitions",
+    "new": "New requisition",
+    "noWorkspace": "Select a workspace to see requisitions.",
+    "showAll": "Show all statuses",
+    "empty": {
+      "title": "No requisitions yet",
+      "hint": "Capture internal demand before any purchasing action.",
+      "cta": "Create a requisition"
+    },
+    "error": { "transport": "Requisitions could not be loaded." },
+    "list": { "caption": "Requisitions with status, requester, needed-by date, urgency and estimated value" },
+    "col": {
+      "number": "Number",
+      "status": "Status",
+      "requester": "Requester",
+      "neededBy": "Needed by",
+      "urgency": "Urgency",
+      "total": "Estimated",
+      "actions": "Actions"
+    },
+    "status": {
+      "draft": "Draft",
+      "pending_approval": "Pending approval",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "partially_converted": "Partially converted",
+      "converted": "Converted",
+      "cancelled": "Cancelled",
+      "closed": "Closed"
+    },
+    "urgency": {
+      "normal": "Normal",
+      "high": "High",
+      "critical": "Critical"
+    },
+    "event": {
+      "submitted": "Submitted",
+      "auto_approved": "Auto-approved",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "returned": "Returned"
+    },
+    "field": {
+      "neededBy": "Needed by",
+      "urgency": "Urgency",
+      "description": "Description",
+      "costCenter": "Cost centre",
+      "item": "Item",
+      "freeText": "Free text",
+      "qty": "Quantity",
+      "unitCost": "Est. unit cost (CHF)",
+      "supplier": "Preferred supplier",
+      "none": "None",
+      "choose": "Choose",
+      "reason": "Reason",
+      "comment": "Comment",
+      "createAs": "Create as",
+      "createDraft": "Draft",
+      "createSent": "Sent",
+      "convertQty": "Quantity to convert"
+    },
+    "detail": {
+      "title": "Requisition",
+      "lines": "Lines",
+      "open": "Open",
+      "lineTotal": "Line total",
+      "timeline": "Approval history",
+      "noEvents": "No decisions yet.",
+      "conversions": "Purchase orders",
+      "po": "Purchase order"
+    },
+    "action": {
+      "submit": "Submit for approval",
+      "approve": "Approve",
+      "reject": "Reject",
+      "return": "Return for revision",
+      "convert": "Convert to PO",
+      "cancel": "Cancel requisition",
+      "close": "Close",
+      "save": "Save",
+      "back": "Close",
+      "addLine": "Add line",
+      "removeLine": "Remove",
+      "confirmConvert": "Create purchase order"
+    },
+    "convert": {
+      "title": "Convert to purchase order",
+      "help": "Select the quantity of each line to order and confirm the supplier."
+    }
+  },
+  "help": {
+    "Requisitions": {
+      "title": "Requisitions",
+      "body": "Internal demand starts here as a requisition: what is needed, by when, how urgent, with an estimated value. A requisition moves through submit, approve or reject, and can finally be converted into a purchase order; the approval timeline stays visible on the record. Nothing posts and nothing leaves the workspace: the estimate is a planning figure, not a posted amount.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,109 @@
+/* C03 Prognose: one accent, tabular numerals on every figure, glyph+label states. */
+
+.forecast {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The filter triplet (Gruppierung, Horizont, Periode) is genuinely surface-specific: a forecast lens
+   has no text search, so the shared FilterBar (search-first) does not fit. It sits under the shared
+   SurfaceHeader, which now carries the title, help and the always-on §3 disclaimer subtitle. */
+.forecast-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+}
+
+.forecast-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.forecast-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--t-space-4);
+  padding: var(--t-space-4);
+}
+
+.forecast-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.forecast-kpi-label {
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+}
+
+.forecast-kpi-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.forecast-kpi-hint {
+  font-size: 0.75rem;
+  color: var(--t-text-dim);
+}
+
+/* The panel wraps a heading over a shared DataTable, which owns its own frame overflow, sticky header
+   and density-aware rows; the panel keeps only its padding. */
+.forecast-panel {
+  padding: var(--t-space-4);
+}
+
+/* The vs-actual figures are a description list, not a table, so they keep their own tabular alignment. */
+.forecast-vs .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The emphasised figure per table (the weighted pipeline total and each monthly forecast total) is
+   money, so it is plain ink, never the accent (DESIGN, the money semantics). Weight carries emphasis. */
+.forecast-total {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.forecast-read-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+}
+
+.forecast-excluded {
+  margin: var(--t-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+}
+
+.forecast-vs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--t-space-4);
+  margin: 0;
+}
+
+.forecast-vs dt {
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+}
+
+.forecast-vs dd {
+  margin: 0.25rem 0 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.forecast-delta-label {
+  font-size: 0.8125rem;
+  font-weight: 400;
+}

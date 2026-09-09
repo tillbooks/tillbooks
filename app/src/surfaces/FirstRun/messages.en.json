@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "firstRun": "First run"
+  },
+  "firstrun": {
+    "title": "Set up your ledger",
+    "lead": "TILL found no ledger on this machine. Pick a door: nothing is created until you do.",
+    "lead_existing_one": "This machine already carries one ledger. These doors add another; your existing books stay untouched.",
+    "lead_existing_many": "This machine already carries {count} ledgers. These doors add another; your existing books stay untouched.",
+    "existing": {
+      "overview": "Back to the overview"
+    },
+    "create": {
+      "label": "Create a new ledger",
+      "label_existing": "Create another ledger",
+      "hint": "Start a fresh set of books with the Swiss KMU chart of accounts.",
+      "name_label": "Company name",
+      "name_placeholder": "Acme GmbH",
+      "action": "Create ledger",
+      "busy": "Creating...",
+      "verb": "Agent: create_workspace"
+    },
+    "restore": {
+      "label": "Restore a backup",
+      "hint": "Load a .tillbackup file. Ids are re-minted into a fresh workspace; nothing is overwritten.",
+      "expects": "This install expects schema generation {generation}.",
+      "pick_label": "Backups on this device ({count})",
+      "pick_row": "{date}: generation {generation}, {entries} entries",
+      "pick_incompatible": "Generation {generation} does not match this install. Install the matching release and restore it there.",
+      "pick_other": "Another path",
+      "verified": "Checked: generation {generation}, {entries} entries, balanced. Restoring.",
+      "source_label": "Backup file",
+      "source_placeholder": "/path/to/books.tillbackup",
+      "name_label": "New workspace name (optional)",
+      "name_default": "Restored ledger",
+      "action": "Restore backup",
+      "busy": "Restoring...",
+      "verb": "Agent: restore_backup"
+    },
+    "adopt": {
+      "label": "Adopt an existing database",
+      "hint": "Already have a .till.db? Point TILL at it and restart. TILL never copies or moves the file.",
+      "path_label": "Database path",
+      "path_placeholder": "/path/to/till.db",
+      "cmd_label": "Command to adopt this database",
+      "verb": "A path is configuration, not tenant data: adoption is config plus restart, not a verb."
+    },
+    "error": {
+      "generic": "That did not work: {code}.",
+      "not_a_till_database": "That file is not a TILL database. The file was left untouched. Pick another.",
+      "schema_newer_than_runtime": "That database was written by a newer TILL. Update TILL, then try again. The file was not changed.",
+      "incompatible_schema_version": "This backup comes from schema generation {backup}; this install runs generation {runtime}. Install the current release, restore the backup there, then upgrade on your own schedule. The backup was left untouched.",
+      "unrestorable_format": "An export (.tillexport) is not a restore source. Choose a .tillbackup file.",
+      "unbalanced": "Checked, but not balanced: generation {generation}, {entries} entries. TILL will not restore it. Choose another backup."
+    },
+    "demo": {
+      "lead": "Want to look around with sample data first?",
+      "action": "Try the demo",
+      "busy": "Creating the demo",
+      "hint": "A demo workspace with sample postings. You can delete it later."
+    }
+  },
+  "runtime": {
+    "loading": "Reading the runtime...",
+    "mode": {
+      "label": "Running as: {mode}",
+      "up": "till up (Studio, REST and MCP on one process)",
+      "mcp": "till mcp (agent over stdio)",
+      "serve": "till serve (MCP over HTTP)",
+      "agent_session": "agent session (inside the agent runtime)"
+    },
+    "scheduler": {
+      "armed": "Scheduler on, no tick yet.",
+      "last_tick": "Scheduler on, last tick {at}.",
+      "off": "Scheduler off (recurring cadences fire only while till up runs)."
+    },
+    "residency": {
+      "caveat": "This session runs in a cloud environment: your books do not stay only on your machine while it runs. Back up at the end of the session and carry the file out."
+    }
+  },
+  "help": {
+    "FirstRun": {
+      "title": "First run",
+      "body": "This is the first screen when TILL has no workspace open. You choose one of three doors: create a fresh workspace, restore one from a backup file, or adopt a store that already lives on this machine. Nothing is created silently, since each door confirms before it writes, and until you pick one, no books exist yet.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  },
+  "journey": {
+    "_block": "M03 journey (N4a)",
+    "residency": {
+      "lead": "Your books are a single file on this device. Nothing is sent. Disk encryption is the operating system's job (FileVault)."
+    }
+  }
+}

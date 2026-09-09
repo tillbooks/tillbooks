@@ -1,0 +1,105 @@
+/* A31 Belegeingang. Only --t-* tokens, no new palette (DESIGN.md). The page header, the queue table
+   and the review drawer are the shared primitives (SurfaceHeader, DataTable, DetailDrawer); what is
+   left here is genuinely Capture-specific: the drop zone, the status badge, the field key/value table
+   and its provenance/confidence badges, the commit target set and the commit call to action. */
+
+.capture__drop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+  cursor: pointer;
+}
+.capture__notice {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+  margin-bottom: 1rem;
+}
+
+/* The selected queue row, while its review drawer is open, carries the accent-soft fill so the open
+   record stays identifiable behind the drawer. */
+.capture__row--active td {
+  background: var(--t-bg-soft);
+}
+
+/* The overflow trigger's cell: it is its own click target inside a clickable row. */
+.capture__rowActions {
+  display: inline-flex;
+}
+
+/* The field proposal: a key/value table inside the review drawer. */
+.capture__fields {
+  margin-top: 0.75rem;
+}
+.capture__fields table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.capture__fields th,
+.capture__fields td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: top;
+}
+.capture__val {
+  font-variant-numeric: tabular-nums;
+}
+.capture__prov,
+.capture__conf {
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+}
+.capture__docref {
+  color: var(--t-text-dim);
+  margin: 0;
+}
+
+.capture__target {
+  border: none;
+  display: flex;
+  gap: 1rem;
+  padding: 0;
+  margin-top: 1rem;
+}
+.capture__cta {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--t-accent);
+  color: var(--t-on-accent);
+  cursor: pointer;
+}
+.capture__cta:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* F-03 (J3.1): the two pickers the commit needs, inside the review drawer. */
+.capture__pickers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.capture__picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.capture__picker > span {
+  font-size: 0.85rem;
+  color: var(--t-text-dim);
+}
+.capture__consequence {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+.capture__committed {
+  margin: 0;
+}

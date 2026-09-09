@@ -1,0 +1,49 @@
+/*
+ * F00's "Wartet auf dich" strip. It spends ZERO accent (the count is not attention-coloured); the
+ * whole row is one quiet link into /attention, with the focus ring the only accent it ever shows.
+ */
+.att-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: 44px;
+  padding: var(--t-space-1) var(--t-space-2);
+  margin-bottom: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  font-size: 13px;
+  color: var(--t-text);
+}
+
+.att-strip--muted {
+  color: var(--t-text-dim);
+  background: var(--t-bg-soft);
+}
+
+.att-strip--link {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.att-strip--link:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+.att-strip-count {
+  font-weight: 600;
+}
+
+.att-strip-lead {
+  color: var(--t-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.att-strip-go {
+  margin-left: auto;
+  color: var(--t-text-faint);
+}

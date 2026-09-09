@@ -1,0 +1,75 @@
+{
+  "nav": {
+    "inventoryReasonCodes": "Korrekturgründe"
+  },
+  "reasonCodes": {
+    "title": "Korrekturgründe",
+    "new": "Neuer Grund",
+    "edit": "Bearbeiten",
+    "archive": "Archivieren",
+    "save": "Speichern",
+    "close": "Schliessen",
+    "showArchived": "Archivierte zeigen",
+    "noteRequiredMark": "Notiz nötig",
+    "noWorkspace": "Wähle einen Arbeitsbereich, um Korrekturgründe zu verwalten.",
+    "selectHint": "Wähle einen Grund.",
+    "col": {
+      "code": "Code",
+      "name": "Name",
+      "category": "Kategorie",
+      "note": "Notiz",
+      "state": "Status",
+      "actions": "Aktionen"
+    },
+    "state": {
+      "active": "Aktiv",
+      "archived": "Archiviert"
+    },
+    "category": {
+      "shrinkage": "Schwund",
+      "damage": "Beschädigung",
+      "found": "Gefunden",
+      "count_variance": "Inventurdifferenz",
+      "obsolescence": "Obsoleszenz",
+      "theft": "Diebstahl",
+      "quality": "Qualität",
+      "correction": "Korrektur",
+      "reversal": "Storno",
+      "system": "System",
+      "other": "Anderes"
+    },
+    "form": {
+      "title": "Korrekturgrund",
+      "titleNew": "Neuer Korrekturgrund",
+      "titleEdit": "Korrekturgrund bearbeiten",
+      "code": "Code",
+      "name": "Name",
+      "category": "Kategorie",
+      "requiresNote": "Bei jeder Korrektur eine Notiz verlangen",
+      "defaultForStocktake": "Standard für Inventurdifferenzen",
+      "description": "Beschreibung"
+    },
+    "empty": {
+      "title": "Noch keine Korrekturgründe",
+      "hint": "Lege deinen ersten Korrekturgrund an, damit jede Bestandeskorrektur klassifiziert werden kann.",
+      "cta": "Grund anlegen"
+    },
+    "list": {
+      "caption": "Katalog der Korrekturgründe"
+    },
+    "error": {
+      "transport": "Die Korrekturgründe konnten nicht geladen werden."
+    },
+    "errors": {
+      "duplicate_code": "Ein Korrekturgrund mit diesem Code besteht in diesem Arbeitsbereich bereits."
+    }
+  },
+  "help": {
+    "ReasonCodes": {
+      "title": "Korrekturgründe",
+      "body": "Der Katalog der Gründe, mit denen Lagerkorrekturen begründet werden: Code, Name, Kategorie und ob eine Notiz verlangt ist. Was du hier führst, erscheint als Auswahl beim Erfassen einer Korrektur; so bleibt jede Bestandsänderung mit einem benannten Grund verknüpft. Archivieren nimmt einen Grund aus den Auswahllisten, ohne die Historie anzutasten: Alte Korrekturen behalten ihren Grund.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

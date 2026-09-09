@@ -1,0 +1,132 @@
+/* A06 VAT controls: the tax-code picker (S9), the per-line readout, and the summary panel (S10).
+   No new colours (DESIGN.md is authoritative); the accent stays reserved. Numeric figures use
+   tabular numerals so columns line up. */
+
+.vat-code-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.vat-code-error {
+  margin: 0;
+  color: var(--t-danger);
+  font-size: 0.8125rem;
+}
+
+.vat-code-readonly {
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.vat-needs-config {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+}
+
+.vat-needs-config-cta {
+  color: var(--t-accent);
+  text-decoration: underline;
+}
+
+.vat-readout {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.vat-readout-figures {
+  display: flex;
+  gap: var(--t-space-2);
+}
+
+.vat-readout-error {
+  color: var(--t-danger);
+}
+
+/* Scoped so the VatSettings `.vat-badge` pill (its method/timing chips, loaded globally by Vite)
+   cannot bleed in and render these as bordered pills: the readout and summary badges are plain
+   glyph + word, never pills. */
+.vat-line-badge,
+.vat-summary-badge {
+  color: var(--t-text-dim);
+  font-weight: 500;
+}
+
+/* The summary sub-panel: an elevated block with a hairline border and a small radius. */
+.vat-summary {
+  margin-top: var(--t-space-2);
+  padding: var(--t-space-2) var(--t-space-3);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.vat-summary-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.vat-summary-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.vat-summary-link {
+  color: var(--t-accent);
+  font-size: 0.8125rem;
+  text-decoration: underline;
+}
+
+.vat-summary-rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.vat-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.vat-summary-row dt,
+.vat-summary-row dd {
+  margin: 0;
+}
+
+.vat-summary-base {
+  color: var(--t-text-dim);
+}
+
+.vat-summary-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding-top: var(--t-space-1);
+  border-top: 1px solid var(--t-border);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.vat-summary-empty {
+  margin: var(--t-space-2) 0 0;
+  color: var(--t-text-dim);
+  font-size: 0.8125rem;
+}

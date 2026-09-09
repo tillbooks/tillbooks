@@ -1,0 +1,81 @@
+{
+  "nav": {
+    "procurementAnalytics": "Analytics"
+  },
+  "procurement": {
+    "analytics": {
+      "title": "Procurement analytics",
+      "subtitle": "Open commitments, match exceptions, spend, supplier scorecards and GR/IR exposure, from one structured read.",
+      "reportsLabel": "Standard reports",
+      "noWorkspace": "Pick a workspace to view procurement analytics.",
+      "emptyTitle": "Nothing to show",
+      "emptyHint": "No matching procurement activity for this report and filter.",
+      "from": "From",
+      "to": "To",
+      "run": "Run",
+      "report": {
+        "openCommitments": "Open commitments",
+        "matchStatus": "Match exceptions",
+        "spendSummary": "Spend summary",
+        "supplierScorecard": "Supplier scorecards",
+        "requisitionPipeline": "Requisition pipeline",
+        "grirClearing": "GR/IR clearing",
+        "landedCostVariance": "Landed-cost variance",
+        "poCycle": "PO cycle time",
+        "anomalies": "Anomalies"
+      },
+      "col": {
+        "po": "PO",
+        "supplier": "Supplier",
+        "openQty": "Open qty",
+        "openValue": "Open value",
+        "aging": "Aging",
+        "status": "Status",
+        "priceVariance": "Price variance",
+        "nextAction": "Next action",
+        "group": "Group",
+        "docs": "Documents",
+        "ordered": "Ordered",
+        "received": "Received",
+        "billed": "Billed",
+        "score": "Score",
+        "onTime": "On-time %",
+        "spend": "Spend",
+        "requisition": "Requisition",
+        "daysInStatus": "Days in status",
+        "estimated": "Estimated",
+        "side": "Side",
+        "count": "Count",
+        "residual": "Residual",
+        "voucher": "Voucher",
+        "date": "Date",
+        "planned": "Planned",
+        "capitalized": "Capitalized",
+        "variance": "Variance",
+        "completed": "Completed",
+        "toReceipt": "Order to receipt (days)",
+        "toMatch": "Order to match (days)",
+        "severity": "Severity",
+        "type": "Type",
+        "summary": "Summary"
+      },
+      "total": {
+        "count": "Open lines",
+        "openValue": "Open value",
+        "matchStatus": "Match status",
+        "billed": "Billed total",
+        "conversion": "Conversion rate",
+        "netExposure": "Net GR/IR exposure",
+        "grirStatus": "GR/IR status"
+      }
+    }
+  },
+  "help": {
+    "ProcurementAnalytics": {
+      "title": "Procurement analytics",
+      "body": "Analytics over your purchasing, each a pure read from the engine: open commitments, match exceptions, spend, supplier scorecards, the requisition pipeline, the clearing between goods receipt and invoice, landed-cost variances, cycle times and anomalies. You pick the report on the left, narrow the date range on the right and read the totals and the preview. Nothing is computed here: the page renders what the engine returns.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

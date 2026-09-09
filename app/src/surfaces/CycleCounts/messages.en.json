@@ -1,0 +1,91 @@
+{
+  "nav": {
+    "cycleCounts": "Cycle counts"
+  },
+  "cycleCounts": {
+    "title": "Cycle counts",
+    "new": "New count",
+    "create": "Create",
+    "close": "Close",
+    "cancel": "Cancel session",
+    "commit": "Commit",
+    "approveAll": "Approve flagged",
+    "saveCount": "Save",
+    "recount": "Recount",
+    "freeze": "Freeze date",
+    "progress": "Progress",
+    "selectHint": "Select a session to count and review.",
+    "listLabel": "Stocktake sessions",
+    "detailLabel": "Session detail",
+    "noLines": "This session has no lines.",
+    "lineCount": "{n} lines",
+    "reviewBanner": "{n} lines exceed the variance threshold and need approval before commit.",
+    "committedBanner": "Committed. Variances were posted as inventory movements.",
+    "inventarFiled": "Inventar filed",
+    "noWorkspace": "Open a workspace to run a stocktake.",
+    "confirm": {
+      "back": "Go back",
+      "commitTitle": "Commit stocktake?",
+      "cancelTitle": "Cancel session?",
+      "commitConsequenceFull": "Committing posts a permanent inventory adjustment for each of the {n} counted variances and files this full count as the statutory Inventar (Bestandesnachweis, OR 958c). Posted movements are immutable and can only be corrected by a compensating movement.",
+      "commitConsequenceCycle": "Committing posts a permanent inventory adjustment for each of the {n} counted variances. Posted movements are immutable and can only be corrected by a compensating movement.",
+      "cancelConsequence": "Cancelling discards this open count session and every count entered in it. The frozen book snapshot and the recorded counts cannot be recovered."
+    },
+    "type": {
+      "full": "Full Inventur",
+      "cycle": "Cycle Count"
+    },
+    "status": {
+      "open": "Open",
+      "review": "Review",
+      "committed": "Committed",
+      "cancelled": "Cancelled"
+    },
+    "lineStatus": {
+      "pending": "Pending",
+      "counted": "Counted",
+      "review_required": "Review",
+      "approved": "Approved"
+    },
+    "col": {
+      "item": "Item",
+      "location": "Location",
+      "book": "Book",
+      "counted": "Counted",
+      "variance": "Variance",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "form": {
+      "title": "New stocktake",
+      "type": "Type",
+      "freeze": "Freeze date",
+      "blind": "Blind count (hide book quantity until review)",
+      "qtyThreshold": "Quantity variance threshold",
+      "pctThreshold": "Percent variance threshold",
+      "notes": "Notes"
+    },
+    "empty": {
+      "title": "No stocktakes yet",
+      "hint": "Start a full Inventur or a cycle count to freeze a book snapshot and record counts."
+    },
+    "error": {
+      "transport": "The stocktake list could not be loaded."
+    },
+    "errors": {
+      "stocktake_not_open": "This session is no longer open for counting.",
+      "uncounted_or_unapproved_lines": "Every line must be counted and approved before commit.",
+      "already_committed": "This session is already committed.",
+      "period_locked": "The freeze date falls in a locked period, so the movements cannot be posted.",
+      "insufficient_stock": "A negative variance would drive on-hand below zero. Recount or allow negative stock."
+    }
+  },
+  "help": {
+    "CycleCounts": {
+      "title": "Cycle counts",
+      "body": "Stocktakes and cycle counts: a counting session freezes the book quantity, then you count, and the variances are reviewed and approved. On commit every variance is posted as its own immutable stock movement; on-hand is never overwritten directly. A blind count hides the book column until the session reaches review.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

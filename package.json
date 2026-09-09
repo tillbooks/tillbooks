@@ -1,0 +1,76 @@
+{
+  "name": "tillbooks",
+  "version": "0.0.0",
+  "private": true,
+  "description": "TILL (Trusted Independent Ledger Library) is a free, open-source (MIT), local-first Swiss accounting app where an AI agent posts entries, categorizes, drafts and chases invoices, and prepares the MWST-Abrechnung through a first-class MCP interface, with a minimalist Studio for human oversight.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nomadik GmbH",
+  "homepage": "https://tillbooks.ch",
+  "bin": {
+    "till": "bin/till.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "accounting",
+    "swiss",
+    "switzerland",
+    "bookkeeping",
+    "mcp",
+    "mcp-server",
+    "agent",
+    "agent-native",
+    "local-first",
+    "self-hosted",
+    "open-source",
+    "double-entry",
+    "ledger",
+    "qr-bill",
+    "qr-rechnung",
+    "mwst",
+    "vat",
+    "iso20022",
+    "kmu",
+    "bexio-alternative",
+    "erp"
+  ],
+  "files": [
+    "bin/",
+    "dist/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "setup": "npm ci && npm --prefix app ci",
+    "build:studio": "npm --prefix app run build",
+    "build:all": "npm run build && npm run build:studio",
+    "typecheck": "npm run typecheck:src && npm run typecheck:test",
+    "typecheck:src": "tsc -p tsconfig.json --noEmit",
+    "typecheck:test": "npm run build && tsc -p tsconfig.test.json",
+    "pretest": "npm run build",
+    "test": "TILL_SUPPORT_DIR=$PWD/.tmp-support node --test test/*.test.mjs test/*/*.test.mjs",
+    "check:style": "node scripts/check-style.mjs",
+    "check": "npm run typecheck && npm run check:style && npm test",
+    "gate": "npm run check && npm run gate:studio",
+    "gate:studio": "cd app && npm run build && npx vitest run",
+    "seed:demo": "npm run build && TILL_DB_PATH=$HOME/.till/till-demo.db node scripts/seed-demo-rich.mjs",
+    "seed:demo:reset": "npm run build && TILL_DB_PATH=$HOME/.till/till-demo.db node scripts/seed-demo-rich.mjs --reset",
+    "seed:kaizen": "npm run build && TILL_DB_PATH=$HOME/.till/till-kaizen-golden.db TILL_SEED_TODAY=$(date +%F) node scripts/seed-demo-rich.mjs --reset",
+    "seed:kaizen:restore": "sh -c 'rm -f \"$HOME/.till/till-kaizen.db\" \"$HOME/.till/till-kaizen.db-wal\" \"$HOME/.till/till-kaizen.db-shm\" && cp \"$HOME/.till/till-kaizen-golden.db\" \"$HOME/.till/till-kaizen.db\" && for s in -wal -shm; do if [ -f \"$HOME/.till/till-kaizen-golden.db$s\" ]; then cp \"$HOME/.till/till-kaizen-golden.db$s\" \"$HOME/.till/till-kaizen.db$s\"; fi; done'",
+    "extract:btc": "node scripts/extract-btc.mjs",
+    "build:mcpb": "node scripts/build-mcpb.mjs"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.3.0",
+    "jsqr": "^1.4.0",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "better-sqlite3": "^13.0.3"
+  }
+}

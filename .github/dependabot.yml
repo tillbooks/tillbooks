@@ -1,0 +1,52 @@
+# Dependabot configuration for TILL (tillbooks).
+# The public repo ships the engine core (root package, with a lockfile) and the
+# Studio (app/, its own lockfile). The marketing site (web/) is not part of the
+# public repo, so it has no entry here. All pull requests target the develop
+# integration trunk.
+#
+# Note: GitHub Actions is disabled org-wide (a billing cap), so the local
+# .githooks/pre-push gate is the real CI. A github-actions ecosystem entry is
+# included anyway so action pins stay current for whoever re-enables Actions.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    target-branch: develop
+    groups:
+      engine-dependencies:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: "/app"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    target-branch: develop
+    groups:
+      studio-dependencies:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - github-actions
+    target-branch: develop
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch

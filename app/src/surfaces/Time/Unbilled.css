@@ -1,0 +1,82 @@
+/* B02, the Unverrechnet panel and the WIP card. A disjoint stylesheet (Unbilled.tsx owns it),
+   reusing B01's time-table, chips and button tokens: one tree panel and one card, no new primitives.
+   One accent (brass, per brand/DESIGN.md D53), spent only on attention; money never wears it. */
+
+.time-billing {
+  margin-top: var(--t-space-6);
+}
+
+/* The Unverrechnet PILE is a contact -> project -> phase tree with colspanned group-header rows and a
+   per-entry select column, which the flat DataTable row model cannot express, so it stays a bespoke
+   table. The WIP report beside it IS the shared DataTable (D118 B2). This table used to borrow B01's
+   `.time-table` base; that base was deleted with the timesheet's DataTable adoption, so the tree
+   carries its own here. Only --t-* tokens. */
+.time-billing-tree {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.time-billing-tree th,
+.time-billing-tree td {
+  text-align: left;
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: top;
+}
+
+.time-billing-tree .time-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-billing-tree .time-billing-contact td {
+  padding-top: var(--t-space-3);
+  border-top: 1px solid var(--t-border);
+}
+
+.time-billing-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-4);
+  margin-top: var(--t-space-3);
+  padding-top: var(--t-space-3);
+  border-top: 2px solid var(--t-border);
+}
+
+.time-billing-footer .btn {
+  margin-inline-start: auto;
+}
+
+.time-billing-wip {
+  margin-top: var(--t-space-6);
+}
+
+.time-billing-wip-title {
+  font-size: 1.125rem;
+  margin-bottom: var(--t-space-2);
+}
+
+/* Separation is the background step, not a box: the forbidden list bans a hairline around a card. */
+.time-billing-wip-card {
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-4);
+}
+
+/* The WIP figure is money, so it is plain ink (never the accent) and tabular so it does not shift. */
+.time-billing-wip-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: var(--t-space-3);
+}
+
+/* D116: the per-entry selection checkbox sits in a dense billing row, so it holds the denser tap
+   band (>= the 24px AA floor) rather than the standalone 44px, and carries the brand accent. */
+.time-billing-tree input[type='checkbox'] {
+  width: 1.5rem;
+  height: 1.5rem;
+  accent-color: var(--t-accent);
+}

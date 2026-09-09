@@ -1,0 +1,88 @@
+{
+  "nav": {
+    "creditorPayments": "Kreditorenzahlungen"
+  },
+  "pay": {
+    "title": "Zahlungen an Kreditoren",
+    "error": {
+      "permission_denied": "Du hast keine Berechtigung, Zahlungsläufe zu sehen."
+    },
+    "empty": {
+      "title": "Nichts zu bezahlen",
+      "hint": "Es gibt aktuell keine offenen Kreditorenrechnungen.",
+      "toBills": "Zu den Kreditorenrechnungen"
+    },
+    "selectBills": "Rechnungen auswählen",
+    "selectOne": "{vendor} auswählen",
+    "column": {
+      "vendor": "Lieferant",
+      "due": "Fällig",
+      "amount": "Betrag",
+      "reference": "Referenz"
+    },
+    "status": {
+      "alreadyBatched": "Bereits in einem Zahlungslauf",
+      "draft": "Entwurf",
+      "generated": "Generiert",
+      "paid": "Bezahlt"
+    },
+    "needsCreditorIban": "IBAN des Lieferanten fehlt",
+    "addCreditorIban": "IBAN hinterlegen",
+    "needsMasterData": "Erfordert die Berechtigung Stammdaten",
+    "profile": {
+      "title": "IBAN für {vendor} hinterlegen",
+      "ibanLabel": "IBAN oder QR-IBAN",
+      "save": "Speichern",
+      "saving": "Wird gespeichert…",
+      "close": "Schliessen"
+    },
+    "unsupportedCurrency": "Währung nicht unterstützt",
+    "referenceKind": {
+      "qrr": "QR-Referenz",
+      "scor": "Creditor Reference",
+      "free_text": "Freitext",
+      "none": "Keine"
+    },
+    "debtorAccount": "Belastungskonto",
+    "needsBankAccount": "Kein Bankkonto verfügbar",
+    "executionDate": "Ausführungsdatum",
+    "selectedTotal": "Ausgewählter Betrag",
+    "generate": "pain.001 generieren",
+    "generating": "Wird generiert…",
+    "needsCapability": "Erfordert die Berechtigung Zahlungen",
+    "valid": "Datei ist gültig",
+    "summary": "{n} Zahlungen, {total}, Ausführung {date}.",
+    "download": "Datei herunterladen",
+    "transmitNote": {
+      "manual": "Diese Datei wird nicht automatisch übermittelt: lade sie selbst in dein E-Banking hoch.",
+      "channel": "Ein Übermittlungskanal ist konfiguriert: die Übertragung läuft über die dafür vorgesehene Freigabe."
+    },
+    "markPaidAction": "Als bezahlt markieren",
+    "markPaid": {
+      "confirmTitle": "Hat die Bank diese Zahlung ausgeführt?",
+      "confirmLabel": "Ich bestätige, dass die Bank diese Überweisung ausgeführt hat.",
+      "confirm": "Bestätigen",
+      "confirming": "Wird bestätigt…",
+      "close": "Schliessen"
+    },
+    "valueDate": "Valutadatum",
+    "cancel": "Abbrechen",
+    "newBatch": "Neuer Zahlungslauf",
+    "paidOn": "Bezahlt am {date}.",
+    "toBillsLink": "Zu den Kreditorenrechnungen",
+    "transmit": "An Bank übertragen",
+    "transmitLocked": "Das Übertragen an die Bank benötigt die Zahlungsberechtigung.",
+    "pendingRelease": "An die Bank übermittelt. Gib die Zahlung im Freigabeprozess deiner Bank frei, um sie abzuschliessen; als bezahlt gilt erst der Belastungseintrag auf einem Kontoauszug.",
+    "transmitDegraded": "Kein EBICS-Kanal verfügbar, es wurde nichts übermittelt: lade die heruntergeladene Datei wie gewohnt in dein E-Banking hoch.",
+    "transmitError": "Die Übertragung konnte nicht abgeschlossen werden. Der Zahlungslauf bleibt unverändert; es wurde nichts bezahlt.",
+    "pickAccountInCurrency": "Konto in {currency} wählen"
+  },
+  "help": {
+    "CreditorPayments": {
+      "title": "Zahlungen an Kreditoren",
+      "body": "Hier wählst du offene Lieferantenrechnungen aus und erzeugst daraus eine Zahlungsdatei, die dein E-Banking einliest. TILL überweist selbst nichts: Du lädst die Datei herunter und gibst sie bei deiner Bank frei. Erst wenn die Bank ausgeführt hat, markierst du den Lauf hier als bezahlt; erst damit gelten die Rechnungen als beglichen.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

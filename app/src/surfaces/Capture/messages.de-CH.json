@@ -1,0 +1,119 @@
+{
+  "nav": {
+    "captureInbox": "Belegeingang"
+  },
+  "capture": {
+    "route": {
+      "title": "Belegeingang"
+    },
+    "review": {
+      "title": "Prüfung"
+    },
+    "original": {
+      "ref": "Originalbeleg"
+    },
+    "action": {
+      "drop": "Beleg ablegen oder Datei wählen",
+      "commit": "Übernehmen",
+      "discard": "Verwerfen",
+      "reextract": "Erneut auslesen",
+      "more": "Mehr",
+      "back": "Zurück",
+      "commitAndPost": "Übernehmen und buchen"
+    },
+    "col": {
+      "received": "Eingegangen",
+      "status": "Status"
+    },
+    "target": {
+      "legend": "Übernehmen als",
+      "bill": "Lieferantenrechnung",
+      "expense": "Spesenposition"
+    },
+    "commit": {
+      "requires": "Erfordert Buchhalterrolle",
+      "consequenceWithTax": "TILL erstellt die Lieferantenrechnung und bucht sie sofort, mit Vorsteuer {code}.",
+      "consequenceNoTax": "TILL erstellt die Lieferantenrechnung und bucht sie sofort, ohne MWST.",
+      "consequenceNeedsTax": "Wähle zuerst den Vorsteuercode. Dann erstellt TILL die Lieferantenrechnung und bucht sie sofort."
+    },
+    "status": {
+      "needs_review": "Zu prüfen",
+      "committed": "Übernommen",
+      "discarded": "Verworfen"
+    },
+    "provenance": {
+      "qr": "QR-Daten",
+      "swico": "Rechnungsinformationen (Swico)",
+      "local_model": "Lokales Modell",
+      "agent": "Agent",
+      "operator": "Manuell"
+    },
+    "confidence": {
+      "high": "Hoch",
+      "medium": "Mittel",
+      "low": "Tief"
+    },
+    "empty": {
+      "queue": "Keine Belege zur Prüfung.",
+      "fields": "Keine Felder erkannt.",
+      "fieldsHintManual": "Felder manuell erfassen.",
+      "fieldsHintNoqr": "Kein QR-Code gefunden. Felder manuell erfassen."
+    },
+    "duplicate": "Diese Datei ist bereits im Belegeingang.",
+    "field": {
+      "vendor_name": "Lieferant",
+      "vendor_uid": "Lieferanten-UID",
+      "vendor_contact_id": "Lieferant (zugeordnet)",
+      "iban": "IBAN",
+      "reference": "Referenz",
+      "reference_type": "Referenztyp",
+      "amount": "Betrag",
+      "currency": "Währung",
+      "invoice_no": "Rechnungsnummer",
+      "invoice_date": "Rechnungsdatum",
+      "due_date": "Fälligkeitsdatum",
+      "customer_reference": "Kundenreferenz",
+      "vat_rate": "MWST-Satz",
+      "vat_breakdown": "MWST-Aufteilung",
+      "import_vat": "Einfuhrsteuer",
+      "payment_conditions": "Zahlungskonditionen",
+      "expense_account_id": "Aufwandskonto",
+      "tax_code": "Steuercode"
+    },
+    "error": {
+      "unsupported_mime": "Dieser Dateityp kann nicht erfasst werden.",
+      "file_unreadable": "Die Datei konnte nicht gelesen werden.",
+      "needs_vendor": "Vor dem Übernehmen einen Lieferanten wählen.",
+      "needs_account": "Vor dem Übernehmen ein Aufwandskonto wählen.",
+      "needs_amount": "Kein Betrag erkannt; vor dem Übernehmen erfassen.",
+      "invalid_state": "Dieser Beleg wurde bereits übernommen oder verworfen.",
+      "no_matching_tax_code": "Kein konfigurierter MWST-Code entspricht diesem Satz.",
+      "needs_open_claim": "Vor dem Übernehmen eine Spesenabrechnung wählen oder erstellen."
+    },
+    "pick": {
+      "vendor": "Lieferant zuordnen",
+      "vendorPlaceholder": "Lieferant wählen oder Namen tippen",
+      "noVendor": "Kein Lieferant passt. Lege ihn unter Kontakte an.",
+      "account": "Aufwandskonto",
+      "accountPlaceholder": "Kontonummer tippen, z. B. 4200",
+      "noAccount": "Kein Konto passt zur Eingabe.",
+      "tax": "Vorsteuer",
+      "taxChoose": "Code wählen",
+      "taxNone": "Keine MWST"
+    },
+    "postRefused": "Die Rechnung ist als Entwurf angelegt, aber noch nicht gebucht. Buche sie unter Kreditoren.",
+    "committed": {
+      "posted": "Übernommen und gebucht.",
+      "drafted": "Übernommen. Die Buchung wartet auf Freigabe.",
+      "openBill": "Rechnung öffnen"
+    }
+  },
+  "help": {
+    "Capture": {
+      "title": "Belegeingang",
+      "body": "Der Belegeingang sammelt eingelesene Belege zur Prüfung: auf der einen Seite das Originaldokument, auf der anderen der Feldvorschlag zur Kontrolle. Jedes Feld trägt seine Herkunft, ob der Wert maschinenlesbar aus der QR-Rechnung stammt oder von Hand korrigiert wurde. Übernehmen erstellt die Lieferantenrechnung und bucht sie im selben Schritt; Aufwandskonto und Vorsteuercode sind von der letzten Rechnung des Lieferanten vorbelegt, und vor dem Klick steht, was gebucht wird; ein Spesenbeleg landet als Position in einer Spesenabrechnung.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

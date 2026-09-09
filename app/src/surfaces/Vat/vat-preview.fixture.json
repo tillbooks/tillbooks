@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "netMinor": 100000,
+  "taxMinor": 8100,
+  "grossMinor": 108100,
+  "formLine": "303",
+  "kind": "output",
+  "deductible": false,
+  "rateBp": 810,
+  "trace": {
+    "taxCode": "UST81",
+    "taxBaseMinor": 100000,
+    "taxAmountMinor": 8100
+  }
+}

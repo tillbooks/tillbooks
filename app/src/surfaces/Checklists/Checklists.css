@@ -1,0 +1,177 @@
+/* G22 Checklisten: the run list and the run detail. One accent (the next item and the primary action). */
+
+.checklists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.chk-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.chk-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.chk-group-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--t-text);
+}
+
+.chk-group summary.chk-group-title {
+  cursor: pointer;
+  color: var(--t-text-dim);
+}
+
+.chk-group-empty {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.chk-runs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.chk-run-link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1) var(--t-space-3);
+  align-items: baseline;
+  padding: var(--t-space-2) var(--t-space-3);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+.chk-run-link:hover {
+  background: var(--t-bg-soft);
+}
+
+.chk-run-link:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+.chk-run-title {
+  font-weight: 500;
+}
+
+.chk-run-range,
+.chk-run-status,
+.chk-run-progress {
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chk-run-progress {
+  margin-left: auto;
+}
+
+.chk-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.chk-detail-period {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chk-detail-status {
+  color: var(--t-text);
+}
+
+.chk-detail-abandoned,
+.chk-detail-done {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.chk-journey {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.chk-check-glyph {
+  font-size: 0.75rem;
+  color: var(--t-text-faint);
+  cursor: help;
+}
+
+.chk-check-glyph:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.chk-disabled-reason {
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+}
+
+.chk-detail-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.chk-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.chk-dialog-form label {
+  font-weight: 500;
+}
+
+.chk-dialog-form input,
+.chk-dialog-form select,
+.chk-dialog-form textarea {
+  min-height: 44px;
+  font: inherit;
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg);
+  color: var(--t-text);
+}
+
+.chk-dialog-template {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.chk-consequence {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.chk-dialog-error {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--t-danger);
+}

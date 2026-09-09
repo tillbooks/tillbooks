@@ -1,0 +1,293 @@
+{
+  "nav": {
+    "bankAccounts": "Bank accounts"
+  },
+  "bank": {
+    "title": "Bank accounts",
+    "loading": "Loading bank accounts",
+    "add": "Add account",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "name": "Name",
+    "currency": "Currency",
+    "qrIbanChip": "QR-IBAN, incoming only",
+    "rowActions": "Actions",
+    "rowActionsFor": "Actions for {name}",
+    "showArchived": "Show archived",
+    "archive": "Archive",
+    "unarchive": "Restore",
+    "archivedDone": "\"{name}\" is archived.",
+    "iban": {
+      "label": "IBAN",
+      "copy": "Copy the IBAN of {name}"
+    },
+    "ledgerAccount": {
+      "label": "Linked account",
+      "choose": "Pick an account",
+      "unknown": "no account",
+      "foreignHint": "For a foreign-currency account you would normally add its own chart account, for example 1021 Bankkonto EUR."
+    },
+    "status": {
+      "archived": "Archived"
+    },
+    "editor": {
+      "title": {
+        "create": "Register a bank account",
+        "edit": "Edit bank account",
+        "opening": "Opening balance"
+      }
+    },
+    "step": {
+      "label": "Steps",
+      "account": "Account",
+      "openingBalance": "Opening balance"
+    },
+    "openingBalance": {
+      "label": "Opening balance",
+      "date": "Date",
+      "none": "not set",
+      "zeroNoEntry": "{amount}, no entry",
+      "zeroHint": "At 0.00 nothing is posted. The account still counts as registered.",
+      "post": "Post",
+      "later": "Later",
+      "record": "Record the opening balance",
+      "consequence": "After this you cannot import an opening balance for this account without reversing this entry first.",
+      "preview": {
+        "label": "This will post",
+        "pending": "calculating",
+        "converted": "converted at the rate {rate}",
+        "contra": "Contra account 9100 Eröffnungsbilanz"
+      }
+    },
+    "fxRate": {
+      "label": "Rate {currency} to {base}",
+      "resolved": "Rate of {date}, source {source}.",
+      "typed": "You entered this rate yourself.",
+      "typeIt": "No rate is recorded for this date. Enter it here.",
+      "remember": "Remember this rate",
+      "notStored": {
+        "text": "The balance is posted. The rate was not stored.",
+        "conflict": "A rate of {stored} is already recorded for this date, and a posted line may depend on it. Record a correction under a different date.",
+        "denied": "You do not have permission to record rates.",
+        "close": "Done"
+      }
+    },
+    "qrIban": {
+      "explainer": "This is a QR-IBAN. It can only receive payments. For payments you initiate you also need a plain IBAN.",
+      "incomplete": {
+        "text": "You have a QR-IBAN but no plain IBAN. Payments you initiate need a plain IBAN.",
+        "action": "Register a plain IBAN",
+        "dismiss": "Do not show again"
+      },
+      "help": {
+        "label": "Help on the IBAN",
+        "title": "QR-IBAN or plain IBAN"
+      }
+    },
+    "empty": {
+      "list": {
+        "title": "No bank accounts yet.",
+        "hint": "Register each one here with its IBAN and the chart account it books to.",
+        "action": "Add account"
+      },
+      "noAssetAccounts": {
+        "text": "Your chart has no asset accounts yet. A bank account needs one.",
+        "action": "Open the chart"
+      }
+    },
+    "error": {
+      "transport": "Bank accounts could not be loaded.",
+      "chart": "The chart of accounts could not be loaded.",
+      "amount": "Enter an amount, for example 12'500.00.",
+      "invalidIban": {
+        "structure": "This IBAN does not have the right length or shape.",
+        "missing": "Enter the IBAN of this account."
+      },
+      "duplicateIban": {
+        "text": "This IBAN is already registered as \"{name}\".",
+        "unknown": "another account"
+      },
+      "needsLedgerAccount": "Pick the chart account this bank account books to.",
+      "needsAccount9100": {
+        "missing": "Account 9100 Eröffnungsbilanz is missing from your chart. Without it you cannot post the balance.",
+        "missingDetail": "TILL will add it to your chart as \"9100 Eröffnungsbilanz\", type equity. Nothing else changes.",
+        "missingAction": "Create account 9100",
+        "archived": "Account 9100 Eröffnungsbilanz is archived. Reactivate it, then you can post the balance.",
+        "archivedDetail": "The account stays exactly as it is. It only becomes active again.",
+        "archivedAction": "Reactivate account 9100",
+        "working": "creating",
+        "reactivating": "reactivating",
+        "duplicate": "Account 9100 already exists. Reload the page.",
+        "failed": "Account 9100 could not be created.",
+        "denied": "You do not have permission to create accounts. Ask someone who does to add 9100 Eröffnungsbilanz.",
+        "toChart": "Open the chart"
+      },
+      "notFound": {
+        "text": "This bank account no longer exists.",
+        "action": "Back to the list"
+      },
+      "periodLocked": {
+        "text": "Period {period} is locked. Post the balance on another date, or open the period.",
+        "action": "Open periods",
+        "unnamed": "this date"
+      },
+      "needsFxRate": "No rate is recorded for {currency} on {date}. Enter the rate here.",
+      "openingBalanceAlreadySet": "This account already has a posted opening balance. A correction is a reversing entry in the journal.",
+      "accountInUse": "Locked since the opening balance was posted. You can still change the name.",
+      "permissionDenied": {
+        "write": "You do not have permission to register bank accounts.",
+        "read": "You do not have permission to view bank accounts.",
+        "post": "You do not have permission to post the opening balance."
+      }
+    }
+  },
+  "channel": {
+    "title": "Bank channel",
+    "empty": "No EBICS channel yet. Connect one to stop importing statements and uploading payment files by hand: your bank must offer EBICS, and the file-based path keeps working either way.",
+    "filePathNote": "The file-based statement import and payment upload always remain available, with or without a channel.",
+    "connect": "Connect a channel",
+    "locked": "Managing a bank channel needs the payment capability.",
+    "kind": {
+      "ebics": "EBICS",
+      "blink": "bLink"
+    },
+    "managed": {
+      "connect": "Connect via bLink",
+      "formIntro": "With bLink you grant consent inside your own e-banking, no paper letter.",
+      "bankRef": "Your bank (bLink reference)",
+      "scopePss": "Also allow payment submission (PSS)",
+      "reconnect": "Reconnect"
+    },
+    "consent": {
+      "pending": "Waiting for your bank",
+      "waitingBank": "Your bank's login will open so you can grant consent there.",
+      "resume": "Resume consent",
+      "revoked": "Consent was revoked at your bank. Reconnect to grant it again.",
+      "expires": "Consent expires",
+      "scopeMissing": "This connection has no payment consent. Reconnect with PSS to submit payments."
+    },
+    "formatUnsupported": "This bank delivers only JSON over bLink. The file-based rails remain the floor.",
+    "cloudTier": {
+      "title": "Managed connectivity",
+      "explainer": "Managed bLink connectivity is an optional tier your owner enables. EBICS and file import keep working without it.",
+      "suspended": "The managed connectivity vendor account has lapsed. Your EBICS and file rails are unaffected."
+    },
+    "releaseNoteBlink": "Submitted over bLink. Release the payment in your own e-banking.",
+    "sharedWith": "Routed accounts",
+    "lastSync": "Last sync",
+    "sync": "Sync now",
+    "orderLog": "Order log",
+    "unmatchedAccount": "Statement for an unrouted account (route it, then sync again)",
+    "transmitInDoubt": "An upload's outcome is unknown: retransmission is blocked until the bank's protocol answers.",
+    "pendingRelease": "Awaiting bank release",
+    "rejectedReason": "Bank rejected",
+    "bankKeysChanged": "The bank's keys changed. All traffic is halted until you re-confirm them out of band.",
+    "routeAccount": "Route an account...",
+    "routeAccountLabel": "Account to route",
+    "disconnectRetire": "Retire",
+    "disconnectBlock": "Block (SPR)",
+    "disconnectBlockConfirm": "Really block this connection? All of its orders are halted.",
+    "disconnectRetireConfirm": "Really retire this connection? The bank feed is closed for good.",
+    "disconnectConfirm": "Confirm",
+    "disconnectCancel": "Cancel",
+    "wizard": {
+      "accessData": "EBICS access data from your bank contract",
+      "confirmKeys": "Compare and confirm the bank keys",
+      "hostUrl": "Host URL",
+      "hostId": "Host ID",
+      "partnerId": "Partner ID",
+      "userId": "User ID"
+    },
+    "orderType": {
+      "ini": "Key initialisation",
+      "hia": "Identification keys",
+      "hpb": "Bank keys fetched",
+      "btd": "Download",
+      "btu": "Upload",
+      "hac": "Order status fetched",
+      "spr": "Access suspended"
+    },
+    "orderKind": {
+      "consent": "Consent",
+      "statusReport": "Status report",
+      "statements": "Statements",
+      "transmit": "Transmission"
+    },
+    "orderStatus": {
+      "ok": "Succeeded",
+      "failed": "Failed",
+      "bankRejected": "Rejected by the bank",
+      "pendingRelease": "Awaiting release",
+      "intent": "Queued"
+    },
+    "error": {
+      "generic": "Something went wrong. Nothing on the money path was changed."
+    },
+    "notice": {
+      "noEbicsOffer": "This bank offers no EBICS. Use the file-based import and upload path instead.",
+      "needsBankTransport": "Keys were generated and the INI letter filed locally. Sending them to the bank needs a wired EBICS transport.",
+      "channelUnreachable": "The bank could not be reached. The last sync stays visible; retry is the one action.",
+      "bankKeysMismatch": "The bank keys did not match. This is a hard stop, never auto-accepted.",
+      "needsConfirmation": "This is a deliberate act and needs your confirmation.",
+      "permissionDenied": "You do not hold the capability for this action.",
+      "cloudTier": "Managed bLink connectivity is an optional tier your owner enables. EBICS and file import keep working without it.",
+      "consentRevoked": "Consent was revoked at your bank. Reconnect to grant it again.",
+      "consentScopeMissing": "This connection has no payment consent. Reconnect with PSS to submit payments.",
+      "formatUnsupported": "This bank delivers only JSON over bLink. The file-based rails remain the floor.",
+      "cloudTierSuspended": "The managed connectivity vendor account has lapsed. Your EBICS and file rails are unaffected.",
+      "alreadyTransmitted": "This batch is already in flight over another rail."
+    },
+    "state": {
+      "draft": "Draft",
+      "keysGenerated": "Keys generated",
+      "iniSent": "INI sent",
+      "pendingBankActivation": "Waiting on the bank",
+      "active": "Active",
+      "bankKeysChanged": "Bank keys changed",
+      "blocked": "Blocked",
+      "retired": "Retired",
+      "consentPending": "Waiting for your bank",
+      "consentRevoked": "Consent revoked",
+      "suspended": "Vendor account suspended"
+    },
+    "bankPicker": {
+      "label": "Bank",
+      "empty": "Bank not found. Enter the EBICS access data below by hand.",
+      "feeUnverified": "Unverified fee"
+    },
+    "keystore": {
+      "title": "Key storage",
+      "kind": {
+        "file": "file, passphrase-encrypted",
+        "keychain": "system keychain",
+        "memory": "memory only"
+      },
+      "locked": "Locked: the passphrase was not entered this session.",
+      "unlock": "Unlock",
+      "unavailable": "The key file is missing or corrupt. Re-initialise the connection (the bank contract is unaffected), or restore the file from backup.",
+      "notPersistent": "This key storage does not survive a restart. The keys must be generated again if the app restarts before you connect a persistent store."
+    },
+    "schedule": {
+      "title": "Automatic fetch",
+      "cadence": "Cadence",
+      "cadenceOption": {
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly"
+      },
+      "egressNote": "Turning this on creates a stored rule that contacts your bank on a schedule: scheduled network egress, unattended.",
+      "inactive": "This schedule is on but nothing is driving it: the local M00 scheduler is not running. Sync now still works, or start the scheduler.",
+      "lastFired": "Last fired"
+    }
+  },
+  "help": {
+    "BankAccounts": {
+      "title": "Bank accounts",
+      "body": "The register of your bank accounts with IBAN, QR-IBAN and opening balance. A QR-IBAN can only receive payments; outgoing payments need an ordinary IBAN in the register as well, and the surface points it out when one is missing. Here you also manage the EBICS channel and archive accounts that are no longer in use.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

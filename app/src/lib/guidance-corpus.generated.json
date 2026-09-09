@@ -1,0 +1,227 @@
+{
+  "generatedFrom": "src/core/guidance/corpus.ts + src/core/vat/rateEras.ts via scripts/generate-guidance-corpus.mjs",
+  "note": "DO NOT EDIT BY HAND. Regenerate: npm run generate:guidance. Guarded by test/guidance/studio-corpus-drift.test.mjs.",
+  "concepts": [
+    {
+      "key": "saldosteuersatz",
+      "area": "mwst",
+      "term": {
+        "de-CH": "Saldosteuersatz",
+        "en": "Net tax rate (Saldosteuersatz)"
+      },
+      "body": {
+        "de-CH": "Mit der Saldosteuersatzmethode rechnest du die MWST vereinfacht ab: Du multiplizierst deinen steuerbaren Umsatz mit einem Saldosteuersatz, den dir die ESTV für deine Branche bewilligt hat. Die Vorsteuer ziehst du nicht separat ab, sie ist im tieferen Satz bereits eingerechnet. Deinen Kundinnen und Kunden stellst du weiterhin den gesetzlichen Satz in Rechnung. Die Methode steht dir offen, solange dein Umsatz und deine Steuer unter den gesetzlichen Grenzen bleiben, und sie bindet dich für mindestens eine Steuerperiode. Den Satz beantragst du bei der ESTV, bevor du wechselst.",
+        "en": "Under the net tax rate method you settle VAT in a simplified way: you multiply your taxable turnover by a net tax rate the ESTV has approved for your line of business. You do not deduct input tax separately; it is already built into the lower rate. You still invoice your customers at the statutory rate. The method is open to you while your turnover and your tax stay under the statutory limits, and it binds you for at least one tax period. You apply for the rate at the ESTV before switching."
+      },
+      "articles": [
+        "MWSTG Art. 37",
+        "MWST-Info 12"
+      ],
+      "seeAlso": [
+        "effektive-methode",
+        "vorsteuer",
+        "bewilligung",
+        "steuerperiode"
+      ],
+      "docsPath": "swiss/mwst",
+      "era": {
+        "effectiveFrom": "2024-01-01",
+        "source": "MWSTG Art. 37 Abs. 1, fedlex consolidation in force 1.1.2024: both eligibility limits raised with the Steuersatzerhöhung (verified 2026-08-17; the 20230101 text carries the previous pair)"
+      }
+    },
+    {
+      "key": "effektive-methode",
+      "area": "mwst",
+      "term": {
+        "de-CH": "Effektive Abrechnung",
+        "en": "Effective accounting"
+      },
+      "body": {
+        "de-CH": "Bei der effektiven Abrechnung rechnest du die MWST auf deinem Umsatz zum gesetzlichen Satz ab und ziehst die Vorsteuer ab, die dir deine Lieferanten in Rechnung gestellt haben. Geschuldet ist die Differenz. Das ist der gesetzliche Normalfall und braucht keine Bewilligung. Die Methode berücksichtigt deine tatsächliche Vorsteuer; dafür musst du sie mit Belegen nachweisen und getrennt erfassen. Nach einem Wechsel vom Saldosteuersatz zur effektiven Methode kannst du frühestens nach drei Jahren wieder zurück, ein Wechsel gilt jeweils auf Beginn einer Steuerperiode.",
+        "en": "Under effective accounting you settle VAT on your turnover at the statutory rate and deduct the input tax your suppliers invoiced you. You owe the difference. This is the statutory default and needs no approval. The method counts your actual input tax; in return you must evidence it with receipts and record it separately. After switching from the net tax rate to the effective method you can return at the earliest after three years, and a switch takes effect only at the start of a tax period."
+      },
+      "articles": [
+        "MWSTG Art. 36",
+        "MWSTG Art. 37 Abs. 4"
+      ],
+      "seeAlso": [
+        "saldosteuersatz",
+        "vorsteuer"
+      ],
+      "docsPath": "swiss/mwst"
+    },
+    {
+      "key": "vereinbarte-entgelte",
+      "area": "mwst",
+      "term": {
+        "de-CH": "Vereinbarte Entgelte (Soll)",
+        "en": "Agreed consideration (accrual)"
+      },
+      "body": {
+        "de-CH": "Bei der Abrechnung nach vereinbarten Entgelten wird die MWST fällig, sobald du die Rechnung stellst, auch wenn sie noch nicht bezahlt ist. Massgebend ist das vereinbarte Entgelt, also der Rechnungsbetrag. Das ist der gesetzliche Normalfall, und er passt zur doppelten Buchhaltung, die Forderungen ohnehin bei der Rechnungsstellung erfasst. Zahlt eine Kundin später weniger oder gar nicht, korrigierst du die Abrechnung in der Periode, in der sich das Entgelt ändert. Die gewählte Abrechnungsart behältst du mindestens eine Steuerperiode.",
+        "en": "Under accounting on agreed consideration, VAT falls due as soon as you issue the invoice, even if it has not been paid yet. What counts is the agreed consideration, the invoice amount. This is the statutory default, and it matches double-entry bookkeeping, which records receivables at invoicing anyway. If a customer later pays less or nothing at all, you correct the return in the period in which the consideration changes. You keep the chosen accounting basis for at least one tax period."
+      },
+      "articles": [
+        "MWSTG Art. 39 Abs. 1 und 3"
+      ],
+      "seeAlso": [
+        "vereinnahmte-entgelte",
+        "steuerperiode"
+      ],
+      "docsPath": "swiss/mwst"
+    },
+    {
+      "key": "vereinnahmte-entgelte",
+      "area": "mwst",
+      "term": {
+        "de-CH": "Vereinnahmte Entgelte (Ist)",
+        "en": "Collected consideration (cash basis)"
+      },
+      "body": {
+        "de-CH": "Bei der Abrechnung nach vereinnahmten Entgelten wird die MWST erst fällig, wenn die Zahlung bei dir eingeht. Das entlastet Betriebe, deren Kundschaft spät zahlt, weil du die Steuer nicht vorschiessen musst. Diese Abrechnungsart musst du bei der ESTV beantragen, und du behältst sie mindestens eine Steuerperiode. TILL kann die Abrechnung nach vereinnahmten Entgelten noch nicht berechnen: Ist sie konfiguriert, bricht das Erstellen der Abrechnung ab, damit du keine falsche Zahl einreichst.",
+        "en": "Under accounting on collected consideration, VAT falls due only when the payment reaches you. That relieves businesses whose customers pay late, because you do not advance the tax. You must apply to the ESTV for this accounting basis, and you keep it for at least one tax period. TILL cannot compute the return on collected consideration yet: if it is configured, preparing the return refuses, so that you never file a wrong figure."
+      },
+      "articles": [
+        "MWSTG Art. 39 Abs. 2 und 3"
+      ],
+      "seeAlso": [
+        "vereinbarte-entgelte",
+        "bewilligung"
+      ],
+      "docsPath": "swiss/mwst",
+      "notImplemented": true
+    },
+    {
+      "key": "steuerperiode",
+      "area": "mwst",
+      "term": {
+        "de-CH": "Steuerperiode",
+        "en": "Tax period (Steuerperiode)"
+      },
+      "body": {
+        "de-CH": "Die Steuerperiode ist der Zeitraum, für den die MWST insgesamt abgerechnet wird, im Normalfall das Kalenderjahr. Eingereicht wird in Abrechnungsperioden, die Teilstücke der Steuerperiode sind: im Normalfall quartalsweise, unter dem Saldosteuersatz halbjährlich, und auf Antrag bewilligt die ESTV bis zu einer Umsatzgrenze auch die jährliche Abrechnung. Wichtig ist die Steuerperiode, weil Bindungen an ihr gemessen werden: Methode und Abrechnungsart wechselst du nur auf ihren Beginn, und ein gewähltes Verfahren behältst du mindestens eine Steuerperiode lang.",
+        "en": "The tax period is the span the VAT is settled for as a whole, normally the calendar year. Filing happens in reporting periods, which are slices of the tax period: normally quarterly, half-yearly under the net tax rate, and on application the ESTV also permits annual filing up to a turnover limit. The tax period matters because commitments are measured against it: you change method and accounting basis only at its start, and you keep an elected regime for at least one tax period."
+      },
+      "articles": [
+        "MWSTG Art. 34",
+        "MWSTG Art. 35"
+      ],
+      "seeAlso": [
+        "saldosteuersatz",
+        "vereinbarte-entgelte"
+      ],
+      "docsPath": "swiss/mwst",
+      "era": {
+        "effectiveFrom": "2025-01-01",
+        "source": "MWSTG Art. 35, revised by BG vom 16. Juni 2023 (AS 2024 438), in force 1.1.2025: the cadence rewritten (quarterly; half-yearly under Saldo, Abs. 1) and the annual option inserted (Abs. 1bis lit. b). Verified 2026-08-18 against the 20250101 consolidation"
+      }
+    },
+    {
+      "key": "vorsteuer",
+      "area": "mwst",
+      "term": {
+        "de-CH": "Vorsteuer",
+        "en": "Input tax (Vorsteuer)"
+      },
+      "body": {
+        "de-CH": "Vorsteuer ist die MWST, die dir deine Lieferanten in Rechnung stellen, wenn du für dein Unternehmen einkaufst. Bei der effektiven Abrechnung ziehst du sie von der Steuer auf deinem Umsatz ab und schuldest nur die Differenz; dafür brauchst du Belege, welche die Steuer ausweisen. Unter dem Saldosteuersatz ziehst du die Vorsteuer nicht separat ab, sie ist im bewilligten Satz pauschal eingerechnet. Ob sich der Saldosteuersatz für dich lohnt, hängt darum stark davon ab, wie viel Vorsteuer bei dir anfällt.",
+        "en": "Input tax is the VAT your suppliers charge you when you buy for your business. Under effective accounting you deduct it from the tax on your own turnover and owe only the difference; for that you need receipts showing the tax. Under the net tax rate you do not deduct input tax separately; it is built into the approved rate as a flat allowance. Whether the net tax rate pays off for you therefore depends heavily on how much input tax you incur."
+      },
+      "articles": [
+        "MWSTG Art. 28"
+      ],
+      "seeAlso": [
+        "effektive-methode",
+        "saldosteuersatz"
+      ],
+      "docsPath": "swiss/mwst",
+      "era": {
+        "effectiveFrom": "2024-01-01",
+        "source": "MWSTG Art. 28 Abs. 2 (the Urproduzenten flat input-tax deduction) Fassung per V vom 9. Dez. 2022 (AS 2022 863), in force 1.1.2024 with the Steuersatzerhöhung. Verified 2026-08-18 against the 20240101 consolidation"
+      }
+    },
+    {
+      "key": "bewilligung",
+      "area": "mwst",
+      "term": {
+        "de-CH": "Bewilligung der ESTV",
+        "en": "ESTV approval"
+      },
+      "body": {
+        "de-CH": "Eine Bewilligung der ESTV ist die Zusage der Steuerverwaltung, dass du ein bestimmtes Verfahren anwenden darfst. Ein Saldosteuersatz und die Abrechnung nach vereinnahmten Entgelten sind keine Einstellungen, die du einfach wählst: Du beantragst sie bei der ESTV, und erst die Zusage macht sie gültig. TILL erfasst, was bewilligt wurde, und rechnet damit; den Antrag stellst du ausserhalb von TILL. Ob sich ein Verfahren für dich lohnt, ist eine Beratungsfrage: Dafür ist deine Treuhänderin oder dein Treuhänder die richtige Adresse.",
+        "en": "An ESTV approval is the tax administration’s confirmation that you may apply a particular regime. A net tax rate and accounting on collected consideration are not settings you simply pick: you apply for them at the ESTV, and only the confirmation makes them valid. TILL records what was approved and computes with it; you file the application outside TILL. Whether a regime pays off for you is an advisory question: your fiduciary is the right address for it."
+      },
+      "articles": [
+        "MWSTG Art. 37 Abs. 4",
+        "MWSTG Art. 39 Abs. 2",
+        "MWSTV Art. 86"
+      ],
+      "seeAlso": [
+        "saldosteuersatz",
+        "vereinnahmte-entgelte"
+      ],
+      "docsPath": "swiss/mwst",
+      "era": {
+        "effectiveFrom": "2025-01-01",
+        "source": "MWSTV Art. 84 und Art. 86 replaced by V vom 21. August 2024 (AS 2024 485), in force 1.1.2025 (the N-rate model). Art. 86 is \"Bewilligung der Saldosteuersätze\", the granting article; Art. 84 only governs using the granted rates. Verified 2026-08-18 against the 20250101 consolidation"
+      }
+    },
+    {
+      "key": "ziffer",
+      "area": "mwst",
+      "term": {
+        "de-CH": "Ziffer",
+        "en": "Ziffer (form line)"
+      },
+      "body": {
+        "de-CH": "Eine Ziffer ist die Nummer eines Feldes auf dem MWST-Abrechnungsformular der ESTV. Jede Position der Abrechnung, etwa der Gesamtumsatz, die Abzüge oder die geschuldete Steuer, hat ihre eigene Ziffer, und die ESTV liest die Beträge über diese Nummern ein. TILL zeigt zu den berechneten Positionen die zugehörige Ziffer an, damit du die Zahlen beim Einreichen im ePortal ohne Übersetzungsarbeit zuordnen kannst. Die Ziffern sind eine Formularkonvention der ESTV, kein Gesetzesbegriff, und sie ändern sich, wenn die ESTV das Formular anpasst.",
+        "en": "A Ziffer is the number of a field on the ESTV’s VAT return form. Every position of the return, such as total turnover, the deductions or the tax due, has its own Ziffer, and the ESTV reads the amounts in through these numbers. TILL shows the matching Ziffer beside the figures it computes, so you can map the numbers in the ePortal without translation work. The Ziffern are an ESTV form convention, not a legal term, and they change when the ESTV revises the form."
+      },
+      "articles": [
+        "ESTV-Formularkonvention, kein Gesetzesartikel"
+      ],
+      "seeAlso": [
+        "saldosteuersatz",
+        "steuerperiode"
+      ],
+      "docsPath": "swiss/mwst",
+      "era": {
+        "effectiveFrom": "2025-01-01",
+        "source": "MWST-Info 12 Ziff. 18.1.4: the Saldo declaration moved to the Beiblatt zu den Ziffern 322 und 323 (Leistungen before and from 1.1.2024 split) with the N-rate model in force 1.1.2025, a different change from the Art. 37 Abs. 1 limit raise"
+      }
+    },
+    {
+      "key": "verrechnungssteuer",
+      "area": "steuern",
+      "term": {
+        "de-CH": "Verrechnungssteuer",
+        "en": "Withholding tax (Verrechnungssteuer)"
+      },
+      "body": {
+        "de-CH": "Die Verrechnungssteuer ist eine Steuer des Bundes auf bestimmten Kapitalerträgen, etwa Zinsen und Dividenden. Sie wird an der Quelle abgezogen: Die Bank oder die Gesellschaft überweist sie direkt an die Steuerverwaltung, und du erhältst den Ertrag gekürzt. Wer den Ertrag ordnungsgemäss deklariert, kann die Steuer zurückfordern oder anrechnen lassen. Mit der MWST hat sie nichts zu tun. TILL führt im Kontenplan ein Konto für das Guthaben aus Verrechnungssteuer und mehr nicht: Rückforderung und Deklaration bildet TILL nicht ab.",
+        "en": "Withholding tax is a federal tax on certain capital income, such as interest and dividends. It is deducted at source: the bank or the company transfers it directly to the tax administration, and you receive the income reduced. If you declare the income properly, you can reclaim the tax or have it credited. It has nothing to do with VAT. TILL carries an account for the withholding tax credit in the chart of accounts and nothing more: reclaim and declaration are not represented in TILL."
+      },
+      "articles": [
+        "VStG (SR 642.21)"
+      ],
+      "seeAlso": [
+        "vorsteuer"
+      ],
+      "notImplemented": true
+    }
+  ],
+  "saldoEligibilityEras": [
+    {
+      "effectiveFrom": "2023-01-01",
+      "turnoverLimitMinor": 500500000,
+      "taxDueLimitMinor": 10300000,
+      "source": "MWSTG SR 641.20 Art. 37 Abs. 1, fedlex consolidation in force 1.1.2023 (verified 2026-08-17)"
+    },
+    {
+      "effectiveFrom": "2024-01-01",
+      "turnoverLimitMinor": 502400000,
+      "taxDueLimitMinor": 10800000,
+      "source": "MWSTG SR 641.20 Art. 37 Abs. 1, fedlex consolidation in force 1.1.2024 (verified 2026-08-17)"
+    }
+  ]
+}

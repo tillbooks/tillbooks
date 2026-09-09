@@ -1,0 +1,67 @@
+{
+  "nav": {
+    "search": "Suche"
+  },
+  "search": {
+    "route": {
+      "title": "Suche"
+    },
+    "loading": "Suche läuft",
+    "placeholder": "Alles durchsuchen…",
+    "hint": {
+      "minLength": "Mindestens 2 Zeichen",
+      "start": "Tippe einen Namen, eine Nummer oder einen Feldwert: eine Abfrage durchsucht alle Datensatztypen."
+    },
+    "empty": "Keine Treffer für '{q}'.",
+    "emptyScoped": "Keine Treffer in diesem Bereich für '{q}'.",
+    "emptyHint": "Versuche einen kürzeren Begriff oder erweitere den Bereich.",
+    "scope": {
+      "label": "Bereich"
+    },
+    "action": {
+      "search": "Suchen",
+      "seeAll": "Alle Ergebnisse anzeigen",
+      "widenScope": "Alle Bereiche durchsuchen",
+      "more": "Mehr laden"
+    },
+    "error": {
+      "partial": "Einige Ergebnisse konnten nicht geladen werden."
+    },
+    "savedSearch": {
+      "save": "Suche speichern",
+      "confirm": "Speichern",
+      "cancel": "Abbrechen",
+      "name": "Name der gespeicherten Suche",
+      "list": "Gespeicherte Suchen"
+    },
+    "result": {
+      "matchedVia": {
+        "customField": "Treffer in {snippet}"
+      }
+    },
+    "palette": {
+      "title": "Globale Suche",
+      "results": "Ergebnisse",
+      "overflow": "{count} weitere"
+    },
+    "kind": {
+      "contact": "Kontakte",
+      "item": "Artikel",
+      "document": "Belege",
+      "project": "Projekte",
+      "deal": "Deals",
+      "task": "Aufgaben",
+      "vendor_bill": "Lieferantenrechnungen",
+      "sales_order": "Aufträge",
+      "po": "Bestellungen"
+    }
+  },
+  "help": {
+    "Search": {
+      "title": "Suche",
+      "body": "Die Suche über den ganzen Arbeitsbereich: Kontakte, Belege, Buchungen, Artikel und mehr, gruppiert nach Art und nach Relevanz geordnet. Jeder Treffer führt direkt auf die Oberfläche, zu der er gehört; eine eigene Detailansicht gibt es hier nicht. Suchbegriff und Filter stehen im Link, ein Treffer lässt sich so direkt teilen. Es erscheint nur, was du lesen darfst.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,48 @@
+# No trailing slash on purpose. `node_modules/` matches a directory only, so a
+# node_modules SYMLINK stays untracked-but-visible and a blind `git add -A` stages
+# it. Agents working in git worktrees symlink node_modules back to the main
+# checkout rather than reinstalling a native better-sqlite3, and two of them hit
+# exactly that. Matching both shapes costs nothing.
+node_modules
+dist/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-journal
+# Ledger and fixture data directories. The rule is deliberately unanchored so it catches a `data/`
+# anywhere, but that also swallowed `web/src/data/`, which holds the website's JSON-LD source of
+# truth. `Layout.astro` imports it, so a fresh clone could not build the site at all: the file had
+# never been committed. Re-include that one directory by name. Un-ignoring the DIRECTORY is what
+# matters here, because git does not descend into an excluded directory to find a re-included file.
+data/
+!web/src/data/
+# G04's engine lives at `src/core/data/` and the unanchored `data/` rule above swallowed it, exactly
+# as it once swallowed `web/src/data/`: the whole engine was authored and then silently un-committed,
+# and the branch was pushed unable to compile. Re-include the DIRECTORY by name (git does not descend
+# into an excluded directory to find a re-included file, so the directory, not just its files).
+!src/core/data/
+# ...and G04's engine tests at `test/data/`, swallowed by the same unanchored `data/` rule.
+!test/data/
+app/.dev-data/
+*.tsbuildinfo
+
+# Browser-flow evidence. Reverses D43, which chose to track all of it: at 254 MB across
+# 380 files it had become the single largest area in the repo, larger than the engine,
+# the Studio and the specs. The runs are reproducible by re-running the flow, so what was
+# being preserved was the artifact and not the fact. D46 (29.07.2026).
+.claude/ui-tests/runs/
+.tmp-support/
+.vercel
+
+# Live Nomadik bexio exports (company data, never commit)
+# Repo-root owner/company handover exports (bank onboarding, never commit)
+.claude/worktrees/
+
+# Orchestrator prompts and per-run planning scratch (scratch, not durable history)
+
+# M00 packaging build outputs (mcpb bundle, macOS app) are artifacts, never committed
+packaging/mcpb/build/
+packaging/macos/build/

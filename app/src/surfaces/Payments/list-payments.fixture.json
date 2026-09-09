@@ -1,0 +1,58 @@
+{
+  "payments": [
+    {
+      "id": "pay_1",
+      "direction": "incoming",
+      "date": "2026-07-19",
+      "amountMinor": 110000,
+      "currency": "CHF",
+      "baseAmountMinor": 110000,
+      "bankAccount": {
+        "id": "acc_2",
+        "number": "1020",
+        "label": "Bankkonto"
+      },
+      "counterparty": {
+        "kind": "customer",
+        "id": "contact_1",
+        "name": "Muster AG"
+      },
+      "reference": {
+        "kind": "qrr",
+        "value": "210000000003139471430009017",
+        "display": "21 00000 00003 13947 14300 09017"
+      },
+      "status": "posted",
+      "source": "manual",
+      "journalEntryId": "entry_4",
+      "reversalEntryId": null,
+      "reversedAt": null,
+      "allocatedMinor": 108100,
+      "onAccountMinor": 1900,
+      "allocations": [
+        {
+          "id": "palloc_1",
+          "targetKind": "document",
+          "targetId": "doc_1",
+          "targetNumber": "R-2026-0001",
+          "amountMinor": 108100,
+          "paymentAmountMinor": 108100,
+          "baseAmountMinor": 108100,
+          "skontoMinor": 0,
+          "skontoVatMinor": 0,
+          "writeoffMinor": 0,
+          "taxBaseMinor": null,
+          "taxAmountMinor": null,
+          "recognizedAt": null,
+          "journalEntryId": "entry_4"
+        }
+      ],
+      "createdBy": "user_1",
+      "createdAt": "2026-07-19T00:00:00.000Z"
+    }
+  ],
+  "truncated": false,
+  "total": 1,
+  "ceiling": 1000,
+  "ok": true
+}

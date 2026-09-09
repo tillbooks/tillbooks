@@ -1,0 +1,175 @@
+{
+  "nav": {
+    "mwst": {
+      "group": "VAT",
+      "abrechnung": "Return",
+      "settings": "Settings"
+    }
+  },
+  "vat": {
+    "return": {
+      "title": "VAT return",
+      "subtitle": "{method} · {timing} · {from} to {to}",
+      "subtitlePending": "Loading the filing method and period.",
+      "method": {
+        "effektiv": "Effective",
+        "saldo": "Net tax rate"
+      },
+      "timing": {
+        "soll": "Accrual (agreed)",
+        "ist": "Cash (collected)"
+      },
+      "payable": "Amount payable",
+      "credit": "Credit in your favour",
+      "markFiled": "Mark as filed",
+      "markFiledPending": "Locking …",
+      "markFiledFailed": "The period could not be locked. Nothing was changed.",
+      "cancel": "Cancel",
+      "confirmClose": "Close dialog",
+      "rangeTo": "to",
+      "pickPeriod": "Choose a period",
+      "periodTrigger": "Period: {period}",
+      "periodMenu": "Choose a filing period",
+      "periodsFailed": "The filing periods could not be loaded.",
+      "periodNotEnded": "The period is still running. You can mark it as filed once it ends.",
+      "period": {
+        "open": "open",
+        "ready": "ready",
+        "filed": "filed"
+      },
+      "periods": {
+        "empty": "No filing periods are defined for this workspace yet.",
+        "emptyHint": "You set the filing method and tax period in the VAT settings."
+      },
+      "col": {
+        "ziffer": "No.",
+        "label": "Description",
+        "turnover": "Turnover CHF",
+        "tax": "Tax CHF"
+      },
+      "section": {
+        "turnover": "I. Turnover",
+        "deductions": "Deductions",
+        "taxCalc": "II. Tax calculation",
+        "inputTax": "Input tax",
+        "taxCredit": "Tax credit",
+        "settlement": "Settlement",
+        "otherFlows": "III. Other cash flows (Art. 18 para. 2)",
+        "unmapped": "Further form lines from the calculation"
+      },
+      "taxCreditNote": "The tax credit comes from FTA forms 1050, 1055 and 1056. TILL does not calculate it and therefore shows no amount: a nil here would be a figure nobody checked.",
+      "saldoPayableNote": "Line 500 is calculated without the tax credit. If you claim one, the amount you actually pay is lower.",
+      "drill": "Show the entries behind line {ziffer}",
+      "drillFailed": "The entries could not be loaded.",
+      "drillCapped": "{shown} of {count} entries. The rest are in the journal.",
+      "empty": "No taxable activity in this period.",
+      "emptyHint": "The return is still expected. You file it as a nil return.",
+      "emptyCta": "Open the journal",
+      "exportNote": "Step 3: TILL produces the eCH-0217 file (version 2.0.0) and you download it. In step 4 you upload it to the FTA ePortal yourself: there is no interface to the FTA.",
+      "export": {
+        "action": "Export the eCH-0217 file",
+        "working": "Building the file …",
+        "title": {
+          "uid": "The VAT number is missing or unusable",
+          "rateSplit": "More than one tax rate on one form line",
+          "byHand": "This period cannot be expressed as a file",
+          "recompute": "The return could no longer be calculated",
+          "failed": "The file could not be built"
+        },
+        "uid": "Every eCH-0217 declaration names the company UID. The company profile carries none, or none in the format CHE-###.###.###, so the file cannot be built.",
+        "uidCta": "Open the company profile",
+        "rateSplit": "Line {ziffern} carries turnover at more than one tax rate. The file names exactly one rate per row, and a rate this turnover did not bear would be a wrong declaration. Check the tax codes on the entries behind it, split them, then export again.",
+        "rateSplitCta": "Check the entries behind line {ziffer}",
+        "byHand": {
+          "unmapped": "The return carries line {ziffern}, which eCH-0217 v2.0.0 has no element for. The file would be short by that amount, and the form would not show you.",
+          "saldoRates": "This workspace has {count} net tax rates configured. The FTA form carries two rows for them (lines 323 and 333) and no third.",
+          "currency": "This workspace keeps its books in {currency}. A VAT return is filed in Swiss francs (MWSTV Art. 45), and eCH-0217 has no element for a currency.",
+          "remedy": "You file this period in the ePortal by hand. The figures for it are on this page."
+        },
+        "portalCta": "Open the FTA ePortal",
+        "recompute": "Building the file recalculates the return, and the calculation refused. Usually the VAT setup has changed since. Reload the return: the reason is then stated on this page.",
+        "reloadCta": "Reload the return",
+        "failed": "Nothing was changed and no file was written.",
+        "retryCta": "Export again",
+        "crossCheckTitle": "The FTA will calculate a different tax",
+        "crossCheck": "Per rate the file carries only the rate and the turnover, no tax amount. From those the FTA calculates {recomputed}. Your entries come to {booked}, a difference of {difference}.",
+        "crossCheckCause": "This usually comes from foreign-currency documents, which are rounded once per document. The file is valid, and you know the difference here rather than at the FTA."
+      },
+      "journey": {
+        "label": "How filing works",
+        "done": "done",
+        "1": "calculated",
+        "2": "checked",
+        "3": "exported",
+        "4": "filed in the ePortal (you, outside TILL)",
+        "5": "marked as filed",
+        "portalUrl": "https://www.estv.admin.ch/de/mwst-online-abrechnen",
+        "exportedAt": "exported on {date}",
+        "attestedAt": "attested on {date} by {who}",
+        "openRun": "Open the checklist",
+        "actor": {
+          "agent": "the agent",
+          "studio": "you",
+          "member": "a member",
+          "unknown": "someone"
+        }
+      },
+      "recon": {
+        "match": "VAT account reconciliation: agrees",
+        "open": "VAT account reconciliation: {amount} unexplained",
+        "notApplicableShort": "VAT account reconciliation: not applicable",
+        "noAccountShort": "VAT account reconciliation: not possible",
+        "notApplicable": "The net tax rate method cannot be checked against account 2200, because the VAT invoiced and the VAT owed are different figures (Art. 37 MWSTG).",
+        "noAccount": "The VAT account is missing from the chart of accounts, so the return cannot be checked against the books.",
+        "noAccountCta": "Open the chart of accounts",
+        "group": {
+          "output": "Output VAT"
+        },
+        "line399": "Line 399 total tax due",
+        "booked": "Movement on account {account}",
+        "unexplained": "unexplained",
+        "matchNote": "The tax due equals the movement on the VAT account.",
+        "noCauses": "TILL does not attribute the difference to a cause yet, so all of it sits under unexplained. It is often a VAT payment to the FTA for an earlier period, or an entry posted straight to the VAT account with no tax code.",
+        "investigate": "Check the entries on the VAT accounts"
+      },
+      "filedBanner": "Filed: {period} is locked.",
+      "filedRecomputed": "No further entries can be added. The figures below are recalculated and are not a stored copy.",
+      "filedCorrection": "Corrections go through the annual reconciliation under Art. 72 MWSTG, which TILL does not produce yet.",
+      "confirmTitle": "Mark the {period} return as filed?",
+      "confirmBody": "TILL records that you filed this return and locks the period. Nothing is transmitted to the FTA: you upload the file in the ePortal yourself.",
+      "confirmIrreversible": "The lock cannot be undone here. Unlocking is only possible under Periods.",
+      "confirmPeriod": "Period",
+      "confirmAck": "I have checked the unexplained difference of {amount}.",
+      "needsConfig": "VAT is not set up for this workspace yet, so there is no return to calculate.",
+      "needsConfigCta": "Set up VAT",
+      "checkVatSettingsCta": "Open the VAT settings",
+      "saldoSplitRequired": "This workspace has {count} net tax rates. Each rate belongs to one business activity, and the VAT Ordinance requires you to book the revenue for each rate separately (MWSTV Art. 84 Abs. 3). No entry in TILL says which activity it belongs to, so TILL cannot apportion the turnover and cannot calculate the return.",
+      "saldoRateRow": "Rate {position}: {rate} percent",
+      "saldoRateNotValid": "The configured net tax rate of {rate} percent was not on the FTA list for this period. TILL stores only the current rate and not its history, so the rate approved at the time cannot be established from here.",
+      "istNotImplemented": "TILL currently calculates returns on agreed consideration (accrual) only. Filing on collected consideration (cash basis) counts a supply in the period it was paid; for a workspace set to it, TILL gives you no figures rather than wrong ones.",
+      "refusal": {
+        "deniedTitle": "No access to the VAT return",
+        "denied": "You do not have the right to read the VAT return. The owner of this workspace can grant it.",
+        "title": {
+          "needsConfig": "VAT is not set up yet",
+          "saldoSplit": "Turnover per activity is missing",
+          "saldoRateNotValidForPeriod": "The net tax rate does not match the period",
+          "istTiming": "Cash-basis filing is not built yet"
+        }
+      },
+      "istNotImplementedCite": "MWSTG Art. 39 Abs. 2"
+    }
+  },
+  "help": {
+    "VatReturn": {
+      "title": "VAT return",
+      "body": "TILL computes the return from your posted records and shows every position with its Ziffer of the ESTV form, so you can map the figures in the ePortal directly. Filing happens outside TILL; afterwards you mark the period as filed here and it locks. Corrections run through a correction return, never by rewriting a locked period.",
+      "concepts": [
+        "ziffer",
+        "steuerperiode",
+        "saldosteuersatz"
+      ],
+      "docsPath": "swiss/mwst"
+    }
+  }
+}

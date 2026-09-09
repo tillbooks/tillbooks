@@ -1,0 +1,110 @@
+{
+  "nav": {
+    "automations": "Automations"
+  },
+  "automation": {
+    "title": "Automations",
+    "lede": "Rules TILL runs for you when nobody is watching. Every rule runs with the permissions of whoever created it, and every firing is in the history.",
+    "noWorkspaceHint": "Open a set of books first, then you will see its rules here.",
+    "needsPermission": "This needs the \"manage automations\" permission.",
+    "neverFired": "Never",
+    "rules": {
+      "title": "Rules",
+      "create": "New rule",
+      "saved": "The rule is saved.",
+      "toggled": "The rule is switched.",
+      "archived": "The rule is archived. Its history is kept."
+    },
+    "runs": {
+      "title": "History"
+    },
+    "tick": {
+      "now": "Check now",
+      "done": "Checked. {n} rules were due."
+    },
+    "form": {
+      "name": "Name",
+      "trigger": "Trigger",
+      "action": "Action",
+      "template": "Action input (JSON)",
+      "templateHint": "Use {{result.contact.id}} to insert a value from the trigger. When the braces stand alone in a field the type is kept, so an amount never turns into a string.",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "col": {
+      "name": "Name",
+      "trigger": "Trigger",
+      "action": "Action",
+      "status": "Status",
+      "lastFired": "Last fired",
+      "controls": "Controls",
+      "rule": "Rule",
+      "outcome": "Outcome",
+      "actor": "Ran as",
+      "when": "When"
+    },
+    "status": {
+      "enabled": "Active",
+      "disabled": "Stopped",
+      "archived": "Archived"
+    },
+    "action": {
+      "enable": "Activate",
+      "disable": "Stop",
+      "archive": "Archive"
+    },
+    "runStatus": {
+      "running": "Running",
+      "ok": "Done",
+      "failed": "Failed",
+      "skipped_condition": "Condition not met",
+      "suppressed_loop": "Loop stopped",
+      "suppressed_depth": "Chain too deep, stopped"
+    },
+    "empty": {
+      "title": "No automations yet",
+      "hint": "A rule joins a trigger, a condition and an action: when the one happens, TILL does the other. You can stop any rule at any time."
+    },
+    "emptyRuns": {
+      "title": "No firings yet",
+      "hint": "As soon as an active rule fires for the first time, this shows what it did and whose permissions it used."
+    },
+    "error": {
+      "unknown_event": "That trigger does not exist. Pick one from the list.",
+      "unknown_action_tool": "That action does not exist.",
+      "action_not_writable": "That action only reads, so it cannot be triggered.",
+      "invalid_condition": "The condition is not complete.",
+      "invalid_action_input": "The action input is not valid JSON.",
+      "action_input_too_large": "The action input is too long.",
+      "invalid_name": "Give the rule a name.",
+      "name_too_long": "That name is too long.",
+      "self_triggering": "This rule would trigger itself: its action raises exactly the trigger it is waiting for.",
+      "rule_archived": "This rule is archived and can no longer be changed.",
+      "not_found": "That rule no longer exists.",
+      "permission_denied": "The necessary permission is missing.",
+      "automation_unavailable": "Automations are not set up in this environment.",
+      "period_locked": "The period is locked.",
+      "store_busy": "The books were busy just then. Please try again.",
+      "unexpected_error": "Something went wrong.",
+      "invalid_input": "A rule input was incomplete. Nothing was changed.",
+      "run_not_stuck": "This run has already finished. Only a run that got stuck can be finished by hand.",
+      "unreadable_action_input": "The stored values for this run cannot be read. It has been closed as failed.",
+      "action_not_automatable": "This action must not run unattended. The rule cannot fire."
+    },
+    "run": {
+      "payload": "Values sent",
+      "withheld": "Not shown. This needs the \"{capability}\" right.",
+      "redelivered": "delivered again {n}x, without running again",
+      "retry": "Finish it",
+      "retried": "The run was finished."
+    }
+  },
+  "help": {
+    "Automations": {
+      "title": "Automations",
+      "body": "Automations shows every rule this workspace runs unattended, and every single run. Under rules you define triggers, conditions and actions; the history shows what a rule actually did, including when something went wrong. Deactivating is always possible, regardless of your role, so a misbehaving rule can be stopped at once.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

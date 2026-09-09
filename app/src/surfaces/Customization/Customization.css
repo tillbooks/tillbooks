@@ -1,0 +1,195 @@
+/*
+ * G00 Anpassung. Separation comes from the background step and from spacing, never from a border
+ * around every card (DESIGN.md, the forbidden list). The one accent spend is the single primary
+ * action per tab: Feld definieren on Fields, and nothing on Views, whose only writes are deletions.
+ *
+ * THE DRAFT BANNER IS NEUTRAL, deliberately. A staged field is not a warning, it is a state waiting
+ * for a decision, and spending the accent (or an alarm colour) on it would make the screen read as
+ * broken every time an agent proposes a field. The glyph and the words carry the meaning, which is
+ * also what keeps it legible to a screen reader and to anyone who does not see the hue.
+ */
+
+.customization {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The page header (title, help, lede) is the shared SurfaceHeader primitive, and the fields/views
+   strip is the shared Tabs primitive, so their per-surface CSS is gone. Only the surface's own
+   controls keep a focus ring here. */
+
+.customization__panel button:focus-visible,
+.customization__panel select:focus-visible,
+.customization__panel input:focus-visible,
+.customization__kind select:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+/* --- The entity picker ------------------------------------------------------------------------ */
+
+.customization__kind {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.customization__kind span {
+  color: var(--t-text-dim);
+}
+
+/* --- Panels ----------------------------------------------------------------------------------- */
+
+.customization__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-3);
+}
+
+.customization__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 46ch;
+}
+
+.customization__form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.customization__form-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* The field and view lists are the shared DataTable primitive, so the per-surface list CSS is gone.
+   The one thing kept is the leading label's weight, a surface choice DataTable does not make. */
+.customization__field-label {
+  font-weight: 500;
+}
+
+/* --- The P8 draft banner ---------------------------------------------------------------------- */
+
+/* The two answers sit together at the end of the banner, so approve and refuse are one glance apart
+   rather than one of them being the only thing on screen. */
+.customization__draft-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  margin-inline-start: auto;
+}
+
+.customization__draft-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text-dim);
+}
+
+/* --- Archived, and the embedded preview ------------------------------------------------------- */
+
+.customization__archived summary {
+  cursor: pointer;
+  color: var(--t-text-dim);
+}
+
+.customization__hint {
+  margin: var(--t-space-1) 0;
+  color: var(--t-text-dim);
+  max-width: 62ch;
+}
+
+.customization__preview h2 {
+  margin: 0 0 var(--t-space-1);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.customization__feedback {
+  margin: 0;
+}
+
+.customization__feedback--error {
+  color: var(--t-danger);
+}
+
+.customization__skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+/* --- The two shared components ---------------------------------------------------------------- */
+
+.custom-field-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: var(--t-space-0-5) 0;
+  min-block-size: 44px;
+}
+
+/*
+ * The label is a 44px target in its own right (`brand/DESIGN.md`), reached through `htmlFor`.
+ *
+ * This row is structurally UNLIKE the Zugriff capability rows, and the difference decides the fix.
+ * There the `<label>` WRAPS the input, so sizing the label gives the control a 268x44 target for
+ * free. Here the label is a SIBLING with a gap beside it, so label and control are two separate
+ * targets and the label cannot stand in for the box.
+ */
+.custom-field-row__label {
+  display: flex;
+  align-items: center;
+  min-block-size: 44px;
+}
+
+/*
+ * The painted box is 24px, NOT 44px, and this is the one place in the wave that knowingly sits under
+ * the design law's number. A 44x44 checkbox beside a normal-height text input reads as a caricature,
+ * and this component renders inline among `text`, `number`, `money` and `date` controls on every
+ * record in the product. 24px is the WCAG 2.2 AA floor (SC 2.5.8), so this is compliant with the
+ * standard and short of TILL's own stricter one.
+ *
+ * It is flagged for the owner rather than settled here, because it is not a one-surface call:
+ * `CustomFieldRow` is the SHARED control the D47 retrofit mounts on all fifteen pre-G00 surfaces, so
+ * whatever is decided multiplies. The alternatives are a 44px box, or wrapping the control in a
+ * 44px hit area (which changes the component's markup, not just its CSS).
+ */
+.custom-field-row input[type='checkbox'] {
+  inline-size: 24px;
+  block-size: 24px;
+  flex: none;
+}
+
+.custom-field-row__label {
+  min-width: 18ch;
+  color: var(--t-text-dim);
+}
+
+.custom-field-row__hint {
+  color: var(--t-text-dim);
+}
+
+/* Tabular numerals on every money preview, so a column of amounts aligns on the decimal. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.saved-view-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.saved-view-picker__label {
+  color: var(--t-text-dim);
+}

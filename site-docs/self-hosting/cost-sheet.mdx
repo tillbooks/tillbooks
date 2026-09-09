@@ -1,0 +1,72 @@
+---
+title: "What a served instance costs"
+description: "Dated prices for the hosts and buckets the recipes support, and where they stop being free."
+---
+
+<Note>
+  Every price below was read on 2026-09-06 from the provider's own page or a dated review.
+  Re-verify before buying. Providers change plans quietly: Hetzner repriced its cloud range in
+  2026, and free tiers come and go, so treat any "free" line as something to confirm, not to lean on.
+</Note>
+
+A TILL instance is small. The ledger of a ten-person company is a few megabytes and the image is
+442 MB. On the drill stack, TILL, Caddy, oauth2-proxy and Litestream idled at about 85 MB of
+memory together (Pocket ID was not part of that measurement). Any host on this page is oversized
+for it. Pick by residency, and by how much you trust a free tier to stay free.
+
+The served host is provider-neutral (D124): the recipe runs on any small VM, and the compose file
+is identical everywhere. The recommendation is Swiss first, Infomaniak for compute and for the
+backup bucket, so the whole instance sits under one account you already use for mail and DNS.
+
+## Compute
+
+| Host | What you get | Price | Swiss | Notes |
+|---|---|---|---|---|
+| Infomaniak VPS Lite (recommended) | 1 vCPU, 2 GB, 20 GB, Linux | from CHF 2.70 per month; 2 vCPU + 4 GB + 60 GB is CHF 7.20 | yes | Swiss end to end, same vendor as TILL's mail and DNS. Same compose file. |
+| Infomaniak Public Cloud | up to 32 vCPU, 128 GB, hourly billing | pay per hour, CHF or EUR | yes | For when one VPS Lite tier is not enough; the scale-up path. |
+| Hetzner CAX11 | Ampere ARM, 2 vCPU, 4 GB, 40 GB NVMe | about EUR 4.49 per month without a public IPv4, about EUR 4.99 with one | no (Falkenstein, Nuremberg, Helsinki) | The cheap non-Swiss ARM box. You pick it for the price, not the residency. |
+| Fly.io shared-cpu-1x, 256 MB | one Machine, one image | about USD 2 per month, plus USD 0.15 per GB of volume | no (Amsterdam is the nearest) | No free tier since 2024. Fly does not run compose: the stack would need one Machine per container. The fallback. |
+| Your Mac behind a tunnel | whatever it is | CHF 0 | your desk | A laptop is not a server. Useful for a demo, not for the books. |
+
+## Backup bucket
+
+Any S3-compatible endpoint works. Swiss first: Infomaniak Swiss Backup.
+
+| Bucket | Price | Swiss | Endpoint line in `.env.example` |
+|---|---|---|---|
+| Infomaniak Swiss Backup (S3, recommended) | from CHF 2.40 per month for 200 GB; a 2026 price roundup lists the S3 cloud mode at about CHF 4.20, so budget for that until you hold Infomaniak's own quote | yes | `s3.swiss-backup03.infomaniak.com` (cluster number and region from the Manager) |
+| Cloudflare R2 | 10 GB free, no egress fees | no | `<account-id>.r2.cloudflarestorage.com` |
+| Backblaze B2 (S3) | first 10 GB free | no | `s3.<region>.backblazeb2.com` (region is the second label of the endpoint) |
+| Tigris | first 5 GB free, no egress fees | no | `fly.storage.tigris.dev` |
+
+Litestream ships WAL pages every second. A ledger that books fifty entries a day produces a few
+megabytes of segments a day; retention keeps that bounded. On a metered bucket, request count is
+the line worth watching, and only on a busy instance; raise `sync-interval` in `litestream.yml` if
+you ever see it.
+
+## Identity and the door
+
+| Piece | Price | Notes |
+|---|---|---|
+| Pocket ID | CHF 0 (open source, self-hosted) | Passkeys only. A few MB of memory. |
+| oauth2-proxy | CHF 0 | The OIDC bridge stock Caddy lacks. |
+| Caddy | CHF 0 | Certificates from Let's Encrypt, renewed by itself. |
+| Cloudflare Tunnel + Access (recipe A) | CHF 0 up to 50 users, then USD 7 per user per month | Needs the zone on Cloudflare DNS. TLS ends at Cloudflare. |
+
+## Two worked totals
+
+The Swiss-first recommendation (D124): Infomaniak VPS Lite for compute, Infomaniak Swiss Backup for
+the bucket, Pocket ID, one DNS record at the registrar you already pay. About CHF 5 to 10 per month
+before the seat price (CHF 2.70 for the smallest VPS Lite, CHF 7.20 for 2 vCPU and 4 GB, plus the
+Swiss Backup line), one vendor, Swiss end to end.
+
+The cheap non-Swiss variant on the same recipe: Hetzner CAX11 (about EUR 4.99 per month with a
+public IPv4) plus Cloudflare R2 or Backblaze B2 for the bucket (both free at TILL's size). That
+trims a few francs and moves the host and the replica out of Switzerland; pick it only when
+residency does not matter to the customer.
+
+## What is not on this sheet
+
+Seat pricing for a managed instance (D107, out of repo), an attorney's pass on hosting terms,
+and the cost of your own time. The last one dominates: the recipe is an hour the first time and
+ten minutes the third.

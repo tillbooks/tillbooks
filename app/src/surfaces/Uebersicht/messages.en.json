@@ -1,0 +1,101 @@
+{
+  "nav": {
+    "overview": "Overview"
+  },
+  "dashboard": {
+    "attentionStrip": {
+      "loading": "Loading what is waiting for you",
+      "error": "The waiting-work count could not be loaded.",
+      "retry": "Try again",
+      "allClear": "Nothing is waiting for you right now.",
+      "count": "{count} waiting for you"
+    },
+    "mandates": {
+      "label": "Mandates",
+      "switchTo": "Switch to {name}",
+      "count": "{count} waiting",
+      "allClear": "nothing waiting",
+      "loading": "reading",
+      "error": "not read",
+      "retry": "Try again",
+      "showAll": "Show all {count} mandates"
+    },
+    "route": {
+      "title": "Overview"
+    },
+    "tile": {
+      "revenue": "Revenue",
+      "cash": "Cash",
+      "ar_aging": "Receivables due",
+      "ap_aging": "Payables due",
+      "utilisation": "Utilisation",
+      "project_margin": "Project margin",
+      "mwst_due": "VAT due",
+      "stock_value": "Stock value"
+    },
+    "range": {
+      "label": "Range",
+      "month": "Month",
+      "quarter": "Quarter",
+      "year": "Year",
+      "custom": "Custom",
+      "from": "From",
+      "to": "To"
+    },
+    "trend": {
+      "label": "Trend versus the previous period: {value}"
+    },
+    "empty": {
+      "title": "No tiles yet",
+      "hint": "As soon as you post, track or invoice, your key figures appear here.",
+      "ar": "No open invoices yet."
+    },
+    "error": {
+      "invalid_range": "End date is before start date."
+    },
+    "degraded": {
+      "needs_vat_config": "VAT not configured."
+    },
+    "more_tiles": "More tiles become available as modules are set up.",
+    "omitted_note": "Some tiles require additional permissions.",
+    "setup": {
+      "title": "Initial setup",
+      "lead": "Your books are still empty. These steps get you to your first posting.",
+      "dismiss": "Hide",
+      "done": "done",
+      "step": {
+        "profile": "Complete the company profile",
+        "vat": "Set up VAT",
+        "accounts": "Review the chart of accounts",
+        "contacts": "Create or import your first contact",
+        "items": "Create your first item",
+        "invoice": "Create your first invoice"
+      }
+    },
+    "view": {
+      "label": "View",
+      "default": "Default view",
+      "save": "Save view",
+      "name": "Name",
+      "shared": "Shared with the workspace",
+      "confirm": "Save",
+      "save_failed": "The view could not be saved.",
+      "fallback_note": "Saved view unavailable, showing the default."
+    },
+    "doors": {
+      "label": "Common actions",
+      "book": "Book",
+      "backup": "Back up",
+      "demo": "Try the demo",
+      "demoBusy": "Creating the demo"
+    }
+  },
+  "help": {
+    "Uebersicht": {
+      "title": "Overview",
+      "body": "The landing page of your books: a wall of key figures, each with its value, its as-of date and a path into the surface behind it. Everything is computed in the engine; this page only composes. A tile whose module is not set up moves behind the further-tiles hint instead of showing a fake zero. You pick the range at the top; an arrangement can be saved as a view and recalled.",
+      "concepts": [],
+      "docsPath": "quickstart"
+    }
+  }
+}

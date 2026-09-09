@@ -1,0 +1,261 @@
+{
+  "nav": {
+    "environments": "Umgebungen"
+  },
+  "help": {
+    "Environments": {
+      "title": "Umgebungen",
+      "body": "Eine Umgebung ist eine eigenständige Kopie von TILL mit eigenen Daten und eigenem Code-Kanal. So arbeitest du an realistischen Daten, ohne die echten Bücher je anzufassen. Daten fliessen nur nach unten (von main in test, von test in develop), Code nur nach oben. main ist die Live-Umgebung und gegen Zurücksetzen, Überschreiben und Löschen geschützt. Beim Kopieren aus main werden Namen, Adressen und IBANs pseudonymisiert und Bank- und Zugangsschlüssel neutralisiert, damit eine Kopie keine echten Zahlungen auslösen kann.",
+      "docsPath": "self-hosting/served-access"
+    }
+  },
+  "env": {
+    "title": "Umgebungen",
+    "subtitle": "Deine main-, test- und develop-Umgebungen und alle benannten Umgebungen an einem Ort.",
+    "create": "Umgebung erstellen",
+    "tiers": {
+      "heading": "Standard-Umgebungen",
+      "hint": "Die drei festen Stufen. Immer vorhanden, oben angeheftet."
+    },
+    "named": {
+      "heading": "Benannte Umgebungen",
+      "hint": "Von dir erstellte Umgebungen für einen bestimmten Zweck.",
+      "empty": "Noch keine benannten Umgebungen. Erstelle eine für einen Test oder eine Migration."
+    },
+    "filter": {
+      "label": "Umgebungen filtern",
+      "placeholder": "Nach Name suchen",
+      "clear": "Filter zurücksetzen",
+      "none": "Keine Umgebung passt zu deiner Suche."
+    },
+    "col": {
+      "name": "Name",
+      "codeChannel": "Code-Kanal",
+      "dataPolicy": "Daten",
+      "guard": "Schutz",
+      "lastRefresh": "Zuletzt aktualisiert",
+      "size": "Grösse",
+      "actions": "Aktionen"
+    },
+    "policy": {
+      "synthetic": "Synthetisch",
+      "copy": "Kopie",
+      "live": "Live"
+    },
+    "policyLong": {
+      "synthetic": "Synthetisch (aus einem Seed erzeugt)",
+      "copy": "Kopie aus einer Quelle",
+      "live": "Live (echte Bücher)"
+    },
+    "guard": {
+      "protected": "Geschützt",
+      "open": "Offen",
+      "liveTooltip": "Live, geschützt"
+    },
+    "runtime": {
+      "served": "Gehostet",
+      "local": "Lokal"
+    },
+    "badge": {
+      "current": "Aktiv",
+      "readOnly": "Nur lesen",
+      "missing": "Datenwurzel fehlt"
+    },
+    "sanitizeBadge": {
+      "raw": "roh (1:1)",
+      "pseudonymize": "pseudonymisiert",
+      "structure_synthetic": "anonymisiert (synthetisch)"
+    },
+    "row": {
+      "open": "Öffnen",
+      "moreLabel": "Aktionen für {name}",
+      "refresh": "Aktualisieren",
+      "reset": "Zurücksetzen",
+      "delete": "Löschen",
+      "switch": "Aktiv setzen"
+    },
+    "never": "Nie",
+    "loadError": "Die Umgebungsliste konnte nicht gelesen werden.",
+    "integrityError": "Die Landschaftsdatei hat ihre Integritätsprüfung nicht bestanden. Sie wurde möglicherweise von Hand verändert. Es wurde nichts geändert.",
+    "noWorkspaceHint": "Wähle zuerst einen Arbeitsbereich, dann kannst du die Umgebungen verwalten.",
+    "reload": "Neu laden",
+    "emptyTitle": "Erstelle deine erste Testumgebung",
+    "emptyHint": "Bisher gibt es nur main, deine Live-Umgebung. Kopiere sie in eine test-Umgebung, um sicher an echten Daten zu üben.",
+    "feedback": {
+      "created": "Umgebung «{name}» erstellt.",
+      "reset": "Umgebung «{name}» zurückgesetzt.",
+      "deleted": "Umgebung «{name}» gelöscht.",
+      "copied": "«{source}» in «{target}» kopiert.",
+      "switched": "Aktive Umgebung ist jetzt «{name}».",
+      "dismiss": "Ausblenden"
+    },
+    "error": {
+      "environment_protected": "main ist geschützt. Diese Aktion ist gegen main nicht möglich.",
+      "standard_tier": "«{name}» ist eine feste Stufe. Setze sie zurück, statt sie zu löschen.",
+      "environment_active": "«{name}» ist gerade aktiv. Wechsle zuerst zu einer anderen Umgebung.",
+      "environment_exists": "Eine Umgebung «{name}» gibt es bereits. Aktualisiere sie oder wähle einen anderen Namen.",
+      "environment_not_found": "Diese Umgebung wurde nicht gefunden.",
+      "data_root_is_main": "Diese Datenwurzel zeigt auf main. Eine andere Umgebung darf das nicht.",
+      "data_root_collision": "Diese Datenwurzel gehört bereits «{collidesWith}».",
+      "source_unreachable": "Die Quelle «{source}» ist nicht erreichbar. Versuche es erneut, sobald sie läuft.",
+      "mandate_not_found": "Der Mandant «{mandate}» wurde in der Quelle nicht gefunden.",
+      "target_is_main": "main ist geschützt und kann kein Ziel sein.",
+      "unknown_seed": "Diesen Seed gibt es nicht.",
+      "seed_failed": "Der Seed ist in der Phase «{phase}» fehlgeschlagen. Die vorherige Umgebung ist unverändert.",
+      "phase_b_not_implemented": "Der Kopier- und Anonymisierungspfad kommt mit Phase B. Synthetische und Live-Umgebungen lassen sich schon jetzt anlegen und zurücksetzen.",
+      "invalid_input": "Eine Eingabe war ungültig. Bitte prüfe die Felder.",
+      "generic": "Die Aktion konnte nicht abgeschlossen werden. Es wurde nichts geändert."
+    },
+    "create_dialog": {
+      "title": "Umgebung erstellen",
+      "lead": "Lege eine neue Umgebung mit eigenen Daten und eigenem Code-Kanal an. main bleibt unberührt.",
+      "name": {
+        "label": "Name",
+        "placeholder": "z. B. test-migration",
+        "hint": "Ein kurzer Name ohne Schrägstriche. Er ist zugleich der Ordnername der Datenwurzel."
+      },
+      "policy": {
+        "label": "Daten",
+        "synthetic": "Synthetisch (aus einem Seed)",
+        "copy": "Kopie aus einer Quelle (Phase B)",
+        "live": "Live (leere Bücher)",
+        "copyNote": "Der Kopierpfad mit Anonymisierung kommt mit Phase B. Nutze so lange die Aktualisieren-Aktion einer bestehenden Umgebung."
+      },
+      "seed": {
+        "label": "Seed",
+        "hint": "Welche synthetischen Daten geladen werden. Standard ist das Seeblick-Musterbuch."
+      },
+      "codeChannel": {
+        "label": "Code-Kanal",
+        "hint": "Der Git-Zweig, den diese Umgebung anpinnt. Standard ist ihr eigener Name."
+      },
+      "runtime": {
+        "label": "Laufzeit",
+        "local": "Lokal",
+        "served": "Gehostet"
+      },
+      "submit": "Umgebung erstellen",
+      "cancel": "Abbrechen",
+      "planTitle": "Das wird angelegt",
+      "plan": {
+        "name": "Name",
+        "policy": "Daten",
+        "seed": "Seed",
+        "codeChannel": "Code-Kanal",
+        "dbPath": "Datenwurzel"
+      },
+      "confirm": "Anlegen"
+    },
+    "copy_dialog": {
+      "title": "Kopieren und ersetzen",
+      "lead": "Die Daten aus «{source}» ersetzen «{target}». {sanitizeSentence}",
+      "sanitizeSentence": {
+        "raw": "Namen, Adressen und IBANs werden 1:1 übernommen. Bank- und Zugangsschlüssel werden trotzdem neutralisiert.",
+        "pseudonymize": "Namen, Adressen und IBANs werden pseudonymisiert. Bank- und Zugangsschlüssel werden neutralisiert.",
+        "structure_synthetic": "Alle Personendaten werden durch synthetische ersetzt. Bank- und Zugangsschlüssel werden neutralisiert."
+      },
+      "oneWay": "Das ist eine Einbahn: die Daten in «{target}» werden ersetzt. Bei einem Fehler bleibt «{target}» unverändert.",
+      "source": {
+        "label": "Quelle",
+        "hint": "Aus welcher Umgebung kopiert wird."
+      },
+      "target": {
+        "label": "Ziel",
+        "hint": "Welche Umgebung ersetzt wird. main kann kein Ziel sein."
+      },
+      "scope": {
+        "label": "Umfang",
+        "instance": "Ganze Umgebung",
+        "mandate": "Nur ein Mandant",
+        "mandateLabel": "Mandant",
+        "mandatePlaceholder": "Mandant wählen"
+      },
+      "sanitize": {
+        "label": "Anonymisierung",
+        "raw": "Roh (1:1-Kopie)",
+        "pseudonymize": "Pseudonymisiert (empfohlen)",
+        "structure_synthetic": "Synthetisch (anonymisiert)"
+      },
+      "phases": {
+        "label": "Ablauf",
+        "snapshot": "Schnappschuss der Quelle",
+        "restore": "Wiederherstellen ins Ziel",
+        "sanitize": "Anonymisieren",
+        "verify": "Prüfen",
+        "pending": "ausstehend",
+        "running": "läuft",
+        "done": "fertig"
+      },
+      "override": {
+        "summary": "Erweiterte Optionen",
+        "rawWarning": "Eine rohe 1:1-Kopie enthält echte Personendaten. Gib zur Bestätigung den Zielnamen ein.",
+        "retainSecrets": "Bank- und Zugangsschlüssel behalten (nur Inhaber)",
+        "retainSecretsWarning": "Behaltene Schlüssel können echte Banken erreichen und echtes Geld bewegen. Nur für einen echten Volldiagnose-Fall.",
+        "confirmName": "Zielname zur Bestätigung",
+        "confirmNamePlaceholder": "{name} eingeben"
+      },
+      "submit": "Kopieren und ersetzen",
+      "cancel": "Abbrechen",
+      "running": "Wird kopiert",
+      "summary": "{workspaces} Arbeitsbereiche kopiert, {masked} Felder anonymisiert.",
+      "toTarget": "Zu «{target}»"
+    },
+    "reset_dialog": {
+      "title": "«{name}» zurücksetzen",
+      "lead": "«{name}» wird geleert und aus seiner Datenpolitik neu aufgebaut. Der Aufbau geschieht daneben und wird nur bei Erfolg übernommen, damit «{name}» bei einem Fehler unverändert bleibt.",
+      "seed": {
+        "label": "Seed",
+        "hint": "Welche synthetischen Daten neu geladen werden."
+      },
+      "planTitle": "Das wird zurückgesetzt",
+      "confirm": "Zurücksetzen",
+      "cancel": "Abbrechen"
+    },
+    "delete_dialog": {
+      "title": "«{name}» löschen",
+      "lead": "Die Datenwurzel von «{name}» und ihr Eintrag in der Landschaft werden entfernt. Das lässt sich nicht rückgängig machen.",
+      "planTitle": "Das wird entfernt",
+      "dataRoot": "Datenwurzel",
+      "confirm": "Löschen",
+      "cancel": "Abbrechen"
+    },
+    "detail": {
+      "title": "Umgebung «{name}»",
+      "codeChannel": "Code-Kanal",
+      "dataPolicy": "Daten",
+      "guard": "Schutz",
+      "runtime": "Laufzeit",
+      "tierRank": "Rang",
+      "source": "Quelle",
+      "sanitization": "Anonymisierung",
+      "seed": "Seed",
+      "created": "Erstellt",
+      "lastRefresh": "Zuletzt aktualisiert",
+      "dbPath": "Datenwurzel",
+      "size": "Grösse",
+      "drift": {
+        "label": "Code-Kanal-Abgleich",
+        "none": "Kein Unterschied",
+        "drifted": "Weicht ab: gebaut aus «{built}»",
+        "unknown": "Unbekannt"
+      },
+      "verifyTitle": "Anonymisierung prüfen",
+      "verifyHint": "Kopiere erneut mit Anonymisierung, wenn diese Umgebung echte Personendaten aus main enthalten könnte.",
+      "verifyAction": "Aktualisieren und anonymisieren",
+      "switch": "Aktiv setzen",
+      "readOnlyNote": "Diese Umgebung ist nur lesend.",
+      "close": "Schliessen",
+      "loadError": "Die Details dieser Umgebung konnten nicht gelesen werden."
+    },
+    "indicator": {
+      "label": "Aktive Umgebung: {name}",
+      "manage": "Umgebungen verwalten",
+      "switchLabel": "Umgebung wechseln",
+      "switchTo": "Zu «{name}» wechseln",
+      "readOnly": "nur lesen",
+      "missing": "Umgebung nicht gefunden, zurück auf develop.",
+      "liveBanner": "Du bist auf LIVE (main). Schreibende Aktionen an den Büchern bleiben möglich, umgebungsweite Eingriffe sind hier gesperrt."
+    },
+    "manageDenied": "Dafür brauchst du das Recht «landscape.manage»."
+  }
+}

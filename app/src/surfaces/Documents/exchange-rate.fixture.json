@@ -1,0 +1,96 @@
+{
+  "resolved": {
+    "ok": true,
+    "currency": "EUR",
+    "baseCurrency": "CHF",
+    "rate": "0.9412",
+    "rateAsOf": "2026-07-15",
+    "rateSource": "manual",
+    "rateMethod": "daily",
+    "date": "2026-07-16"
+  },
+  "base": {
+    "ok": true,
+    "currency": "CHF",
+    "baseCurrency": "CHF",
+    "rate": "1",
+    "rateAsOf": null,
+    "rateSource": "base",
+    "rateMethod": null,
+    "date": "2026-07-16"
+  },
+  "needsRateEmpty": {
+    "ok": false,
+    "error": "needs_fx_rate",
+    "currency": "EUR",
+    "baseCurrency": "CHF",
+    "date": "2026-07-16",
+    "latestAsOf": null,
+    "maxAgeDays": 7,
+    "reason": "no rate has been recorded for this pair: record one with record_exchange_rate, or pass fxRate explicitly"
+  },
+  "needsRateStale": {
+    "ok": false,
+    "error": "needs_fx_rate",
+    "currency": "EUR",
+    "baseCurrency": "CHF",
+    "date": "2026-09-30",
+    "latestAsOf": "2026-07-15",
+    "ageDays": 77,
+    "maxAgeDays": 7,
+    "reason": "the newest recorded rate is too old to price this posting: record a current rate"
+  },
+  "methodNotElected": {
+    "ok": false,
+    "error": "fx_method_not_elected",
+    "method": "daily",
+    "electedMethod": "monthly_avg",
+    "electedFor": "2026",
+    "taxPeriod": "2026",
+    "date": "2026-07-16",
+    "fallbackMethod": "bank",
+    "reason": "this workspace converts on the monthly_avg basis for this Steuerperiode and the chosen basis must be kept for at least one Steuerperiode (MWSTV Art. 45 Abs. 5): record the rate for this basis with record_exchange_rate or import_exchange_rates, or pass fxRate explicitly",
+    "rateId": "fxrate_1",
+    "asOf": "2026-07-15"
+  },
+  "list": {
+    "ok": true,
+    "rates": [
+      {
+        "id": "fxrate_1",
+        "baseCurrency": "EUR",
+        "quoteCurrency": "CHF",
+        "rate": "0.9412",
+        "asOf": "2026-07-15",
+        "source": "manual",
+        "method": "daily",
+        "provenance": "ESTV Tageskurs Verkauf",
+        "createdAt": "2026-07-16T00:00:00.000Z"
+      }
+    ]
+  },
+  "fxMethod": {
+    "ok": true,
+    "taxPeriod": "2026",
+    "method": "monthly_avg",
+    "electedFor": "2026",
+    "locked": false,
+    "newestForeignCurrencyPosting": null,
+    "earliestChangeablePeriod": null,
+    "electableMethods": ["daily", "monthly_avg", "group"],
+    "fallbackMethod": "bank",
+    "elections": [{ "taxPeriod": "2026", "method": "monthly_avg", "electedAt": "2026-07-16T00:00:00.000Z" }]
+  },
+  "fxMethodLocked": {
+    "ok": true,
+    "taxPeriod": "2026",
+    "method": "daily",
+    "electedFor": "2026",
+    "locked": true,
+    "newestForeignCurrencyPosting": "2026-07-16",
+    "earliestChangeablePeriod": "2027",
+    "electableMethods": ["daily", "monthly_avg", "group"],
+    "fallbackMethod": "bank",
+    "elections": [{ "taxPeriod": "2026", "method": "daily", "electedAt": "2026-07-16T00:00:00.000Z" }]
+  }
+}

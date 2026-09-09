@@ -1,0 +1,237 @@
+/* Periods surface styles (A03). Tokens only, no hex, no new colours. 8-pt grid throughout.
+   Depth is one border plus a background step, never a shadow, matching the shell (global.css).
+   Status uses glyph plus text; colour is a secondary cue on top of the always-present label. */
+
+.periods {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  max-width: 960px;
+}
+
+/* The page header (title, help) is the shared SurfaceHeader; the year/month sub-heading below is the
+   surface's own. */
+.periods-subtitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 var(--t-space-2);
+}
+
+.periods-locks {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Action forms (close a month, run the year-end close). */
+.periods-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+  padding: var(--t-space-2);
+}
+
+.period-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--t-space-1);
+}
+
+.period-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+.period-field input,
+.period-field select {
+  padding: var(--t-space-1);
+  background: var(--t-bg);
+  color: var(--t-text);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+}
+
+/* Lock grid: the table frame, sticky header, overflow, density and the five states are the shared
+   DataTable. What stays here is surface-specific: the period code / date cells read tabular, and the
+   row-state hook signals soft vs hard alongside the always-present state badge. */
+.period-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-dim);
+}
+
+/* Row-state hook (DataTable ships no state CSS). A hard, sealing-adjacent lock reads a shade heavier
+   than a soft one; the state badge, not colour, is the primary cue, so this stays subtle. */
+.period-row--hard > td {
+  background: var(--t-bg-soft);
+}
+
+/* Lock state badge: glyph plus text. Soft = warn (amber), hard = full ink (the accent is never spent on status). */
+.period-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.period-state-soft {
+  color: var(--t-warn);
+}
+
+.period-state-hard {
+  color: var(--t-text);
+}
+
+.period-state-text {
+  color: var(--t-text);
+}
+
+.period-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+/* Action feedback rides the shared ActionFeedback primitive (components/ActionFeedback). */
+
+/* Confirm dialog for a period lock is the shared Modal (scrim, focus trap, alertdialog role, footer).
+   Only the body copy is the surface's own. */
+.period-confirm-message {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+/* Audit panel. */
+.audit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+.audit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.audit-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.audit-controls {
+  display: flex;
+  gap: var(--t-space-2);
+}
+
+/* Chain-verification badge: glyph plus text. Verified = full ink, broken = danger (the accent is never spent on status). */
+.audit-chain {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.audit-chain-ok {
+  color: var(--t-text);
+}
+
+.audit-chain-broken {
+  color: var(--t-danger);
+}
+
+.audit-chain-text {
+  color: var(--t-text);
+}
+
+.audit-broken-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-md);
+  color: var(--t-danger);
+}
+
+.audit-broken-text {
+  margin: 0;
+  color: var(--t-text);
+}
+
+/* The audit trail is the shared DataTable; only the timestamp cell's tabular treatment is local. */
+.audit-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-dim);
+}
+
+/* The month-end checklist (F-07, J4.1): one panel per chosen month, each line a count plus the link
+   to the surface that resolves it. Status is carried by the count and the words; the only colour is
+   the warn tone on a line that needs a look, never the accent (spent on the close control). */
+.period-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+}
+
+.period-checklist-summary,
+.period-checklist-locked,
+.period-checklist-wayout {
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.period-checklist-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.period-checklist-line {
+  display: grid;
+  grid-template-columns: 3ch 1fr auto;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  padding: var(--t-space-0-5) 0;
+  border-top: 1px solid var(--t-border);
+  font-size: 13px;
+}
+
+.period-checklist-line:first-child {
+  border-top: 0;
+}
+
+.period-checklist-count {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  color: var(--t-text-dim);
+}
+
+.period-checklist-line--attention .period-checklist-count {
+  color: var(--t-warn);
+  font-weight: 600;
+}
+
+.period-checklist-line--not_available .period-checklist-label,
+.period-checklist-line--not_available .period-checklist-detail {
+  color: var(--t-text-dim);
+}
+
+.period-checklist-detail {
+  font-size: 12px;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The deep-linked month (J8.6): the row the Journal refusal pointed at, brought into view and marked
+   with a left rule in the warn tone so the eye lands on it without a coloured fill. */
+.period-row--focus > td:first-child {
+  box-shadow: inset 3px 0 0 var(--t-warn);
+}

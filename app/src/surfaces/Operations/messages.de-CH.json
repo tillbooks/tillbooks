@@ -1,0 +1,251 @@
+{
+  "egress": {
+    "panel": {
+      "title": "Vertrauen"
+    },
+    "indicator": {
+      "local": "Lokal, keine Verbindung",
+      "unknown": "Nicht geprüft",
+      "violated": "Eine Verbindung wurde geöffnet"
+    },
+    "action": {
+      "run": "Jetzt prüfen"
+    },
+    "scope": {
+      "note": "Dies betrifft TILL, nicht deinen Mac. Deine Mail-App nutzt das Internet; so kommt deine Post an."
+    },
+    "setup": {
+      "prompt": "Schalte dein WLAN aus und drücke dann Jetzt prüfen.",
+      "passed": "TILL hat einen Entwurf geschrieben, während dein WLAN aus war.",
+      "needsIntro": "Zuerst die Einrichtung abschliessen:",
+      "missing": {
+        "mail_store": "Ein Postfach verbinden (Korrespondenz)",
+        "voice_profile": "Deinen Schreibstil anlernen (Schreibstil)",
+        "local_runtime": "Die lokale Entwurfs-Engine installieren (Schreibstil)",
+        "draftable_thread": "Eine unbeantwortete Nachricht, auf die TILL antworten kann (Korrespondenz)"
+      },
+      "incomplete": "Die Prüfung konnte nicht abgeschlossen werden. Es wurde nichts gesendet."
+    },
+    "limits": {
+      "title": "Was dies nicht abdeckt",
+      "os": "Backups und Cloud-Sync (iCloud, Time Machine) können deine Post von diesem Mac kopieren. TILL sieht das nicht und kann es nicht verhindern.",
+      "machine": "Wenn dieser Mac kompromittiert ist, gilt nichts davon.",
+      "disk": "Verschlüsselung auf der Festplatte ist Aufgabe von FileVault. Schalte es ein.",
+      "sockets": "Die ständige Anzeige beobachtet nur Netzwerk-Sockets (TCP, UDP, DNS). Der Selbsttest auf Knopfdruck deckt zusätzlich Subprozesse und höhere Schichten ab (TLS, HTTP, fetch, WebSocket).",
+      "trust_us": "Diese Anzeige ist unsere Software. Die Prüfung mit ausgeschaltetem WLAN ist die, für die du uns nicht glauben musst."
+    },
+    "violated": {
+      "report": "Das ist ein Fehler. Bitte melde ihn."
+    },
+    "model_download": {
+      "note": "Bei der Installation der Entwurfs-Engine wird das Modell einmal heruntergeladen. Danach verbindet es sich nie wieder."
+    },
+    "permissionDenied": "Du hast keine Berechtigung, den Offline-Nachweis zu sehen."
+  },
+  "implProject": {
+    "roster": {
+      "blocked": "Blockiert"
+    }
+  },
+  "diagnostics": {
+    "title": "Diagnose und Rückmeldungen",
+    "scope": "Diese Einstellungen und Dateien gehören zu diesem Computerkonto, nicht zu einem Arbeitsbereich. Wer dieses Konto nutzen kann, kann sie lesen.",
+    "capture": {
+      "label": "Fehlerdetails auf diesem Computer aufzeichnen",
+      "hint": "Standardmässig aus. Beim Ausschalten wird das bereits Aufgezeichnete gelöscht."
+    },
+    "captured": {
+      "title": "Was aufgezeichnet wird",
+      "list": "Der Fehlercode, welche Aktion fehlgeschlagen ist, auf welcher Art von Bildschirm du warst, die Zeit, der Name unserer Quelldatei, die Funktion und die Zeile sowie die Namen (nicht der Inhalt) der beteiligten Felder.",
+      "never": "Nie: Beträge, Namen, Kontonummern, deine Eingaben, Fehlertexte oder welchen Datensatz du offen hattest."
+    },
+    "at_rest": "TILL verschlüsselt diese Dateien nicht. Auf einem Mac schützt FileVault sie.",
+    "empty": {
+      "off": "TILL zeichnet keine Fehlerdetails auf.",
+      "on": "Seit dem Einschalten wurden keine Fehler aufgezeichnet."
+    },
+    "cap": "Die letzten 20 Fehler werden aufbewahrt.",
+    "action": {
+      "clear": "Jetzt löschen"
+    },
+    "clear": {
+      "confirm": {
+        "title": "Aufgezeichnete Fehler löschen?",
+        "body": "Damit wird die Fehlerliste gelöscht. Bereits verfasste Berichte bleiben erhalten.",
+        "close": "Schliessen"
+      }
+    },
+    "error": {
+      "config_not_writable": "TILL konnte nicht in {path} schreiben, daher bleibt die Einstellung aus.",
+      "config_unreadable": "Die Einstellungsdatei konnte nicht gelesen werden, es gelten die Standardwerte. Die Datei wurde unverändert gelassen.",
+      "journal_not_readable": "Die aufgezeichneten Fehler konnten nicht aus {path} gelesen werden. Jetzt löschen entfernt diese Datei und beginnt neu."
+    },
+    "journal": {
+      "title": "Aufgezeichnete Fehler"
+    },
+    "denied": {
+      "body": "Du hast keine Berechtigung, aufgezeichnete Fehlerdetails zu lesen. Löschen kannst du sie trotzdem: eigene Daten zu löschen erfordert nie eine Berechtigung."
+    },
+    "col": {
+      "at": "Zeit",
+      "kind": "Art",
+      "code": "Code",
+      "name": "Ausnahme",
+      "action": "Aktion",
+      "surface": "Bildschirm",
+      "detailKeys": "Felder",
+      "frames": "Wo"
+    },
+    "kind": {
+      "verb_error": "Eine Aktion ist fehlgeschlagen",
+      "unhandled_exception": "Ein unerwarteter Fehler",
+      "transport_error": "Ein Verbindungsfehler"
+    },
+    "value": {
+      "none": "keine"
+    }
+  },
+  "feedback": {
+    "kind": {
+      "bug": "Etwas funktioniert nicht",
+      "idea": "Eine Idee",
+      "question": "Eine Frage"
+    },
+    "action": {
+      "copy_path": "Dateipfad kopieren"
+    },
+    "log": {
+      "title": "Von dir verfasste Berichte",
+      "state": {
+        "prepared": "Vorbereitet"
+      },
+      "cannot_confirm": "TILL übergibt einen Bericht an dein Mail-Programm und kann nicht erkennen, ob du ihn gesendet hast.",
+      "empty": "Du hast noch keinen Bericht verfasst.",
+      "col": {
+        "subject": "Betreff",
+        "kind": "Art",
+        "at": "Datum",
+        "state": "Status",
+        "actions": "Aktionen"
+      },
+      "copyPathFor": "Dateipfad kopieren von {subject}",
+      "copied": "Dateipfad kopiert.",
+      "page": {
+        "status": "Berichte {from} bis {to} von {total}",
+        "prev": "Zurück",
+        "next": "Weiter"
+      }
+    }
+  },
+  "journey": {
+    "_block": "M03 journey (N4a)",
+    "location": {
+      "local": "Deine Bücher: eine einzelne Datei auf diesem Gerät ({path}). Nichts verlässt TILL von selbst.",
+      "served": "Deine Bücher: eine Datei auf dieser Instanz; Export und Backup jederzeit.",
+      "unknown": "Speicherort unbekannt.",
+      "retry": "Erneut versuchen",
+      "backupLink": "Daten & Sicherung",
+      "hostingLink": "Sync & Hosting",
+      "exitLink": "Dein Ausstieg"
+    },
+    "hosting": {
+      "title": "Hosting",
+      "model": "Ein Hauptbuch, eine Instanz. Alle weiteren Personen und Geräte arbeiten als Clients darauf. Kein Geräte-Sync.",
+      "rung": {
+        "current": "jetzt",
+        "local": {
+          "label": "Lokal",
+          "hint": "Dieses Gerät. Keine Freigabe, kein Server."
+        },
+        "selfhost": {
+          "label": "Selbst gehostet",
+          "hint": "Ein Docker-Image, ein Befehl (docker compose up -d), hinter deinem eigenen Reverse-Proxy.",
+          "guide": "In unter einer Stunde online",
+          "proxyGuide": "Reverse-Proxy-Anleitung"
+        },
+        "managed": {
+          "label": "Verwaltet",
+          "hint": "Eigene Instanz, eigene URL, Schweizer Hosting.",
+          "soon": "(bald verfügbar)",
+          "more": "Mehr",
+          "moreBody": "Die verwaltete Instanz wird ausserhalb von TILL bereitgestellt, als externer Schritt. Sie ist noch nicht verfügbar."
+        }
+      },
+      "start": "Umzug starten",
+      "denied": "Nur wer Einstellungen verwalten darf, kann einen Umzug führen.",
+      "moveTitle": "Umzug: {from} → {to}",
+      "done": "Umzug abgeschlossen: {name} ist hier stillgelegt. Dieses Gerät arbeitet als Client der Instanz ({target})."
+    },
+    "step": {
+      "position": "Schritt {n} von {total}",
+      "1": "Backup hier erstellen",
+      "1_done": "Backup erstellt ({date})",
+      "1_action": "Jetzt sichern",
+      "2_selfhost": "Instanz aufsetzen: docker compose up -d (Anleitung, manuell)",
+      "2_managed": "Instanz bereitstellen (extern, manuell)",
+      "2_local": "TILL auf dem Zielgerät installieren (manuell)",
+      "2_guide": "Anleitung öffnen",
+      "2_proxyGuide": "Reverse-Proxy",
+      "3": "Backup dort wiederherstellen (Wiederherstellen-Dialog beim ersten Start, manuell)",
+      "4": "Saldenliste vergleichen",
+      "5": "Dieses lokale Hauptbuch stilllegen",
+      "5_action": "Stilllegen",
+      "manual_check": "Als erledigt markieren",
+      "manual_uncheck": "Als offen markieren",
+      "manual_note": "Die manuellen Schritte auf der anderen Maschine kann TILL nicht prüfen; du bestätigst sie selbst, und der Abgleich in Schritt 4 ist die eine Kontrolle dieses Bereichs."
+    },
+    "compare": {
+      "check": "Prüfen",
+      "note": "Manueller Abgleich: TILL kann die andere Instanz nicht lesen. Öffne dort die Saldenbilanz und vergleiche die Summe.",
+      "loading": "Saldenbilanz dieses Hauptbuchs wird gelesen…",
+      "total": "Summe Soll dieses Hauptbuchs: {total}",
+      "match": "Stimmt überein",
+      "mismatch": "Stimmt nicht überein",
+      "mismatchBody": "Die Summen weichen ab: die Ziel-Instanz hat ein anderes Backup wiederhergestellt.",
+      "mismatchAction": "Backup erneut erstellen und übertragen; die Schritte 1, 3 und 4 sind wieder offen."
+    },
+    "abort": "Umzug abbrechen",
+    "stale": {
+      "notice": "Dieses Hauptbuch wurde umgezogen, ist aber noch beschreibbar.",
+      "action": "Stilllegen"
+    },
+    "retire": {
+      "title": "Hauptbuch stilllegen",
+      "body": "{name} wird auf diesem Gerät schreibgeschützt. Die Bücher bleiben vollständig und exportierbar. Wieder aktivierbar über die Mandatsliste.",
+      "confirm": "Stilllegen",
+      "cancel": "Abbrechen",
+      "denied": "Dafür braucht es die Berechtigung, Einstellungen zu verwalten (manage_settings).",
+      "failed": "Stilllegen fehlgeschlagen: {code}."
+    },
+    "exit": {
+      "title": "Dein Ausstieg, Schritt für Schritt",
+      "steps": {
+        "1": "Backup und Export hier erstellen",
+        "2": "Zuhause (oder auf dem eigenen Server) über den Wiederherstellen-Dialog beim ersten Start wiederherstellen",
+        "3": "Saldenliste vergleichen (manueller Abgleich)",
+        "4": "Konto beim Anbieter schliessen (extern)"
+      }
+    },
+    "backup": {
+      "col": "Wiederherstellung",
+      "hintLabel": "Wiederherstellungspfad anzeigen",
+      "restorePath": "Wiederherstellbar auf jeder TILL-Installation über den Wiederherstellen-Dialog beim ersten Start. Schema-Generation {generation}."
+    }
+  },
+  "help": {
+    "Operations": {
+      "title": "Betrieb",
+      "body": "Hier liegen die Bereiche, die du nicht beim Einrichten, sondern im laufenden Betrieb aufsuchst: der Offline-Nachweis (Vertrauen), die Laufzeitanzeige, Synchronisation und Hosting, Datensicherung, die Übersicht deiner Mandate sowie Diagnose und Rückmeldung. Jeder Bereich zeigt sich erst, sobald ein Arbeitsbereich gewählt ist, und die meisten davon verlangen eine eigene Berechtigung. Das Firmenprofil selbst bleibt unter Einrichtung.",
+      "concepts": [],
+      "docsPath": "self-hosting/served-access"
+    }
+  },
+  "dataBackup": {
+    "verify": {
+      "rowLabel": "{kind} vom {date} prüfen",
+      "ok": "Gültig: {entries} Buchungen, ausgeglichen. Schema-Generation {generation}.",
+      "unbalanced": "Geprüft, aber nicht ausgeglichen: {entries} Buchungen. Diese Sicherung solltest du nicht wiederherstellen.",
+      "failed": "Die Prüfung ist fehlgeschlagen. Versuch es nochmals."
+    }
+  }
+}

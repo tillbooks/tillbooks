@@ -1,0 +1,339 @@
+/* D126 Umgebungen surface. One accent, one typeface, minimalist (brand/DESIGN.md). Colour is never
+   the only cue: every chip and guard state carries a word, and main's protection carries a glyph. */
+
+.environments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-4);
+}
+
+.env-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.env-subtitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--t-text-dim);
+  margin: 0;
+}
+
+.env-named-empty {
+  color: var(--t-text-dim);
+  font-size: 0.9rem;
+  margin: 0;
+  padding: var(--t-space-2) 0;
+}
+
+/* --- list cells ------------------------------------------------------------------------------- */
+
+.env-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.env-name-text {
+  font-weight: 600;
+}
+
+.env-mono {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.env-chip {
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0.2em 0.5em;
+  border-radius: var(--t-radius-full);
+  border: 1px solid var(--t-border);
+  color: var(--t-text-dim);
+  background: var(--t-bg-soft);
+  white-space: nowrap;
+}
+
+.env-chip--active {
+  border-color: var(--t-accent);
+  color: var(--t-accent);
+  background: var(--t-accent-soft);
+}
+
+.env-chip--warn {
+  border-color: var(--t-warn);
+  color: var(--t-warn);
+}
+
+.env-policy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.env-sanitize {
+  font-size: 0.72rem;
+  color: var(--t-text-dim);
+}
+
+.env-guard {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text-dim);
+}
+
+.env-guard--protected {
+  color: var(--t-warn);
+  font-weight: 600;
+}
+
+.env-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  justify-content: flex-end;
+}
+
+.env-padlock {
+  display: inline-flex;
+  align-items: center;
+  color: var(--t-warn);
+}
+
+.env-row--active td {
+  background: var(--t-accent-soft);
+}
+
+/* --- dialogs / drawers ------------------------------------------------------------------------ */
+
+.env-dialog-lead {
+  margin: 0 0 var(--t-space-2);
+  color: var(--t-text);
+}
+
+.env-dialog-oneway {
+  margin: 0 0 var(--t-space-2);
+  color: var(--t-text-dim);
+  font-size: 0.85rem;
+}
+
+.env-dialog-error {
+  margin: 0 0 var(--t-space-2);
+  color: var(--t-danger);
+  font-size: 0.9rem;
+}
+
+.env-dialog-summary {
+  margin: var(--t-space-2) 0 0;
+  color: var(--t-text);
+}
+
+.env-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.env-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.env-field-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.env-field-hint {
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+}
+
+.env-field-hint--warn {
+  color: var(--t-warn);
+}
+
+.env-radio,
+.env-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  font-size: 0.9rem;
+}
+
+.env-radio--disabled {
+  color: var(--t-text-dim);
+}
+
+.env-checkbox span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.env-target-fixed {
+  margin: 0;
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+}
+
+.env-disclosure {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+}
+
+.env-disclosure > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.env-disclosure > .env-field,
+.env-disclosure > .env-checkbox {
+  margin-top: var(--t-space-2);
+}
+
+/* --- the plan / detail definition list -------------------------------------------------------- */
+
+.env-plan {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.env-plan-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 var(--t-space-1);
+}
+
+.env-plan-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 12rem) 1fr;
+  gap: var(--t-space-2);
+  padding: var(--t-space-0-5) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.env-plan-row dt {
+  color: var(--t-text-dim);
+  font-size: 0.85rem;
+}
+
+.env-plan-row dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.env-readonly-note {
+  margin: 0 0 var(--t-space-2);
+  color: var(--t-text-dim);
+  font-size: 0.85rem;
+}
+
+.env-verify {
+  margin-top: var(--t-space-3);
+}
+
+/* --- the four-phase copy journey (finding #12) ------------------------------------------------ */
+
+.env-phases {
+  list-style: none;
+  margin: var(--t-space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.env-phase {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--t-space-2);
+  font-size: 0.85rem;
+}
+
+.env-phase-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: var(--t-radius-full);
+  border: 1px solid var(--t-border-strong);
+  background: var(--t-bg);
+}
+
+.env-phase--running .env-phase-dot {
+  border-color: var(--t-accent);
+  background: var(--t-accent);
+}
+
+.env-phase--done .env-phase-dot {
+  border-color: var(--t-accent);
+  background: var(--t-accent);
+}
+
+.env-phase-state {
+  color: var(--t-text-dim);
+  font-size: 0.75rem;
+}
+
+.env-phase--pending {
+  color: var(--t-text-dim);
+}
+
+/* --- the shell environment indicator + LIVE banner (7.4, E6a) --------------------------------- */
+
+.env-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+  width: 100%;
+}
+
+.env-indicator-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  padding: 0.15em 0.5em;
+  border-radius: var(--t-radius-full);
+  border: 1px solid var(--t-border);
+  background: var(--t-bg-soft);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.env-indicator-badge--live {
+  border-color: var(--t-warn);
+  color: var(--t-warn);
+  font-weight: 600;
+}
+
+.env-indicator-readonly {
+  font-size: 0.72rem;
+  color: var(--t-text-faint);
+}
+
+.env-live-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) var(--t-space-3);
+  background: var(--t-warn);
+  color: var(--t-bg);
+  font-size: 0.85rem;
+  font-weight: 600;
+}

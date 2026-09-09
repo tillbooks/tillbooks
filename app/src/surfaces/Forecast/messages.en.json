@@ -1,0 +1,92 @@
+{
+  "nav": {
+    "forecast": "Forecast"
+  },
+  "forecast": {
+    "route": {
+      "title": "Forecast"
+    },
+    "loading": "Loading forecast",
+    "disclaimer": "Projection, not an accounting figure.",
+    "empty": "No open deals.",
+    "emptyHint": "Create deals in the pipeline and the weighted forecast appears here.",
+    "emptyCta": "Open the pipeline",
+    "denied": "No permission for reports.",
+    "group": {
+      "label": "Group by",
+      "stage": "Stage",
+      "month": "Month",
+      "quarter": "Quarter",
+      "custom": "Group by field"
+    },
+    "horizon": {
+      "label": "Horizon",
+      "months": "{count} months"
+    },
+    "period": {
+      "label": "Period"
+    },
+    "pipelineTable": {
+      "title": "Weighted pipeline",
+      "col": {
+        "group": "Group",
+        "count": "Deals",
+        "value": "Value (CHF)",
+        "weighted": "Weighted (CHF)"
+      },
+      "total": "Total"
+    },
+    "bucket": {
+      "no_date": "No close date",
+      "none": "No value"
+    },
+    "kpi": {
+      "title": "Sales KPIs",
+      "conversion": "Conversion rate",
+      "avg_deal": "Avg. deal size",
+      "cycle": "Avg. sales cycle (days)",
+      "no_sample": "Not enough data",
+      "window": "Last 12 months"
+    },
+    "revenue": {
+      "title": "Revenue forecast",
+      "col": {
+        "period": "Period",
+        "weighted": "Weighted open",
+        "wonUninvoiced": "Won, not yet invoiced",
+        "openQuotes": "Open quotes (without deal)",
+        "total": "Total"
+      }
+    },
+    "excluded": {
+      "fx": "Excluded: missing exchange rate"
+    },
+    "vsActual": {
+      "title": "Forecast vs actual",
+      "actual": "Actual (A08, net)",
+      "pipeline": "Pipeline (won)",
+      "delta": "Delta",
+      "over": "above pipeline",
+      "under": "below pipeline",
+      "even": "no deviation",
+      "wonNotInvoiced": "Won, not yet invoiced",
+      "invoicedWithoutDeal": "Invoiced without a deal"
+    },
+    "error": {
+      "invalid_horizon": "Invalid horizon: 1 to 24 months are allowed.",
+      "invalid_range": "Invalid range: the from date must not be after the to date.",
+      "invalid_group_by": "Invalid grouping: pick stage, month, quarter or a registered field.",
+      "invalid_period": "Invalid period: YYYY, YYYY-MM or YYYY-Qn are allowed.",
+      "not_found": "This pipeline does not exist. Reset the filter.",
+      "reset": "Reset"
+    }
+  },
+  "help": {
+    "Forecast": {
+      "title": "Forecast",
+      "body": "The forecast is a read-only lens over your pipeline: weighted values per stage or period, sales indicators and the monthly revenue outlook, broken down by source. A forecast is not an accounting figure; only the actuals column in the comparison comes from posted revenue. When the data behind an indicator is too thin, it shows a dash rather than a fabricated zero.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

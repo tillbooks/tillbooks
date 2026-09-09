@@ -1,0 +1,75 @@
+{
+  "note": "Pinned to the live engine by test/format-money/format-money-currency-fixture.test.mjs. A EUR-base workspace holding one posted USD entry, plus the year close that sweeps it. Every figure here is an engine answer, never a literal typed by a Studio test.",
+  "baseCurrency": "EUR",
+  "transactionCurrency": "USD",
+  "fxRate": "0.86",
+  "profile": {
+    "workspaceId": "ws_1",
+    "name": "Nomadik GmbH",
+    "legalForm": null,
+    "baseCurrency": "EUR",
+    "fiscalYearStart": "01-01",
+    "vatMethod": null,
+    "vatAccounting": null,
+    "creditorName": null,
+    "creditorAddress": null,
+    "creditorIban": null,
+    "uid": null,
+    "mwstNo": null,
+    "createdAt": "2026-07-16T00:00:00.000Z",
+    "ledgerLocked": true
+  },
+  "entry": {
+    "id": "entry_1",
+    "workspaceId": "ws_1",
+    "date": "2026-07-16",
+    "ref": "B-901",
+    "description": "US consulting",
+    "status": "posted",
+    "reversesEntryId": null,
+    "idempotencyKey": "e1",
+    "source": "manual",
+    "createdBy": "user_1",
+    "createdAt": "2026-07-16T00:00:00.000Z"
+  },
+  "lines": [
+    {
+      "id": "line_1",
+      "entryId": "entry_1",
+      "account": "acc_2",
+      "costCenter": null,
+      "debit": 100000,
+      "credit": 0,
+      "currency": "USD",
+      "baseDebit": 86000,
+      "baseCredit": 0,
+      "baseCurrency": "EUR",
+      "fxRate": "0.86",
+      "taxCode": null,
+      "taxBase": null,
+      "taxAmount": null
+    },
+    {
+      "id": "line_2",
+      "entryId": "entry_1",
+      "account": "acc_29",
+      "costCenter": null,
+      "debit": 0,
+      "credit": 100000,
+      "currency": "USD",
+      "baseDebit": 0,
+      "baseCredit": 86000,
+      "baseCurrency": "EUR",
+      "fxRate": "0.86",
+      "taxCode": null,
+      "taxBase": null,
+      "taxAmount": null
+    }
+  ],
+  "yearClose": {
+    "closingEntryId": "entry_2",
+    "carryEntryId": "entry_3",
+    "result": 86000,
+    "baseCurrency": "EUR"
+  }
+}

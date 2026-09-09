@@ -1,0 +1,70 @@
+{
+  "docTemplate": {
+    "title": "Vorlagen",
+    "lede": "Gestalte, wie deine Rechnungen, Gutschriften, Offerten und Mahnungen aussehen: Logo, Fusszeile und Sprache. Der Swiss QR-Zahlteil, die MWST-Angaben und alle gesetzlichen Inhalte bleiben unter jeder Vorlage unverändert.",
+    "loading": "Vorlagen werden geladen…",
+    "new": "Neu",
+    "name": "Name",
+    "statusCol": "Status",
+    "actionsCol": "Aktionen",
+    "listCaption": "Vorlagen dieser Belegart",
+    "logo": "Logo",
+    "uploadLogo": "Logo hochladen",
+    "logoCurrent": "Ein Logo ist hinterlegt.",
+    "logoNote": "PNG oder JPG, höchstens 2 MB. Das Logo wird lokal als Beleg abgelegt und verlässt dieses Gerät nicht.",
+    "columns": "Optionale Spalten",
+    "columnsNote": "Nur nicht-gesetzliche Zusatzspalten. Beschrieb, Menge, Preis, MWST und Totale sind immer enthalten.",
+    "column": {
+      "discount": "Rabatt",
+      "sku": "Artikelnummer",
+      "project": "Projektreferenz",
+      "unit": "Einheit"
+    },
+    "footer": "Fusszeile",
+    "footerFor": "Fusszeile ({locale})",
+    "languageMode": {
+      "label": "Sprache",
+      "fixed": "Feste Sprache",
+      "perContactLang": "Sprache des Kontakts"
+    },
+    "fixedLocale": "Standardsprache",
+    "setDefault": "Als Standard festlegen",
+    "default": "Standard",
+    "archive": "Archivieren",
+    "archived": "Archiviert",
+    "archivedRefusal": "Eine archivierte Vorlage kann nicht Standard werden.",
+    "invalidColumns": "Nur die angebotenen Zusatzspalten sind zulässig.",
+    "preview": "Vorschau",
+    "previewAria": "Vorschau des gerenderten Dokuments",
+    "previewHint": "Wähle eine Vorlage, um die Vorschau zu sehen.",
+    "previewLocale": "Gerendert in {locale}.",
+    "previewFallback": "Die PDF-Vorschau kann hier nicht angezeigt werden.",
+    "samplePreview": "Muster-Vorschau mit Beispieldaten: kein echtes, zahlbares Dokument.",
+    "empty": "Noch keine Vorlagen",
+    "emptyHint": "Erstelle mit «Neu» eine erste Vorlage. Bis dahin verwendet TILL das eingebaute Standardlayout.",
+    "needsValidLogoFile": "Das Logo muss eine Bilddatei (PNG/JPG) unter 2 MB sein. Die Vorlage wurde nicht gespeichert.",
+    "needsPermission": "Vorlagen ändern erfordert Administratorrechte.",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "permissionDenied": {
+      "read": "Du hast keine Berechtigung, die Vorlagen dieses Mandanten zu sehen."
+    },
+    "kind": {
+      "invoice": "Rechnung",
+      "creditNote": "Gutschrift",
+      "quote": "Offerte",
+      "dunningRun": "Mahnung"
+    }
+  },
+  "nav": {
+    "documentTemplates": "Vorlagen"
+  },
+  "help": {
+    "DocumentTemplates": {
+      "title": "Vorlagen",
+      "body": "Vorlagen bestimmen, wie deine Belege aussehen: Logo, Farben, Schrift und Aufbau, je Belegart, mit einer Vorschau neben dem Editor. Eine Vorlage ändert nur die Darstellung. Der QR-Zahlteil, die MWST-Beträge und die Pflichtangaben kommen aus dem Beleg selbst und gehen unverändert durch jede Vorlage. Die Vorschau zeigt die Sprache, in der der Beleg beim Empfänger ankommt.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

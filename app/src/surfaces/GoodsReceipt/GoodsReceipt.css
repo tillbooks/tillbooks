@@ -1,0 +1,179 @@
+/* I02, Einkauf -> Wareneingänge. Receipt-centric master-detail split, one accent, glyph+label status
+   and inspection badges. No new colour token (design-canon): every value reuses a --t- token.
+
+   D118 B2 (2026-08-24): the receipt master list and the line table are the shared `DataTable` now
+   (frame overflow, sticky header, density and the five states in one place); the page header is the
+   shared `SurfaceHeader`, the create and add-line overlays are the shared `DetailDrawer`. The
+   per-surface CSS that duplicated the list buttons, the line table, the page header, the buttons and
+   the drawer chrome has been deleted. What remains is genuinely GoodsReceipt-specific: the
+   master-detail layout, the status/inspection badges, the selection and over-delivery row cues, the
+   mono movement cell, the over-receipt/issue markers, the audit trail, the hold panel and the
+   label-stacked drawer form fields the DetailDrawer hosts.
+
+   There is no FilterBar: this surface has no search or filter row (only the receipt list and a
+   "new receipt" action), and the B2 rule is not to invent a search row that never existed. */
+
+.gr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.gr-split {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .gr-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gr-pane {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-1);
+}
+
+.gr-detail {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The selected receipt row in the master-list DataTable: a soft fill plus an inset accent edge, the
+   selection cue the bespoke button list carried before (rowClassName hook, DataTable ships no state
+   CSS). */
+.data-table-row.gr-row--selected {
+  background: var(--t-bg-soft);
+  box-shadow: inset 3px 0 0 var(--t-accent);
+}
+
+/* A receipt (or line) that carries an accepted over-delivery reads as an exception: a quiet neutral
+   inset edge, distinct from the accent selection edge. The readable signal stays the ⚠ badge in the
+   cell and the reason line in words; colour alone is never the cue (design-canon, WCAG 2.2 AA). */
+.data-table-row.gr-row--exception {
+  box-shadow: inset 3px 0 0 var(--t-text-faint);
+}
+
+/* The receipt list cell: the number stacked over its meta line (order, supplier, date). */
+.gr-list-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.gr-list-number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.gr-list-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-0-5);
+}
+
+.gr-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.gr-detail-title {
+  margin: 0;
+}
+
+.gr-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.gr-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.gr-mono {
+  font-family: var(--t-font-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+}
+
+.gr-issue {
+  display: inline-block;
+  margin-right: var(--t-space-0-5);
+  font-size: 0.75rem;
+  color: var(--t-text-dim);
+}
+
+.gr-subtitle {
+  margin: var(--t-space-1) 0 0;
+  font-size: 0.95rem;
+}
+
+.gr-total {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.gr-hold {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1);
+}
+
+.gr-trail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--t-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.gr-badge {
+  display: inline-block;
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font-size: 0.75rem;
+  color: var(--t-text-dim);
+}
+
+.gr-muted {
+  color: var(--t-text-dim);
+}
+
+.gr-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+}
+
+/* The drawer form fields the shared DetailDrawer hosts. The controls themselves are the shared
+   `.field` class (global.css); this is only the label-stacked layout around them. */
+.gr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gr-field label {
+  font-size: 0.85rem;
+  color: var(--t-text-dim);
+}

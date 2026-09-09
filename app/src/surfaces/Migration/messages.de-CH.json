@@ -1,0 +1,537 @@
+{
+  "nav": {
+    "migration": "Datenübernahme"
+  },
+  "migration": {
+    "title": "Datenübernahme",
+    "noWorkspaceHint": "Eine Datenübernahme gehört zu einem Arbeitsbereich. Leg zuerst einen an.",
+    "loading": "Der Übernahmeplan wird geladen",
+    "error": "Der Übernahmeplan konnte nicht geladen werden",
+    "denied": "Du brauchst das Recht \"Datenübernahmen durchführen\", um das zu sehen. Frag einen Besitzer des Arbeitsbereichs, es dir zu geben.",
+    "empty": {
+      "title": "Noch keine Datenübernahme geplant",
+      "body": "Eine Übernahme ist ein abgegrenzter, fortsetzbarer, prüfbarer Plan, um Bücher zu übernehmen, kein einmaliger Import.",
+      "cta": "Exportdateien hinzufügen"
+    },
+    "next": "Nächster Schritt",
+    "verb": {
+      "migration_preview_step": "Vorschau erzeugen",
+      "migration_trial_load_step": "Probelauf laden",
+      "migration_commit_step": "Schritt übernehmen",
+      "migration_rollback_step": "Schritt zurücksetzen",
+      "migration_readiness": "Bereitschaft prüfen",
+      "migration_get_plan": "Plan öffnen"
+    },
+    "journey": {
+      "export": "Export",
+      "discover": "Erkunden",
+      "map": "Zuordnen",
+      "trial": "Probelauf",
+      "check": "Prüfen",
+      "golive": "Produktiv",
+      "verified": "Geprüft"
+    },
+    "extraction": {
+      "title": "Was aus dem alten System raus muss",
+      "create": "Exportliste anlegen",
+      "empty": "Die Exportliste hält fest, was rechtzeitig aus dem alten System raus muss. Sie wird aus der Anleitung des Quellsystems erstellt.",
+      "item": {
+        "open": "Offen",
+        "exported": "Exportiert",
+        "notUsed": "Nicht verwendet",
+        "blocked": "Blockiert"
+      },
+      "rung": {
+        "1": "Nativer Export",
+        "2": "Bericht-Export",
+        "3": "Browser-Begleiter",
+        "4": "Seitenweise Erfassung",
+        "5": "Datenherausgabe-Brief"
+      },
+      "rungGated": "Vorgesehen, noch nicht verfügbar",
+      "deadline": "Zugriff auf {source} noch {n} Tage",
+      "deadlineExpired": "Zugriff auf {source} endete am {date}",
+      "complete": "Alle Exporte erfasst",
+      "letter": {
+        "create": "Datenherausgabe-Brief erstellen"
+      },
+      "rowCount": "{n} Zeilen",
+      "dateRange": "{from} bis {to}",
+      "files": "{n} Dateien",
+      "verifyTerms": "Frist gemäss deinem Vertrag prüfen"
+    },
+    "plan": {
+      "state": {
+        "draft": "Entwurf",
+        "planned": "Geplant",
+        "trial": "Probelauf",
+        "live": "Produktiv",
+        "closed": "Abgeschlossen",
+        "abandoned": "Abgebrochen"
+      },
+      "close": "Übernahme abschliessen",
+      "closeConfirm": "Mit dem Abschluss gilt die Übernahme als erledigt. Jeder Schritt muss abgeschlossen sein und keine Kontrolle darf fehlgeschlagen sein.",
+      "closeBlocked": "Die Übernahme kann noch nicht abgeschlossen werden: {blocker}",
+      "abandonBlocked": "Die Übernahme konnte nicht abgebrochen werden: {blocker}",
+      "identity": "{source}, Stichtag {date}",
+      "identityNoDate": "{source}",
+      "identityNoSource": "Stichtag {date}",
+      "identityUnknown": "Übernahme ohne Quelle und Stichtag",
+      "prepared": "{identity}: vorbereitet, produktiv ab {date}",
+      "selectorLabel": "Plan",
+      "abandon": "Übernahme abbrechen",
+      "abandonConfirm": "Die Übernahme abbrechen? Der Testmandant wird verworfen. Belege bereits übernommener Schritte bleiben erhalten."
+    },
+    "source": {
+      "adapter": "Format",
+      "worksheet": "Arbeitsblatt",
+      "bundle": "Archivinhalt",
+      "uploadProgress": "Upload-Fortschritt"
+    },
+    "map": {
+      "taxPresetPending": "Die ESTV-Ziffern für diese Quelle sind noch nicht geprüft. Ordne die Steuercodes von Hand zu."
+    },
+    "step": {
+      "state": {
+        "pending": "Offen",
+        "mapped": "Zugeordnet",
+        "previewed": "Vorschau erstellt",
+        "trialLoaded": "Probe geladen",
+        "checked": "Geprüft",
+        "committed": "Übernommen",
+        "verified": "Bestätigt",
+        "diverged": "Abweichung",
+        "failed": "Fehlgeschlagen",
+        "rolledBack": "Rückgängig gemacht",
+        "skipped": "Übersprungen"
+      }
+    },
+    "actor": {
+      "you": "du",
+      "agent": "ein Agent",
+      "system": "das System"
+    },
+    "approval": {
+      "pending": "Wartet auf deine Freigabe",
+      "approve": "Freigeben",
+      "error": "Die Freigabe konnte nicht gespeichert werden. Versuche es nochmals."
+    },
+    "diverged": {
+      "title": "Die Prüfung nach der Übernahme weicht vom Probelauf ab",
+      "reverse": "Schritt rückgängig machen",
+      "reverseError": "Das Rückgängigmachen ist nicht durchgegangen. Der Schritt steht noch auf Abweichung.",
+      "restoreHint": "Der zweite Weg zurück: eine Sicherung wiederherstellen, im Bereich",
+      "restoreLink": "Daten & Sicherung"
+    },
+    "testmandant": {
+      "banner": {
+        "title": "Du arbeitest im Testmandanten",
+        "plan": "Ein Probelauf dieser Datenübernahme, nicht deine echten Bücher"
+      },
+      "empty": {
+        "title": "Noch kein Testmandant",
+        "body": "Ein Testmandant ist ein Wegwerf-Arbeitsbereich, der sich genau wie ein echter verhält, damit du deine eigenen Bücher in TILL anschauen kannst, bevor du dich festlegst."
+      },
+      "create": "Testmandanten erstellen",
+      "diff": {
+        "title": "Mit dem Live-Mandanten vergleichen",
+        "loading": "Vergleich läuft ...",
+        "error": "Der Vergleich konnte nicht geladen werden.",
+        "noLive": "Es gibt noch keinen Live-Mandanten mit dieser UID, mit dem verglichen werden könnte.",
+        "same": "Keine Unterschiede: beide Seiten halten gleich viele Zeilen je Datenklasse.",
+        "row": "{class}: {testmandant} im Testmandanten, {live} live"
+      },
+      "goProductive": "Produktiv setzen",
+      "waitForStichtag": "Produktiv setzen geht ab dem Stichtag {date}. Bis dahin ist alles vorbereitet und bleibt im Testmandanten.",
+      "toIntake": "Zur Übernahme",
+      "confirmLabel": "Tippe den Firmennamen ein, um produktiv zu gehen",
+      "irreversible": "Das lässt sich nicht rückgängig machen. Der Testmandant kann danach nicht mehr verworfen werden.",
+      "discard": "Testmandanten verwerfen",
+      "discardConfirm": "Den Testmandanten wirklich verwerfen? Der Wegwerf-Arbeitsbereich wird gelöscht. Belege aus Schritten, die bereits live gingen, bleiben erhalten.",
+      "more": "Mehr",
+      "wentLive": "Dieser Arbeitsbereich sind jetzt deine echten Bücher.",
+      "err": {
+        "checkNotClean": "Die Eröffnungsprüfung ist noch nicht sauber. Kläre jede Kontrolle, bevor du produktiv gehst.",
+        "containsDemoRows": "Dieser Testmandant enthält noch Beispieldaten und kann nie zu echten Büchern werden.",
+        "needsCompanyProfile": "Das Firmenprofil ist unvollständig. Ergänze zuerst die Rechtsform und die UID.",
+        "liveWorkspaceExists": "Für diese UID gibt es bereits einen Live-Mandanten. Führe die Übernahme stattdessen dort aus.",
+        "confirmMismatch": "Der Name stimmt nicht mit dem Firmennamen überein.",
+        "notATestmandant": "Das ist kein Testmandant.",
+        "planAlreadyLive": "Diese Übernahme ist bereits live.",
+        "generic": "Das hat nicht geklappt. Versuche es nochmals."
+      }
+    },
+    "dataClass": {
+      "opening_balances": "Eröffnungssaldi",
+      "open_items_ar": "Offene Debitoren",
+      "open_items_ap": "Offene Kreditoren",
+      "bank_statements": "Kontoauszüge",
+      "vat_history": "MWST-Historie",
+      "chart_of_accounts": "Kontenplan",
+      "tax_codes": "Steuercodes",
+      "contacts": "Kontakte",
+      "items": "Artikel",
+      "payment_terms": "Zahlungskonditionen",
+      "bank_accounts": "Bankkonten",
+      "documents": "Belege",
+      "gl_history": "Buchungshistorie"
+    },
+    "intake": {
+      "stepsLabel": "Schritte der Datenübernahme",
+      "step": {
+        "files": "Dateien",
+        "plan": "Plan",
+        "scope": "Umfang"
+      },
+      "drop": {
+        "hint": "Zieh die Exportdateien hierher oder wähle sie aus. TILL liest sie, ohne etwas zu buchen.",
+        "choose": "Dateien auswählen"
+      },
+      "uploadError": {
+        "tooLarge": "Die Datei ist zu gross und konnte nicht gespeichert werden.",
+        "integrity": "Der Upload stimmte nicht mit seiner Prüfsumme überein und wurde abgelehnt. Lade ihn nochmals hoch.",
+        "generic": "Die Datei konnte nicht gespeichert werden."
+      },
+      "discoverError": "Die Dateien konnten nicht erkundet werden.",
+      "file": {
+        "adapter": "Format",
+        "rows": "Zeilen",
+        "asAt": "Exportdatum",
+        "noAsAt": "kein Datum in der Datei"
+      },
+      "failure": {
+        "unparseable": "Diese Datei konnte nicht gelesen werden.",
+        "generic": "Diese Datei konnte nicht verarbeitet werden.",
+        "encoding": "Zeichensatz: {value}",
+        "delimiter": "Trennzeichen: {value}",
+        "retry": "Erneut prüfen",
+        "remove": "Aus dem Stapel entfernen",
+        "force": "Format erzwingen",
+        "forceHint": "Wenn TILL diese Datei falsch gelesen hat, das richtige Format wählen und erneut versuchen.",
+        "forceAdapter": "Format",
+        "forceEncoding": "Zeichensatz",
+        "forceDelimiter": "Trennzeichen",
+        "forceAuto": "Automatisch",
+        "forceRetry": "Mit diesem Format erneut versuchen",
+        "delimiterName": {
+          "comma": "Komma",
+          "semicolon": "Semikolon",
+          "tab": "Tabulator"
+        }
+      },
+      "reason": {
+        "noHeaderRow": "Es liess sich keine Kopfzeile finden.",
+        "notYetReadable": "Dieses Format kann noch nicht gelesen werden.",
+        "encrypted": "Die Datei ist verschlüsselt und muss zuerst entsperrt werden.",
+        "corrupt": "Die Datei ist beschädigt oder unvollständig.",
+        "worksheetNotFound": "Das gewählte Tabellenblatt wurde nicht gefunden.",
+        "notAZip": "Das ist kein gültiges ZIP-Archiv.",
+        "notAbaconnect": "Das ist keine AbaConnect-Datei.",
+        "sourceIntegrityMismatch": "Die Datei stimmt nicht mit ihrer Prüfsumme überein. Lade sie nochmals hoch.",
+        "unparseable": "Diese Datei konnte nicht gelesen werden.",
+        "invalidInput": "Diese Datei konnte nicht verarbeitet werden."
+      },
+      "continue": "Weiter",
+      "back": "Zurück",
+      "plan": {
+        "source": "Quellsystem",
+        "cutover": "Übernahmestichtag",
+        "cutoverHint": "Der Stand, ab dem TILL die Bücher führt. Ein Stichtag in der Zukunft geht: du bereitest jetzt alles vor, produktiv gehst du ab dem Stichtag. Wo die Datei ein Datum trägt, ist es hier schon eingesetzt.",
+        "create": "Plan erstellen",
+        "err": {
+          "cutoverInFuture": "Der Übernahmestichtag ist noch nicht erreicht. Produktiv gehen kannst du ab diesem Tag.",
+          "invalidDate": "Das Datum ist ungültig.",
+          "generic": "Der Plan konnte nicht erstellt werden."
+        }
+      },
+      "scope": {
+        "title": "Was übernommen wird",
+        "body": "Wähle je Datenklasse, ob sie in die Übernahme gehört. Nichts wird versehentlich importiert.",
+        "unavailable": "{cls} ist im ersten Umfang noch nicht verfügbar ({owner}).",
+        "confirm": "Umfang bestätigen",
+        "err": {
+          "generic": "Der Umfang konnte nicht gespeichert werden."
+        }
+      }
+    },
+    "mapping": {
+      "title": "Zuordnung",
+      "kind": {
+        "column": "Spalten",
+        "account": "Konten",
+        "tax": "Steuern"
+      },
+      "error": "Die Zuordnung konnte nicht geladen werden.",
+      "empty": "Für diese Zuordnung gibt es noch keine Einträge. Lade zuerst eine Quelldatei.",
+      "col": {
+        "source": "Quelle",
+        "target": {
+          "column": "Feld in TILL",
+          "account": "Konto in TILL",
+          "tax": "Steuercode in TILL"
+        }
+      },
+      "targetFor": "Ziel für {source}",
+      "complete": "Vollständig zugeordnet.",
+      "blocking": {
+        "title": "{n} Einträge sind noch nicht zugeordnet und tragen einen Saldo."
+      },
+      "ignorable": "{n} Einträge ohne Saldo können übersprungen werden.",
+      "collapsed": "Mehrere Quellen fallen auf {target} zusammen ({n}).",
+      "conflict": "{source}: du hast {target} gewählt, die Vorlage schlug {template} vor.",
+      "suggestSource": {
+        "adapter_preset": "Vorschlag aus der Vorlage des Quellformats.",
+        "locale_pack": "Vorschlag aus dem Länderpaket.",
+        "saved_template": "Vorschlag aus deiner gespeicherten Zuordnungsvorlage.",
+        "fuzzy": "Vorschlag aus einer Namensähnlichkeit, bitte prüfen.",
+        "none": "Kein Vorschlag gefunden, ordne von Hand zu."
+      },
+      "saved": "Zuordnung gespeichert.",
+      "suggest": "Vorschlagen",
+      "save": "Speichern",
+      "saveError": "Die Zuordnung konnte nicht gespeichert werden. Versuche es nochmals.",
+      "suggestError": "Es konnte kein Vorschlag geladen werden. Versuche es nochmals."
+    },
+    "controlTotals": {
+      "title": "Summen aus der Quelle",
+      "body": "Gib die Summen an, die das alte System nannte. Eine Kontrolle, die niemand angibt, bleibt \"nicht geprüft\" und nie grün.",
+      "kind": "Kontrolle",
+      "scope": {
+        "account": "Konto",
+        "workspace": "Bereich",
+        "accountHint": "Kontonummer"
+      },
+      "amount": "Betrag",
+      "amountHint": "In Franken, zum Beispiel 12'345.60.",
+      "amountInvalid": "Der Betrag ist ungültig. Gib ihn in Franken an, zum Beispiel 12'345.60.",
+      "err": {
+        "unknownKind": "Diese Kontrolle ist nicht bekannt.",
+        "generic": "Die Summe konnte nicht gespeichert werden."
+      },
+      "declare": "Summe angeben",
+      "declaredTitle": "Angegebene Summen",
+      "declaredRow": "{kind} ({scope}): {amount}",
+      "redeclare": {
+        "title": "Summe erneut angeben",
+        "body": "Für diese Kontrolle gibt es bereits eine angegebene Summe. Erneutes Angeben ersetzt sie und setzt die berechnete Seite zurück, bis die nächste Prüfung sie beantwortet. Das ist bewusst, kein stilles Überschreiben.",
+        "confirm": "Summe ersetzen"
+      }
+    },
+    "readiness": {
+      "title": "Bereitschaft für den produktiven Start",
+      "error": "Die Bereitschaft konnte nicht geladen werden.",
+      "ready": "Bereit für den produktiven Start.",
+      "readyWithOneWaiver": "Bereit, mit 1 Ausnahme.",
+      "readyWithWaivers": "Bereit, mit {n} Ausnahmen.",
+      "blockedOne": "Noch nicht bereit: 1 offener Punkt.",
+      "blocked": "Noch nicht bereit: {n} offene Punkte.",
+      "item": {
+        "scopeEmpty": "Es ist noch nichts im Umfang",
+        "backupRequired": "Sicherung vor der ersten Übernahme",
+        "vatStraddled": "MWST-Periode am Stichtag geteilt",
+        "cutoverPending": "Stichtag noch nicht erreicht"
+      },
+      "reason": {
+        "scopeEmpty": "Es ist noch nichts im Umfang",
+        "cutoverPending": "Alles ist vorbereitet. Produktiv gehen kannst du ab dem Übernahmestichtag.",
+        "stepOpen": "Schritt ist noch {state}",
+        "diverged": "Die Prüfung nach der Übernahme weicht vom Probelauf ab",
+        "backupRequired": "Vor der ersten Übernahme in die echten Bücher braucht es eine Sicherung",
+        "vatStraddled": "Der Übernahmestichtag liegt mitten in einer MWST-Periode",
+        "extractionIncomplete": "Die Exportliste ist noch nicht vollständig",
+        "sourceAccessExpiring": "Der Zugriff auf das alte System läuft bald ab"
+      },
+      "owner": {
+        "prefix": "Als Nächstes: {owner}"
+      },
+      "straddle": {
+        "ranges": "Altes System {oldFrom} bis {oldTo}, TILL {tillFrom} bis {tillTo}."
+      },
+      "waiver": "{control} ({scope}) zurückgestellt"
+    },
+    "openItems": {
+      "title": "Offene Posten",
+      "ar": "Debitoren",
+      "ap": "Kreditoren",
+      "import": "Importieren",
+      "preview": "Vorschau",
+      "controlAr": "Kontrolle 1100 Debitoren",
+      "controlAp": "Kontrolle 2000 Kreditoren",
+      "difference": "Abweichung: {amount}",
+      "asserted": "Stimmt überein",
+      "notAsserted": "Noch nicht geprüft",
+      "notAssertedHint": "Der Import ist gesperrt, bis der Abgleich stimmt. Führe zuerst die Eröffnungsprüfung aus und prüfe dann hier erneut.",
+      "recheck": "Erneut prüfen",
+      "empty": "Noch keine offenen Posten geladen",
+      "loading": "Offene Posten werden geprüft",
+      "denied": "Du brauchst das Recht «Übernahme freigeben», um offene Posten zu importieren. Bitte eine Workspace-Eignerin darum.",
+      "importedCount": "{count} offene Posten importiert",
+      "acknowledge": "Trotz offener Abweichung importieren",
+      "totalMismatch": "Positionen ergeben nicht den Rechnungsbetrag",
+      "contactUnmapped": "Kontakt noch nicht zugeordnet",
+      "vendorUnmapped": "Lieferant noch nicht zugeordnet",
+      "taxUnresolved": "Steuercode zum Belegdatum nicht auflösbar",
+      "needsFxRate": "Kein Kurs zum Stichtag erfasst",
+      "invalidRow": "Diese Zeile ist unvollständig",
+      "priorYearArchived": "Bereits ausgeglichene Vorjahres-Details gehören ins schreibgeschützte Archiv",
+      "genericRefusal": "Diese Zeile wurde abgelehnt",
+      "origin": "Übernommen",
+      "rowRefused": "{number}: {reason}",
+      "panelHint": "Jede Zeile wurde vorher zugeordnet; der Import bucht nichts Eigenes.",
+      "cancelConfirm": "Diesen übernommenen Posten stornieren? Die Eröffnungsbilanz wird per Gegenbuchung korrigiert."
+    }
+  },
+  "implProject": {
+    "title": "Einführungsprojekt",
+    "denied": "Du brauchst das Recht \"Einführung verwalten\", um das Projekt zu sehen. Frag einen Besitzer des Arbeitsbereichs, es dir zu geben.",
+    "error": "Das Einführungsprojekt konnte nicht geladen werden",
+    "empty": "Ein Einführungsprojekt hält Phasen, Entscheide, Freigaben und den Parallellauf über dem Übernahmeplan zusammen, damit sie die Leute überleben, die sie gemacht haben.",
+    "continueWithout": "Ohne Projekt fortfahren",
+    "next": "Nächster Schritt",
+    "needsManage": "Braucht das Recht \"Einführung verwalten\"",
+    "create": "Einführungsprojekt anlegen",
+    "createFailed": "Das Projekt konnte nicht angelegt werden",
+    "createField": {
+      "sourceSystem": "Quellsystem",
+      "cutoverDate": "Stichtag",
+      "mwstMethod": "MWST-Methode"
+    },
+    "phase": {
+      "discovery": "Erkundung",
+      "extraction": "Export",
+      "mapping": "Zuordnung",
+      "rehearsal": "Probelauf",
+      "cutover": "Übernahme",
+      "parallelRun": "Parallellauf",
+      "live": "Live",
+      "closed": "Abgeschlossen",
+      "liveLabel": "Stabilisierung"
+    },
+    "owner": {
+      "human": "du",
+      "agent": "ein Agent",
+      "system": "das System"
+    },
+    "task": {
+      "blockedBy": "Wartet auf: {item}",
+      "evidenceRequired": "Nachweis nötig: {kind}",
+      "notApplicable": "Nicht zutreffend",
+      "done": "Erledigt"
+    },
+    "signoff": {
+      "title": "Freigaben",
+      "pending": "Wartet auf deine Unterschrift",
+      "voided": "Ungültig (Nachweis geändert)",
+      "record": "Unterschreiben",
+      "needsCommit": "Braucht commit_migration",
+      "kind": {
+        "conversionDate": "Stichtag",
+        "mwstMethod": "MWST-Methode",
+        "mappingApproval": "Zuordnung freigegeben",
+        "tieout": "Abstimmung",
+        "contactMerge": "Kontakt-Zusammenführung",
+        "goNogo": "Go/No-Go",
+        "rollbackTrigger": "Rückfall-Auslöser",
+        "parallelRunClose": "Parallellauf-Abschluss",
+        "sourceCancellation": "Quellsystem-Abschaltung"
+      }
+    },
+    "decision": {
+      "title": "Entscheide",
+      "record": "Entscheid festhalten"
+    },
+    "parallel": {
+      "title": "Parallellauf",
+      "empty": "Noch keine Vergleichszahlen erfasst",
+      "declare": "Vergleichszahlen erfassen",
+      "notAsserted": "Noch nicht geprüft",
+      "difference": "Abweichung: {amount}",
+      "recheck": "Erneut prüfen",
+      "windowMismatch": "Periode passt nicht zum Fenster",
+      "methodChangeNeedsSignoff": "Methodenwechsel braucht eine Treuhänder-Freigabe",
+      "status": {
+        "passed": "Geprüft",
+        "failed": "Abweichung"
+      }
+    },
+    "runbook": {
+      "title": "Ablaufvorlage wählen",
+      "instantiate": "Vorlage anwenden"
+    },
+    "close": "Projekt abschliessen",
+    "closeBlockedBy": "Noch offen: {item}",
+    "roster": {
+      "title": "Einführungen über alle Mandate",
+      "empty": "Noch keine Einführung geplant",
+      "hidden": "Kein Zugriff auf dieses Mandat",
+      "daysToCutover": "{n} Tage bis zum Stichtag"
+    }
+  },
+  "check": {
+    "title": "Eröffnungsprüfung",
+    "run": "Prüfen",
+    "empty": "Noch nichts geprüft. Die Eröffnungsprüfung belegt, dass die Eröffnungsposition in TILL der des alten Systems entspricht: gib die Summen aus der Quelle an und starte dann die Prüfung.",
+    "error": "Die Prüfung konnte nicht geladen werden",
+    "clean": "Alle Kontrollen bestanden oder begründet zurückgestellt: die Eröffnung stimmt mit der Quelle überein.",
+    "ready": {
+      "withOneWaiver": "bereit, mit 1 Ausnahme",
+      "withWaivers": "bereit, mit {n} Ausnahmen"
+    },
+    "hash": "Prüfsumme",
+    "status": {
+      "passed": "Bestanden",
+      "failed": "Nicht bestanden",
+      "notAsserted": "Nicht geprüft",
+      "notComputable": "Nicht berechenbar",
+      "waived": "Zurückgestellt"
+    },
+    "kind": {
+      "trialBalanceBalanced": "Rohbilanz ist ausgeglichen",
+      "trialBalanceMatchesSource": "Rohbilanz stimmt mit der Quelle überein",
+      "arControl": "Offene Debitoren gegen das Sammelkonto",
+      "apControl": "Offene Kreditoren gegen das Sammelkonto",
+      "bankControl": "Eröffnungssaldo Bank gegen den Kontoauszug",
+      "vatBalanceAtCutover": "MWST-Position am Stichtag",
+      "rowCount": "Zeilenzahl",
+      "documentIntegrity": "Belege unverändert",
+      "sourceAsAt": "Exportdatum gegen Übernahmestichtag"
+    },
+    "declared": "Angegeben",
+    "computed": "Berechnet",
+    "difference": "Differenz",
+    "declare": "Summe angeben",
+    "waive": {
+      "action": "Zurückstellen",
+      "reason": "Begründung",
+      "needsReason": "Gib einen Grund an, damit die Ausnahme nachvollziehbar bleibt"
+    },
+    "waivers": {
+      "count": "{n} Kontrollen zurückgestellt"
+    },
+    "export": "Prüfbericht exportieren",
+    "exported": "Gespeichert als {filename}",
+    "notComputable": {
+      "reason": "Fehlende Angabe"
+    },
+    "recover": {
+      "fixOpening": "Eröffnungssaldo korrigieren",
+      "newExport": "Neuen Export hochladen",
+      "fixOpeningHint": "Korrigiere die Summen aus der Quelle oder die Zuordnung oben und prüfe dann erneut.",
+      "newExportHint": "Lade oben im Übernahmeschritt einen neuen Export mit dem richtigen Stichtag hoch.",
+      "recheck": "Erneut prüfen"
+    },
+    "actionError": {
+      "run": "Die Prüfung konnte nicht ausgeführt werden",
+      "waive": "Die Zurückstellung konnte nicht gespeichert werden",
+      "export": "Der Prüfbericht konnte nicht exportiert werden"
+    }
+  },
+  "help": {
+    "Migration": {
+      "title": "Datenübernahme",
+      "body": "Die Übernahme aus einem bestehenden System läuft hier als Plan mit Schritten, vom Erkunden über das Zuordnen und den Probelauf bis zum produktiven Start und zur Prüfung. Jeder Schritt zeigt seinen Zustand und wer als Nächstes handelt: du, ein Agent oder das System. Ein Schritt mit Geldwirkung wartet auf deine Freigabe, statt still zu laufen. Läuft die Übernahme auseinander, stehen echte Wege zurück bereit: rückgängig machen oder wiederherstellen.",
+      "concepts": [],
+      "docsPath": "quickstart"
+    }
+  }
+}

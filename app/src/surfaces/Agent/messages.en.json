@@ -1,0 +1,241 @@
+{
+  "help": {
+    "Agent": {
+      "title": "Agent",
+      "body": "Here you keep watch over the agent. Read the conversation to see what it did and why, then work through the proposals: the agent records each write as a proposal instead of posting it, and you approve or reject every one. Under Trust you set how far each kind of action is trusted, from always ask to run automatically. That grant is yours alone to give: no agent can raise its own trust.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  },
+  "attention": {
+    "area": {
+      "system": "System"
+    },
+    "queue": {
+      "agentAction": "Agent proposals"
+    },
+    "item": {
+      "agentAction": {
+        "title": "Proposal awaiting approval",
+        "subtitle": "{tool}"
+      }
+    }
+  },
+  "agent": {
+    "title": "Agent",
+    "tab": {
+      "gespraeche": "Conversations",
+      "vorschlaege": "Proposals",
+      "vertrauen": "Trust"
+    },
+    "archive": {
+      "empty": {
+        "title": "No session yet",
+        "hint": "Connect an MCP client and every step the agent takes will be listed here.",
+        "action": "Open setup"
+      },
+      "col": {
+        "datum": "Date",
+        "client": "Client",
+        "schritte": "Steps",
+        "buchungen": "Postings",
+        "vorschlaege": "Proposals",
+        "status": "Status"
+      },
+      "running": "running",
+      "back": "Back to list",
+      "unknownClient": "Unknown client",
+      "month": "Month",
+      "monthPrev": "Previous month",
+      "monthNext": "Next month",
+      "monthEmpty": "No sessions in this month.",
+      "caption": "Agent sessions, newest first"
+    },
+    "turn": {
+      "agentLabel": "Agent",
+      "userLabel": "You",
+      "reads": "{n} reads executed",
+      "readsOne": "1 read executed",
+      "writes": "{n} writes executed",
+      "writesOne": "1 write executed",
+      "drafted": "Proposal recorded, awaiting approval",
+      "denied": "Call refused",
+      "partialBooked": "In the books: {verbs}",
+      "partialNothingBooked": "Nothing in the books",
+      "partialFailed": "{n} failed",
+      "partialDrafted": "{n} proposals awaiting approval",
+      "partialDraftedOne": "1 proposal awaiting approval"
+    },
+    "trace": {
+      "steps": "{n} steps",
+      "stepsOne": "1 step",
+      "more": "{n} more steps",
+      "details": "Details",
+      "rejectedWith": "Rejected: {reason}",
+      "rejectedNoReason": "Rejected",
+      "approved": "Approved",
+      "status": {
+        "gelesen": "read",
+        "ausgefuehrt": "executed",
+        "entwurf": "draft",
+        "verweigert": "refused",
+        "fehlgeschlagen": "failed"
+      }
+    },
+    "card": {
+      "title": "Proposal",
+      "approve": "Approve",
+      "approveAllow": "Approve and allow in future",
+      "reject": "Reject",
+      "rejectConfirm": "Reject? The proposal is then finished and would have to be recorded again.",
+      "rejectYes": "Yes, reject",
+      "rejectNo": "Keep",
+      "rejectReasonLabel": "Reason (optional)",
+      "rejectReasonHint": "Shown in the trace, so the agent knows why.",
+      "details": "Details",
+      "level": "Level: {level}",
+      "provenance": "Proposed by {actor} on {date}",
+      "needs": "Requires: agent approval right",
+      "needsHint": "Open members",
+      "executed": "Approved and executed",
+      "rejected": "Rejected",
+      "grantHint": "The grant applies to all future proposals of this kind and can be revoked at any time.",
+      "selfHint": "Your own proposal needs a second person to approve it."
+    },
+    "queue": {
+      "empty": "Nothing to approve.",
+      "emptyHint": "The agent records proposals instead of posting directly. You control what it may do under Trust.",
+      "group": {
+        "geld": "Money",
+        "system": "System"
+      }
+    },
+    "trust": {
+      "col": {
+        "was": "What",
+        "stufe": "Level",
+        "vorgeschlagen": "Proposed",
+        "genehmigt": "Approved",
+        "abgelehnt": "Rejected",
+        "automatisch": "Automatic",
+        "aktion": "Action"
+      },
+      "window": "Window: {from} to {to}",
+      "level": {
+        "ask": "ask",
+        "auto": "automatic"
+      },
+      "fragtImmer": "always asks",
+      "storedVsEffective": "stored: {stored}, effective: {effective}",
+      "noHistory": "Nothing proposed yet",
+      "grantAction": "Allow automatically",
+      "revokeAction": "Ask again",
+      "grantConfirm": "Run {capability} without asking in future? The grant is revocable at any time and is attributed to you.",
+      "grantYes": "Yes, allow",
+      "grantNo": "Cancel",
+      "strongReason": "This act is externally irreversible, so it always asks by default. An explicit grant lifts that.",
+      "suggest": "{approved} of {proposed} proposals approved, none rejected. Should the agent run this directly in future?",
+      "suggestDismiss": "No, keep asking",
+      "statutoryNote": "This history is operational. The audit-grade export stays with the fiduciary export (A25).",
+      "grantedBy": "by {actor} on {date}"
+    },
+    "dock": {
+      "toggle": "Agent",
+      "close": "Collapse",
+      "session": "Session",
+      "since": "since {time}",
+      "running": "running",
+      "empty": "The session is running. No steps yet.",
+      "openArchive": "Open in history",
+      "narrowHint": "Not enough room for the table and the agent side by side. The history has its own page.",
+      "composerPlaceholder": "Ask your books …",
+      "composerSend": "Ask",
+      "noRuntime": "Conversations happen in your MCP client today. Set up a local model under Writing style."
+    },
+    "capability": {
+      "post": "Post",
+      "issue": "Issue",
+      "send": "Send",
+      "dun": "Dun",
+      "pay": "Pay",
+      "vat-file": "File VAT",
+      "customize": "Customize",
+      "plugin-install": "Plugins",
+      "close-period": "Close period",
+      "go-live": "Go live"
+    },
+    "consequence": {
+      "post": "Posts irreversibly to the journal. The only correction is a reversing entry.",
+      "issue": "Issues the document for good. Issued means immutable.",
+      "send": "Sends outward. Sent cannot be recalled.",
+      "dun": "Triggers the reminder run and raises the debtors' dunning level.",
+      "pay": "Books a payment and settles open items.",
+      "vat-file": "Marks the VAT period as filed. A filed period is closed.",
+      "customize": "Changes the record structure for the whole workspace.",
+      "plugin-install": "Installs third-party code with the granted scopes.",
+      "close-period": "Seals an accounting period against further posting. A hard seal cannot be reopened.",
+      "go-live": "Commits migration data into the live books. The cutover cannot be undone."
+    },
+    "consequenceVerb": {
+      "invite_member": "Seats a person or an agent in the workspace with the chosen role. Whoever redeems the token sees the books from then on.",
+      "set_role": "Changes what a member may see and do here. The new rights apply on their next call.",
+      "revoke_member": "Removes a member's access to the workspace. The lockout applies on their next call.",
+      "define_role": "Redefines which rights a role holds, for everyone who has that role."
+    },
+    "verb": {
+      "post_entry": "Record entry",
+      "reverse_entry": "Reverse entry",
+      "issue_invoice": "Issue invoice",
+      "issue_credit_note": "Issue credit note",
+      "send_invoice": "Send invoice",
+      "propose_dunning_run": "Propose reminder run",
+      "issue_dunning_run": "Issue reminder run",
+      "send_dunning_run": "Send reminder run",
+      "record_payment": "Record payment",
+      "allocate_payment": "Allocate payment",
+      "reverse_payment": "Reverse payment",
+      "vat_mark_filed": "Mark VAT as filed",
+      "checklist_item_complete": "Complete checklist item",
+      "define_field": "Create field",
+      "install_plugin": "Install plugin",
+      "invite_member": "Invite member",
+      "set_role": "Change role",
+      "revoke_member": "Revoke access",
+      "define_role": "Define role",
+      "ledger_qa": "Question to the books",
+      "list_accounts": "Accounts read",
+      "list_journal": "Journal read",
+      "month_end_checklist": "Month-end checked",
+      "detect_anomalies": "Anomalies scanned"
+    },
+    "field": {
+      "amount": "Amount",
+      "soll": "Debit",
+      "haben": "Credit",
+      "date": "Date",
+      "source": "Source",
+      "description": "Description",
+      "direction": "Direction",
+      "amountMinor": "Amount",
+      "period": "Period",
+      "periodStart": "Period from",
+      "periodEnd": "Period to",
+      "invoiceId": "Invoice",
+      "creditNoteId": "Credit note",
+      "entryId": "Entry",
+      "runId": "Reminder run",
+      "contactId": "Contact",
+      "bankAccountId": "Bank account",
+      "currency": "Currency",
+      "ref": "Reference",
+      "intent": "Intent",
+      "entityKind": "Record kind",
+      "key": "Field key",
+      "type": "Type",
+      "name": "Name",
+      "asOf": "As of",
+      "paymentId": "Payment",
+      "reference": "Reference"
+    }
+  }
+}

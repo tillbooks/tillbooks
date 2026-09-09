@@ -1,0 +1,80 @@
+{
+  "account": {
+    "title": "Konten",
+    "new": "Neues Konto",
+    "number": "Nummer",
+    "name": "Bezeichnung",
+    "typeLabel": "Typ",
+    "type": {
+      "asset": "Aktivum",
+      "liability": "Verbindlichkeit",
+      "equity": "Eigenkapital",
+      "income": "Ertrag",
+      "expense": "Aufwand"
+    },
+    "group": {
+      "aktiven": "Aktiven",
+      "passiven": "Passiven",
+      "eigenkapital": "Eigenkapital",
+      "ertrag": "Ertrag",
+      "aufwand": "Aufwand"
+    },
+    "vatDefault": "MWST-Vorgabe",
+    "vatNone": "Keine",
+    "costCenterAllowed": "Kostenstelle erlaubt",
+    "archive": "Archivieren",
+    "archived": "Archiviert",
+    "delete": "Löschen",
+    "confirm": {
+      "title": "Löschen bestätigen",
+      "delete": "Konto wirklich löschen? Dies kann nicht rückgängig gemacht werden."
+    },
+    "search": "Konten suchen",
+    "empty": "Keine Konten in dieser Ansicht",
+    "err": {
+      "duplicateNumber": "Diese Kontonummer ist bereits vergeben.",
+      "inUse": "Dieses Konto hat Buchungen und kann nicht gelöscht werden. Archiviere es stattdessen."
+    },
+    "edit": "Bearbeiten",
+    "rowActions": "Weitere Aktionen für Konto {number} {name}",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schliessen",
+    "editTitle": "Konto bearbeiten",
+    "showArchived": "Archivierte anzeigen",
+    "noWorkspaceHint": "Ohne Arbeitsbereich gibt es keinen Kontenrahmen, den du bearbeiten kannst.",
+    "warn": {
+      "typeMismatch": "Der Typ passt nicht zum Nummernbereich."
+    },
+    "emptyHint": "Der KMU-Kontenrahmen kommt mit dem Arbeitsbereich. Passe Suche und Filter an, oder lege ein eigenes Konto an.",
+    "noMatch": "Kein Konto passt zur Suche",
+    "noMatchHint": "Passe den Suchbegriff an oder zeige archivierte Konten.",
+    "clearSearch": "Suche zurücksetzen"
+  },
+  "costCenter": {
+    "title": "Kostenstellen",
+    "new": "Neue Kostenstelle",
+    "code": "Code",
+    "name": "Bezeichnung",
+    "archive": "Archivieren",
+    "delete": "Löschen",
+    "confirm": {
+      "title": "Löschen bestätigen",
+      "delete": "Kostenstelle wirklich löschen? Dies kann nicht rückgängig gemacht werden."
+    },
+    "err": {
+      "inUse": "Diese Kostenstelle wird verwendet und kann nicht gelöscht werden. Archiviere sie stattdessen."
+    },
+    "empty": "Noch keine Kostenstelle vorhanden.",
+    "toggle": "Kostenstellen ein- und ausblenden",
+    "rowActions": "Weitere Aktionen für Kostenstelle {code} {name}"
+  },
+  "help": {
+    "Accounts": {
+      "title": "Konten",
+      "body": "Der Kontenplan dieses Arbeitsbereichs, gruppiert nach Aktiven, Passiven, Eigenkapital, Ertrag und Aufwand. Hier legst du Konten an, bearbeitest sie und archivierst, was nicht mehr gebraucht wird. Ein Konto mit Buchungen lässt sich nur archivieren, nie löschen: Die Historie dahinter bleibt vollständig. Unterhalb des Kontenplans pflegst du die Kostenstellen.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

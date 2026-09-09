@@ -1,0 +1,159 @@
+{
+  "nav": {
+    "purchasing": "Purchasing"
+  },
+  "po": {
+    "tab": {
+      "orders": "Purchase orders",
+      "open": "Open quantities",
+      "prices": "Supplier prices",
+      "scorecard": "Scorecard"
+    },
+    "scorecard": {
+      "supplier": "Supplier",
+      "supplierPick": "Pick a supplier",
+      "window": "Period",
+      "windowDays": "Last {n} days",
+      "noData": "–",
+      "error": "The supplier performance could not be loaded.",
+      "emptyWindow": "No activity in this period",
+      "emptyWindowHint": "Widen the period or pick a supplier with recent receipts.",
+      "emptyRank": "No suppliers with activity in this period yet.",
+      "exceptions": "Top exceptions",
+      "alertsTitle": "Suppliers needing attention",
+      "leaderboard": "Ranked suppliers",
+      "rankSupplier": "Supplier",
+      "rankScore": "Score",
+      "rankActivity": "Receipts",
+      "rankDelta": "Trend",
+      "unit": {
+        "days": "d"
+      },
+      "light": {
+        "green": "on target",
+        "amber": "watch",
+        "red": "off target",
+        "none": "no data"
+      },
+      "metric": {
+        "otif_pct": "On-time in-full",
+        "on_time_pct": "On-time delivery",
+        "in_full_pct": "Quantity fill rate",
+        "avg_delay_days": "Average delay",
+        "qty_variance_pct": "Quantity variance",
+        "price_variance_pct": "Price variance",
+        "match_override_rate": "Match override rate",
+        "rejection_rate": "Rejection rate",
+        "overall_score": "Overall score"
+      },
+      "exception": {
+        "late_delivery": "Late delivery",
+        "short_shipment": "Short shipment",
+        "price_override": "Price override",
+        "rejection": "Inspection rejection"
+      }
+    },
+    "title": "Purchasing",
+    "loading": "Loading purchase orders",
+    "empty": "No purchase orders.",
+    "emptyOpen": "No open quantities.",
+    "emptyPrices": "No supplier prices.",
+    "emptyMatch": "No matching purchase order.",
+    "match": {
+      "ok": "Matched",
+      "overridden": "Approved despite variance",
+      "override": "Approve despite variance"
+    },
+    "action": {
+      "new": "New purchase order",
+      "send": "Send purchase order",
+      "receipt": "Record goods receipt",
+      "closeShort": "Close remaining quantity",
+      "cancel": "Cancel purchase order",
+      "revise": "Revise purchase order",
+      "match": "Match bill",
+      "addLine": "Add line",
+      "removeLine": "Remove line",
+      "save": "Save",
+      "discard": "Discard",
+      "back": "Back",
+      "addPrice": "Add supplier price"
+    },
+    "list": {
+      "caption": "Purchase orders"
+    },
+    "open": {
+      "caption": "Open quantities"
+    },
+    "prices": {
+      "caption": "Supplier prices"
+    },
+    "lines": {
+      "caption": "Order lines"
+    },
+    "field": {
+      "number": "Number",
+      "supplier": "Supplier",
+      "supplierPick": "Pick a supplier",
+      "status": "Status",
+      "revision": "Revision {n}",
+      "lines": "Lines",
+      "item": "Item",
+      "qty": "Quantity",
+      "price": "Cost price",
+      "ordered": "Ordered",
+      "received": "Received",
+      "billed": "Billed",
+      "open": "Open",
+      "location": "Location",
+      "locationPick": "Pick a location",
+      "receiveQty": "Receipt quantity",
+      "expectedOn": "Expected on",
+      "validFrom": "Valid from",
+      "leadTime": "Lead time (days)",
+      "sku": "Supplier SKU"
+    },
+    "status": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "received": "Received",
+      "closed": "Closed",
+      "cancelled": "Cancelled"
+    },
+    "sent": {
+      "artifact": "Artifact created, not transmitted"
+    },
+    "receipts": {
+      "title": "Goods receipts",
+      "movement": "D01 movement"
+    },
+    "matches": {
+      "title": "Matches"
+    },
+    "error": {
+      "transport": "The purchase orders could not be loaded.",
+      "no_lines": "A purchase order needs at least one line to send.",
+      "over_receipt": "Quantity exceeds the open order quantity.",
+      "variance_exceeded": "Variance exceeds the tolerance.",
+      "has_receipts": "This order has receipts and cannot be cancelled. Close the remaining quantity instead.",
+      "nothing_received": "Nothing received yet for this order.",
+      "qty_below_received": "Quantity cannot fall below the quantity already received.",
+      "already_matched": "This bill has already been matched.",
+      "invalid_transition": "This step is not possible in the current status.",
+      "invalid_reference": "This reference does not exist.",
+      "invalid_qty": "Enter a whole, positive quantity.",
+      "permissionDenied": {
+        "read": "You do not have permission to see purchasing.",
+        "write": "You do not have permission to change purchasing."
+      }
+    }
+  },
+  "help": {
+    "Purchasing": {
+      "title": "Purchasing",
+      "body": "Purchasing from the order through goods receipt to the match against the bill. An order moves through its stations: send, record a goods receipt, close short, cancel or revise; what is available follows its status. A goods receipt moves stock; this area posts no money, that happens only with the supplier bill. Alongside you track the open quantities and the supplier prices.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

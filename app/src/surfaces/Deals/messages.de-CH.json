@@ -1,0 +1,114 @@
+{
+  "nav": {
+    "deals": "Pipeline"
+  },
+  "deals": {
+    "route": {
+      "title": "Pipeline"
+    },
+    "loading": "Pipeline wird geladen",
+    "empty": "Noch keine Deals.",
+    "emptyColumn": "Keine Deals in dieser Phase.",
+    "search": "Deals suchen",
+    "weighted": {
+      "label": "Gewichtet"
+    },
+    "pipeline": {
+      "label": "Pipeline",
+      "first": "Standard"
+    },
+    "view": {
+      "label": "Ansicht",
+      "all": "Alle Deals"
+    },
+    "filter": {
+      "showClosed": "Abgeschlossene anzeigen",
+      "clear": "Filter zurücksetzen"
+    },
+    "action": {
+      "create": "Deal anlegen",
+      "move": "Phase",
+      "markWon": "Als gewonnen markieren",
+      "markLost": "Als verloren markieren",
+      "reopen": "Wieder öffnen",
+      "to_quote": "In Offerte umwandeln"
+    },
+    "status": {
+      "open": "Offen",
+      "won": "Gewonnen",
+      "lost": "Verloren"
+    },
+    "field": {
+      "contact": "Kontakt",
+      "contactPick": "Kontakt wählen",
+      "title": "Titel",
+      "value": "Wert",
+      "currency": "Währung",
+      "probability": "Wahrscheinlichkeit",
+      "expectedClose": "Erwarteter Abschluss",
+      "weighted": "Gewichteter Wert",
+      "status": "Status",
+      "quote": "Offerte"
+    },
+    "editor": {
+      "save": "Speichern",
+      "discard": "Verwerfen"
+    },
+    "lost": {
+      "label": "Deal als verloren markieren: {title}",
+      "reason": "Grund"
+    },
+    "drawer": {
+      "close": "Details schliessen"
+    },
+    "activity": {
+      "label": "Aktivität erfassen",
+      "kind": "Art",
+      "body": "Notiz",
+      "reminder": "Erinnerung",
+      "log": "Erfassen",
+      "kinds": {
+        "note": "Notiz",
+        "call": "Anruf",
+        "email": "E-Mail",
+        "meeting": "Termin",
+        "task": "Aufgabe"
+      }
+    },
+    "settings": {
+      "open": "Pipeline bearbeiten",
+      "title": "Pipeline bearbeiten",
+      "stageName": "Phasenname",
+      "addStage": "Phase hinzufügen"
+    },
+    "customization": {
+      "save_view": "Ansicht speichern",
+      "viewName": "Name der Ansicht"
+    },
+    "error": {
+      "transport": "Die Pipeline konnte nicht geladen werden.",
+      "contact_not_found": "Dieser Kontakt existiert nicht.",
+      "stage_not_in_pipeline": "Diese Phase gehört nicht zu dieser Pipeline.",
+      "lost_reason_required": "Für verlorene Deals ist ein Grund erforderlich.",
+      "terminal_stage_use_mark": "In eine Abschlussphase gelangt ein Deal über Gewonnen/Verloren, nicht per Verschieben.",
+      "deal_closed": "Dieser Deal ist abgeschlossen. Zuerst wieder öffnen.",
+      "needs_fx_rate": "Für diese Währung ist kein aktueller Kurs erfasst.",
+      "reminder_in_past": "Die Erinnerung liegt in der Vergangenheit.",
+      "invalid_activity_kind": "Diese Aktivitätsart gibt es nicht.",
+      "needs_quotes_module": "Die Offerten-Funktion ist hier nicht verfügbar.",
+      "pipeline_has_no_open_stage": "Diese Pipeline hat keine offene Phase.",
+      "permissionDenied": {
+        "read": "Dir fehlt die Berechtigung, die Pipeline zu sehen.",
+        "write": "Dir fehlt die Berechtigung, Deals zu bearbeiten."
+      }
+    }
+  },
+  "help": {
+    "Deals": {
+      "title": "Pipeline",
+      "body": "Die Pipeline zeigt deine offenen Verkaufschancen als Spalten je Phase, mit dem gewichteten Gesamtwert im Kopf. Eine Karte wechselt die Phase über ihre Phasenauswahl; gewonnen oder verloren läuft über den eigenen Abschlussschritt, bei Verlust mit Begründung. Gibt es keine offenen Chancen, zeigt der Gesamtwert einen Strich statt einer erfundenen Null.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

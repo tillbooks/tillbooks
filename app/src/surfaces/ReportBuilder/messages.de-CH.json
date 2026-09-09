@@ -1,0 +1,67 @@
+{
+  "nav": {
+    "reportBuilder": "Berichte"
+  },
+  "reportBuilder": {
+    "route": { "title": "Berichte" },
+    "tab": { "title": "Berichte" },
+    "denied": "Du hast keine Berechtigung, Berichte zu sehen.",
+    "empty": "Noch keine Berichte.",
+    "empty_result": "Keine Daten für diese Filter.",
+    "action": {
+      "create": "Bericht erstellen",
+      "run": "Ausführen",
+      "download": "Herunterladen",
+      "schedule": "Zeitplan",
+      "duplicate": "Duplizieren",
+      "delete": "Löschen",
+      "edit": "Bearbeiten",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "clear_schedule": "Zeitplan entfernen"
+    },
+    "confirm": { "delete": "Wirklich löschen" },
+    "field": {
+      "name": "Name",
+      "source": "Datenquelle",
+      "format": "Format",
+      "columns": "Spalten",
+      "additional": "Zusätzliche Felder",
+      "recipients": "Empfänger",
+      "frequency": "Häufigkeit",
+      "time": "Uhrzeit",
+      "weekday": "Wochentag",
+      "dayOfMonth": "Tag im Monat"
+    },
+    "col": {
+      "name": "Name",
+      "source": "Quelle",
+      "format": "Format",
+      "schedule": "Zeitplan",
+      "lastRun": "Letzter Lauf",
+      "actions": "Aktionen"
+    },
+    "freq": { "daily": "Täglich", "weekly": "Wöchentlich", "monthly": "Monatlich" },
+    "preview": { "count": "{count} Zeilen" },
+    "run": { "success": "{count} Zeilen", "retain": "Aufbewahren" },
+    "delivery": { "cloud_tier": "Der geplante E-Mail-Versand ist eine Cloud-Funktion. Lokale Ausführung funktioniert immer." },
+    "retention": { "badge": "10 Jahre aufbewahrt (OR 958f)" },
+    "error": {
+      "source_unavailable": "Datenquelle in diesem Arbeitsbereich nicht verfügbar.",
+      "invalid_schedule": "Nur tägliche, wöchentliche oder monatliche Zeitpläne werden unterstützt.",
+      "invalid_field": "Ein Filter verweist auf ein Feld, das die Quelle nicht bereitstellt.",
+      "columns_empty": "Wähle mindestens eine Spalte.",
+      "retention_locked": "Dieser Bericht hat aufbewahrte Läufe (OR 958f) und kann vor Ablauf der Aufbewahrungsfrist nicht gelöscht werden.",
+      "generic": "Etwas ist schiefgelaufen."
+    },
+    "builder": { "title": "Bericht erstellen", "editTitle": "Bericht bearbeiten" }
+  },
+  "help": {
+    "ReportBuilder": {
+      "title": "Berichte",
+      "body": "Eigene Berichte über deine Daten: Du wählst eine Quelle, Spalten, Filter und Sortierung und speicherst das Ganze als Bericht. Ein Lauf hängt sein Ergebnis samt Zeilenzahl an den Verlauf an; heruntergeladen wird, was der Lauf ergab. Zeitpläne mit Zustellung sind eine Cloud-Funktion und sind so gekennzeichnet.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

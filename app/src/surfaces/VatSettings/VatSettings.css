@@ -1,0 +1,464 @@
+/* VatSettings surface styles (spec A05 §6).
+   Tokens only: no hex literals, no new colours. 8-pt grid throughout. Depth is a single border plus a
+   background step, never a shadow or a gradient. The method/timing badge stays neutral: the accent is
+   reserved for focus and the single primary action, and success rides --t-success, so neither ever
+   recolours the config. */
+
+.vat-surface {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  max-width: 760px;
+}
+
+.vat-subtitle {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.vat-panel {
+  padding: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* Not-enabled (empty) face: a greyed preview above the empty-state CTA. */
+.vat-not-enabled {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.vat-preview {
+  padding: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  opacity: 0.5;
+}
+
+.vat-preview-row {
+  height: 32px;
+  background: var(--t-bg-soft);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+/* Neutral method/timing badges. */
+.vat-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.vat-badge {
+  padding: var(--t-space-0-5) var(--t-space-2);
+  background: var(--t-bg-soft);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+/* A method / timing choice group. */
+.vat-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.vat-choice legend {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--t-text-dim);
+  padding: 0;
+}
+
+.vat-radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+.vat-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  cursor: pointer;
+}
+
+/* The labelled form field, its actions row, and the control paint all come from the shared
+   `.form-stack` / `.form-row` / `.form-actions` primitives in global.css. `.vat-input` is the
+   standalone (unlabelled) control used inside the Saldo rows, so it keeps the same paint here. */
+.vat-input {
+  height: 36px;
+  padding: 0 var(--t-space-2);
+  background: var(--t-bg);
+  color: var(--t-text);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+}
+
+/* The needs-registration rejection and the standing IST limitation ride the shared ActionFeedback
+   primitive (components/ActionFeedback). */
+
+/* The ordered Saldosteuersatz editor. */
+.vat-saldo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.vat-saldo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.vat-saldo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.vat-saldo-ziffer {
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.vat-saldo-note {
+  margin-top: var(--t-space-1);
+}
+
+/* The add-rate control is the only button in the Saldo editor's flex COLUMN, so it needs to stop
+   stretching. Layout only: every paint comes from the shared `.btn` system. */
+.vat-add-rate {
+  align-self: flex-start;
+}
+
+.vat-status {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.vat-status-ok {
+  color: var(--t-success);
+}
+
+.vat-glyph {
+  flex: 0 0 auto;
+}
+
+.vat-glyph-ok {
+  color: var(--t-success);
+}
+
+.vat-glyph-error {
+  color: var(--t-danger);
+}
+
+/* The tax-code register. */
+.vat-register-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+/* The register table itself is the shared DataTable. Only the archived-row tint is surface state
+   (DataTable ships no state colour): applied through `rowClassName`. */
+.vat-code-row--archived td {
+  color: var(--t-text-faint);
+}
+
+.vat-code-since {
+  color: var(--t-text-dim);
+}
+
+/* A status dot paired with a text label, never colour alone. The active dot is full ink, the archived
+   dot faint; both are backed by a text label ("aktiv"/"archiviert"). The accent is never spent on
+   status. */
+.vat-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--t-radius-full);
+  margin-right: var(--t-space-0-5);
+  vertical-align: middle;
+}
+
+.vat-dot-active {
+  background: var(--t-text);
+}
+
+.vat-dot-archived {
+  background: var(--t-text-faint);
+}
+
+/* The inline add-code form. */
+.vat-add-code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+
+/* ---------------------------------------------------------------------------------------------
+   F11: Tätigkeiten, the approval-branch dialog, and the Bewilligungsverlauf.
+
+   Same visual grammar as the Saldosteuersatz list above: a bordered block, one accent, no second
+   colour introduced. The only new signal is `--contested`, and it is a border weight plus an
+   adjacent text error, never colour alone.
+   --------------------------------------------------------------------------------------------- */
+
+.vat-activities {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.vat-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.vat-activity-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.vat-activity-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.vat-activity-name {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.vat-activity-accounts {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.vat-activity-accounts legend {
+  font-size: 13px;
+  color: var(--t-text-dim);
+  padding: 0;
+}
+
+/* The chart can be long, so the picker wraps into columns rather than becoming one tall list. */
+.vat-account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--t-space-0-5) var(--t-space-2);
+  margin-top: var(--t-space-0-5);
+}
+
+.vat-account {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: 13px;
+}
+
+.vat-account--contested span {
+  text-decoration: underline wavy;
+  text-underline-offset: 3px;
+}
+
+/* The save-time question is the shared Modal primitive (blocking overlay, focus trap, Escape). Its
+   scrim, panel and footer come from Modal.css, so this surface no longer paints a dialog. */
+
+.vat-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.vat-history-row {
+  padding-left: var(--t-space-2);
+  border-left: 2px solid var(--t-border);
+}
+
+.vat-history-span {
+  margin: 0;
+  font-weight: 600;
+}
+
+.vat-history-rates {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.vat-history-activities {
+  margin: var(--t-space-0-5) 0 0;
+  padding-left: var(--t-space-2);
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+/* --- G17, the guidance layers of the election (spec G17 §6, design §8b) ----------------------- */
+
+.vat-explainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-3);
+}
+
+.vat-explainer-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.vat-explainer-body {
+  margin: 0;
+  color: var(--t-text-dim);
+  line-height: 1.55;
+  max-width: 60ch;
+}
+
+.vat-explainer-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  justify-content: flex-end;
+  margin-top: var(--t-space-1);
+}
+
+.vat-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.vat-option {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.vat-option input[type='radio'] {
+  margin-top: 3px;
+}
+
+.vat-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vat-option-label {
+  font-weight: 500;
+}
+
+/* Layer 1: the permanent consequence line. Dim ink, never hidden, sized for de-CH length. */
+.vat-option-consequence {
+  color: var(--t-text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+/* The product-limitation line: its own element, one message key with the engine refusal. */
+.vat-limitation {
+  margin: 2px 0 0;
+  color: var(--t-text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+/* The fieldset-level binding facts, with the structured citation right-aligned below them. */
+.vat-binding {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--t-space-2) 0 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+.vat-binding-cite {
+  align-self: flex-end;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--t-text-faint);
+}
+
+/* The eligibility comparison beside the Saldo option: limits always, figure in one of its three
+   honest states. The pending skeleton is the width of the figure, never delaying the limits. */
+.vat-eligibility {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 62ch;
+  color: var(--t-text-dim);
+}
+
+.vat-eligibility-figure {
+  font-variant-numeric: tabular-nums;
+}
+
+.vat-eligibility-pending {
+  display: inline-block;
+  width: 18ch;
+  height: 1em;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-border);
+}
+
+/* The archive-confirm dialog body: one sentence, no default paragraph margin (the Modal owns spacing). */
+.vat-confirm-message {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--t-text);
+}

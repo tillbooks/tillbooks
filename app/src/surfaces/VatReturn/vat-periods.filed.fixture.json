@@ -1,0 +1,51 @@
+{
+  "method": "effektiv",
+  "year": "2026",
+  "periods": [
+    {
+      "label": "2026-Q1",
+      "periodStart": "2026-01-01",
+      "periodEnd": "2026-03-31",
+      "months": [
+        "2026-01",
+        "2026-02",
+        "2026-03"
+      ],
+      "filed": false
+    },
+    {
+      "label": "2026-Q2",
+      "periodStart": "2026-04-01",
+      "periodEnd": "2026-06-30",
+      "months": [
+        "2026-04",
+        "2026-05",
+        "2026-06"
+      ],
+      "filed": true
+    },
+    {
+      "label": "2026-Q3",
+      "periodStart": "2026-07-01",
+      "periodEnd": "2026-09-30",
+      "months": [
+        "2026-07",
+        "2026-08",
+        "2026-09"
+      ],
+      "filed": false
+    },
+    {
+      "label": "2026-Q4",
+      "periodStart": "2026-10-01",
+      "periodEnd": "2026-12-31",
+      "months": [
+        "2026-10",
+        "2026-11",
+        "2026-12"
+      ],
+      "filed": false
+    }
+  ],
+  "ok": true
+}

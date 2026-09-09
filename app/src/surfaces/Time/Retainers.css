@@ -1,0 +1,83 @@
+/* B04, the Mandate tab. Reuses B01's list/row shell and the one shared accent (brass, brand/DESIGN.md
+   D53): no new colour, no new panel treatment. The burn-down signal is always glyph+number, never
+   colour alone (WCAG 2.2 AA). */
+
+.retainer {
+  margin-top: 2rem;
+}
+
+.retainer-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.retainer-head-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.retainer-form {
+  margin-block: 1rem;
+}
+
+.retainer-warn {
+  color: var(--t-text);
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+}
+
+/* The retainer list is the shared DataTable now (D118 B2); `.retainer-table` (a width override the
+   DataTable frame already provides) was deleted. The burn-down meter below is genuinely retainer
+   specific and stays. */
+
+.retainer-burn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 12rem;
+}
+
+.retainer-burn-bar {
+  position: relative;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--t-border);
+  overflow: hidden;
+}
+
+.retainer-burn-fill {
+  display: block;
+  height: 100%;
+  background: var(--t-accent);
+  transition: width 0.2s ease;
+}
+
+/* Motion is a courtesy: honour a reduced-motion preference (design law). */
+@media (prefers-reduced-motion: reduce) {
+  .retainer-burn-fill {
+    transition: none;
+  }
+}
+
+.retainer-burn-label {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.retainer-overcap {
+  font-weight: 600;
+}
+
+.retainer-status {
+  font-size: 0.9rem;
+}
+
+.retainer-startson {
+  display: block;
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-top: 0.25rem;
+}

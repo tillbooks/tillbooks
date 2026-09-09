@@ -1,0 +1,88 @@
+{
+  "nav": {
+    "inbox": "Inbox"
+  },
+  "notifications": {
+    "route": {
+      "title": "Inbox"
+    },
+    "loading": "Loading notifications",
+    "unread": "{count} unread",
+    "empty": "No notifications yet. Events from tasks, invoices, and deals will appear here.",
+    "section": {
+      "unread": "Unread",
+      "read": "Read",
+      "archive": "Archive",
+      "empty": "Nothing here."
+    },
+    "action": {
+      "markRead": "Mark read",
+      "markAllRead": "Mark all read",
+      "archive": "Archive",
+      "openPrefs": "Notification settings",
+      "closePrefs": "Hide notification settings"
+    },
+    "view": {
+      "label": "View",
+      "all": "All"
+    },
+    "status": {
+      "unread": "Unread",
+      "read": "Read",
+      "archived": "Archived"
+    },
+    "summary": {
+      "task_due": "Task due: {title}",
+      "invoice_issued": "Invoice issued",
+      "invoice_sent": "Invoice sent",
+      "deal_stage_changed": "Deal moved to a new stage",
+      "payment_recorded": "Payment recorded"
+    },
+    "prefs": {
+      "title": "Notifications",
+      "hint": "Choose which events reach you, per channel. The in-app inbox always delivers immediately.",
+      "channel": {
+        "inbox": "In-app",
+        "email": "Email",
+        "push": "Push"
+      },
+      "digest": {
+        "instant": "Immediately",
+        "hourly": "Hourly digest",
+        "daily": "Daily digest",
+        "weekly": "Weekly digest"
+      },
+      "wildcard": "All events",
+      "enabled": "Enabled",
+      "override": {
+        "title": "Per-event overrides",
+        "add": "Add override",
+        "event": "Event",
+        "save": "Save override",
+        "none": "No overrides yet. Every event follows the defaults above."
+      },
+      "connectEmail": "Connect email delivery",
+      "cloudTier": "Email and push leave the device only on the cloud tier. Until then a digest stays a local document.",
+      "saved": "Saved."
+    },
+    "error": {
+      "transport": "The notifications could not be loaded.",
+      "forbidden": "This inbox belongs to another user.",
+      "notification_not_found": "This notification no longer exists or is archived.",
+      "invalid_channel": "This channel is not available.",
+      "inbox_is_always_instant": "The in-app inbox always delivers immediately.",
+      "unknown_event": "This event does not exist.",
+      "permissionDenied": {
+        "read": "This inbox could not be read."
+      }
+    }
+  },
+  "help": {
+    "Inbox": {
+      "title": "Inbox",
+      "body": "The inbox answers what changed while you were away: every notification from every area, grouped into unread, read and archived. Each row can be marked read or archived. Here you also choose what you are notified about; those preferences apply to you alone, not to the whole workspace.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

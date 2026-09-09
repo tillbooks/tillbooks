@@ -1,0 +1,182 @@
+/*
+ * G01 Automatisierungen. Separation comes from the background step and from spacing, never from a
+ * border around every card (DESIGN.md, the forbidden list). The one accent spend is the single
+ * primary action, Neue Regel, and nothing on Verlauf, which is a read.
+ *
+ * A DISABLED RULE IS DIMMED, NOT COLOURED, and an archived one is dimmed further. Neither is a
+ * warning: an operator who has switched a rule off has done the right thing, and painting that state
+ * in an alarm colour would make the screen read as broken every time somebody used the stop button.
+ * The glyph and the words carry the state, which is also what keeps it legible to a screen reader
+ * and to anyone who does not see the hue.
+ *
+ * THE TABLE SCROLLS INSIDE ITSELF rather than pushing the page sideways. A rule row carries a name, a
+ * trigger, a verb and three controls, which is genuinely wide, and a page that scrolls horizontally
+ * is a page whose rail has left the screen.
+ */
+
+.automations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The page header is the shared SurfaceHeader and the two-tab strip is the shared Tabs primitive;
+   both carry their own styling and focus treatment, so the hand-rolled header, lede and tablist CSS
+   are gone. One surface-scoped focus ring remains for the controls the primitives do not own: the
+   draft form fields and the action, control and retry buttons. */
+.automations :is(input, select, textarea, button, .btn, a):focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+/* --- Panel ----------------------------------------------------------------------------------- */
+
+.automations__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.automations__actions {
+  display: flex;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.automations__skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.automations__feedback {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.automations__feedback--error {
+  color: var(--t-danger);
+}
+
+.automations__hint {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: 0.9rem;
+  max-width: 62ch;
+}
+
+/* --- The rule form --------------------------------------------------------------------------- */
+
+.automations__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+}
+
+.automations__form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.automations__form label span {
+  color: var(--t-text-dim);
+  font-size: 0.9rem;
+}
+
+.automations__form input,
+.automations__form select,
+.automations__form textarea {
+  font: inherit;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg);
+  color: var(--t-text);
+}
+
+.automations__form textarea {
+  font-family: var(--t-font-mono);
+  resize: vertical;
+}
+
+.automations__formActions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* --- The two tables -------------------------------------------------------------------------- */
+
+/* Both tables are the shared DataTable now (frame overflow, sticky header, density, five states), so
+   the hand-rolled table, caption and cell CSS is gone. The one row-state hook DataTable leaves to the
+   consumer stays here: an archived rule is dimmed, never coloured, because it is a resolved state and
+   not a fault, and the dim is joined onto DataTable's base row class rather than replacing it. */
+.automations-row--archived td {
+  color: var(--t-text-dim);
+}
+
+.automations__controls {
+  display: flex;
+  gap: var(--t-space-0-5);
+  flex-wrap: wrap;
+}
+
+.automations__reason {
+  color: var(--t-text-dim);
+}
+
+/*
+ * The action verb is a MACHINE NAME (`post_entry`, `send_invoice`), so it is set as code rather than
+ * dressed up as prose. It is the string the operator will paste into a question, and a verb list is
+ * the one place in this product where the engine's own vocabulary is the useful vocabulary.
+ */
+/* The resolved payload, one click away. Closed by default: the log is scanned far more often than
+   it is interrogated, and the canon wants the default surface calm. */
+.automations__payload summary {
+  cursor: pointer;
+  color: var(--t-text-dim);
+  font-size: 0.9em;
+  min-block-size: 24px;
+}
+
+.automations__payload-list {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: 0.9em;
+}
+
+.automations__payload-list > div {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.automations__payload-list dt {
+  color: var(--t-text-dim);
+  font-family: var(--t-font-mono, ui-monospace, monospace);
+}
+
+.automations__payload-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A withheld payload is a FACT about permissions, not a failure, so it reads as dimmed prose and
+   never borrows the danger colour. */
+.automations__withheld,
+.automations__redeliveries {
+  margin: var(--t-space-0-5) 0 0;
+  color: var(--t-text-dim);
+  font-size: 0.9em;
+}
+
+.automations__retry {
+  margin-block-start: var(--t-space-0-5);
+}
+
+.automations__tool {
+  font-family: var(--t-font-mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  color: var(--t-text-dim);
+}

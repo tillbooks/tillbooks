@@ -1,0 +1,288 @@
+{
+  "contact": {
+    "title": "Contacts",
+    "new": "New contact",
+    "name": "Name",
+    "address": "Street",
+    "houseNo": "House no.",
+    "zip": "ZIP",
+    "city": "Town",
+    "country": "Country",
+    "addressGroup": "Address",
+    "vatNumber": "VAT number",
+    "vatNumberHint": "Format: CHE-123.456.789 MWST",
+    "email": "Email",
+    "defaultCurrency": "Default currency",
+    "paymentTerms": "Payment terms",
+    "paymentTermsUnit": "days",
+    "description": "Note",
+    "partyRole": "Role",
+    "role": {
+      "customer": "Customer",
+      "vendor": "Vendor",
+      "both": "Customer and vendor"
+    },
+    "roleFilter": {
+      "all": "All roles"
+    },
+    "archive": "Archive",
+    "archived": "Archived",
+    "qrReady": "QR-ready",
+    "needsStructuredAddress": "Address needed",
+    "invalidVatNumber": "Invalid VAT number. Expected: CHE-123.456.789 MWST.",
+    "empty": "No contacts yet",
+    "emptyHint": "Add customers and suppliers for invoices and QR payment slips.",
+    "noMatch": "No contact matches the search",
+    "savedView": "Saved view",
+    "search": "Search contacts",
+    "showArchived": "Show archived",
+    "edit": "Edit",
+    "rowActions": "More actions for contact {name}",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "editTitle": "Edit contact",
+    "noWorkspaceHint": "Contacts belong to a workspace. Create one first.",
+    "noMatchHint": "Adjust the search term or show archived contacts.",
+    "clearSearch": "Clear the search",
+    "col": {
+      "select": "Selection",
+      "type": "Type",
+      "qr": "QR",
+      "actions": "Actions"
+    },
+
+    "kindLabel": "Type",
+    "kind": {
+      "company": "Company",
+      "person": "Person"
+    },
+    "kindFilter": {
+      "all": "Companies and people"
+    },
+    "people": "People",
+    "segmentsTitle": "Segments",
+    "segments": {
+      "empty": "No segments yet.",
+      "filter": "Filter by segment",
+      "add": "Add a segment",
+      "addAction": "Add",
+      "addHint": "Enter a segment first, then you can add it."
+    },
+    "consent": {
+      "title": "Drafts",
+      "toggle": "Let drafts use this client's accounting data",
+      "note": "Off by default. Nothing is sent anywhere either way."
+    },
+    "tabs": "Contact sections",
+    "tab": {
+      "master": "Details",
+      "timeline": "History",
+      "finance": "Finance",
+      "portal": "Portal access"
+    },
+    "action": {
+      "merge": "Merge",
+      "import": "Import",
+      "anonymise": "Anonymise"
+    },
+    "field": {
+      "employer": "Employer",
+      "employerNone": "No employer"
+    },
+    "error": {
+      "employerMustBeCompany": "The employer must be a company contact."
+    },
+    "finance": {
+      "hint": "Open items and payments live on the financial surfaces: Receivables, Payments and Documents."
+    },
+    "timeline": {
+      "empty": "No activity yet.",
+      "log": "Log an activity",
+      "logAction": "Log",
+      "kind": "Type",
+      "body": "Text",
+      "bodyHint": "Write the text first, then you can log the activity."
+    },
+    "activity": {
+      "note": "Note",
+      "call": "Call",
+      "email": "Email",
+      "meeting": "Meeting",
+      "task": "Task"
+    },
+    "tasks": {
+      "title": "Tasks",
+      "loading": "Loading tasks",
+      "empty": "No tasks for this contact yet.",
+      "loadFailed": "The tasks could not be loaded.",
+      "retry": "Try again",
+      "permissionDenied": "You do not have permission to see tasks.",
+      "action": {
+        "create": "New task",
+        "edit": "Edit",
+        "complete": "Mark done",
+        "snooze": "Snooze",
+        "cancel": "Cancel task",
+        "save": "Save",
+        "discard": "Discard"
+      },
+      "status": {
+        "open": "Open",
+        "doing": "In progress",
+        "done": "Done",
+        "cancelled": "Cancelled"
+      },
+      "recurring": {
+        "badge": "Recurring",
+        "seriesEnded": "Series ended."
+      },
+      "field": {
+        "title": "Title",
+        "assignee": "Assignee",
+        "due": "Due",
+        "reminder": "Reminder",
+        "recurrence": "Recurrence"
+      },
+      "recurrence": {
+        "preset": {
+          "none": "None",
+          "daily": "Daily",
+          "weekly": "Weekly",
+          "monthly": "Monthly",
+          "yearly": "Yearly",
+          "custom": "Advanced"
+        },
+        "advancedLabel": "Advanced rule (RRULE)",
+        "advancedHint": "e.g. FREQ=WEEKLY;INTERVAL=2;BYDAY=MO"
+      },
+      "snoozedUntil": "snoozed until {until}",
+      "snoozeUntil": "Snooze until",
+      "snoozeLabel": "Snooze task {title}",
+      "createLabel": "New task for {name}",
+      "editLabel": "Edit task {title}",
+      "titleHint": "Enter a title first, then you can create the task.",
+      "warnReminderAfterDue": "The reminder is after the due date.",
+      "fallbackError": "The task could not be saved.",
+      "error": {
+        "reminder_in_past": "The reminder time is in the past.",
+        "reminder_after_due": "The reminder is after the due date.",
+        "snooze_in_past": "The snooze time is in the past.",
+        "recurrence_invalid": "This recurrence rule is not valid.",
+        "task_not_open": "This task is already closed.",
+        "invalid_status_transition": "That status change is not allowed."
+      }
+    },
+    "merge": {
+      "toolbar": "Merge contacts",
+      "select": "Select {name} for merging",
+      "selected": "{n} selected",
+      "needTwo": "Select exactly two contacts to merge them.",
+      "clearSelection": "Clear the selection",
+      "survivor": "Which contact survives?",
+      "field": "Field",
+      "keeps": "Keeps",
+      "discards": "Discarded",
+      "diffCaption": "Comparison of the two contacts",
+      "confirm": "{source} will be merged into {target}. This cannot be undone.",
+      "action": "Merge"
+    },
+    "anonymise": {
+      "warning": "This clears the name, email, address and every activity text. Posted documents are retained (OR 958f). This cannot be undone.",
+      "confirmWord": "ANONYMISE",
+      "typeLabel": "Type {word} to confirm",
+      "typeHint": "Type {word} exactly to enable the button."
+    },
+    "import": {
+      "paste": "Paste CSV content",
+      "hint": "The first line names the columns: name, rolle, art, email, mwst, plz, ort.",
+      "parsed": "{n} rows recognised",
+      "action": "Import",
+      "emptyHint": "Paste CSV content with a header row first.",
+      "created": "{n} contacts created.",
+      "duplicates": "{n} possible duplicates found",
+      "duplicatesHint": "These rows were not created. Review them and merge if needed.",
+      "duplicateRow": "Row {row}",
+      "noDuplicates": "No duplicates found."
+    }
+  },
+  "portal": {
+    "panel": { "title": "Portal access" },
+    "action": {
+      "create": "Grant access",
+      "send": "Send link",
+      "revoke": "Revoke",
+      "share_entity": "Share in portal"
+    },
+    "field": {
+      "expiresAt": "Valid until",
+      "expiresAtHint": "Pick an expiry date first, then you can grant access."
+    },
+    "status": {
+      "active": "Active",
+      "draft": "Draft",
+      "revoked": "Revoked",
+      "expired": "Expired",
+      "local": "Local only"
+    },
+    "scope": {
+      "all_invoices": "Grant all invoices",
+      "all_invoices_warning": "Grants access to all future invoices."
+    },
+    "link": {
+      "once": "The link is shown only once.",
+      "copy": "Copy",
+      "copyLabel": "Copy link"
+    },
+    "empty": "No portal grants yet.",
+    "empty_scopes": "Nothing to share yet.",
+    "error": {
+      "invalid_scope": "Scope must reference this contact's own records.",
+      "grant_denied": "This link is no longer valid."
+    },
+    "not_hosted": "Created locally. Hosting not configured.",
+    "not_hosted_cta": "Enable hosting"
+  },
+  "vendorPortal": {
+    "section": { "title": "Vendor portal" },
+    "action": {
+      "grant": "Grant portal access",
+      "revoke": "Revoke access",
+      "remittance": "Create remittance advice"
+    },
+    "field": { "expiresAt": "Valid until" },
+    "status": {
+      "active": "Active",
+      "draft": "Draft",
+      "revoked": "Revoked",
+      "expired": "Expired"
+    },
+    "poStatus": {
+      "sent": "Sent",
+      "received": "Received"
+    },
+    "link": { "copy": "Copy", "copyLabel": "Copy link" },
+    "notice": {
+      "token_once": "This link is shown only once.",
+      "cloud_tier": "Hosting and sending require the cloud tier. The link artifact stays on this device."
+    },
+    "preview": { "title": "Visible to supplier" },
+    "empty": {
+      "grants": "No portal access granted yet.",
+      "pos": "No open purchase orders.",
+      "remittances": "No remittance advices yet."
+    },
+    "error": {
+      "expiry_in_past": "The expiry date is in the past.",
+      "grant_invalid": "This access link is no longer valid."
+    }
+  },
+  "help": {
+    "Contacts": {
+      "title": "Contacts",
+      "body": "Every customer and vendor in this workspace: companies and people, with roles, segments and a detail view covering master data, history and finances. Duplicates are combined through merge, larger sets arrive through import with a duplicate check. Nothing is deleted: a contact referenced by documents is archived, so every issued document keeps its recipient.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

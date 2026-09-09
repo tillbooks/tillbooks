@@ -1,0 +1,12 @@
+/* I03 Landed Costs surface. The list table, the page header, the detail panel and the button set are
+   the shared primitives now (DataTable, SurfaceHeader, DetailDrawer, Modal, .btn), so their bespoke
+   CSS is gone. What remains is genuinely surface-specific: the create form grid, the reversed-row
+   dim (the DataTable rowClassName hook), and the journal-entry caption in the drawer foot. No new
+   colour tokens (design canon). */
+.landed-costs { display: flex; flex-direction: column; gap: 1rem; }
+.lc-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.75rem; padding: 1rem; border: 1px solid var(--t-border); border-radius: 0.5rem; }
+.lc-form label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; }
+/* A reversed voucher reads as spent: dimmed, with the status glyph still carrying the state (never
+   colour alone). Joined onto the base row class by the DataTable rowClassName hook. */
+.lc-row--reversed { opacity: 0.6; }
+.lc-journal { font-size: 0.8rem; opacity: 0.75; }

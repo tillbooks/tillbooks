@@ -1,0 +1,264 @@
+/*
+ * A17 Kreditoren styling.
+ *
+ * Every value is a token. Spacing is the 8-pt grid, with 4px reserved for the optical nudges the
+ * design law permits (a chip's inner padding, a hairline offset), never for layout rhythm.
+ *
+ * THE ACCENT BUDGET ON THIS SURFACE IS TWO: the focus ring (inherited from global.css) and ONE
+ * accent-filled primary action, which is "Rechnung erfassen". The drawer's Buchen replaces it while
+ * the drawer is open, not adds to it, because the list's button is behind a scrim and unreachable.
+ *
+ * MONEY CARRIES NO COLOUR, and on this surface that is worth stating twice, because every figure here
+ * is money going OUT. The minus sign does the work: `formatMoney(-openMinor)` puts it in the TEXT, so
+ * a grayscale printout (a real Treuhänder artefact) reads exactly what the screen reads. A filled
+ * danger row per line would make the hue mean "this is a bill" instead of "look at this", which is
+ * exactly the inflation DESIGN.md forbids. `tabular-nums` is on every figure so the columns line up
+ * digit for digit.
+ *
+ * THE ONE COLOURED THING is the reconciliation mismatch band, which is the only genuinely urgent state
+ * on the surface. A passing reconciliation gets no band and no colour at all: an all-clear that gets a
+ * colour makes that colour the background and dulls the real warning.
+ *
+ * A VOIDED ROW IS DIMMED AND NOT STRUCK THROUGH. Strike-through on a table row is unreadable at 14px
+ * and says "deleted", which is the one thing a reversed bill is not: the row and its reversing entry
+ * both survive, on purpose (OR 957a).
+ */
+
+.bills {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The open-total line under the SurfaceHeader. Tabular figures so the amount reads as money, not as
+   running text. The header chrome itself (title, help, primary action) is the shared SurfaceHeader. */
+.bills-total {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.bills-total--pending {
+  min-height: 24px;
+}
+
+.bills-total-skeleton {
+  display: block;
+  width: 180px;
+  height: 16px;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.bills-dim {
+  color: var(--t-text-dim);
+  font-size: 13px;
+  margin: 0;
+}
+
+/* --- toolbar and filters ------------------------------------------------------------------------- */
+
+.bills-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  align-items: center;
+}
+
+.bills-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.bills-filter select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--t-text);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+  min-height: 32px;
+}
+
+/* --- the reconciliation band, the one coloured thing on the surface ------------------------------ */
+
+.bills-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.bills-band p {
+  margin: 0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- the rows (the table frame, sticky header, overflow and alignment are the shared DataTable) --- */
+
+/* A VOIDED ROW IS DIMMED AND NOT STRUCK THROUGH. Strike-through on a table row is unreadable at 14px
+   and says "deleted", which is the one thing a reversed bill is not: the row and its reversing entry
+   both survive, on purpose (OR 957a). Joined onto DataTable's base row class via `rowClassName`. */
+.bills-row--void {
+  color: var(--t-text-dim);
+}
+
+/* The row's own link into its drawer. A button because it opens an overlay rather than navigating. */
+.bills-link {
+  font: inherit;
+  color: var(--t-text);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* A word-only status (D19/U4): text on a neutral surface, never a colour carrying the meaning. */
+.bills-status {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  white-space: nowrap;
+}
+
+.bills-overdue {
+  /* 4px inner padding: an optical nudge, which the design law permits. */
+  padding: 4px var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+/* --- the editor form (hosted in the shared DetailDrawer; the shell, scrim and animation are its) -- */
+
+.bill-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* FLEXIBLE WIDTH, not fixed (P11): a German MWST-code label ("Vorsteuer Investitionen und übriger
+   Betriebsaufwand") runs far longer than its English twin, and a fixed column would clip it. */
+.bill-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.bill-field input,
+.bill-field select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--t-text);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+  min-height: 40px;
+  width: 100%;
+}
+
+.bill-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.bill-toggle legend {
+  padding: 0 var(--t-space-0-5);
+  font-size: 12px;
+}
+
+.bill-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text);
+}
+
+/* --- the posting preview ------------------------------------------------------------------------ */
+
+.bill-preview {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+  padding: var(--t-space-2);
+}
+
+/* IN FLIGHT THE FIGURES DIM rather than presenting the previous answer as current. */
+.bill-preview--pending {
+  opacity: 0.55;
+}
+
+.bill-preview h3 {
+  margin: 0 0 var(--t-space-1);
+  font-size: 13px
+}
+
+.bill-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+  margin: 0;
+}
+
+.bill-split div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bill-split dt {
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+.bill-split dd {
+  margin: 0;
+  font-size: 15px;
+}
+
+.bill-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.bill-note,
+.bill-frozen,
+.bill-cta {
+  margin: var(--t-space-1) 0 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+/* The A24 courtesy note above the write actions: the reason in words, text and not colour alone. */
+.bill-requires {
+  margin: var(--t-space-1) 0 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.bill-dim {
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-text-faint);
+}

@@ -1,0 +1,261 @@
+{
+  "nav": {
+    "environments": "Environments"
+  },
+  "help": {
+    "Environments": {
+      "title": "Environments",
+      "body": "An environment is a self-contained copy of TILL with its own data and its own code channel. It lets you work against realistic data without ever touching the real books. Data flows down only (from main into test, from test into develop), code flows up only. main is the live environment and is protected against reset, overwrite and deletion. On any copy out of main, names, addresses and IBANs are pseudonymised and bank and access secrets are neutralised, so a copy can never trigger real payments.",
+      "docsPath": "self-hosting/served-access"
+    }
+  },
+  "env": {
+    "title": "Environments",
+    "subtitle": "Your main, test and develop environments and every named environment in one place.",
+    "create": "Create environment",
+    "tiers": {
+      "heading": "Standard environments",
+      "hint": "The three fixed tiers. Always present, pinned to the top."
+    },
+    "named": {
+      "heading": "Named environments",
+      "hint": "Environments you created for a specific purpose.",
+      "empty": "No named environments yet. Create one for a test or a migration."
+    },
+    "filter": {
+      "label": "Filter environments",
+      "placeholder": "Search by name",
+      "clear": "Clear filter",
+      "none": "No environment matches your search."
+    },
+    "col": {
+      "name": "Name",
+      "codeChannel": "Code channel",
+      "dataPolicy": "Data",
+      "guard": "Protection",
+      "lastRefresh": "Last refreshed",
+      "size": "Size",
+      "actions": "Actions"
+    },
+    "policy": {
+      "synthetic": "Synthetic",
+      "copy": "Copy",
+      "live": "Live"
+    },
+    "policyLong": {
+      "synthetic": "Synthetic (built from a seed)",
+      "copy": "Copy from a source",
+      "live": "Live (real books)"
+    },
+    "guard": {
+      "protected": "Protected",
+      "open": "Open",
+      "liveTooltip": "Live, protected"
+    },
+    "runtime": {
+      "served": "Served",
+      "local": "Local"
+    },
+    "badge": {
+      "current": "Active",
+      "readOnly": "Read only",
+      "missing": "Data root missing"
+    },
+    "sanitizeBadge": {
+      "raw": "raw (1:1)",
+      "pseudonymize": "pseudonymised",
+      "structure_synthetic": "anonymised (synthetic)"
+    },
+    "row": {
+      "open": "Open",
+      "moreLabel": "Actions for {name}",
+      "refresh": "Refresh",
+      "reset": "Reset",
+      "delete": "Delete",
+      "switch": "Set active"
+    },
+    "never": "Never",
+    "loadError": "The environment list could not be read.",
+    "integrityError": "The landscape file failed its integrity check. It may have been edited by hand. Nothing was changed.",
+    "noWorkspaceHint": "Select a workspace first, then you can manage the environments.",
+    "reload": "Reload",
+    "emptyTitle": "Create your first test environment",
+    "emptyHint": "So far there is only main, your live environment. Copy it into a test environment to practise safely on real data.",
+    "feedback": {
+      "created": "Environment “{name}” created.",
+      "reset": "Environment “{name}” reset.",
+      "deleted": "Environment “{name}” deleted.",
+      "copied": "“{source}” copied into “{target}”.",
+      "switched": "Active environment is now “{name}”.",
+      "dismiss": "Dismiss"
+    },
+    "error": {
+      "environment_protected": "main is protected. This action is not possible against main.",
+      "standard_tier": "“{name}” is a fixed tier. Reset it instead of deleting it.",
+      "environment_active": "“{name}” is currently active. Switch to another environment first.",
+      "environment_exists": "An environment “{name}” already exists. Refresh it or choose another name.",
+      "environment_not_found": "This environment was not found.",
+      "data_root_is_main": "This data root points at main. Another environment may not do that.",
+      "data_root_collision": "This data root already belongs to “{collidesWith}”.",
+      "source_unreachable": "The source “{source}” is not reachable. Try again once it is up.",
+      "mandate_not_found": "The mandate “{mandate}” was not found in the source.",
+      "target_is_main": "main is protected and cannot be a target.",
+      "unknown_seed": "That seed does not exist.",
+      "seed_failed": "The seed failed in the “{phase}” phase. The prior environment is unchanged.",
+      "phase_b_not_implemented": "The copy and sanitize path lands with Phase B. Synthetic and live environments can already be created and reset.",
+      "invalid_input": "An input was invalid. Please check the fields.",
+      "generic": "The action could not be completed. Nothing was changed."
+    },
+    "create_dialog": {
+      "title": "Create environment",
+      "lead": "Create a new environment with its own data and its own code channel. main stays untouched.",
+      "name": {
+        "label": "Name",
+        "placeholder": "e.g. test-migration",
+        "hint": "A short name with no slashes. It is also the folder name of the data root."
+      },
+      "policy": {
+        "label": "Data",
+        "synthetic": "Synthetic (from a seed)",
+        "copy": "Copy from a source (Phase B)",
+        "live": "Live (empty books)",
+        "copyNote": "The copy path with sanitization lands with Phase B. Until then, use the Refresh action on an existing environment."
+      },
+      "seed": {
+        "label": "Seed",
+        "hint": "Which synthetic data is loaded. The default is the Seeblick sample ledger."
+      },
+      "codeChannel": {
+        "label": "Code channel",
+        "hint": "The git branch this environment pins. The default is its own name."
+      },
+      "runtime": {
+        "label": "Runtime",
+        "local": "Local",
+        "served": "Served"
+      },
+      "submit": "Create environment",
+      "cancel": "Cancel",
+      "planTitle": "This will be created",
+      "plan": {
+        "name": "Name",
+        "policy": "Data",
+        "seed": "Seed",
+        "codeChannel": "Code channel",
+        "dbPath": "Data root"
+      },
+      "confirm": "Create"
+    },
+    "copy_dialog": {
+      "title": "Copy and replace",
+      "lead": "The data from “{source}” replaces “{target}”. {sanitizeSentence}",
+      "sanitizeSentence": {
+        "raw": "Names, addresses and IBANs are copied as-is. Bank and access secrets are still neutralised.",
+        "pseudonymize": "Names, addresses and IBANs are pseudonymised. Bank and access secrets are neutralised.",
+        "structure_synthetic": "All personal data is replaced with synthetic data. Bank and access secrets are neutralised."
+      },
+      "oneWay": "This is one-way: the data in “{target}” is replaced. On failure, “{target}” stays unchanged.",
+      "source": {
+        "label": "Source",
+        "hint": "Which environment is copied from."
+      },
+      "target": {
+        "label": "Target",
+        "hint": "Which environment is replaced. main cannot be a target."
+      },
+      "scope": {
+        "label": "Scope",
+        "instance": "Whole environment",
+        "mandate": "A single mandate",
+        "mandateLabel": "Mandate",
+        "mandatePlaceholder": "Choose a mandate"
+      },
+      "sanitize": {
+        "label": "Sanitization",
+        "raw": "Raw (1:1 copy)",
+        "pseudonymize": "Pseudonymised (recommended)",
+        "structure_synthetic": "Synthetic (anonymised)"
+      },
+      "phases": {
+        "label": "Sequence",
+        "snapshot": "Snapshot the source",
+        "restore": "Restore into the target",
+        "sanitize": "Sanitize",
+        "verify": "Verify",
+        "pending": "pending",
+        "running": "running",
+        "done": "done"
+      },
+      "override": {
+        "summary": "Advanced options",
+        "rawWarning": "A raw 1:1 copy contains real personal data. Type the target name to confirm.",
+        "retainSecrets": "Keep bank and access secrets (owner only)",
+        "retainSecretsWarning": "Kept secrets can reach real banks and move real money. Only for a genuine full-fidelity debug.",
+        "confirmName": "Target name to confirm",
+        "confirmNamePlaceholder": "Type {name}"
+      },
+      "submit": "Copy and replace",
+      "cancel": "Cancel",
+      "running": "Copying",
+      "summary": "{workspaces} workspaces copied, {masked} fields sanitized.",
+      "toTarget": "To “{target}”"
+    },
+    "reset_dialog": {
+      "title": "Reset “{name}”",
+      "lead": "“{name}” is wiped and rebuilt from its data policy. The rebuild happens alongside and is swapped in only on success, so “{name}” stays unchanged on failure.",
+      "seed": {
+        "label": "Seed",
+        "hint": "Which synthetic data is reloaded."
+      },
+      "planTitle": "This will be reset",
+      "confirm": "Reset",
+      "cancel": "Cancel"
+    },
+    "delete_dialog": {
+      "title": "Delete “{name}”",
+      "lead": "The data root of “{name}” and its landscape entry are removed. This cannot be undone.",
+      "planTitle": "This will be removed",
+      "dataRoot": "Data root",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    },
+    "detail": {
+      "title": "Environment “{name}”",
+      "codeChannel": "Code channel",
+      "dataPolicy": "Data",
+      "guard": "Protection",
+      "runtime": "Runtime",
+      "tierRank": "Rank",
+      "source": "Source",
+      "sanitization": "Sanitization",
+      "seed": "Seed",
+      "created": "Created",
+      "lastRefresh": "Last refreshed",
+      "dbPath": "Data root",
+      "size": "Size",
+      "drift": {
+        "label": "Code-channel check",
+        "none": "No difference",
+        "drifted": "Drifted: built from “{built}”",
+        "unknown": "Unknown"
+      },
+      "verifyTitle": "Verify sanitization",
+      "verifyHint": "Copy again with sanitization if this environment might hold real personal data from main.",
+      "verifyAction": "Refresh and sanitize",
+      "switch": "Set active",
+      "readOnlyNote": "This environment is read-only.",
+      "close": "Close",
+      "loadError": "The details of this environment could not be read."
+    },
+    "indicator": {
+      "label": "Active environment: {name}",
+      "manage": "Manage environments",
+      "switchLabel": "Switch environment",
+      "switchTo": "Switch to “{name}”",
+      "readOnly": "read only",
+      "missing": "Environment not found, back to develop.",
+      "liveBanner": "You are on LIVE (main). Writing to the books stays possible; environment-wide operations are locked here."
+    },
+    "manageDenied": "You need the “landscape.manage” right for that."
+  }
+}

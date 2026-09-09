@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" role="img" aria-label="TILL">
+  <!--
+    THE TILL MARK (D53). A drawer face, its split, and the pull.
+    Three straight elements on the 8-pt grid, no curves to lose at small sizes.
+
+    This file is the ONE geometry. The favicon, the app icons, the avatar and the banners are all
+    derived from it, which is why the tab, the profile picture and the header cannot drift apart.
+    `currentColor` on purpose: the mark is one colour, always, and the surface decides which.
+    Brass (#7a5a16 on paper, #e0b444 on walnut) in brand use; ink or paper in monochrome.
+  -->
+  <rect x="2.5" y="4.5" width="19" height="15" rx="2" stroke="currentColor" stroke-width="2"/>
+  <path d="M2.5 10.5h19" stroke="currentColor" stroke-width="2"/>
+  <path d="M9.5 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>

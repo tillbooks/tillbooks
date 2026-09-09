@@ -1,0 +1,71 @@
+---
+title: "Run TILL inside an agent"
+description: "Use TILL with zero installed infrastructure, and the three trade-offs to know first."
+---
+
+You do not need a machine of your own for TILL. If you already work in an agent runtime (Claude
+Desktop on your Mac, or a Claude Code / Cowork session in the cloud), TILL runs inside it. Point the
+agent at a session folder that holds the `tillbooks` package and a `till.db`, run the MCP server, and
+the full verb surface works: the engine has no idea it is sandboxed, and tenancy, the approval dial
+and the permission model hold exactly as they do anywhere else.
+
+```bash
+# inside the session folder, with TILL_DB_PATH pointed at a .db in that folder
+till mcp
+```
+
+To tell TILL it is running this way, set one flag. TILL never guesses it:
+
+```bash
+export TILL_RUNTIME_MODE=agent_session
+```
+
+With the flag set, `delivery_status` reports `mode: agent_session`, and the Studio shows the
+residency note below. This is the honest signal that the trade-offs on this page apply.
+
+## Three things to know first
+
+This mode is real and supported. It also gives up three things a local install keeps, and TILL says
+so rather than hiding them.
+
+### 1. Residency
+
+A cloud agent session runs on the vendor's machine, not yours. So while you work this way, "your
+books never leave your machine" does not hold: the data lives on that machine for the length of the
+session. A local Claude Desktop session keeps full residency, because it runs on your own Mac. Swiss
+data residency is exactly what the managed tier is built to contract for; this mode does not promise
+it.
+
+### 2. Local correspondence is off in the cloud
+
+The mail, drafting and voice features read your local mail store and run a local model on Apple
+Silicon. A cloud machine has neither, and TILL will not host them for you by design. In cloud agent
+mode these verbs return `needs_local_runtime` rather than a stand-in. Run them on a local Mac, or not
+at all.
+
+### 3. Back up at the end of every session, and carry the file out
+
+A session folder is disposable. Treat the backup as a ritual, not as optional hygiene: a ledger whose
+only copy lives in a machine that will be wiped is not a ledger.
+
+```bash
+# at the end of the session: take a backup and move the file OUT of the sandbox
+create_backup
+# carry the .tillbackup out through the session's own file transfer, then next session:
+restore_backup   # or point TILL_DB_PATH at the file you carried back in
+```
+
+TILL does not take backups for you, here least of all. Pre-alpha rules apply, and they apply doubly
+in a runtime that can vanish between one message and the next.
+
+## The one-click extension (not shipping yet)
+
+TILL is designed to ship a `.mcpb` desktop extension for Claude Desktop, so that installing `till mcp`
+is one double-click with no JSON to edit. The extension manifest is defined and version-locked to the
+npm package: it exposes exactly two settings, the database path and the support directory, and it
+bundles no database of its own.
+
+It is not available to install yet, for the same reason nothing else is: TILL is pre-alpha, the
+package is unpublished, and the signed bundle is built and notarised in the release pipeline, which
+has not run. When TILL ships, the extension ships with it. See the
+[agent interface overview](/mcp/overview) for the verb surface it will give you.

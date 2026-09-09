@@ -1,0 +1,10 @@
+{
+  "currency": "EUR",
+  "baseCurrency": "CHF",
+  "date": "2026-07-20",
+  "latestAsOf": null,
+  "maxAgeDays": 7,
+  "reason": "no rate has been recorded for this pair: record one with record_exchange_rate, or pass fxRate explicitly",
+  "ok": false,
+  "error": "needs_fx_rate"
+}

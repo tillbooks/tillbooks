@@ -1,0 +1,24 @@
+---
+title: "Agent interface (MCP)"
+description: "How an agent talks to TILL, and what stays under human control."
+---
+
+TILL ships an MCP server over stdio. It is the primary interface: the GUI and the CLI are built on
+the same engine verbs the agent calls, so an agent is never a second-class client.
+
+```bash
+till mcp
+```
+
+## The rule that does not bend
+
+Posted entries are append-only and immutable. An agent cannot edit or delete a posted entry, because
+nobody can. A correction is a reversing entry, which is how real accounting works and what an audit
+expects to see.
+
+Posting is idempotent, so a retry does not double-count.
+
+## Status
+
+Pre-alpha. The tool surface is specified and in progress. This page describes the shape, not a
+shipped API.

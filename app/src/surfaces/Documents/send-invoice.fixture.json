@@ -1,0 +1,61 @@
+{
+  "document": {
+    "id": "doc_1",
+    "workspaceId": "ws_1",
+    "type": "invoice",
+    "number": "R-2026-0001",
+    "status": "sent",
+    "contactId": "ct_1",
+    "currency": "CHF",
+    "sourceDocumentId": null,
+    "targetDocumentId": null,
+    "postedEntryId": "entry_1",
+    "subtotalMinor": 150000,
+    "taxMinor": 12150,
+    "totalMinor": 162150,
+    "issueDate": "2026-07-16",
+    "dueDate": null,
+    "sentToEmail": "kunde@example.ch",
+    "notes": null,
+    "createdAt": "2026-07-16T00:00:00.000Z",
+    "creditedDocumentId": null,
+    "origin": "native"
+  },
+  "lines": [
+    {
+      "id": "docline_1",
+      "position": 1,
+      "itemId": null,
+      "description": "Beratung",
+      "quantityMilli": 10000,
+      "unitPriceMinor": 15000,
+      "lineTotalMinor": 150000,
+      "taxCode": "UST81",
+      "supplyDate": null,
+      "creditedLinePosition": null
+    }
+  ],
+  "history": [
+    {
+      "fromStatus": null,
+      "toStatus": "draft",
+      "actor": "user_1",
+      "at": "2026-07-16T00:00:00.000Z"
+    },
+    {
+      "fromStatus": "draft",
+      "toStatus": "issued",
+      "actor": "user_1",
+      "at": "2026-07-16T00:00:00.000Z"
+    },
+    {
+      "fromStatus": "issued",
+      "toStatus": "sent",
+      "actor": "user_1",
+      "at": "2026-07-16T00:00:00.000Z"
+    }
+  ],
+  "ok": true,
+  "sentToEmail": "kunde@example.ch",
+  "transmitted": true
+}

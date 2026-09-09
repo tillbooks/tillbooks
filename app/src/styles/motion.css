@@ -1,0 +1,166 @@
+/* The motion vocabulary, the CSS half (D122 D-I, 2026-09-05). Three moments, one ease pair,
+   every number a `--t-motion-*` token from brand/tokens/tokens.css, never a literal. The JS half
+   (app/src/lib/motion.ts) only decides WHICH element moves and WHEN; everything that moves, moves
+   here. The reduced-motion block in tokens.css zeroes every duration and delay below.
+
+   Imported once by global.css, right after the tokens. */
+
+/* ─── Navigate: the new surface enters from the travel side ─────────────────────────────────────
+   The View Transitions API is deliberately NOT used here (measured 2026-09-05, see motion.ts): a
+   transition holds the pointer for its life, about 250 ms even with nothing but an 80 ms exit
+   declared (the user agent's group animations run regardless), and a raw click 150 ms after the
+   rail click was lost, four of four. So the old surface's exit is withdrawn and nothing leaves;
+   the rail pill has its own 120 ms transition (global.css) and the entrance below costs the next
+   act nothing (measured level with reduced motion). */
+
+/* The entrance: the live surface, from the travel side. The same for a history POP (it never
+   passes through router.navigate). Two animations: the fade runs the whole of `--t-motion-nav-in`; the 8 px travel settles in the
+   exit's own beat, `--t-motion-nav-out`, so the surface is STILL by the time the old one has
+   left. Measured 2026-09-05: a travel that ran the full 200 ms moved every box in the surface for
+   200 ms, and the act after a navigation paid the remainder as a wait (334 ms median against
+   146 under reduced motion); with the ease-out curve three quarters of the 8 px were already
+   travelled by 80 ms, so nothing visible is lost and nothing waits. */
+#main-content.motion-nav-enter {
+  animation:
+    motion-fade-in var(--t-motion-nav-in) var(--t-ease-out),
+    motion-travel-in var(--t-motion-nav-out) var(--t-ease-out);
+}
+
+/* Travelling back, the new surface enters from the left. */
+html[data-motion-nav='back'] #main-content.motion-nav-enter {
+  animation-name: motion-fade-in, motion-travel-in-back;
+}
+
+/* ─── Commit: press, land, draw, tint ──────────────────────────────────────────────────────────
+   The press is on every `.btn` (global.css). The landing and the tint key on the attribute
+   `data-just-committed`, stamped by motion.ts on the row (or the feedback banner) a write produced.
+   A table row lands as a whole and tints through its cells, because a background on a `<tr>`
+   does not paint reliably across engines; anything else lands and tints on itself. Neither
+   animation fills forward: the row returns to whatever its own stylesheet says the moment the
+   tint has decayed, so a reversal row keeps its soft ground and a voided row its dimming. */
+[data-just-committed] {
+  animation: motion-land var(--t-motion-commit) var(--t-ease-out);
+}
+
+tr[data-just-committed] > td,
+tr[data-just-committed] > th {
+  animation: motion-tint var(--t-motion-tint) var(--t-ease-out);
+}
+
+:not(tr)[data-just-committed] {
+  animation:
+    motion-land var(--t-motion-commit) var(--t-ease-out),
+    motion-tint var(--t-motion-tint) var(--t-ease-out);
+}
+
+@keyframes motion-land {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--t-travel)));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-tint {
+  from {
+    background-color: var(--t-accent-soft);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+/* The check draws beside the words. The success glyph's path is one stroke of about 23 units
+   (M20 6 L9 17 l-5 -5); a dash of 24 covers it, and the offset runs to zero in `commit`. */
+.action-feedback--success .action-feedback__glyph path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: motion-draw var(--t-motion-commit) var(--t-ease-out) forwards;
+}
+
+@keyframes motion-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ─── Reveal: a panel slides from the edge it lives on, its items follow ─────────────────────────
+   One class per edge. The items inside carry `data-motion-item="1|2|3"` and fade in with a
+   per-item stagger of at most three steps; a fourth item would inherit no delay, by design.
+   The drawer lives on the right edge, the modal in the middle (it rises from below by the travel
+   distance), a disclosure's body under its chevron. */
+.motion-reveal--right {
+  animation: motion-reveal-right var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.motion-reveal--center {
+  animation: motion-reveal-up var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.motion-reveal--under {
+  animation: motion-reveal-under var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.motion-reveal--right [data-motion-item],
+.motion-reveal--center [data-motion-item] {
+  animation: motion-fade-in var(--t-motion-reveal) var(--t-ease-out) both;
+}
+
+/* The delays carry the SAME specificity as the shorthand above (the shorthand resets
+   animation-delay, so a bare attribute selector would lose the cascade and read 0s; measured). */
+.motion-reveal--right [data-motion-item='2'],
+.motion-reveal--center [data-motion-item='2'] {
+  animation-delay: var(--t-motion-stagger);
+}
+
+.motion-reveal--right [data-motion-item='3'],
+.motion-reveal--center [data-motion-item='3'] {
+  animation-delay: calc(2 * var(--t-motion-stagger));
+}
+
+@keyframes motion-reveal-right {
+  from {
+    opacity: 0;
+    transform: translateX(var(--t-travel));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(var(--t-travel));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A disclosure's body FADES under its chevron: opacity only, no travel. A body that slides moves
+   the rows inside it, and a click on a moving row waits for the move to end (measured 2026-09-05:
+   the rail leaf under an opening group cost about 180 ms of pointer settling with a 4 px slide,
+   and a fade costs none). */
+@keyframes motion-reveal-under {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes motion-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

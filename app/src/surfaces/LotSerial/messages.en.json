@@ -1,0 +1,97 @@
+{
+  "nav": {
+    "lotSerial": "Lot & serial"
+  },
+  "lotSerial": {
+    "title": "Lot & serial tracking",
+    "noWorkspace": "Pick a workspace to manage lot and serial tracking.",
+    "listLabel": "Trackable items",
+    "detailLabel": "Item tracking detail",
+    "selectHint": "Select an item to set its tracking mode and manage its lots and serials.",
+    "modeLabel": "Tracking mode",
+    "notTracked": "This item is not lot- or serial-tracked. Choose a mode above to start.",
+    "col": { "actions": "Actions" },
+    "cancel": "Cancel",
+    "save": "Save",
+    "archive": "Archive",
+    "error": { "transport": "Could not load the tracked items. Please try again." },
+    "empty": {
+      "title": "No stockable items yet",
+      "hint": "Create a stockable item first, then enable lot or serial tracking on it here."
+    },
+    "mode": {
+      "none": "Not tracked",
+      "lot": "Lot",
+      "serial": "Serial",
+      "lot_and_serial": "Lot and serial"
+    },
+    "lotStatus": {
+      "open": "Open",
+      "held": "On hold",
+      "expired": "Expired",
+      "closed": "Closed",
+      "archived": "Archived"
+    },
+    "serialStatus": {
+      "available": "Available",
+      "reserved": "Reserved",
+      "issued": "Issued",
+      "returned": "Returned",
+      "scrapped": "Scrapped",
+      "archived": "Archived"
+    },
+    "lots": {
+      "title": "Lots",
+      "new": "New lot",
+      "empty": "No lots yet. Create one when you receive the first batch.",
+      "setStatus": "Set status",
+      "col": {
+        "number": "Number",
+        "status": "Status",
+        "expiry": "Expiry",
+        "onHand": "On hand"
+      },
+      "form": { "title": "New lot" },
+      "field": {
+        "number": "Lot number",
+        "expiry": "Expiry date",
+        "supplier": "Supplier reference"
+      }
+    },
+    "serials": {
+      "title": "Serials",
+      "new": "New serials",
+      "empty": "No serials yet. Add units when you receive serialised goods.",
+      "setStatus": "Set status",
+      "col": { "number": "Serial number", "status": "Status" },
+      "form": { "title": "New serials" },
+      "field": {
+        "numbers": "Serial numbers",
+        "numbersHint": "One per line, or separated by commas. A single number creates one serial; several create them all-or-nothing.",
+        "lot": "Lot",
+        "noLot": "Select a lot"
+      }
+    },
+    "errors": {
+      "tracking_not_applicable": "This item cannot be tracked. It must be a stockable product.",
+      "tracking_mode_requires_zero_stock": "The on-hand quantity must be zero before you can change the tracking mode.",
+      "invalid_tracking_mode": "That is not a valid tracking mode.",
+      "lot_number_taken": "A lot with that number already exists for this item.",
+      "serial_number_taken": "A serial with that number already exists for this item.",
+      "lot_has_balance": "This lot still has stock on hand and cannot be closed or archived.",
+      "serial_has_balance": "This serial is still in stock. Issue, return or scrap it before archiving.",
+      "lot_reference_required": "This item needs both a lot and a serial, so pick a lot for the serial.",
+      "lot_item_mismatch": "That lot belongs to a different item.",
+      "invalid_lot_status": "That is not a valid lot status.",
+      "invalid_serial_status": "That is not a valid serial status."
+    }
+  },
+  "help": {
+    "LotSerial": {
+      "title": "Lot & serial tracking",
+      "body": "Here you decide per item whether it is tracked by lot, by serial number or not at all, and manage the lots and units that belong to it. Pick an item on the left: the right pane shows its tracking mode and, depending on the mode, its lots with their status and its serial numbers. The mode can only change while no stock is on hand, so the existing movements stay unambiguous.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,184 @@
+/* J01, Inventory -> Lot & Serial Tracking. Item-centric master-detail split, one accent, glyph+label
+   status. No new colour token (design-canon): every value reuses a --t- token.
+
+   D118 B2 (2026-08-24): the page header is the shared SurfaceHeader, the Lots and Serials detail
+   tables the shared DataTable, and both create overlays the shared DetailDrawer. The per-surface CSS
+   that duplicated the tables (and their header, cells and numeric alignment), the drawer chrome and
+   the button set has been deleted; what remains is genuinely LotSerial-specific: the master-detail
+   split, the item navigation list, the mode selector, the status badges and the drawer form fields. */
+
+.ls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The visible accent focus ring the design law requires (2px accent, offset 2px), for the bespoke
+   controls this surface still owns: the item list buttons, the mode selector and the drawer form
+   fields. The shared primitives (DataTable, DetailDrawer) carry their own rings. */
+.ls :is(input, select, textarea, button, .btn, a):focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+.ls-split {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .ls-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ls-pane {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-1);
+}
+
+.ls-detail {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The item navigation list (the master pane): a single-column pick-one list, not a tabular grid, so
+   it stays bespoke rather than adopting DataTable. */
+.ls-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ls-list-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border: none;
+  background: none;
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+
+.ls-list-item:hover {
+  background: var(--t-bg-soft);
+}
+
+.ls-list-item-selected {
+  background: var(--t-bg-soft);
+  font-weight: 600;
+}
+
+.ls-item-name {
+  flex: 1;
+}
+
+.ls-mode {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.ls-detail-title {
+  margin: 0;
+  flex: 1;
+}
+
+.ls-field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.ls-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.ls-subhead {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.ls-h3 {
+  margin: 0;
+  flex: 1;
+}
+
+/* A monospace code cell (lot number, serial number) inside the shared DataTable. */
+.ls-code {
+  font-family: var(--t-font-mono);
+}
+
+/* The per-row actions cell content: the status-change select and the archive button, right-aligned. */
+.ls-row-actions {
+  display: flex;
+  gap: var(--t-space-0-5);
+  justify-content: flex-end;
+}
+
+/* Status badge: glyph + label, never colour alone (WCAG 2.2 AA). LotSerial-specific. */
+.ls-badge {
+  display: inline-block;
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font-size: 0.75rem;
+  color: var(--t-text-dim);
+}
+
+/* An archived lot or serial reads dimmed down the whole row, joined onto the shared DataTable row
+   class via the rowClassName hook. */
+.ls-archived {
+  opacity: 0.55;
+}
+
+.ls-muted {
+  color: var(--t-text-dim);
+}
+
+.ls-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+}
+
+/* Drawer form fields the DetailDrawer body hosts. */
+.ls-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ls-field label {
+  font-size: 0.85rem;
+  color: var(--t-text-dim);
+}
+
+.ls-field input,
+.ls-field select,
+.ls-field textarea {
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+  background: var(--t-bg-elev);
+  color: inherit;
+}

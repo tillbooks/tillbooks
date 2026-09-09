@@ -1,0 +1,197 @@
+---
+title: "Run TILL for your team in under an hour"
+description: "One docker compose up: a TILL instance at your own URL, passkey login, and a backup that never stops."
+---
+
+<Warning>
+  TILL is pre-alpha. Do not run your business on it. This page exists so you can run a real
+  instance and find out what breaks before anyone's books depend on it.
+</Warning>
+
+One host, one compose stack, one SQLite file on one volume, replicated to a bucket every second.
+Your team signs in with passkeys, an agent reaches `/mcp` with a token, and a restore is a single
+command. Pick Swiss compute and a Swiss bucket and the default recipe keeps every byte in
+Switzerland. The fast variant borrows Cloudflare's door instead, and this page says what that costs
+you.
+
+## Before you start
+
+You need a Linux host you can SSH into (2 vCPU and 2 GB are plenty; the image is 442 MB), Docker
+with the compose plugin, a domain where you can create two A records, and about an hour the first
+time. The [cost sheet](/self-hosting/cost-sheet) lists hosts from CHF 0 to about CHF 6 a month.
+
+Clone the repository on the host. The image builds from the repository root and everything below
+happens in `ops/instance/`.
+
+## Recipe B: Caddy, Pocket ID, TILL, Litestream
+
+Five containers. Caddy has the only public port and fetches its certificates itself. Pocket ID is
+the identity provider (passkeys, a few megabytes of memory). oauth2-proxy sits between them
+because stock Caddy speaks no OIDC. TILL binds loopback inside its own container; Caddy shares
+that container's network namespace, so it is the only thing on the host that can reach the
+ledger. Litestream copies the write-ahead log to your bucket.
+
+### 1. Names and secrets (10 minutes)
+
+```sh
+cd ops/instance
+cp .env.example .env
+```
+
+Fill in the two hostnames (`books.example.ch` and `id.books.example.ch`), an email for the
+certificate authority, and generate the three secrets the file asks for with the commands written
+next to them. Pick one bucket target and paste its four lines; the file carries the endpoint lines
+for Infomaniak Swiss Backup (Swiss, recommended), Cloudflare R2, Backblaze B2 and Tigris. Leave the
+OIDC client lines empty for now.
+
+### 2. DNS (2 minutes)
+
+Two A records to the host: `books.example.ch` and `id.books.example.ch`. A wildcard works too.
+
+### 3. Up (10 minutes, mostly the build)
+
+```sh
+docker compose up -d --build
+docker compose ps
+```
+
+`till` reports healthy once its own `delivery_status` read answers. `oauth2-proxy` exits with
+`missing setting: client-id` and restarts in a loop until step 4 gives it one; `docker compose ps`
+shows it restarting. That is expected, and nothing else waits for it.
+
+### 4. Identity (10 minutes)
+
+Open `https://id.books.example.ch/setup`, create the admin account and enrol a passkey. In Pocket
+ID, add an OIDC client named TILL with the callback `https://books.example.ch/oauth2/callback`.
+Copy its id and secret into `.env`, then:
+
+```sh
+docker compose up -d oauth2-proxy
+```
+
+Add each teammate as a Pocket ID user with their email, and tick **Email verified** on every user,
+your own admin account included. oauth2-proxy refuses an unverified email, and the recipe keeps
+that refusal: an email you did not verify by hand is not an identity. That email is the subject
+TILL will see, byte for byte: invite `anna@example.ch` and Pocket ID must hold `anna@example.ch`,
+not `Anna@Example.ch`.
+
+Users cannot edit their own account: the compose sets `ALLOW_OWN_ACCOUNT_EDIT=false` under
+`UI_CONFIG_DISABLED=true`, because Pocket ID only reads that setting from the environment when its
+application-configuration page is disabled. The page is read-only in the admin UI; every setting
+on it is a line in `compose.yml`. Whoever assigns an email in Pocket ID assigns an identity in TILL,
+and with self-edit on, a signed-in teammate could rename themselves to the agent seat's subject or
+to a colleague's invite email and take that seat with their own passkey.
+
+### 5. Provision locally first, then invite (15 minutes)
+
+Membership in TILL is by invitation, never by showing up authenticated. The workspace and its first
+owner are created where holding the file is the trust boundary, with served mode off, and the
+instance is opened to invited people afterwards. Two ways to do that:
+
+On the host, in the running container, with served mode blanked for that one process:
+
+```sh
+docker compose exec -e TILL_SERVED_MODE= till node --input-type=module -e "
+  const { makeApiDeps } = await import('/app/dist/api/mcp.js');
+  const { getAction } = await import('/app/dist/api/registry.js');
+  const { deps, store } = makeApiDeps(process.env.TILL_DB_PATH);
+  const ws = getAction('create_workspace').run(deps, { name: 'Example GmbH', idempotencyKey: 'ws-1' });
+  const inv = getAction('invite_member').run(deps, { workspaceId: ws.workspaceId, email: 'you@example.ch', role: 'owner', idempotencyKey: 'inv-you' });
+  console.log(JSON.stringify({ ws, inv }, null, 2)); store.close();"
+```
+
+Or on your laptop: run `till up`, build the books there (import, migrate, seed), mint the invites
+with `node ops/instance/invite-local.mjs`, and copy `till.db` onto the volume before the first
+`docker compose up`. The copy command is in step 5 of `ops/instance/README.md`; it matters that
+the file ends up owned by uid 1000, because that is the user the container runs as.
+
+Either way you hold an invite token per person. Sign in at `https://books.example.ch` with your
+passkey and paste your token on the "signed in, not a member" page. Everyone else does the same
+with theirs. A revoked teammate fails on their next request; TILL keeps no session of its own.
+
+### 6. The agent (5 minutes)
+
+An MCP client cannot do passkeys. The recipe gives it a bearer token instead: `TILL_AGENT_TOKEN`
+in `.env`, and `TILL_AGENT_SUBJECT`, the subject you invite the agent as. Caddy maps that token to
+that one subject and nothing else. The agent is then a member like anyone, with a role, an audit
+trail, and the A35 dial. Claude Desktop reaches it through `mcp-remote` with an `Authorization`
+header; the exact JSON is in `ops/instance/README.md`. On its first session the agent calls
+`accept_invite` with its token, then reconnects.
+
+Whoever holds the token is that seat. Keep it out of chat logs and rotate it by editing `.env`
+and restarting Caddy.
+
+## Recipe A: the fast variant on Cloudflare
+
+If your zone already lives on Cloudflare DNS, `compose.cloudflare.yml` gets you there in about
+half an hour: a Cloudflare Tunnel (no open port at all) and a Cloudflare Access application that
+signs people in with an email code or your Google or Microsoft accounts. Access stamps
+`Cf-Access-Authenticated-User-Email` on each request; a small Caddy hop maps it onto TILL's subject
+header. Machines pass Access with a service token and name their seat with the same bearer as
+recipe B. The tunnel's public hostname points at the origin `http://127.0.0.1:8080`: the hop binds
+loopback inside the `till` container's network namespace and `cloudflared` runs in that namespace,
+so only TILL, Caddy and the tunnel can reach the listener that believes the identity header.
+
+What you give up: TLS ends at Cloudflare, so "hosted in Switzerland" is only half true, and your
+identity provider is now Cloudflare. The compose file says so in its first comment. It was
+lint-checked (`docker compose config`, `caddy validate`) and its Caddyfile ran in the header rig
+(the loopback bind and the Access mapping), not against a real tunnel. One thing stays unverified
+until a real tunnel runs: whether Cloudflare strips a client-supplied
+`Cf-Access-Authenticated-User-Email` on a service-token request. Until that test is on record,
+treat a service-token holder as able to name any person, and hand the service token to nobody you
+would not make an owner.
+
+## What the proofs showed
+
+The same compose file runs on a laptop with MinIO as the bucket and a stand-in for the identity
+provider (`ops/instance/test/`). On 2026-09-05 that stack answered a forged
+`Till-Authenticated-Subject` from outside with `401 missing_subject`, overwrote the forgery when a
+valid agent token came along, refused a foreign `Origin` with `403`, and refused `Bearer ` with a
+trailing space over HTTP/2 (a value HTTP/1.1 clients cannot even send). A signed-in person, played
+by a stand-in that answers as oauth2-proxy does, reached TILL as that person and nothing else while
+every forged identity header rode along, redeemed an invite and came back as the owner. A scripted
+MCP client opened a session through the door, redeemed its invite and read `identity_source:
+served_subject` with a member actor; a second subject on the same session was refused
+`subject_changed`. Then the destructive part: three entries posted through the proxy, the data
+volume deleted, `litestream restore` run into a fresh one. The journal came back with an identical
+sha256, and the newest replicated segment was 2 seconds old when the volume died.
+
+The first version of this recipe failed its security review on the human lane: the Caddyfile
+deleted the subject header in the same block that set it, and Caddy runs a block's deletes after
+its sets, so every signed-in person would have been refused. The stand-in proof exists because the
+earlier proofs could not see that. Details in `ops/instance/README.md`.
+
+Proofs are about the stack as configured here. Read the [threat model](/self-hosting/threat-model)
+before you change the Caddyfile.
+
+## What the recipe does not do for you
+
+- **The host firewall.** Some cloud images ship a host firewall closed (open 80 and 443 as the
+  runbook shows); others start open and need `ufw default deny incoming`, then 22 from your address,
+  80 and 443, before the first `up`. Either way, end up with those three ports reachable. Recipe A
+  needs nothing inbound at all.
+- **Updates.** `unattended-upgrades` for the host. The four pinned images watch no advisory feed:
+  `docker compose pull && docker compose up -d` on a schedule you own.
+- **The bucket.** Retention is set in `litestream.yml` (seven days of snapshots; the Litestream
+  default is one day). Litestream 0.5 encrypts nothing on the client side, so turn on the bucket's
+  server-side encryption. The replica is the whole ledger file: every workspace on the instance,
+  every invite token, every subject. Scope the bucket credentials to that one bucket (some
+  providers' access keys belong to a user and reach every bucket that user can, so use a dedicated
+  user, policy or per-bucket token). Take a `.tillbackup` to a third place monthly; the drill
+  restore is the only proof the replica works.
+- **Identity hygiene.** Signup disabled, self-edit off, every email verified by hand, and a subject
+  for each agent seat that no person could plausibly claim.
+- **Secrets.** `.env` in a password manager and `chmod 600` on the host; rotate the agent token when
+  a chat transcript that carried it leaves your hands.
+- **Logs.** Caddy keeps no access log in this recipe. Turn one on (`log`) if you must answer "who
+  read what, when" at the door; TILL's audit trail names the member, not the address.
+
+## When something is off
+
+`docker compose logs caddy` shows every refusal with its reason. `401 missing_subject` from TILL
+itself means the proxy was bypassed or the header rewrite is gone. `403 forbidden_host` means the
+proxy forgot to present itself as `localhost`. A `502` on `/oauth2/auth` means oauth2-proxy is not
+up yet, usually because the OIDC client lines are still empty. Every request failing with no
+response at all after `till` restarted on its own means Caddy is listening in a dead network
+namespace: `docker compose up -d --force-recreate caddy`. (A `docker compose restart till` restarts
+Caddy with it; a crash restart by the Docker daemon does not.)

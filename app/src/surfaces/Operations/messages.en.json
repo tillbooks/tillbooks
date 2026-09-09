@@ -1,0 +1,251 @@
+{
+  "egress": {
+    "panel": {
+      "title": "Trust"
+    },
+    "indicator": {
+      "local": "Local, no connection",
+      "unknown": "Not verified",
+      "violated": "A connection was opened"
+    },
+    "action": {
+      "run": "Check now"
+    },
+    "scope": {
+      "note": "This is about TILL, not about your Mac. Your mail app uses the internet; that is how your mail arrives."
+    },
+    "setup": {
+      "prompt": "Turn off your wifi, then press Check now.",
+      "passed": "TILL wrote a draft with your wifi off.",
+      "needsIntro": "Finish the setup first:",
+      "missing": {
+        "mail_store": "Connect a mailbox (Correspondence)",
+        "voice_profile": "Learn your writing style (Writing style)",
+        "local_runtime": "Install the local drafting engine (Writing style)",
+        "draftable_thread": "An unanswered message TILL can reply to (Correspondence)"
+      },
+      "incomplete": "The check could not finish. Nothing was sent."
+    },
+    "limits": {
+      "title": "What this does not cover",
+      "os": "Backups and cloud sync (iCloud, Time Machine) can copy your mail off this Mac. TILL cannot see or prevent that.",
+      "machine": "If this Mac is compromised, none of this holds.",
+      "disk": "Encryption at rest is FileVault's job. Turn it on.",
+      "sockets": "The standing indicator watches network sockets only (TCP, UDP, DNS). The self-test you run on demand is what also covers subprocesses and higher layers (TLS, HTTP, fetch, WebSocket).",
+      "trust_us": "This indicator is our software. The check with your wifi off is the one you do not have to take our word for."
+    },
+    "violated": {
+      "report": "This is a bug. Please report it."
+    },
+    "model_download": {
+      "note": "Installing the drafting engine downloads the model once. After that it never connects again."
+    },
+    "permissionDenied": "You do not have permission to see the offline proof."
+  },
+  "implProject": {
+    "roster": {
+      "blocked": "Blocked"
+    }
+  },
+  "diagnostics": {
+    "title": "Diagnostics & feedback",
+    "scope": "These settings and files belong to this computer account, not to a workspace. Anyone who can use this account can read them.",
+    "capture": {
+      "label": "Record error details on this computer",
+      "hint": "Off by default. Turning it off again deletes what has already been recorded."
+    },
+    "captured": {
+      "title": "What gets recorded",
+      "list": "The error code, which action failed, which kind of screen you were on, the time, the name of our source file, the function and line, and the names (not the contents) of the fields involved.",
+      "never": "Never: amounts, names, account numbers, anything you typed, any error text, or which record you had open."
+    },
+    "at_rest": "TILL does not encrypt these files. On a Mac, FileVault is what protects them.",
+    "empty": {
+      "off": "TILL is not recording error details.",
+      "on": "No errors recorded since you turned this on."
+    },
+    "cap": "The last 20 errors are kept.",
+    "action": {
+      "clear": "Clear now"
+    },
+    "clear": {
+      "confirm": {
+        "title": "Delete the recorded errors?",
+        "body": "This deletes the error list. Reports you already wrote are kept.",
+        "close": "Close"
+      }
+    },
+    "error": {
+      "config_not_writable": "TILL could not write to {path}, so the setting stays off.",
+      "config_unreadable": "The settings file could not be read, so defaults apply. The file was left as it is.",
+      "journal_not_readable": "The recorded errors could not be read from {path}. Clear now removes that file and starts over."
+    },
+    "journal": {
+      "title": "Recorded errors"
+    },
+    "denied": {
+      "body": "You do not have permission to read recorded error details. You can still delete them: erasing your own data never requires one."
+    },
+    "col": {
+      "at": "Time",
+      "kind": "Kind",
+      "code": "Code",
+      "name": "Exception",
+      "action": "Action",
+      "surface": "Screen",
+      "detailKeys": "Fields",
+      "frames": "Where"
+    },
+    "kind": {
+      "verb_error": "An action failed",
+      "unhandled_exception": "An unexpected error",
+      "transport_error": "A connection error"
+    },
+    "value": {
+      "none": "none"
+    }
+  },
+  "feedback": {
+    "kind": {
+      "bug": "Something is broken",
+      "idea": "An idea",
+      "question": "A question"
+    },
+    "action": {
+      "copy_path": "Copy file path"
+    },
+    "log": {
+      "title": "Reports you wrote",
+      "state": {
+        "prepared": "Prepared"
+      },
+      "cannot_confirm": "TILL hands a report to your email app and cannot tell whether you sent it.",
+      "empty": "You have not written a report yet.",
+      "col": {
+        "subject": "Subject",
+        "kind": "Kind",
+        "at": "Date",
+        "state": "State",
+        "actions": "Actions"
+      },
+      "copyPathFor": "Copy file path of {subject}",
+      "copied": "File path copied.",
+      "page": {
+        "status": "Reports {from} to {to} of {total}",
+        "prev": "Previous",
+        "next": "Next"
+      }
+    }
+  },
+  "journey": {
+    "_block": "M03 journey (N4a)",
+    "location": {
+      "local": "Your books: one single file on this device ({path}). Nothing leaves TILL by itself.",
+      "served": "Your books: one file on this instance; export and backup at any time.",
+      "unknown": "Data location unknown.",
+      "retry": "Try again",
+      "backupLink": "Data & Backup",
+      "hostingLink": "Sync & hosting",
+      "exitLink": "Your exit"
+    },
+    "hosting": {
+      "title": "Hosting",
+      "model": "One ledger, one instance. Every additional person and device works as a client of it. No device sync.",
+      "rung": {
+        "current": "now",
+        "local": {
+          "label": "Local",
+          "hint": "This device. No sharing, no server."
+        },
+        "selfhost": {
+          "label": "Self-hosted",
+          "hint": "One Docker image, one command (docker compose up -d), behind your own reverse proxy.",
+          "guide": "Online in under an hour",
+          "proxyGuide": "Reverse-proxy guide"
+        },
+        "managed": {
+          "label": "Managed",
+          "hint": "Your own instance, your own URL, Swiss hosting.",
+          "soon": "(coming soon)",
+          "more": "More",
+          "moreBody": "The managed instance is provisioned outside of TILL, as an external step. It is not available yet."
+        }
+      },
+      "start": "Start move",
+      "denied": "Only someone who may manage settings can run a move.",
+      "moveTitle": "Move: {from} → {to}",
+      "done": "Move complete: {name} is retired here. This device works as a client of the {target} instance."
+    },
+    "step": {
+      "position": "Step {n} of {total}",
+      "1": "Create a backup here",
+      "1_done": "Backup created ({date})",
+      "1_action": "Back up now",
+      "2_selfhost": "Set up the instance: docker compose up -d (guide, manual)",
+      "2_managed": "Provision the instance (external, manual)",
+      "2_local": "Install TILL on the target device (manual)",
+      "2_guide": "Open the guide",
+      "2_proxyGuide": "Reverse proxy",
+      "3": "Restore the backup there (restore dialog on first start, manual)",
+      "4": "Compare the trial balance",
+      "5": "Retire this local ledger",
+      "5_action": "Retire",
+      "manual_check": "Mark as done",
+      "manual_uncheck": "Mark as open",
+      "manual_note": "TILL cannot verify the manual steps on the other machine; you confirm them yourself, and step 4's comparison is the one check this panel offers."
+    },
+    "compare": {
+      "check": "Check",
+      "note": "Manual comparison: TILL cannot read the other instance. Open its trial balance there and compare the total.",
+      "loading": "Reading this ledger's trial balance…",
+      "total": "This ledger's debit total: {total}",
+      "match": "Totals match",
+      "mismatch": "Totals differ",
+      "mismatchBody": "The totals differ: the target instance restored a different backup.",
+      "mismatchAction": "Create the backup again and transfer it; steps 1, 3 and 4 are open again."
+    },
+    "abort": "Abort move",
+    "stale": {
+      "notice": "This ledger was moved but is still writable.",
+      "action": "Retire"
+    },
+    "retire": {
+      "title": "Retire ledger",
+      "body": "{name} becomes read-only on this device. The books stay intact and exportable. Reactivate it any time from the client roster.",
+      "confirm": "Retire",
+      "cancel": "Cancel",
+      "denied": "This needs the manage settings permission (manage_settings).",
+      "failed": "Retiring failed: {code}."
+    },
+    "exit": {
+      "title": "Your exit, step by step",
+      "steps": {
+        "1": "Create a backup and an export here",
+        "2": "Restore at home (or on your own server) via the restore dialog on first start",
+        "3": "Compare the trial balance (manual comparison)",
+        "4": "Close the account with the provider (external)"
+      }
+    },
+    "backup": {
+      "col": "Restore",
+      "hintLabel": "Show the restore path",
+      "restorePath": "Restorable on any TILL install via the restore dialog on first start. Schema generation {generation}."
+    }
+  },
+  "help": {
+    "Operations": {
+      "title": "Operations",
+      "body": "This is where the panels you visit during day-to-day operation live, rather than during setup: the offline proof (Vertrauen), the runtime line, sync and hosting, data and backup, the roster of your mandates, and diagnostics and feedback. Each panel appears only once a workspace is selected, and most of them need a permission of their own. The company profile itself stays under Setup.",
+      "concepts": [],
+      "docsPath": "self-hosting/served-access"
+    }
+  },
+  "dataBackup": {
+    "verify": {
+      "rowLabel": "Verify the {kind} of {date}",
+      "ok": "Valid: {entries} entries, balanced. Schema generation {generation}.",
+      "unbalanced": "Checked, but not balanced: {entries} entries. Do not restore this backup.",
+      "failed": "The check failed. Try again."
+    }
+  }
+}

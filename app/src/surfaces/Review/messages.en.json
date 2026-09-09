@@ -1,0 +1,114 @@
+{
+  "nav": {
+    "review": "Review",
+    "export": "Export",
+    "group": {
+      "treuhaender": "Fiduciary"
+    }
+  },
+  "review": {
+    "title": "Review",
+    "subtitle": "Comment on, flag and approve a period's posted entries, then lock it once it is clean.",
+    "permission": "Reviewing the books needs the Fiduciary role. Ask a workspace owner to grant it.",
+    "coverage": "Coverage",
+    "lockPeriod": "Lock period",
+    "toExport": "Go to export",
+    "locked": "{period} is locked",
+    "lockedBody": "The figures are sealed for this period. A correction goes into a later, open period as a reversal, never an edit here.",
+    "softClosed": "{period} is soft-closed: new postings are refused, the review stays open. You can lock once everything is approved.",
+    "approveAll": {
+      "action": "Approve all ({count})",
+      "working": "Approving",
+      "title": "Approve {count} open entries?",
+      "body": "Approving is a review mark, not a posting: the entries stay as they are. Flagged entries ({flagged}) stay flagged until you judge them one by one.",
+      "confirm": "Approve {count}",
+      "failed": "{count} entries could not be approved. Reload and try again."
+    },
+    "empty": "No movements in this period",
+    "emptyHint": "Nothing was posted here, so there is nothing to review yet.",
+    "allApproved": "Nothing to review, everything is approved. You can lock the period or move on to export.",
+    "noAmount": "No amount",
+    "comment": "Comment",
+    "flag": "Flag",
+    "approve": "Approve",
+    "flagReason": "Reason for the flag",
+    "commentText": "Your comment",
+    "cancel": "Cancel",
+    "flagSubmit": "Flag entry",
+    "commentSubmit": "Add comment",
+    "close": "Close",
+    "status": {
+      "open": "open",
+      "flagged": "flagged",
+      "approved": "approved"
+    },
+    "col": {
+      "date": "Date",
+      "ref": "Reference",
+      "description": "Description",
+      "amount": "Amount",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "period": {
+      "granularity": "Period type",
+      "month": "Month",
+      "year": "Year",
+      "monthLabel": "Month",
+      "yearLabel": "Year"
+    },
+    "lock": {
+      "locked": "Locked",
+      "alreadyLocked": "This period is already locked.",
+      "needsManagePeriods": "Locking a period needs the manage periods right.",
+      "notClean": "Every entry has to be approved and none flagged before you can lock.",
+      "confirmTitle": "Lock {period}?",
+      "confirmBody": "This covers the entries from {from} to {to}.",
+      "failed": "The period could not be locked. Try again.",
+      "cancel": "Cancel",
+      "confirm": "Lock period",
+      "locking": "Locking"
+    }
+  },
+  "export": {
+    "title": "Export",
+    "subtitle": "Produce the journal, the statements and the MWST figures a period's filing needs.",
+    "permission": "Exporting the books needs the Fiduciary role. Ask a workspace owner to grant it.",
+    "formatLabel": "Format",
+    "format": {
+      "csv": "CSV",
+      "pdf": "PDF"
+    },
+    "working": "Preparing",
+    "download": "Download",
+    "empty": "This period had no movements. The file carries only its headers.",
+    "needsVatConfig": "MWST is not configured yet, so there are no figures to export.",
+    "needsVatConfigCta": "Configure MWST",
+    "error": "The export could not be produced.",
+    "retry": "Try again",
+    "journal": "Journal",
+    "journalDesc": "Every posted line of the period as a locale-neutral CSV that re-imports cleanly.",
+    "statements": "Financial statements",
+    "statementsDesc": "The balance sheet and the income statement, one file each.",
+    "vat": "MWST figures",
+    "vatDesc": "The MWST return figures, one row per form line.",
+    "vatWorkingPaper": "A working paper to lay beside the annual accounts, not the ESTV upload file (that is the eCH-0217 file on the MWST screen)."
+  },
+  "help": {
+    "Review": {
+      "title": "Review",
+      "body": "Go through a period's posted entries: comment on anything you want to query, flag what looks wrong, and approve what you have checked. The line at the top counts what is done and what is left, and the lock button stays off until every entry is approved and nothing is flagged. A comment or a flag never changes a booked entry; a correction is a reversal in a later period.",
+      "concepts": [
+        "steuerperiode"
+      ]
+    },
+    "Export": {
+      "title": "Export",
+      "body": "Produce the files a period's filing needs: the full journal as a re-importable CSV, the balance sheet and income statement as a PDF or CSV pair, and the MWST figures as a working paper. Each row keeps its own format and downloads its own file. The MWST working paper sits beside the annual accounts; it is not the upload file for the tax portal. An empty period still exports, carrying only its headers.",
+      "concepts": [
+        "steuerperiode",
+        "ziffer"
+      ]
+    }
+  }
+}

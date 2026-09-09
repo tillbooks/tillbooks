@@ -1,0 +1,131 @@
+/* F00, die Übersicht: the KPI tile wall. One accent, elevated cards, tabular money.
+   The page header is the shared SurfaceHeader (D118 B2); only the control row and the tile
+   grid stay bespoke here, since a KPI tile wall is not a DataTable. */
+
+.uebersicht-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: var(--t-space-1);
+}
+
+.uebersicht-range {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.uebersicht-preset {
+  border: 1px solid var(--t-border);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-sm);
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+}
+
+.uebersicht-preset.is-active {
+  color: var(--t-accent);
+  border-color: var(--t-accent);
+}
+
+.uebersicht-custom,
+.uebersicht-save-form {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.uebersicht-custom label,
+.uebersicht-view,
+.uebersicht-save-form label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.uebersicht-caption {
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+  margin: 0.25rem 0 0;
+}
+
+.uebersicht-range-error {
+  color: var(--t-danger);
+  margin: 0.5rem 0 0;
+}
+
+.uebersicht-note {
+  color: var(--t-text-dim);
+  font-size: 0.85rem;
+  margin: 0.75rem 0 0;
+}
+
+.uebersicht-save-error {
+  color: var(--t-danger);
+  font-size: 0.85rem;
+}
+
+.uebersicht-grid {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+
+.uebersicht-tile {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  box-shadow: var(--t-shadow-control);
+  cursor: pointer;
+}
+
+.uebersicht-tile:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+.uebersicht-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.uebersicht-glyph {
+  color: var(--t-text-dim);
+}
+
+.uebersicht-label {
+  font-size: 0.85rem;
+  color: var(--t-text-dim);
+}
+
+/* KPI values are mostly money: plain body ink, never the accent (the accent is for actions only).
+   This matches the Documents amount column, which reads money as plain text. */
+.uebersicht-value {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.uebersicht-trend {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.uebersicht-asof {
+  font-size: 0.75rem;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}

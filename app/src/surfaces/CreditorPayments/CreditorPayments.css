@@ -1,0 +1,182 @@
+/*
+ * A18 creditor-payments styling.
+ *
+ * D118 modernisation: the page header (SurfaceHeader), the payable table and its overflow/sticky
+ * header (DataTable), and the two confirms (Modal) now come from the shared primitives, so their
+ * bespoke CSS is deleted here. What remains is genuinely surface-specific: the batch bar and its
+ * fields, the running selected total, the result panel with its validity glyph, the transmit notes,
+ * and the blocked-row and reference-hint state hooks the DataTable rows carry.
+ *
+ * Every value is a token, the 8-pt grid throughout. The accent budget is ONE: the single primary
+ * action (Generate pain.001 / Mark paid). The "file is valid" glyph is status, not the accent, so
+ * it rides `--t-success` as a deliberate green go-signal (glyph + label, never colour alone). Money
+ * right-aligns with tabular numerals. Status is a word in a neutral chip, never colour alone.
+ */
+
+.pay-cp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.pay-cp-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.pay-cp-bar-skeleton {
+  max-width: 480px;
+}
+
+/* --- payable-row state hooks (DataTable carries the frame; these are the row-state styles) -------- */
+
+.pay-cp-row--blocked td {
+  color: var(--t-text-dim);
+}
+
+.pay-cp-hint {
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+/* f2: the visible denied-reason note beside a disabled money-path control (a disabled button's title
+   is carried neither to a hover nor to assistive tech). */
+.pay-cp-denied-note {
+  margin: var(--t-space-1) 0 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+/* --- the batch bar -------------------------------------------------------------------------------- */
+
+.pay-cp-batchbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+}
+
+.pay-cp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--t-text-dim);
+  flex: 1 1 180px;
+}
+
+.pay-cp-field input,
+.pay-cp-field select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--t-text);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1);
+}
+
+.pay-cp-total {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--t-text-dim);
+  flex: 0 0 auto;
+}
+
+.pay-cp-total strong {
+  font-size: 16px;
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- the result panel ----------------------------------------------------------------------------- */
+
+.pay-cp-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-3);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  border: 1px solid var(--t-border);
+}
+
+.pay-cp-result-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+/* The "file is valid" glyph: a deliberate green go-signal (`--t-success`), glyph + label, never
+   colour alone. Status has its own colours; the accent stays on focus and the primary action. */
+.pay-cp-valid {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--t-success);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.pay-cp-chip {
+  display: inline-block;
+  padding: 4px var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+  border: 1px solid var(--t-border);
+  font-size: 13px;
+  color: var(--t-text);
+}
+
+.pay-cp-summary {
+  margin: 0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-cp-transmit-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-2);
+}
+
+.pay-cp-paid {
+  margin: 0;
+  font-size: 14px;
+  color: var(--t-text);
+}
+
+.pay-cp-newbatch {
+  align-self: flex-start;
+}
+
+/* --- the mark-paid confirm's own controls (Modal owns the container) ----------------------------- */
+
+.pay-cp-checkline {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: 13px;
+  color: var(--t-text);
+}
+
+/* --- the F8 creditor-IBAN capture affordance (Modal owns the dialog container) ------------------- */
+
+.pay-cp-addiban {
+  padding: 2px 8px;
+  font-size: 13px;
+}
+
+.pay-cp-toBills {
+  margin: 0;
+  font-size: 13px;
+}

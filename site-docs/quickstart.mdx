@@ -1,0 +1,42 @@
+---
+title: "Quickstart"
+description: "Where TILL stands today, and how it will connect to your agent."
+---
+
+<Note>
+  TILL is pre-alpha. It is not installable yet: nothing is published to npm, there are no downloads,
+  and the source is not public. This page shows how the flow will work once TILL ships, so it reads
+  as a preview, not a set of commands that run today.
+</Note>
+
+## Install
+
+TILL is not installable yet. The package name `tillbooks` is reserved but unpublished, so
+`npm install -g tillbooks` does not resolve, and there is no download to run in its place. The code
+opens and the package ships when the ledger can keep real books, not before.
+
+Once it ships, the package will be `tillbooks` and the command will be `till`:
+
+```bash
+npm install -g tillbooks
+```
+
+Until then, follow [the build log](https://tillbooks.ch/en/build) for where it stands.
+
+## Check it runs
+
+When TILL is installed, this confirms the CLI is on your path:
+
+```bash
+till help
+```
+
+## Connect an agent
+
+TILL speaks MCP over stdio. Once installed, you point your MCP client at:
+
+```bash
+till mcp
+```
+
+See [the agent interface](/mcp/overview) for what that exposes.

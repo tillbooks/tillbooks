@@ -1,0 +1,76 @@
+/* AccountCombobox / Combobox (F-03, J3.7).
+   The popup borrows the OverflowMenu treatment: an elevated ground and a real border, no shadow,
+   no gradient. The input inherits whatever field treatment the hosting surface gives its inputs,
+   so the control reads exactly like the select it replaced. */
+
+.combobox {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.combobox__input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.combobox__list {
+  position: absolute;
+  top: calc(100% + var(--t-space-0-5));
+  left: 0;
+  z-index: 40;
+  margin: 0;
+  padding: var(--t-space-0-5);
+  list-style: none;
+  min-width: 100%;
+  width: max-content;
+  max-width: min(28rem, 90vw);
+  max-height: 18rem;
+  overflow-y: auto;
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+}
+
+.combobox__list[hidden] {
+  display: none;
+}
+
+.combobox__option {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: baseline;
+  min-height: 36px;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  color: var(--t-text);
+  white-space: nowrap;
+}
+
+/* The active (keyboard-highlighted) row is the accent-soft ground; the currently selected value
+   carries the check-less soft ground so both facts stay visible and neither is colour alone (the
+   selected row is also aria-selected, the active one is the aria-activedescendant). */
+.combobox__option--active {
+  background: var(--t-accent-soft);
+}
+
+.combobox__option[aria-selected='true']:not(.combobox__option--active) {
+  background: var(--t-bg-soft);
+}
+
+.combobox__code {
+  color: var(--t-text-dim);
+  font-family: var(--t-font-mono);
+  min-width: 3.5em;
+}
+
+.combobox__option--create {
+  color: var(--t-accent);
+}
+
+.combobox__empty {
+  padding: var(--t-space-0-5) var(--t-space-1);
+  color: var(--t-text-faint);
+}

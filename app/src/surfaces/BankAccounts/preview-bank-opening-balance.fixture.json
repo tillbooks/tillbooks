@@ -1,0 +1,30 @@
+{
+  "bankAccountId": "bank_1",
+  "currency": "EUR",
+  "amountMinor": 1234567,
+  "baseCurrency": "CHF",
+  "baseAmountMinor": 1165076,
+  "posts": true,
+  "lines": [
+    {
+      "accountId": "acc_2",
+      "accountNumber": "1020",
+      "debitMinor": 1234567,
+      "creditMinor": 0,
+      "baseDebitMinor": 1165076,
+      "baseCreditMinor": 0
+    },
+    {
+      "accountId": "acc_55",
+      "accountNumber": "9100",
+      "debitMinor": 0,
+      "creditMinor": 1234567,
+      "baseDebitMinor": 0,
+      "baseCreditMinor": 1165076
+    }
+  ],
+  "fxRate": "0.943712",
+  "fxRateAsOf": "2026-07-19",
+  "fxRateSource": "manual",
+  "ok": true
+}

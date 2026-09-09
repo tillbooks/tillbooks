@@ -1,0 +1,97 @@
+/* I01, Einkauf -> Bestellversionen. The list is the shared DataTable, the page header the shared
+   SurfaceHeader and the detail overlay the shared DetailDrawer (D118 B2); what remains here is
+   genuinely PurchaseVersions-specific: the status badges, the version timeline, the amend line grid
+   and the impact box. One accent, glyph+label status, no new colour token (design-canon). */
+
+.pov {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.pov-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pov-code {
+  font-family: var(--t-font-mono, ui-monospace, monospace);
+  font-weight: 600;
+}
+
+.pov-badge {
+  display: inline-block;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  border: 1px solid var(--t-border);
+  color: var(--t-text-dim);
+}
+
+.pov-badge-active {
+  border-color: var(--t-accent);
+  color: var(--t-accent);
+}
+
+.pov-section-title {
+  margin: var(--t-space-1) 0 0;
+  font-size: 0.9375rem;
+}
+
+.pov-muted {
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}
+
+.pov-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: 0.9375rem;
+}
+
+.pov-amend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.pov-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pov-edit-line {
+  display: grid;
+  grid-template-columns: 1fr 5rem 6rem;
+  gap: var(--t-space-0-5);
+  align-items: center;
+}
+
+.pov-edit-desc {
+  font-size: 0.9375rem;
+}
+
+.pov-impact {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-1) var(--t-space-2);
+}
+
+.pov-impact-delta {
+  margin: 0;
+}
+
+.pov-violations {
+  margin: var(--t-space-0-5) 0 0;
+  padding-left: 1.25rem;
+}
+
+.pov-violation {
+  color: var(--t-warn);
+  font-size: 0.875rem;
+}

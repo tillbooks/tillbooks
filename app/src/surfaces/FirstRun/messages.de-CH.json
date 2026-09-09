@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "firstRun": "Erster Start"
+  },
+  "firstrun": {
+    "title": "Richte dein Hauptbuch ein",
+    "lead": "TILL hat auf diesem Gerät kein Hauptbuch gefunden. Wähle eine Tür: es wird nichts angelegt, bis du es tust.",
+    "lead_existing_one": "Auf diesem Gerät gibt es bereits ein Hauptbuch. Diese Türen legen ein weiteres an; deine bestehenden Bücher bleiben unberührt.",
+    "lead_existing_many": "Auf diesem Gerät gibt es bereits {count} Hauptbücher. Diese Türen legen ein weiteres an; deine bestehenden Bücher bleiben unberührt.",
+    "existing": {
+      "overview": "Zur Übersicht"
+    },
+    "create": {
+      "label": "Neues Hauptbuch anlegen",
+      "label_existing": "Ein weiteres Hauptbuch anlegen",
+      "hint": "Beginne frische Bücher mit dem Schweizer KMU-Kontenplan.",
+      "name_label": "Firmenname",
+      "name_placeholder": "Acme GmbH",
+      "action": "Hauptbuch anlegen",
+      "busy": "Wird angelegt...",
+      "verb": "Agent: create_workspace"
+    },
+    "restore": {
+      "label": "Backup wiederherstellen",
+      "hint": "Lade eine .tillbackup-Datei. Die IDs werden in einen neuen Arbeitsbereich neu vergeben; nichts wird überschrieben.",
+      "expects": "Diese Installation erwartet Schema-Generation {generation}.",
+      "pick_label": "Sicherungen auf diesem Gerät ({count})",
+      "pick_row": "{date}: Generation {generation}, {entries} Buchungen",
+      "pick_incompatible": "Generation {generation} passt nicht zu dieser Installation. Installiere das passende Release und stelle sie dort wieder her.",
+      "pick_other": "Anderer Pfad",
+      "verified": "Geprüft: Generation {generation}, {entries} Buchungen, ausgeglichen. Wird wiederhergestellt.",
+      "source_label": "Backup-Datei",
+      "source_placeholder": "/pfad/zu/backup.tillbackup",
+      "name_label": "Name des neuen Arbeitsbereichs (optional)",
+      "name_default": "Wiederhergestelltes Hauptbuch",
+      "action": "Backup wiederherstellen",
+      "busy": "Wird wiederhergestellt...",
+      "verb": "Agent: restore_backup"
+    },
+    "adopt": {
+      "label": "Bestehende Datenbank übernehmen",
+      "hint": "Hast du schon eine .till.db? Zeige TILL darauf und starte neu. TILL kopiert oder verschiebt die Datei nie.",
+      "path_label": "Datenbankpfad",
+      "path_placeholder": "/pfad/zu/till.db",
+      "cmd_label": "Befehl, um diese Datenbank zu übernehmen",
+      "verb": "Ein Pfad ist Konfiguration, keine Mandantendaten: Übernehmen heisst konfigurieren und neu starten, kein Verb."
+    },
+    "error": {
+      "generic": "Das hat nicht geklappt: {code}.",
+      "not_a_till_database": "Diese Datei ist keine TILL-Datenbank. Die Datei blieb unberührt. Wähle eine andere.",
+      "schema_newer_than_runtime": "Diese Datenbank wurde von einem neueren TILL geschrieben. Aktualisiere TILL und versuche es erneut. Die Datei wurde nicht verändert.",
+      "incompatible_schema_version": "Dieses Backup stammt aus Schema-Generation {backup}; diese Installation läuft auf Generation {runtime}. Installiere das aktuelle Release, stelle das Backup dort wieder her und aktualisiere danach in deinem eigenen Rhythmus. Das Backup blieb unberührt.",
+      "unrestorable_format": "Ein Export (.tillexport) ist keine Wiederherstellungsquelle. Wähle eine .tillbackup-Datei.",
+      "unbalanced": "Geprüft, aber nicht ausgeglichen: Generation {generation}, {entries} Buchungen. TILL stellt sie nicht wieder her. Wähle eine andere Sicherung."
+    },
+    "demo": {
+      "lead": "Lieber erst mit Beispieldaten anschauen?",
+      "action": "Demo ausprobieren",
+      "busy": "Demo wird erstellt",
+      "hint": "Ein Demo-Arbeitsbereich mit Beispielbuchungen. Du kannst ihn später löschen."
+    }
+  },
+  "runtime": {
+    "loading": "Laufzeit wird gelesen...",
+    "mode": {
+      "label": "Läuft als: {mode}",
+      "up": "till up (Studio, REST und MCP in einem Prozess)",
+      "mcp": "till mcp (Agent über stdio)",
+      "serve": "till serve (MCP über HTTP)",
+      "agent_session": "Agent-Sitzung (in der Agent-Laufzeit)"
+    },
+    "scheduler": {
+      "armed": "Scheduler an, noch kein Tick.",
+      "last_tick": "Scheduler an, letzter Tick {at}.",
+      "off": "Scheduler aus (wiederkehrende Kadenzen laufen nur, während till up läuft)."
+    },
+    "residency": {
+      "caveat": "Diese Sitzung läuft in einer Cloud-Umgebung: deine Bücher liegen währenddessen nicht nur auf deinem Gerät. Sichere sie am Ende der Sitzung und trage die Datei hinaus."
+    }
+  },
+  "help": {
+    "FirstRun": {
+      "title": "Erster Start",
+      "body": "Das ist der erste Bildschirm, wenn TILL keinen Arbeitsbereich geöffnet hat. Du wählst eine von drei Türen: einen neuen Arbeitsbereich erstellen, einen aus einer Sicherung wiederherstellen oder einen Speicher übernehmen, der auf diesem Gerät schon vorhanden ist. Nichts entsteht im Stillen, denn jede Tür bestätigt, bevor sie schreibt, und bis du eine wählst, gibt es noch keine Bücher.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  },
+  "journey": {
+    "_block": "M03 journey (N4a)",
+    "residency": {
+      "lead": "Deine Bücher sind eine einzelne Datei auf diesem Gerät. Nichts wird gesendet. Verschlüsselung übernimmt das Betriebssystem (FileVault)."
+    }
+  }
+}

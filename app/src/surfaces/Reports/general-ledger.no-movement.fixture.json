@@ -1,0 +1,25 @@
+{
+  "account": {
+    "id": "acc_21",
+    "number": "2400",
+    "name": "Langfristige Bankschulden",
+    "type": "liability"
+  },
+  "naturalSide": "credit",
+  "period": {
+    "start": "2026-01-01",
+    "end": "2026-03-31"
+  },
+  "baseCurrency": "CHF",
+  "groupBy": "kmu",
+  "kmuClass": "2",
+  "openingMinor": -1000000,
+  "lines": [],
+  "closingMinor": -1000000,
+  "noActivity": true,
+  "reconciles": true,
+  "reconciliation": {
+    "closingTiesToLedger": true
+  },
+  "ok": true
+}

@@ -1,0 +1,87 @@
+{
+  "dispatch": {
+    "title": "Dispatch",
+    "lede": "Saved message texts for invoices, quotes and reminders, and the log of what left this workspace. Sending itself (channels, confirmations, recipients) stays with the documents, unchanged.",
+    "loading": "Loading dispatch …",
+    "tab": {
+      "texts": "Message texts",
+      "log": "Send log"
+    },
+    "kind": {
+      "invoice": "Invoice",
+      "quote": "Quote",
+      "dunningRun": "Reminder"
+    },
+    "texts": {
+      "subject": "Subject",
+      "body": "Message body",
+      "localeTabs": "Language",
+      "variables": "Variables",
+      "variablesHint": "Insert by click or keyboard; every variable is validated against the valid set when you save.",
+      "defaultInUse": "No custom text saved for this language yet: the built-in default text applies.",
+      "empty": "No custom message texts yet.",
+      "save": "Save",
+      "saved": "Message text saved.",
+      "preview": "Preview",
+      "previewHint": "The preview shows the resolved text with sample values. It refreshes on switching and saving.",
+      "previewDefault": "Built-in default text",
+      "previewSaved": "Custom text"
+    },
+    "err": {
+      "unknownVariable": "Unknown variable {variable}. Valid: {valid}",
+      "needsCustomerEmail": "The contact has no email address: add one on the contact.",
+      "needsEmailTransport": "No email transport is configured."
+    },
+    "needsPermission": "Requires admin (manage dispatch texts).",
+    "permissionDenied": {
+      "read": "You do not have access to dispatch."
+    },
+    "log": {
+      "caption": "Log of all dispatches",
+      "date": "Date",
+      "kind": "Kind",
+      "recipient": "Recipient",
+      "channel": "Channel",
+      "result": "Outcome",
+      "document": "Document",
+      "open": "Open",
+      "openRun": "Open dunning run",
+      "reason": "Reason",
+      "empty": "No dispatches yet.",
+      "emptyHint": "As soon as an invoice, quote or reminder is sent, a row appears here.",
+      "filterLabel": "Filter by outcome",
+      "filterAll": "All outcomes",
+      "outcome": {
+        "sent": "sent",
+        "degraded": "not transmitted",
+        "failed": "failed",
+        "artifactCreated": "artifact created"
+      },
+      "degradeReason": {
+        "needs_customer_email": "Contact has no email address",
+        "no_email": "No email address on file",
+        "settled_since_issue": "Settled since issue",
+        "needs_email_config": "Email sending not configured",
+        "needs_email_transport": "No email transport",
+        "render_failed": "PDF rendering failed",
+        "send_failed": "Sending failed"
+      },
+      "channelName": {
+        "smtp": "Email",
+        "cloud_relay": "Cloud relay",
+        "artifact_only": "Artifact (local)"
+      }
+    }
+  },
+  "nav": {
+    "dispatch": "Dispatch"
+  },
+  "help": {
+    "Dispatch": {
+      "title": "Dispatch",
+      "body": "Dispatch maintains the text blocks for outgoing messages, per language, and shows the log of everything sent. This surface changes no send behaviour: channels, recipients and confirmations stay with the documents that send. The log is append-only; a logged send can neither be edited nor deleted.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

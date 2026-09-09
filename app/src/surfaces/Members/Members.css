@@ -1,0 +1,290 @@
+/*
+ * A24 Zugriff. Separation comes from the background step and from spacing, never from a border
+ * around every card (DESIGN.md, the forbidden list). The one accent spend on this surface is the
+ * single primary action per view: Einladen on Members, Rolle definieren on Roles. Nothing else here
+ * touches the accent, and the role pills are deliberately neutral: colour-coding a role would make
+ * the palette carry authorization, which is meaning colour must never carry alone.
+ */
+
+/*
+ * The page header (SurfaceHeader), the tab strip (Tabs) and the roster table (DataTable) are the
+ * shared D118 B2 primitives now, so the `.members-head`/`.members-title`, `.members-tabs`/
+ * `.members-tab` and `.members-table` blocks that used to live here are deleted. What remains is
+ * genuinely Members-specific: the notices, the feedback banner, the invite grid, the role pills and
+ * actor sub-line, and the whole Roles editor.
+ */
+
+.members {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* --- Feedback -------------------------------------------------------------------------------- */
+
+/* The notices and the invite confirmation ride the shared ActionFeedback primitive
+   (components/ActionFeedback). Only the token code style stays the surface's own. */
+
+.members-token {
+  background: var(--t-bg-code);
+  padding: 0 var(--t-space-0-5);
+  border-radius: var(--t-radius-sm);
+  word-break: break-all;
+}
+
+/*
+ * M03 invite (N4b): the S4.2 go-online notice. It sits WITH the invite form (rendered directly
+ * above it, inside the same manager-only block), so it reads as the form's precondition and never
+ * as a page banner.
+ */
+.members-goonline a {
+  white-space: nowrap;
+}
+
+/* --- Invite form ----------------------------------------------------------------------------- */
+
+/*
+ * A grid rather than a flex row, and the reason is German: "Berechtigung" compounds run about 30%
+ * longer than their English equivalents, and a flex row would either truncate the label or push the
+ * button off the end. The columns collapse to a stack under 640px.
+ */
+.members-invite {
+  padding: var(--t-space-2);
+}
+
+/* Phase 2c: the grid sits on the fieldset, so `disabled` covers every control at once in local mode. */
+.members-invite-fields {
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 1fr) auto minmax(10rem, auto) auto auto auto;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.members-field {
+  color: var(--t-text-dim);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .members-invite-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Roster cells (inside the shared DataTable) ---------------------------------------------- */
+
+.members-person {
+  display: block;
+}
+
+.members-actor {
+  display: block;
+  color: var(--t-text-faint);
+  font-size: 0.85rem;
+}
+
+.members-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* The join date reads with tabular figures so the column lines up, though it is text and left-aligned
+   (a date is not money, so it is not a `numeric` DataTable column). */
+.members-since {
+  font-variant-numeric: tabular-nums;
+}
+
+.members-role-select {
+  min-width: 10rem;
+}
+
+/* --- Pills ----------------------------------------------------------------------------------- */
+
+.members-pill {
+  display: inline-block;
+  background: var(--t-bg-soft);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  padding: 0 var(--t-space-1);
+  font-size: 0.85rem;
+}
+
+.members-pill--fixed {
+  color: var(--t-text-dim);
+}
+
+/* --- Roles tab ------------------------------------------------------------------------------- */
+
+.members-roles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.members-roles-head {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.members-role-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.members-role {
+  padding: var(--t-space-2);
+}
+
+.members-role-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.members-role-name {
+  font-weight: 600;
+}
+
+.members-role-actions {
+  display: inline-flex;
+  gap: var(--t-space-1);
+}
+
+.members-role-caps,
+.members-role-count {
+  margin: var(--t-space-0-5) 0 0;
+  color: var(--t-text-dim);
+  font-size: 0.9rem;
+}
+
+/* --- Capability editor ----------------------------------------------------------------------- */
+
+.members-role-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+.members-cap-group {
+  border: none;
+  border-top: 1px solid var(--t-border);
+  margin: 0;
+  padding: var(--t-space-1) 0 0;
+  display: grid;
+  /*
+   * `auto-fit` with a 16rem floor rather than a fixed column count: "Automatisierungen verwalten"
+   * and "MWST-Konfiguration verwalten" are the widest labels this grid will ever hold, and a
+   * fixed-width chip layout would truncate exactly the German compounds a Swiss operator reads.
+   */
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--t-space-0-5) var(--t-space-2);
+}
+
+.members-cap-group legend {
+  color: var(--t-text-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0 var(--t-space-0-5) 0 0;
+}
+
+/*
+ * TAP TARGET, to `brand/DESIGN.md`'s number: "Tap targets are at least 44px".
+ *
+ * Measured before this rule existed, off the live editor: the label was 268x21 with a 13x13 native
+ * box inside it. WIDTH was never the problem and HEIGHT was, which is the kind of miss that survives
+ * review because the row looks fine and only a ruler disagrees.
+ *
+ * The `<label>` is what is sized, because the LABEL is the target: it WRAPS the input, so a pointer
+ * anywhere across those 268px toggles the control. That is the design law's own "style the control
+ * or wrap it", and it buys the full 44px without a 44px checkbox, which at this density would be a
+ * caricature. The painted box gets a modest bump so it does not read as a 13px dot on a 44px row.
+ *
+ * The native control is styled, never replaced. A div with a click handler would trade a measurable
+ * failure for an invisible one: the real input carries the label association, the focus ring and the
+ * space-bar behaviour, and none of those survive the swap.
+ *
+ * ON THE CITATION, because the next person to read this will check it. DESIGN.md and the shared
+ * canon both cite 44px to "WCAG 2.5.5". Fetched from the normative text on 29.07.2026, 2.5.5 Target
+ * Size (Enhanced) is 44x44 at Level **AAA**; the Level AA criterion is 2.5.8 Target Size (Minimum)
+ * at **24x24**. So 44px here is TILL's own standard (and Apple HIG's), stricter than AA rather than
+ * required by it. The number is kept because it is the design law; only the citation is loose.
+ */
+.members-cap {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-block-size: 44px;
+}
+
+.members-cap input[type='checkbox'] {
+  inline-size: 16px;
+  block-size: 16px;
+  flex: none;
+}
+
+.members-role-editor-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* --- Phase 2c (F-11): the kind field, the local-mode disabled form, the revoke confirm --------- */
+
+.members-invite-fields:disabled .field,
+.members-invite-fields:disabled .btn {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.members-kind {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: center;
+}
+
+.members-kind-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: 0.9rem;
+}
+
+.members-kind-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: 0.85rem;
+}
+
+/* An agent member, in words: a quiet outline chip beside the name, no colour of its own. */
+.members-kind-chip {
+  display: inline-block;
+  margin-left: var(--t-space-1);
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  color: var(--t-text-dim);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+
+.members-revoke-body {
+  margin: 0 0 var(--t-space-1);
+}
+
+.members-revoke-consequence {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: 0.9rem;
+}

@@ -1,0 +1,240 @@
+{
+  "nav": {
+    "time": "Zeit",
+    "group": {
+      "projects": "Projekte"
+    }
+  },
+  "time": {
+    "route": {
+      "title": "Zeit"
+    },
+    "tableCaption": "Zeiteinträge",
+    "loading": "Zeiteinträge werden geladen",
+    "empty": {
+      "title": "Noch keine Zeit erfasst.",
+      "body": "Starte den Timer oder trage Zeit auf einem Projekt nach.",
+      "noProjects": {
+        "title": "Noch keine Projekte.",
+        "body": "Zeit wird auf einem Projekt erfasst. Lege zuerst eines an.",
+        "cta": "Projekt anlegen"
+      }
+    },
+    "timer": {
+      "start": "Start",
+      "stop": "Stopp",
+      "running": "Timer läuft auf {project}",
+      "badge": "läuft"
+    },
+    "action": {
+      "log": "Zeit nachtragen",
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "submit": "Einreichen",
+      "approve": "Freigeben",
+      "lock": "Periode sperren"
+    },
+    "editor": {
+      "save": "Speichern",
+      "discard": "Verwerfen",
+      "label": "Zeiteintrag bearbeiten"
+    },
+    "field": {
+      "project": "Projekt",
+      "projectPlaceholder": "Projekt wählen",
+      "date": "Datum",
+      "minutes": "Minuten",
+      "billable": "Verrechenbar",
+      "notes": "Notizen"
+    },
+    "col": {
+      "date": "Datum",
+      "project": "Projekt",
+      "user": "Person",
+      "duration": "Dauer",
+      "rate": "Tarif",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "open": "Offen",
+      "submitted": "Eingereicht",
+      "approved": "Freigegeben",
+      "locked": "Gesperrt",
+      "billed": "Verrechnet"
+    },
+    "totals": {
+      "minutes": "Total",
+      "billable": "Verrechenbar"
+    },
+    "period": {
+      "label": "Periode"
+    },
+    "view": {
+      "label": "Gespeicherte Ansicht",
+      "all": "Alle Einträge"
+    },
+    "rates": {
+      "title": "Tarife",
+      "tableCaption": "Hinterlegte Tarife",
+      "empty": "Noch keine Tarife hinterlegt.",
+      "add": "Tarif anlegen",
+      "addDefault": "Standardtarif anlegen",
+      "col": {
+        "scope": "Geltung",
+        "ref": "Gilt für",
+        "rate": "Tarif / h",
+        "validity": "Gültigkeit"
+      },
+      "field": {
+        "rate": "Stundensatz (CHF)",
+        "validFrom": "Gültig ab",
+        "validTo": "Gültig bis"
+      },
+      "scope": {
+        "default": "Standard",
+        "employee": "Mitarbeiter",
+        "project": "Projekt",
+        "client": "Kunde"
+      },
+      "action": {
+        "end": "Beenden"
+      }
+    },
+    "error": {
+      "transport": "Zeiteinträge konnten nicht geladen werden.",
+      "permissionDenied": {
+        "read": "Dir fehlt die Berechtigung, Zeiteinträge zu sehen.",
+        "write": "Dir fehlt die Berechtigung dafür."
+      },
+      "timer_already_running": "Ein Timer läuft bereits.",
+      "timer_not_running": "Dieser Timer läuft nicht.",
+      "entry_locked": "Gesperrte Zeit kann nicht bearbeitet werden.",
+      "invalid_minutes": "Minuten müssen zwischen 1 und 1440 liegen.",
+      "no_rate_defined": "Bitte zuerst einen Tarif hinterlegen.",
+      "nothing_to_submit": "In dieser Periode gibt es nichts einzureichen.",
+      "nothing_to_lock": "In dieser Periode gibt es nichts zu sperren.",
+      "rate_card_overlap": "Gültigkeitszeiträume dürfen sich nicht überschneiden.",
+      "invalid_rate_card": "Dieser Tarif ist ungültig.",
+      "rate_card_already_ended": "Dieser Tarif ist bereits beendet.",
+      "invalid_transition": "Dieser Eintrag lässt das in seinem Status nicht zu.",
+      "project_not_found": "Dieses Projekt gibt es nicht."
+    }
+  },
+  "billing": {
+    "section": {
+      "title": "Zu verrechnende Zeit"
+    },
+    "tab": {
+      "unbilled": "Unverrechnet"
+    },
+    "loading": "Unverrechnete Zeit wird geladen",
+    "total": "Unverrechnet total",
+    "selected": "Ausgewählt",
+    "noContact": "Kein Kunde",
+    "empty": {
+      "unbilled": "Keine unverrechnete Zeit",
+      "hint": "Freigegebene verrechenbare Zeit erscheint hier, bereit zur Verrechnung."
+    },
+    "col": {
+      "select": "Auswählen",
+      "selectEntry": "Zeit auf {project} auswählen",
+      "item": "Position",
+      "duration": "Dauer",
+      "value": "Wert",
+      "project": "Projekt"
+    },
+    "action": {
+      "generate_draft": "Rechnungsentwurf erstellen"
+    },
+    "success": {
+      "draft_created": "Rechnungsentwurf erstellt."
+    },
+    "status": {
+      "billed": "Verrechnet"
+    },
+    "savedView": {
+      "label": "Gespeicherte Ansicht"
+    },
+    "error": {
+      "permissionDenied": "Keine Berechtigung, die Verrechnung zu lesen.",
+      "transport": "Unverrechnete Zeit konnte nicht geladen werden. Bitte erneut versuchen.",
+      "mixed_contacts": "Bitte Zeit für nur einen Kunden pro Rechnung auswählen.",
+      "already_billed": "Einige Einträge sind bereits verrechnet. Auswahl aktualisiert.",
+      "currency_mismatch": "Die Satzwährung stimmt nicht mit der Rechnungswährung überein.",
+      "invoice_not_draft": "Nur Rechnungsentwürfe können Zeit freigeben.",
+      "empty_selection": "Bitte mindestens einen Eintrag auswählen."
+    },
+    "wip": {
+      "title": "Angefangene Arbeiten",
+      "tableCaption": "WIP nach Projekt",
+      "empty": "Kein WIP.",
+      "oldest": "Ältester Eintrag",
+      "days": "Tage"
+    }
+  },
+  "retainer": {
+    "tab": { "title": "Mandate" },
+    "tableCaption": "Mandatsliste",
+    "emptyTitle": "Noch keine Mandate.",
+    "emptyHint": "Ein Mandat verrechnet ein festes periodisches Honorar, zieht inbegriffene Stunden von der freigegebenen Zeit ab und stellt alles über dem Kostendach in Rechnung.",
+    "loading": "Mandate werden geladen",
+    "action": {
+      "create": "Mandat anlegen",
+      "generate": "Rechnung erzeugen",
+      "runDue": "Alle fälligen abrechnen",
+      "close": "Mandat beenden",
+      "cancel": "Abbrechen"
+    },
+    "field": {
+      "contact": "Kunde",
+      "contactPlaceholder": "Kunde wählen",
+      "project": "Projekt",
+      "projectAll": "Alle Projekte des Kunden",
+      "periodLabel": "Abrechnungsperiode",
+      "period": { "monthly": "Monatlich", "quarterly": "Quartalsweise" },
+      "fee": "Pauschalhonorar",
+      "included": "Inbegriffene Stunden",
+      "cap": "Kostendach",
+      "startsOn": "Beginnt am",
+      "rollover": "Ungenutzte Stunden übertragen",
+      "genPeriod": "Abzurechnende Periode"
+    },
+    "col": {
+      "contact": "Kunde",
+      "period": "Periode",
+      "fee": "Honorar",
+      "burndown": "Verbrauch",
+      "status": "Status",
+      "actions": "Aktionen",
+      "since": "seit"
+    },
+    "status": { "draft": "Entwurf", "active": "Aktiv", "ended": "Beendet" },
+    "burndown": { "carryover": "Übertrag", "overcap": "über Kostendach" },
+    "warning": {
+      "cap_below_included": "Kostendach liegt unter dem Wert der inbegriffenen Stunden."
+    },
+    "error": {
+      "permissionDenied": "Keine Berechtigung, Mandate zu verwalten.",
+      "transport": "Mandate konnten nicht geladen werden. Bitte erneut versuchen.",
+      "invalid_fee": "Das Honorar muss grösser als null sein.",
+      "invalid_hours": "Inbegriffene Stunden dürfen nicht negativ sein.",
+      "period_not_closed": "Die Periode ist noch nicht abgeschlossen.",
+      "period_pending": "Zuerst die letzte Periode abrechnen oder überspringen.",
+      "retainer_not_found": "Mandat nicht gefunden.",
+      "retainer_not_active": "Dieses Mandat ist nicht aktiv.",
+      "invalid_period_key": "Diese Periode passt nicht zu diesem Mandat.",
+      "currency_mismatch": "Ein Teil der Zeit ist in einer anderen Währung als das Mandat.",
+      "retainer_has_draws": "Dieses Feld ist gesperrt, sobald eine Periode abgerechnet wurde.",
+      "retainer_ended": "Dieses Mandat ist beendet."
+    }
+  },
+  "help": {
+    "Time": {
+      "title": "Zeit",
+      "body": "Zeiterfassung mit laufender Uhr und Rapport: Du startest einen Timer oder trägst Stunden nach, ordnest sie Projekt und Phase zu und reichst den Rapport zur Freigabe ein. Freigegebene Zeit lässt sich sperren, damit Verrechnetes nicht mehr wandert. Die Tarife pflegst du in der Karte unten; ohne hinterlegten Tarif entsteht keine stille Null, sondern ein Hinweis.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

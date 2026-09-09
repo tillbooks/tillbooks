@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, staging, main]
+  pull_request:
+    branches: [develop, staging, main]
+
+# Cancel a superseded run when a newer commit lands on the same ref, so rapid
+# pushes to a PR don't stack the 2-way Node matrix (install + typecheck + test).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: House style (no em dashes)
+        run: npm run check:style
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # The Studio was invisible to CI until 2026-07-20: only the root was installed
+      # and tested, so a change breaking the entire app passed green. These four steps
+      # close that. They run in the same Node matrix, after the root, because the app
+      # imports the COMPILED engine from dist/ and cannot be built before it exists.
+      #
+      # `if: !cancelled()` because ORDER WAS HIDING THEM. A step that fails skips every
+      # later step in its job, so a single red root test took all four of these with it
+      # and they reported nothing at all. Measured 2026-07-29 on develop: twelve
+      # consecutive runs where `Test` failed and `Typecheck (Studio)` never executed,
+      # while the Studio type check was in fact red on its own account. One red gate
+      # must not hide another. This does not make the run pass; it makes it report.
+      - name: Install (Studio)
+        if: ${{ !cancelled() }}
+        run: npm ci --prefix app
+
+      - name: Build the engine for the Studio
+        if: ${{ !cancelled() }}
+        run: npm run build
+
+      - name: Typecheck (Studio)
+        if: ${{ !cancelled() }}
+        run: npx tsc --noEmit
+        working-directory: app
+
+      - name: Test (Studio)
+        if: ${{ !cancelled() }}
+        run: npx vitest run
+        working-directory: app
+
+      # The website was invisible to CI until 2026-07-30, exactly as the Studio was until 07-20.
+      # `check:aeo` existed for two weeks and ran nowhere, so the one surface a stranger reads and an
+      # answer engine quotes was the one surface with no gate on it. That is how robots.txt came to
+      # advertise /sitemap-index.xml, a URL that returned 404 on the live site for a day.
+      #
+      # `check:aeo` runs AFTER the build and reads dist/, not the source: it asserts the advertised
+      # sitemap is really there, that hreflang pairs are reciprocal, that the JSON-LD parses into one
+      # @graph, that no anchor points at the repository that does not exist, and that every live
+      # channel renders with an absolute URL. All offline, per CLAUDE.md. Resolving the social URLs
+      # over the network stays a manual pre-launch check: a gate that fails when X rate-limits the
+      # runner is a gate nobody trusts.
+      #
+      # Same `if: !cancelled()` as the Studio block, for the same measured reason. One red gate must
+      # not hide another.
+      - name: Install (web)
+        if: ${{ !cancelled() }}
+        run: npm ci --prefix web
+
+      - name: Build (web)
+        if: ${{ !cancelled() }}
+        run: npm run build --prefix web
+
+      - name: AEO gate (web)
+        if: ${{ !cancelled() }}
+        run: npm run check:aeo --prefix web

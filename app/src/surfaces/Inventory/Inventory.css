@@ -1,0 +1,125 @@
+/* Inventory (Lager), the D01 surface. Every value is a token (--t-*): no hex, no second accent.
+   Buttons use the shared .btn system (global.css), so the surface spends the Brass accent only where
+   the design law allows it (the one primary, the consequential accent). Panels separate by the
+   --t-bg-elev elevation step, never by a border around every card (DESIGN.md forbidden list).
+
+   D118 B2: the page header (SurfaceHeader), every table (DataTable) and the movement dialog (Modal)
+   are shared primitives now, so their per-surface CSS is gone. What stays is stock-specific: the
+   low-stock badge, the panels, the panel/dialog form fields, the toast, the count field. */
+
+.inventory {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  padding: var(--t-space-3);
+  max-width: 60rem;
+}
+
+/* Low stock is a glyph AND a label, never colour alone (WCAG 2.2 AA, DESIGN.md status rule). */
+.inventory__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: 0.8rem;
+  color: var(--t-warn);
+}
+
+/* A panel is the elevation step on the page ground, not a boxed card. Depth from --t-bg-elev + radius. */
+.inventory__panel {
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+}
+
+.inventory__panel h2 {
+  margin: 0 0 var(--t-space-2);
+  font-size: 1.1rem;
+}
+
+.inventory__row {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+/* The movement dialog's form, hosted inside the shared Modal body: a stacked column of labelled
+   fields, the same field idiom the valuation/Inventur panel rows use. */
+.inventory__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.inventory__row label,
+.inventory__form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: 0.85rem;
+  color: var(--t-text-dim);
+}
+
+/* The controls read as editable against the elevated panel: a token ground, a real border, tokens
+   only, so they theme correctly in dark (a bare UA select paints a theme-blind white box). */
+.inventory__row input,
+.inventory__row select,
+.inventory__form input,
+.inventory__form select {
+  height: 36px;
+  padding: 0 var(--t-space-1);
+  background: var(--t-bg);
+  color: var(--t-text);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+}
+
+.inventory__warn {
+  color: var(--t-warn);
+  font-size: 0.85rem;
+}
+
+/* Success/error notice: a neutral elevated strip, never the accent tint (the accent is a signal,
+   not decoration). It carries a real dismiss control so a keyboard user can close it. */
+.inventory__toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+}
+
+.inventory__toast-close {
+  flex: 0 0 auto;
+}
+
+/* A dense-row counting field (D116 dense band). Right-aligned tabular numerals like the columns. */
+.inventory__count {
+  width: 5rem;
+  height: 32px;
+  padding: 0 var(--t-space-1);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: var(--t-bg);
+  color: var(--t-text);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+}
+
+.inventory__frozen {
+  font-size: 0.85rem;
+  color: var(--t-text-dim);
+}
+
+/* The mandated accent focus ring (DESIGN.md: 2px --t-accent, offset 2px, never removed). Native
+   controls already inherit it from tokens.css; this also covers the .btn anchors and any custom
+   control, matching the per-surface convention the peer surfaces carry. */
+.inventory :is(input, select, textarea, button, .btn, a):focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}

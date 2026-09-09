@@ -1,0 +1,235 @@
+/**
+ * A22 FX revaluation.
+ *
+ * No hex anywhere: every colour is a token, so both themes come out of one declaration. The two
+ * blocks and the panels sit on the one elevated treatment (`--t-bg-elev`, a hairline, a radius),
+ * with no new colour; the accent is spent only on the primary Post-revaluation action, and the
+ * danger colour appears only on an unrealised loss figure, never as a filled row (DESIGN.md).
+ *
+ * D118 B2 (2026-08-24): the page header, the rate register table and the revaluation positions table
+ * are the shared primitives now (SurfaceHeader, DataTable). Their CSS lived here (the head block, the
+ * `.fx-table` frame/rows/sticky, the numeric alias, the table skeleton, the tfoot total row) and has
+ * been deleted. What remains is only what is genuinely A22-specific: the block shells, the inline
+ * add-rate form, the locked note, the diff figure, the currency-pair/account cells, the total and
+ * per-currency summaries and the note panels.
+ */
+
+/* `.fx` is a namespace root that also lays the surface out as a stack. Each block sets its own top
+   margin nowhere: the column gap here owns the rhythm. */
+.fx {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* --- a block: the rates panel and the revaluation panel share this shell ---------------------- */
+.fx-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-3);
+}
+
+.fx-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.fx-block-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+/* --- the add-rate inline form ---------------------------------------------------------------- */
+.fx-addrate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.fx-addrate-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--t-space-2);
+}
+
+.fx-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.fx-field-label {
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+}
+
+.fx-field .field {
+  min-width: 7rem;
+}
+
+.fx-addrate-submit {
+  align-self: flex-end;
+}
+
+/* The rate-quote note tells the operator which way the pair is quoted, so it carries essential
+   meaning on a money-path input and must clear AA: it sits on --t-text-dim, not the sub-AA faint
+   step the design law reserves for text with no meaning (DESIGN.md). */
+.fx-addrate-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+}
+
+.fx-inline-error {
+  margin-top: var(--t-space-1);
+}
+
+/* --- the locked note (no write capability) --------------------------------------------------- */
+.fx-locked {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.fx-lock-glyph {
+  flex: none;
+  color: var(--t-text-faint);
+}
+
+/* --- table cell content (the tables themselves are the shared DataTable) ---------------------- */
+/* The faint quote-currency after the pair, and the faint account kind after its number, inside a
+   DataTable cell rendered by this surface. */
+.fx-pair-quote,
+.fx-acct-kind {
+  color: var(--t-text-faint);
+}
+
+.fx-acct-number {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- the revaluation controls ---------------------------------------------------------------- */
+.fx-reval-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--t-space-2);
+}
+
+/* --- the diff figure: sign + glyph + colour, never colour alone ------------------------------- */
+.fx-diff {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  justify-content: flex-end;
+}
+
+.fx-diff svg {
+  flex: none;
+}
+
+/* A gain renders in the normal text colour: no celebratory emerald (the brand money-colour rule). */
+.fx-diff--gain {
+  color: var(--t-text);
+}
+
+/* A loss carries the danger colour, which recolours the minus sign and the down glyph it wraps. It
+   is never a filled red row: only the figure itself is tinted. */
+.fx-diff--loss {
+  color: var(--t-danger);
+}
+
+.fx-diff--flat {
+  color: var(--t-text-dim);
+}
+
+/* --- the total: a labelled summary line under the positions table ---------------------------- */
+/* The total moved out of the table's tfoot (DataTable is flat-rows-only) into this line: the label
+   at the start, the diff figure at the end, over a top rule that reads as the table's closing line. */
+.fx-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  font-weight: 600;
+  border-top: 2px solid var(--t-border);
+  padding-top: var(--t-space-1);
+}
+
+/* --- per-currency subtotals ------------------------------------------------------------------ */
+.fx-bycurrency {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+.fx-bycurrency li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: 0.9rem;
+}
+
+.fx-bycurrency-code {
+  color: var(--t-text-dim);
+  font-weight: 600;
+}
+
+/* --- the post action + reverses note --------------------------------------------------------- */
+.fx-reval-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+.fx-reverses-note {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: 0.9rem;
+}
+
+/* --- panels: needs-rate, refusal, posted, all quiet notes ------------------------------------ */
+.fx-needsrate,
+.fx-refusal,
+.fx-posted {
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+}
+
+.fx-needsrate-title,
+.fx-refusal-title {
+  margin: 0 0 var(--t-space-0-5);
+  font-weight: 600;
+}
+
+.fx-needsrate-list {
+  margin: 0;
+  padding-left: var(--t-space-3);
+}
+
+.fx-needsrate-latest,
+.fx-refusal-body {
+  color: var(--t-text-dim);
+}
+
+.fx-refusal-body {
+  margin: 0 0 var(--t-space-1);
+}
+
+.fx-posted-line {
+  margin: 0;
+}

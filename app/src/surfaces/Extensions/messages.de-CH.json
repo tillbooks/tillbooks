@@ -1,0 +1,80 @@
+{
+  "nav": { "extensions": "Erweiterungen" },
+  "plugin": {
+    "panel": { "title": "Erweiterungen" },
+    "lede": "Erweiterungen von Drittanbietern ergänzen TILL um Werkzeuge, Bildschirme, Berichtsquellen und Automatisierungen. Jede läuft in einer Sandbox mit nur den Berechtigungen, die du erteilst, und keine kann einen zweiten Weg zu deinem Journal öffnen.",
+    "tab": { "installed": "Installiert", "browse": "Durchsuchen" },
+    "action": {
+      "install": "Installieren",
+      "browse": "Durchsuchen",
+      "enable": "Aktivieren",
+      "disable": "Deaktivieren",
+      "uninstall": "Deinstallieren",
+      "restart": "Neu starten",
+      "review": "Prüfen und installieren",
+      "viewScreen": "Panel öffnen"
+    },
+    "status": {
+      "installed": "Installiert",
+      "disabled": "Deaktiviert",
+      "incompatible": "Nicht kompatibel"
+    },
+    "incompatible": { "reason": "Erfordert Kernversion {range}, installiert ist {version}." },
+    "card": {
+      "version": "Version {version}",
+      "capabilities": "{count} Fähigkeiten",
+      "grantedOf": "{granted} von {requested} Berechtigungen erteilt",
+      "byline": "Installiert von {actor}"
+    },
+    "review": {
+      "title": "Diese Erweiterung möchte",
+      "subtitle": "{name}, Version {version}",
+      "confirm": "Mit den ausgewählten Berechtigungen installieren",
+      "noScopes": "Diese Erweiterung verlangt keine Berechtigungen.",
+      "compatWarning": "Diese Erweiterung ist mit der aktuellen Kernversion nicht kompatibel und wird deaktiviert installiert.",
+      "cancel": "Abbrechen"
+    },
+    "screen": { "title": "Panel von {name}", "sandboxNote": "Dieses Panel läuft in einer Sandbox. Es erreicht weder den Rest des Studios noch das Netzwerk über das hinaus, was du erteilt hast." },
+    "empty": "Keine Erweiterungen installiert.",
+    "registry": {
+      "empty": "Kein Erweiterungs-Verzeichnis verbunden.",
+      "emptyHint": "Du kannst eine Erweiterung jederzeit aus einer lokalen Datei installieren.",
+      "no_results": "Keine Treffer für '{query}'.",
+      "searchLabel": "Erweiterungs-Verzeichnis durchsuchen",
+      "searchPlaceholder": "Erweiterungen suchen",
+      "search": "Suchen",
+      "clear": "Zurücksetzen",
+      "stale": "Es werden die letzten bekannten Ergebnisse angezeigt."
+    },
+    "needsPermission": "Dafür brauchst du das Recht «Erweiterungen installieren und verwalten».",
+    "confirm": { "uninstall": "{name} deinstallieren? Die Einstellungen werden entfernt." },
+    "error": {
+      "manifest_checksum_failed": "Diese Erweiterungsdatei hat die Integritätsprüfung nicht bestanden und wurde nicht installiert.",
+      "invalid_manifest": "Diese Datei ist keine gültige Erweiterung.",
+      "capability_forbidden": "Diese Erweiterung wollte eine geschützte Buchungsaktion registrieren und wurde abgelehnt.",
+      "capability_name_conflict": "«{name}» dieser Erweiterung steht in Konflikt mit einer bestehenden.",
+      "registry_unreachable": "Das Erweiterungs-Verzeichnis konnte nicht erreicht werden. Die letzten bekannten Ergebnisse werden angezeigt.",
+      "needs_registry": "Es ist kein Erweiterungs-Verzeichnis verbunden.",
+      "plugin_crashed": "Diese Erweiterung reagiert nicht mehr.",
+      "plugin_incompatible": "Diese Erweiterung ist mit der aktuellen Kernversion nicht kompatibel.",
+      "plugin_downgrade_refused": "Eine neuere Version dieser Erweiterung ist bereits installiert.",
+      "plugin_not_found": "Diese Erweiterung ist nicht mehr installiert.",
+      "permission_denied": "Du hast keine Berechtigung, Erweiterungen zu verwalten.",
+      "generic": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
+    },
+    "feedback": {
+      "installed": "Die Erweiterung ist installiert.",
+      "enabled": "Die Erweiterung ist aktiviert.",
+      "disabled": "Die Erweiterung ist deaktiviert.",
+      "uninstalled": "Die Erweiterung ist deinstalliert."
+    }
+  },
+  "help": {
+    "Extensions": {
+      "title": "Erweiterungen",
+      "body": "Erweiterungen zeigt, welche Plugins in diesem Arbeitsbereich installiert sind und was jedes einzelne darf. Vor jeder Installation prüfst du die angeforderten Berechtigungen und entscheidest selbst. Ein Plugin bekommt nur die Berechtigungen, die du bei der Installation siehst und bestätigst; seine Oberfläche läuft in einem isolierten Rahmen und spricht nur über definierte Schnittstellen mit TILL.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

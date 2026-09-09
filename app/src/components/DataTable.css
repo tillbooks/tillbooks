@@ -1,0 +1,209 @@
+/* DataTable (D118 B2). The one ledger/list table. Only --t-* tokens. This CSS is the canonical
+   replacement for the pay-, journal-, ct- and item- per-surface table styling, so it is complete on
+   its own: frame overflow, sticky header, density-aware rows, alignment and the hover/selection. */
+
+/* The frame owns the horizontal overflow, so a wide table scrolls sideways INSIDE itself and never
+   shoves the page body. Thin tokenised bar (inherited from the root, B1) with its gutter reserved.
+
+   F-04 (friction ledger, Phase 2): the frame is a scroll container ONLY while the table really
+   overflows it (DataTable.tsx measures that and stamps `data-overflow`). The bare frame stays
+   `overflow: visible`, and that is load-bearing: an `overflow-x: auto` frame computes `overflow-y`
+   to auto too, which made the frame the nearest scrolling ancestor of the sticky `thead th`. The
+   header then resolved `top: var(--surface-header-height)` against the FRAME (whose scrollport top
+   is the table's own top) and was pushed down by the whole page-header height onto the first data
+   row, on every list surface, at scrollTop 0. With the frame transparent to scrolling, <main> is
+   the one scrollport for the page header and the column labels alike, and the offset is exact. */
+.data-table-frame {
+  width: 100%;
+}
+
+.data-table-frame[data-overflow] {
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  /* Density-aware table type: 14px in Komfortabel, one step down in Kompakt (tokens.css). */
+  font-size: var(--t-font-table);
+  color: var(--t-text);
+  /* Tree-indent channel: 0 by default (flat model), overridden inline per nested row by its depth.
+     Defined here so it is a real custom property, not an undefined var resolving to initial. */
+  --t-row-depth: 0;
+}
+
+/* The header sticks to the top of the scrolling main, so column labels stay while a long ledger
+   scrolls under them. It carries its own ground so rows never show through as they pass beneath.
+
+   S1 (N5 sweep): the SurfaceHeader is ALSO sticky at the top of that same one scroll region
+   (.frame > main), so a bare top:0 here pinned the labels at the SAME line and the opaque, higher-z
+   page header painted over them on every list surface. Stick BELOW the page header instead: both
+   resolve their sticky against the one main scrollport, so offsetting by the header's height lands
+   the labels just under it. --surface-header-height is published by SurfaceHeader.tsx as the header's
+   MEASURED rendered height (subtitle, density and wrapping included), so this is always exact with no
+   per-surface tuning. It falls back to 0 when no header is in scope (nothing to clear, so top:0 is
+   right there). We do NOT raise z-index above the header: that would only invert the bug (labels over
+   the title).
+
+   F-04: this offset is correct ONLY while <main> is the sticky containing block, which is the
+   non-overflowing frame's case above. A frame that scrolls sideways is itself the containing
+   block, so inside it the header pins to `top: 0` (its natural position, no displacement, and it
+   scrolls away with the page: a wide table trades its sticky labels for its sideways scroll rather
+   than covering its first row). */
+.data-table thead th {
+  position: sticky;
+  top: var(--surface-header-height, 0px);
+  z-index: 1;
+  background: var(--t-bg-soft);
+  border-bottom: 1px solid var(--t-border);
+  padding: var(--t-space-1) var(--t-space-2);
+  font-weight: 600;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.data-table-frame[data-overflow] thead th {
+  top: 0;
+}
+
+/* Left-align text, right-align money and numbers. Never centre (design law). */
+.data-table [data-align='start'] {
+  text-align: left;
+}
+
+.data-table [data-align='end'] {
+  text-align: right;
+}
+
+/* The sort control fills its header cell so the whole label is the hit target; it is a quiet button,
+   not an accent one. The glyph trails the label and follows text alignment. */
+.data-table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+}
+
+.data-table [data-align='end'] .data-table-sort {
+  flex-direction: row-reverse;
+}
+
+.data-table-sort-glyph {
+  display: inline-flex;
+  color: var(--t-text-faint);
+}
+
+/* The active sort column reads slightly stronger, and its glyph takes the accent as an attention
+   signal (the selected sort is one of the three things the accent is for). */
+.data-table th[aria-sort='ascending'] .data-table-sort,
+.data-table th[aria-sort='descending'] .data-table-sort {
+  color: var(--t-text);
+}
+
+.data-table th[aria-sort='ascending'] .data-table-sort-glyph,
+.data-table th[aria-sort='descending'] .data-table-sort-glyph {
+  color: var(--t-accent);
+}
+
+/* Rows. Height reads the density control-height token, so Komfortabel is 36px and Kompakt lands
+   exactly on the D116 32px floor; padding reads the density row-padding token. A table rule is one
+   of the few places a hairline is earned. */
+.data-table tbody td {
+  height: var(--t-control-h);
+  padding: var(--t-row-pad-y) var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: middle;
+}
+
+/* The totals row (an optional <tfoot>). It reads as a summary, not another data row: its own soft
+   ground, a firmer top rule to close the column off, and the stronger weight a sum earns. Height and
+   padding follow the same density tokens as the body, so a total lines up with the figures above it. */
+.data-table tfoot td {
+  height: var(--t-control-h);
+  padding: var(--t-row-pad-y) var(--t-space-2);
+  border-top: 2px solid var(--t-border);
+  background: var(--t-bg-soft);
+  font-weight: 600;
+  color: var(--t-text);
+  vertical-align: middle;
+}
+
+/* A group header row (the optional grouped/tree model). It spans every column in one cell and reads
+   as a divider between piles, not as data: its own soft ground, a hairline top rule, and the dimmer
+   label ink. Height and padding follow the density tokens so it sits in the same rhythm as the rows. */
+.data-table tbody td.data-table-group-cell {
+  height: var(--t-control-h);
+  padding: var(--t-row-pad-y) var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+  background: var(--t-bg-soft);
+  font-weight: 600;
+  color: var(--t-text-dim);
+  text-align: left;
+}
+
+/* Indent a nested group header and the leading cell of a nested row by the tree depth. One step per
+   level, keyed off the inline --t-row-depth the component sets; depth 0 gets the base padding. */
+.data-table tbody td[data-indented] {
+  padding-inline-start: calc(var(--t-space-2) + var(--t-row-depth, 0) * var(--t-space-3));
+}
+
+/* The disclosure control fills the header cell so the whole label toggles the group. A quiet button,
+   never the accent one; the chevron carries the state and rotates a quarter turn when open. */
+.data-table-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+}
+
+.data-table-group-toggle:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+  border-radius: var(--t-radius-sm);
+}
+
+.data-table-group-chevron {
+  display: inline-flex;
+  color: var(--t-text-faint);
+  transition: transform 0.12s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .data-table-group-chevron {
+    transition: none;
+  }
+}
+
+/* Collapsed points right; open rotates it to point down, so the direction is the state and never
+   colour alone. */
+.data-table-group-chevron[data-open] {
+  transform: rotate(90deg);
+}
+
+/* A clickable row is a real affordance: a hover fill (the neutral background step, not the accent),
+   the focus ring, and a pointer cursor. Selection, when a surface adds it, is the accent-soft fill. */
+.data-table-row--clickable {
+  cursor: pointer;
+}
+
+.data-table-row--clickable:hover td {
+  background: var(--t-bg-soft);
+}
+
+.data-table-row--clickable:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: -2px;
+}

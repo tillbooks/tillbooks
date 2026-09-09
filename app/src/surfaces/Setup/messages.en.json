@@ -1,0 +1,114 @@
+{
+  "setup": {
+    "title": "Set up workspace",
+    "emptyHint": "Create your workspace to start bookkeeping. A name is enough: base currency (CHF) and fiscal year (01.01.) are preset and editable later.",
+    "createWorkspace": "Create workspace",
+    "name": "Company name",
+    "cancel": "Cancel",
+    "legalFormHint": "Preset from the name. Everything else is set in the new workspace's company profile.",
+    "newTitle": "New workspace",
+    "newHint": "A separate set of books beside your existing ones: name and legal form are enough. You are seated in it as owner; the other workspaces stay untouched."
+  },
+  "workspaces": {
+    "title": "Workspaces",
+    "newWorkspace": "New workspace",
+    "active": "Active",
+    "open": "Open workspace {name}",
+    "empty": "No workspaces yet."
+  },
+  "company": {
+    "title": "Company profile",
+    "sections": {
+      "profile": "Company details",
+      "fiscal": "Fiscal year and currency",
+      "creditor": "Invoice issuer (QR-bill)",
+      "more": "More details"
+    },
+    "firstHour": {
+      "lead": "Legal form, VAT and the IBAN for your invoices: enter them once, save once. Base currency CHF and a fiscal year from 01.01. are preset.",
+      "vatHint": "Effective method, accounting on agreement (Soll), quarterly returns is the usual case. TILL creates the tax codes when you save.",
+      "vatSetUp": "Set up under VAT",
+      "vatChange": "Change under VAT",
+      "addressLater": "You only need the address once the first QR-bill goes out. The IBAN saves now.",
+      "addressLead": "Name and structured address appear on the QR-bill. Without a name, the company name is used.",
+      "fixFields": "One field still needs a correction."
+    },
+    "vatChoice": {
+      "effektiv": "VAT registered, effective method",
+      "saldo": "VAT registered, flat tax rate (Saldo)",
+      "none": "Not VAT registered"
+    },
+    "legalForm": {
+      "label": "Legal form",
+      "einzelfirma": "Sole proprietorship (Einzelfirma)",
+      "gmbh": "Limited liability company (GmbH)",
+      "ag": "Public limited company (AG)"
+    },
+    "baseCurrency": "Base currency",
+    "fiscalYearStart": "Fiscal year start",
+    "fiscalYearStartMonth": "Fiscal year start, month",
+    "fiscalYearStartDay": "Fiscal year start, day",
+    "vatMethod": {
+      "label": "VAT method",
+      "effektiv": "Effective",
+      "saldo": "Flat tax rate (Saldo)",
+      "none": "Not VAT registered"
+    },
+    "vatTiming": {
+      "label": "VAT accounting",
+      "ist": "On collection (Ist)",
+      "soll": "On agreement (Soll)"
+    },
+    "creditorName": "Issuer name",
+    "address": {
+      "label": "Address",
+      "street": "Street",
+      "buildingNo": "Building no.",
+      "zip": "Postal code",
+      "town": "Town",
+      "country": "Country"
+    },
+    "iban": "IBAN for your invoices",
+    "ibanHelp": "Which IBAN do I need?",
+    "ibanHint": "Either kind works. A QR-IBAN (QR-IID 30000 to 31999) gives your invoices a QRR reference, an ordinary IBAN gives them a SCOR reference.",
+    "uid": "UID",
+    "mwstNo": "VAT number",
+    "save": "Save",
+    "saved": "Saved",
+    "saving": "Saving",
+    "locked": {
+      "note": "Locked: this workspace already has posted entries. Base currency and fiscal-year start are fixed from here on, because the existing entries build on them."
+    },
+    "err": {
+      "invalidName": "Please enter a company name.",
+      "invalidIban": "That is not a valid IBAN. Please check the number: a QR-IBAN and an ordinary IBAN are both fine here.",
+      "illegalCharacter": "One of these fields contains a character a QR-bill cannot carry, such as a line break. Please keep the name and address on a single line each.",
+      "needsStructuredAddress": "Please provide the full structured address (street, building no., postal code, town, country).",
+      "needsEmptyLedger": "Fiscal year and currency cannot change once entries have been posted.",
+      "invalidUid": "The UID has the form CHE-123.456.789.",
+      "invalidMwstNo": "The VAT number has the form CHE-123.456.789 MWST.",
+      "invalidLegalForm": "TILL does not know this legal form.",
+      "vatFailed": "VAT could not be set up. The other details are saved; set up VAT under VAT."
+    },
+    "customFields": {
+      "title": "Custom fields",
+      "empty": "Custom fields do not exist yet. Once you can create them, they show up here."
+    }
+  },
+  "ebillConfig": {
+    "title": "eBill",
+    "enrollmentExplainer": "Enrolling as a biller happens with a certified network partner, not in TILL. Once enrolled, enter the eBill-Biller-ID the partner issued you.",
+    "partnerListLink": "Certified network partners (ebill.ch)",
+    "billerPid": "eBill-Biller-ID",
+    "invalidBillerPid": "The eBill-Biller-ID is 41 followed by 15 digits.",
+    "connectorAbsent": "No eBill connector is configured. Preparing payloads works offline; transmitting them needs the cloud connector, which is enabled separately."
+  },
+  "help": {
+    "Setup": {
+      "title": "Setup",
+      "body": "The foundation of this workspace: the company profile with name, address, UID, currency and fiscal year, and the management of your workspaces. On first run the page walks you through creating the workspace; afterwards you edit the profile here. Once postings exist, currency and the fiscal-year start are fixed, because the existing entries build on them. The operational panels such as data backup, trust and diagnostics now live under Operations.",
+      "concepts": [],
+      "docsPath": "quickstart"
+    }
+  }
+}

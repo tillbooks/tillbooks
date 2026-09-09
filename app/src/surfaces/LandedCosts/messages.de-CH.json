@@ -1,0 +1,91 @@
+{
+  "nav": {
+    "landedCosts": "Landkosten"
+  },
+  "landedCosts": {
+    "title": "Landkosten",
+    "create": "Neuer Beleg",
+    "needsPermission": "Benötigt die Landkosten-Berechtigung.",
+    "empty": "Noch keine Landkosten-Belege.",
+    "confirm": "Zuteilung bestätigen",
+    "reverse": "Stornieren",
+    "reverseReason": "Storniert über die Landkosten-Ansicht",
+    "journal": "Buchung",
+    "close": "Schliessen",
+    "itemIdTooltip": "Artikel-ID: {id}",
+    "list": {
+      "caption": "Landkosten-Belege"
+    },
+    "detail": {
+      "caption": "Verteilung auf die empfangenen Positionen",
+      "empty": "Keine Positionen zum Zuteilen."
+    },
+    "confirmDialog": {
+      "title": "Zuteilung bestätigen",
+      "body": "Damit werden {total} CHF auf den Lagerwert der empfangenen Artikel aktiviert und eine ausgeglichene Buchung erstellt. Aufgehoben wird dies durch eine Stornierung, nie durch Umschreiben.",
+      "cancel": "Abbrechen"
+    },
+    "reverseDialog": {
+      "title": "Zuteilung stornieren",
+      "body": "Damit entsteht eine Stornobuchung und die aktivierten Kosten werden aus dem Lagerwert der Artikel entfernt. Die ursprüngliche Buchung bleibt im Journal."
+    },
+    "form": {
+      "receipt": "Wareneingang",
+      "component": "Kostenart",
+      "amount": "Betrag (CHF)",
+      "method": "Verteilmethode",
+      "inventoryAccount": "Vorratskonto",
+      "clearingAccount": "Verrechnungskonto",
+      "submit": "Beleg erstellen"
+    },
+    "component": {
+      "freight": "Fracht",
+      "duty": "Zoll",
+      "insurance": "Versicherung",
+      "handling": "Handling",
+      "brokerage": "Speditionsgebühr",
+      "other": "Übriges"
+    },
+    "method": {
+      "by_value": "Nach Wert",
+      "by_qty": "Nach Menge",
+      "by_weight": "Nach Gewicht",
+      "by_volume": "Nach Volumen",
+      "equal": "Gleichmässig",
+      "manual": "Manuell"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "allocated": "Zugeteilt",
+      "reversed": "Storniert"
+    },
+    "col": {
+      "number": "Nummer",
+      "status": "Status",
+      "method": "Methode",
+      "total": "Total",
+      "date": "Datum",
+      "item": "Artikel",
+      "baseValue": "Basiswert",
+      "allocated": "Zugeteilt",
+      "unitImpact": "Pro Einheit"
+    },
+    "errors": {
+      "already_allocated": "Eine dieser Wareneingangszeilen ist bereits einem anderen Beleg zugeteilt.",
+      "nothing_to_allocate": "Keine erfassten Wareneingangszeilen zum Zuteilen.",
+      "invalid_transition": "Der Beleg ist nicht in einem Zustand, der diese Aktion erlaubt.",
+      "period_locked": "Die Buchungsperiode ist gesperrt.",
+      "invalid_reference": "Eine referenzierte Wareneingangszeile oder ein Konto wurde nicht gefunden.",
+      "invalid_amount": "Der Betrag muss eine positive Zahl sein.",
+      "allocation_residual": "Die Zuteilung hat nicht das gesamte Total verteilt."
+    }
+  },
+  "help": {
+    "LandedCosts": {
+      "title": "Landkosten",
+      "body": "Fracht, Zoll und Abwicklung, die zu einem gebuchten Wareneingang gehören, sammelst du hier in einem Landkosten-Beleg. Die Vorschau zeigt, wie sich die Kosten auf die empfangenen Positionen verteilen, bevor etwas geschrieben wird. Beim Bestätigen fliessen die Beträge in den Lagerwert der Artikel und es entsteht eine ausgeglichene Buchung; aufgehoben wird eine Bestätigung durch eine Rückbuchung, nie durch Umschreiben.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,266 @@
+/* Projects (B00): the master list and its detail panel. Every value is a token (--t-*), no hex and
+   no new colour; one accent, and the status chip is always glyph+label, never colour alone.
+
+   D118 B2 (2026-08-23): the list table, the page header, the search/status controls row and the
+   create/edit overlay are all shared primitives now (DataTable, SurfaceHeader, FilterBar, Modal).
+   Their CSS lived here and has been deleted; what remains is only what is genuinely Projects-specific:
+   the list cell content, the master/detail layout, the detail panel with its Budget vs. Ist figures
+   and phase table, and the bespoke editor form fields the Modal hosts. */
+
+.projects {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.projects-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .projects-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The bespoke editor form fields the shared Modal hosts, and the detail panel's phase form. */
+.projects-field input,
+.projects-field select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--t-border-strong);
+  border-radius: 6px;
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+  font: inherit;
+}
+
+/* The mandated accent focus ring (DESIGN.md: 2px --t-accent, offset 2px, never removed). Covers the
+   bespoke controls this surface still owns: the status filter select, the editor form fields, the
+   phase form and the inline deep-link. The shared primitives (DataTable, FilterBar) carry their own. */
+.projects :is(input, select, textarea, button, .btn, a):focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+/* List cell content. The list itself is the shared DataTable; these style what sits inside its cells. */
+.projects-code {
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-dim);
+}
+
+.projects-name {
+  font-weight: 500;
+}
+
+/* A sub-project is indented under its parent (the hierarchy DataTable renders as a flat, ordered list). */
+.projects-name--child {
+  display: inline-block;
+  padding-left: 20px;
+}
+
+.projects-contact {
+  color: var(--t-text-dim);
+  font-size: 0.9em;
+}
+
+/* The selected row: the accent-soft fill DataTable reserves for a surface's own selection state. */
+.data-table-row.projects-row--active td {
+  background: var(--t-accent-soft);
+}
+
+.projects-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* B03: the computed Marge cell on a list row, fed by costing_pl_list. */
+.projects-margin {
+  color: var(--t-text-dim);
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+/* The overflow cell inside a clickable row: a presentational wrapper that keeps its own clicks and
+   keystrokes from also selecting the row underneath it. */
+.projects-actions-cell {
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.projects-status {
+  font-size: 0.85em;
+  white-space: nowrap;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+
+.projects-detail {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.projects-detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.projects-detail-title {
+  margin: 0 0 4px;
+}
+
+.projects-detail-meta {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.projects-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.projects-readonly {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+/* The unselected second column: a prompt to pick a row, so the panel never sits blank. */
+.projects-detail-placeholder {
+  margin: 0;
+  padding: 24px 16px;
+  color: var(--t-text-dim);
+  text-align: center;
+}
+
+/* The deep-link out of the empty contact picker (accent as an interactive signal, not decoration). */
+.projects-inline-link {
+  color: var(--t-accent);
+}
+
+.projects-budget-panel h3,
+.projects-phases h3 {
+  margin: 0 0 8px;
+}
+
+.projects-budget-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--t-bg-soft);
+  overflow: hidden;
+}
+
+.projects-budget-bar-fill {
+  height: 100%;
+  background: var(--t-accent);
+  border-radius: 999px;
+  transition: width 200ms ease;
+}
+
+.projects-budget-figures {
+  display: flex;
+  gap: 24px;
+  margin: 12px 0 0;
+  flex-wrap: wrap;
+}
+
+.projects-budget-figures dt {
+  font-size: 0.8em;
+  color: var(--t-text-dim);
+}
+
+.projects-budget-figures dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.projects-over,
+.projects-warning {
+  margin: 8px 0 0;
+  color: var(--t-warn);
+}
+
+.projects-phases-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.projects-phases-empty {
+  color: var(--t-text-dim);
+}
+
+/* The phase table is a small, Projects-specific sub-table nested in the detail panel with an inline
+   Erledigt control and a trailing add-form: kept bespoke rather than the ledger DataTable. */
+.projects-phase-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.projects-phase-table th,
+.projects-phase-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--t-border);
+  text-align: left;
+}
+
+.projects-phase-done {
+  white-space: nowrap;
+  color: var(--t-success);
+}
+
+.projects-phase-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.projects-phase-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.projects-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.projects-field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.projects-field-row .projects-field {
+  flex: 1;
+}
+
+.projects-hint {
+  font-size: 0.8em;
+  color: var(--t-text-dim);
+  min-height: 1em;
+}
+
+.projects-field-error {
+  color: var(--t-danger);
+  margin: 4px 0 0;
+}
+
+/* The editor form fields stack on the 8-pt grid inside the shared Modal body. */
+.projects-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

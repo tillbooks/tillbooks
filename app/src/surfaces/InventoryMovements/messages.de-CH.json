@@ -1,0 +1,78 @@
+{
+  "nav": {
+    "inventoryMovements": "Bewegungen"
+  },
+  "invMovements": {
+    "title": "Lagerbewegungen",
+    "noWorkspace": "Wähle einen Mandanten, um das Bewegungsjournal zu sehen.",
+    "listLabel": "Lagerartikel",
+    "detailLabel": "Bewegungsverlauf",
+    "selectHint": "Wähle einen Artikel, um seinen Bestand und Bewegungsverlauf zu sehen.",
+    "onHand": "Bestand",
+    "record": "Bewegung erfassen",
+    "transfer": "Umlagern",
+    "allowNegative": "Negativbestand erlauben",
+    "noMovements": "Für diesen Artikel gibt es noch keine Bewegungen.",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "error": { "transport": "Das Bewegungsjournal konnte nicht geladen werden. Bitte versuche es erneut." },
+    "empty": {
+      "title": "Noch keine Lagerartikel",
+      "hint": "Lege zuerst einen Lagerartikel an, dann erfasse hier seine Bewegungen."
+    },
+    "col": {
+      "date": "Datum",
+      "type": "Art",
+      "qty": "Menge",
+      "running": "Saldo",
+      "unitCost": "Stückkosten",
+      "location": "Standort",
+      "actor": "Von"
+    },
+    "type": {
+      "opening": "Eröffnung",
+      "receipt": "Zugang",
+      "issue": "Abgang",
+      "transfer_out": "Umlagerung raus",
+      "transfer_in": "Umlagerung rein",
+      "adjustment": "Korrektur",
+      "return": "Retoure",
+      "scrap": "Ausschuss"
+    },
+    "form": {
+      "recordTitle": "Bewegung erfassen",
+      "transferTitle": "Zwischen Standorten umlagern",
+      "type": "Bewegungsart",
+      "location": "Standort",
+      "qty": "Menge",
+      "qtyHint": "Eine positive Stückzahl. Abgang und Ausschuss ziehen ab; Korrektur und Retoure nehmen das Vorzeichen, das du eingibst.",
+      "unitCost": "Stückkosten (Rappen)",
+      "date": "Wirksamkeitsdatum",
+      "lot": "Charge",
+      "serial": "Seriennummer",
+      "description": "Beschreibung",
+      "from": "Von Standort",
+      "to": "Nach Standort",
+      "optional": "optional"
+    },
+    "errors": {
+      "insufficient_stock": "Nicht genug Bestand für diese Bewegung. Erlaube Negativbestand oder reduziere die Menge.",
+      "invalid_qty": "Gib eine Menge ungleich null mit dem richtigen Vorzeichen für diese Bewegungsart ein.",
+      "invalid_movement_type": "Wähle eine gültige Bewegungsart.",
+      "lot_required": "Dieser Artikel ist chargengeführt: wähle eine Charge für die Bewegung.",
+      "serial_required": "Dieser Artikel ist seriengeführt: wähle eine Seriennummer für die Bewegung.",
+      "item_not_stockable": "Dieser Artikel ist kein Lagerartikel und kann keine Bewegungen tragen.",
+      "lot_item_mismatch": "Diese Charge gehört zu einem anderen Artikel.",
+      "serial_item_mismatch": "Diese Seriennummer gehört zu einem anderen Artikel.",
+      "serial_already_in_stock": "Diese Seriennummer liegt schon an Lager, ein Stück gibt es nur einmal. Für einen Standortwechsel nimm eine Umlagerung, für einen echten Neuzugang buche das Stück zuerst aus (Abgang, Rücksendung oder Ausschuss)."
+    }
+  },
+  "help": {
+    "InventoryMovements": {
+      "title": "Lagerbewegungen",
+      "body": "Jede Lagerbewegung dieses Arbeitsbereichs steht hier als Eintrag in einem fortlaufenden Bewegungsjournal. Wähle links einen Artikel: Rechts stehen sein Bestand, die Regel für negative Bestände und die Historie mit laufendem Saldo, Menge, Einstandswert, Lagerort und Charge oder Seriennummer. Der Bestand wird aus den Bewegungen gerechnet, nie separat geführt. Neue Bewegungen und Umlagerungen erfasst du über die beiden Formulare; bestehende Einträge werden nie umgeschrieben.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

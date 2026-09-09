@@ -1,0 +1,97 @@
+{
+  "nav": {
+    "lotSerial": "Chargen"
+  },
+  "lotSerial": {
+    "title": "Chargen & Seriennummern",
+    "noWorkspace": "Wähle einen Mandanten, um Chargen und Seriennummern zu verwalten.",
+    "listLabel": "Verfolgbare Artikel",
+    "detailLabel": "Artikel-Verfolgung",
+    "selectHint": "Wähle einen Artikel, um seinen Verfolgungsmodus zu setzen und seine Chargen und Seriennummern zu verwalten.",
+    "modeLabel": "Verfolgungsmodus",
+    "notTracked": "Dieser Artikel wird nicht per Charge oder Seriennummer verfolgt. Wähle oben einen Modus, um zu starten.",
+    "col": { "actions": "Aktionen" },
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "archive": "Archivieren",
+    "error": { "transport": "Die verfolgbaren Artikel konnten nicht geladen werden. Bitte versuche es erneut." },
+    "empty": {
+      "title": "Noch keine lagergeführten Artikel",
+      "hint": "Lege zuerst einen lagergeführten Artikel an und aktiviere hier die Chargen- oder Seriennummern-Verfolgung."
+    },
+    "mode": {
+      "none": "Nicht verfolgt",
+      "lot": "Charge",
+      "serial": "Seriennummer",
+      "lot_and_serial": "Charge und Seriennummer"
+    },
+    "lotStatus": {
+      "open": "Offen",
+      "held": "Gesperrt",
+      "expired": "Abgelaufen",
+      "closed": "Abgeschlossen",
+      "archived": "Archiviert"
+    },
+    "serialStatus": {
+      "available": "Verfügbar",
+      "reserved": "Reserviert",
+      "issued": "Ausgeliefert",
+      "returned": "Zurückgenommen",
+      "scrapped": "Verschrottet",
+      "archived": "Archiviert"
+    },
+    "lots": {
+      "title": "Chargen",
+      "new": "Neue Charge",
+      "empty": "Noch keine Chargen. Lege eine an, sobald du die erste Charge erhältst.",
+      "setStatus": "Status setzen",
+      "col": {
+        "number": "Nummer",
+        "status": "Status",
+        "expiry": "Ablauf",
+        "onHand": "Bestand"
+      },
+      "form": { "title": "Neue Charge" },
+      "field": {
+        "number": "Chargennummer",
+        "expiry": "Ablaufdatum",
+        "supplier": "Lieferantenreferenz"
+      }
+    },
+    "serials": {
+      "title": "Seriennummern",
+      "new": "Neue Seriennummern",
+      "empty": "Noch keine Seriennummern. Erfasse Einheiten, sobald du serialisierte Ware erhältst.",
+      "setStatus": "Status setzen",
+      "col": { "number": "Seriennummer", "status": "Status" },
+      "form": { "title": "Neue Seriennummern" },
+      "field": {
+        "numbers": "Seriennummern",
+        "numbersHint": "Eine pro Zeile oder durch Komma getrennt. Eine einzelne Nummer erstellt eine Seriennummer; mehrere werden ganz oder gar nicht erstellt.",
+        "lot": "Charge",
+        "noLot": "Charge wählen"
+      }
+    },
+    "errors": {
+      "tracking_not_applicable": "Dieser Artikel kann nicht verfolgt werden. Er muss ein lagergeführtes Produkt sein.",
+      "tracking_mode_requires_zero_stock": "Der Bestand muss null sein, bevor du den Verfolgungsmodus ändern kannst.",
+      "invalid_tracking_mode": "Das ist kein gültiger Verfolgungsmodus.",
+      "lot_number_taken": "Für diesen Artikel gibt es bereits eine Charge mit dieser Nummer.",
+      "serial_number_taken": "Für diesen Artikel gibt es bereits eine Seriennummer mit dieser Nummer.",
+      "lot_has_balance": "Diese Charge hat noch Bestand und kann nicht abgeschlossen oder archiviert werden.",
+      "serial_has_balance": "Diese Seriennummer ist noch am Lager. Liefere, nimm sie zurück oder verschrotte sie vor dem Archivieren.",
+      "lot_reference_required": "Dieser Artikel braucht Charge und Seriennummer, wähle also eine Charge für die Seriennummer.",
+      "lot_item_mismatch": "Diese Charge gehört zu einem anderen Artikel.",
+      "invalid_lot_status": "Das ist kein gültiger Chargenstatus.",
+      "invalid_serial_status": "Das ist kein gültiger Seriennummern-Status."
+    }
+  },
+  "help": {
+    "LotSerial": {
+      "title": "Chargen & Seriennummern",
+      "body": "Hier bestimmst du pro Artikel, ob er nach Chargen, nach Seriennummern oder gar nicht verfolgt wird, und verwaltest die zugehörigen Chargen und Einheiten. Wähle links einen Artikel: Rechts stehen sein Verfolgungsmodus und, je nach Modus, seine Chargen mit Status und seine Seriennummern. Der Modus lässt sich nur ändern, solange kein Bestand vorhanden ist, damit die bestehenden Bewegungen eindeutig bleiben.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

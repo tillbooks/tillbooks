@@ -1,0 +1,92 @@
+{
+  "nav": {
+    "quotes": "Offerten"
+  },
+  "quotes": {
+    "route": {
+      "title": "Offerten"
+    },
+    "loading": "Offerten werden geladen",
+    "empty": "Noch keine Offerten.",
+    "tab": {
+      "title": "Offerten"
+    },
+    "action": {
+      "create": "Offerte anlegen",
+      "send": "Senden",
+      "mark_accepted": "Als angenommen markieren",
+      "decline": "Ablehnen",
+      "revise": "Revidieren",
+      "convert_order": "In Auftrag umwandeln",
+      "convert_invoice": "In Rechnung umwandeln",
+      "to_sales_order": "Auftrag erstellen",
+      "addLine": "Position hinzufügen",
+      "removeLine": "Position entfernen"
+    },
+    "field": {
+      "contact": "Kundin/Kunde",
+      "contactPick": "Kontakt wählen",
+      "valid_until": "Gültig bis",
+      "total": "Total",
+      "status": "Status",
+      "number": "Nummer",
+      "versions": "Versionen",
+      "lineDesc": "Bezeichnung",
+      "linePrice": "Einzelpreis"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "issued": "Ausgestellt",
+      "sent": "Versendet",
+      "accepted": "Angenommen",
+      "declined": "Abgelehnt",
+      "converted": "Umgewandelt",
+      "expired": "Abgelaufen",
+      "superseded": "Ersetzt"
+    },
+    "savedView": "Gespeicherte Ansicht",
+    "view": {
+      "all": "Alle offenen"
+    },
+    "filter": {
+      "showSuperseded": "Ersetzte anzeigen"
+    },
+    "drawer": {
+      "close": "Schliessen"
+    },
+    "editor": {
+      "save": "Speichern",
+      "discard": "Verwerfen"
+    },
+    "send": {
+      "cloud_note": "Artefakt erstellt. Der Versand ist eine Cloud-Funktion; PDF herunterladen oder Annahme-Link kopieren.",
+      "copyLink": "Annahme-Link kopieren"
+    },
+    "decline": {
+      "reason": "Ablehnungsgrund"
+    },
+    "empty_hint": "Lege deine erste Offerte an, um den Verkaufstrichter zu schliessen.",
+    "error": {
+      "validity_in_past": "Das Gültigkeitsdatum liegt in der Vergangenheit.",
+      "no_lines": "Vor dem Versand mindestens eine Position erfassen.",
+      "quote_expired": "Diese Offerte ist abgelaufen; bitte eine neue Offerte anfordern.",
+      "edit_draft_instead": "Entwürfe werden direkt bearbeitet, nicht revidiert.",
+      "invalid_token": "Der Annahme-Link ist ungültig oder wurde bereits verwendet.",
+      "illegal_transition": "Dieser Schritt ist im aktuellen Status nicht möglich.",
+      "invalid_reference": "Der gewählte Kontakt existiert nicht.",
+      "transport": "Die Offerten konnten nicht geladen werden.",
+      "permissionDenied": {
+        "read": "Für Offerten fehlt dir die Berechtigung.",
+        "write": "Für diese Änderung fehlt dir die Berechtigung."
+      }
+    }
+  },
+  "help": {
+    "Quotes": {
+      "title": "Offerten",
+      "body": "Deine Offerten mit ihrem Lebenslauf: erstellen, senden, annehmen oder ablehnen, überarbeiten, in eine Rechnung überführen. Senden erzeugt die Nummer, das Dokument und einen Link zum Annehmen; verschickt wird lokal nichts, du erhältst den Link zum Weitergeben. Eine Überarbeitung wird zur neuen Version, die alte bleibt bestehen. Gebucht wird hier nie: Auch das Überführen erzeugt nur einen Rechnungsentwurf.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

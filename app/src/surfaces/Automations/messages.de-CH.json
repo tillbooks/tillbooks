@@ -1,0 +1,110 @@
+{
+  "nav": {
+    "automations": "Automatisierungen"
+  },
+  "automation": {
+    "title": "Automatisierungen",
+    "lede": "Regeln, die TILL für dich ausführt, wenn niemand zusieht. Jede Regel läuft mit den Rechten der Person, die sie angelegt hat, und jede Ausführung steht im Verlauf.",
+    "noWorkspaceHint": "Öffne zuerst eine Buchhaltung, dann siehst du deren Regeln hier.",
+    "needsPermission": "Dafür brauchst du das Recht «Automatisierungen verwalten».",
+    "neverFired": "Noch nie",
+    "rules": {
+      "title": "Regeln",
+      "create": "Neue Regel",
+      "saved": "Die Regel ist angelegt.",
+      "toggled": "Die Regel ist umgestellt.",
+      "archived": "Die Regel ist archiviert, ihr Verlauf bleibt erhalten."
+    },
+    "runs": {
+      "title": "Verlauf"
+    },
+    "tick": {
+      "now": "Jetzt prüfen",
+      "done": "Geprüft. Fällig waren {n} Regeln."
+    },
+    "form": {
+      "name": "Name",
+      "trigger": "Auslöser",
+      "action": "Aktion",
+      "template": "Eingaben der Aktion (JSON)",
+      "templateHint": "Mit {{result.contact.id}} setzt du einen Wert aus dem Auslöser ein. Steht die Klammer allein im Feld, bleibt der Typ erhalten: aus einem Betrag wird keine Zeichenkette.",
+      "save": "Speichern",
+      "cancel": "Abbrechen"
+    },
+    "col": {
+      "name": "Name",
+      "trigger": "Auslöser",
+      "action": "Aktion",
+      "status": "Status",
+      "lastFired": "Zuletzt",
+      "controls": "Steuerung",
+      "rule": "Regel",
+      "outcome": "Ergebnis",
+      "actor": "Ausgeführt als",
+      "when": "Wann"
+    },
+    "status": {
+      "enabled": "Aktiv",
+      "disabled": "Gestoppt",
+      "archived": "Archiviert"
+    },
+    "action": {
+      "enable": "Aktivieren",
+      "disable": "Stoppen",
+      "archive": "Archivieren"
+    },
+    "runStatus": {
+      "running": "Läuft",
+      "ok": "Ausgeführt",
+      "failed": "Fehlgeschlagen",
+      "skipped_condition": "Bedingung nicht erfüllt",
+      "suppressed_loop": "Schleife gestoppt",
+      "suppressed_depth": "Kette zu tief, gestoppt"
+    },
+    "empty": {
+      "title": "Noch keine Automatisierungen",
+      "hint": "Eine Regel verbindet einen Auslöser, eine Bedingung und eine Aktion: geschieht das eine, tut TILL das andere. Du kannst jede Regel jederzeit stoppen."
+    },
+    "emptyRuns": {
+      "title": "Noch keine Ausführungen",
+      "hint": "Sobald eine aktive Regel zum ersten Mal auslöst, steht hier, was sie getan hat und mit wessen Rechten."
+    },
+    "error": {
+      "unknown_event": "Diesen Auslöser gibt es nicht. Wähle einen aus der Liste.",
+      "unknown_action_tool": "Diese Aktion gibt es nicht.",
+      "action_not_writable": "Diese Aktion liest nur und kann darum nichts auslösen.",
+      "invalid_condition": "Die Bedingung ist nicht vollständig.",
+      "invalid_action_input": "Die Eingaben der Aktion sind kein gültiges JSON.",
+      "action_input_too_large": "Die Eingaben der Aktion sind zu lang.",
+      "invalid_name": "Gib der Regel einen Namen.",
+      "name_too_long": "Der Name ist zu lang.",
+      "self_triggering": "Diese Regel würde sich selbst auslösen: ihre Aktion löst genau den Auslöser aus, auf den sie wartet.",
+      "rule_archived": "Diese Regel ist archiviert und lässt sich nicht mehr ändern.",
+      "not_found": "Diese Regel gibt es nicht mehr.",
+      "permission_denied": "Dafür fehlt das nötige Recht.",
+      "automation_unavailable": "Automatisierungen sind in dieser Umgebung nicht eingerichtet.",
+      "period_locked": "Die Periode ist gesperrt.",
+      "store_busy": "Die Buchhaltung war gerade belegt. Versuch es nochmals.",
+      "unexpected_error": "Etwas ist schiefgelaufen.",
+      "invalid_input": "Eine Eingabe der Regel war unvollständig. Es wurde nichts geändert.",
+      "run_not_stuck": "Diese Ausführung ist bereits abgeschlossen. Nachholen lässt sich nur eine, die hängen geblieben ist.",
+      "unreadable_action_input": "Die gespeicherten Werte dieser Ausführung sind unlesbar. Sie wurde als fehlgeschlagen abgeschlossen.",
+      "action_not_automatable": "Diese Aktion darf nicht unbeaufsichtigt laufen. Die Regel kann nicht ausgeführt werden."
+    },
+    "run": {
+      "payload": "Gesendete Werte",
+      "withheld": "Nicht sichtbar. Dafür brauchst du das Recht «{capability}».",
+      "redelivered": "{n}x erneut zugestellt, ohne nochmals auszuführen",
+      "retry": "Nachholen",
+      "retried": "Die Ausführung wurde nachgeholt."
+    }
+  },
+  "help": {
+    "Automations": {
+      "title": "Automatisierungen",
+      "body": "Automatisierungen zeigt jede Regel, die dieser Arbeitsbereich unbeaufsichtigt ausführt, und jeden einzelnen Lauf. Unter Regeln definierst du Auslöser, Bedingungen und Aktionen; der Verlauf zeigt, was eine Regel tatsächlich getan hat, auch wenn etwas schiefging. Deaktivieren ist immer möglich, unabhängig von deiner Rolle, damit sich eine fehlerhafte Regel sofort anhalten lässt.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

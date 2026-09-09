@@ -1,0 +1,102 @@
+{
+  "nav": { "requisitions": "Anforderungen" },
+  "requisitions": {
+    "title": "Anforderungen",
+    "new": "Neue Anforderung",
+    "noWorkspace": "Wähle einen Mandanten, um Anforderungen zu sehen.",
+    "showAll": "Alle Status zeigen",
+    "empty": {
+      "title": "Noch keine Anforderungen",
+      "hint": "Erfasse den internen Bedarf, bevor du einkaufst.",
+      "cta": "Anforderung erstellen"
+    },
+    "error": { "transport": "Die Anforderungen konnten nicht geladen werden." },
+    "list": { "caption": "Anforderungen mit Status, Antragsteller, Bedarfsdatum, Dringlichkeit und geschätztem Wert" },
+    "col": {
+      "number": "Nummer",
+      "status": "Status",
+      "requester": "Antragsteller",
+      "neededBy": "Benötigt bis",
+      "urgency": "Dringlichkeit",
+      "total": "Geschätzt",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "pending_approval": "Wartet auf Freigabe",
+      "approved": "Freigegeben",
+      "rejected": "Abgelehnt",
+      "partially_converted": "Teilweise umgewandelt",
+      "converted": "Umgewandelt",
+      "cancelled": "Storniert",
+      "closed": "Abgeschlossen"
+    },
+    "urgency": {
+      "normal": "Normal",
+      "high": "Hoch",
+      "critical": "Kritisch"
+    },
+    "event": {
+      "submitted": "Eingereicht",
+      "auto_approved": "Automatisch freigegeben",
+      "approved": "Freigegeben",
+      "rejected": "Abgelehnt",
+      "returned": "Zurückgewiesen"
+    },
+    "field": {
+      "neededBy": "Benötigt bis",
+      "urgency": "Dringlichkeit",
+      "description": "Beschreibung",
+      "costCenter": "Kostenstelle",
+      "item": "Artikel",
+      "freeText": "Freitext",
+      "qty": "Menge",
+      "unitCost": "Gesch. Stückkosten (CHF)",
+      "supplier": "Bevorzugter Lieferant",
+      "none": "Keine",
+      "choose": "Wählen",
+      "reason": "Begründung",
+      "comment": "Kommentar",
+      "createAs": "Erstellen als",
+      "createDraft": "Entwurf",
+      "createSent": "Versendet",
+      "convertQty": "Umzuwandelnde Menge"
+    },
+    "detail": {
+      "title": "Anforderung",
+      "lines": "Positionen",
+      "open": "Offen",
+      "lineTotal": "Positionstotal",
+      "timeline": "Freigabeverlauf",
+      "noEvents": "Noch keine Entscheide.",
+      "conversions": "Bestellungen",
+      "po": "Bestellung"
+    },
+    "action": {
+      "submit": "Zur Freigabe einreichen",
+      "approve": "Freigeben",
+      "reject": "Ablehnen",
+      "return": "Zur Überarbeitung zurückweisen",
+      "convert": "In Bestellung umwandeln",
+      "cancel": "Anforderung stornieren",
+      "close": "Abschliessen",
+      "save": "Speichern",
+      "back": "Schliessen",
+      "addLine": "Position hinzufügen",
+      "removeLine": "Entfernen",
+      "confirmConvert": "Bestellung erstellen"
+    },
+    "convert": {
+      "title": "In Bestellung umwandeln",
+      "help": "Wähle die zu bestellende Menge je Position und bestätige den Lieferanten."
+    }
+  },
+  "help": {
+    "Requisitions": {
+      "title": "Anforderungen",
+      "body": "Interner Bedarf beginnt hier als Anforderung: was gebraucht wird, bis wann, wie dringend, mit geschätztem Wert. Eine Anforderung durchläuft Einreichen, Freigeben oder Zurückweisen und lässt sich am Ende in eine Bestellung überführen; die Freigabegeschichte bleibt am Vorgang sichtbar. Gebucht wird nichts und nach aussen geht nichts: Die Schätzung ist eine Planungsgrösse, kein Buchungsbetrag.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

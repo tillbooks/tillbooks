@@ -1,0 +1,47 @@
+/* Tabs (D118 B2). One WAI-ARIA tablist treatment. Only --t-* tokens. The active tab is marked by a
+   tinted pill, never a left/bottom accent bar (the bar is retired by the design law). */
+
+.tabs-list {
+  display: flex;
+  gap: var(--t-space-0-5);
+  border-bottom: 1px solid var(--t-border);
+  margin-bottom: var(--t-space-2);
+}
+
+/* A tab is a quiet button. Height follows the density control token so the strip tightens with the
+   global toggle. The resting state is dim ink on the page; hover is a neutral background step. */
+.tabs-tab {
+  height: var(--t-control-h);
+  padding: 0 var(--t-space-2);
+  border: 0;
+  border-radius: var(--t-radius-sm) var(--t-radius-sm) 0 0;
+  background: none;
+  color: var(--t-text-dim);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tabs-tab:hover {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+}
+
+/* The active tab takes the tinted accent-soft pill and accent ink: the selected item is one of the
+   three things the accent is for. */
+.tabs-tab--active {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+/* The focus ring is the shared accent ring; never removed. */
+.tabs-tab:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: -2px;
+}
+
+/* A focusable panel gets the same ring when reached by keyboard, but no persistent border. */
+.tabs-panel:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}

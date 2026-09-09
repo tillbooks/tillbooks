@@ -1,0 +1,207 @@
+{
+  "nav": {
+    "reconciliation": "Abgleich"
+  },
+  "qrmatch": {
+    "title": "Abgleich",
+    "subtitle": "Eingehende Zahlungen den offenen Rechnungen zuordnen.",
+    "record": "Gutschrift erfassen",
+    "savedView": "Ansicht",
+    "savedViewAll": "Alle",
+    "counts": "{open} offen ({review} zu prüfen, {unmatched} ohne Zuordnung) · {applied} verbucht",
+    "col": {
+      "date": "Valuta",
+      "amount": "Betrag",
+      "reference": "Referenz",
+      "match": "Rechnung",
+      "state": "Status",
+      "actions": "Aktionen"
+    },
+    "confidence": {
+      "high": "Sicher",
+      "medium": "Zu prüfen",
+      "none": "Keine Zuordnung"
+    },
+    "reason": {
+      "exact_open": "Referenz und Betrag stimmen genau",
+      "exact_open_plus_fee": "Betrag entspricht Rechnung plus Mahngebühr",
+      "amount_short": "Betrag liegt unter dem offenen Betrag",
+      "amount_over": "Betrag liegt über dem offenen Betrag",
+      "currency_differs": "Währung weicht von der Rechnung ab",
+      "no_invoice": "Keine offene Rechnung zu dieser Referenz",
+      "already_paid": "Die Rechnung ist bereits beglichen",
+      "ambiguous_reference": "Mehrere offene Rechnungen zu dieser Referenz",
+      "reference_invalid": "Die Referenz hat eine ungültige Prüfziffer",
+      "no_reference": "Ohne strukturierte Referenz"
+    },
+    "state": {
+      "applied": "Verbucht",
+      "dismissed": "Keine Kundenzahlung"
+    },
+    "noReference": "Ohne Referenz",
+    "noMatch": "Keine Rechnung zugeordnet",
+    "applyFull": "Übernehmen",
+    "review": "Prüfen",
+    "matchManually": "Manuell zuordnen",
+    "override": "Korrigieren",
+    "reviewDetail": "Rechnung {invoice}: offen {open}, Differenz {delta}.",
+    "feeShare": "Davon Mahngebühr: {fee} (wird als Guthaben geparkt).",
+    "applyPartial": "Als Teilzahlung buchen",
+    "applyAsFull": "Als vollständig akzeptieren ({loss} Verlust)",
+    "autoApply": "Sichere Treffer automatisch verbuchen (nur exakte Referenz und exakter Betrag)",
+    "empty": "Noch keine eingehenden Zahlungen im Abgleich",
+    "emptyHint": "Erfasse eine Bankgutschrift, um sie einer offenen Rechnung zuzuordnen.",
+    "denied": "Erfordert die Berechtigung zum Buchen von Zahlungen",
+    "deniedRead": "Du brauchst Leserechte auf den Verkauf, um den Abgleich zu sehen.",
+    "deniedNote": "Dafür fehlt dir die Berechtigung.",
+    "alreadyPaid": "Diese Rechnung ist bereits beglichen.",
+    "periodLocked": "Die Periode ist gesperrt: die Zahlung kann dort nicht gebucht werden.",
+    "currencyMismatch": "Die Währungen stimmen nicht überein: erfasse die Zahlung mit Umrechnung unter Zahlungen.",
+    "needsBankAccount": "Das Bankkonto ist nicht registriert.",
+    "toPeriods": "Zu den Perioden",
+    "toBankAccounts": "Zu den Bankkonten",
+    "error": {
+      "action": "Das hat nicht geklappt. Versuche es noch einmal.",
+      "record": "Die Gutschrift konnte nicht erfasst werden."
+    },
+    "form": {
+      "account": "Bankkonto",
+      "accountPick": "Bankkonto wählen",
+      "amount": "Betrag (CHF)",
+      "valueDate": "Valutadatum",
+      "reference": "Referenz (QRR oder RF)",
+      "payer": "Zahlender",
+      "submit": "In den Abgleich aufnehmen"
+    },
+    "overrideAudit": "Verbucht von {who} am {when}. Eine Korrektur storniert die Zahlung und bucht neu.",
+    "overridePick": "Richtige Rechnung",
+    "overridePickNone": "Keine Rechnung wählen",
+    "overrideApply": "Zuordnen und buchen",
+    "overrideReapply": "Stornieren und neu zuordnen",
+    "overrideUnmatch": "Zuordnung aufheben",
+    "overrideDismiss": "Keine Kundenzahlung",
+    "close": "Schliessen",
+    "lossAboveThreshold": "Rest von {loss} übersteigt die Ausbuchungsgrenze ({threshold}): buche die Zahlung mit bewusster Ausbuchung unter Zahlungen.",
+    "toPayments": "Unter Zahlungen erfassen",
+    "remainingOpen": "Noch offen: {open}",
+    "creditedShare": "Davon durch Gutschrift verrechnet: {credited}."
+  },
+  "camt": {
+    "import": "Kontoauszug importieren",
+    "denied": "Erfordert die Berechtigung zum Buchen von Zahlungen",
+    "duplicate": "Dieser Kontoauszug wurde bereits importiert; es wurde nichts doppelt erfasst.",
+    "noEntryRef": "Ohne Referenz",
+    "seeQueue": "Im Abgleich oben entscheiden",
+    "confirm": "Zuordnen",
+    "createEntry": "Buchen",
+    "form": {
+      "account": "Bankkonto",
+      "file": "camt.053/054-Datei",
+      "submit": "Importieren",
+      "allowDuplicates": "Dies ist wirklich eine zweite, echte Buchung (keine erneute Zustellung)"
+    },
+    "col": {
+      "entryRef": "Referenz"
+    },
+    "state": {
+      "matched": "Zugeordnet",
+      "unmatched": "Offen",
+      "partial": "Teilweise"
+    },
+    "board": {
+      "title": "Kontoauszug",
+      "reconciled": "Mit dem Kontostand abgeglichen",
+      "notReconciled": "Noch nicht mit dem Kontostand abgeglichen",
+      "close": "Schliessen",
+      "empty": "Dieser Kontoauszug enthält keine Buchungen",
+      "emptyHint": "Importiere einen weiteren Kontoauszug, um Bewegungen zu sehen."
+    },
+    "dialog": {
+      "pickBill": "Kreditorenrechnung",
+      "pickEntry": "Oder: bestehende Buchung verknüpfen (Buchungs-ID)",
+      "entryIdPlaceholder": "Buchungs-ID",
+      "confirmBill": "Rechnung zuordnen",
+      "confirmEntry": "Buchung verknüpfen",
+      "pickContra": "Gegenkonto",
+      "description": "Beschreibung",
+      "book": "Buchen",
+      "split": "Aufteilen",
+      "contraPlaceholder": "Kontonummer tippen, z. B. 6900",
+      "noAccountMatch": "Kein Konto passt zur Eingabe."
+    },
+    "preview": {
+      "title": "Buchungsvorschau",
+      "soll": "Soll",
+      "haben": "Haben",
+      "total": "Total",
+      "target": "Zielbeleg",
+      "loading": "Vorschau wird berechnet",
+      "unavailable": "Die Buchungsvorschau ist hier nicht verfügbar: das Bankkonto dieser Bewegung ist keinem Sachkonto zugeordnet. Die Buchung selbst funktioniert weiterhin.",
+      "bankUnlinked": "Bankkonto ohne Sachkonto"
+    },
+    "werkbank": {
+      "title": "Bewegung aufteilen",
+      "bankFact": "Bankbewegung",
+      "candidates": "Offene Kreditorenrechnungen",
+      "allocate": "Zuteilen",
+      "rest": "Rest",
+      "restDone": "Vollständig zugeteilt",
+      "book": "Buchen",
+      "empty": "Keine offenen Kreditorenrechnungen vorhanden.",
+      "restOpen": "Teile den ganzen Betrag zu, bevor du buchst: es bleiben {amount} offen.",
+      "over": "Die Zuteilung übersteigt die Bewegung um {amount}."
+    },
+    "error": {
+      "schemaInvalid": "Die Datei konnte nicht gelesen werden: prüfe, ob es ein gültiges camt.053/054-XML ist.",
+      "ibanMismatch": "Die IBAN in der Datei stimmt nicht mit dem gewählten Bankkonto überein.",
+      "import": "Der Import ist fehlgeschlagen.",
+      "confirm": "Die Zuordnung ist fehlgeschlagen.",
+      "createEntry": "Die Buchung ist fehlgeschlagen.",
+      "currencyMismatch": "Die Währung weicht von der Basiswährung ab: buche dies über die Zahlungen oder als manuelle Buchung.",
+      "statementAmended": "Dieser Kontoauszug wurde bereits importiert, aber die neue Datei weicht ab: {changes}. Die bestehenden Buchungen wurden NICHT überschrieben.",
+      "statementAmendedUnnamed": "der Inhalt weicht ab",
+      "wrongDirection": "Diese Buchung ist eine Gutschrift (Geld kommt herein) und kann nicht als ausgehende Zahlung verbucht werden. Für eine zurückgebuchte Zahlung: unter Zahlungen stornieren."
+    },
+    "needsBankAccount": "Das Bankkonto ist nicht registriert.",
+    "skipped": "{count} Buchung(en) wurden nicht importiert (bereits vorhanden oder nicht lesbar).",
+    "needsReview": "Zu prüfen: kein Vorschlag erreicht die Prüfschwelle",
+    "needsReviewShort": "Zu prüfen",
+    "suggestion": {
+      "reason": {
+        "amount": "genauer Betrag",
+        "valueDate": "Valuta innerhalb des Fensters",
+        "counterparty": "Zahlungspartner stimmt überein",
+        "reference": "Referenz stimmt überein"
+      },
+      "target": "Vorschlag: {name}",
+      "batch": "Sammelzahlung",
+      "batchMismatch": "Die Summe der Sammelzahlung stimmt nicht mit dieser Buchung überein: nutze die manuelle Aufteilung unten",
+      "confirmBatch": "Sammelzahlung bestätigen",
+      "none": "Kein Gegenstück gefunden: buche die Bewegung als Aufwand oder teile sie auf."
+    },
+    "statements": {
+      "title": "Kontoauszüge",
+      "col": {
+        "period": "Zeitraum",
+        "account": "Bankkonto",
+        "lines": "Bewegungen",
+        "open": "Stand"
+      },
+      "until": "bis",
+      "open": "Öffnen",
+      "openNamed": "Kontoauszug {id} öffnen",
+      "allMatched": "Alles zugeordnet",
+      "openCount": "{n} offen",
+      "empty": "Noch kein Kontoauszug importiert.",
+      "emptyHint": "Importiere eine camt.053-Datei deiner Bank. Die Bewegungen erscheinen dann hier, und du siehst, was noch offen ist."
+    }
+  },
+  "help": {
+    "Reconciliation": {
+      "title": "Abgleich",
+      "body": "Eingehende Zahlungen treffen hier auf ihre Rechnungen. Oben die Warteschlange der QR-Gutschriften mit Vorschlägen zum Übernehmen, Prüfen oder Korrigieren; jede Entscheidung fällst du auf der Zeile, die es betrifft. Importierst du einen Kontoauszug, erscheint darunter dessen eigene Liste zum Zuordnen und Buchen. Gutschriften entscheidet immer die Warteschlange oben, damit dieselbe Entscheidung nur einen Ort hat.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

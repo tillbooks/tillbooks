@@ -1,0 +1,117 @@
+{
+  "nav": {
+    "goodsReceipts": "Goods receipts"
+  },
+  "goodsReceipt": {
+    "title": "Goods receipts",
+    "noWorkspace": "Pick a workspace to view goods receipts.",
+    "listLabel": "Goods receipts",
+    "detailLabel": "Receipt detail",
+    "selectHint": "Select a receipt to see its lines and its trail.",
+    "new": "New receipt",
+    "addLine": "Add line",
+    "post": "Post",
+    "cancel": "Cancel receipt",
+    "reverse": "Reverse",
+    "accept": "Accept held lines",
+    "reject": "Reject held lines",
+    "close": "Close",
+    "save": "Save",
+    "value": "Receipt value",
+    "noLines": "No lines yet. Add one from the order's open quantity.",
+    "noMovement": "no stock movement",
+    "reversed": "reversed",
+    "holdTitle": "Lines held for inspection",
+    "trailTitle": "Trail",
+    "dateIsFixed": "The receipt date is fixed when it is opened: every stock movement carries it, and a locked period refuses the post.",
+    "error": { "transport": "Could not load the goods receipts. Please try again." },
+    "empty": {
+      "title": "No goods receipts yet",
+      "hint": "Send a purchase order first, then record what arrives against it here."
+    },
+    "overReceipt": {
+      "badge": "Over-delivery",
+      "line": "{qty} more than the order had open"
+    },
+    "overReceiptHint": "An over-delivery is accepted and recorded here rather than refused: the goods are in the warehouse either way. Set a hard ceiling in the settings if you want it blocked instead.",
+    "field": { "receivedAt": "Received on" },
+    "col": {
+      "receipt": "Goods receipt",
+      "status": "Status",
+      "description": "Line",
+      "qty": "Qty",
+      "unitCost": "Unit cost",
+      "inspection": "Inspection",
+      "movement": "Stock movement",
+      "note": "Note"
+    },
+    "status": {
+      "draft": "Draft",
+      "posted": "Posted",
+      "reversed": "Reversed",
+      "cancelled": "Cancelled"
+    },
+    "inspection": {
+      "none": "Not required",
+      "pending": "Held",
+      "accepted": "Accepted",
+      "rejected": "Rejected"
+    },
+    "event": {
+      "created": "Opened",
+      "line_changed": "Line changed",
+      "posted": "Posted",
+      "accepted": "Accepted",
+      "rejected": "Rejected",
+      "reversed": "Reversed",
+      "cancelled": "Cancelled",
+      "over_receipt": "Over-delivery accepted"
+    },
+    "form": {
+      "createTitle": "Open a goods receipt",
+      "lineTitle": "Add a receipt line",
+      "po": "Purchase order",
+      "receivedAt": "Received on",
+      "note": "Note",
+      "poLine": "Order line",
+      "qty": "Quantity received",
+      "open": "open",
+      "hold": "Hold for inspection (no stock until accepted)",
+      "lot": "Existing lot",
+      "serial": "Existing serial",
+      "noneSelected": "None",
+      "newLot": "New lot number",
+      "newLotHint": "The lot number from the delivery note. A purchased lot usually comes into existence right here, on its first delivery.",
+      "newSerial": "New serial number",
+      "serialHint": "A serial is a single unit, so a serial line receives 1.",
+      "serialReturnHint": "Serials that are not at a location right now: ones already on the shelf are left out, because receiving a unit twice would count it twice.",
+      "optional": "optional",
+      "reverseReason": "Reason for the reversal",
+      "rejectReason": "Reason for the rejection"
+    },
+    "errors": {
+      "nothing_open": "This order has nothing left to receive.",
+      "qty_exceeds_open": "More than the order still has open. Reduce the quantity, or allow over-receipt in the settings.",
+      "over_receipt": "Above the over-receipt tolerance this workspace allows. Reduce the quantity or raise the tolerance.",
+      "line_already_billed": "A vendor bill has already been matched against this line, so it cannot be reversed.",
+      "location_required": "Pick a location for this line: the goods have to land somewhere.",
+      "period_locked": "The period this receipt belongs to is locked. Unlock it first, in Periods.",
+      "insufficient_stock": "The goods have already left the warehouse, so this receipt cannot be reversed. Record an inventory adjustment instead.",
+      "invalid_transition": "That is not possible in the receipt's current state.",
+      "invalid_qty": "Check the quantity: a whole number above zero, and exactly 1 on a line that names a serial.",
+      "lot_required": "This item is lot-tracked: pick a lot for the line, or enter the lot number from the delivery note.",
+      "serial_required": "This item is serial-tracked: pick a serial for the line, or enter the serial number from the delivery note.",
+      "tracking_not_applicable": "That item is not lot- or serial-tracked, so it cannot carry one.",
+      "lot_number_taken": "That lot number already exists for this item. Pick it from the list instead.",
+      "serial_number_taken": "That serial number already exists for this item."
+    }
+  },
+  "help": {
+    "GoodsReceipt": {
+      "title": "Goods receipts",
+      "body": "Goods receipts record what actually arrived against an order: lines with quantity, cost value, location and inspection state. A draft can be edited and posted; a posted receipt is immutable and is reversed when needed. Every recognised line mints its own stock movement carrying the document’s date, and a closed period accepts no further posting.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

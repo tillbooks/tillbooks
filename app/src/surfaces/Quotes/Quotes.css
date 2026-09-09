@@ -1,0 +1,122 @@
+/* C02 Offerten: one accent (teal), tabular numerals on money/date.
+
+   D118 B2 (2026-08-24): the quote list is the shared DataTable, the page header the shared
+   SurfaceHeader, and both overlays the shared DetailDrawer. The per-surface CSS that duplicated the
+   list table (and its rows, hover and open highlight), the page header and title, and the drawer
+   chrome and its action row has been deleted; the shared primitives own all of that. What remains is
+   genuinely Quotes-specific: the saved-view picker and the show-superseded toggle that ride the
+   header, the status chip, the create and decline forms the drawer body hosts, the drawer fact grid
+   and the honest cloud-tier note. */
+
+.quotes {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* The visible accent focus ring the design law requires (2px accent, offset 2px), for the bespoke
+   controls this surface still owns: the header picker/toggle and the drawer form fields. The shared
+   primitives (DataTable, DetailDrawer) carry their own rings. */
+.quotes :is(input, select, textarea, button, .btn, a):focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+/* The saved-view picker and the show-superseded toggle ride the SurfaceHeader actions slot. */
+.quotes-picker,
+.quotes-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* The show-superseded filter is a standalone toggle: the label carries the whole hit area so a
+   native checkbox's ~16px does not set the target size (D116 standalone tier, 44px). */
+.quotes-toggle {
+  min-height: 44px;
+  cursor: pointer;
+}
+
+/* The create and decline forms the DetailDrawer body hosts. The drawer supplies the panel ground and
+   padding, so these carry only the field rhythm, not their own chrome. */
+.quotes-editor,
+.quotes-decline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.quotes-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.quotes-lines {
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.quotes-line-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.quotes-line-row input:first-child {
+  flex: 1;
+}
+
+.quotes-form-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.quotes-version {
+  color: var(--t-text-dim);
+  font-size: 0.8em;
+}
+
+.quotes-status {
+  white-space: nowrap;
+}
+
+.quotes-money {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The drawer fact grid: label and value in two columns. */
+.quotes-drawer-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.quotes-drawer-facts dt {
+  color: var(--t-text-dim);
+}
+
+.quotes-drawer-facts dd {
+  margin: 0;
+}
+
+/* The honest cloud-tier note: the local artifact is made, the send is a Cloud function. */
+.quotes-cloud-note {
+  padding: 0.75rem;
+  border: 1px dashed var(--t-border);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.quotes-cloud-note input {
+  width: 100%;
+  margin-top: 0.5rem;
+}

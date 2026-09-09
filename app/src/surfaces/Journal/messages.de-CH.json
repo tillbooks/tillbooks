@@ -1,0 +1,187 @@
+{
+  "journal": {
+    "title": "Journal",
+    "empty": "Noch keine Buchungen.",
+    "emptyAction": "Erste Buchung erfassen",
+    "noMatch": "Keine Buchungen entsprechen diesen Filtern.",
+    "noMatchHint": "Erweitere den Datumsbereich oder setze die Filter zurück, um mehr zu sehen.",
+    "noWorkspaceHint": "Das Journal gehört zu einem Arbeitsbereich. Leg zuerst einen an.",
+    "newEntry": "Neue Buchung",
+    "openEntry": "Buchung {label} öffnen",
+    "booked": "In den Büchern",
+    "reversalTag": "Storno",
+    "filters": {
+      "legend": "Journal filtern",
+      "from": "Von",
+      "to": "Bis",
+      "account": "Konto",
+      "source": "Quelle",
+      "status": "Status",
+      "all": "Alle",
+      "apply": "Filter anwenden",
+      "clear": "Filter zurücksetzen"
+    },
+    "columns": {
+      "date": "Datum",
+      "ref": "Referenz",
+      "description": "Buchungstext",
+      "amount": "Betrag",
+      "source": "Quelle",
+      "status": "Status"
+    },
+    "source": {
+      "manual": "Manuell",
+      "invoice": "Rechnung",
+      "payment": "Zahlung",
+      "import": "Import",
+      "agent": "Agent",
+      "fx": "Fremdwährung",
+      "reversal": "Storno",
+      "close": "Abschluss",
+      "purchase": "Kreditorenbuchung",
+      "dunning": "Mahngebühr",
+      "credit_note": "Gutschrift",
+      "camt": "Bankabgleich",
+      "stock": "Bestandesbewertung",
+      "landed_cost": "Bezugskosten",
+      "expense_claim": "Spesen",
+      "asset_acquisition": "Anlagenzugang",
+      "asset_depreciation": "Abschreibung",
+      "asset_disposal": "Anlagenabgang",
+      "inventory_valuation": "Lagerbewertung"
+    },
+    "reversedTag": "Storniert",
+    "openReversed": "Stornierte Buchung {label} öffnen",
+    "openReversal": "Storno-Buchung {label} öffnen",
+    "tablist": "Journal-Ansichten",
+    "tab": {
+      "live": "Journal"
+    }
+  },
+  "entry": {
+    "post": "Buchen",
+    "saveDraft": "Entwurf speichern",
+    "reverse": "Stornieren",
+    "delete": "Löschen",
+    "unbalanced": "Soll und Haben weichen um {difference} ab.",
+    "fx": {
+      "note": "Fremdwährung: {amount} zum Kurs {rate} ergibt {base} in den Büchern.",
+      "mixed": "Diese Buchung enthält uneinheitliche Währungen oder Kurse. Angezeigt: {amount} zum Kurs {rate}, {base} in den Büchern. Prüf die Zeilen einzeln."
+    },
+    "periodLocked": "Diese Periode ist gesperrt.",
+    "periodLockedLink": "Perioden verwalten",
+    "permissionDenied": "Dir fehlt die Berechtigung zum Buchen.",
+    "requiresBookkeeper": "Erfordert die Buchhalter-Rolle.",
+    "debit": "Soll",
+    "credit": "Haben",
+    "status": {
+      "draft": "Entwurf",
+      "posted": "Gebucht"
+    },
+    "newTitle": "Neue Buchung",
+    "editTitle": "Entwurf bearbeiten",
+    "viewTitle": "Buchung ansehen",
+    "date": "Datum",
+    "ref": "Referenz",
+    "description": "Buchungstext",
+    "account": "Konto",
+    "selectAccount": "Konto wählen",
+    "noAccountMatch": "Kein Konto passt zur Eingabe.",
+    "costCenter": "Kostenstelle",
+    "taxCode": "Steuercode",
+    "none": "Keine",
+    "lines": "Buchungszeilen",
+    "addLine": "Zeile hinzufügen",
+    "removeLine": "Zeile {number} entfernen",
+    "close": "Schliessen",
+    "cancel": "Abbrechen",
+    "more": "Weitere Aktionen",
+    "debitTotal": "Summe Soll",
+    "creditTotal": "Summe Haben",
+    "balanced": "Ausgeglichen",
+    "reversalOf": "Storno einer früheren Buchung",
+    "reverseConfirmTitle": "Buchung stornieren?",
+    "reverseConfirmBody": "Eine Korrektur ist immer eine zusätzliche Buchung: TILL bucht ein Storno mit vertauschtem Soll und Haben. Die ursprüngliche Buchung bleibt unverändert im Journal, beide Buchungen bleiben sichtbar und heben sich gegenseitig auf.",
+    "reverseConfirmAction": "Storno buchen",
+    "deleteConfirmTitle": "Entwurf löschen?",
+    "deleteConfirmBody": "Der Entwurf und seine Zeilen werden endgültig entfernt. Ein Entwurf wurde nie gebucht, an den Büchern ändert sich also nichts, aber der Entwurf selbst lässt sich nicht wiederherstellen.",
+    "deleteConfirmAction": "Entwurf löschen",
+    "vatUnreconciled": "Die MWST stimmt nicht überein: Die markierten Zeilen ergeben {expected}, auf den MWST-Konten sind {booked} gebucht."
+  },
+  "errors": {
+    "unbalanced": "Die Buchung ist nicht ausgeglichen. Soll muss gleich Haben sein.",
+    "period_locked": "Die Periode ist gesperrt, es wurde nichts gebucht.",
+    "not_a_draft": "Diese Buchung ist gebucht und kann nicht gelöscht, nur storniert werden.",
+    "already_reversed": "Diese Buchung wurde bereits storniert.",
+    "not_posted": "Nur eine gebuchte Buchung kann storniert werden.",
+    "not_found": "Diese Buchung wurde nicht gefunden.",
+    "invalid_line": "Eine Zeile ist ungültig. Jede Zeile braucht ein Konto und genau einen Betrag.",
+    "invalid_source": "Diese Buchungsquelle ist hier nicht erlaubt.",
+    "vat_trace_unreconciled": "Die MWST dieser Buchung stimmt nicht mit den MWST-Konten überein, es wurde nichts gebucht.",
+    "unknown_tax_code": "Eine Zeile verwendet einen MWST-Code, den es in diesem Arbeitsbereich nicht gibt.",
+    "archived_tax_code": "Eine Zeile verwendet einen archivierten MWST-Code, es wurde nichts gebucht. Wähle einen aktiven Code.",
+    "needs_vat_config": "Die MWST ist für diesen Arbeitsbereich noch nicht eingerichtet."
+  },
+  "archive": {
+    "tab": "Archiv",
+    "provenance": "Aus dem Vorsystem {system}, {from} bis {to}. Nicht Teil der TILL-Belegkette.",
+    "requiresReadBooks": "Zum Lesen des Archivs brauchst du die Berechtigung read_books.",
+    "empty": "Kein Archiv übernommen",
+    "emptyBody": "Das Archiv hält das Journal deines Vorsystems, schreibgeschützt und klar gekennzeichnet. Es entsteht über den Historie-Schritt eines Übernahmeplans.",
+    "emptyAction": "Zum Übernahmeplan",
+    "rowGlyph": "Archiveintrag",
+    "overflow": "Aktionen für Archivperioden",
+    "pager": "Archivseiten",
+    "pagerPrev": "Vorherige Seite",
+    "pagerNext": "Nächste Seite",
+    "pagerPage": "Seite {page} von {pages}",
+    "columns": {
+      "flags": "Hinweise",
+      "sourceAccount": "Konto (Vorsystem)",
+      "targetAccount": "TILL-Konto"
+    },
+    "filters": {
+      "legend": "Archiv filtern",
+      "sourceAccount": "Konto (Vorsystem)",
+      "text": "Text"
+    },
+    "query": {
+      "noHits": "Keine Archiveinträge für diese Filter.",
+      "clearFilters": "Filter zurücksetzen"
+    },
+    "row": {
+      "unmapped": "Nicht zugeordnet",
+      "unbalanced": "Im Vorsystem unausgeglichen"
+    },
+    "periods": {
+      "title": "Archivierte Perioden",
+      "period": "Periode",
+      "entries": "Einträge",
+      "retentionUntil": "Aufbewahren bis",
+      "purged": "Bereinigt",
+      "status": "Status"
+    },
+    "purge": {
+      "action": "Abgelaufene Perioden bereinigen",
+      "fromPeriod": "Von Periode",
+      "toPeriod": "Bis Periode",
+      "reason": "Begründung",
+      "confirm": "Mit dieser Begründung bereinigen",
+      "done": "{count} Archiveinträge bereinigt. Der Bereinigungsnachweis bleibt."
+    },
+    "err": {
+      "retentionActive": "Die Aufbewahrungsfrist läuft noch bis {until} ({statute}). Es wurde nichts gelöscht; die Ablehnung ist dokumentiert.",
+      "purgeDenied": "Zum Bereinigen brauchst du die Berechtigung purge_archive.",
+      "purgeFailed": "Die Bereinigung wurde abgelehnt: {code}"
+    }
+  },
+  "help": {
+    "Journal": {
+      "title": "Journal",
+      "body": "Das Journal ist die unveränderliche Liste aller in TILL verbuchten Einträge dieses Arbeitsbereichs. Verbuchte Einträge werden nie umgeschrieben: Eine Korrektur ist immer eine Stornobuchung, die den Fehler sichtbar aufhebt. Jede Zeile trägt ihr Konto, ihren Betrag und, wo MWST im Spiel ist, ihren Steuercode, aus dem später die Abrechnung gerechnet wird. Ein übernommenes Altsystem-Journal erscheint daneben als eigenes Archiv und gehört nicht zur laufenden Belegkette.",
+      "concepts": [
+        "vorsteuer"
+      ]
+    }
+  }
+}

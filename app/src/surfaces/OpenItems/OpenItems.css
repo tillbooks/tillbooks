@@ -1,0 +1,525 @@
+/*
+ * A16 Offene Posten styling.
+ *
+ * Every value is a token. Spacing is the 8-pt grid, with 4px reserved for the optical nudges the
+ * design law permits (a chip's inner padding, a hairline offset), never for layout rhythm.
+ *
+ * THE ACCENT BUDGET ON THIS SURFACE IS TWO, not three, and the missing one is deliberate: the focus
+ * ring (inherited from global.css) and the selected tab. There is no primary action, because A16
+ * writes nothing to the ledger. The one further spend in the capability is the popover's Speichern,
+ * and the popover is an overlay over this surface rather than part of it.
+ *
+ * MONEY CARRIES NO ACCENT AND NO COLOUR AT ALL, including the negative amounts a Guthaben produces:
+ * `formatMoney` puts a leading minus on them, so the sign is in the text and a grayscale printout,
+ * which is a real Treuhänder artefact, reads exactly what the screen reads. `tabular-nums` is on
+ * every figure, so the columns line up digit for digit.
+ *
+ * THE ONE COLOURED THING is the mismatch band, and it is the only state on the surface that is
+ * genuinely urgent. The passing reconciliation mark is dim and uncoloured, because an all-clear state
+ * that gets a colour makes that colour the background and dulls the real warning.
+ */
+
+.oi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/*
+ * The base-total headline and the reconciliation line, the surface's own summary block under the
+ * shared SurfaceHeader. The title, help and the bucket-boundaries popover now ride SurfaceHeader; the
+ * head/title chrome that used to live here is deleted.
+ */
+.oi-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.oi-total {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.oi-total--pending {
+  min-height: 24px;
+}
+
+.oi-total-skeleton {
+  display: block;
+  width: 180px;
+  height: 16px;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.oi-reconciled {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.oi-reconciled-glyph {
+  flex: none;
+}
+
+.oi-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --- toolbar, tabs and filters ------------------------------------------------------------------ */
+
+.oi-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.oi-tabs {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: center;
+}
+
+.oi-tab {
+  font: inherit;
+  font-size: 14px;
+  color: var(--t-text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+  cursor: pointer;
+}
+
+.oi-tab:hover {
+  background: var(--t-bg-soft);
+}
+
+/* The selected item: one of the sanctioned accent spends. A tinted pill, never a left bar. */
+.oi-tab--on {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+  font-weight: 500;
+}
+
+.oi-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  align-items: center;
+}
+
+.oi-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.oi-filter input,
+.oi-filter select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--t-text);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+  min-height: 32px;
+}
+
+/* --- the historical cut-off band ---------------------------------------------------------------- */
+
+.oi-asof-band {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.oi-asof-glyph {
+  flex: none;
+}
+
+/* --- the tiles ---------------------------------------------------------------------------------- */
+
+.oi-tile-group {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+}
+
+.oi-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  flex: 1;
+}
+
+.oi-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  align-items: flex-start;
+  min-width: 160px;
+  /* 44px minimum tap target, comfortably exceeded by the three stacked lines. */
+  min-height: 44px;
+  font: inherit;
+  text-align: left;
+  padding: var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  cursor: pointer;
+}
+
+.oi-tile:hover {
+  border-color: var(--t-border-strong);
+}
+
+/* Selected, and it is the same treatment the selected tab uses: one vocabulary, not two. */
+.oi-tile--on {
+  background: var(--t-accent-soft);
+  border-color: var(--t-accent-dim);
+}
+
+.oi-tile-label {
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.oi-tile-amount {
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The count carries meaning (how many items in the bucket), so it cannot sit on
+   --t-text-faint: measured 3.6:1 on --t-bg-elev in light and 3.2:1 in dark, both under the
+   4.5:1 AA floor. --t-text-dim clears AA against both the default tile ground and the selected
+   tile's --t-accent-soft fill in both themes (worst case 4.8:1, selected tile in dark). */
+.oi-tile-count {
+  font-size: 12px;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-tile--skeleton {
+  height: 84px;
+  background: var(--t-bg-soft);
+  border-color: var(--t-border);
+  cursor: default;
+}
+
+.oi-tile-reset {
+  align-self: center;
+}
+
+/* --- the tables --------------------------------------------------------------------------------- */
+
+.oi-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.oi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.oi-table th,
+.oi-table td {
+  text-align: left;
+  padding: var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+  font-weight: 400;
+  vertical-align: top;
+}
+
+.oi-table thead th {
+  font-size: 12px;
+  color: var(--t-text-dim);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.oi-table tbody tr:last-child th,
+.oi-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.oi-num {
+  text-align: right;
+}
+
+.oi-money {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A word-only chip (D19/U4): a neutral surface with text, never a colour carrying the meaning. */
+.oi-chip {
+  display: inline-block;
+  /* 4px inner padding: an optical nudge, which the design law permits. */
+  padding: 4px var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  font-size: 12px;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* The document cell when it also carries a Mahnstufe chip (K-29): the link leads, the chip trails. */
+.oi-doc-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+/* The Mahnstufe: a word-only chip, reusing the neutral chip look. Colour never carries the meaning. */
+.oi-dunning-chip {
+  display: inline-block;
+  padding: 2px var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  font-size: 11px;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* The Offen cell with its booked-fee sub-line (K-29): the amount leads, the fee note sits under it. */
+.oi-open-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.oi-fee-note {
+  font-size: 11px;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* --- the customer tab and its expansion --------------------------------------------------------- */
+
+.oi-customer-cell {
+  min-width: 220px;
+}
+
+.oi-expander {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.oi-expander-glyph {
+  flex: none;
+  transition: transform 120ms ease;
+}
+
+.oi-expander--on .oi-expander-glyph {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oi-expander-glyph {
+    transition: none;
+  }
+}
+
+.oi-expansion-row > td {
+  background: var(--t-bg-soft);
+}
+
+.oi-expansion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.oi-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-4);
+  margin: 0;
+}
+
+.oi-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.oi-figure dt {
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+.oi-figure dd {
+  margin: 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-figure-note {
+  font-size: 12px;
+  color: var(--t-text-faint);
+}
+
+/* --- the mismatch band, the one coloured thing on the surface ----------------------------------- */
+
+.oi-mismatch {
+  display: flex;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.oi-mismatch-glyph {
+  flex: none;
+  color: var(--t-danger);
+  margin-top: 2px;
+}
+
+.oi-mismatch-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.oi-mismatch-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-mismatch-detail {
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-mismatch-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: center;
+}
+
+.oi-mismatch-causes {
+  margin: 0;
+  padding-left: var(--t-space-3);
+  font-size: 13px;
+  color: var(--t-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+/* --- the bucket-boundaries popover -------------------------------------------------------------- */
+
+/*
+ * The containing block the panel is positioned against. It holds the header overflow, so the panel
+ * opens under the control that summoned it. Without this rule `.oi-popover` below is positioned
+ * against the viewport instead, which is a different bug in the same shape.
+ */
+.oi-popover-anchor {
+  position: relative;
+  flex: none;
+}
+
+.oi-popover {
+  position: absolute;
+  top: calc(100% + var(--t-space-1));
+  /* Right-aligned to the trigger, because the trigger is at the surface's right edge and a panel
+     growing rightwards from there leaves the viewport. */
+  right: 0;
+  /* Above the tiles and the table it covers. 30 is the `.help-popover` layer in global.css: one
+     stacking vocabulary, not two. */
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  /* 460px where there is room, and never wider than the viewport on a narrow window. */
+  width: max-content;
+  max-width: min(460px, calc(100vw - var(--t-space-4)));
+  /* No shadow: depth on this surface is a background step and a border, per the design law. The
+     `panel` class already carries `--t-bg-elev` and the hairline, which is what separates it from
+     the table underneath. */
+}
+
+.oi-popover-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.oi-popover-source,
+.oi-popover-preview,
+.oi-popover-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.oi-boundary-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.oi-boundary-input {
+  font: inherit;
+  width: 96px;
+  color: var(--t-text);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+  min-height: 32px;
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-boundary-unit {
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.oi-boundary-add {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}

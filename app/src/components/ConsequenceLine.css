@@ -1,0 +1,26 @@
+/**
+ * C4 consequence line: a quiet sentence, never a badge. Neutral ink, a calm glyph, aligned to the
+ * text baseline. The accent and danger colours belong to the action button, never to this line, so a
+ * dialog full of these never becomes a wall of coloured warnings (the owner-banned slop pattern).
+ */
+
+.consequence-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  margin: var(--t-space-1) 0;
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.consequence-line-glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.consequence-line-text {
+  flex: 1 1 auto;
+}

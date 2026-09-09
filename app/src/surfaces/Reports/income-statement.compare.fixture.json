@@ -1,0 +1,278 @@
+{
+  "period": {
+    "start": "2026-01-01",
+    "end": "2026-03-31"
+  },
+  "compareTo": {
+    "start": "2025-10-01",
+    "end": "2025-12-31"
+  },
+  "baseCurrency": "CHF",
+  "sections": [
+    {
+      "key": "netto_erloese",
+      "nature": "revenue",
+      "labels": {
+        "de": "Nettoerlöse aus Lieferungen und Leistungen",
+        "fr": "Produits nets des ventes de biens et de prestations de services",
+        "it": "Importo netto dei ricavi da forniture e prestazioni",
+        "en": "Net revenue from goods and services"
+      },
+      "cite": "OR Art. 959b Abs. 2 Ziff. 1",
+      "lines": [
+        {
+          "key": "3200",
+          "account": {
+            "id": "acc_29",
+            "number": "3200",
+            "name": "Erlöse aus Handelswaren",
+            "type": "income"
+          },
+          "amountMinor": 500000,
+          "compareAmountMinor": 0,
+          "deltaMinor": 500000
+        },
+        {
+          "key": "3400",
+          "account": {
+            "id": "acc_30",
+            "number": "3400",
+            "name": "Erlöse aus Dienstleistungen",
+            "type": "income"
+          },
+          "amountMinor": 1000000,
+          "compareAmountMinor": 0,
+          "deltaMinor": 1000000
+        },
+        {
+          "key": "3800",
+          "account": {
+            "id": "acc_32",
+            "number": "3800",
+            "name": "Rabatte, Skonti und Gutschriften",
+            "type": "income"
+          },
+          "amountMinor": -30000,
+          "compareAmountMinor": 0,
+          "deltaMinor": -30000
+        }
+      ],
+      "subtotalMinor": 1470000,
+      "compareSubtotalMinor": 0
+    },
+    {
+      "key": "bestandes_aenderungen",
+      "nature": "mixed",
+      "labels": {
+        "de": "Bestandesänderungen an unfertigen und fertigen Erzeugnissen sowie an nicht fakturierten Dienstleistungen",
+        "fr": "Variation des stocks de produits finis et semi-finis et variation des prestations de services non facturées",
+        "it": "Variazione delle scorte di prodotti finiti e in corso di fabbricazione e delle prestazioni di servizi non fatturate",
+        "en": "Change in inventories of finished and unfinished goods and in unbilled services"
+      },
+      "cite": "OR Art. 959b Abs. 2 Ziff. 2",
+      "lines": [],
+      "subtotalMinor": 0,
+      "compareSubtotalMinor": 0
+    },
+    {
+      "key": "materialaufwand",
+      "nature": "expense",
+      "labels": {
+        "de": "Materialaufwand",
+        "fr": "Charges de matériel",
+        "it": "Costi per il materiale",
+        "en": "Material expenses"
+      },
+      "cite": "OR Art. 959b Abs. 2 Ziff. 3",
+      "lines": [
+        {
+          "key": "4900",
+          "account": {
+            "id": "acc_38",
+            "number": "4900",
+            "name": "Erhaltene Rabatte und Skonti",
+            "type": "expense"
+          },
+          "amountMinor": 15000,
+          "compareAmountMinor": 0,
+          "deltaMinor": 15000
+        }
+      ],
+      "subtotalMinor": 15000,
+      "compareSubtotalMinor": 0
+    },
+    {
+      "key": "personalaufwand",
+      "nature": "expense",
+      "labels": {
+        "de": "Personalaufwand",
+        "fr": "Charges de personnel",
+        "it": "Costi per il personale",
+        "en": "Personnel expenses"
+      },
+      "cite": "OR Art. 959b Abs. 2 Ziff. 4",
+      "lines": [
+        {
+          "key": "5000",
+          "account": {
+            "id": "acc_40",
+            "number": "5000",
+            "name": "Löhne und Gehälter",
+            "type": "expense"
+          },
+          "amountMinor": -600000,
+          "compareAmountMinor": 0,
+          "deltaMinor": -600000
+        }
+      ],
+      "subtotalMinor": -600000,
+      "compareSubtotalMinor": 0
+    },
+    {
+      "key": "uebriger_betrieblicher_aufwand",
+      "nature": "expense",
+      "labels": {
+        "de": "Übriger betrieblicher Aufwand",
+        "fr": "Autres charges d'exploitation",
+        "it": "Altri costi d'esercizio",
+        "en": "Other operating expenses"
+      },
+      "cite": "OR Art. 959b Abs. 2 Ziff. 5",
+      "lines": [
+        {
+          "key": "6500",
+          "account": {
+            "id": "acc_48",
+            "number": "6500",
+            "name": "Verwaltungs- und Bürokosten",
+            "type": "expense"
+          },
+          "amountMinor": -120000,
+          "compareAmountMinor": 0,
+          "deltaMinor": -120000
+        }
+      ],
+      "subtotalMinor": -120000,
+      "compareSubtotalMinor": 0
+    },
+    {
+      "key": "abschreibungen",
+      "nature": "expense",
+      "labels": {
+        "de": "Abschreibungen und Wertberichtigungen auf Positionen des Anlagevermögens",
+        "fr": "Amortissements et corrections de valeur sur les postes de l'actif immobilisé",
+        "it": "Ammortamenti e rettifiche di valore sulle poste dell'attivo fisso",
+        "en": "Depreciation and value adjustments on non-current assets"
+      },
+      "cite": "OR Art. 959b Abs. 2 Ziff. 6",
+      "lines": [
+        {
+          "key": "6800",
+          "account": {
+            "id": "acc_52",
+            "number": "6800",
+            "name": "Abschreibungen und Wertberichtigungen auf Positionen des Anlagevermögens",
+            "type": "expense"
+          },
+          "amountMinor": -200000,
+          "compareAmountMinor": 0,
+          "deltaMinor": -200000
+        }
+      ],
+      "subtotalMinor": -200000,
+      "compareSubtotalMinor": 0
+    },
+    {
+      "key": "finanzergebnis",
+      "nature": "mixed",
+      "labels": {
+        "de": "Finanzaufwand und Finanzertrag",
+        "fr": "Charges et produits financiers",
+        "it": "Costi e ricavi finanziari",
+        "en": "Financial expenses and financial income"
+      },
+      "cite": "OR Art. 959b Abs. 2 Ziff. 7",
+      "lines": [
+        {
+          "key": "6900",
+          "account": {
+            "id": "acc_53",
+            "number": "6900",
+            "name": "Finanzaufwand",
+            "type": "expense"
+          },
+          "amountMinor": -25000,
+          "compareAmountMinor": 0,
+          "deltaMinor": -25000
+        }
+      ],
+      "subtotalMinor": -25000,
+      "compareSubtotalMinor": 0
+    },
+    {
+      "key": "betriebsfremder_erfolg",
+      "nature": "mixed",
+      "labels": {
+        "de": "Betriebsfremder Aufwand und betriebsfremder Ertrag",
+        "fr": "Charges et produits hors exploitation",
+        "it": "Costi e ricavi estranei all'esercizio",
+        "en": "Non-operating expenses and non-operating income"
+      },
+      "cite": "OR Art. 959b Abs. 2 Ziff. 8",
+      "lines": [],
+      "subtotalMinor": 0,
+      "compareSubtotalMinor": 0
+    },
+    {
+      "key": "ausserordentlicher_erfolg",
+      "nature": "mixed",
+      "labels": {
+        "de": "Ausserordentlicher, einmaliger oder periodenfremder Aufwand und Ertrag",
+        "fr": "Charges et produits exceptionnels, uniques ou hors période",
+        "it": "Costi e ricavi straordinari, unici o relativi ad altri periodi contabili",
+        "en": "Extraordinary, non-recurring or prior-period expenses and income"
+      },
+      "cite": "OR Art. 959b Abs. 2 Ziff. 9",
+      "lines": [],
+      "subtotalMinor": 0,
+      "compareSubtotalMinor": 0
+    },
+    {
+      "key": "direkte_steuern",
+      "nature": "expense",
+      "labels": {
+        "de": "Direkte Steuern",
+        "fr": "Impôts directs",
+        "it": "Imposte dirette",
+        "en": "Direct taxes"
+      },
+      "cite": "OR Art. 959b Abs. 2 Ziff. 10",
+      "lines": [],
+      "subtotalMinor": 0,
+      "compareSubtotalMinor": 0
+    },
+    {
+      "key": "uebrige_positionen",
+      "nature": "mixed",
+      "labels": {
+        "de": "Übrige Positionen",
+        "fr": "Autres postes",
+        "it": "Altre poste",
+        "en": "Other positions"
+      },
+      "cite": "OR Art. 959b Abs. 5",
+      "lines": [],
+      "subtotalMinor": 0,
+      "compareSubtotalMinor": 0
+    }
+  ],
+  "reingewinnMinor": 540000,
+  "compareReingewinnMinor": 0,
+  "noActivity": false,
+  "reconciles": true,
+  "reconciliation": {
+    "resultTiesToLedger": true,
+    "everyAccountClassifiedOnce": true
+  },
+  "ok": true
+}

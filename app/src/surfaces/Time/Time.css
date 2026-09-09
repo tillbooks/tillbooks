@@ -1,0 +1,164 @@
+/* B01, the Zeit surface: the timer strip, the timesheet table, the period controls, the Tarife card.
+   Tokens only, one accent; status is glyph+label in the markup, never colour alone. */
+
+.time {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-4);
+}
+
+/* The page header is the shared SurfaceHeader (D118 B2); the saved-view picker rides in its actions
+   slot, so only the picker's own inline layout stays here. */
+.time-view-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.time-capture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.time-timer {
+  display: flex;
+  align-items: end;
+  gap: var(--t-space-3);
+  flex-wrap: wrap;
+}
+
+.time-timer--running {
+  align-items: center;
+}
+
+.time-timer-label {
+  font-weight: 600;
+}
+
+.time-editor {
+  display: flex;
+  align-items: end;
+  gap: var(--t-space-3);
+  flex-wrap: wrap;
+}
+
+.time-editor-actions {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.time-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* The surface's own controls used to render as bare native widgets (no panel ground, no border, no
+   radius, the UA font), out of step with every other Studio surface. They wear the shared field
+   treatment now, stated with tokens so both themes and the css-property guard hold. `type=checkbox`
+   is excluded: it is a box, not a 36px text control. This one block reaches the Time, Tarife,
+   Unverrechnet and Mandate controls, all of which nest under `.time`. */
+.time-field > input:not([type='checkbox']),
+.time-field > select,
+.time-view-picker select {
+  height: 36px;
+  padding: 0 var(--t-space-2);
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+}
+
+.time-field > input:not([type='checkbox']):hover:not(:disabled),
+.time-field > select:hover:not(:disabled),
+.time-view-picker select:hover {
+  border-color: var(--t-text-faint);
+}
+
+/* The visible accent focus ring the design law requires on every interactive element (2px accent,
+   offset 2px). The surface carried none, so its controls fell back to the UA outline. */
+.time :is(input, select, textarea, .btn, a):focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+.time-field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+/* D116: a checkbox is a standalone control, so its label row is a 44px tap target and the box itself
+   is sized up from the native 16px. The brand accent carries the checked state. */
+.time-field--check input[type='checkbox'] {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--t-accent);
+}
+
+.time-totals {
+  display: flex;
+  gap: var(--t-space-4);
+}
+
+/* The timesheet and Tarife tables are the shared DataTable now (D118 B2): frame overflow, sticky
+   header, density-aware rows and money right-alignment live there, so the per-surface `.time-table`
+   base (width, border-collapse, cell padding/rules, `.time-num`) was deleted from here. The grouped
+   Unverrechnet tree (Unbilled.tsx) is not a flat DataTable, so it keeps its own table styling in
+   Unbilled.css. */
+
+.time-status {
+  white-space: nowrap;
+}
+
+.time-notes {
+  opacity: 0.75;
+}
+
+.time-actions {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.time-period {
+  display: flex;
+  align-items: end;
+  gap: var(--t-space-3);
+  flex-wrap: wrap;
+}
+
+.time-rates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.time-rates-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.time-rates-empty {
+  margin: 0;
+  opacity: 0.85;
+}
+
+.time-hint {
+  margin: 0;
+}
+
+.time-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

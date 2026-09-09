@@ -1,0 +1,121 @@
+/* I04, Einkauf -> Abgleich-Ausnahmen. Since the D118 money-path wave the exception list is the shared
+   DataTable, the header is the shared SurfaceHeader, the detail is the shared DetailDrawer, and the
+   confirm/override step is the shared Modal (alertdialog). What is left here is genuinely
+   I04-specific: the glyph + label status badges, the per-line variance emphasis, the panel layout and
+   the three-way totals summary. No new colour token (design-canon): status is carried by the glyph
+   and label, and every value reuses a --t- token, so the one-accent law holds. */
+
+.twm-surface {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* Status badge: glyph + label, never colour alone (WCAG 2.2 AA). One accent only, so a resolved-good
+   state carries the accent border/ink and every other state stays neutral, disambiguated by its
+   glyph and label. Shared by the exception list, the drawer header and the per-line comparison. */
+.twm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* A matched line is positive status: it wears the success token, never the accent (DESIGN, and the
+   same call the Reconciliation matched glyph makes). The badge always carries its word label too. */
+.twm-badge--matched {
+  border-color: var(--t-success);
+  color: var(--t-success);
+}
+
+/* The exception row whose detail drawer is open: the same quiet selection wash the old bespoke table
+   carried, now via the DataTable rowClassName hook (DataTable ships no state CSS). */
+.twm-row--selected td {
+  background: var(--t-bg-soft);
+}
+
+/* Per-line variance emphasis inside the comparison DataTable. Neutral by law: a variance line reads
+   heavier, a blocked line (nothing received / no candidate) dims, and the badge (glyph + label)
+   carries the actual meaning, never colour alone. */
+.twm-line--variance td {
+  font-weight: 600;
+}
+
+.twm-line--blocked td {
+  color: var(--t-text-dim);
+}
+
+/* The panel: the embeddable evaluate -> confirm / override body (spec §6). */
+.twm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.twm-panel h3 {
+  margin: 0;
+}
+
+/* The three-way totals summary. NOT a plain column sum (expected value, billed base-net and the
+   aggregate value variance are three engine figures, not one column total), so it stays bespoke
+   rather than forcing DataTable's per-column footer. Every figure renders VERBATIM from the engine
+   evaluation; nothing is re-summed here. */
+.twm-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  margin: 0;
+  padding-top: var(--t-space-1);
+  border-top: 1px solid var(--t-border);
+}
+
+.twm-totals div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.twm-totals dt {
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+}
+
+.twm-totals dd {
+  margin: 0;
+}
+
+.twm-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-1);
+}
+
+/* The override reason field, hosted in the confirm Modal. */
+.twm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.twm-field input {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+}
+
+.twm-note {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.twm-error {
+  color: var(--t-danger);
+}
+
+.twm-success {
+  color: var(--t-success);
+}

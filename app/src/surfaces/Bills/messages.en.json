@@ -1,0 +1,126 @@
+{
+  "nav": {
+    "bills": "Vendor bills",
+    "group": {
+      "purchasing": "Purchasing"
+    }
+  },
+  "bills": {
+    "title": "Vendor bills",
+    "headerTotal": "Open {total}",
+    "list": {
+      "caption": "List of vendor bills"
+    },
+    "new": "Capture a bill",
+    "vendor": "Vendor",
+    "billDate": "Bill date",
+    "dueDate": "Due",
+    "vendorReference": "Vendor's invoice number",
+    "net": "Net",
+    "gross": "Gross",
+    "vat": "MWST",
+    "amountIs": "The amount is",
+    "vatCode": "Input VAT",
+    "noVat": "No MWST",
+    "expenseAccount": "Expense or asset account",
+    "chooseVendor": "Choose a vendor",
+    "chooseAccount": "Choose an account",
+    "costCenter": "Cost centre",
+    "noCostCenter": "None",
+    "project": "Project",
+    "noProject": "None",
+    "receipt": "Receipt (reference)",
+    "post": "Post",
+    "saveDraft": "Save as draft",
+    "saveReceipt": "Save receipt",
+    "discard": "Discard draft",
+    "void": "Void",
+    "close": "Close",
+    "pay": "Record a payment",
+    "payDenied": "Record a payment (requires the bookkeeper role)",
+    "requiresBookkeeper": "Requires the bookkeeper role.",
+    "days": "{n} days",
+    "noReference": "No number",
+    "noDueDate": "No date",
+    "unknownVendor": "Unknown vendor",
+    "rowActions": "Actions",
+    "rowActionsFor": "Actions for {row}",
+    "rowAction": {
+      "open": "Open"
+    },
+    "column": {
+      "reference": "Number",
+      "gross": "Gross",
+      "open": "Open",
+      "status": "Status"
+    },
+    "status": {
+      "draft": "Draft",
+      "posted": "Posted",
+      "partly_paid": "Partly paid",
+      "paid": "Paid",
+      "void": "Void"
+    },
+    "frozen": {
+      "posted": "This bill is posted. Posted entries are never overwritten: correct it with a reversing entry. You can still add the receipt reference.",
+      "void": "This bill is void. Its reversing entry is in the journal."
+    },
+    "preview": {
+      "title": "What gets posted",
+      "none": "Enter an amount and TILL shows the split here.",
+      "saldo": "Under the Saldosteuersatz method the input VAT is already inside the rate (MWSTG Art. 37), so the whole amount is booked as cost and nothing is reclaimed separately."
+    },
+    "needsVendor": {
+      "body": "You have not recorded a vendor yet.",
+      "action": "Create a contact"
+    },
+    "filter": {
+      "allStatuses": "All",
+      "allVendors": "All vendors",
+      "vendorById": "Vendor {id}"
+    },
+    "reconciliation": {
+      "mismatch": "The list and account 2000 Kreditoren differ by {difference}: list {list}, account {ledger}.",
+      "hint": "TILL derives both independently. A difference means something reached 2000 that did not come from a vendor bill."
+    },
+    "empty": {
+      "title": "No vendor bills yet",
+      "hint": "This is where you record what you owe your suppliers, and reclaim the input VAT.",
+      "filtered": {
+        "title": "No bill matches this filter",
+        "hint": "Reset the filter to see every bill again.",
+        "action": "Reset the filter"
+      }
+    },
+    "editor": {
+      "newTitle": "Capture a vendor bill",
+      "title": "Bill {ref}"
+    },
+    "error": {
+      "transport": "TILL could not save that just now. Try again.",
+      "options": "TILL could not load vendors, accounts and MWST codes.",
+      "needsVendor": "Choose a vendor.",
+      "vendorRole": "This contact is recorded as a customer only. Give it the vendor role as well, or choose another.",
+      "needsAccount": "That account will not work. Use an expense or asset account that TILL does not book itself.",
+      "needsInputTaxCode": "That MWST code describes turnover, not a purchase. Use an input VAT code, Bezugsteuer, Einfuhrsteuer, or none.",
+      "periodLocked": "That period is locked, so TILL cannot post on the bill date.",
+      "alreadySettled": "A payment is already booked against this bill. Reverse the payment first.",
+      "alreadyPosted": "This bill is already posted.",
+      "alreadyVoid": "This bill is already void.",
+      "needsFxRate": "There is no exchange rate for this bill date. Record one first.",
+      "permissionDenied": {
+        "write": "You do not hold the Post capability.",
+        "read": "You do not hold the capability to read the books."
+      }
+    }
+  },
+  "help": {
+    "Bills": {
+      "title": "Vendor bills",
+      "body": "The payables list: every supplier bill with its open amount, due date and status. Here you capture a new bill; paying runs through the same payment allocation used everywhere in the product, so there is only one settlement path. The list reconciles back to the creditors account in the ledger, and any difference is stated rather than hidden. Input VAT arises on these bills.",
+      "concepts": [
+        "vorsteuer"
+      ]
+    }
+  }
+}

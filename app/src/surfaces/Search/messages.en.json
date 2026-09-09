@@ -1,0 +1,67 @@
+{
+  "nav": {
+    "search": "Search"
+  },
+  "search": {
+    "route": {
+      "title": "Search"
+    },
+    "loading": "Searching",
+    "placeholder": "Search everything…",
+    "hint": {
+      "minLength": "At least 2 characters",
+      "start": "Type a name, a number, or a custom field value: one query searches every record kind."
+    },
+    "empty": "No results for '{q}'.",
+    "emptyScoped": "No results in this scope for '{q}'.",
+    "emptyHint": "Try a shorter term, or widen the scope.",
+    "scope": {
+      "label": "Scope"
+    },
+    "action": {
+      "search": "Search",
+      "seeAll": "Show all results",
+      "widenScope": "Search all areas",
+      "more": "Load more"
+    },
+    "error": {
+      "partial": "Some results could not be loaded."
+    },
+    "savedSearch": {
+      "save": "Save search",
+      "confirm": "Save",
+      "cancel": "Cancel",
+      "name": "Name of the saved search",
+      "list": "Saved searches"
+    },
+    "result": {
+      "matchedVia": {
+        "customField": "Matched in {snippet}"
+      }
+    },
+    "palette": {
+      "title": "Global search",
+      "results": "Results",
+      "overflow": "{count} more"
+    },
+    "kind": {
+      "contact": "Contacts",
+      "item": "Items",
+      "document": "Documents",
+      "project": "Projects",
+      "deal": "Deals",
+      "task": "Tasks",
+      "vendor_bill": "Vendor bills",
+      "sales_order": "Sales orders",
+      "po": "Purchase orders"
+    }
+  },
+  "help": {
+    "Search": {
+      "title": "Search",
+      "body": "Search across the whole workspace: contacts, documents, journal entries, items and more, grouped by kind and ranked. Every hit leads straight to the surface it belongs to; there is no separate detail view here. The query and filters live in the address, so a link to a result can be shared. Only what you may read appears.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

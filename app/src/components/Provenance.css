@@ -1,0 +1,43 @@
+/**
+ * C3 provenance line: a quiet fact at the point of judgement. Neutral ink, a calm glyph, the trace
+ * link the one interactive part. Never a coloured badge (the accent is not spent on a standing
+ * label), and an agent origin reads in words, not in colour.
+ */
+
+.provenance {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  margin: var(--t-space-2) 0 0;
+  color: var(--t-text-dim);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.provenance-glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+.provenance-text {
+  flex: 1 1 auto;
+}
+
+.provenance-trace {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+  text-decoration: underline;
+}
+
+.provenance-trace:hover {
+  color: var(--t-text);
+}
+
+.provenance-trace:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+  border-radius: var(--t-radius-sm);
+}

@@ -1,0 +1,729 @@
+{
+  "nav": {
+    "assetCategories": "Anlagevermögen",
+    "assets": "Anlagenregister",
+    "depreciation": "Abschreibung",
+    "assetLocations": "Anlagestandorte",
+    "depreciationRuns": "Abschreibungsläufe",
+    "assetReconciliation": "Anlagenabstimmung",
+    "assetMaintenance": "Wartung",
+    "assetReports": "Anlagenberichte"
+  },
+  "assets": {
+    "common": {
+      "close": "Schliessen"
+    },
+    "method": {
+      "straight_line": "Lineare Abschreibung",
+      "declining_balance": "Degressive Abschreibung",
+      "units_of_production": "Leistungsabschreibung",
+      "none": "Keine Abschreibung"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "active": "Aktiv",
+      "fully_depreciated": "Vollständig abgeschrieben",
+      "disposed": "Abgegangen",
+      "archived": "Archiviert"
+    },
+    "categories": {
+      "title": "Anlagenkategorien",
+      "new": "Neue Kategorie",
+      "edit": "Bearbeiten",
+      "archive": "Archivieren",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "active": "Aktiv",
+      "archived": "Archiviert",
+      "showArchived": "Archivierte anzeigen",
+      "noWorkspace": "um Anlagenkategorien zu verwalten",
+      "confirmArchive": "Kategorie {code} archivieren? Sie verschwindet aus der Auswahl, bleibt aber für bestehende Anlagen auflösbar.",
+      "empty": {
+        "title": "Noch keine Kategorien",
+        "hint": "Lege die erste an, damit Anlagen die richtigen Buchhaltungsvorgaben erben.",
+        "cta": "Erste Kategorie anlegen"
+      },
+      "col": {
+        "code": "Code",
+        "name": "Name",
+        "method": "Methode",
+        "life": "Nutzungsdauer (Monate)",
+        "residual": "Restwert",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "field": {
+        "code": "Code",
+        "name": "Name",
+        "method": "Abschreibungsmethode",
+        "life": "Nutzungsdauer (Monate)",
+        "residualPct": "Restwert (Basispunkte)",
+        "residualHint": "0 bis 10000 Basispunkte (10000 = 100%).",
+        "assetAccount": "Anlagenkonto (Anschaffung)",
+        "accumAccount": "Konto kumulierte Abschreibung",
+        "expenseAccount": "Abschreibungsaufwandskonto",
+        "costCenter": "Standard-Kostenstelle",
+        "choose": "Konto wählen",
+        "none": "Keine"
+      },
+      "form": {
+        "title": "Kategorie",
+        "createTitle": "Neue Kategorie",
+        "editTitle": "Kategorie bearbeiten"
+      },
+      "error": {
+        "transport": "Kategorien konnten nicht geladen werden. Bitte erneut versuchen."
+      }
+    },
+    "register": {
+      "title": "Anlagenregister",
+      "new": "Neue Anlage",
+      "edit": "Bearbeiten",
+      "archive": "Archivieren",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "noWorkspace": "um das Anlagenregister zu verwalten",
+      "searchPlaceholder": "Nummer, Name, Seriennummer, Notizen suchen",
+      "confirmArchive": "Anlage {number} archivieren? Sie verschwindet aus dem aktiven Register, bleibt aber lesbar.",
+      "filter": {
+        "category": "Nach Kategorie filtern",
+        "allCategories": "Alle Kategorien",
+        "status": "Nach Status filtern",
+        "allStatuses": "Alle Status",
+        "clear": "Zurücksetzen"
+      },
+      "empty": {
+        "title": "Noch keine Anlagen",
+        "hint": "Lege die erste aus einer Kategorie an, damit ihre Buchhaltungsvorgaben geerbt werden.",
+        "cta": "Erste Anlage anlegen",
+        "noCatTitle": "Noch keine Kategorien",
+        "noCatHint": "Du brauchst zuerst mindestens eine Anlagenkategorie, bevor du eine Anlage anlegen kannst."
+      },
+      "col": {
+        "number": "Nummer",
+        "name": "Name",
+        "category": "Kategorie",
+        "status": "Status",
+        "acquired": "Anschaffung",
+        "cost": "Anschaffungswert",
+        "nbv": "Buchwert",
+        "actions": "Aktionen"
+      },
+      "field": {
+        "category": "Kategorie",
+        "chooseCategory": "Kategorie wählen",
+        "name": "Name",
+        "acquired": "Anschaffungsdatum",
+        "cost": "Anschaffungswert (CHF)",
+        "method": "Abschreibungsmethode",
+        "life": "Nutzungsdauer (Monate)",
+        "serial": "Seriennummer",
+        "notes": "Notizen"
+      },
+      "form": {
+        "title": "Anlage",
+        "createTitle": "Neue Anlage",
+        "editTitle": "Anlage bearbeiten",
+        "numberLabel": "Nummer",
+        "locked": "Diese Anlage hat eine gebuchte Anschaffung, daher sind ihre Finanzfelder gesperrt. Beschreibende Felder lassen sich weiterhin bearbeiten; eine finanzielle Korrektur läuft über einen Transfer, einen Abgang oder eine Neubewertung."
+      },
+      "error": {
+        "transport": "Das Register konnte nicht geladen werden. Bitte erneut versuchen."
+      }
+    },
+    "depreciation": {
+      "title": "Abschreibung",
+      "subtitle": "Abschreibung vorschauen und projizieren. Hier wird nichts gebucht; der Periodenabschluss bucht diese Beträge.",
+      "noWorkspace": "um die Abschreibung vorzuschauen",
+      "assetLabel": "Anlage",
+      "chooseAsset": "Anlage wählen",
+      "period": "Periode",
+      "periodHint": "Der zu berechnende Monat, als JJJJ-MM.",
+      "refresh": "Vorschau aktualisieren",
+      "nextAmount": "Nächste Periode",
+      "methodLabel": "Methode",
+      "remainingLife": "Restnutzungsdauer (Monate)",
+      "remainingUnits": "Resteinheiten",
+      "isFinal": "Letzte Periode",
+      "yes": "Ja",
+      "no": "Nein",
+      "nbv": "Buchwert",
+      "cost": "Anschaffungswert",
+      "residual": "Restwert",
+      "unitsThisPeriod": "Produzierte Einheiten dieser Periode",
+      "rateBp": "Degressiver Satz (Basispunkte)",
+      "totalUnits": "Geschätzte Gesamteinheiten",
+      "paramHint": "Noch nicht auf der Anlage gespeichert; gib den Wert an, um diese Methode vorzuschauen.",
+      "method": {
+        "straight_line": "Lineare Abschreibung",
+        "declining_balance": "Degressive Abschreibung",
+        "units_of_production": "Leistungsabschreibung",
+        "none": "Keine Abschreibung"
+      },
+      "methodDesc": {
+        "straight_line": "Gleichmässige Verteilung über die Nutzungsdauer.",
+        "declining_balance": "Ein fester Prozentsatz des Buchwerts pro Periode.",
+        "units_of_production": "Aufwand nach tatsächlich produzierten Einheiten.",
+        "none": "Nicht abschreibend (Land, Kunst, geringwertige Güter zum Anschaffungswert)."
+      },
+      "explain": {
+        "straight_line": "Linear: Die abschreibbare Basis wird gleichmässig über die Nutzungsdauer verteilt.",
+        "declining_balance": "Degressiv: Ein fester Satz wird pro Periode auf den Buchwert angewendet.",
+        "units_of_production": "Leistung: Die Abschreibung folgt der tatsächlichen Nutzung der Periode.",
+        "none": "Für diese Anlage wird keine Abschreibung berechnet."
+      },
+      "reason": {
+        "already_at_residual": "Diese Anlage ist bereits auf dem Restwert; es bleibt keine Abschreibung.",
+        "period_already_processed": "Diese Periode wurde bereits abgeschrieben.",
+        "non_depreciable": "Diese Anlage nutzt die Methode „keine“; es wird keine Abschreibung berechnet.",
+        "missing_production_data": "Gib die produzierten Einheiten (und die geschätzten Gesamteinheiten) an, um diese Anlage abzuschreiben.",
+        "unknown_method": "Die Methode dieser Anlage ist nicht bekannt."
+      },
+      "schedule": {
+        "title": "Projizierter Plan",
+        "period": "Periode",
+        "amount": "Abschreibung",
+        "accum": "Kumuliert",
+        "nbv": "Buchwert",
+        "final": "Letzte",
+        "empty": "Keine weitere Abschreibung zu projizieren.",
+        "incomplete": "Der Plan ist unvollständig: gib eine Einheiten-Prognose an, um eine Leistungsabschreibung zu projizieren."
+      },
+      "methods": {
+        "title": "Methoden",
+        "hint": "Schalte eine Methode aus, um sie aus der Kategorie- und Anlagen-Auswahl auszublenden.",
+        "enabled": "Aktiviert",
+        "requiresUnits": "Braucht Einheiten",
+        "requiresRate": "Braucht einen Satz",
+        "col": {
+          "method": "Methode",
+          "requires": "Braucht",
+          "enabled": "Aktiviert"
+        }
+      },
+      "empty": {
+        "title": "Keine Anlagen zum Abschreiben",
+        "hint": "Lege zuerst eine Anlage im Register an."
+      },
+      "error": {
+        "transport": "Die Abschreibung konnte nicht geladen werden. Bitte erneut versuchen."
+      }
+    },
+    "acquisition": {
+      "record": "Anschaffung buchen",
+      "addCapitalisation": "Zusatzaktivierung",
+      "transactions": "Transaktionen",
+      "recordTitle": "Anschaffung buchen",
+      "addTitle": "Zusatzaktivierung buchen",
+      "date": "Datum",
+      "cost": "Anschaffungswert (CHF)",
+      "amount": "Betrag (CHF)",
+      "creditAccount": "Gegenkonto (Haben)",
+      "chooseAccount": "Konto wählen",
+      "residual": "Restwert (CHF, optional)",
+      "description": "Beschreibung",
+      "preview": "Das wird gebucht",
+      "debit": "Soll",
+      "credit": "Haben",
+      "post": "Buchen",
+      "empty": {
+        "title": "Noch keine Finanzereignisse",
+        "hint": "Buche die Anschaffung, um diese Anlage zu aktivieren."
+      },
+      "col": {
+        "date": "Datum",
+        "type": "Typ",
+        "amount": "Betrag"
+      },
+      "txnType": {
+        "acquisition": "Anschaffung",
+        "additional_capitalisation": "Zusatzaktivierung",
+        "opening": "Eröffnungsbilanz",
+        "depreciation": "Abschreibung",
+        "disposal": "Abgang",
+        "revaluation": "Neubewertung",
+        "adjustment": "Korrektur"
+      }
+    },
+    "ledger": {
+      "title": "Journal",
+      "subtitle": "Jedes finanzielle Ereignis dieser Anlage, mit den laufenden Werten für Anschaffung, kumulierte Abschreibung und Buchwert nach jedem Ereignis, und einem Link zur gebuchten Journalbuchung.",
+      "openingBalance": "Eröffnungsbilanz",
+      "openingTitle": "Eröffnungsbilanz erfassen",
+      "openingHint": "Erfasse die historischen Anschaffungskosten und die kumulierte Abschreibung einer bereits bestehenden Anlage, damit das Nebenbuch von Beginn an stimmt. Dies bucht eine ausgeglichene Eröffnungsbuchung.",
+      "cost": "Anschaffungskosten (CHF)",
+      "accumulated": "Kumulierte Abschreibung (CHF)",
+      "offsetAccount": "Eigenkapital- / Eröffnungskonto",
+      "chooseAccount": "Konto wählen",
+      "date": "Eröffnungsdatum",
+      "description": "Beschreibung",
+      "post": "Eröffnungsbilanz buchen",
+      "nbv": "Buchwert",
+      "col": {
+        "date": "Datum",
+        "type": "Art",
+        "deltaCost": "Kostenänderung",
+        "deltaAccum": "Abschreibungsänderung",
+        "nbv": "Buchwert",
+        "journal": "Buchung"
+      },
+      "empty": {
+        "title": "Noch keine finanziellen Ereignisse",
+        "hint": "Erfasse die Anschaffung oder eine Eröffnungsbilanz, um diese Anlage zu aktivieren."
+      }
+    },
+    "reconciliation": {
+      "title": "Anlagenabstimmung",
+      "explainer": "Der Nachweis, dass das Anlagen-Nebenbuch den Kontrollkonten im Hauptbuch entspricht, auf den Rappen genau. Eine Differenz ist eine Abweichung: sie sperrt den Periodenabschluss, bis sie erklärt oder korrigiert ist.",
+      "noWorkspace": "um Anlagen abzustimmen",
+      "period": "Periode",
+      "cutOff": "Stichtag",
+      "runCheck": "Prüfung starten",
+      "balancedCount": "Abgestimmte Konten",
+      "driftCount": "Konten mit Abweichung",
+      "checkBalanced": "Abgestimmt: jedes Kontrollkonto stimmt für {period}. Der Periodenabschluss kann erfolgen.",
+      "checkDrift": "Abweichung auf {count} Kontrollkonto/-konten für {period}. Der Periodenabschluss ist gesperrt, bis dies korrigiert ist.",
+      "noAssets": "Zum Stichtag trägt keine Anlage zu diesem Konto bei.",
+      "role": {
+        "cost": "Anschaffung",
+        "accum": "Kumulierte Abschreibung"
+      },
+      "status": {
+        "balanced": "Abgestimmt",
+        "drift": "Abweichung"
+      },
+      "col": {
+        "account": "Kontrollkonto",
+        "role": "Art",
+        "subLedger": "Nebenbuch",
+        "gl": "Hauptbuch",
+        "delta": "Differenz",
+        "status": "Status"
+      },
+      "drill": {
+        "asset": "Anlage",
+        "amount": "Saldo"
+      },
+      "empty": {
+        "title": "Nichts abzustimmen",
+        "hint": "Zu diesem Stichtag trägt keine Anlage einen Kontrollkontosaldo."
+      },
+      "error": {
+        "transport": "Die Abstimmung konnte nicht geladen werden. Bitte erneut versuchen."
+      }
+    },
+    "reports": {
+      "title": "Anlagenberichte",
+      "explainer": "Reine Leseberichte über das ganze Anlageregister: das Inventar für den Revisionsordner, eine Abschreibungsprognose für die Budgetierung, die Abgangs-Erfolgsrechnung, was aktiviert wurde, den Buchwert nach Dimension und was das Nutzungsende erreicht.",
+      "noWorkspace": "um die Anlagenberichte zu öffnen",
+      "apply": "Anwenden",
+      "tab": {
+        "register": "Register",
+        "forecast": "Prognose",
+        "disposals": "Abgänge",
+        "acquisitions": "Zugänge",
+        "nbv": "Buchwert nach Dimension",
+        "endOfLife": "Nutzungsende"
+      },
+      "status": {
+        "draft": "Entwurf",
+        "active": "Aktiv",
+        "fully_depreciated": "Vollständig abgeschrieben",
+        "disposed": "Abgegangen",
+        "archived": "Archiviert"
+      },
+      "empty": {
+        "title": "Nichts anzuzeigen",
+        "hint": "Keine Anlage entspricht den aktuellen Filtern."
+      },
+      "error": {
+        "transport": "Der Bericht konnte nicht geladen werden. Bitte erneut versuchen."
+      },
+      "range": {
+        "from": "Von",
+        "to": "Bis"
+      },
+      "register": {
+        "search": "Suche",
+        "searchHint": "Nummer, Name, Seriennummer, Barcode",
+        "totals": "{count} Anlagen",
+        "col": {
+          "number": "Nummer",
+          "name": "Name",
+          "category": "Kategorie",
+          "status": "Status",
+          "cost": "Anschaffungswert",
+          "accum": "Kumuliert",
+          "nbv": "Buchwert"
+        }
+      },
+      "forecast": {
+        "from": "Von Periode",
+        "to": "Bis Periode",
+        "groupBy": "Gruppieren nach",
+        "group": {
+          "none": "Keine Gruppierung",
+          "category": "Kategorie",
+          "location": "Standort"
+        },
+        "summary": "Prognostizierte Abschreibung: {total}, davon erreichen {reaching} Anlage(n) den Restwert im Fenster.",
+        "productionDataRequired": "Eine leistungsabhängig abgeschriebene Anlage hat keine Mengenprognose und trägt deshalb nichts bei. Hinterlege eine Mengenprognose, um sie einzubeziehen.",
+        "invalidPeriodRange": "Der Periodenbereich ist ungültig: das Ende liegt vor dem Anfang, oder das Fenster ist länger als 60 Monate.",
+        "emptyHint": "Keine abschreibbare Anlage projiziert in dieses Fenster.",
+        "totalLabel": "Total prognostiziert",
+        "col": {
+          "period": "Periode",
+          "amount": "Abschreibung"
+        }
+      },
+      "disposals": {
+        "emptyTitle": "Keine Abgänge im Zeitraum",
+        "emptyHint": "In den gewählten Daten wurde keine Anlage abgegeben.",
+        "totals": "{count} Abgänge",
+        "col": {
+          "asset": "Anlage",
+          "date": "Abgangsdatum",
+          "nbv": "Buchwert beim Abgang",
+          "proceeds": "Erlös",
+          "gainLoss": "Gewinn / Verlust"
+        }
+      },
+      "acquisitions": {
+        "emptyTitle": "Nichts aktiviert im Zeitraum",
+        "emptyHint": "In den gewählten Daten wurde kein Zugang oder keine Aktivierung gebucht.",
+        "totals": "{count} Zugänge",
+        "source": {
+          "manual": "Manuell",
+          "vendor_bill": "Lieferantenrechnung",
+          "project": "Projekt",
+          "opening": "Eröffnungsbilanz"
+        },
+        "col": {
+          "asset": "Anlage",
+          "date": "Datum",
+          "category": "Kategorie",
+          "source": "Quelle",
+          "cost": "Anschaffungswert"
+        }
+      },
+      "nbv": {
+        "groupBy": "Gruppieren nach",
+        "group": {
+          "category": "Kategorie",
+          "location": "Standort",
+          "status": "Status",
+          "method": "Abschreibungsmethode"
+        },
+        "totalLabel": "Total",
+        "col": {
+          "group": "Gruppe",
+          "count": "Anzahl",
+          "cost": "Anschaffungswert",
+          "accum": "Kumuliert",
+          "nbv": "Buchwert"
+        }
+      },
+      "endOfLife": {
+        "mode": "Anzeigen",
+        "approaching": "Nähert sich dem Nutzungsende",
+        "fullyDepreciated": "Vollständig abgeschrieben",
+        "withinMonths": "Innerhalb Monaten",
+        "emptyTitle": "Nichts zu markieren",
+        "emptyHint": "Keine Anlage fällt in das gewählte Fenster.",
+        "col": {
+          "asset": "Anlage",
+          "nbv": "Buchwert",
+          "remaining": "Restmonate",
+          "next": "Nächste Abschreibung"
+        }
+      }
+    },
+    "locations": {
+      "title": "Anlagestandorte",
+      "new": "Neuer Standort",
+      "edit": "Bearbeiten",
+      "archive": "Archivieren",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "active": "Aktiv",
+      "archived": "Archiviert",
+      "showArchived": "Archivierte zeigen",
+      "noWorkspace": "um Anlagestandorte zu verwalten",
+      "confirmArchive": "Standort {code} archivieren? Er verlässt die Auswahl, bleibt aber für bestehende Anlagen auflösbar.",
+      "empty": {
+        "title": "Noch keine Standorte",
+        "hint": "Lege den ersten an, damit Anlagen einem realen Ort zugeordnet werden können.",
+        "cta": "Ersten Standort anlegen"
+      },
+      "col": {
+        "code": "Code",
+        "name": "Name",
+        "parent": "Übergeordnet",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "field": {
+        "code": "Code",
+        "name": "Name",
+        "parent": "Übergeordneter Standort",
+        "noParent": "Keiner (Wurzel)",
+        "description": "Beschreibung"
+      },
+      "form": {
+        "title": "Standort",
+        "createTitle": "Neuer Standort",
+        "editTitle": "Standort bearbeiten"
+      },
+      "error": {
+        "transport": "Standorte konnten nicht geladen werden. Bitte erneut versuchen."
+      }
+    },
+    "transfer": {
+      "action": "Transfer",
+      "title": "Anlage transferieren",
+      "nonPosting": "Ein Transfer bucht nichts: er ändert nur Standort und verantwortliche Person, keine Finanzwerte.",
+      "toLocation": "Neuer Standort",
+      "keepLocation": "Standort beibehalten",
+      "toResponsible": "Neue verantwortliche Person",
+      "effectiveDate": "Datum des Transfers",
+      "reason": "Grund",
+      "confirm": "Transfer buchen",
+      "none": "-",
+      "history": "Transferverlauf",
+      "empty": {
+        "title": "Noch keine Transfers",
+        "hint": "Der erste Transfer erscheint hier."
+      },
+      "col": {
+        "date": "Datum",
+        "from": "Von",
+        "to": "Nach",
+        "reason": "Grund"
+      }
+    },
+    "disposal": {
+      "action": "Abgang",
+      "title": "Anlage abgehen lassen",
+      "explainer": "Ein Abgang ist ein endgültiger, gebuchter Vorgang: er löst die Anschaffungskosten und die kumulierte Abschreibung auf, erfasst den Erlös und den Buchgewinn oder Buchverlust und entfernt die Anlage aus dem aktiven Register. Ein falscher Abgang wird durch Stornierung der Buchung korrigiert, nie rückgängig gemacht.",
+      "date": "Abgangsdatum",
+      "proceeds": "Erlös (CHF)",
+      "proceedsAccount": "Erlöskonto",
+      "gainLossAccount": "Konto Gewinn / Verlust",
+      "chooseAccount": "Konto wählen",
+      "reason": "Grund",
+      "counterparty": "Gegenpartei (optional)",
+      "preview": "Das wird gebucht",
+      "cost": "Anschaffungskosten",
+      "accumulated": "Kumulierte Abschreibung",
+      "nbv": "Buchwert",
+      "gain": "Buchgewinn",
+      "loss": "Buchverlust",
+      "journalPreview": "Buchung",
+      "post": "Abgang buchen"
+    },
+    "depreciationRun": {
+      "title": "Abschreibungsläufe",
+      "subtitle": "Berechne die Abschreibung zum Periodenende für jede berechtigte Anlage, prüfe sie und verbuche sie als eine ausgeglichene Buchung. Ein wesentlicher Fehler wird durch Stornieren des Laufs korrigiert, nie durch Ändern der Historie.",
+      "noWorkspace": "Wähle einen Mandanten, um die Abschreibung auszuführen.",
+      "new": "Neuer Lauf",
+      "period": "Periode",
+      "calculate": "Berechnen",
+      "review": "Entwurf prüfen",
+      "emptyDraft": "Keine berechtigten Anlagen für diese Periode. Nichts zu verbuchen.",
+      "alreadyPosted": "Diese Periode ist bereits verbucht, es gibt nichts mehr zu buchen.",
+      "post": "Verbuchen",
+      "postConfirmTitle": "Abschreibungslauf verbuchen?",
+      "postConfirmBody": "Das verbucht die Abschreibung der Periode als eine ausgeglichene Buchung für {count} Anlage(n), CHF {total}. Korrigiert wird nur durch Stornieren des Laufs, nie durch Ändern der Historie.",
+      "postConfirm": "Lauf verbuchen",
+      "postCancel": "Abbrechen",
+      "reverse": "Stornieren",
+      "reverseTitle": "Lauf stornieren",
+      "reverseHint": "Die Stornierung bucht eine Gegenbuchung und gibt jeder Anlage im Lauf die Abschreibung zurück. Sag warum: der Grund wird auf der Stornobuchung und auf der Anlagenbewegung festgehalten.",
+      "reverseReason": "Grund",
+      "reverseConfirm": "Lauf stornieren",
+      "reverseCancel": "Abbrechen",
+      "view": "Ansehen",
+      "history": "Bisherige Läufe",
+      "detail": "Lauf-Detail",
+      "total": "Total",
+      "unitsFor": "Produzierte Einheiten für",
+      "recalculateWithUnits": "Mit Leistungsdaten neu berechnen",
+      "yes": "Ja",
+      "status": {
+        "draft": "Entwurf",
+        "posted": "Verbucht",
+        "reversed": "Storniert"
+      },
+      "col": {
+        "period": "Periode",
+        "status": "Status",
+        "assetCount": "Anlagen",
+        "total": "Total",
+        "actions": "Aktionen",
+        "asset": "Anlage",
+        "amount": "Betrag",
+        "accumBefore": "Kumuliert vorher",
+        "accumAfter": "Kumuliert nachher",
+        "nbvAfter": "Buchwert nachher",
+        "final": "Letzte",
+        "units": "Einheiten",
+        "reason": "Grund"
+      },
+      "empty": {
+        "title": "Noch keine Abschreibungsläufe",
+        "hint": "Wähle eine Periode und drücke Berechnen, um den ersten Entwurf zu erstellen."
+      },
+      "error": {
+        "transport": "Die Abschreibungsläufe konnten nicht geladen werden.",
+        "period_locked": "Diese Periode ist gesperrt, es kann nichts hineingebucht werden.",
+        "empty_run": "Dieser Lauf hat keine berechtigten Anlagen, es gibt nichts zu verbuchen.",
+        "stale_draft": "Eine Anlage hat sich seit der Berechnung geändert: ihre Abschreibung oder ihr Wert. Erstelle den Lauf neu.",
+        "run_already_posted": "Für diese Periode und Auswahl ist bereits ein Lauf verbucht.",
+        "run_already_exists": "Für diese Periode und Auswahl besteht bereits ein Entwurf.",
+        "run_reversed": "Dieser Lauf wurde storniert und kann nicht verbucht werden.",
+        "run_not_posted": "Nur ein verbuchter Lauf kann storniert werden.",
+        "already_reversed": "Dieser Lauf ist bereits storniert.",
+        "later_run_exists": "Für eine dieser Anlagen ist bereits ein späterer Lauf verbucht. Storniere zuerst diesen.",
+        "missing_production_data": "Diese Anlage wird leistungsabhängig abgeschrieben und hat für diese Periode keine Leistungsdaten. Erfasse die produzierten Einheiten und berechne neu.",
+        "missing_units_estimate": "Dieser Anlage fehlen die geschätzten Gesamteinheiten, ihre Leistung lässt sich nicht verteilen. Erfasse zuerst totalEstimatedUnits auf der Anlage."
+      },
+      "skipped": {
+        "title": "In dieser Periode nicht abgeschrieben",
+        "hint": "Diese Anlagen waren in der Auswahl, ergaben aber keine Buchung. Erfasse die produzierten Einheiten für jede leistungsabhängig abgeschriebene Anlage und berechne neu.",
+        "reason": {
+          "missing_production_data": "Keine Leistungsdaten für diese Periode",
+          "already_at_residual": "Bereits auf dem Restwert",
+          "period_already_processed": "Diese Periode ist bereits abgeschrieben",
+          "non_depreciable": "Methode \"keine\", wird nie abgeschrieben",
+          "unknown_method": "Unbekannte Abschreibungsmethode",
+          "zero_amount": "In dieser Periode nichts zu buchen",
+          "asset_terminal": "Abgegangen oder archiviert, wird nicht mehr abgeschrieben",
+          "filtered_out": "Nicht in diesem Lauf: andere Kategorie oder Kostenstelle",
+          "missing_units_estimate": "Keine geschätzten Gesamteinheiten auf der Anlage, es gibt nichts zu verteilen"
+        }
+      }
+    },
+    "maintenance": {
+      "title": "Wartungsprotokoll",
+      "new": "Eintrag hinzufügen",
+      "edit": "Bearbeiten",
+      "cancel": "Stornieren",
+      "back": "Zurück",
+      "save": "Speichern",
+      "asset": "Anlage",
+      "totalCost": "Total erfasste Kosten",
+      "archivedNote": "Diese Anlage ist archiviert. Die Historie bleibt lesbar, neue Einträge sind gesperrt.",
+      "noWorkspace": "um Wartungseinträge zu verwalten",
+      "confirmCancel": "Eintrag «{title}» stornieren? Er bleibt für die Prüfung sichtbar, wird aber nicht gelöscht.",
+      "noAssets": {
+        "title": "Noch keine Anlagen",
+        "hint": "Lege zuerst eine Anlage an, dann kannst du Wartungseinträge erfassen."
+      },
+      "empty": {
+        "title": "Noch keine Wartung erfasst",
+        "hint": "Erfasse den ersten Serviceeintrag für diese Anlage.",
+        "cta": "Ersten Eintrag erfassen"
+      },
+      "status": {
+        "completed": "Abgeschlossen",
+        "cancelled": "Storniert"
+      },
+      "type": {
+        "corrective": "Reparatur",
+        "preventive": "Vorbeugend",
+        "inspection": "Inspektion",
+        "calibration": "Kalibrierung",
+        "upgrade": "Aufwertung",
+        "other": "Sonstiges"
+      },
+      "filter": {
+        "type": "Typ",
+        "allTypes": "Alle Typen",
+        "hasCost": "Nur mit Kosten",
+        "includeCancelled": "Stornierte zeigen"
+      },
+      "col": {
+        "date": "Datum",
+        "type": "Typ",
+        "title": "Titel",
+        "performedBy": "Ausgeführt von",
+        "cost": "Kosten",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "field": {
+        "logDate": "Datum",
+        "type": "Typ",
+        "title": "Titel",
+        "description": "Beschreibung",
+        "externalParty": "Ausgeführt von (extern)",
+        "cost": "Kosten",
+        "costTotal": "Total (CHF)",
+        "partsCost": "Material (CHF)",
+        "labourCost": "Arbeit (CHF)",
+        "externalReference": "Externe Referenz",
+        "notes": "Notizen",
+        "cancelReason": "Grund"
+      },
+      "form": {
+        "title": "Wartungseintrag",
+        "createTitle": "Neuer Wartungseintrag",
+        "editTitle": "Wartungseintrag bearbeiten"
+      },
+      "error": {
+        "transport": "Wartungseinträge konnten nicht geladen werden. Bitte erneut versuchen."
+      }
+    }
+  },
+  "errors": {
+    "duplicate_code": "Ein Eintrag mit diesem Code besteht bereits.",
+    "location_cycle": "Dieser übergeordnete Standort würde eine Schleife in der Hierarchie bilden.",
+    "location_inactive": "Der Zielstandort ist archiviert. Wähle einen aktiven Standort.",
+    "location_in_use": "Dieser Standort wird noch von einer Anlage genutzt und kann nicht archiviert werden.",
+    "asset_not_transferable": "Eine abgegangene oder archivierte Anlage kann nicht transferiert werden.",
+    "nothing_to_transfer": "Gib einen neuen Standort oder eine neue verantwortliche Person an.",
+    "duplicate_number": "Eine Anlage mit dieser Nummer besteht bereits.",
+    "invalid_credit_account": "Dieses Gegenkonto besteht in diesem Mandanten nicht.",
+    "credit_account_wrong_type": "Das Gegenkonto muss ein Bank-, Kreditoren- oder Eigenkapitalkonto sein, kein Ertrags- oder Aufwandskonto.",
+    "invalid_residual": "Der Restwert muss zwischen null und dem Anschaffungswert liegen.",
+    "already_acquired": "Diese Anlage hat bereits eine Anschaffung. Nutze stattdessen die Zusatzaktivierung.",
+    "already_opened": "Für diese Anlage ist bereits eine Eröffnungsbilanz erfasst.",
+    "invalid_offset_account": "Wähle ein gültiges Eigenkapital- oder Eröffnungskonto für den Buchwert.",
+    "reconciliation_drift": "Das Nebenbuch stimmt für ein oder mehrere Kontrollkonten nicht mit dem Hauptbuch überein.",
+    "not_acquired": "Buche zuerst die Anschaffung, bevor du weitere Kosten aktivierst.",
+    "asset_not_acquirable": "Eine abgegangene oder archivierte Anlage kann nicht aktiviert werden.",
+    "source_document_not_found": "Der verknüpfte Beleg wurde in diesem Mandanten nicht gefunden.",
+    "period_locked": "Das gewählte Datum liegt in einer gesperrten Periode. Öffne die Periode wieder oder wähle ein anderes Datum.",
+    "invalid_account_type": "Dieses Konto hat den falschen Typ für dieses Feld.",
+    "invalid_cost_center": "Diese Kostenstelle besteht in diesem Mandanten nicht.",
+    "invalid_cost": "Der Anschaffungswert muss grösser als null sein.",
+    "missing_acquisition_date": "Ein Anschaffungsdatum ist erforderlich.",
+    "missing_useful_life": "Für diese Methode ist eine Nutzungsdauer erforderlich.",
+    "invalid_useful_life": "Die Nutzungsdauer muss eine positive Anzahl Monate sein.",
+    "invalid_residual_pct": "Der Restwert muss zwischen 0 und 10000 Basispunkten liegen.",
+    "invalid_residual_rappen": "Der Restwert darf nicht negativ oder höher als der Anschaffungswert sein.",
+    "invalid_method": "Diese Abschreibungsmethode ist nicht bekannt.",
+    "category_in_use": "Diese Kategorie wird noch von einer Anlage genutzt und kann nicht archiviert werden.",
+    "category_archived": "Diese Kategorie ist archiviert.",
+    "financial_fields_locked": "Diese Anlage hat eine gebuchte Anschaffung, daher können ihre Finanzfelder hier nicht mehr geändert werden.",
+    "asset_in_use": "Diese Anlage ist im Einsatz und kann nicht archiviert werden. Buche stattdessen einen Abgang.",
+    "asset_terminal": "Diese Anlage ist abgegangen oder archiviert und kann nicht mehr bearbeitet werden.",
+    "invalid_period": "Gib eine gültige Periode als JJJJ-MM an.",
+    "method_locked": "Die Methode „keine“ kann nicht deaktiviert werden.",
+    "unknown_method": "Diese Abschreibungsmethode ist nicht bekannt.",
+    "asset_archived": "Diese Anlage ist archiviert. Neue Wartungseinträge sind gesperrt, die Historie bleibt lesbar.",
+    "log_locked": "Dieser Eintrag liegt ausserhalb des Bearbeitungsfensters (90 Tage) und kann nur noch storniert werden.",
+    "log_cancelled": "Dieser Eintrag ist storniert. Korrigiere ihn mit einem neuen Eintrag.",
+    "missing_log_date": "Bitte ein Datum angeben.",
+    "log_date_too_far": "Das Datum liegt zu weit in der Zukunft (mehr als 30 Tage).",
+    "invalid_maintenance_type": "Unbekannter Wartungstyp."
+  },
+  "help": {
+    "FixedAssets": {
+      "title": "Anlagen",
+      "body": "Das Anlagevermögen: Jede aktivierte Anlage entsteht aus einer Kategorie und erbt deren Abschreibungsregeln und Konten; nur was abweicht, wird überschrieben. Abschreibungsläufe berechnen und verbuchen die Perioden, und der Abgleich stellt das Register den Buchwerten der Buchhaltung gegenüber. Sobald eine Anlage gebucht ist, sind ihre Finanzfelder gesperrt; Korrekturen laufen über Buchungen, nicht über das Umschreiben der Anlage.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

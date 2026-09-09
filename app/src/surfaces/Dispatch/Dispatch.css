@@ -1,0 +1,150 @@
+/* G05 section 10, Versand: the Textbausteine editor and the Protokoll. One elevated panel
+   treatment, one accent (Speichern), outcome as glyph + label, never colour alone. The
+   DocumentTemplates conventions verbatim: this surface is its sibling. */
+
+.dispatch {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dispatch-lede,
+.dispatch-muted {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+/* The kind and locale selectors are segmented single-select strips (one editor behind them), not
+   tabs-with-panels, so they stay bespoke; the top-level Textbausteine/Protokoll tabs use the shared
+   Tabs primitive. */
+.dispatch-kinds,
+.dispatch-locales {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.dispatch-tab {
+  border: 1px solid var(--t-border);
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.dispatch-tab--active {
+  background: var(--t-bg-elev);
+  font-weight: 600;
+}
+
+.dispatch-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .dispatch-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dispatch-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.dispatch-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dispatch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.dispatch-field input,
+.dispatch-field textarea {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+}
+
+.dispatch-chips {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.dispatch-chip {
+  border: 1px solid var(--t-border);
+  background: var(--t-bg-elev);
+  color: inherit;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-family: var(--t-font-mono);
+}
+
+.dispatch-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dispatch-preview {
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dispatch-preview-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dispatch-preview-subject {
+  margin: 0;
+  font-weight: 600;
+}
+
+.dispatch-preview-body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.875rem;
+}
+
+.dispatch-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.dispatch-filter select {
+  font: inherit;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+}

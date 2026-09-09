@@ -1,0 +1,117 @@
+{
+  "nav": {
+    "correspondence": "Correspondence"
+  },
+  "mail": {
+    "route": { "title": "Correspondence" },
+    "loading": "Loading correspondence…",
+    "empty": "No correspondence yet.",
+    "section": { "empty": "No threads." },
+    "bucket": {
+      "needs_reply": "Needs reply",
+      "drafted": "Draft ready",
+      "done": "Done"
+    },
+    "action": {
+      "connect": "Connect a local mail store",
+      "reindex": "Reindex",
+      "open": "Open",
+      "close": "Close",
+      "discard": "Cancel"
+    },
+    "connect": {
+      "no_password": "No password needed. TILL reads the mail store on this Mac; it never signs in to your provider.",
+      "supported": "Supported: Apple Mail, Thunderbird.",
+      "adapter": "Mail client",
+      "adapter_apple_mail": "Apple Mail",
+      "adapter_thunderbird": "Thunderbird",
+      "storePath": "Path to the mail store",
+      "address": "Email address"
+    },
+    "account": {
+      "title": "Account",
+      "connected": "Connected: {address}",
+      "lastIndexed": "Last indexed: {at}",
+      "never": "Never indexed"
+    },
+    "draft": {
+      "in_drafts": "The draft is in your Drafts folder. You review it and send it.",
+      "badge": "Draft ready"
+    },
+    "thread": {
+      "messages": "{count} messages",
+      "last": "Last: {at}",
+      "noSubject": "(no subject)"
+    },
+    "direction": {
+      "inbound": "inbound",
+      "outbound": "outbound"
+    },
+    "msg": {
+      "stale": "This message changed since it was indexed."
+    },
+    "field": { "label": "Label", "none": "None" },
+    "column": {
+      "direction": "Direction",
+      "subject": "Subject",
+      "messages": "Messages",
+      "last": "Last"
+    },
+    "view": { "label": "View", "all": "All" },
+    "error": {
+      "needs_mailstore": "No local mail store found.",
+      "unknown_mail_adapter": "This folder is not a mail store TILL can read.",
+      "drafts_not_writable": "The Drafts folder cannot be written to.",
+      "message_moved": "This message is no longer where it was indexed.",
+      "transport": "The correspondence could not be loaded.",
+      "permissionDenied": {
+        "read": "This needs the \"Read the local mail index and threads\" right.",
+        "write": "This needs the \"Connect a local mail store and write drafts\" right."
+      }
+    }
+  },
+  "draft": {
+    "pane": { "title": "Draft" },
+    "empty": "No draft yet.",
+    "generating": "Writing locally…",
+    "action": {
+      "generate": "Create draft",
+      "regenerate": "Try again"
+    },
+    "hint": {
+      "shorter": "Shorter",
+      "formal": "More formal"
+    },
+    "grounded": {
+      "on": "Accounting data included",
+      "off": "Writing style only",
+      "facts": "Facts used",
+      "no_history": "No accounting data for this client."
+    },
+    "fact": {
+      "invoice": "Invoice {number} open",
+      "due": "due {date}",
+      "total": "Total open"
+    },
+    "model": { "changed": "Created with a different model." },
+    "review": { "note": "You review and send in your mail app. TILL never sends." },
+    "error": {
+      "nothing_to_reply_to": "The last message here is yours.",
+      "needs_voice_profile": "Learn your writing style first, under Writing style.",
+      "needs_local_runtime": "No local drafting engine is installed. Nothing falls back to a cloud.",
+      "needs_mailstore": "The mail store is not readable. Check the connected account.",
+      "source_changed": "This message changed. Reindex and try again.",
+      "draft_gone": "This draft is no longer in your Drafts folder.",
+      "generation_failed": "The local model could not write this draft. The attempt is on record.",
+      "forbidden": "This needs the \"Create drafts\" right."
+    }
+  },
+  "help": {
+    "Correspondence": {
+      "title": "Correspondence",
+      "body": "Correspondence shows your business mail across all contacts: what is unanswered, what belongs to which contact and what you want to file. TILL reads the local mail store your mail client already maintains; there is no password and no sending from inside TILL. A finished draft lands in your mail client’s own drafts folder, where you review and send it yourself.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

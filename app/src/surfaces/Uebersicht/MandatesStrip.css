@@ -1,0 +1,75 @@
+/*
+ * F-13, J2.5: the mandates strip. A quiet horizontal list of the session's mandates with each one's
+ * waiting count. It spends the accent ONLY on the tinted pill of the current mandate (the same
+ * language as the active nav row) and on the focus ring; counts are text, never a coloured badge.
+ */
+.mandates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin-bottom: var(--t-space-2);
+}
+
+.mandates-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mandates-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.mandates-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  min-height: 32px;
+  padding: var(--t-space-0-5) var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mandates-btn:hover {
+  background: var(--t-bg-soft);
+}
+
+.mandates-btn:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+.mandates-row--current .mandates-btn {
+  background: var(--t-accent-soft);
+  border-color: transparent;
+  color: var(--t-accent);
+  cursor: default;
+}
+
+.mandates-name {
+  font-weight: 600;
+}
+
+.mandates-count {
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.mandates-row--current .mandates-count {
+  color: var(--t-accent);
+}
+
+.mandates-count--dim {
+  color: var(--t-text-faint);
+}

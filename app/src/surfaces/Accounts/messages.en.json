@@ -1,0 +1,80 @@
+{
+  "account": {
+    "title": "Accounts",
+    "new": "New account",
+    "number": "Number",
+    "name": "Name",
+    "typeLabel": "Type",
+    "type": {
+      "asset": "Asset",
+      "liability": "Liability",
+      "equity": "Equity",
+      "income": "Income",
+      "expense": "Expense"
+    },
+    "group": {
+      "aktiven": "Assets",
+      "passiven": "Liabilities",
+      "eigenkapital": "Equity",
+      "ertrag": "Income",
+      "aufwand": "Expenses"
+    },
+    "vatDefault": "Default VAT",
+    "vatNone": "None",
+    "costCenterAllowed": "Cost centre allowed",
+    "archive": "Archive",
+    "archived": "Archived",
+    "delete": "Delete",
+    "confirm": {
+      "title": "Confirm deletion",
+      "delete": "Delete this account? This cannot be undone."
+    },
+    "search": "Search accounts",
+    "empty": "No accounts in this view",
+    "err": {
+      "duplicateNumber": "This account number is already in use.",
+      "inUse": "This account has postings and cannot be deleted. Archive it instead."
+    },
+    "edit": "Edit",
+    "rowActions": "More actions for account {number} {name}",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "editTitle": "Edit account",
+    "showArchived": "Show archived",
+    "noWorkspaceHint": "Without a workspace there is no chart of accounts to edit.",
+    "warn": {
+      "typeMismatch": "The type does not match the number range."
+    },
+    "emptyHint": "The SME chart of accounts ships with the workspace. Adjust the search and filters, or add an account of your own.",
+    "noMatch": "No account matches the search",
+    "noMatchHint": "Adjust the search term or show archived accounts.",
+    "clearSearch": "Clear the search"
+  },
+  "costCenter": {
+    "title": "Cost centres",
+    "new": "New cost centre",
+    "code": "Code",
+    "name": "Name",
+    "archive": "Archive",
+    "delete": "Delete",
+    "confirm": {
+      "title": "Confirm deletion",
+      "delete": "Delete this cost centre? This cannot be undone."
+    },
+    "err": {
+      "inUse": "This cost centre is in use and cannot be deleted. Archive it instead."
+    },
+    "empty": "No cost centres yet.",
+    "toggle": "Toggle cost centres",
+    "rowActions": "More actions for cost centre {code} {name}"
+  },
+  "help": {
+    "Accounts": {
+      "title": "Accounts",
+      "body": "The chart of accounts for this workspace, grouped into assets, liabilities, equity, revenue and expenses. Here you create and edit accounts and archive what is no longer needed. An account that carries postings can only be archived, never deleted: the history behind it stays complete. Below the chart you maintain the cost centres.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,189 @@
+{
+  "nav": {
+    "group": {
+      "bank": "Bank"
+    },
+    "payments": "Payments"
+  },
+  "payment": {
+    "title": "Payments",
+    "caption": "Payments",
+    "record": "Record payment",
+    "post": "Post payment",
+    "allocate": "Allocate",
+    "cancel": "Cancel",
+    "retry": "Try again",
+    "search": "Search",
+    "resetFilter": "Reset filter",
+    "close": "Close",
+    "amount": "Amount",
+    "date": "Date",
+    "bankAccount": "Account",
+    "documentCount": "{n} documents",
+    "candidates": "Suggestions",
+    "candidatesCount": "{n} of {total} open items",
+    "openAmount": "Open",
+    "afterwardsOpen": "open afterwards",
+    "candidate": {
+      "vendorBill": "Vendor bill"
+    },
+    "dueDate": "due {date}",
+    "skonto": "Cash discount",
+    "distributeOldest": "Distribute the rest to the oldest open items",
+    "reverse": "Reverse",
+    "createAdvice": "Create remittance advice",
+    "reversedLink": "View the reversal of {date}",
+    "settledAlready": "Already settled",
+    "refreshCandidates": "Reload the suggestions",
+    "openDocument": "Open document",
+    "direction": {
+      "all": "All",
+      "incoming": "Incoming",
+      "outgoing": "Outgoing"
+    },
+    "column": {
+      "date": "Date",
+      "direction": "Direction",
+      "counterparty": "Counterparty",
+      "amount": "Amount",
+      "allocatedTo": "Allocated to",
+      "account": "Account",
+      "status": "Status",
+      "document": "Document",
+      "due": "Due"
+    },
+    "statement": {
+      "label": "Allocation",
+      "rest": "Remaining",
+      "skonto": "Cash discount (incl. VAT)",
+      "credit": "Credit"
+    },
+    "reference": {
+      "label": "Reference",
+      "qrr": "QR reference recognised",
+      "scor": "Creditor Reference recognised",
+      "freeText": "Free text, used for the search",
+      "hint": "Reference or free text from the payment"
+    },
+    "writeOff": {
+      "label": "Write off difference",
+      "noun": "Write-off"
+    },
+    "onAccount": {
+      "label": "Park as credit",
+      "field": "Credit",
+      "chip": "Credit {amount}",
+      "for": "Credit {amount} for {name}"
+    },
+    "remainder": {
+      "open": "Still to allocate: {amount}",
+      "over": "Over-allocated: {amount}",
+      "done": "Fully allocated"
+    },
+    "preview": {
+      "label": "Posting (preview)",
+      "show": "Show posting",
+      "hide": "Hide posting",
+      "debit": "Debit",
+      "credit": "Credit",
+      "istVat": "Of which VAT (cash basis), recognised on {date}: {amount}",
+      "fx": "Realised FX difference",
+      "fxRate": "Rate {rate} of {date}",
+      "stale": "The preview is being recalculated."
+    },
+    "status": {
+      "posted": "Posted",
+      "reversed": "Reversed"
+    },
+    "counterparty": {
+      "label": "Counterparty",
+      "customer": "Customer",
+      "supplier": "Supplier"
+    },
+    "allocateCredit": {
+      "label": "Allocate credit",
+      "warning": "This allocation can only be undone by reversing the whole payment, which also reopens the first allocation."
+    },
+    "match": {
+      "exact_reference": "Reference matches",
+      "exact_amount_customer": "Amount and customer match",
+      "amount_tolerance": "Amount close, difference {amount}",
+      "manual": "Chosen manually"
+    },
+    "empty": {
+      "list": "No payments recorded yet. Every payment you or the agent records, allocates, or parks as a credit appears here.",
+      "filtered": "No payments in this period.",
+      "noOpenItems": "There are no open items.",
+      "noOpenItemsIssue": "Issue an invoice",
+      "noMatch": "No open item fits this payment.",
+      "noMatchWiden": "Widen the search",
+      "noMatchJournal": "Not a customer payment? Record a journal entry",
+      "preview": "Nothing allocated yet.",
+      "allocations": "Not allocated to any document yet."
+    },
+    "error": {
+      "transport": "Payments could not be loaded.",
+      "candidates": "The suggestions could not be loaded.",
+      "preview": "The preview could not be calculated.",
+      "detail": "The details could not be loaded.",
+      "allocation_mismatch": "The allocations do not add up to the payment amount. {amount} is missing.",
+      "allocation_target_side_mismatch": "The payment and the selected item sit on different sides of the books: money that cleared receivables cannot settle a vendor bill, and money that cleared payables cannot settle a customer document.",
+      "allocation_counterparty_mismatch": "One payment can only settle one counterparty's items. The item you selected belongs to someone else. Record a separate payment for it.",
+      "allocation_direction_mismatch": "This payment's direction does not match what it settles: an outgoing payment cannot settle a receivable, an incoming payment cannot settle a payable, and a credit note is only ever refunded outgoing. Check the direction of this payment.",
+      "allocation_exceeds_open": "{number} is only open for {open}, and you are allocating {amount}.",
+      "skonto_exceeds_open": "The cash discount of {skonto} is larger than the open amount of {open} on {number}.",
+      "needs_counterparty": "A credit needs a customer. Choose who the money came from first.",
+      "needs_bank_account": "Add a bank or cash account first.",
+      "needs_account": "An account for this posting is missing from the chart of accounts.",
+      "period_locked": "Period {period} is locked. Nothing is posted in a locked period.",
+      "document_already_settled": "{number} has been settled in the meantime.",
+      "already_reversed": "This payment has already been reversed.",
+      "needs_fx_rate": "The rate for {pair} on {date} is missing.",
+      "permission_denied": "You do not have permission to post payments.",
+      "reference_check_digit": "The check digit does not match. Check the reference again.",
+      "reference_unknown": "This reference belongs to no open item in this workspace.",
+      "currency_mismatch": "A payment in {payCur} cannot settle a document in {docCur}.",
+      "intent_required": "The payment was sent without an explicit intent, so nothing was posted.",
+      "unexpected": "The payment could not be posted."
+    },
+    "errorCta": {
+      "needs_bank_account": "Go to setup",
+      "period_locked": "Open periods",
+      "needs_fx_rate": "Add the rate",
+      "document_already_settled": "Reload the suggestions",
+      "currency_mismatch": "Record a journal entry"
+    },
+    "errorExplain": {
+      "needs_fx_rate": "Without a rate nothing is converted and nothing is posted. Add the rate and TILL converts the payment."
+    },
+    "confirm": {
+      "post": "Post the payment of {amount}?",
+      "postDetail": "The entry is created and can only be undone with a reversal.",
+      "postSuppress": "Do not show again",
+      "reverse": "Reverse the payment of {date} for {amount}? A reversing entry is posted. The payment and its entry are kept, and {number} is open again afterwards.",
+      "reverseWhole": "A payment is always reversed as a whole. For a different allocation, reverse it and record it again.",
+      "reverseDate": "Reversal date",
+      "discard": "Discard what you entered?",
+      "discardConfirm": "Discard",
+      "discardKeep": "Keep editing"
+    },
+    "detail": {
+      "allocations": "Allocations",
+      "legs": "Posting",
+      "source": "Source",
+      "sourceValue": {
+        "manual": "Manual"
+      },
+      "journalEntry": "View the entry",
+      "documentMissing": "Document not found"
+    }
+  },
+  "help": {
+    "Payments": {
+      "title": "Payments",
+      "body": "Here you record incoming and outgoing payments and match them to open invoices. A payment never changes an invoice itself: it is allocated to it, and the open amount follows from the difference. Partial payments, overpayments and bulk payments are ordinary cases and stay visible in the allocation.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

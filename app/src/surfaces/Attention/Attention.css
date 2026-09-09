@@ -1,0 +1,390 @@
+/*
+ * G15 Pendenzen. The design law applies verbatim: ONE accent, spent only on the focus ring, the
+ * selected row and at most one primary. The attention count and the rail fragment spend ZERO accent;
+ * status is glyph + text, never colour alone; only `überfällig` carries `--t-warn`; money is a
+ * right-aligned tabular column. Two-step elevation, no blur, no glass.
+ */
+
+.att {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  padding: var(--t-space-3);
+  max-width: 880px;
+}
+
+.att-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * The page header (title, inline help, stand + refresh actions) is the shared SurfaceHeader (D118 B2),
+ * so the former `.att-head` / `.att-title` / `.att-head-right` blocks are gone: the flex row, the title
+ * type and the right-pinned actions slot all live in `SurfaceHeader.css` now. Only the two
+ * Attention-specific spans that ride in the actions slot stay below.
+ */
+
+.att-stand {
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+.att-incomplete {
+  color: var(--t-warn);
+}
+
+.att-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-text-dim);
+  margin: 0;
+  text-transform: none;
+}
+
+.att-work,
+.att-index,
+.att-events {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.att-work-head,
+.att-events-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.att-total {
+  margin-left: auto;
+  font-family: var(--t-font-mono);
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.att-provider-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-soft);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font-size: 13px;
+  color: var(--t-warn);
+}
+
+/* --- the item list ------------------------------------------------------------------------------ */
+
+.att-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.att-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--t-space-1);
+}
+
+.att-row-open {
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: 44px;
+  padding: var(--t-space-1) var(--t-space-2);
+  text-align: left;
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text);
+  cursor: pointer;
+}
+
+.att-row-open[aria-current='true'] {
+  border-color: var(--t-accent);
+  box-shadow: 0 0 0 1px var(--t-accent);
+}
+
+.att-row-open:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+.att-urgency {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: 12px;
+  color: var(--t-text-dim);
+  min-width: 5.5rem;
+}
+
+.att-urgency--overdue {
+  color: var(--t-warn);
+  font-weight: 600;
+}
+
+.att-urgency-label {
+  white-space: nowrap;
+}
+
+.att-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.att-row-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--t-text);
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.att-row-subtitle {
+  font-size: 12px;
+  color: var(--t-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.att-collapsed {
+  color: var(--t-text-faint);
+}
+
+.att-new {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t-text-dim);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: 0 var(--t-space-0-5);
+}
+
+.att-amount {
+  font-family: var(--t-font-mono);
+  font-size: 13px;
+  color: var(--t-text);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.att-row-overflow {
+  display: flex;
+  align-items: center;
+}
+
+.att-area-empty {
+  font-size: 13px;
+  color: var(--t-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  align-items: flex-start;
+}
+
+/* --- the area index ----------------------------------------------------------------------------- */
+
+.att-index-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.att-index-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: 44px;
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.att-index-row[aria-current='true'] {
+  border-color: var(--t-accent);
+}
+
+.att-index-row:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+.att-index-label {
+  font-size: 13px;
+}
+
+.att-index-count {
+  font-family: var(--t-font-mono);
+  font-size: 13px;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.att-index-chevron {
+  color: var(--t-text-faint);
+}
+
+/* --- the events zone ---------------------------------------------------------------------------- */
+
+.att-events-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.att-events-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+  font-size: 13px;
+}
+
+.att-events-status {
+  font-size: 12px;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.att-events-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.att-events-meta {
+  font-size: 12px;
+  color: var(--t-text-faint);
+}
+
+.att-events-empty,
+.att-events-error {
+  font-size: 13px;
+  color: var(--t-text-dim);
+  margin: 0;
+}
+
+/* --- the decision strip under a row (F-01) ------------------------------------------------------ */
+
+/*
+ * The row is now two lines: the open button with its overflow, then the strip that carries the
+ * decision. The strip spends NO accent of its own: the one primary carries `btn--primary` only on the
+ * selected row, the sentences are dim ink, and the reject confirm is the shared danger fill.
+ */
+.att-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.att-row-line {
+  display: flex;
+  align-items: stretch;
+  gap: var(--t-space-1);
+}
+
+.att-decide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin: 0 var(--t-space-4) 0 calc(var(--t-space-2) + 5.5rem + var(--t-space-2));
+  padding: var(--t-space-1) 0 var(--t-space-2);
+}
+
+.att-decide-reason,
+.att-decide-consequence,
+.att-decide-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+.att-decide-suggested {
+  color: var(--t-text);
+}
+
+.att-decide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.att-decide-busy {
+  font-size: 12px;
+  color: var(--t-text-faint);
+}
+
+.att-decide-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.att-decide-reason-label {
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+.att-decide-reason-field {
+  min-height: 36px;
+  padding: var(--t-space-1) var(--t-space-2);
+  font: inherit;
+  color: var(--t-text);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.att-decide-reason-field:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .att-decide {
+    margin-left: var(--t-space-2);
+    margin-right: var(--t-space-2);
+  }
+}

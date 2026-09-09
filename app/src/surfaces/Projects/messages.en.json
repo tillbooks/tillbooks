@@ -1,0 +1,134 @@
+{
+  "nav": {
+    "projects": "Projects"
+  },
+  "errors": {
+    "code_taken": "Project code already in use.",
+    "invalid_dates": "The end date must be after the start date.",
+    "parent_cycle": "A project cannot be its own parent.",
+    "parent_not_found": "That parent project does not exist.",
+    "has_children": "Delete or re-parent the sub-projects first.",
+    "project_closed": "This project is closed and can no longer be edited.",
+    "project_not_found": "This project no longer exists.",
+    "phase_not_found": "This phase no longer exists.",
+    "not_draft": "Only draft projects can be deleted. Close the project instead.",
+    "project_referenced": "This draft already carries data (fields or files).",
+    "project_has_open_time": "The project has open time entries.",
+    "invalid_transition": "This status change is not possible.",
+    "invalid_status": "That status does not exist.",
+    "needs_fx_rate": "No rate is recorded for this currency. Record one, or state it directly."
+  },
+  "project": {
+    "route": {
+      "title": "Projects"
+    },
+    "col": {
+      "code": "Code",
+      "name": "Name",
+      "client": "Client",
+      "status": "Status",
+      "budget": "Budget",
+      "actions": "Actions"
+    },
+    "noWorkspaceHint": "Pick a client first, then you will see its projects.",
+    "action": {
+      "create": "New project",
+      "edit": "Edit",
+      "delete": "Delete",
+      "activate": "Activate",
+      "hold": "Put on hold",
+      "resume": "Resume",
+      "close": "Close",
+      "reopen": "Reopen"
+    },
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "on_hold": "On hold",
+      "closed": "Closed"
+    },
+    "list": {
+      "aria": "Project list",
+      "searchLabel": "Search projects",
+      "search": "Search (code or name)",
+      "statusFilter": "Filter by status",
+      "allStatuses": "All statuses",
+      "rowActions": "Actions for {name}",
+      "subprojectOf": "Sub-project of {code}"
+    },
+    "detail": {
+      "contact": "Client",
+      "dates": "Duration",
+      "code": "Code",
+      "parent": "Parent project",
+      "statusMenu": "Change status",
+      "pickPrompt": "Pick a project on the left to see its budget, phases and status."
+    },
+    "phase": {
+      "title": "Phases",
+      "add": "Add phase",
+      "name": "Name",
+      "budget": "Budget",
+      "milestone": "Milestone",
+      "done": "Done",
+      "doneOn": "Done on {date}",
+      "empty": "No phases.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "markDone": "Mark phase {name} as done"
+    },
+    "budget": {
+      "title": "Budget vs actual",
+      "budget": "Budget",
+      "actual": "Actual cost",
+      "remaining": "Remaining",
+      "hours": "Hours",
+      "over": "Over budget",
+      "barLabel": "Budget used: {pct}%"
+    },
+    "warning": {
+      "phase_budgets": "Phase budgets exceed the project budget."
+    },
+    "editor": {
+      "createTitle": "New project",
+      "editTitle": "Edit project",
+      "name": "Name",
+      "contact": "Client",
+      "contactEmptyHint": "No contacts yet. Create a contact first.",
+      "contactCreate": "Create contact",
+      "code": "Project code",
+      "codePlaceholder": "Assigned automatically",
+      "currency": "Currency",
+      "fxRate": "Rate to {base}",
+      "fxRateHint": "Only needed when no rate is recorded.",
+      "budget": "Budget ({currency})",
+      "budgetHours": "Budget (hours)",
+      "startsOn": "Start",
+      "endsOn": "End",
+      "parent": "Parent project",
+      "parentNone": "None",
+      "save": "Save",
+      "cancel": "Cancel",
+      "invalidBudget": "Please enter a valid amount.",
+      "invalidHours": "Please enter whole hours."
+    },
+    "confirm": {
+      "delete": "Delete this draft project?",
+      "deleteConfirm": "Delete",
+      "cancel": "Cancel"
+    },
+    "empty": "No projects yet.",
+    "emptyHint": "A project bundles budget, phases, and later time and expenses for one client.",
+    "emptySearch": "Nothing found.",
+    "clearSearch": "Clear search",
+    "readonly": "Read-only access"
+  },
+  "help": {
+    "Projects": {
+      "title": "Projects",
+      "body": "Your projects with phases, dates and budget. On the left the filterable list, nested with subprojects; on the right the selected project with status, client, dates and the budget-versus-actual comparison fed from real postings. Phases are ticked off directly in the table. Only a draft can be deleted; everything else keeps its history.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

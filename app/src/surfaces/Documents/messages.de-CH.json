@@ -1,0 +1,393 @@
+{
+  "nav": {
+    "group": {
+      "sales": "Verkauf"
+    },
+    "documents": "Belege"
+  },
+  "document": {
+    "title": "Belege",
+    "new": "Neuer Beleg",
+    "search": "Belege suchen",
+    "empty": "Noch keine Belege",
+    "emptyHint": "Offerten, Aufträge, Rechnungen und Gutschriften erscheinen hier.",
+    "noMatch": "Keine Belege gefunden",
+    "noMatchHint": "Kein Beleg passt zu diesem Filter.",
+    "clearFilters": "Filter zurücksetzen",
+    "loadError": "Belege konnten nicht geladen werden.",
+    "truncatedNotice": "Zeigt die ersten {ceiling} von {total} Belegen.",
+    "truncatedHint": "Nutze die Filter, um die Liste einzugrenzen.",
+    "noWorkspaceHint": "Richte zuerst einen Arbeitsbereich ein, dann kannst du Belege erstellen.",
+    "savedView": "Ansicht",
+    "overdue": "überfällig",
+    "draftNumber": "(Entwurf)",
+    "rowActions": "Aktionen für {name}",
+    "dialog": {
+      "close": "Schliessen"
+    },
+    "column": {
+      "number": "Nummer",
+      "type": "Typ",
+      "customer": "Kunde",
+      "date": "Datum",
+      "total": "Total",
+      "status": "Status"
+    },
+    "type": {
+      "all": "Alle",
+      "quote": "Offerte",
+      "order": "Auftrag",
+      "invoice": "Rechnung",
+      "creditNote": "Gutschrift"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "issued": "Ausgestellt",
+      "sent": "Versendet",
+      "accepted": "Akzeptiert",
+      "declined": "Abgelehnt",
+      "confirmed": "Bestätigt",
+      "partiallyPaid": "Teilweise bezahlt",
+      "settled": "Beglichen",
+      "converted": "Umgewandelt",
+      "cancelled": "Storniert",
+      "expired": "Abgelaufen",
+      "superseded": "Ersetzt"
+    },
+    "action": {
+      "issue": "Ausstellen",
+      "send": "Senden",
+      "accept": "Als angenommen markieren",
+      "decline": "Als abgelehnt markieren",
+      "confirm": "Bestätigen",
+      "expire": "Als abgelaufen markieren",
+      "supersede": "Ersetzen",
+      "convert": "Umwandeln",
+      "convertToOrder": "In Auftrag umwandeln",
+      "convertToInvoice": "In Rechnung umwandeln",
+      "cancel": "Stornieren",
+      "delete": "Löschen",
+      "edit": "Bearbeiten",
+      "open": "Öffnen",
+      "openTarget": "Ziel öffnen",
+      "back": "Zurück zu den Belegen",
+      "cancelConfirm": "Diesen Beleg stornieren? Eine Stornobuchung wird erstellt. Der Beleg und seine Buchung bleiben erhalten.",
+      "deleteDraftConfirm": "Diesen Entwurf löschen?"
+    },
+    "illegalTransition": "Dieser Schritt ist für den aktuellen Stand nicht möglich.",
+    "needsLines": "Füge zuerst eine Position hinzu.",
+    "needsCustomer": "Wähle zuerst einen Kunden.",
+    "periodLocked": "Die Periode {period} ist gesperrt.",
+    "periodLockedLink": "Perioden öffnen",
+    "genericError": "Der Beleg konnte nicht aktualisiert werden.",
+    "denied": "Dir fehlt die Berechtigung, Belege zu erstellen oder zu bearbeiten.",
+    "editor": {
+      "newTitle": "Neuer Beleg",
+      "customer": "Kunde",
+      "pickCustomer": "Kunde wählen",
+      "noContacts": "Noch keine Kunden. Lege zuerst einen Kontakt an.",
+      "toContacts": "Zu den Kontakten",
+      "date": "Datum",
+      "currency": "Währung",
+      "notes": "Notiz",
+      "notesPlaceholder": "Interne Notiz zum Beleg",
+      "position": "Position",
+      "description": "Bezeichnung",
+      "descriptionPlaceholder": "Leistung oder Artikel",
+      "quantity": "Menge",
+      "unitPrice": "Einzelpreis",
+      "vat": "MWST",
+      "amount": "Betrag",
+      "addLine": "Position hinzufügen",
+      "removeLine": "Position {number} entfernen",
+      "subtotal": "Zwischensumme",
+      "total": "Total",
+      "vatSummary": "MWST-Übersicht",
+      "saveDraft": "Entwurf speichern",
+      "saved": "Gespeichert",
+      "reasonNoCustomer": "Wähle zuerst einen Kunden.",
+      "reasonNoLines": "Füge zuerst eine Position hinzu.",
+      "reasonNeedsFxRate": "Für {currency} fehlt ein Kurs auf den {date}.",
+      "reasonFxMethod": "Der Kurs für {currency} passt nicht zur Umrechnungsbasis der Steuerperiode {taxPeriod}.",
+      "noContactsInline": "Noch keine Kunden. Lege den ersten gleich hier an:",
+      "newCustomer": "Neuer Kunde",
+      "newCustomerName": "Name des Kunden",
+      "createCustomer": "Kunde anlegen",
+      "newCustomerCancel": "Abbrechen",
+      "customerCreated": "{name} ist als Kunde angelegt und ausgewählt.",
+      "customerCreateFailed": "Der Kunde konnte nicht angelegt werden. Versuch es noch einmal oder lege ihn unter Kontakte an."
+    },
+    "detail": {
+      "timeline": "Statusverlauf",
+      "positions": "Positionen",
+      "notFound": "Beleg nicht gefunden",
+      "notFoundHint": "Dieser Beleg existiert nicht oder wurde entfernt.",
+      "vatSummary": "MWST-Übersicht",
+      "ledgerEntry": "Buchung ansehen",
+      "source": "Aus Quelle erstellt",
+      "target": "Zielbeleg öffnen",
+      "waitingPayment": "wartet auf Zahlung",
+      "convertedToast": "Aus {number} erstellt",
+      "issuedAck": "{number} ist ausgestellt.",
+      "actor": {
+        "you": "du",
+        "agent": "Agent",
+        "system": "System"
+      },
+      "issuedAndSentAck": "{number} ist ausgestellt und an {email} versendet.",
+      "issuedNotSentAck": "{number} ist ausgestellt, aber noch nicht an {email} versendet."
+    },
+    "issue": {
+      "title": "Beleg ausstellen",
+      "numberLine": "Eine Nummer wird vergeben.",
+      "postingLine": "Eine Buchung über {total} wird erstellt.",
+      "immutabilityLine": "Ausgestellte Belege kannst du nicht mehr bearbeiten, nur stornieren.",
+      "quoteLine": "Die Offerte wird ausgestellt und erhält eine Nummer.",
+      "confirm": "Ausstellen",
+      "cancel": "Abbrechen"
+    },
+    "dirty": {
+      "indicator": "Nicht gespeichert",
+      "confirm": "Du hast Änderungen, die noch nicht gespeichert sind. Verwerfen?",
+      "discard": "Verwerfen",
+      "keep": "Weiter bearbeiten"
+    }
+  },
+  "invoice": {
+    "terms": {
+      "title": "Konditionen",
+      "dueDate": "Zahlbar bis",
+      "paymentTerms": "Zahlungsfrist des Kunden",
+      "termsDays": "{days} Tage",
+      "applyTerms": "Frist übernehmen",
+      "reference": "Zahlungsreferenz",
+      "referencePending": "Die Referenz wird beim Ausstellen aus der Rechnungsnummer gebildet."
+    },
+    "qr": {
+      "title": "QR-Zahlteil",
+      "readiness": "QR-Bereitschaft",
+      "ready": "Alles bereit: Adresse, IBAN und Währung stimmen.",
+      "pendingIssue": "Den QR-Zahlteil gibt es ab dem Ausstellen. Vorher wäre die Referenz erfunden.",
+      "missingAddress": "Die Kundenadresse ist unvollständig, es fehlt: {fields}.",
+      "fixAddress": "Adresse vervollständigen",
+      "fixCreditorAddress": "Deine Adresse vervollständigen",
+      "needsIban": "Für diesen Arbeitsbereich ist keine IBAN hinterlegt. Ohne IBAN gibt es keinen QR-Zahlteil.",
+      "toSetup": "IBAN hinterlegen",
+      "unsupportedCurrency": "In {currency} gibt es keinen QR-Zahlteil.",
+      "qrIbanChfOnly": "Ab dem {date} trägt deine QR-IBAN nur noch CHF, also gibt es für {currency} keinen Zahlteil.",
+      "field": {
+        "street": "Strasse",
+        "zip": "PLZ",
+        "city": "Ort",
+        "country": "Land"
+      },
+      "reference": "Referenz",
+      "referenceHelpLabel": "Was diese Referenz ist",
+      "referenceHelp": {
+        "qrr": {
+          "title": "QR-Referenz (QRR)",
+          "body": "Eine 27-stellige Referenz, die zu deiner QR-IBAN gehört. Deine Bank meldet sie beim Zahlungseingang zurück. Damit ordnet TILL die Zahlung dieser Rechnung zu."
+        },
+        "scor": {
+          "title": "Creditor Reference (SCOR)",
+          "body": "Die internationale Referenz nach ISO 11649, für eine normale IBAN. Sie beginnt mit RF und trägt eine Prüfziffer, damit ein Tippfehler auffällt."
+        }
+      },
+      "amount": "Betrag",
+      "dueBy": "Zahlbar bis {date}",
+      "guideline": "Richtlinie",
+      "igVersion": "SIX Implementation Guidelines {version}",
+      "graphicLabel": "Swiss QR-Code für die Zahlung",
+      "graphicDense": "Dieser Code ist dicht. Im Druck liegen seine Module unter den 0.4 mm, die die Richtlinie verlangt. Kürze die Zusatzinformationen, falls das Scannen scheitert.",
+      "graphicUndrawable": "Die Zahlungsdaten sind zu lang für einen Swiss QR Code. Kürze die Adresse oder die Zusatzinformationen.",
+      "showPayload": "Rohdaten anzeigen",
+      "hidePayload": "Rohdaten ausblenden",
+      "payloadLabel": "Swiss Payments Code",
+      "unavailable": "Kein QR-Zahlteil"
+    },
+    "currency": {
+      "baseOption": "{currency} (Buchwährung)",
+      "other": "Andere Währung",
+      "otherCode": "Währungscode",
+      "otherHint": "Drei Buchstaben nach ISO 4217, zum Beispiel USD.",
+      "qr": {
+        "qrr": "Der Zahlteil entsteht beim Ausstellen, mit einer QR-Referenz.",
+        "scor": "Der Zahlteil entsteht beim Ausstellen, mit einer SCOR-Referenz.",
+        "noIban": "Ohne hinterlegte IBAN gibt es in keiner Währung einen Zahlteil.",
+        "unsupported": "Den QR-Zahlteil gibt es nur in CHF und EUR. Eine Rechnung in {currency} kannst du stellen und verbuchen, sie bekommt einfach keinen Zahlteil.",
+        "chfOnly": "Ab dem {date} trägt eine QR-IBAN nur noch CHF. Eine Rechnung in {currency} mit diesem Datum bekommt darum keinen Zahlteil.",
+        "chfOnlyRemedy": "Mit einer normalen IBAN gäbe es weiterhin einen Zahlteil, dann mit SCOR-Referenz. Das ist unsere Schlussfolgerung: zu einem Konto mit nur einer QR-IBAN sagt SIX nichts.",
+        "chfOnlyValidity": "Rechnungen, die du vorher ausstellst, bleiben zahlbar. Die Fassung 2.3 gilt noch bis November 2027."
+      }
+    },
+    "fx": {
+      "title": "Umrechnung",
+      "base": "{currency} ist deine Buchwährung. TILL rechnet hier nichts um und speichert keinen Kurs.",
+      "loading": "TILL sucht den Kurs.",
+      "rate": "Kurs",
+      "rateLine": "1 {currency} = {rate} {baseCurrency}",
+      "asOf": "Kurs vom",
+      "basis": "Basis",
+      "origin": "Herkunft",
+      "willPost": "Beim Ausstellen verbucht TILL diese Rechnung zu diesem Kurs in {baseCurrency}. Die umgerechneten Beträge stehen danach auf der Buchung.",
+      "postedTitle": "Umrechnung der Buchung",
+      "billed": "Fakturiert",
+      "booked": "Gebucht",
+      "vatBilled": "MWST fakturiert",
+      "vatBooked": "MWST gebucht",
+      "postedNote": "So steht dieser Beleg in den Büchern. TILL hat ihn beim Ausstellen zu diesem Kurs umgerechnet, ein später erfasster Kurs ändert daran nichts.",
+      "vatNote": "Die MWST in {baseCurrency} ist der Betrag, auf den du deine MWST-Abrechnung stellst. TILL liest ihn aus der Buchung und rechnet ihn nicht aus dem Kurs hoch: die Buchung rundet einmal auf der Seitensumme, ein Produkt aus Betrag und Kurs liegt darum manchmal einen Rappen daneben.",
+      "needsRateNoPosting": "Für {currency} liegt kein zulässiger Kurs auf den {date} vor. Diesen Beleg kannst du trotzdem ausstellen, er verbucht nichts. Eine Rechnung daraus braucht den Kurs.",
+      "needsRateEmpty": "Für diesen Arbeitsbereich ist noch gar kein Kurs erfasst.",
+      "needsRateNone": "Für {currency} gibt es Kurse, aber keiner deckt dieses Datum ab.",
+      "needsRateStale": "Der neuste Kurs ist vom {date} und damit älter als {days} Tage.",
+      "recordRate": "Kurs erfassen",
+      "methodNotElected": "Der Kurs für {currency} liegt auf der Basis {method}. Für die Steuerperiode {taxPeriod} gilt bei dir aber {electedMethod}.",
+      "methodLocked": "Die Basis für {taxPeriod} steht fest, es ist schon eine Fremdwährungsbuchung gebucht. Wechseln kannst du erst ab {period}.",
+      "methodFix": "Erfasse den Kurs auf der Basis {method}.",
+      "denied": "Dir fehlt die Berechtigung, Kurse zu lesen.",
+      "error": "Der Kurs konnte nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "method": {
+        "daily": "Tageskurs (Verkauf von Devisen)",
+        "monthly_avg": "Monatsmittelkurs",
+        "bank": "Bankkurs",
+        "group": "Konzernkurs"
+      },
+      "source": {
+        "manual": "Von Hand erfasst",
+        "rate_api": "Kursfeed",
+        "explicit": "Vorgegeben",
+        "base": "Buchwährung"
+      }
+    },
+    "pdf": {
+      "open": "PDF",
+      "title": "Rechnung als PDF",
+      "download": "Herunterladen",
+      "close": "Schliessen",
+      "loading": "TILL erstellt das PDF.",
+      "error": "Das PDF konnte nicht erstellt werden.",
+      "retry": "Erneut versuchen",
+      "size": "{kb} KB",
+      "withQr": "Mit QR-Zahlteil",
+      "withoutQr": "Ohne QR-Zahlteil",
+      "preview": "Vorschau der Rechnung",
+      "previewHint": "Nicht jeder Browser zeigt PDFs direkt an. Bleibt die Vorschau leer, lade die Datei herunter. Sie ist vollständig."
+    },
+    "send": {
+      "title": "Rechnung senden",
+      "to": "An",
+      "emailPlaceholder": "name@example.ch",
+      "attachment": "Anhang",
+      "confirm": "Senden",
+      "cancel": "Abbrechen",
+      "sentTo": "Versendet an {email}",
+      "downloadInstead": "PDF herunterladen",
+      "toSetup": "E-Mail-Versand einrichten"
+    },
+    "issue": {
+      "title": "Rechnung ausstellen",
+      "vatLine": "Davon MWST {tax}.",
+      "noQrLine": "Diese Rechnung bekommt keinen QR-Zahlteil:",
+      "sendLine": "Anschliessend per E-Mail an {email} senden",
+      "confirmAndSend": "Ausstellen und senden"
+    },
+    "error": {
+      "needsQrIban": "Ohne hinterlegte IBAN gibt es keinen QR-Zahlteil. Die Rechnung selbst bleibt gültig.",
+      "needsCreditorAddress": "Deine eigene Adresse ist unvollständig, darum lässt sich der QR-Zahlteil nicht erstellen.",
+      "needsCustomerAddress": "Die Kundenadresse ist unvollständig, darum lässt sich der QR-Zahlteil nicht erstellen.",
+      "needsCustomer": "Wähle zuerst einen Kunden.",
+      "needsCustomerEmail": "Für diesen Kunden ist keine E-Mail hinterlegt. Trage eine ein oder lade das PDF herunter.",
+      "needsEmailConfig": "Es ist kein E-Mail-Versand eingerichtet. Lade das PDF herunter und sende es von Hand, oder richte den Versand ein.",
+      "needsEmailTransport": "Der E-Mail-Versand ist zwar eingerichtet, aber diese Installation kann nicht senden. Lade das PDF herunter und sende es von Hand.",
+      "needsQrBill": "Dieser Rechnung fehlt der QR-Zahlteil, ein Schweizer Kunde könnte sie so nicht bezahlen. TILL hat sie darum nicht gesendet.",
+      "needsQrBillUnknown": "Woran es liegt, hat TILL nicht herausgefunden. Prüfe die IBAN und beide Adressen.",
+      "sendOutcomeUnknown": "Ein früherer Versuch hat den Mailserver schon erreicht, ob die Rechnung hinausging, weiss TILL nicht. Sie liegt möglicherweise beim Kunden, darum hat TILL diesen Versand nicht wiederholt. Prüfe das Postfach, bevor du erneut sendest.",
+      "needsConfirmation": "Beim Senden geht die Rechnung an den Kunden, darum bestätigst du diesen Schritt selbst.",
+      "needsFxRate": "Für {currency} fehlt ein Kurs auf den {date}.",
+      "fxMethodNotElected": "Der erfasste Kurs liegt auf einer anderen Umrechnungsbasis als der, die für diese Steuerperiode gilt.",
+      "fxMethodLocked": "Die Umrechnungsbasis dieser Steuerperiode steht fest, es ist schon eine Fremdwährungsbuchung gebucht.",
+      "qrIbanChfOnly": "Eine QR-IBAN trägt nach der SIX-Fassung 2.4 nur noch CHF. Die Rechnung bleibt gültig, sie bekommt nur keinen Zahlteil.",
+      "unsupportedCurrency": "Den QR-Zahlteil gibt es nur in CHF und EUR.",
+      "zeroTotal": "Eine Rechnung über null bekommt keinen QR-Zahlteil.",
+      "invalidQrBill": "Der QR-Zahlteil erfüllt die SIX-Vorgaben noch nicht.",
+      "notAvailable": "Ein Entwurf hat noch keine Nummer und darum weder Referenz noch PDF.",
+      "sendFailed": "Der Versand hat nicht geklappt. Die Rechnung bleibt ausgestellt, du kannst es also erneut versuchen.",
+      "notAnInvoice": "Dieser Beleg ist keine Rechnung."
+    }
+  },
+  "creditNote": {
+    "create": "Gutschrift erstellen",
+    "createAction": "Entwurf erstellen",
+    "forInvoice": "Zu Rechnung {number}",
+    "remainingNet": "Noch gutschreibbar (netto): {amount}",
+    "scope": "Was gutschreiben?",
+    "full": "Die ganze Rechnung",
+    "partial": "Einzelne Positionen",
+    "partialAmount": "Ein Betrag (netto)",
+    "amountLabel": "Betrag in {currency} (netto)",
+    "grossReadout": "Ergibt brutto (inkl. MWST): {amount}",
+    "quantityFor": "Menge für {line}",
+    "reason": "Grund (optional)",
+    "total": "Gutschrift total (netto): {amount}",
+    "overCap": "Auf dieser Rechnung sind höchstens {amount} noch gutschreibbar.",
+    "reference": "Zur gutgeschriebenen Rechnung",
+    "listForInvoice": "Gutschriften zu dieser Rechnung",
+    "issue": {
+      "title": "Gutschrift ausstellen",
+      "postingLine": "Eine Buchung über {total} wird erstellt. Sie reduziert die Forderung an den Kunden."
+    },
+    "linesDerived": "Die Positionen einer Gutschrift sind aus der Rechnung abgeleitet und lassen sich hier nicht bearbeiten.",
+    "changeSelectionHint": "Um die Auswahl zu ändern, lösche diesen Entwurf und erstelle eine neue Gutschrift aus der Rechnung.",
+    "overCredit": "Auf dieser Rechnung sind höchstens {amount} noch offen für Gutschriften.",
+    "lineOverCredit": "Auf Position {position} sind nur noch {lineAmount} (netto) gutschreibbar; auf der ganzen Rechnung noch {amount}."
+  },
+  "ebill": {
+    "title": "eBill-Zustellung",
+    "empty": "eBill stellt diese Rechnung ins E-Banking deiner Kundschaft zu. Bereite die Nutzlast hier vor und übermittle sie, sobald ein Netzwerkpartner verbunden ist.",
+    "loadError": "Der eBill-Status dieser Rechnung konnte nicht geladen werden.",
+    "prepare": "Für eBill vorbereiten",
+    "retryPrepare": "Erneut vorbereiten",
+    "transmit": "Übermitteln",
+    "downloadArtifact": "Nutzlast herunterladen",
+    "statusLabel": "Status",
+    "hintLabel": "Hinweis",
+    "partnerStatusLabel": "Partner-Status",
+    "conformanceLabel": "Konformität",
+    "recoveryLabel": "Nächster Schritt",
+    "pdfaPending": "PDF/A-3b ausstehend: die Nutzlast ist lokal abgelegt, aber noch nicht übermittelbar (offener Punkt bei A11).",
+    "submittingHint": "Wird übermittelt, Ausgang unbestätigt. Ein erneuter Versuch kann den Partner doppelt erreichen.",
+    "status": {
+      "prepared": "Vorbereitet",
+      "submitting": "Wird übermittelt, Ausgang unbestätigt",
+      "transmitted": "Übermittelt",
+      "failed": "Fehlgeschlagen"
+    },
+    "partnerStatus": {
+      "nwpPending": "Beim Netzwerkpartner",
+      "open": "Offen",
+      "approved": "Freigegeben",
+      "rejected": "Abgelehnt",
+      "completed": "Abgeschlossen"
+    },
+    "cloudTierCard": "Es ist kein eBill-Konnektor konfiguriert. Die Übermittlung braucht einen Vertrag mit einem zertifizierten Netzwerkpartner und den aktivierten Cloud-Konnektor. Die Nutzlast oben bleibt herunterladbar, damit du sie von Hand hochladen kannst.",
+    "needsBillerPid": "Es ist keine eBill-Biller-ID konfiguriert.",
+    "setupLink": "Einrichtung öffnen",
+    "notConformant": "Die Nutzlast ist noch nicht eBill-konform und wurde nicht übermittelt: {detail}.",
+    "invalidState": "Diese Rechnung kann im aktuellen Zustand nicht für eBill vorbereitet werden.",
+    "rejectedRecovery": "Sende die Rechnung stattdessen per E-Mail, oder korrigiere sie mit einer Gutschrift und einer neuen Rechnung. Die verbuchte Rechnung wird nie bearbeitet.",
+    "prepareLocked": "Für das Vorbereiten einer eBill-Nutzlast wird die Berechtigung «Ausstellen» benötigt.",
+    "transmitLocked": "Für die Übermittlung wird die Berechtigung «Senden» benötigt."
+  },
+  "help": {
+    "Documents": {
+      "title": "Belege",
+      "body": "Alle Belege in einer Liste: Offerten, Aufträge, Rechnungen und Gutschriften, filterbar nach Art und Status. Von hier startest du einen neuen Beleg. Ein Entwurf lässt sich löschen; ein ausgestellter Beleg ist unveränderlich und wird bei Bedarf storniert, mit sichtbarer Gegenbuchung. Wer nach vereinbarten Entgelten abrechnet, schuldet die MWST mit der Rechnungsstellung, nicht erst beim Zahlungseingang.",
+      "concepts": [
+        "vereinbarte-entgelte"
+      ],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

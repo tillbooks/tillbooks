@@ -1,0 +1,96 @@
+{
+  "nav": {
+    "personal": "HR"
+  },
+  "hr": {
+    "route": { "title": "HR" },
+    "tab": { "employees": "Employees", "absences": "Absences", "claims": "Expenses", "lohn": "Payroll" },
+    "noWorkspace": "Choose a workspace to see its team.",
+    "denied": { "title": "No access", "body": "You do not have permission to see personnel data here." },
+    "action": { "add": "Add employee", "save": "Save", "cancel": "Cancel" },
+    "employee": {
+      "name": "Name",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "pct": "Employment %",
+      "startsOn": "Start date",
+      "ahv": "AHV no.",
+      "ahv_restricted": "AHV no. (restricted)"
+    },
+    "absence": {
+      "kind": { "vacation": "Vacation", "sick": "Sick", "other": "Other" },
+      "col": { "kind": "Type", "period": "Period" },
+      "cancelled": "Cancelled"
+    },
+    "claim": { "title": "Claim", "status": "Status", "total": "Total", "readonly": "You can view claims but not create or approve them." },
+    "empty": { "employees": "No employees yet.", "absences": "No absences in this range.", "claims": "No expense claims." },
+    "error": {
+      "load": "The list could not be loaded.",
+      "forbidden": "You are not allowed to do that.",
+      "permission_denied": "You are not allowed to do that.",
+      "invalid_pct": "Employment % must be a whole number between 1 and 100.",
+      "invalid_dates": "The end date is before the start date.",
+      "self_approval": "You cannot approve your own claim.",
+      "period_locked": "The period is locked; the reimbursement cannot post.",
+      "invalid_transition": "That claim is not in a state that allows this.",
+      "receipt_required": "A receipt is required for a line over CHF 50.",
+      "empty_claim": "Add at least one line before submitting.",
+      "needs_employee_contact": "Link a contact (vendor role) to the employee first.",
+      "reason_required": "A reason is required to reject a claim."
+    }
+  },
+  "spesen": {
+    "status": { "draft": "Draft", "submitted": "Submitted", "approved": "Approved", "reimbursed": "Reimbursed", "rejected": "Rejected", "cancelled": "Cancelled" },
+    "action": { "approve": "Approve & post", "reject": "Reject", "reimburse": "Prepare reimbursement" },
+    "reject": { "default": "Please attach the missing receipt." }
+  },
+  "payroll": {
+    "oss": { "note": "The file stays on this device. TILL does not transmit to payroll providers." },
+    "export": {
+      "title": "Hand-off",
+      "cta": "Export hand-off",
+      "first": "First export, full master data.",
+      "mutations": "Changes since last export: {count}",
+      "withAhv": "AHV numbers included",
+      "noAhv": "Created without AHV numbers (permission missing)"
+    },
+    "import": {
+      "title": "Wage entry",
+      "date": "Entry date",
+      "cta": "Upload wage file",
+      "post": "Post"
+    },
+    "preview": { "account": "Account", "debit": "Debit", "credit": "Credit" },
+    "history": {
+      "title": "History",
+      "empty": "No hand-offs yet.",
+      "type": "Type",
+      "date": "Date",
+      "detail": "Detail",
+      "posted": "Posted entry {entry}",
+      "kind": { "export": "Export", "posting": "Posting" }
+    },
+    "requiresManage": "Requires HR management.",
+    "requiresPost": "Requires bookkeeper.",
+    "err": {
+      "load": "The history could not be loaded.",
+      "no_employees": "No employees yet.",
+      "unbalanced": "Debits and credits differ.",
+      "period_locked": "The period is locked; the wage journal cannot post.",
+      "unknown_account": "A line names an account that is not in the chart.",
+      "missing_columns": "The file is missing account_number, debit_rappen or credit_rappen.",
+      "unsupported_currency": "A wage journal posts in CHF; remove the currency column.",
+      "invalid_amount": "An amount is not an integer Rappen value.",
+      "forbidden": "You are not allowed to do that.",
+      "permission_denied": "You are not allowed to do that."
+    }
+  },
+  "help": {
+    "Hr": {
+      "title": "HR",
+      "body": "HR bundles three loops: employees, absences and expenses. Personal data is specially protected: the AHV number renders masked, and without HR rights you see only your own entries. An expense can never be approved by the person who submitted it. Payroll itself happens outside TILL; this surface prepares the handoff for it.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

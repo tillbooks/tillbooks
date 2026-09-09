@@ -1,0 +1,202 @@
+{
+  "nav": {
+    "files": "Files"
+  },
+  "files": {
+    "route": {
+      "title": "Files"
+    },
+    "loading": "Loading files",
+    "empty": "No files yet.",
+    "emptyHint": "Upload a contract, a voucher, or correspondence. Everything stays on this device.",
+    "list": {
+      "truncated": "Showing {shown} of {total} files. Narrow the search or pick a folder to see the rest."
+    },
+    "table": {
+      "caption": "Stored files with their tags, version, size and retention date"
+    },
+    "action": {
+      "upload": "Upload file",
+      "newVersion": "New version",
+      "link": "Attach to record",
+      "delete": "Delete",
+      "download": "Download",
+      "downloadShort": "Get",
+      "downloadDenied": "Download locked",
+      "linkDenied": "Attach locked",
+      "downloading": "Verifying",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "save": "Save",
+      "close": "Close"
+    },
+    "search": {
+      "label": "Search files",
+      "placeholder": "Title, filename or tag",
+      "submit": "Search",
+      "noResults": "No matches.",
+      "noResultsHint": "Adjust the search or remove a filter."
+    },
+    "filter": {
+      "query": "Search: {q}",
+      "folder": "Folder: {name}",
+      "remove": "Remove filter"
+    },
+    "field": {
+      "title": "Title",
+      "filename": "Filename",
+      "size": "Size",
+      "version": "Version",
+      "created": "Created",
+      "checksum": "Checksum (sha256)",
+      "linkedTo": "Attached to",
+      "tags": "Tags",
+      "tagsHint": "Separated by commas",
+      "retentionUntil": "Retain until"
+    },
+    "tags": {
+      "none": "No tags."
+    },
+    "version": {
+      "label": "Version {n}"
+    },
+    "versions": {
+      "title": "Versions"
+    },
+    "retention": {
+      "none": "No retention date set.",
+      "auto": "Statutory (OR 958f, 10 years)",
+      "manual": "Set by hand",
+      "editHint": "Extending is always possible. It cannot go below the statutory minimum.",
+      "readOnly": "Changing the retention date needs an additional right."
+    },
+    "folder": {
+      "tree": "Folders",
+      "all": "All files",
+      "empty": "This folder is empty.",
+      "action": {
+        "new": "New folder",
+        "newChild": "New subfolder",
+        "rename": "Rename",
+        "renameShort": "Ren.",
+        "delete": "Delete folder",
+        "deleteShort": "Del."
+      },
+      "blocked": {
+        "files": "The folder must be empty first.",
+        "children": "The folder still holds subfolders."
+      }
+    },
+    "delete": {
+      "staged": "Deletion staged. Confirm to proceed.",
+      "pending": {
+        "badge": "Pending deletion",
+        "body": "An agent staged this file for deletion. Confirm to delete it permanently, or cancel to keep it."
+      }
+    },
+    "linked": {
+      "title": "Files",
+      "empty": "No files on this record yet.",
+      "emptyHint": "Attach the voucher that evidences this record."
+    },
+    "entityKind": {
+      "contact": "Contact",
+      "item": "Item",
+      "bank_account": "Bank account",
+      "account": "Account",
+      "cost_center": "Cost centre",
+      "document": "Document",
+      "payment": "Payment",
+      "journal_entry": "Journal entry",
+      "automation_rule": "Automation rule",
+      "vendor_bill": "Vendor bill"
+    },
+    "error": {
+      "transport": "The files could not be loaded.",
+      "retention_locked": "This file is under statutory retention and cannot be deleted.",
+      "retention_below_statutory": "Retention cannot be shorter than the statutory minimum ({floor} at the earliest).",
+      "folder_not_empty": "Only empty folders can be deleted.",
+      "folder_name_taken": "A folder with this name already exists here.",
+      "folder_cycle": "A folder cannot be moved into its own subfolder.",
+      "not_head_version": "A newer version of this file already exists.",
+      "unknown_entity_kind": "Unknown record type.",
+      "entity_not_found": "The record was not found. The file is stored and reachable under Files.",
+      "file_too_large": "File exceeds the size limit.",
+      "file_unreadable": "The file could not be read.",
+      "content_not_found": "File not found in local storage.",
+      "integrity_mismatch": "Stored file no longer matches its checksum. Download blocked.",
+      "permissionDenied": {
+        "read": "You are missing the right needed to see the files.",
+        "write": "You are missing the right needed for this action. Nothing was changed.",
+        "download": "You can see the filing but you are not allowed to download its contents.",
+        "link": "You are missing a right needed to attach files to this record."
+      }
+    }
+  },
+  "sign": {
+    "section": {
+      "title": "Signature"
+    },
+    "loading": "Loading signature requests",
+    "empty": "No signature requests yet.",
+    "action": {
+      "request": "Request signature",
+      "send": "Send",
+      "withdraw": "Withdraw",
+      "mark_signed": "Mark as signed (upload)",
+      "mark_declined": "Mark as declined",
+      "delete_draft": "Discard draft"
+    },
+    "status": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "viewed": "Viewed",
+      "signed": "Signed",
+      "declined": "Declined",
+      "expired": "Expired",
+      "withdrawnHint": "withdrawn"
+    },
+    "level": {
+      "ses": "Simple e-signature (SES)",
+      "qes": "Qualified e-signature (QES)"
+    },
+    "hint": {
+      "qes": "QES equals a handwritten signature (OR Art. 14); required only where written form is mandated.",
+      "ses": "SES does not satisfy statutory written-form requirements.",
+      "sendDenied": "Sending requires the sign.send permission."
+    },
+    "form": {
+      "signer": "Signer",
+      "signerPlaceholder": "Choose a contact",
+      "noEmail": "no email",
+      "level": "Signature level",
+      "message": "Message (optional)",
+      "expires": "Expires on (optional)",
+      "submit": "Create request"
+    },
+    "filter": {
+      "open": "Open signatures",
+      "empty": "No open signature requests."
+    },
+    "error": {
+      "needs_provider": "No e-signature provider connected. Complete the signature manually via upload, or connect a provider (cloud).",
+      "request_already_open": "An open request for this signer already exists.",
+      "expiry_in_past": "The expiry date is in the past.",
+      "document_hash_mismatch": "The signed file does not match the requested document.",
+      "signer_email_missing": "This contact has no email address.",
+      "invalid_transition": "This action is not possible in the request's current state."
+    },
+    "levelShort": {
+      "ses": "SES",
+      "qes": "QES"
+    }
+  },
+  "help": {
+    "Files": {
+      "title": "Files",
+      "body": "Files is this workspace’s filing cabinet: a folder tree, a searchable list and a detail drawer. A file can attach to any record, a contact, a payment or a journal entry, and carries its versions with it, so earlier states stay accessible. Folder, search and selection live in the address; a filtered view can therefore be shared as a link.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,1043 @@
+/* The Datenübernahme surface. One accent (brass) on the single primary action; a passing state
+   spends no colour (brand law), only attention does. Deep polish is the later UX pass (D46). */
+
+.migration {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 60rem;
+}
+
+.migration-journey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.migration-journey li {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.migration-journey li.is-current {
+  border-color: var(--t-accent);
+  color: inherit;
+  font-weight: 600;
+}
+
+.migration-next {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.migration-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.migration-step {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+}
+.migration-step[data-attention='true'] {
+  border-color: var(--t-danger);
+}
+.migration-step-class {
+  font-weight: 600;
+}
+.migration-step-state,
+.migration-step-actor {
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.migration-approval,
+.migration-diverged {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--t-border);
+}
+.migration-diverged p {
+  margin: 0;
+  color: var(--t-danger);
+}
+
+.migration-primary {
+  background: var(--t-accent);
+  color: var(--t-on-accent);
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+.migration-step button,
+.migration-diverged button {
+  min-height: 44px;
+}
+
+.migration-padlock {
+  padding: 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+}
+.migration-error {
+  color: var(--t-danger);
+}
+.migration-empty {
+  padding: 1.5rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+}
+
+.migration-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.migration-skeleton-row {
+  height: 3rem;
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+}
+
+/* --- G11 Eröffnungsprüfung ----------------------------------------------------------------------
+   Label-above-values blocks, never a five-column grid: the German compounds cannot hold one at the
+   narrowest supported width. A passed control renders NO colour (an all-clear state does not get
+   one); not_asserted / not_computable render --t-warn, which is ORANGE, never amber (brass owns
+   amber); failed renders --t-danger. Status is always glyph plus text, never colour alone. */
+
+.check {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+}
+.check h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.check-controls {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.check-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+}
+.check-control-name {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.check-control-scope {
+  margin-left: 0.5rem;
+  font-weight: 400;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.check-control-values {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin: 0;
+}
+.check-control-values div {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.check-control-values dt {
+  color: var(--t-text-dim);
+}
+.check-control-values dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.check-control-status {
+  margin: 0;
+}
+/* A passed control: neutral ink, no colour at all. Only attention spends ink. */
+.check-control[data-status='failed'] {
+  border-color: var(--t-danger);
+}
+.check-control[data-status='failed'] .check-control-status {
+  color: var(--t-danger);
+}
+.check-control[data-status='not_asserted'] .check-control-status,
+.check-control[data-status='not_computable'] .check-control-status {
+  color: var(--t-warn);
+}
+.check-waiver-reason {
+  margin-left: 0.5rem;
+  color: var(--t-text-dim);
+}
+.check-waive {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.check-waive label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.check-waive input {
+  min-height: 44px;
+}
+.check-waive button,
+.check-recover,
+.check-actions button {
+  min-height: 44px;
+}
+.check-waive-hint {
+  margin: 0;
+  color: var(--t-warn);
+}
+.check-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.check-error {
+  color: var(--t-danger);
+}
+.check-hash {
+  margin: 0;
+  color: var(--t-text-dim);
+  overflow-wrap: anywhere;
+}
+.check-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.check-skeleton-block {
+  height: 4rem;
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+}
+
+/* G12 Testmandant: the shared WorkspaceModeBanner and the Testmandant card. A neutral elevated strip
+   with one glyph, one brass accent on the single primary action, glyph plus text, dark/light parity
+   via the shared tokens (no hard-coded colour). */
+.testmandant {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+/* The .workspace-mode-* strip now lives in app/src/styles/global.css: it is shared with the
+   Onboarding demo banner, so it must not depend on this surface's stylesheet being loaded. */
+.testmandant-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+}
+.testmandant-confirm label {
+  font-weight: 600;
+}
+.testmandant-irreversible {
+  margin: 0;
+  color: var(--t-warn);
+}
+/* F-09: the prepared-ahead-of-the-Stichtag note, tied to the disabled promotion control. */
+.testmandant-stichtag-note {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+.testmandant-confirm input {
+  min-height: 44px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: var(--t-bg-elev);
+  color: inherit;
+}
+.testmandant-expected {
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}
+.testmandant-error {
+  color: var(--t-danger);
+  margin: 0;
+}
+.testmandant-live,
+.testmandant-empty h2 {
+  margin: 0;
+}
+.testmandant-overflow > summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.testmandant-overflow button {
+  display: block;
+  margin-top: 0.5rem;
+  min-height: 44px;
+}
+.testmandant-skeleton {
+  height: 4rem;
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+}
+
+/* --- G09 front-half wizard: source intake (upload, discovery, plan, scope) ---------------------- */
+.intake {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+}
+.intake-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.intake-steps li {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  color: var(--t-text-dim);
+}
+.intake-steps li.is-current {
+  border-color: var(--t-accent);
+  color: inherit;
+  font-weight: 600;
+}
+.intake-files,
+.intake-plan,
+.intake-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.intake-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border: 1px dashed var(--t-border);
+  border-radius: 8px;
+}
+.intake-drop.is-dragging {
+  border-color: var(--t-accent);
+}
+.intake-drop p {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+.intake-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.intake-choose,
+.intake-back,
+.intake-scope-list button,
+.intake button {
+  min-height: 44px;
+}
+.intake-discovered,
+.intake-failures,
+.intake-scope-list,
+.intake-unavailable {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.intake-file {
+  padding: 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+}
+.intake-file-name {
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.intake-file-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0;
+}
+.intake-file-facts div {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.intake-file-facts dt {
+  color: var(--t-text-dim);
+}
+.intake-file-facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.intake-file-classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0;
+}
+.intake-class-chip {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}
+.intake-file-warn {
+  margin: 0.5rem 0 0;
+  color: var(--t-warn);
+}
+.intake-failure {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--t-warn);
+  border-radius: 8px;
+  color: var(--t-warn);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.intake-failure-name {
+  font-weight: 600;
+}
+.intake-failure-member {
+  font-weight: 400;
+  color: var(--t-text-dim);
+}
+.intake-failure-reason {
+  color: inherit;
+}
+.intake-failure-detected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}
+.intake-failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.intake-failure-actions button {
+  min-height: 44px;
+}
+/* K-15: the force-a-format recovery. Neutral text (not the warn ink) so the selects read as controls. */
+.intake-failure-force {
+  color: var(--t-text);
+}
+.intake-failure-force summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.intake-failure-force-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+.intake-failure-force-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+.intake-failure-force-fields select {
+  min-height: 44px;
+  padding: 0 0.5rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: var(--t-bg-elev);
+  color: inherit;
+}
+.intake-failure-force-retry {
+  min-height: 44px;
+}
+.intake-plan label,
+.intake-scope-list label {
+  font-weight: 600;
+}
+.intake-plan select,
+.intake-plan input,
+.intake-scope-list input {
+  min-height: 44px;
+}
+.intake-plan select,
+.intake-plan input[type='date'] {
+  padding: 0 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: var(--t-bg-elev);
+  color: inherit;
+}
+.intake-hint {
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}
+.intake-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.intake-scope-list label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 400;
+}
+.intake-unavailable li {
+  color: var(--t-text-dim);
+}
+
+/* --- G10 mapping editor -------------------------------------------------------------------------- */
+.mapping {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+}
+.mapping h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.mapping-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.mapping-tabs button {
+  min-height: 44px;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-text-dim);
+  cursor: pointer;
+}
+.mapping-tabs button.is-active {
+  border-color: var(--t-accent);
+  color: inherit;
+  font-weight: 600;
+}
+.mapping-source {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.mapping-source-name {
+  display: block;
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}
+.mapping-balance {
+  display: block;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.mapping-target-input {
+  min-height: 44px;
+  width: 100%;
+  padding: 0 0.5rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: var(--t-bg);
+  color: inherit;
+}
+.mapping-complete {
+  margin: 0;
+}
+.mapping-blocking {
+  padding: 0.75rem;
+  border: 1px solid var(--t-warn);
+  border-radius: 8px;
+}
+.mapping-blocking p {
+  margin: 0 0 0.5rem;
+  color: var(--t-warn);
+}
+.mapping-blocking ul,
+.mapping-collapsed,
+.mapping-conflicts {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.mapping-ignorable,
+.mapping-suggest-source {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+.mapping-conflicts li {
+  color: var(--t-warn);
+}
+.mapping-saved {
+  margin: 0;
+}
+.mapping-error {
+  color: var(--t-danger);
+}
+.mapping-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.mapping-actions .mapping-suggest {
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* --- G11 control-total declaration form --------------------------------------------------------- */
+.control-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+}
+.control-totals h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.control-totals-body {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+.control-totals-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 28rem;
+}
+.control-totals-form label {
+  font-weight: 600;
+}
+.control-totals-form select,
+.control-totals-form input {
+  min-height: 44px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: var(--t-bg);
+  color: inherit;
+}
+.control-totals-hint {
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}
+.control-totals-error {
+  margin: 0;
+  color: var(--t-danger);
+}
+.control-totals-declared {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- G09 readiness card -------------------------------------------------------------------------- */
+.readiness {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+}
+.readiness h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.readiness-ready,
+.readiness-blocked {
+  margin: 0;
+}
+.readiness-blocking,
+.readiness-warnings,
+.readiness-waivers {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.readiness-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+}
+.readiness-item[data-attention='true'] {
+  border-color: var(--t-warn);
+}
+.readiness-item-label {
+  font-weight: 600;
+}
+.readiness-item-owner {
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}
+.readiness-item-reason,
+.readiness-warning-ranges,
+.readiness-waiver-reason {
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}
+.readiness-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--t-warn);
+  border-radius: 8px;
+}
+.readiness-waiver {
+  color: var(--t-text-dim);
+}
+.readiness-error {
+  color: var(--t-danger);
+}
+.readiness-skeleton {
+  height: 3rem;
+  border-radius: 8px;
+  background: var(--t-bg);
+  border: 1px solid var(--t-border);
+}
+
+/* G19 extraction checklist: the opening phase (getting data OUT of the old system). A passing state
+   spends no colour (brand law); the deletion clock spends colour only when it is the problem, and
+   status is always glyph plus text, never colour alone (WCAG 2.2 AA). */
+.extraction {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.extraction .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.extraction-deadline {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+.extraction-deadline[data-tone='warn'] {
+  color: var(--t-warn);
+}
+.extraction-deadline[data-tone='danger'] {
+  color: var(--t-danger);
+}
+.extraction-verify {
+  color: var(--t-text-dim);
+  font-size: 0.85em;
+}
+.extraction-complete {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+.extraction-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.extraction-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+}
+.extraction-item[data-attention='true'] {
+  border-color: var(--t-danger);
+}
+.extraction-item-what {
+  font-weight: 600;
+}
+.extraction-item-area,
+.extraction-item-rung,
+.extraction-item-count,
+.extraction-item-range,
+.extraction-item-files,
+.extraction-item-question {
+  color: var(--t-text-dim);
+  font-size: 0.9em;
+}
+.extraction-item-gated {
+  color: var(--t-warn);
+  font-size: 0.9em;
+}
+.extraction-item-control {
+  min-height: 44px;
+}
+.extraction-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+.extraction-letter-body {
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.extraction-letter-subject {
+  font-weight: 600;
+  margin: 0;
+}
+.extraction-letter-limits {
+  color: var(--t-text-dim);
+  font-size: 0.9em;
+  margin: 0;
+}
+.extraction-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.extraction-skeleton-row {
+  height: 2.5rem;
+  border-radius: 8px;
+  background: var(--t-bg);
+  border: 1px solid var(--t-border);
+}
+
+/* G18 US-G18.4: chunked-upload progress for a large source. */
+.intake-progress {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.intake-progress-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+.intake-progress-bar {
+  inline-size: 8rem;
+  block-size: 0.6rem;
+}
+.intake-progress-pct {
+  color: var(--t-text-dim);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* G18 US-G18.2/3: the per-file worksheet picker and the zip bundle group. */
+.intake-file-worksheet {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0;
+}
+.intake-file-bundle {
+  margin: 0.4rem 0 0;
+}
+.intake-file-bundle > summary {
+  cursor: pointer;
+}
+
+/* G18 R4: the finish-the-migration action. */
+.migration-close {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.migration-close-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.migration-close-error {
+  color: var(--t-warn);
+}
+.migration-close-state {
+  color: var(--t-text-dim);
+}
+
+/* K-18: the plan identity, selector and confirm-gated abandon. */
+.migration-plan-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+.migration-plan-id {
+  font-weight: 600;
+}
+.migration-plan-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.migration-plan-select select {
+  min-height: 44px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: var(--t-bg-elev);
+  color: inherit;
+}
+.migration-abandon-open {
+  margin-left: auto;
+}
+.migration-abandon-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  flex-basis: 100%;
+}
+.migration-abandon-open,
+.migration-abandon-confirm button {
+  min-height: 44px;
+}
+.migration-danger {
+  background: var(--t-warn);
+  color: var(--t-on-accent);
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+/* --- G20 implementation project layer (leads the Datenübernahme surface) --- */
+.impl-project { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; }
+.impl-skeleton { height: 4rem; border-radius: 6px; background: color-mix(in srgb, currentColor 8%, transparent); }
+.impl-phase-strip { display: flex; flex-wrap: wrap; gap: 0.75rem; list-style: none; padding: 0; margin: 0; }
+.impl-phase-strip li { opacity: 0.55; }
+.impl-phase-strip li.is-current { opacity: 1; font-weight: 600; }
+.impl-tasks { display: flex; flex-direction: column; gap: 0.75rem; }
+.impl-phase-group ul, .impl-signoff-pending, .impl-signoff-recorded, .impl-decisions ul, .impl-parallel ul, .impl-roster-rows { list-style: none; padding: 0; margin: 0; }
+/* The task row is the shared RunbookItemRow (G22, D127): its styles live in components/RunbookItemRow.css. */
+.impl-signoff-card { display: flex; gap: 0.5rem; align-items: baseline; padding: 0.25rem 0; }
+.impl-disabled-reason { opacity: 0.7; font-size: 0.85em; }
+.impl-signoff-voided { color: var(--t-warn); margin-left: 0.5rem; font-size: 0.85em; }
+/* Three-status honesty: not_asserted is orange, never green; failed is danger. */
+.impl-warn, [data-status='not_asserted'] > span[data-status='not_asserted'] { color: var(--t-warn); }
+.impl-danger, .impl-figure[data-status='failed'] { color: var(--t-danger); }
+.impl-figure { display: flex; gap: 0.75rem; font-variant-numeric: tabular-nums; }
+.impl-parallel-period[data-status='not_asserted'] h4 span { color: var(--t-warn); }
+
+/* G21, the Offene-Posten step: two panels, each with its control tie-out (three-status honesty:
+   passed neutral with a check, not_asserted --t-warn "noch nicht geprüft" never green, failed
+   --t-danger with the Rappen difference). Status is always glyph plus text, never colour alone. */
+.open-items-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1.5rem; }
+.open-items-panel { border: 1px solid var(--t-border); border-radius: 0.5rem; padding: 1rem; }
+.open-items-hint { color: var(--t-text-dim); font-size: 0.9em; }
+.open-items-control { font-variant-numeric: tabular-nums; }
+.open-items-control-label { font-weight: 600; }
+.open-items-ok { color: inherit; }
+.open-items-warn { color: var(--t-warn); }
+.open-items-danger { color: var(--t-danger); }
+.open-items-success { color: inherit; }
+.open-items-refusals { list-style: none; padding: 0; }
+.open-items-refusal { color: var(--t-danger); }
+.open-items-ack { display: flex; gap: 0.5rem; align-items: center; }
+.open-items-denied { color: var(--t-text-dim); }

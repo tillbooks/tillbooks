@@ -1,0 +1,107 @@
+{
+  "nav": {
+    "warehouses": "Lager"
+  },
+  "warehouses": {
+    "title": "Lager & Lagerorte",
+    "noWorkspace": "um Lager und Lagerorte zu verwalten",
+    "showArchived": "Archivierte anzeigen",
+    "newWarehouse": "Neues Lager",
+    "listLabel": "Lager",
+    "detailLabel": "Ausgewähltes Lager",
+    "selectHint": "Wähle ein Lager, um seine Lagerorte zu sehen.",
+    "default": "Standard",
+    "archived": "Archiviert",
+    "makeDefault": "Als Standard",
+    "edit": "Bearbeiten",
+    "archive": "Archivieren",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "confirmTitle": "Archivieren bestätigen",
+    "confirmArchiveWarehouse": "Lager {code} archivieren? Seine leeren Lagerorte werden mitarchiviert; für bestehende Bewegungen bleibt es auflösbar.",
+    "confirmArchiveLocation": "Lagerort {code} archivieren? Er verschwindet aus der Auswahl, seine Bewegungshistorie bleibt erhalten.",
+    "empty": {
+      "title": "Noch keine Lager",
+      "hint": "Lege eines an, oder lass das System das Standardlager Main erstellen, damit Bestandesbewegungen einen Ort haben.",
+      "cta": "Erstes Lager anlegen",
+      "ensure": "Oder das Standardlager Main automatisch erstellen"
+    },
+    "form": {
+      "title": "Lager",
+      "createTitle": "Neues Lager",
+      "editTitle": "Lager bearbeiten"
+    },
+    "field": {
+      "code": "Code",
+      "name": "Name",
+      "city": "Ort",
+      "description": "Beschreibung"
+    },
+    "locations": {
+      "title": "Lagerorte",
+      "new": "Neuer Lagerort",
+      "empty": "In diesem Lager gibt es noch keine Lagerorte.",
+      "col": {
+        "code": "Code",
+        "name": "Name",
+        "type": "Typ",
+        "actions": "Aktionen"
+      },
+      "type": {
+        "zone": "Zone",
+        "aisle": "Gang",
+        "shelf": "Regal",
+        "bin": "Fach",
+        "staging": "Bereitstellung",
+        "other": "Anderes"
+      },
+      "form": {
+        "title": "Lagerort",
+        "createTitle": "Neuer Lagerort",
+        "editTitle": "Lagerort bearbeiten"
+      },
+      "field": {
+        "code": "Code",
+        "name": "Name",
+        "type": "Typ",
+        "noType": "Kein Typ",
+        "parent": "Übergeordneter Lagerort",
+        "rootParent": "Keiner (oberste Ebene)",
+        "description": "Beschreibung"
+      }
+    },
+    "balance": {
+      "title": "Bestand nach Lagerort",
+      "empty": "In diesem Lager ist noch kein Bestand erfasst.",
+      "col": {
+        "item": "Artikel",
+        "location": "Lagerort",
+        "qty": "Bestand"
+      }
+    },
+    "error": {
+      "transport": "Lager konnten nicht geladen werden. Bitte erneut versuchen."
+    },
+    "errors": {
+      "invalid_code": "Der Code muss zwischen 1 und 20 Zeichen lang sein.",
+      "duplicate_code": "Ein Eintrag mit diesem Code besteht hier bereits.",
+      "parent_warehouse_mismatch": "Der übergeordnete Lagerort muss im selben Lager sein.",
+      "location_cycle": "Ein Lagerort kann nicht unter sich selbst oder einen seiner Nachkommen verschoben werden.",
+      "location_has_stock": "Dieser Lagerort (oder ein Nachkomme) hält noch Bestand und kann nicht archiviert werden.",
+      "location_in_use": "Eine offene Inventur verweist auf diesen Lagerort; er kann nicht archiviert werden.",
+      "cannot_archive_default": "Der Standard kann nicht archiviert werden. Setze zuerst einen anderen Standard.",
+      "warehouse_archived": "Dieses Lager ist archiviert.",
+      "location_archived": "Dieser Lagerort ist archiviert.",
+      "invalid_location_type": "Dieser Lagerort-Typ ist unbekannt.",
+      "max_depth_exceeded": "Die Lagerort-Hierarchie ist zu tief."
+    }
+  },
+  "help": {
+    "Warehouses": {
+      "title": "Lager & Lagerorte",
+      "body": "Die Struktur deines Lagers: Lager mit ihren verschachtelten Lagerorten, damit jede Bewegung einen eindeutigen Ort trägt und der Bestand pro Ort lesbar bleibt. Links die Lagerliste mit Standardlager und Status; rechts der Ortsbaum des gewählten Lagers und sein Bestand nach Ort. Angelegt und bearbeitet wird im Seitenfenster; archivierte Lager verschwinden aus den Auswahllisten, ihre Geschichte bleibt bestehen.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

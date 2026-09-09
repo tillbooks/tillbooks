@@ -1,0 +1,91 @@
+{
+  "nav": {
+    "cycleCounts": "Inventur & Zyklus"
+  },
+  "cycleCounts": {
+    "title": "Inventur & Zykluszählung",
+    "new": "Neue Zählung",
+    "create": "Erstellen",
+    "close": "Schliessen",
+    "cancel": "Session abbrechen",
+    "commit": "Buchen",
+    "approveAll": "Markierte freigeben",
+    "saveCount": "Speichern",
+    "recount": "Neu zählen",
+    "freeze": "Stichtag",
+    "progress": "Fortschritt",
+    "selectHint": "Wähle eine Session, um zu zählen und zu prüfen.",
+    "listLabel": "Inventur-Sessions",
+    "detailLabel": "Session-Detail",
+    "noLines": "Diese Session hat keine Positionen.",
+    "lineCount": "{n} Positionen",
+    "reviewBanner": "{n} Positionen überschreiten die Abweichungsschwelle und brauchen vor dem Buchen eine Freigabe.",
+    "committedBanner": "Gebucht. Die Abweichungen wurden als Lagerbewegungen erfasst.",
+    "inventarFiled": "Inventar abgelegt",
+    "noWorkspace": "Öffne einen Workspace, um eine Inventur durchzuführen.",
+    "confirm": {
+      "back": "Zurück",
+      "commitTitle": "Inventur buchen?",
+      "cancelTitle": "Session abbrechen?",
+      "commitConsequenceFull": "Beim Buchen wird für jede der {n} gezählten Abweichungen eine dauerhafte Lagerbewegung gebucht und diese Vollinventur als gesetzliches Inventar (Bestandesnachweis nach OR 958c) abgelegt. Gebuchte Bewegungen sind unveränderlich und lassen sich nur durch eine Gegenbewegung korrigieren.",
+      "commitConsequenceCycle": "Beim Buchen wird für jede der {n} gezählten Abweichungen eine dauerhafte Lagerbewegung gebucht. Gebuchte Bewegungen sind unveränderlich und lassen sich nur durch eine Gegenbewegung korrigieren.",
+      "cancelConsequence": "Beim Abbrechen wird diese offene Zählsession samt allen erfassten Zählungen verworfen. Der eingefrorene Buchbestand und die erfassten Zählungen können nicht wiederhergestellt werden."
+    },
+    "type": {
+      "full": "Vollinventur",
+      "cycle": "Zykluszählung"
+    },
+    "status": {
+      "open": "Offen",
+      "review": "Prüfung",
+      "committed": "Gebucht",
+      "cancelled": "Abgebrochen"
+    },
+    "lineStatus": {
+      "pending": "Offen",
+      "counted": "Gezählt",
+      "review_required": "Prüfung",
+      "approved": "Freigegeben"
+    },
+    "col": {
+      "item": "Artikel",
+      "location": "Lagerort",
+      "book": "Buchbestand",
+      "counted": "Gezählt",
+      "variance": "Abweichung",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "form": {
+      "title": "Neue Inventur",
+      "type": "Typ",
+      "freeze": "Stichtag",
+      "blind": "Blindzählung (Buchbestand bis zur Prüfung verbergen)",
+      "qtyThreshold": "Mengen-Abweichungsschwelle",
+      "pctThreshold": "Prozent-Abweichungsschwelle",
+      "notes": "Notizen"
+    },
+    "empty": {
+      "title": "Noch keine Inventuren",
+      "hint": "Starte eine Vollinventur oder eine Zykluszählung, um einen Buchbestand einzufrieren und Zählungen zu erfassen."
+    },
+    "error": {
+      "transport": "Die Inventur-Liste konnte nicht geladen werden."
+    },
+    "errors": {
+      "stocktake_not_open": "Diese Session ist nicht mehr offen für Zählungen.",
+      "uncounted_or_unapproved_lines": "Jede Position muss gezählt und freigegeben sein, bevor du buchen kannst.",
+      "already_committed": "Diese Session ist bereits gebucht.",
+      "period_locked": "Der Stichtag liegt in einer gesperrten Periode, die Bewegungen können nicht gebucht werden.",
+      "insufficient_stock": "Eine negative Abweichung würde den Bestand unter null treiben. Zähle neu oder erlaube Negativbestand."
+    }
+  },
+  "help": {
+    "CycleCounts": {
+      "title": "Inventur & Zykluszählung",
+      "body": "Inventur und Zykluszählung: Eine Zählsitzung friert den Buchbestand ein, dann zählst du, und die Abweichungen werden geprüft und freigegeben. Beim Abschluss wird jede Abweichung als eigene, unveränderliche Lagerbewegung verbucht; der Bestand wird nie direkt überschrieben. Eine Blindzählung blendet die Buchspalte aus, bis die Sitzung in die Prüfung geht.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

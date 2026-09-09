@@ -1,0 +1,145 @@
+/* G05, Vorlagen: the two-pane branding editor. One elevated panel treatment, one accent (the
+   primary Speichern / Als Standard festlegen actions), default state as glyph + label, never
+   colour alone. The rendered-document canvas inside the preview is the USER'S letterhead; the
+   chrome around it stays Studio-neutral. */
+
+.doctpl {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.doctpl-lede,
+.doctpl-muted {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.doctpl-kinds,
+.doctpl-locale-tabs {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.doctpl-tab {
+  border: 1px solid var(--t-border);
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.doctpl-tab--active {
+  background: var(--t-bg-elev);
+  font-weight: 600;
+}
+
+.doctpl-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .doctpl-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.doctpl-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* The DataTable owns the list frame, the sticky header and the five states. What stays here is the
+   surface-specific row state (an archived template reads dimmer) and the per-row action cluster. */
+.doctpl-row--archived {
+  opacity: 0.6;
+}
+
+.doctpl-row-actions {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.doctpl-badge {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.doctpl-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+  padding: 1rem;
+}
+
+.doctpl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  border: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+.doctpl-field legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.doctpl-field input[type='text'],
+.doctpl-field textarea,
+.doctpl-field select {
+  font: inherit;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  max-width: 28rem;
+}
+
+.doctpl-radio,
+.doctpl-check {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.doctpl-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.doctpl-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev);
+  padding: 1rem;
+}
+
+.doctpl-preview-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.doctpl-preview-pdf {
+  width: 100%;
+  min-height: 24rem;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+}

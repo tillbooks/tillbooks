@@ -1,0 +1,174 @@
+/* J03, Inventory -> Bewertung. One accent, no new colour token (design-canon); every badge is a
+   bordered label rather than a colour, so it survives a monochrome or high-contrast render.
+
+   D118 B2 (2026-08-24): the three tables (methods, cost layers, method history) are the shared
+   DataTable, the page header the shared SurfaceHeader, the default-change overlay the shared
+   DetailDrawer, and the buttons and form fields the global .btn / .form-row / .field-hint primitives.
+   The per-surface CSS that duplicated the table (frame, header, rows, numeric cell), the page header,
+   the drawer chrome, the button set and the form-field stack has been deleted. What remains is
+   genuinely Bewertung-specific: the panels, the master-detail split and its item picker, the figure
+   grid, the method-registry description cell, the bordered badge, the two inline toggles, the muted
+   default-in-force note and the reason/warning callout. */
+
+.iv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The workspace total valuation figure, verb-provided (inventory_valuation_preview totalValueMinor),
+   pinned to the right of the SurfaceHeader row. Never a client sum. */
+.iv-total {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.iv-panel {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.iv-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.iv-panel-title {
+  margin: 0;
+  flex: 1;
+  font-size: 1.05rem;
+}
+
+.iv-sub {
+  margin: var(--t-space-1) 0 0;
+  font-size: 0.95rem;
+}
+
+.iv-split {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .iv-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.iv-pane {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-1);
+}
+
+.iv-detail {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.iv-detail-title {
+  margin: 0;
+}
+
+.iv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.iv-list-item {
+  width: 100%;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border: none;
+  background: none;
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+
+.iv-list-item:hover {
+  background: var(--t-bg-soft);
+}
+
+.iv-list-item-selected {
+  background: var(--t-bg-soft);
+  font-weight: 600;
+}
+
+.iv-controls {
+  display: flex;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.iv-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--t-space-1);
+  margin: 0;
+}
+
+.iv-figures dt {
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+}
+
+.iv-figures dd {
+  margin: 0.15rem 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The method-registry description cell in the shared methods DataTable: dimmed and width-capped so a
+   long sentence does not push the toggle and default columns off the edge. */
+.iv-desc {
+  color: var(--t-text-dim);
+  max-width: 32rem;
+}
+
+.iv-badge {
+  display: inline-block;
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font-size: 0.75rem;
+  color: var(--t-text-dim);
+}
+
+.iv-toggle {
+  display: inline-flex;
+  align-items: center;
+}
+
+.iv-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: 0.9rem;
+}
+
+.iv-muted {
+  color: var(--t-text-dim);
+}
+
+.iv-reason {
+  margin: 0;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border-left: 3px solid var(--t-border);
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}

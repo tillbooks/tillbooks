@@ -1,0 +1,216 @@
+{
+  "asOf": "2026-03-31",
+  "baseCurrency": "CHF",
+  "sections": [
+    {
+      "key": "umlaufvermoegen",
+      "side": "aktiven",
+      "labels": {
+        "de": "Umlaufvermögen",
+        "fr": "Actif circulant",
+        "it": "Attivo circolante",
+        "en": "Current assets"
+      },
+      "cite": "OR Art. 959a Abs. 1 Ziff. 1",
+      "lines": [
+        {
+          "key": "1000",
+          "account": {
+            "id": "acc_1",
+            "number": "1000",
+            "name": "Kassenbestand",
+            "type": "asset"
+          },
+          "balanceMinor": 500000
+        },
+        {
+          "key": "1020",
+          "account": {
+            "id": "acc_2",
+            "number": "1020",
+            "name": "Bankkonto",
+            "type": "asset"
+          },
+          "balanceMinor": 1795500
+        },
+        {
+          "key": "1100",
+          "account": {
+            "id": "acc_4",
+            "number": "1100",
+            "name": "Forderungen aus Lieferungen und Leistungen",
+            "type": "asset"
+          },
+          "balanceMinor": 1051000
+        }
+      ],
+      "subtotalMinor": 3346500
+    },
+    {
+      "key": "anlagevermoegen",
+      "side": "aktiven",
+      "labels": {
+        "de": "Anlagevermögen",
+        "fr": "Actif immobilisé",
+        "it": "Attivo fisso",
+        "en": "Non-current assets"
+      },
+      "cite": "OR Art. 959a Abs. 1 Ziff. 2",
+      "lines": [
+        {
+          "key": "1500",
+          "account": {
+            "id": "acc_11",
+            "number": "1500",
+            "name": "Maschinen und Produktionsanlagen",
+            "type": "asset"
+          },
+          "balanceMinor": 1000000
+        }
+      ],
+      "subtotalMinor": 1000000
+    },
+    {
+      "key": "uebrige_aktiven",
+      "side": "aktiven",
+      "labels": {
+        "de": "Übrige Aktiven",
+        "fr": "Autres actifs",
+        "it": "Altri attivi",
+        "en": "Other assets"
+      },
+      "cite": "OR Art. 959a Abs. 3",
+      "lines": [],
+      "subtotalMinor": 0
+    },
+    {
+      "key": "kurzfristiges_fremdkapital",
+      "side": "passiven",
+      "labels": {
+        "de": "Kurzfristiges Fremdkapital",
+        "fr": "Capitaux étrangers à court terme",
+        "it": "Capitale di terzi a breve termine",
+        "en": "Current liabilities"
+      },
+      "cite": "OR Art. 959a Abs. 2 Ziff. 1",
+      "lines": [
+        {
+          "key": "2000",
+          "account": {
+            "id": "acc_15",
+            "number": "2000",
+            "name": "Verbindlichkeiten aus Lieferungen und Leistungen",
+            "type": "liability"
+          },
+          "balanceMinor": 685000
+        },
+        {
+          "key": "2200",
+          "account": {
+            "id": "acc_17",
+            "number": "2200",
+            "name": "Geschuldete MWST auf Erlösen",
+            "type": "liability"
+          },
+          "balanceMinor": 121500
+        }
+      ],
+      "subtotalMinor": 806500
+    },
+    {
+      "key": "langfristiges_fremdkapital",
+      "side": "passiven",
+      "labels": {
+        "de": "Langfristiges Fremdkapital",
+        "fr": "Capitaux étrangers à long terme",
+        "it": "Capitale di terzi a lungo termine",
+        "en": "Non-current liabilities"
+      },
+      "cite": "OR Art. 959a Abs. 2 Ziff. 2",
+      "lines": [
+        {
+          "key": "2400",
+          "account": {
+            "id": "acc_21",
+            "number": "2400",
+            "name": "Langfristige Bankschulden",
+            "type": "liability"
+          },
+          "balanceMinor": 1000000
+        }
+      ],
+      "subtotalMinor": 1000000
+    },
+    {
+      "key": "eigenkapital",
+      "side": "passiven",
+      "labels": {
+        "de": "Eigenkapital",
+        "fr": "Capitaux propres",
+        "it": "Capitale proprio",
+        "en": "Equity"
+      },
+      "cite": "OR Art. 959a Abs. 2 Ziff. 3",
+      "lines": [
+        {
+          "key": "2800",
+          "account": {
+            "id": "acc_24",
+            "number": "2800",
+            "name": "Grund-, Gesellschafter- oder Stiftungskapital",
+            "type": "equity"
+          },
+          "balanceMinor": 2000000
+        },
+        {
+          "key": "ergebnisvortrag",
+          "account": null,
+          "labels": {
+            "de": "Gewinnvortrag oder Verlustvortrag",
+            "fr": "Bénéfice reporté ou perte reportée",
+            "it": "Utile o perdita riportati",
+            "en": "Profit or loss carried forward"
+          },
+          "cite": "OR Art. 959a Abs. 2 Ziff. 3 lit. f",
+          "balanceMinor": 0
+        },
+        {
+          "key": "jahresergebnis",
+          "account": null,
+          "labels": {
+            "de": "Jahresgewinn oder Jahresverlust",
+            "fr": "Bénéfice ou perte de l'exercice",
+            "it": "Utile o perdita dell'esercizio",
+            "en": "Annual profit or annual loss"
+          },
+          "cite": "OR Art. 959a Abs. 2 Ziff. 3 lit. g",
+          "balanceMinor": 540000
+        }
+      ],
+      "subtotalMinor": 2540000
+    },
+    {
+      "key": "uebrige_passiven",
+      "side": "passiven",
+      "labels": {
+        "de": "Übrige Passiven",
+        "fr": "Autres passifs",
+        "it": "Altri passivi",
+        "en": "Other liabilities"
+      },
+      "cite": "OR Art. 959a Abs. 3",
+      "lines": [],
+      "subtotalMinor": 0
+    }
+  ],
+  "aktivenMinor": 4346500,
+  "passivenMinor": 4346500,
+  "noActivity": false,
+  "reconciles": true,
+  "reconciliation": {
+    "aktivenEqualPassiven": true,
+    "ledgerNetsToZero": true,
+    "everyAccountClassifiedOnce": true
+  },
+  "ok": true
+}

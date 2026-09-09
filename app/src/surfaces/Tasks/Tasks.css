@@ -1,0 +1,133 @@
+/* E03, Aufgaben: the cross-entity queue. One accent, elevated row panels, glyph+label status. */
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tasks-view-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.tasks-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 1rem;
+  margin: 0.5rem 0;
+}
+
+/* The teal accent belongs to Heute (spec 6: one accent, on the section that matters today). */
+.tasks-section--today .tasks-section-title {
+  color: var(--t-accent);
+}
+
+.tasks-count {
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+}
+
+.tasks-section-empty {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.tasks-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* An elevated panel per row: the background step off the page and the gap between rows carry the
+   separation, so no per-card hairline is issued (design law: a border around every card is banned). */
+.tasks-row {
+  border-radius: 8px;
+  padding: 0.625rem 0.875rem;
+  background: var(--t-bg-elev);
+}
+
+.tasks-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tasks-status {
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+
+.tasks-row-title {
+  font-weight: 600;
+}
+
+.tasks-badge {
+  font-size: 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  white-space: nowrap;
+}
+
+.tasks-meta {
+  display: inline-flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+}
+
+.tasks-row-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* The inline snooze quick-action form under a row. The create/edit editor lives in a DetailDrawer,
+   which owns its own chrome, so no bordered panel is styled here any more. */
+.tasks-editor {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tasks-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.tasks-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.tasks-editor-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tasks-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

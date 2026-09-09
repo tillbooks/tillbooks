@@ -1,0 +1,73 @@
+/* J05, Inventory -> Adjustments / Bestandeskorrekturen. One accent, signed quantity as sign+glyph.
+
+   D118 Phase 2 (2026-08-24): the ledger is the shared DataTable, the page header the shared
+   SurfaceHeader, the create form the shared DetailDrawer, the reverse confirm the shared Modal and the
+   search row the shared FilterBar. The per-surface CSS that duplicated the list table (and its rows,
+   header and hover), the drawer chrome and the button set has been deleted; what remains is genuinely
+   Adjustments-specific: the signed-quantity weight, the reversed-row state, the reason badge and the
+   drawer/modal form fields. No new colour token (design-canon): every value reuses a --t- token. */
+
+.adj {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The visible accent focus ring the design law requires, for the bespoke form controls this surface
+   still owns inside the drawer and modal. The shared primitives carry their own rings. */
+.adj :is(input, select, textarea):focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+/* Signed quantity: the sign is the glyph (never colour alone, WCAG 2.2 AA). The DataTable numeric
+   column already right-aligns it with tabular figures; this only carries the weight. */
+.adj-qty {
+  font-weight: 600;
+}
+
+/* A reversed adjustment reads dimmed and struck through down the whole row. Joined onto the shared
+   row class via DataTable's rowClassName hook. */
+.data-table-row.adj-row--reversed td {
+  color: var(--t-text-dim);
+  text-decoration: line-through;
+}
+
+/* Reason code badge: glyph + label, Adjustments-specific. */
+.adj-badge {
+  display: inline-block;
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font-family: var(--t-font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--t-text-dim);
+}
+
+.adj-note {
+  display: inline-block;
+  max-width: 18rem;
+  white-space: pre-wrap;
+}
+
+.adj-muted {
+  color: var(--t-text-dim);
+  font-size: 0.8rem;
+}
+
+/* Drawer and modal form fields. */
+.adj-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.adj-field label {
+  font-size: 0.8125rem;
+  color: var(--t-text-dim);
+}
+
+.adj-hint {
+  font-size: 0.75rem;
+  color: var(--t-text-dim);
+}

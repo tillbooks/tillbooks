@@ -1,0 +1,87 @@
+{
+  "dispatch": {
+    "title": "Versand",
+    "lede": "Textbausteine für Rechnung, Offerte und Mahnung, und das Protokoll dessen, was diesen Arbeitsbereich verlassen hat. Der Versand selbst (Kanäle, Freigaben, Empfänger) bleibt unverändert bei den jeweiligen Belegen.",
+    "loading": "Versand wird geladen …",
+    "tab": {
+      "texts": "Textbausteine",
+      "log": "Protokoll"
+    },
+    "kind": {
+      "invoice": "Rechnung",
+      "quote": "Offerte",
+      "dunningRun": "Mahnung"
+    },
+    "texts": {
+      "subject": "Betreff",
+      "body": "Nachrichtentext",
+      "localeTabs": "Sprache",
+      "variables": "Variablen",
+      "variablesHint": "Einfügen per Klick oder Tastatur; beim Speichern wird jede Variable gegen die gültige Liste geprüft.",
+      "defaultInUse": "Noch kein eigener Text für diese Sprache gespeichert: der eingebaute Standardtext wird verwendet.",
+      "empty": "Noch keine eigenen Textbausteine.",
+      "save": "Speichern",
+      "saved": "Textbaustein gespeichert.",
+      "preview": "Vorschau",
+      "previewHint": "Die Vorschau zeigt den aufgelösten Text mit Musterwerten. Sie wird beim Wechseln und Speichern aktualisiert.",
+      "previewDefault": "Eingebauter Standardtext",
+      "previewSaved": "Eigener Text"
+    },
+    "err": {
+      "unknownVariable": "Unbekannte Variable {variable}. Gültig sind: {valid}",
+      "needsCustomerEmail": "Der Kontakt hat keine E-Mail-Adresse: beim Kontakt ergänzen.",
+      "needsEmailTransport": "Kein E-Mail-Versandweg eingerichtet."
+    },
+    "needsPermission": "Erfordert Administratorrechte (Versandtexte verwalten).",
+    "permissionDenied": {
+      "read": "Du hast keinen Zugriff auf den Versand."
+    },
+    "log": {
+      "caption": "Protokoll aller Sendungen",
+      "date": "Datum",
+      "kind": "Art",
+      "recipient": "Empfänger",
+      "channel": "Kanal",
+      "result": "Ergebnis",
+      "document": "Beleg",
+      "open": "Öffnen",
+      "openRun": "Mahnlauf öffnen",
+      "reason": "Grund",
+      "empty": "Noch keine Sendungen.",
+      "emptyHint": "Sobald eine Rechnung, Offerte oder Mahnung versendet wird, erscheint hier eine Zeile.",
+      "filterLabel": "Nach Ergebnis filtern",
+      "filterAll": "Alle Ergebnisse",
+      "outcome": {
+        "sent": "gesendet",
+        "degraded": "nicht übermittelt",
+        "failed": "fehlgeschlagen",
+        "artifactCreated": "Artefakt erstellt"
+      },
+      "degradeReason": {
+        "needs_customer_email": "Kontakt ohne E-Mail-Adresse",
+        "no_email": "Keine E-Mail-Adresse hinterlegt",
+        "settled_since_issue": "Seit Ausstellung beglichen",
+        "needs_email_config": "E-Mail-Versand nicht eingerichtet",
+        "needs_email_transport": "Kein E-Mail-Versandweg",
+        "render_failed": "PDF-Erstellung fehlgeschlagen",
+        "send_failed": "Versand fehlgeschlagen"
+      },
+      "channelName": {
+        "smtp": "E-Mail",
+        "cloud_relay": "Cloud-Versand",
+        "artifact_only": "Artefakt (lokal)"
+      }
+    }
+  },
+  "nav": {
+    "dispatch": "Versand"
+  },
+  "help": {
+    "Dispatch": {
+      "title": "Versand",
+      "body": "Versand pflegt die Textbausteine für ausgehende Nachrichten, je Sprache, und zeigt das Protokoll aller Sendungen. Am Versandverhalten selbst ändert diese Oberfläche nichts: Kanäle, Empfänger und Bestätigungen bleiben bei den Belegen, die versenden. Das Protokoll ist nur anfügbar; ein protokollierter Versand lässt sich weder bearbeiten noch löschen.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

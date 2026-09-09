@@ -1,0 +1,91 @@
+{
+  "nav": {
+    "landedCosts": "Landed costs"
+  },
+  "landedCosts": {
+    "title": "Landed costs",
+    "create": "New voucher",
+    "needsPermission": "Requires the landed-cost permission.",
+    "empty": "No landed-cost vouchers yet.",
+    "confirm": "Confirm allocation",
+    "reverse": "Reverse",
+    "reverseReason": "Reversed from the Landed Costs surface",
+    "journal": "Journal entry",
+    "close": "Close",
+    "itemIdTooltip": "Item ID: {id}",
+    "list": {
+      "caption": "Landed-cost vouchers"
+    },
+    "detail": {
+      "caption": "Allocation across the received lines",
+      "empty": "No lines to allocate against."
+    },
+    "confirmDialog": {
+      "title": "Confirm allocation",
+      "body": "This capitalises {total} CHF onto the inventory value of the received items and posts one balanced journal entry. It is undone by a reversal, never by rewriting.",
+      "cancel": "Cancel"
+    },
+    "reverseDialog": {
+      "title": "Reverse allocation",
+      "body": "This posts a reversing journal entry and removes the capitalised cost from the inventory value of the items. The original entry stays on the ledger."
+    },
+    "form": {
+      "receipt": "Goods receipt",
+      "component": "Cost type",
+      "amount": "Amount (CHF)",
+      "method": "Allocation method",
+      "inventoryAccount": "Inventory account",
+      "clearingAccount": "Clearing account",
+      "submit": "Create voucher"
+    },
+    "component": {
+      "freight": "Freight",
+      "duty": "Duty",
+      "insurance": "Insurance",
+      "handling": "Handling",
+      "brokerage": "Brokerage",
+      "other": "Other"
+    },
+    "method": {
+      "by_value": "By value",
+      "by_qty": "By quantity",
+      "by_weight": "By weight",
+      "by_volume": "By volume",
+      "equal": "Equal",
+      "manual": "Manual"
+    },
+    "status": {
+      "draft": "Draft",
+      "allocated": "Allocated",
+      "reversed": "Reversed"
+    },
+    "col": {
+      "number": "Number",
+      "status": "Status",
+      "method": "Method",
+      "total": "Total",
+      "date": "Date",
+      "item": "Item",
+      "baseValue": "Base value",
+      "allocated": "Allocated",
+      "unitImpact": "Per unit"
+    },
+    "errors": {
+      "already_allocated": "One of these receipt lines is already allocated under another voucher.",
+      "nothing_to_allocate": "No recognised receipt lines to allocate against.",
+      "invalid_transition": "The voucher is not in a state that allows this action.",
+      "period_locked": "The effective period is locked.",
+      "invalid_reference": "A referenced receipt line or account was not found.",
+      "invalid_amount": "The amount must be a positive figure.",
+      "allocation_residual": "The allocation did not distribute the full total."
+    }
+  },
+  "help": {
+    "LandedCosts": {
+      "title": "Landed costs",
+      "body": "Freight, duty and handling that belong to a posted goods receipt are collected here on a landed-cost voucher. The preview shows how the costs spread across the received lines before anything is written. On confirmation the amounts flow into the inventory value of the items and one balanced entry is posted; a confirmation is undone by a reversal, never by rewriting.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,191 @@
+{
+  "nav": {
+    "checklists": "Checklisten"
+  },
+  "attention": {
+    "queue": {
+      "checklistItemsDue": "Checklisten: fällige Schritte"
+    },
+    "item": {
+      "checklistItem": {
+        "title": "MWST {period}: {title}",
+        "subtitle": "{template}, zuständig: {owner}"
+      }
+    },
+    "act": {
+      "openChecklist": "Checkliste öffnen"
+    }
+  },
+  "help": {
+    "Checklists": {
+      "title": "Checklisten",
+      "body": "Eine Checkliste führt dich durch eine wiederkehrende Aufgabe Schritt für Schritt, zuerst durch die MWST-Periode: von den offenen Büchern bis zur eingereichten, gesperrten und bezahlten Abrechnung. Prüfungen, die das System selbst kennt, erfüllen sich von allein; Schritte, die nur du bestätigen kannst, tragen dein Datum und deinen Namen. Jeder Schritt hat eine Frist, und was fällig wird, erscheint in den Pendenzen. Ein Agent geht dieselbe Liste über dieselben Befehle.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  },
+  "checklists": {
+    "title": "Checklisten",
+    "loading": "Deine Checklisten werden geladen",
+    "backToList": "Zur Übersicht",
+    "rangeTo": "bis",
+    "due": "fällig am {date}",
+    "checkKey": "Prüfung: {key}",
+    "needsManage": "Braucht das Recht manage_checklists.",
+    "needsFile": "Braucht das Recht vat_file.",
+    "denied": {
+      "read": "Dir fehlt das Recht read_books, darum siehst du hier keine Checklisten."
+    },
+    "error": {
+      "transport": "Die Checklisten konnten nicht geladen werden.",
+      "refused": "Abgelehnt: {code}"
+    },
+    "empty": {
+      "title": "Noch keine Checkliste",
+      "hint": "Starte die MWST-Periode für die letzte abgeschlossene Abrechnungsperiode. Die Schritte und Fristen kommen von selbst."
+    },
+    "missing": {
+      "title": "Diese Checkliste gibt es nicht",
+      "hint": "Der Verweis zeigt auf keine Checkliste in diesem Arbeitsbereich."
+    },
+    "group": {
+      "open": "Offen ({count})",
+      "openEmpty": "Nichts offen.",
+      "done": "Abgeschlossen ({count})",
+      "abandoned": "Abgebrochen ({count})"
+    },
+    "run": {
+      "title": "{template} {period}",
+      "progress": "{done} von {total} Schritten"
+    },
+    "runStatus": {
+      "open": "offen",
+      "done": "abgeschlossen",
+      "abandoned": "abgebrochen"
+    },
+    "detail": {
+      "period": "{period}, {from} bis {to}:",
+      "journey": "Schritte der Checkliste",
+      "abandoned": "Abgebrochen: {reason}",
+      "done": "Alle Schritte sind erledigt oder nicht zutreffend."
+    },
+    "owner": {
+      "human": "du",
+      "agent": "ein Agent",
+      "system": "das System"
+    },
+    "actor": {
+      "agent": "den Agenten",
+      "studio": "dich",
+      "member": "ein Mitglied",
+      "unknown": "jemanden"
+    },
+    "state": {
+      "open": "offen",
+      "fulfilled": "erfüllt",
+      "done": "erledigt",
+      "doneAt": "erledigt am {date} durch {who}",
+      "signed": "freigegeben am {date} durch {who}",
+      "attested": "bestätigt am {date} durch {who}",
+      "skipped": "nicht zutreffend",
+      "stale": "Freigabe hinfällig",
+      "unavailable": "Prüfung nicht verfügbar"
+    },
+    "note": {
+      "blockedBy": "Wartet auf: {item}",
+      "skipped": "Grund: {reason}",
+      "checkPending": "{check}: {count} offen",
+      "checkFailed": "{check}: noch nicht erfüllt",
+      "checkUnavailable": "{check}: Prüfung nicht verfügbar",
+      "stale": "Die Abrechnung hat sich seit der Freigabe geändert. Berechne sie neu und gib sie nochmals frei.",
+      "preconditionOpen": "Zuerst muss die Prüfung {check} erfüllt sein."
+    },
+    "check": {
+      "no_drafts": "Keine Entwürfe bis Periodenende",
+      "bank_reconciled": "Bank abgestimmt",
+      "no_missing_tax_codes": "Steuercodes vollständig",
+      "vat_return_computed": "Abrechnung berechnet",
+      "abstimmung_resolved": "Abstimmung geklärt",
+      "period_locked_vat_filed": "MWST-Periode gesperrt"
+    },
+    "item": {
+      "no_drafts": "Keine Entwürfe bis Periodenende",
+      "bank_reconciled": "Bank abgestimmt",
+      "tax_codes_complete": "Steuercodes vollständig",
+      "vat_return_computed": "Abrechnung berechnet",
+      "abstimmung_reviewed": "Abstimmung geprüft",
+      "ech0217_exported": "eCH-0217 exportiert",
+      "eportal_filed": "Im ESTV ePortal eingereicht",
+      "period_locked": "MWST-Periode sperren",
+      "settlement_booked": "Zahlung oder Gutschrift verbucht"
+    },
+    "act": {
+      "open": "Öffnen",
+      "resolve": "Klären",
+      "compute": "Abrechnung berechnen",
+      "export": "Zur MWST-Abrechnung exportieren",
+      "attest": "Eingereicht am",
+      "sign": "Abstimmung freigeben",
+      "confirmPayment": "Zahlung bestätigen",
+      "markFiled": "Als eingereicht markieren",
+      "skip": "Nicht zutreffend",
+      "reopen": "Wieder öffnen",
+      "abandon": "Checkliste abbrechen"
+    },
+    "dialog": {
+      "close": "Schliessen",
+      "cancel": "Abbrechen"
+    },
+    "start": {
+      "title": "Checkliste starten",
+      "template": "MWST-Periode",
+      "period": "Abrechnungsperiode",
+      "filedSuffix": "(eingereicht)",
+      "action": "Checkliste starten",
+      "working": "Wird gestartet",
+      "consequence": "Legt die Checkliste mit allen Schritten und Fristen an. Eine Checkliste wird abgebrochen, nie gelöscht.",
+      "needsConfig": "Ohne MWST-Einstellungen gibt es keine Abrechnungsperioden.",
+      "needsConfigCta": "MWST einrichten",
+      "notFilable": "Das ist keine Abrechnungsperiode dieses Jahres. Möglich sind: {periods}"
+    },
+    "attest": {
+      "title": "Im ESTV ePortal eingereicht",
+      "portal": "ESTV ePortal öffnen (ausserhalb von TILL)",
+      "portalUrl": "https://www.estv.admin.ch/de/mwst-online-abrechnen",
+      "date": "Eingereicht am",
+      "action": "Bestätigen",
+      "working": "Wird bestätigt",
+      "consequence": "Markiert den Schritt als eingereicht. Die Periode wird damit noch nicht gesperrt.",
+      "needsDate": "Gib das Datum der Einreichung an.",
+      "beforeExport": "Das Datum liegt vor dem Export vom {exportedAt}.",
+      "alreadyAttested": "Die Einreichung ist schon am {date} bestätigt. Öffne den Schritt zuerst wieder."
+    },
+    "skip": {
+      "title": "{item}: nicht zutreffend",
+      "reason": "Grund",
+      "action": "Als nicht zutreffend markieren",
+      "working": "Wird gespeichert",
+      "consequence": "Der Schritt gilt als nicht zutreffend und bleibt sichtbar."
+    },
+    "reason": {
+      "needed": "Gib einen Grund an."
+    },
+    "signoff": {
+      "title": "{item}",
+      "action": "Freigeben",
+      "working": "Wird freigegeben",
+      "reference": "Beleg",
+      "referenceHint": "Banktransaktion oder Buchung",
+      "needsReference": "Gib den Beleg an, der die Zahlung belegt.",
+      "consequenceReview": "Bestätigt die Abstimmung für die aktuell berechnete Abrechnung. Ändert sich die Abrechnung, wird die Freigabe hinfällig.",
+      "consequencePayment": "Bestätigt, dass die Zahlung oder Gutschrift verbucht ist. Der Beleg bleibt am Schritt."
+    },
+    "abandon": {
+      "title": "Checkliste {period} abbrechen",
+      "reason": "Grund",
+      "action": "Abbrechen bestätigen",
+      "working": "Wird abgebrochen",
+      "consequence": "Die Checkliste bleibt sichtbar und speist keine Pendenzen mehr. Sie wird nicht gelöscht."
+    }
+  }
+}

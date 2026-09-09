@@ -1,0 +1,138 @@
+{
+  "nav": {
+    "inventoryValuation": "Valuation"
+  },
+  "invValuation": {
+    "title": "Inventory valuation",
+    "noWorkspace": "Pick a workspace to see its inventory valuation.",
+    "workspaceTotal": "Total inventory value",
+    "methodsLabel": "Valuation methods",
+    "methodsTitle": "Valuation methods",
+    "listLabel": "Stocked items",
+    "detailLabel": "Item valuation",
+    "selectHint": "Pick an item to see its valuation and its cost layers.",
+    "changeDefault": "Change the default method",
+    "defaultInForce": "Currently in force: {method}",
+    "since": "since {date}",
+    "isDefault": "Default",
+    "enableAria": "Enable {method}",
+    "effectiveMethod": "Method in force",
+    "onHand": "On hand",
+    "unitCost": "Unit cost",
+    "totalValue": "Balance-sheet value",
+    "writeDown": "Write-down",
+    "lcmApplied": "Lower of cost or market applied",
+    "variance": "Variance",
+    "asOf": "Value as of",
+    "netRealisableValue": "Net realisable value (Rappen per unit)",
+    "nrvHint": "OR 960c: the selling value less the costs still to be incurred. Where it sits below cost it must be used.",
+    "effectiveFrom": "Effective from",
+    "reasonHint": "Required once movements exist from that date on: the reason is what the method history shows later.",
+    "forceRevaluation": "Confirm the revaluation of existing movements",
+    "forceHint": "Needed when movements already exist from the chosen date on. The change recalculates their valuation.",
+    "effectiveFromHint": "This date decides when the method starts to apply, and it is what TILL checks the period lock against. A year that is already closed cannot be revalued after the fact.",
+    "noValuation": "There is no valuation for this item at that date.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "error": { "transport": "The inventory valuation could not be loaded. Please try again." },
+    "empty": {
+      "title": "No stocked items yet",
+      "hint": "Create a stocked item and record some movements, then you can value it here."
+    },
+    "col": {
+      "method": "Method",
+      "description": "Description",
+      "enabled": "Enabled",
+      "default": "Default"
+    },
+    "method": {
+      "weighted_average": "Weighted average",
+      "fifo": "FIFO",
+      "standard_cost": "Standard cost"
+    },
+    "methodDesc": {
+      "weighted_average": "Every receipt joins one cost pool, and what is on hand is valued at the average of it.",
+      "fifo": "The oldest receipts are consumed first, so what is on hand carries the most recent purchase costs.",
+      "standard_cost": "Stock is carried at a fixed standard price, and the gap to what was actually paid is reported as a variance."
+    },
+    "source": {
+      "item": "Item",
+      "workspace": "Workspace",
+      "builtin": "Built-in",
+      "override": "What-if"
+    },
+    "scope": {
+      "workspace": "Workspace",
+      "item": "Item"
+    },
+    "layers": {
+      "title": "Cost layers (FIFO)",
+      "receiptDate": "Received",
+      "remaining": "Remaining",
+      "original": "Received qty",
+      "unitCost": "Unit cost",
+      "value": "Value"
+    },
+    "history": {
+      "title": "Method history (consistency)",
+      "empty": "No method has been recorded yet, so the weighted average applies.",
+      "effectiveFrom": "Effective from",
+      "scope": "Scope",
+      "reason": "Reason",
+      "actor": "By",
+      "forced": "forced"
+    },
+    "reason": {
+      "zero_quantity": "Nothing on hand, so the value is zero.",
+      "negative_quantity": "On hand is negative. A short position carries no positive book value; fix the movements first.",
+      "insufficient_layers": "More was issued than ever arrived with a cost. The value rests only on the layers that existed.",
+      "missing_standard_cost": "Standard cost is in force but this item has no standard price.",
+      "missing_unit_cost": "None of the receipts carries a unit cost, so the value is zero.",
+      "invalid_unit_cost": "A movement carries a negative unit cost. TILL reports that rather than computing through it.",
+      "invalid_net_realisable_value": "The net realisable value must be a whole number of zero or more."
+    },
+    "warning": {
+      "missing_unit_cost": "{qty} units arrived with no unit cost, so they are valued at zero rather than at the average of the rest. Movements affected:",
+      "transfer_cost_ignored": "A transfer carries a unit cost of its own. Valuation uses what the moved goods cost, not the stated figure: otherwise moving stock would change what it is worth.",
+      "unpaired_transfer_leg": "A transfer is missing its other half. TILL treats it as an ordinary movement and tells you, rather than inventing a counterparty."
+    },
+    "basis": {
+      "allocated": "share"
+    },
+    "form": {
+      "defaultTitle": "Change the default method"
+    },
+    "errors": {
+      "method_disabled": "This method is not enabled for the workspace.",
+      "method_is_default": "This method is the current default. Change the default first, then you can disable it.",
+      "method_change_blocked_open_period": "The item already has movements from this date on, and the change would recalculate their valuation. Confirm the revaluation and state a reason.",
+      "missing_standard_cost": "Standard cost needs a standard price in Rappen.",
+      "unknown_method": "TILL does not know this valuation method.",
+      "period_locked": "That date sits in a closed period. A method cannot be back-dated into a year that is already closed."
+    },
+    "explain": {
+      "none": "No valuation.",
+      "weightedAverage": "Weighted average over every receipt up to the as-of date.",
+      "fifo": "FIFO: the oldest receipts have been consumed first.",
+      "standardCost": "Carried at standard cost, with the variance reported separately.",
+      "lcm": "The OR 960c lower-of-cost-or-market clamp was applied, layer by layer.",
+      "allocated": "A share of the item total, not valued on its own.",
+      "locationNeedsAllocation": "Under this method a location figure is a share of the item total, not something derived from that location's movements alone.",
+      "zeroQuantity": "Nothing on hand at the as-of date.",
+      "negativeQuantity": "Negative on hand, so no positive book value.",
+      "insufficientLayers": "More was issued than arrived with a cost.",
+      "missingStandardCost": "No standard price is set.",
+      "noCostBasis": "No cost basis anywhere in the movements.",
+      "invalidUnitCost": "A movement carries a negative unit cost.",
+      "invalidNrv": "The net realisable value is not valid."
+    }
+  },
+  "help": {
+    "InventoryValuation": {
+      "title": "Inventory valuation",
+      "body": "Here you choose the method your inventory is valued by and read the valuation that follows from it. The method list comes from the engine; a change takes effect from a date and stays traceable as history. Per item the valuation shows on-hand, unit cost and total value, at any as-of date if you wish; a lower market value can be recorded as a write-down. Nothing posts here: the valuation reaches the books through the valuation runs.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

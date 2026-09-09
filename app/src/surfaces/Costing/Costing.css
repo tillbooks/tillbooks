@@ -1,0 +1,145 @@
+/* B03, the Projekterfolg panel: rides the Projects detail panel, one accent, tabular money. */
+
+.costing {
+  margin-top: var(--t-space-6);
+  padding-top: var(--t-space-4);
+  border-top: 1px solid var(--t-border);
+}
+
+.costing-head,
+.costing-drill-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.costing-title {
+  margin: 0;
+}
+
+.costing-basis {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+/* Segmented toggle (basis + drill component). A toggle is not a headline primary,
+   so the selected segment carries a soft accent treatment, never the solid fill,
+   and always pairs it with aria-pressed so the state is not colour-only (WCAG 2.2 AA). */
+.costing-seg {
+  appearance: none;
+  padding: 0 var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg);
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 26px;
+  cursor: pointer;
+}
+
+.costing-seg--active {
+  border-color: var(--t-accent);
+  background: var(--t-accent-soft);
+  color: var(--t-text);
+}
+
+.costing-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+}
+
+.costing-figures dt {
+  font-size: 0.8rem;
+  color: var(--t-text-dim);
+}
+
+.costing-figures dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.costing-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.costing-figures .costing-num,
+.costing-breakdown .costing-num {
+  text-align: left;
+}
+
+.costing-margin {
+  color: var(--t-accent);
+}
+
+.costing-breakdown {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+
+.costing-breakdown div {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.costing-breakdown dt {
+  color: var(--t-text-dim);
+}
+
+.costing-breakdown dd {
+  margin: 0;
+}
+
+.costing-hint,
+.costing-drill-empty,
+.costing-empty {
+  font-size: 0.85rem;
+  color: var(--t-text-dim);
+  margin: 0.5rem 0 0;
+}
+
+.costing-over {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+}
+
+.costing-denied {
+  color: var(--t-text-dim);
+}
+
+.costing-budget {
+  margin-top: 1rem;
+}
+
+.costing-budget h4,
+.costing-drill h4 {
+  margin: 0;
+}
+
+.costing-drill {
+  margin-top: 1rem;
+}
+
+.costing-drill-table {
+  width: 100%;
+  margin-top: 0.5rem;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.costing-drill-table th,
+.costing-drill-table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--t-border);
+  text-align: left;
+}
+
+.costing-drill-table th.costing-num,
+.costing-drill-table td.costing-num {
+  text-align: right;
+}

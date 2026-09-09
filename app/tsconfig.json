@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true
+  },
+
+  // THE TEST SOURCES ARE CHECKED, ALL OF THEM. There is deliberately no `exclude` key here, and
+  // `test/style/app-tsconfig-covers-tests.test.mjs` fails the build if one comes back. Until
+  // 2026-07-26 this file excluded `["src/**/*.test.ts", "src/**/*.test.tsx", "src/test-setup.ts"]`
+  // (added wholesale in cf2ba72, with no reason recorded), which left the entire app suite outside
+  // the type checker. Two things were therefore worthless: a fixture could claim a shape the engine
+  // never sends and nothing objected, and every `@ts-expect-error` in a test asserted nothing,
+  // because an unused one only errors in a file tsc actually reads. Tests are source.
+  //
+  // The flip put 46 errors on the floor across 16 of the 49 suites. They were fixed, file by file,
+  // never by re-excluding. If a test file will not compile, that is the finding: fix the file.
+  "include": ["src"]
+}

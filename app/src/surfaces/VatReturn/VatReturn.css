@@ -1,0 +1,499 @@
+/**
+ * A07 MWST-Abrechnung.
+ *
+ * THE GERMAN LAYOUT BUDGET IS A RULE HERE, NOT A HOPE. This surface carries the longest labels in
+ * the product ("Vorsteuerkürzungen: Nicht-Entgelte wie Subventionen, Tourismusabgaben (Art. 33
+ * Abs. 2)"), and it is drawn at the FULL form wording rather than the engine's trimmed one:
+ *
+ *   - Ziffer labels WRAP. They are never truncated and never get an ellipsis, because the operator
+ *     is matching them against a paper form and half a label matches nothing.
+ *   - Money figures never wrap and never shrink. The figure column holds its width and the label
+ *     column yields.
+ *   - Tabular numerals, so a column of francs lines up digit for digit.
+ *
+ * No hex anywhere: every colour is a token, so both themes come out of one declaration.
+ */
+
+/* `.vr` on the root `<section>` is a namespace hook and carries NO declaration on purpose, which is
+   the one place this surface departs from `.oi` / `.rp` / `.pay` (each a `flex column` with a gap).
+   Every block below already sets its own `margin-top: var(--t-space-2)`, so a column gap here would
+   double every gap on the surface. It is not a second orphan class: it is a prefix root. */
+
+/* --- the header ------------------------------------------------------------------------------
+ * The page header is the shared `SurfaceHeader` primitive (D118 B2): the title, the inline
+ * `SurfaceHelp`, the subtitle and the right-pinned action slot come from `SurfaceHeader.css`, which
+ * declares the flex row, zeroes the `<h1>` margin and wraps the action cluster. The bespoke
+ * `.vr-head` / `.vr-title` / `.vr-subtitle` / `.vr-actions` rules this surface once carried (a row
+ * that had fallen back to block flow because `.surface-head` was declared nowhere) are gone: the
+ * primitive owns that layout for every surface at once: the title column carries `min-width: 0` so
+ * it yields, and the action cluster is `flex: 0 0 auto` so the Periodenwaehler and the two buttons
+ * hold their size. `.vr-picker-pop` still positions `right: 0` against its trigger; the trigger now
+ * sits inside the primitive's right-pinned slot. */
+
+/* --- the journey strip ---------------------------------------------------------------------- */
+
+.vr-journey {
+  list-style: none;
+  margin: var(--t-space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.vr-step {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.vr-step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--t-border);
+  font-size: 11px;
+}
+
+/* A completed step is marked by a WORD ("erledigt"), which is what carries it for a reader who
+   cannot see the weight change. */
+.vr-step--done {
+  color: var(--t-text);
+}
+
+.vr-step--done .vr-step-no {
+  border-color: var(--t-text);
+}
+
+.vr-step-done-mark {
+  font-size: 11px;
+  color: var(--t-text-faint);
+}
+
+.vr-step-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--t-accent);
+}
+
+.vr-step-external {
+  flex: 0 0 auto;
+}
+
+.vr-journey-note {
+  margin: var(--t-space-1) 0 0;
+  font-size: 12px;
+  color: var(--t-text-faint);
+}
+
+/* --- the payable strip ---------------------------------------------------------------------- */
+
+.vr-payable {
+  margin-top: var(--t-space-2);
+  padding: var(--t-space-2);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.vr-payable-label {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.vr-payable-figure {
+  margin: 0;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* --- the Abstimmung ------------------------------------------------------------------------- */
+
+.vr-recon {
+  margin-top: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+/* The warn state. Colour is never alone: the glyph and the word "ungeklärt" carry it too. */
+.vr-recon--warn {
+  border-color: var(--t-warn);
+}
+
+.vr-recon--warn .vr-recon-glyph {
+  color: var(--t-warn);
+}
+
+.vr-recon-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.vr-recon-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.vr-recon-verdict {
+  margin: 0;
+}
+
+.vr-recon-note {
+  margin: var(--t-space-1) 0 0;
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.vr-recon-body {
+  margin-top: var(--t-space-2);
+}
+
+.vr-recon-group {
+  margin: 0 0 var(--t-space-0-5);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-text-faint);
+}
+
+.vr-recon-rows {
+  margin: 0;
+}
+
+.vr-recon-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: 2px 0;
+}
+
+.vr-recon-row dt,
+.vr-recon-row dd {
+  margin: 0;
+}
+
+.vr-recon-row--warn {
+  color: var(--t-warn);
+  font-weight: 500;
+}
+
+.vr-chevron {
+  transition: transform 0.15s ease;
+}
+
+.vr-chevron--open {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vr-chevron {
+    transition: none;
+  }
+}
+
+/* --- the form ------------------------------------------------------------------------------- */
+
+.vr-form {
+  margin-top: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.vr-section {
+  padding: var(--t-space-2);
+}
+
+.vr-section-title {
+  margin: 0 0 var(--t-space-1);
+  font-size: 14px;
+}
+
+.vr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.vr-table th,
+.vr-table td {
+  padding: var(--t-space-0-5) var(--t-space-1);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.vr-table thead th {
+  color: var(--t-text-faint);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.vr-th-code {
+  width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  color: var(--t-text-dim);
+}
+
+/* The label column yields; the figure columns never do. */
+.vr-label {
+  width: auto;
+  overflow-wrap: anywhere;
+}
+
+.vr-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  width: 9rem;
+}
+
+.vr-row--total {
+  font-weight: 500;
+}
+
+.vr-subhead th {
+  color: var(--t-text-faint);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.vr-footnote {
+  margin: var(--t-space-1) 0 0;
+  font-size: 12px;
+  color: var(--t-text-faint);
+}
+
+/* --- S3, the drill-down --------------------------------------------------------------------- */
+
+.vr-drill {
+  margin-left: var(--t-space-0-5);
+  background: none;
+  border: 0;
+  padding: 2px;
+  color: var(--t-text-dim);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.vr-drill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vr-drill-entry {
+  display: flex;
+  gap: var(--t-space-1);
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: var(--t-space-0-5) 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vr-drill-date {
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-dim);
+  flex: 0 0 auto;
+}
+
+.vr-drill-more,
+.vr-drill-error {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: 12px;
+  color: var(--t-text-faint);
+}
+
+/* --- the period picker ---------------------------------------------------------------------- */
+
+.vr-picker {
+  position: relative;
+}
+
+.vr-picker-pop {
+  position: absolute;
+  top: calc(100% + var(--t-space-0-5));
+  right: 0;
+  z-index: 20;
+  min-width: 20rem;
+  padding: var(--t-space-1);
+}
+
+.vr-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vr-picker-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: var(--t-space-1);
+  border-radius: var(--t-radius-md);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vr-picker-item:hover {
+  background: var(--t-bg-soft);
+}
+
+.vr-picker-item[aria-checked='true'] {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+.vr-picker-label {
+  font-weight: 500;
+  flex: 0 0 auto;
+}
+
+.vr-picker-range {
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+  flex: 1 1 auto;
+}
+
+.vr-picker-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--t-text-faint);
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+.vr-picker-hint,
+.vr-picker-empty p,
+.vr-picker-error p {
+  margin: 0 0 var(--t-space-0-5);
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+/* --- the filed banner ----------------------------------------------------------------------- */
+
+.vr-filed {
+  margin-top: var(--t-space-2);
+  padding: var(--t-space-2);
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.vr-filed-glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.vr-filed-title {
+  margin: 0;
+  font-weight: 500;
+}
+
+.vr-filed-body {
+  margin: var(--t-space-0-5) 0 0;
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+/* --- S7, the export outcome ------------------------------------------------------------------
+   Both panels sit directly under the header, where the operator clicked, and neither is a toast:
+   a message that vanishes is how someone comes to believe they have a file they do not have. */
+
+.vr-export-refusal,
+.vr-export-check {
+  margin-top: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+/* The cross-check is not an error. It reports a real Rappen gap between the ESTV's recomputation
+   and the booked tax, on a file that IS valid, so it carries the warn accent and never the danger
+   one. The word "Differenz" in the copy is what does the work; the border only supports it. */
+.vr-export-check {
+  border-left: 3px solid var(--t-warn);
+}
+
+.vr-export-refusal {
+  border-left: 3px solid var(--t-danger);
+}
+
+/* --- the refusal ---------------------------------------------------------------------------- */
+
+.vr-refusal-rates {
+  margin: 0 0 var(--t-space-1);
+  padding-left: var(--t-space-2);
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+/* --- S5, the confirm dialog -----------------------------------------------------------------
+   The overlay, the panel width, the title and the footer row are the shared `Modal` primitive's
+   (D118 B2): `.modal-scrim`, `.modal`, `.modal-title` and `.modal-foot` in `Modal.css`. Only the
+   dialog's own CONTENT classes stay here, styling what sits inside the primitive's body. */
+
+.vr-dialog-body {
+  margin: 0 0 var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.vr-dialog-facts {
+  margin: 0 0 var(--t-space-2);
+}
+
+.vr-dialog-facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: 2px 0;
+}
+
+.vr-dialog-facts dt,
+.vr-dialog-facts dd {
+  margin: 0;
+}
+
+.vr-dialog-facts dd {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.vr-dialog-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  margin: 0 0 var(--t-space-2);
+  font-size: 13px;
+}
+
+.vr-dialog-error {
+  margin: 0 0 var(--t-space-1);
+  color: var(--t-danger);
+  font-size: 13px;
+}

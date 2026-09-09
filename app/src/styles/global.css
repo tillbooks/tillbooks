@@ -1,0 +1,1742 @@
+/* Studio global stylesheet.
+   The canonical design tokens live at brand/tokens/tokens.css and are IMPORTED, never duplicated.
+   No hex literals and no new colours in here: every value is a token. Depth is 1px border plus a
+   background step, never a shadow or a gradient. 8-pt grid throughout. */
+
+@import '../../../brand/tokens/tokens.css';
+@import './motion.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* Thin, token-driven scrollbars everywhere (D118 B1, recommendation A: native CSS, zero dependency).
+   `scrollbar-width` and `scrollbar-color` INHERIT, so declaring them on the root reaches every scroll
+   container (the main content, drawers, code blocks) without touching one of them. The thumb is the
+   control-boundary gray and the track is the page ground, both real tokens, so the bar is correct in
+   light and dark alike. No `::-webkit-scrollbar` pseudo-bars (that was option B, rejected): this is
+   the native thin bar, which the modern engines all honour. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--t-border-strong) var(--t-bg);
+}
+
+body {
+  background: var(--t-bg);
+  color: var(--t-text);
+  font-family: var(--t-font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Inline links (A11-G7). There was no global anchor rule at all, so every link that was not a
+   `.btn` and did not name its own colour fell through to the user agent's `#0000EE` (and `#9E9EFF`
+   in dark). That is off-palette in both themes and UN-THEMED in the strict sense the design law
+   uses: dark is not a filter over light, and an element whose dark value nobody chose is a defect.
+   It landed on exactly the wrong links, too: `IBAN hinterlegen`, `Kurs erfassen`, `Buchung
+   ansehen`, `E-Mail-Versand einrichten` are every recovery route on the money path, sitting beside
+   the accent-coloured `Je Satz` on the same screen.
+
+   The value chosen is the one seven surfaces already use for a link (`.help-link`,
+   `.documents-open`, Setup, Periods, Journal, VatSettings, Vat), so this states the app's existing
+   answer rather than inventing an eighth. The underline is kept, not traded for the colour: a link
+   inside a paragraph must be findable without colour vision.
+
+   Specificity keeps this out of the way of everything that already decides for itself: a bare `a`
+   is (0,0,1), so `.btn`, `.rail-link` and `.documents-back` all still win. */
+a {
+  color: var(--t-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--t-accent-dim);
+}
+
+/* A raised surface: separation comes from the background step and space, NOT a box around every
+   card (anti-slop rule 3). No border by default; the elevation is the --t-bg-elev step plus radius.
+   Base padding is deliberately NOT forced here: several surfaces compose `.panel` with a full-width
+   `.panel-head` strip (the drawers) or reset the box to zero (the list panels), and a forced inset
+   would break those. Redesigned cards opt into generous padding with `.panel--pad`, and into a real
+   boundary with `.panel--bordered`. */
+.panel {
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+}
+
+/* Opt-in generous padding for a standalone content card. */
+.panel--pad {
+  padding: var(--t-space-3);
+}
+
+/* Opt-in hairline, used ONLY where a real boundary helps (an overlay edge, a nested well). */
+.panel--bordered {
+  border: 1px solid var(--t-border);
+}
+
+/* A panel's header strip sits one step softer than its body. */
+.panel-head {
+  background: var(--t-bg-soft);
+  border-bottom: 1px solid var(--t-border);
+  padding: var(--t-space-2);
+}
+
+/* The single fixed navigation rail: an elevated panel that never scrolls (only <main> does). It is
+   a flex column so the theme toggle can pin to the foot. The border-right is a real boundary between
+   two regions, which is exactly where a hairline is allowed. */
+.rail {
+  width: 240px;
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  background: var(--t-bg-elev);
+  border-right: 1px solid var(--t-border);
+  padding: var(--t-space-3) var(--t-space-2);
+  overflow: hidden;
+  /* A4 (D118): the width animates when the splitter snaps or steps: a Reveal (the rail is a panel
+     changing its edge, D122 D-I). Suppressed during a pointer drag (.rail--resizing) so the rail
+     tracks the pointer, and nulled entirely under prefers-reduced-motion (the block near the
+     responsive collapse below). */
+  transition: width var(--t-motion-reveal) var(--t-ease-out), flex-basis var(--t-motion-reveal) var(--t-ease-out);
+}
+
+/* A4: no width transition while the pointer is dragging the separator (it would lag the pointer). */
+.rail--resizing {
+  transition: none;
+}
+
+/* The app frame: fixed rail plus one scrolling main. */
+.frame {
+  display: flex;
+  height: 100%;
+}
+
+.frame > main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  /* B1: reserve the scrollbar's gutter so a surface that grows past one viewport does not shove its
+     content sideways the moment the bar appears. `min-width: 0` above is what keeps a wide child
+     (a table, a code block) scrolling INSIDE its own frame instead of forcing the body sideways. */
+  scrollbar-gutter: stable;
+  padding: var(--t-space-3);
+}
+
+/* The rail masthead: product title plus tagline. */
+.rail-head {
+  padding: 0 var(--t-space-2);
+  margin-bottom: var(--t-space-3);
+}
+
+.rail-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--t-text);
+  margin: 0;
+}
+
+.rail-tagline {
+  font-size: 12px;
+  color: var(--t-text-dim);
+  margin: var(--t-space-0-5) 0 0;
+  line-height: 1.4;
+}
+
+/* The rail-head workspace switcher (D24, variant A): names the current workspace and discloses
+   the full list. It reads as a CONTROL, not another nav row: surface fill plus the strong border,
+   exactly the .btn--secondary treatment, so it can never be mistaken for a label. The popup is the
+   OverflowMenu ground (elevated step plus a real border, no shadow, no gradient). */
+.ws-switcher {
+  position: relative;
+  margin-top: var(--t-space-2);
+}
+
+.ws-switcher-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+  width: 100%;
+  min-height: 36px;
+  padding: var(--t-space-1) var(--t-space-1);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-switcher-trigger:hover {
+  background: var(--t-bg-soft);
+  border-color: var(--t-text-faint);
+}
+
+.ws-switcher-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-switcher-chevron {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+/* z-index clears the rail nav below; width follows the trigger so the two read as one control. */
+.ws-switcher-pop {
+  position: absolute;
+  top: calc(100% + var(--t-space-0-5));
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--t-space-0-5);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+}
+
+.ws-switcher-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The list-failed note sits OUTSIDE the role=menu container (a menu owns items and separators
+   only): a quiet sentence plus a retry, so a failed list read is not a dead end. */
+.ws-switcher-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-0-5) var(--t-space-1);
+}
+
+.ws-switcher-note-text {
+  margin: 0;
+  font-size: 12px;
+  color: var(--t-text-dim);
+  line-height: 1.4;
+}
+
+/* The accent-outline recovery control, matching the .error-retry treatment: a real button, never a
+   bare link, reachable by keyboard with the shared focus ring. */
+.ws-switcher-retry {
+  padding: var(--t-space-0-5) var(--t-space-1);
+  background: transparent;
+  border: 1px solid var(--t-accent);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-accent);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ws-switcher-retry:hover {
+  background: var(--t-accent-soft);
+}
+
+/* A two-line item: the workspace name over a dim id-and-currency meta line. The current one wears
+   the same accent-soft pill as the active rail link (tint fill + accent ink + aria-current, never
+   colour alone). 44px keeps every row a full touch target. */
+.ws-switcher-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  background: transparent;
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-switcher-item:hover {
+  background: var(--t-bg-soft);
+}
+
+.ws-switcher-item[aria-current='true'] {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+  font-weight: 500;
+}
+
+.ws-switcher-item-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-switcher-item-meta {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--t-text-dim);
+}
+
+.ws-switcher-item[aria-current='true'] .ws-switcher-item-meta {
+  color: var(--t-accent);
+}
+
+.ws-switcher-sep {
+  height: 1px;
+  margin: var(--t-space-0-5) 0;
+  background: var(--t-border);
+}
+
+/* The nav takes the free height so the footer sits at the bottom of the rail. */
+.rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The tree itself (A1): a flat column of rows. A row's depth reads from the inset of its
+   role="group" container, not from per-row padding, so nesting stays legible without a second glyph
+   column. The tree owns the whole nav region; the middle band still scrolls only if a user expands
+   more than fits, which the default-collapsed state avoids (the rail never scrolls, DESIGN.md). */
+.rail-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* A collapsible node's header row: a group heading or a nested parent. The 32px dense band (D116),
+   icon + label + a chevron pushed to the right edge. It is a heading, never a link, so it never
+   wears the active pill; the whole row is the toggle, so hover is the neutral background step. */
+.rail-treeitem {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 32px;
+  padding: var(--t-space-1) var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text-dim);
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rail-treeitem:hover {
+  color: var(--t-text);
+  background: var(--t-bg-soft);
+}
+
+/* The group heading is quiet, small and in SENTENCE CASE (F-05, friction ledger Phase 2: the
+   design law's "no all-caps, sentence case everywhere" applies to the rail too, and CSS uppercase
+   hurt the German compounds it was set over). It NAMES a nav cluster, so it carries meaning and
+   cannot sit on --t-text-faint, which the design law reserves for text with none (faint measured
+   3.6:1 here, under the 4.5:1 AA floor); it inherits --t-text-dim from the row, which clears AA in
+   both themes. */
+.rail-group-row .rail-group-label {
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+}
+
+/* The disclosure chevron sits at the row's right edge and rotates from pointing right (collapsed) to
+   pointing down (expanded). The rotation is the only motion on the row, the Reveal duration (D122
+   D-I), and it is switched off under reduced motion below. */
+.rail-chevron {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--t-text-faint);
+  transition: transform var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.rail-treeitem[aria-expanded='true'] .rail-chevron {
+  transform: rotate(90deg);
+}
+
+/* The child list of an expanded node (role="group"). Each level insets its children one step; the
+   inset compounds naturally because a parent's group nests inside its group's group. It is the
+   disclosure pattern of the Reveal moment (D122 D-I): the body fades under its chevron in
+   `--t-motion-reveal` (motion.css, `.motion-reveal--under`); collapse is instant (the node unmounts). */
+.rail-tree-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: var(--t-space-2);
+  animation: motion-reveal-under var(--t-motion-reveal) var(--t-ease-out);
+}
+
+/* A destination row: icon plus label. The active state is a soft accent-tinted PILL (tint fill +
+   accent text/icon) plus aria-current, never a left accent bar and never colour alone. */
+.rail-link {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 32px;
+  padding: var(--t-space-1) var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text-dim);
+  text-decoration: none;
+  line-height: 1.2;
+  /* The pill changes in `--t-motion-pill` regardless of what the surface is doing (D122 D-I). */
+  transition:
+    background-color var(--t-motion-pill) var(--t-ease-out),
+    color var(--t-motion-pill) var(--t-ease-out);
+}
+
+/* A nested destination (a parent's child). Its indentation is carried by the role="group" container,
+   so the row keeps the standard inset and only drops its glyph (see nav.ts). It keeps every state a
+   top-level link has: hover, the accent pill, aria-current, the focus ring. */
+.rail-link--nested {
+  padding-left: var(--t-space-2);
+}
+
+.rail-icon {
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+.rail-label {
+  min-width: 0;
+}
+
+.rail-link:hover {
+  color: var(--t-text);
+  background: var(--t-bg-soft);
+}
+
+.rail-link[aria-current='page'] {
+  color: var(--t-accent);
+  background: var(--t-accent-soft);
+  font-weight: 500;
+}
+
+.rail-link[aria-current='page']:hover {
+  color: var(--t-accent);
+  background: var(--t-accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-chevron {
+    transition: none;
+  }
+  .rail-tree-group {
+    animation: none;
+  }
+}
+
+/* --- The Favoriten lane (A3): the per-user personal shortcut section, above the canonical tree ---
+   It renders only when non-empty, and its rows carry pointer drag (a grip) AND keyboard reorder
+   (move up/down buttons), rename and unpin. The controls are quiet by default and surface on hover
+   or keyboard focus, so a resting lane reads as a short list of destinations, not a wall of icons. */
+.rail-favourites {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--t-space-2);
+  padding-bottom: var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+}
+
+/* The Favoriten header: the same quiet, small, sentence-case treatment as a group header, but it is
+   a plain label (the lane is a section, always shown when non-empty, never a collapsible node). */
+.rail-fav-label {
+  padding: var(--t-space-1) var(--t-space-2);
+}
+
+.rail-fav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* One favourite row: the grip, the link (taking the free width) and the trailing controls. The row is
+   the positioning context for the controls, which overlay the row's right edge on hover/focus rather
+   than reserving width, so the label keeps the full row until a user reaches for a control. */
+.rail-fav-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: var(--t-radius-md);
+}
+
+/* While a row is being dragged it rides above its neighbours and dims slightly, so the drop target
+   reads clearly. dnd-kit drives the transform inline; this is only the lift treatment. */
+.rail-fav-row--dragging {
+  opacity: 0.85;
+  background: var(--t-bg-soft);
+  z-index: 1;
+}
+
+/* The pointer-only drag grip. touch-action:none lets the pointer sensor claim the gesture on touch.
+   It is hidden from assistive tech and out of the tab order: the keyboard reorder is the move
+   buttons (WCAG 2.5.7), not this grip. */
+.rail-fav-grip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 32px;
+  color: var(--t-text-faint);
+  cursor: grab;
+  touch-action: none;
+  opacity: 0;
+  transition: opacity var(--t-motion-pill) var(--t-ease-out);
+}
+
+.rail-fav-row:hover .rail-fav-grip,
+.rail-fav-row:focus-within .rail-fav-grip {
+  opacity: 1;
+}
+
+.rail-fav-grip:active {
+  cursor: grabbing;
+}
+
+/* The favourite's navigation link: the rail-link treatment (hover, active pill, focus ring), taking
+   the free width so the controls trail at the right edge. */
+.rail-fav-link {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rail-fav-link .rail-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The inline rename field: sits where the link is, sized to the row, using the app's field tokens. */
+.rail-fav-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-accent);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg);
+  color: var(--t-text);
+  font: inherit;
+  line-height: 1.2;
+}
+
+.rail-fav-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--t-accent);
+}
+
+/* The trailing control cluster: move up, move down, rename, unpin. It OVERLAYS the row's right edge
+   (absolute, so it reserves no width and the label stays full-length), quiet until the row is hovered
+   or holds keyboard focus. It stays in the DOM and focusable throughout, so the keyboard reorder path
+   is real: a Tab into a hidden control reveals the cluster via :focus-within. A soft background lifts
+   it off the label it sits over. */
+.rail-fav-controls {
+  position: absolute;
+  right: 2px;
+  top: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding-left: var(--t-space-1);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-motion-pill) var(--t-ease-out);
+}
+
+.rail-fav-row:hover .rail-fav-controls,
+.rail-fav-row:focus-within .rail-fav-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rail-fav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--t-radius-sm);
+  background: transparent;
+  color: var(--t-text-faint);
+  cursor: pointer;
+}
+
+.rail-fav-btn:hover:not(:disabled) {
+  color: var(--t-text);
+  background: var(--t-bg-soft);
+}
+
+.rail-fav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* The unpin star rests in the accent (it is the "this is a favourite" mark). */
+.rail-fav-btn--unpin {
+  color: var(--t-accent);
+}
+
+.rail-fav-glyph {
+  flex: 0 0 auto;
+}
+
+/* --- The tree leaf pin affordance: a star at each destination's right edge (A3) ------------------
+   The leaf wrapper is presentational (the anchor inside is the treeitem); it lays the link and its
+   pin star in one row. The star is quiet until the leaf is hovered or focused, and stays lit when the
+   surface is already pinned, so the tree reads unchanged until a user reaches for a row. */
+/* The treeitem row (F-05: a real anchor) carries .rail-link (its flex layout, hover/active pill and
+   focus ring). The label eats the free width so the pin star trails at the right edge; a count
+   badge, when present, sits just before it. */
+.rail-leaf > .rail-label {
+  flex: 1 1 auto;
+}
+
+.rail-pin {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--t-radius-sm);
+  background: transparent;
+  color: var(--t-text-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--t-motion-pill) var(--t-ease-out);
+}
+
+.rail-leaf:hover .rail-pin,
+.rail-leaf:focus-within .rail-pin,
+.rail-pin:focus-visible,
+.rail-pin--on {
+  opacity: 1;
+}
+
+.rail-pin:hover {
+  color: var(--t-text);
+  background: var(--t-bg-soft);
+}
+
+/* A pinned surface's star rests in the accent, matching the unpin star in the lane above. */
+.rail-pin--on {
+  color: var(--t-accent);
+}
+
+.rail-pin-glyph {
+  flex: 0 0 auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-fav-grip,
+  .rail-fav-controls,
+  .rail-pin {
+    transition: none;
+  }
+}
+
+/* Touch devices have no hover, so a reveal-on-hover control would be unreachable. On a pointer that
+   cannot hover, the favourite controls and the pin star are always shown; the controls flow inline
+   (not as a right-edge overlay) so they never sit invisibly over the navigation target. */
+@media (hover: none) {
+  .rail-fav-controls {
+    position: static;
+    opacity: 1;
+    pointer-events: auto;
+    background: transparent;
+    padding-left: 0;
+  }
+  .rail-fav-grip,
+  .rail-pin {
+    opacity: 1;
+  }
+}
+
+/* A compact icon button. 36px keeps it a comfortable tap target on the 8-pt grid (nudged by 4). The
+   density toggle (B3) is the theme toggle's twin in the footer, so it shares this exact treatment. */
+.theme-toggle,
+.density-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--t-radius-md);
+  background: transparent;
+  color: var(--t-text-dim);
+  cursor: pointer;
+}
+
+.theme-toggle:hover,
+.density-toggle:hover {
+  color: var(--t-text);
+  background: var(--t-bg-soft);
+}
+
+/* Shared control system. Every surface uses these so a button reads the same everywhere and the
+   real action never looks disabled. A control (unlike a panel) may carry a single subtle shadow.
+
+   It sits on a <button> OR on a router <a>: an empty state's way out is often a route, not a
+   handler, and the two must be visually identical or the link reads as decoration. `text-decoration`
+   and `color` are therefore stated rather than inherited, because there is no global anchor reset
+   and a UA-underlined, UA-blue "button" is what an unstated one gives you. `line-height: 1` plus a
+   fixed height and `inline-flex` centring already make the anchor's box match the button's. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--t-space-0-5);
+  /* B3 density: 36px in Komfortabel, 32px in Kompakt (never below the D116 dense-band floor). */
+  height: var(--t-control-h);
+  padding: 0 var(--t-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  font: inherit;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  /* State changes in `--t-motion-pill`; the press (Commit, D122 D-I) scales in `--t-motion-press`. */
+  transition:
+    background-color var(--t-motion-pill) var(--t-ease-out),
+    border-color var(--t-motion-pill) var(--t-ease-out),
+    color var(--t-motion-pill) var(--t-ease-out),
+    transform var(--t-motion-press) var(--t-ease-in);
+}
+
+/* The pressed control scales to `--t-press-scale`: the first beat of every commit, felt under the
+   pointer before the row lands. Never on a disabled control, which cannot commit anything. */
+.btn:active:not(:disabled) {
+  transform: scale(var(--t-press-scale));
+}
+
+/* An anchor has no :disabled, and a link that is not a real action should not be rendered at all,
+   so the hover rules of each variant are enough. This only re-states what the UA would otherwise
+   win on specificity for. */
+a.btn:hover {
+  text-decoration: none;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+}
+
+/* Primary: a solid accent fill with on-accent text and a subtle lift. The obvious main action. */
+.btn--primary {
+  background: var(--t-accent);
+  color: var(--t-on-accent);
+  box-shadow: var(--t-shadow-control);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--t-accent-dim);
+}
+
+.btn--primary:disabled {
+  background: var(--t-bg-soft);
+  color: var(--t-text-faint);
+  box-shadow: none;
+}
+
+/* Secondary: a surface fill with a real, visible border. Clearly interactive, never a ghost. */
+.btn--secondary {
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+  border-color: var(--t-border-strong);
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: var(--t-bg-soft);
+  border-color: var(--t-text-faint);
+}
+
+.btn--secondary:disabled {
+  color: var(--t-text-faint);
+  border-color: var(--t-border);
+}
+
+/* Accent: the accent stated as a tint plus an outline instead of a solid fill. Two uses, both of
+   them cases where the solid fill of `--primary` would be wrong:
+   1. The action is consequential enough that a solid accent invites the careless click. Posting an
+      entry is the case this variant exists for, and `EntryDrawer` documents the intent.
+   2. It is a go action inside a disclosed sub-form on a surface that already spends its one solid
+      primary elsewhere, so the accent budget stays honest and the real action still reads as the
+      real action.
+   A surface shows at most one solid `--primary`. */
+.btn--accent {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+  border-color: var(--t-accent-dim);
+}
+
+.btn--accent:hover:not(:disabled) {
+  background: var(--t-accent-soft);
+  border-color: var(--t-accent);
+}
+
+.btn--accent:disabled {
+  background: transparent;
+  color: var(--t-text-faint);
+  border-color: var(--t-border);
+}
+
+/* Ghost: text with a hover fill. Tertiary and overflow actions. */
+.btn--ghost {
+  background: transparent;
+  color: var(--t-text-dim);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+}
+
+.btn--ghost:disabled {
+  color: var(--t-text-faint);
+}
+
+/* Danger: an outline that fills on hover, so the solid accent never sits on an irreversible action. */
+.btn--danger {
+  background: transparent;
+  color: var(--t-danger);
+  border-color: var(--t-danger);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--t-danger);
+  /* The on-DANGER ink, not a borrow of on-accent: this text sits on the danger fill, so it is tuned
+     to it (both AA-contrast, and decoupled if either fill moves). */
+  color: var(--t-on-danger);
+}
+
+.btn--danger:disabled {
+  color: var(--t-text-faint);
+  border-color: var(--t-border);
+}
+
+/* A compact size for dense toolbars and table rows. */
+.btn--sm {
+  height: 28px;
+  padding: 0 var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  font-size: 13px;
+}
+
+/* B3 density: Kompakt tightens the vertical rhythm of money/number TABLE cells (the shared
+   `.t-num` / `.t-money` utility, or `td[data-money]`). It is scoped to `td` so the same classes on an
+   inline money span are untouched, and it is applied only in Kompakt, so Komfortabel keeps each
+   surface's own row padding and the default view does not shift. The ancestor attribute selector
+   lifts specificity above a bare surface `.table td`, so the denser rhythm actually wins where it is
+   asked for. Row height stays above the D116 32px floor: the money type is 13px and the padding adds
+   at least 8px, so a cell measures ~29px of ink inside a ~32px+ row. */
+[data-density='kompakt'] td.t-num,
+[data-density='kompakt'] td.t-money,
+[data-density='kompakt'] td[data-money] {
+  padding-block: var(--t-row-pad-y);
+}
+
+/* Icon-only: a square control. Composes with a colour variant and, optionally, with `--sm`. The
+   caller always supplies an aria-label, because there is no text to read. */
+.btn--icon {
+  width: 36px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.btn--icon.btn--sm {
+  width: 28px;
+}
+
+/* A row inside an overflow menu: full width, text left, no side border. It composes with a colour
+   variant, so the destructive item stays `--danger` and keeps the hover fill that says so. It is
+   defined AFTER the colour variants so its border reset wins at equal specificity. */
+.btn--menu {
+  width: 100%;
+  justify-content: flex-start;
+  border-color: transparent;
+}
+
+/* Fields read as editable: a panel-light ground, a visible border, a placeholder distinct from a
+   real value. This is a CONTROL class, so it is scoped to real controls by element: a bare `.field`
+   selector would also hit any wrapper that happens to carry the name and clamp it to 36px. */
+input.field,
+select.field,
+textarea.field {
+  height: var(--t-control-h);
+  padding: 0 var(--t-space-1);
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+}
+
+textarea.field {
+  height: auto;
+  padding: var(--t-space-1);
+}
+
+input.field::placeholder,
+textarea.field::placeholder {
+  color: var(--t-text-faint);
+}
+
+input.field:hover:not(:disabled),
+select.field:hover:not(:disabled),
+textarea.field:hover:not(:disabled) {
+  border-color: var(--t-text-faint);
+}
+
+input.field:disabled,
+select.field:disabled,
+textarea.field:disabled {
+  background: var(--t-bg-soft);
+  color: var(--t-text-faint);
+  cursor: not-allowed;
+}
+
+/* Form layout primitives. One pattern, shared by every surface that stacks labelled controls.
+   A form is a `.form-stack`; each labelled control is a `.form-row` (label over control); the
+   `.form-actions` row closes the form. The row carries the LAYOUT only and never a fixed height:
+   its height is whatever the label, the control, and any hint or error below them add up to, so a
+   36px control can never spill out of the row and collide with the actions row underneath. */
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.form-row > label,
+.form-row .field-label-row > label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+/* The controls inside a form row inherit the shared control height (--t-control-h: 36px comfortable,
+   32px compact), on the page ground so an editable field reads as an inset against the elevated
+   panel around it. */
+.form-row > input,
+.form-row > select {
+  height: var(--t-control-h);
+  padding: 0 var(--t-space-2);
+  background: var(--t-bg);
+  color: var(--t-text);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+}
+
+.form-row > textarea {
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg);
+  color: var(--t-text);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+}
+
+.form-row > input::placeholder,
+.form-row > textarea::placeholder {
+  color: var(--t-text-faint);
+}
+
+.form-row > input[aria-invalid='true'],
+.form-row > select[aria-invalid='true'] {
+  border-color: var(--t-danger);
+}
+
+.form-row > input:disabled,
+.form-row > select:disabled {
+  background: var(--t-bg-soft);
+  color: var(--t-text-faint);
+  cursor: not-allowed;
+}
+
+/* The support text under a control. These three names are UNPREFIXED, so they are global whatever
+   file they sit in. They used to be defined twice, once in Setup.css and once in VatSettings.css,
+   with different max-widths, and which one won depended on stylesheet order. One definition, here
+   with the rest of the form primitives, so it cannot drift again. */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+  max-width: 60ch;
+}
+
+/* A disabled control's precondition, stated beside it (D15/C3). One class for every lockable
+   surface, so "why can I not edit this" always looks the same and is always visible: a tooltip
+   would be hover-only, which hides the reason from touch and from the keyboard. Neutral, not a
+   status colour, because a lock is a fact and not an error. The padlock glyph carries no meaning
+   the sentence does not, so it is decorative and the text does the work. */
+.lock-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+  max-width: 60ch;
+}
+
+.lock-note-glyph {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+/* Never colour alone: every call site pairs this with an alert glyph and role="alert". */
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-danger);
+}
+
+/* Inline save status: glyph plus text, never colour alone. Unprefixed, and `.form-actions` below
+   already depends on it, so it belongs here rather than in one surface's stylesheet. */
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-text-dim);
+}
+
+.status-ok {
+  color: var(--t-success);
+}
+
+.status-error {
+  color: var(--t-danger);
+}
+
+.status-glyph {
+  flex: 0 0 auto;
+}
+
+.status-glyph-ok {
+  color: var(--t-success);
+}
+
+.status-glyph-error {
+  color: var(--t-danger);
+}
+
+/* The actions row that closes a form: the status line takes the free space, the buttons trail. */
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  margin-top: var(--t-space-1);
+}
+
+.form-actions > .status-line,
+.form-actions > .vat-status {
+  margin-right: auto;
+}
+
+/* Five-state primitives. */
+
+/* Skeleton: a block that matches the real layout, animated with opacity only (no colour signal). */
+.skeleton {
+  display: block;
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* A centred state panel used by empty and permission-denied. */
+.state-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  padding: var(--t-space-4);
+}
+
+.state-glyph {
+  color: var(--t-text-dim);
+  flex: 0 0 auto;
+}
+
+.state-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.state-body {
+  color: var(--t-text-dim);
+  margin: 0;
+  max-width: 48ch;
+}
+
+/* The state panels' action used to carry its own `.state-action` button style: a second, parallel
+   button system sitting outside the shared one every other surface uses. It is folded into `.btn`
+   now, and only the spacing that is genuinely about the panel (not about the control) survives. */
+.state-panel .btn {
+  margin-top: var(--t-space-1);
+}
+
+/* Error banner: the danger colour PLUS a glyph and a sign, never colour alone. role="alert". */
+.error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.error-glyph {
+  color: var(--t-danger);
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.error-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--t-danger);
+}
+
+.error-body {
+  margin: var(--t-space-0-5) 0 0;
+  color: var(--t-text);
+}
+
+.error-retry {
+  margin-top: var(--t-space-1);
+  padding: var(--t-space-0-5) var(--t-space-2);
+  background: transparent;
+  color: var(--t-text);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Tooltip: a supplemental description tied to its trigger by aria-describedby. An inverted mini
+   popover (--t-text ground, --t-bg ink), hidden until the trigger is hovered or focused (.is-open),
+   positioned above or below. The opacity transition is honoured or dropped by the global
+   reduced-motion guard. */
+.tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.tooltip {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: max-content;
+  max-width: 240px;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-text);
+  color: var(--t-bg);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--t-motion-pill) var(--t-ease-out);
+}
+
+.tooltip-top {
+  bottom: calc(100% + var(--t-space-0-5));
+}
+
+.tooltip-bottom {
+  top: calc(100% + var(--t-space-0-5));
+}
+
+.tooltip.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Help affordance: a small "?" that discloses a titled popover with an optional link. The popover is
+   an elevated surface with a hairline: an overlay is exactly where a real boundary helps. */
+.help-hint {
+  position: relative;
+  display: inline-flex;
+}
+
+.help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--t-radius-full);
+  background: transparent;
+  color: var(--t-text-faint);
+  cursor: pointer;
+}
+
+.help-trigger:hover,
+.help-trigger[aria-expanded='true'] {
+  color: var(--t-accent);
+  background: var(--t-accent-soft);
+}
+
+.help-popover {
+  position: absolute;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  width: max-content;
+  max-width: 280px;
+  padding: var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  color: var(--t-text);
+}
+
+.help-bottom {
+  top: calc(100% + var(--t-space-0-5));
+}
+
+.help-top {
+  bottom: calc(100% + var(--t-space-0-5));
+}
+
+.help-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.help-body {
+  font-size: 13px;
+  color: var(--t-text-dim);
+  line-height: 1.5;
+}
+
+.help-link {
+  width: fit-content;
+  font-size: 13px;
+  color: var(--t-accent);
+  text-decoration: none;
+}
+
+.help-link:hover {
+  text-decoration: underline;
+}
+
+/* G17: the panel's structured layers. Citations are a quiet list below the body; related terms are
+   real buttons; the leaves-device note is plain ink, never an accent (zero accent budget on any
+   guidance affordance). */
+.help-articles {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--t-text-faint);
+}
+
+.help-see-also {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.help-see-also-label {
+  font-size: 12px;
+  color: var(--t-text-faint);
+}
+
+.help-see-also-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.help-see-also-term {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  color: var(--t-text);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.help-leaves-device {
+  color: var(--t-text-faint);
+}
+
+/* G17: the marked term inside a sentence. A REAL button (focusable, accessible name), styled as
+   running text with a dotted underline as the one boundary signal. Inline, so it takes the WCAG
+   2.5.8 inline-target exemption; the focus ring stays the shared one. */
+.concept-term {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.concept-term[aria-expanded='true'] {
+  text-decoration-style: solid;
+}
+
+/* G17: the centred, palette-opened panel. Same component, same roles; fixed placement because
+   there is no trigger to anchor to. */
+.help-hint--center {
+  position: static;
+}
+
+.help-popover.help-center {
+  position: fixed;
+  top: 20vh;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 360px;
+  z-index: 60;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.24);
+}
+
+/* Accessible label that stays off-screen but reachable by assistive tech. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ============================================================================================== */
+/* G16, the Studio shell additions: skip link, palette trigger, chrome slots, responsive drawer.  */
+/* ============================================================================================== */
+
+/* WCAG 2.2 bypass-blocks: off-screen until focused, then a real, visible control. */
+.skip-link {
+  position: absolute;
+  left: var(--t-space-2);
+  top: -3rem;
+  z-index: 60;
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  transition: top var(--t-motion-pill) var(--t-ease-out);
+}
+.skip-link:focus {
+  top: var(--t-space-2);
+}
+
+/* The palette trigger: a control, not a nav row, the widest door into the product. */
+.rail-search {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  width: 100%;
+  margin-top: var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text-dim);
+  cursor: pointer;
+  text-align: left;
+}
+.rail-search:hover {
+  border-color: var(--t-accent);
+}
+.rail-search-label {
+  flex: 1 1 auto;
+  font-size: 13px;
+}
+/* The shortcut hint on the palette trigger. It names the key a person presses, so it carries meaning
+   and moves off --t-text-faint (3.3:1, under AA) to --t-text-dim (clears 4.5:1 in both themes). */
+.rail-search-kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--t-text-dim);
+}
+
+/* The rail footer utility cluster: trust indicator, bell, feedback, theme. Zero accent. */
+.rail-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2) var(--t-space-2) 0;
+  margin-top: var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+}
+
+/* The /agent count badge and the bell badge: text plus glyph, never colour alone, never the accent. */
+.rail-badge {
+  margin-left: auto;
+  min-width: 1.25rem;
+  padding: 0 var(--t-space-0-5);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--t-text-dim);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+.rail-bell {
+  display: inline-flex;
+  align-items: center;
+  color: var(--t-text-dim);
+}
+
+/* A slot that threw: a compact, reportable error in place of the fragment (design §3f). */
+.slot-error {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: 11px;
+  color: var(--t-danger);
+}
+
+/* The responsive collapse: the hamburger is hidden above the collapse width and the rail is fixed. */
+.rail-hamburger {
+  display: none;
+  position: absolute;
+  left: var(--t-space-2);
+  top: var(--t-space-2);
+  z-index: 55;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+}
+.rail-scrim {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .rail-hamburger {
+    display: block;
+  }
+  /* Below the collapse width the rail is an overlay drawer, off-screen until opened. */
+  .rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 58;
+    transform: translateX(-105%);
+    transition: transform var(--t-motion-reveal) var(--t-ease-out);
+  }
+  .rail--open {
+    transform: translateX(0);
+  }
+  .frame--drawer-open .rail-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 56;
+    background: rgba(0, 0, 0, 0.4);
+  }
+  .frame > main {
+    padding-top: calc(var(--t-space-3) + 2.5rem);
+  }
+  /* A4: the splitter is a desktop affordance; below the collapse width the drawer takes over. */
+  .rail-resizer {
+    display: none;
+  }
+}
+
+/* Honour a reduced-motion preference: no drawer slide, no skip-link glide, no rail width glide. */
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .skip-link {
+    transition: none;
+  }
+}
+
+/* ============================================================================================== */
+/* A4 (D118): the resizable rail. The hand-rolled window splitter, the collapsed icon strip and its */
+/* flyouts. No resize library (D2). Every colour is a token; motion lives on .rail above.           */
+/* ============================================================================================== */
+
+/* The draggable separator between the rail and main: a thin, focusable col-resize handle with a
+   centred grip. It is a real flex item, so the rail and main meet along it. */
+.rail-resizer {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: var(--t-space-1);
+  position: relative;
+  z-index: 5;
+  cursor: col-resize;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.rail-resizer-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 28px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-border);
+}
+
+.rail-resizer:hover .rail-resizer-grip {
+  background: var(--t-border-strong);
+}
+
+.rail-resizer:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: -2px;
+}
+
+.rail-resizer:focus-visible .rail-resizer-grip {
+  background: var(--t-accent);
+}
+
+/* The collapsed icon strip: centre the icons, tighten the horizontal padding to fit 56px. */
+.rail--icon {
+  padding: var(--t-space-3) var(--t-space-0-5);
+  align-items: center;
+}
+
+.rail-head--icon,
+.rail-footer--icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+}
+
+.rail-head--icon {
+  margin-bottom: var(--t-space-2);
+}
+
+.rail-footer--icon {
+  margin-top: var(--t-space-2);
+}
+
+.rail-icons {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-height: 0;
+  overflow-y: auto;
+  /* A thin scrollbar only if the strip outgrows a short viewport; the flyouts are fixed, so this
+     never clips them. */
+  scrollbar-width: thin;
+}
+
+.rail-icon-entry {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.rail-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  color: var(--t-text-dim);
+  cursor: pointer;
+}
+
+.rail-icon-btn:hover {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+}
+
+/* The active surface's icon: the same soft accent-tinted pill the tree's active row uses, so the
+   active state is never signalled by colour alone (aria-current carries it too). */
+.rail-icon-btn--active {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+/* The flyout: a fixed-position disclosure panel anchored beside its icon, so it escapes the rail's
+   overflow clip. The OverflowMenu ground: elevated step plus a real border, no shadow, no gradient. */
+.rail-flyout {
+  position: fixed;
+  z-index: 60;
+  min-width: 180px;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--t-space-0-5);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+}
+
+.rail-flyout-title {
+  margin: 0;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-text-dim);
+}
+
+.rail-flyout-label {
+  padding: var(--t-space-0-5) var(--t-space-1);
+  font-size: 13px;
+  color: var(--t-text);
+}
+
+.rail-flyout-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  background: transparent;
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rail-flyout-link:hover {
+  background: var(--t-bg-soft);
+}
+
+.rail-flyout-link[aria-current='page'] {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+/* ============================================================================================== */
+/* The shared workspace-mode banner (D89): one bounded status strip announcing a non-production     */
+/* workspace. It lives here, not in a surface stylesheet, because TWO surfaces render it:           */
+/* TestmandantPanel (Migration) and DemoBanner (Onboarding). When its treatment sat in             */
+/* Migration.css, the demo banner only got its ground and edge if the Migration surface had         */
+/* already loaded its CSS, which is a load-order accident, not a rule. A banner is a genuine         */
+/* bounded affordance, so it earns its hairline (DESIGN.md: a border only where a boundary helps).  */
+/* ============================================================================================== */
+.workspace-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+.workspace-mode-glyph {
+  font-size: 1.25rem;
+}
+.workspace-mode-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.workspace-mode-plan {
+  color: var(--t-text-dim);
+  font-size: 0.875rem;
+}

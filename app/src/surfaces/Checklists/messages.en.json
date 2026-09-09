@@ -1,0 +1,191 @@
+{
+  "nav": {
+    "checklists": "Checklists"
+  },
+  "attention": {
+    "queue": {
+      "checklistItemsDue": "Checklists: items due"
+    },
+    "item": {
+      "checklistItem": {
+        "title": "VAT {period}: {title}",
+        "subtitle": "{template}, owner: {owner}"
+      }
+    },
+    "act": {
+      "openChecklist": "Open checklist"
+    }
+  },
+  "help": {
+    "Checklists": {
+      "title": "Checklists",
+      "body": "A checklist walks you through a recurring job step by step, starting with the VAT period: from the open books to a filed, locked and paid return. Checks the system knows by itself fulfil themselves; steps only you can confirm carry your date and your name. Every step has a deadline, and whatever falls due appears in the attention hub. An agent walks the same list through the same verbs.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  },
+  "checklists": {
+    "title": "Checklists",
+    "loading": "Loading your checklists",
+    "backToList": "Back to the list",
+    "rangeTo": "to",
+    "due": "due {date}",
+    "checkKey": "Check: {key}",
+    "needsManage": "Needs the manage_checklists right.",
+    "needsFile": "Needs the vat_file right.",
+    "denied": {
+      "read": "You lack the read_books right, so no checklist is shown here."
+    },
+    "error": {
+      "transport": "The checklists could not be loaded.",
+      "refused": "Refused: {code}"
+    },
+    "empty": {
+      "title": "No checklist yet",
+      "hint": "Start the VAT period for the last filing period that has ended. The steps and deadlines come by themselves."
+    },
+    "missing": {
+      "title": "This checklist does not exist",
+      "hint": "The link points at no checklist in this workspace."
+    },
+    "group": {
+      "open": "Open ({count})",
+      "openEmpty": "Nothing open.",
+      "done": "Done ({count})",
+      "abandoned": "Abandoned ({count})"
+    },
+    "run": {
+      "title": "{template} {period}",
+      "progress": "{done} of {total} steps"
+    },
+    "runStatus": {
+      "open": "open",
+      "done": "done",
+      "abandoned": "abandoned"
+    },
+    "detail": {
+      "period": "{period}, {from} to {to}:",
+      "journey": "Checklist steps",
+      "abandoned": "Abandoned: {reason}",
+      "done": "Every step is done or not applicable."
+    },
+    "owner": {
+      "human": "you",
+      "agent": "an agent",
+      "system": "the system"
+    },
+    "actor": {
+      "agent": "the agent",
+      "studio": "you",
+      "member": "a member",
+      "unknown": "someone"
+    },
+    "state": {
+      "open": "open",
+      "fulfilled": "fulfilled",
+      "done": "done",
+      "doneAt": "done on {date} by {who}",
+      "signed": "signed off on {date} by {who}",
+      "attested": "attested on {date} by {who}",
+      "skipped": "not applicable",
+      "stale": "sign-off void",
+      "unavailable": "check unavailable"
+    },
+    "note": {
+      "blockedBy": "Waits on: {item}",
+      "skipped": "Reason: {reason}",
+      "checkPending": "{check}: {count} pending",
+      "checkFailed": "{check}: not fulfilled yet",
+      "checkUnavailable": "{check}: check unavailable",
+      "stale": "The return changed since the sign-off. Recompute it and sign off again.",
+      "preconditionOpen": "The check {check} has to pass first."
+    },
+    "check": {
+      "no_drafts": "No drafts up to the period end",
+      "bank_reconciled": "Bank reconciled",
+      "no_missing_tax_codes": "Tax codes complete",
+      "vat_return_computed": "Return computed",
+      "abstimmung_resolved": "Bridge resolved",
+      "period_locked_vat_filed": "VAT period locked"
+    },
+    "item": {
+      "no_drafts": "No drafts up to the period end",
+      "bank_reconciled": "Bank reconciled",
+      "tax_codes_complete": "Tax codes complete",
+      "vat_return_computed": "Return computed",
+      "abstimmung_reviewed": "Bridge reviewed",
+      "ech0217_exported": "eCH-0217 exported",
+      "eportal_filed": "Filed in the ESTV ePortal",
+      "period_locked": "Lock the VAT period",
+      "settlement_booked": "Payment or credit booked"
+    },
+    "act": {
+      "open": "Open",
+      "resolve": "Resolve",
+      "compute": "Compute the return",
+      "export": "Export on the VAT return",
+      "attest": "Filed on",
+      "sign": "Sign off the bridge",
+      "confirmPayment": "Confirm the payment",
+      "markFiled": "Mark as filed",
+      "skip": "Not applicable",
+      "reopen": "Reopen",
+      "abandon": "Abandon checklist"
+    },
+    "dialog": {
+      "close": "Close",
+      "cancel": "Cancel"
+    },
+    "start": {
+      "title": "Start a checklist",
+      "template": "VAT period",
+      "period": "Filing period",
+      "filedSuffix": "(filed)",
+      "action": "Start checklist",
+      "working": "Starting",
+      "consequence": "Creates the checklist with every step and deadline. A checklist is abandoned, never deleted.",
+      "needsConfig": "Without VAT settings there are no filing periods.",
+      "needsConfigCta": "Set up VAT",
+      "notFilable": "That is not a filing period of this year. Possible: {periods}"
+    },
+    "attest": {
+      "title": "Filed in the ESTV ePortal",
+      "portal": "Open the ESTV ePortal (outside TILL)",
+      "portalUrl": "https://www.estv.admin.ch/de/mwst-online-abrechnen",
+      "date": "Filed on",
+      "action": "Confirm",
+      "working": "Confirming",
+      "consequence": "Marks the step as filed. The period is not locked by this.",
+      "needsDate": "Give the filing date.",
+      "beforeExport": "The date lies before the export on {exportedAt}.",
+      "alreadyAttested": "The filing is already attested on {date}. Reopen the step first."
+    },
+    "skip": {
+      "title": "{item}: not applicable",
+      "reason": "Reason",
+      "action": "Mark as not applicable",
+      "working": "Saving",
+      "consequence": "The step counts as not applicable and stays visible."
+    },
+    "reason": {
+      "needed": "Give a reason."
+    },
+    "signoff": {
+      "title": "{item}",
+      "action": "Sign off",
+      "working": "Signing off",
+      "reference": "Reference",
+      "referenceHint": "Bank transaction or journal entry",
+      "needsReference": "Name the reference that proves the payment.",
+      "consequenceReview": "Confirms the bridge for the return as computed now. If the return changes, the sign-off becomes void.",
+      "consequencePayment": "Confirms that the payment or credit is booked. The reference stays on the step."
+    },
+    "abandon": {
+      "title": "Abandon checklist {period}",
+      "reason": "Reason",
+      "action": "Confirm abandon",
+      "working": "Abandoning",
+      "consequence": "The checklist stays visible and feeds no attention items any more. It is not deleted."
+    }
+  }
+}

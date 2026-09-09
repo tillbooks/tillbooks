@@ -1,0 +1,204 @@
+{
+  "vat": {
+    "settings": {
+      "title": "VAT settings"
+    },
+    "noWorkspace": "No workspace selected.",
+    "noWorkspaceHint": "Set up a workspace first to configure VAT.",
+    "emptyTitle": "VAT is not enabled for this workspace yet.",
+    "emptyHint": "Enable VAT to seed the default tax codes and choose a method and accounting timing.",
+    "enable": "Enable VAT",
+    "save": "Save",
+    "saving": "Saving",
+    "saved": "Saved",
+    "cancel": "Cancel",
+    "method": {
+      "label": "Method",
+      "effektiv": "Effective",
+      "saldo": "Net tax rate",
+      "none": "None"
+    },
+    "timing": {
+      "label": "Accounting",
+      "ist": "Cash (collected)",
+      "soll": "Accrual (agreed)"
+    },
+    "registered": "VAT-registered",
+    "registeredHint": "This workspace accounts for VAT.",
+    "vatNumber": "VAT number",
+    "vatNumberPlaceholder": "CHE-123.456.789 MWST",
+    "saldo": {
+      "title": "Net tax rates",
+      "hint": "One rate per business activity above 10% of turnover (no fixed cap since 1.1.2025).",
+      "max": "One rate per business activity.",
+      "rate": "Net tax rate",
+      "position": "Net tax rate {n}",
+      "choose": "Choose a rate",
+      "add": "Add rate",
+      "remove": "Remove rate {n}",
+      "ziffer": "Line {ziffer}",
+      "duplicate": "This rate is already listed.",
+      "empty": "No net tax rate yet. Add at least one.",
+      "noInputDeduction": "Under the net tax rate, input tax is not separately reclaimed.",
+      "noInputDeductionCite": "MWSTG Art. 37"
+    },
+    "activity": {
+      "title": "Business activities",
+      "hintRequired": "With more than one approved net tax rate you must book the revenue separately per rate. Assign each activity its revenue accounts.",
+      "hintOptional": "With a single net tax rate no mapping is needed. It becomes necessary as soon as a second rate is approved.",
+      "empty": "No activity yet.",
+      "add": "Add activity",
+      "removeShort": "Remove",
+      "remove": "Remove activity {name}",
+      "nameLabel": "Name of activity {n}",
+      "namePlaceholder": "e.g. Restaurant service",
+      "rateLabel": "Net tax rate for {name}",
+      "accounts": "Revenue accounts",
+      "noAccounts": "This chart carries no revenue accounts.",
+      "orphan": "This rate is no longer approved above. Pick an approved rate or remove the activity.",
+      "contested": "These accounts are assigned more than once: {accounts}. A revenue account belongs to exactly one activity.",
+      "hintRequiredCite": "MWSTV Art. 84 Abs. 3"
+    },
+    "branch": {
+      "title": "What changed?",
+      "close": "Close",
+      "why": "This workspace already holds posted turnover that the current approval governs. The two options produce different figures, so the choice is yours.",
+      "legend": "Kind of change",
+      "grant": "The ESTV approved new rates",
+      "correction": "The current approval was recorded wrongly",
+      "validFrom": "Valid from",
+      "validFromHint": "From which day do the new rates apply?",
+      "newLastDay": "The current approval (from {from}) now runs until {until}. Periods already filed are unchanged.",
+      "correctionHint": "The open approval is overwritten. Earlier approvals and periods already filed are unchanged."
+    },
+    "basis": {
+      "title": "Declaration basis for tax period {period}",
+      "hint": "Optional: you may declare the whole taxable turnover at the highest approved net tax rate (MWSTV Art. 88 Abs. 6). It simplifies the return and usually increases the tax due.",
+      "legend": "Basis of the declaration",
+      "perActivity": "Per activity at its approved rate (Art. 88 Abs. 1)",
+      "highestRate": "Whole turnover at the highest rate (Art. 88 Abs. 6)",
+      "notCarried": "The choice applies to this tax period only and is not carried into the next year."
+    },
+    "history": {
+      "title": "Approval history",
+      "hint": "Under the net tax rate method no journal line carries a rate. This history is therefore the only evidence of which rates a filed period was computed with.",
+      "open": "From {from}, current",
+      "closed": "{from} until {until}"
+    },
+    "codes": {
+      "title": "Tax codes",
+      "seed": "Seed default codes",
+      "empty": "No tax codes yet.",
+      "add": "Add code"
+    },
+    "code": {
+      "code": "Code",
+      "kindLabel": "Kind",
+      "rate": "Rate",
+      "rateBpLabel": "Rate (basis points)",
+      "rateBpHint": "810 = 8.1%",
+      "formLine": "Line",
+      "label": "Label",
+      "statusLabel": "Status",
+      "status": {
+        "active": "active",
+        "archived": "archived"
+      },
+      "archive": "Archive",
+      "archiveLabel": "Archive code {code}",
+      "reactivate": "Reactivate",
+      "reactivateLabel": "Reactivate code {code}",
+      "confirmArchiveTitle": "Archive this tax code?",
+      "confirmArchive": "Code {code} stops appearing on new documents. Posted lines that already reference it keep resolving, so nothing filed changes. You can reactivate it later.",
+      "confirmArchiveClose": "Keep the code",
+      "kind": {
+        "output": "Output tax",
+        "input": "Input tax",
+        "reverseCharge": "Reverse charge",
+        "import": "Import tax",
+        "exempt": "Exempt",
+        "zero": "Zero-rated (0%)",
+        "none": "None"
+      }
+    },
+    "account": {
+      "default": "Default tax code"
+    },
+    "error": {
+      "invalidSaldoRate": "Rate not on the current ESTV list.",
+      "rateUnit": "Enter basis points as a whole number 0..10000 (810 = 8.1%).",
+      "invalidVatNumber": "Format must be CHE-###.###.### MWST.",
+      "invalidActivity": "An activity is incomplete or names a rate this approval does not carry.",
+      "unknownAccount": "An assigned revenue account does not exist in this chart.",
+      "generationFiled": "A period this approval governs is already filed. Record the new rates as a new approval and file a correction return for the periods already sent.",
+      "grantOutOfOrder": "A new approval starts after the one it supersedes. Pick a later day, or correct the open approval instead."
+    },
+    "needsRegistration": "Enable VAT for this workspace first.",
+    "explainer": {
+      "what": "Two settings decide which figure ends up in your return: the method (effective or {saldo}) and the accounting basis ({soll} or {ist}).",
+      "default": "Enable VAT sets method and accounting basis to effective and accrual, the statutory default. You can change both later; a change only takes effect at the start of a tax period, and you must apply to the ESTV for the net tax rate and for the cash basis."
+    },
+    "notLiable": "Not VAT-liable",
+    "notLiableState": {
+      "title": "This workspace does not account for VAT.",
+      "hint": "That is stored as an answer, not as a gap. If your business becomes VAT-liable, enable VAT here; the answer is reversible at any time."
+    },
+    "consequence": {
+      "effektiv": "You settle VAT on your turnover at the statutory rate and deduct {vorsteuer} separately.",
+      "saldo": "You settle your turnover at a rate the ESTV approved. Input tax is included in it. You must apply for the rate at the ESTV before switching.",
+      "soll": "VAT falls due when you issue the invoice, even if it has not been paid yet. This is the statutory default.",
+      "ist": "VAT falls due when the payment arrives. You must apply to the ESTV for this accounting basis."
+    },
+    "binding": {
+      "method": "A change only takes effect at the start of a {steuerperiode}. You must keep the net tax rate for at least one tax period; after switching to effective you can return at the earliest after three years.",
+      "methodCite": "MWSTG Art. 37 Abs. 1 und 4",
+      "timing": "You must keep the chosen accounting basis for at least one tax period.",
+      "timingCite": "MWSTG Art. 39 Abs. 3"
+    },
+    "eligibility": {
+      "limits": "Allowed up to {turnoverLimit} taxable turnover and up to {taxLimit} tax per year. Both must hold. TILL cannot compute the tax per rate before the approval.",
+      "measured": "Your taxable turnover {year}: {amount}.",
+      "none": "This workspace has no turnover yet.",
+      "failed": "The turnover could not be loaded.",
+      "retry": "Try again"
+    },
+    "term": {
+      "soll": "accrual (Soll)",
+      "ist": "cash (Ist)",
+      "vorsteuer": "input tax",
+      "steuerperiode": "tax period"
+    }
+  },
+  "help": {
+    "VatSettings": {
+      "title": "VAT settings",
+      "body": "Here you decide how this workspace accounts for VAT: method, accounting basis, VAT number and tax codes. Method and accounting basis are binding elections; a change only takes effect at the start of a tax period and partly needs an ESTV approval. Under the net tax rate you additionally maintain the approved rates and their activities here. What you set here shapes every later return.",
+      "concepts": [
+        "saldosteuersatz",
+        "vereinbarte-entgelte",
+        "vereinnahmte-entgelte",
+        "vorsteuer",
+        "steuerperiode"
+      ],
+      "docsPath": "swiss/mwst",
+      "bindingElections": [
+        {
+          "id": "vat-method",
+          "options": [
+            "vat.consequence.effektiv",
+            "vat.consequence.saldo"
+          ],
+          "bindingFacts": "vat.binding.method"
+        },
+        {
+          "id": "vat-timing",
+          "options": [
+            "vat.consequence.soll",
+            "vat.consequence.ist"
+          ],
+          "bindingFacts": "vat.binding.timing"
+        }
+      ]
+    }
+  }
+}

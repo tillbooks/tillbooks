@@ -1,0 +1,503 @@
+{
+  "identity": {
+    "signed_in_as": "Signed in as {subject}",
+    "local_session": "Local session",
+    "not_a_member": {
+      "title": "You are signed in, but not a member here",
+      "body": "You are signed in as {subject} but you are not a member of any workspace here. Ask an owner for an invitation."
+    },
+    "error": {
+      "title": "Sign-in required",
+      "missing_subject": "Your deployment requires sign-in, and this request arrived without an authenticated identity.",
+      "retry_hint": "Sign in at your installation's proxy, then try again here.",
+      "retry": "Try again"
+    },
+    "invite": {
+      "subject_mismatch": "This invitation was addressed to a different person than the one you are signed in as."
+    },
+    "redeem": {
+      "lead": "Do you have an invitation?",
+      "label": "Invitation code or link",
+      "action": "Redeem",
+      "error": {
+        "invite_expired": "This invitation has expired. Ask the owner for a fresh invitation.",
+        "invite_subject_mismatch": "This invitation was issued for a different address. You are signed in as {subject}: ask for an invitation for exactly this address.",
+        "invalid": "This code is not valid."
+      }
+    },
+    "details": {
+      "title": "Session details",
+      "subject": "Signed-in identity",
+      "role": "Role",
+      "source": "Identity source",
+      "source_served": "Authenticated by your deployment"
+    },
+    "role": {
+      "owner": "Owner",
+      "viewer": "Read only",
+      "bookkeeper": "Bookkeeping",
+      "treuhaender": "Fiduciary",
+      "agent": "Agent"
+    }
+  },
+  "data": {
+    "title": "Data & Backup",
+    "intro": "Your books are yours. Export the whole workspace to an open format, back it up, or restore a backup onto this machine.",
+    "denied": {
+      "body": "This needs the “{right}” permission."
+    },
+    "action": {
+      "export": "Export workspace",
+      "backup": "Back up now",
+      "verify": "Verify",
+      "restore": "Restore into a new workspace",
+      "delete": "Delete"
+    },
+    "col": {
+      "kind": "Kind",
+      "created": "Created",
+      "size": "Size",
+      "status": "Status",
+      "actor": "By"
+    },
+    "kind": {
+      "export": "Export",
+      "backup": "Backup"
+    },
+    "status": {
+      "complete": "Complete",
+      "failed": "Failed"
+    },
+    "history": {
+      "empty": "No backups yet. Back up now to create a safety net."
+    },
+    "export": {
+      "empty": "Workspace has no data yet."
+    },
+    "restore": {
+      "title": "Restore",
+      "hint": "Verify a backup file, then restore it into a brand-new workspace. Restore never overwrites an existing workspace.",
+      "source": "Backup or export path",
+      "confirm": "Restore this backup into a brand-new workspace? Your current workspaces are left untouched.",
+      "defaultName": "Restored workspace",
+      "close": "Close"
+    },
+    "verify": {
+      "result": "Valid. {entries} posted entries, balanced {balance}."
+    },
+    "catalog": {
+      "link": "API catalog",
+      "result": "{count} tools, each with its REST route."
+    },
+    "field": {
+      "entity_kind": {
+        "backup": "Backup"
+      }
+    },
+    "error": {
+      "backup_corrupt": "This file is damaged and cannot be restored. Choose another file.",
+      "incompatible_schema_version": "This backup is from an incompatible TILL version and cannot be restored.",
+      "restore_invariant_failed": "The backup did not pass the balance check and was not restored.",
+      "export_destination_unwritable": "The export could not be written. Free up space and try again.",
+      "unrestorable_format": "An export (.tillexport) is not a restore source. Use a .tillbackup file."
+    }
+  },
+  "app": {
+    "title": "TILL Studio",
+    "tagline": "Swiss accounting your agent can actually use."
+  },
+  "nav": {
+    "label": "Primary navigation",
+    "setup": "Setup",
+    "operations": "Operations",
+    "members": "Access",
+    "customization": "Customization",
+    "accounts": "Accounts",
+    "journal": "Journal",
+    "periods": "Periods",
+    "vat": "VAT settings",
+    "contacts": "Contacts",
+    "items": "Items",
+    "group": {
+      "masterData": "Master data",
+      "accounting": "Accounting",
+      "berichte": "Reports",
+      "einstellungen": "Settings"
+    },
+    "parent": {
+      "lager": "Inventory",
+      "anlagen": "Fixed assets"
+    },
+    "favourites": {
+      "label": "Favorites",
+      "pin": "Add {name} to favorites",
+      "unpin": "Remove {name} from favorites",
+      "moveUp": "Move {name} up",
+      "moveDown": "Move {name} down",
+      "rename": "Rename {name}",
+      "renameField": "New name for {name}"
+    },
+    "resize": {
+      "label": "Adjust navigation width"
+    },
+    "collapse": "Collapse navigation",
+    "expand": "Expand navigation",
+    "agent": "Agent"
+  },
+  "theme": {
+    "toggle": "Switch colour scheme"
+  },
+  "density": {
+    "toDense": "Compact view",
+    "toComfortable": "Comfortable view"
+  },
+  "workspace": {
+    "switcher": {
+      "trigger": "Switch workspace: {name}",
+      "new": "New workspace",
+      "loadFailed": "The list of workspaces could not be loaded."
+    }
+  },
+  "help": {
+    "leavesDevice": "opens a page on the internet, which needs a connection",
+    "term": "Term {term}",
+    "articles": "Legal basis",
+    "seeAlso": "Related terms",
+    "docs": "Open the documentation",
+    "surface": "Help on {title}"
+  },
+  "copy": {
+    "action": "Copy",
+    "copied": "Copied",
+    "failed": "Copying does not work here"
+  },
+  "states": {
+    "loading": {
+      "label": "Loading"
+    },
+    "empty": {
+      "title": "Nothing here yet",
+      "hint": "Create the first entry to get started."
+    },
+    "error": {
+      "title": "Action failed",
+      "retry": "Try again"
+    },
+    "permission": {
+      "title": "No access",
+      "body": "You are missing the right needed for this view."
+    },
+    "placeholder": {
+      "hint": "This view arrives with Module 1."
+    },
+    "noWorkspace": {
+      "title": "No workspace yet",
+      "body": "Set up a workspace first and this view opens up.",
+      "action": "Set up a workspace"
+    }
+  },
+  "feedback": {
+    "open": "Send feedback",
+    "title": "Send feedback",
+    "kind": {
+      "label": "What kind of feedback is this?",
+      "bug": "Something is broken",
+      "idea": "An idea",
+      "question": "A question"
+    },
+    "field": {
+      "subject": {
+        "label": "Subject",
+        "required": "Please give this a short subject.",
+        "too_long": "Please keep this under 200 characters."
+      },
+      "message": {
+        "label": "What happened, and what did you expect?",
+        "required": "Please describe what happened.",
+        "too_long": "Please keep this under 4000 characters."
+      }
+    },
+    "diagnostics": {
+      "include": "Include the error details shown below",
+      "none": "Nothing to include.",
+      "turn_on": "Record errors from now on",
+      "denied": "You do not have permission to read recorded errors, so none can be included. You can still write the report.",
+      "preview": "What the report would contain"
+    },
+    "recipient": {
+      "notice": "The report goes to hello@tillbooks.ch. We delete it within 12 months, and you can ask us to delete it sooner."
+    },
+    "action": {
+      "open_mail": "Open in email app",
+      "copy": "Copy report",
+      "copy_path": "Copy file path",
+      "cancel": "Cancel",
+      "close": "Close"
+    },
+    "copy": {
+      "clipboard_note": "Copying puts the report on your clipboard, which some systems sync to your other devices.",
+      "done": "Copied."
+    },
+    "saved": {
+      "title": "Report saved",
+      "body": "TILL saved the report and handed it to your email app. Check that it opened, then send it.",
+      "truncated": "Your text is longer than an email link can hold, so only part of it is prefilled. Copy the report to get all of it.",
+      "no_mail_app": "If nothing opened, this computer has no email app set up. Copy the report and send it to hello@tillbooks.ch yourself.",
+      "path": "Saved to"
+    },
+    "crash_path": {
+      "not_saved": "TILL could not reach its own background service, so this report was not saved. Copy it before you close this."
+    }
+  },
+  "crash": {
+    "title": "This screen stopped working",
+    "body": "Reloading is safe. TILL saves only when you confirm an action.",
+    "action": {
+      "reload": "Reload",
+      "report": "Report this error"
+    }
+  },
+  "errors": {
+    "report_this": "Report this error",
+    "invalid_input": "An input was invalid. Please check the fields and try again.",
+    "workspace_not_found": "The selected workspace could not be found.",
+    "workspace_archived": "This ledger is archived and read-only. Nothing was changed. It can be reactivated from the workspace roster.",
+    "unknown_action": "The application does not know this action.",
+    "permission_denied": "You are missing the right needed for this action. Nothing was changed.",
+    "forbidden": "Your role is not allowed to perform this action. Nothing was changed.",
+    "unexpected_error": "Something went wrong inside TILL itself. Nothing was changed. Try again, and report it if it keeps happening.",
+    "store_busy": "The ledger was busy and could not take this. Nothing was changed. Try again in a moment.",
+    "transport_error": "TILL could not reach the ledger service. Nothing was changed. Check that it is running and try again.",
+    "fallback": "The action could not be completed. Please try again or check your input.",
+    "open_documents": "This contact still has open documents. Settle or cancel them first.",
+    "self_merge": "A contact cannot be merged into itself.",
+    "invalid_scope": "Scope must reference this contact's own records.",
+    "grant_denied": "This link is no longer valid.",
+    "expiry_in_past": "The expiry date must be in the future.",
+    "contact_not_found": "This contact was not found.",
+    "grant_revoked": "This portal access has already been revoked.",
+    "grant_expired": "This portal access has expired.",
+    "target_merged": "That target contact has itself been merged away. Pick the surviving contact.",
+    "already_merged": "This contact has already been merged.",
+    "too_many_tags": "Too many tags on this contact. At most 50 are allowed.",
+    "tag_too_long": "That tag is too long. At most 40 characters are allowed.",
+    "occurred_in_future": "An activity cannot be dated in the future.",
+    "invalid_activity_kind": "That activity type is not recognised.",
+    "invalid_import_format": "The file could not be read. Check the header row and the first bad row."
+  },
+  "shell": {
+    "skipToContent": "Skip to content",
+    "deeplink": {
+      "notFound": "That link points to a workspace that does not exist or is not yours.",
+      "pick": "Choose a workspace"
+    },
+    "notFound": {
+      "title": "This address does not exist.",
+      "body": "There is no screen at this address. The link may be out of date or mistyped.",
+      "toOverview": "Go to the overview"
+    },
+    "nav": {
+      "more": "Menu",
+      "close": "Close menu"
+    },
+    "agent": {
+      "pending": "{count} awaiting approval",
+      "label": "Agent"
+    },
+    "slotError": "This part could not be loaded."
+  },
+  "shortcut": {
+    "title": "Keyboard shortcuts",
+    "palette": "Open the command palette",
+    "help": "Show keyboard shortcuts",
+    "escape": "Close the overlay",
+    "group": {
+      "global": "Anywhere",
+      "chord": "Go to a screen",
+      "overlay": "In an overlay"
+    }
+  },
+  "palette": {
+    "aria": "Search screens, records and actions",
+    "legend": "Enter to act, Esc to close",
+    "resultCount": "Results: {count}",
+    "trigger": "Search",
+    "section": {
+      "recent": "Recent",
+      "nav": "Navigation",
+      "actions": "Actions",
+      "actionsHere": "Actions here",
+      "records": "Records",
+      "concepts": "Terms"
+    },
+    "kind": {
+      "open": "open",
+      "run": "run"
+    },
+    "openItemsOf": "Open items of {name}: {total}",
+    "empty": "Nothing here you can open or run.",
+    "searchAll": "Search all data",
+    "overflow": "{count} more in search",
+    "denied": "Requires: {capability}",
+    "deniedGoto": "Who has this",
+    "remedy": "Open {surface}",
+    "running": "Running",
+    "resultLink": "Open {surface}",
+    "concepts": {
+      "narrow": "More terms: narrow the query"
+    },
+    "ask": "Ask the agent: “{query}”",
+    "askKind": "ask",
+    "askSection": "Ask the agent",
+    "askNoRuntime": "No local agent runtime is configured.",
+    "askFailed": "The agent could not answer just now."
+  },
+  "provenance": {
+    "byAgent": "Recorded by the agent",
+    "byActor": "Recorded by {actor}",
+    "byStudio": "Recorded in the Studio",
+    "byImport": "Imported",
+    "byUnknown": "Recorded",
+    "trace": "View trace"
+  },
+  "command": {
+    "post_entry": {
+      "label": "Post an entry"
+    },
+    "reverse_entry": {
+      "label": "Reverse an entry"
+    },
+    "record_payment": {
+      "label": "Record a payment"
+    },
+    "issue_invoice": {
+      "label": "Issue an invoice"
+    },
+    "create_document": {
+      "label": "Create a document"
+    },
+    "send_invoice": {
+      "label": "Send an invoice"
+    },
+    "create_contact": {
+      "label": "Add a contact"
+    },
+    "create_item": {
+      "label": "Add an item"
+    },
+    "propose_dunning_run": {
+      "label": "Propose a dunning run"
+    },
+    "quotes_create": {
+      "label": "Create a quote"
+    },
+    "sales_order_create": {
+      "label": "Create a sales order"
+    },
+    "requisition_upsert": {
+      "label": "Create a requisition"
+    },
+    "export_journal": {
+      "label": "Export the journal"
+    },
+    "egress_self_test": {
+      "label": "Run the connection self-test"
+    },
+    "detect_anomalies": {
+      "label": "Check for anomalies"
+    }
+  },
+  "sync": {
+    "title": "Sync & hosting",
+    "dial": {
+      "label": "Publish ledger stream",
+      "on": "Publishing on",
+      "off": "Publishing off",
+      "denied": "Only an owner with the manage sync right can change this."
+    },
+    "state": {
+      "off": {
+        "body": "Publishing is off. TILL publishes no ledger stream; nothing about your books leaves this app."
+      },
+      "on": {
+        "body": "Publishing is on. The ledger stream is available to authorised readers. TILL does not connect anywhere by itself."
+      }
+    },
+    "contract": {
+      "version": "Contract version"
+    },
+    "stream": {
+      "head": "Stream head"
+    },
+    "epoch": {
+      "label": "Epoch",
+      "reset_hint": "After a restore the epoch changes. A consumer with an old cursor is told to reset instead of silently reading a forked history.",
+      "help_label": "Help on the epoch"
+    },
+    "consumer": {
+      "title": "Consumers",
+      "none": "No consumer readout available on this install. Lag is computed from the cursor a consumer presents when it reads.",
+      "lag": "{consumer}: {lag} events behind"
+    },
+    "exit": {
+      "title": "Your exit, any day",
+      "body": "Your books are yours: backup and export are ready at any time, including when you leave the hosted offering.",
+      "link": "Open Data & Backup"
+    },
+    "tier": {
+      "note": "The managed tier is a separate hosted offering. This install runs locally: turning publishing on makes the stream readable here and connects to nothing by itself."
+    },
+    "denied": {
+      "body": "You do not have permission to see the sync posture."
+    },
+    "trust": {
+      "publishing": "Publishing on: the ledger stream is available to authorised readers."
+    }
+  },
+  "agent": {
+    "verb": {
+      "post_entry": "Record entry",
+      "reverse_entry": "Reverse entry",
+      "issue_invoice": "Issue invoice",
+      "issue_credit_note": "Issue credit note",
+      "send_invoice": "Send invoice",
+      "propose_dunning_run": "Propose reminder run",
+      "issue_dunning_run": "Issue reminder run",
+      "send_dunning_run": "Send reminder run",
+      "record_payment": "Record payment",
+      "allocate_payment": "Allocate payment",
+      "reverse_payment": "Reverse payment",
+      "vat_mark_filed": "Mark VAT as filed",
+      "checklist_item_complete": "Complete checklist item",
+      "define_field": "Create field",
+      "install_plugin": "Install plugin",
+      "mark_batch_paid": "Mark payment batch as paid",
+      "payment_batch_transmit": "Transmit payment batch to the bank",
+      "apply_qr_match": "Apply QR payment",
+      "override_qr_match": "Correct QR payment match",
+      "confirm_match": "Confirm bank match",
+      "expense_claim_reimburse": "Reimburse expense claim",
+      "create_entry_for_txn": "Book bank transaction",
+      "wage_journal_post": "Post wage journal",
+      "post_vendor_bill": "Post vendor bill",
+      "post_fx_revaluation": "Revalue foreign currencies",
+      "expense_claim_approve": "Approve expense claim",
+      "asset_acquire": "Capitalise asset",
+      "asset_add_capitalisation": "Capitalise additional cost",
+      "asset_depreciation_run_post": "Post depreciation run",
+      "asset_depreciation_run_reverse": "Reverse depreciation run",
+      "asset_dispose": "Book asset disposal",
+      "inventory_valuation_post": "Post inventory valuation",
+      "inventory_valuation_reverse": "Reverse inventory valuation",
+      "landed_cost_allocate_confirm": "Allocate and post landed costs",
+      "landed_cost_reverse": "Reverse landed cost allocation",
+      "close_year": "Close financial year",
+      "lock_period": "Lock period",
+      "close_month": "Close month",
+      "reopen_month": "Reopen month",
+      "unlock_period": "Unlock period",
+      "go_productive": "Switch workspace to live books",
+      "import_open_items": "Import open items"
+    }
+  }
+}
