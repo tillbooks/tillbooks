@@ -177,6 +177,7 @@
       "go-live": "Commits migration data into the live books. The cutover cannot be undone."
     },
     "consequenceVerb": {
+      "close_year": "After this you can no longer post anything in this fiscal year and nothing can be undone. There is no way back.",
       "invite_member": "Seats a person or an agent in the workspace with the chosen role. Whoever redeems the token sees the books from then on.",
       "set_role": "Changes what a member may see and do here. The new rights apply on their next call.",
       "revoke_member": "Removes a member's access to the workspace. The lockout applies on their next call.",

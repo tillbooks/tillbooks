@@ -235,3 +235,142 @@
 .period-row--focus > td:first-child {
   box-shadow: inset 3px 0 0 var(--t-warn);
 }
+
+/* A38: the accrual and provision editor (the panel, its drawer form, the live lines preview). */
+.accrual-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+.accrual-editor-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+}
+
+.accrual-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.accrual-editor-batch {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.accrual-feedback {
+  margin: 0;
+  font-size: 13px;
+}
+
+.accrual-feedback--error {
+  color: var(--t-danger);
+}
+
+.accrual-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.accrual-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.accrual-picker legend,
+.accrual-form > .period-field {
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+.accrual-picker-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--t-space-1);
+  align-items: baseline;
+  min-height: 44px;
+}
+
+.accrual-picker-name {
+  font-size: 13px;
+  color: var(--t-text);
+}
+
+.accrual-picker-hint {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--t-text-dim);
+}
+
+.accrual-field-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--t-danger);
+}
+
+.accrual-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  margin-top: var(--t-space-2);
+  padding-top: var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+}
+
+.accrual-lines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.accrual-lines-caption {
+  text-align: start;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-text-dim);
+  padding-bottom: var(--t-space-0-5);
+}
+
+.accrual-lines th,
+.accrual-lines td {
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  text-align: start;
+}
+
+.accrual-lines .t-num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.accrual-status {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-0-5);
+}
+
+.accrual-badge {
+  font-size: 11px;
+  color: var(--t-text-dim);
+}
+
+.accrual-row--discarded > td,
+.accrual-row--reversed > td {
+  color: var(--t-text-dim);
+}
+
+.accrual-row-actions {
+  display: inline-flex;
+  gap: var(--t-space-0-5);
+}

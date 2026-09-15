@@ -217,7 +217,9 @@ test('G01: a viewer may STOP a rule through both doors, and may not start it thr
   // The viewer can find the rule at all, which is what makes the stop button aimable.
   const listed = call(deps, 'list_automation_rules', { workspaceId });
   assert.equal(listed.ok, true, `a viewer cannot read the rule list: ${JSON.stringify(listed)}`);
-  assert.deepEqual(listed.rules.map((r) => r.ruleId), [ruleId]);
+  // The two G22 defaults (retired by the fixture) list beside it: a disabled rule stays visible.
+  assert.deepEqual(listed.rules.map((r) => r.ruleId).filter((id) => !id.startsWith('builtin:checklist_autostart:')), [ruleId]);
+  assert.equal(listed.rules.filter((r) => r.ruleId.startsWith('builtin:checklist_autostart:')).length, 2);
 
   // STOP, through MCP stdio.
   const stopMcp = JSON.parse(callTool(deps, 'disable_automation_rule', { workspaceId, ruleId }).content[0].text);

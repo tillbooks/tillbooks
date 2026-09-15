@@ -24,10 +24,10 @@ import assert from 'node:assert/strict';
 
 import { getAction } from '../../dist/api/registry.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
-import { call, count, defineRule, postTemplate, runRows } from './support.mjs';
+import { call, count, defineRule, postTemplate, runRows, retireSeededChecklistRules, OWN_RULES } from './support.mjs';
 
 const ENTRIES = 'SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?';
-const RULES = 'SELECT COUNT(*) AS n FROM automation_rule WHERE workspace_id = ?';
+const RULES = `SELECT COUNT(*) AS n FROM automation_rule WHERE workspace_id = ? AND ${OWN_RULES}`;
 const RUNS = 'SELECT COUNT(*) AS n FROM automation_run WHERE workspace_id = ?';
 
 /**
@@ -42,6 +42,8 @@ function twoTenants() {
 
   const alpha = mintWorkspace(deps, 'Alpha GmbH', 'ta-alpha-ws');
   const beta = mintWorkspace(deps, 'Beta GmbH', 'ta-beta-ws');
+  retireSeededChecklistRules(deps, alpha.workspaceId);
+  retireSeededChecklistRules(deps, beta.workspaceId);
 
   const alphaRule = defineRule(
     deps,
@@ -107,10 +109,13 @@ test('H-TENANT: list_automation_rules and list_automation_runs answer one worksp
 
   const alphaRules = call(deps, 'list_automation_rules', { workspaceId: alpha.workspaceId });
   assert.equal(alphaRules.ok, true);
-  assert.deepEqual(alphaRules.rules.map((r) => r.ruleId), [alphaRule]);
+  // Each list carries its OWN two retired G22 defaults beside its rule, and never the other tenant's.
+  const own = (rules) => rules.map((r) => r.ruleId).filter((id) => !id.startsWith('builtin:checklist_autostart:'));
+  assert.deepEqual(own(alphaRules.rules), [alphaRule]);
+  assert.deepEqual(alphaRules.rules.map((r) => r.ruleId).filter((id) => id.startsWith('builtin:')).map((id) => id.endsWith(':' + alpha.workspaceId)), [true, true], "Alpha's defaults are Alpha's");
 
   const betaRules = call(deps, 'list_automation_rules', { workspaceId: beta.workspaceId });
-  assert.deepEqual(betaRules.rules.map((r) => r.ruleId), [betaRule], "Beta's rule list carried Alpha's rule");
+  assert.deepEqual(own(betaRules.rules), [betaRule], "Beta's rule list carried Alpha's rule");
 
   const betaRuns = call(deps, 'list_automation_runs', { workspaceId: beta.workspaceId });
   assert.equal(betaRuns.ok, true);
@@ -184,6 +189,8 @@ test('H-TENANT: the tick fires one workspace at a time', () => {
   deps.actor = 'studio';
   const alpha = mintWorkspace(deps, 'Alpha GmbH', 'tt-alpha');
   const beta = mintWorkspace(deps, 'Beta GmbH', 'tt-beta');
+  retireSeededChecklistRules(deps, alpha.workspaceId);
+  retireSeededChecklistRules(deps, beta.workspaceId);
 
   defineRule(
     deps,

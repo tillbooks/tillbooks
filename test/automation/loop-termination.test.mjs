@@ -46,7 +46,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { MAX_CASCADE_DEPTH } from '../../dist/core/automation/index.js';
-import { call, count, defineRule, runRows, workspace } from './support.mjs';
+import { call, count, defineRule, runRows, workspace, OWN_RULES } from './support.mjs';
 
 const RUNS = 'SELECT COUNT(*) AS n FROM automation_run WHERE workspace_id = ?';
 
@@ -98,7 +98,7 @@ test('LOOP 1/3: a rule whose action emits its own trigger is refused at SAVE, an
   assert.equal(res.tool, 'post_entry');
 
   assert.equal(
-    count(deps, 'SELECT COUNT(*) AS n FROM automation_rule WHERE workspace_id = ?', workspaceId),
+    count(deps, `SELECT COUNT(*) AS n FROM automation_rule WHERE workspace_id = ? AND ${OWN_RULES}`, workspaceId),
     0,
     'the refused rule was stored anyway, so it would fire the first time its trigger happened',
   );

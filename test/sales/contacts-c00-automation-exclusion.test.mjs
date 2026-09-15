@@ -35,7 +35,10 @@ test('C00 §7: neither elevated contact verb can be SAVED as a rule action', () 
     assert.equal(res.tool, tool);
   }
   // Refused at DEFINITION time means no rule and therefore nothing to fire, disable or explain later.
-  assert.equal(call(deps, 'list_automation_rules', { workspaceId }).rules.length, 0);
+  // A workspace is born with the two G22 (D129) `builtin:checklist_autostart:*` rules, so the invariant
+  // is that the elevated verbs added NONE of their own, not that the list is empty.
+  const own = call(deps, 'list_automation_rules', { workspaceId }).rules.filter((r) => !r.ruleId.startsWith('builtin:checklist_autostart:'));
+  assert.equal(own.length, 0);
 });
 
 test('C00 §7: a rule cannot be PATCHED into one either', () => {

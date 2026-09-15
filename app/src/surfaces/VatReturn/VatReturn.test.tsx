@@ -25,6 +25,7 @@ import { I18nProvider } from '../../i18n';
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type Transport, type RestResponse } from '../../lib/client';
 import { WorkspaceProvider } from '../../app/workspace';
+import { CapabilitiesContext, ALLOW_ALL, type Capabilities } from '../../lib/capabilities';
 import { neverSettles, watchReads, hang } from '../../test-transport';
 import { VatReturn } from './VatReturn';
 
@@ -38,6 +39,8 @@ import needsConfigFixture from './vat-return.needs-config.fixture.json';
 import periodsFixture from './vat-periods.fixture.json';
 import periodsSaldoFixture from './vat-periods.saldo.fixture.json';
 import periodsFiledFixture from './vat-periods.filed.fixture.json';
+import settlementFixture from './vat-settlement.fixture.json';
+import settlementPostedFixture from './vat-settlement.posted.fixture.json';
 
 /**
  * The stylesheet as TEXT, read off disk beside this file.
@@ -74,6 +77,9 @@ function routes(overrides: Record<string, RestResponse> = {}): Record<string, Re
     vat_periods: at(periodsFixture),
     vat_return: at(returnFixture),
     get_company_profile: PROFILE,
+    // A38 (D129 leg 2): the settlement panel reads its model on every period; the recorded
+    // preview is of a FILED, unsettled Q2/2026.
+    vat_settlement_preview: at(settlementFixture),
     ...overrides,
   };
 }
@@ -82,8 +88,8 @@ function transportFor(table: Record<string, RestResponse>): Transport {
   return async (action) => table[action] ?? at({ ok: false, error: 'unknown_action' }, 404);
 }
 
-function renderSurface(transport: Transport, workspaceId: string | null = 'ws_1') {
-  return render(
+function renderSurface(transport: Transport, workspaceId: string | null = 'ws_1', capabilities?: Capabilities) {
+  const tree = (
     <TillClientProvider client={new TillClient(transport)}>
       <I18nProvider>
         <WorkspaceProvider initialId={workspaceId}>
@@ -92,8 +98,14 @@ function renderSurface(transport: Transport, workspaceId: string | null = 'ws_1'
           </MemoryRouter>
         </WorkspaceProvider>
       </I18nProvider>
-    </TillClientProvider>,
+    </TillClientProvider>
   );
+  return render(capabilities === undefined ? tree : <CapabilitiesContext.Provider value={capabilities}>{tree}</CapabilitiesContext.Provider>);
+}
+
+/** The A24 answer with exactly one capability withheld (the fail-open default otherwise). */
+function without(capability: string): Capabilities {
+  return { ...ALLOW_ALL, can: (c) => c !== capability };
 }
 
 /**
@@ -164,7 +176,9 @@ describe('A07 MWST-Abrechnung: the healthy effektiv return', () => {
     // Twice on purpose: once in the strip above the form, once as Ziffer 500 inside it. That is
     // what the ESTV form does, so the query names both rather than pretending one of them is wrong.
     expect(screen.getAllByText('Zu bezahlender Betrag')).toHaveLength(2);
-    expect(screen.getAllByText("CHF 1'596.20")).toHaveLength(2);
+    // Outside the A38 settlement panel, which shows the same net (the settlement of this book moves
+    // exactly the payable to 2201) and is asserted on its own below.
+    expect(screen.getAllByText("CHF 1'596.20").filter((el) => el.closest('.vr-settle') === null)).toHaveLength(2);
   });
 
   it('renders the WHOLE ESTV form, not only the boxes the ledger filled', async () => {
@@ -275,12 +289,16 @@ describe('A07 MWST-Abrechnung: the healthy effektiv return', () => {
     vi.setSystemTime(TODAY);
     const { container } = renderSurface(transportFor(routes()));
     await settled();
+    // The A38 settlement panel reads on its own clock; count only once it is on screen, or the
+    // assertion below passes by racing the panel rather than by the panel's design.
+    await settlementPanel();
 
     const exportButton = screen.getByRole('button', { name: 'eCH-0217-Datei exportieren' });
     expect(exportButton.className).toContain('btn--primary');
     expect(exportButton).toBeEnabled();
-    // DESIGN.md allows one solid primary per surface, and this is it.
+    // DESIGN.md allows one solid primary per surface, and this is it: the settlement post is secondary.
     expect(container.querySelectorAll('.btn--primary')).toHaveLength(1);
+    expect(within(await settlementPanel()).getByRole('button', { name: 'MWST-Konten saldieren' }).className).toContain('btn--secondary');
 
     expect(screen.queryByText(/noch nicht/)).toBeNull();
     expect(
@@ -1024,6 +1042,251 @@ describe('A07: accessibility', () => {
     vi.setSystemTime(TODAY);
     const { container } = renderSurface(transportFor(routes({ vat_return: at(needsConfigFixture, 422) })));
     await screen.findByText(/MWST ist für diesen Arbeitsbereich noch nicht eingerichtet/);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
+// -------------------------------------------------------------------------------------------
+// A38 (D129 leg 2): the MWST-Saldierung panel
+// -------------------------------------------------------------------------------------------
+
+/**
+ * The SETTLED settlement panel: the section once its read has answered. Re-queried on every wait
+ * rather than captured off the first heading, because the heading moves inside the section when the
+ * skeleton gives way to the table and a captured element would be a detached one.
+ */
+async function settlementPanel() {
+  return waitFor(() => {
+    const el = document.querySelector('section.vr-settle');
+    if (el === null) throw new Error('the settlement panel is not on screen');
+    if (el.querySelector('[role="status"]') !== null) throw new Error('the settlement panel is still loading');
+    return el as HTMLElement;
+  });
+}
+
+describe('A38: the MWST-Saldierung panel on a filed period', () => {
+  it('renders booked beside declared with no difference, and the net that lands on 2201, off the recorded preview', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(transportFor(routes({ vat_periods: at(periodsFiledFixture) })));
+    await settled();
+    const panel = await settlementPanel();
+    // The figures are the engine's: 8.1% of the taxable sales on 2200, the two Vorsteuer accounts,
+    // and a net that equals the return's own payable (the same book, the same Rappen).
+    const output = within(panel).getByRole('row', { name: /Umsatzsteuer/ });
+    expect(within(output).getAllByText("CHF 3'702.20")).toHaveLength(2);
+    expect(within(output).getByText('keine')).toBeInTheDocument();
+    const input = within(panel).getByRole('row', { name: /Vorsteuer/ });
+    expect(within(input).getAllByText("CHF 2'106.00")).toHaveLength(2);
+    const net = within(panel).getByRole('row', { name: /Netto auf 2201/ });
+    expect(within(net).getAllByText("CHF 1'596.20")).toHaveLength(2);
+    // The lines the post books, behind a disclosure, dated the period end.
+    expect(within(panel).getByText('4 Buchungszeilen per 30.06.2026')).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'MWST-Konten saldieren' })).toBeEnabled();
+  });
+
+  it('gates the post behind an alertdialog carrying the C4 consequence sentence, and posts with a period-derived key', async () => {
+    vi.setSystemTime(TODAY);
+    const seen: unknown[] = [];
+    let posted = false;
+    const table = routes({ vat_periods: at(periodsFiledFixture) });
+    const transport: Transport = async (action, input) => {
+      if (action === 'vat_settlement_post') {
+        seen.push(input);
+        posted = true;
+        return at({ ok: true, settlementId: 'vatsettle_1' });
+      }
+      if (action === 'vat_settlement_preview') return at(posted ? settlementPostedFixture : settlementFixture);
+      return table[action] ?? at({ ok: false, error: 'unknown_action' }, 404);
+    };
+    renderSurface(transport);
+    await settled();
+    const panel = await settlementPanel();
+    await userEvent.click(within(panel).getByRole('button', { name: 'MWST-Konten saldieren' }));
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(within(dialog).getByText(/innerhalb der eingereichten Periode/)).toBeInTheDocument();
+    expect(dialog.querySelector('[data-verb="vat_settlement_post"]')).not.toBeNull();
+    expect(within(dialog).getByText('Q2/2026, 01.04.2026 bis 30.06.2026')).toBeInTheDocument();
+    expect(within(dialog).getByText("CHF 1'596.20")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'MWST-Konten saldieren' }));
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ period: '2026-Q2' });
+    expect((seen[0] as { idempotencyKey: string }).idempotencyKey).toMatch(/^vat_settlement:ws_1:2026-Q2:[0-9a-f-]{36}$/);
+    // The posted state is the ENGINE's row re-read, not the click: the date is the row's posted_at.
+    expect(await screen.findByText('Saldiert am 16.07.2026')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    // And the journey's sixth step reads the same fact.
+    expect(screen.getByText('saldiert am 16.07.2026')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Aktionen zur Saldierung Q2/2026' })).toBeInTheDocument();
+  });
+
+  it('settles a period AGAIN after a reversal under a NEW key, so the engine books a new settlement instead of replaying the reversed memo', async () => {
+    vi.setSystemTime(TODAY);
+    const keys: string[] = [];
+    let posted = false;
+    const table = routes({ vat_periods: at(periodsFiledFixture) });
+    const transport: Transport = async (action, input) => {
+      if (action === 'vat_settlement_post') {
+        keys.push((input as { idempotencyKey: string }).idempotencyKey);
+        posted = true;
+        return at({ ok: true, settlementId: `vatsettle_${keys.length}` });
+      }
+      if (action === 'vat_settlement_reverse') {
+        posted = false;
+        return at({ ok: true, settlementId: 'vatsettle_1', status: 'reversed' });
+      }
+      if (action === 'vat_settlement_preview') return at(posted ? settlementPostedFixture : settlementFixture);
+      return table[action] ?? at({ ok: false, error: 'unknown_action' }, 404);
+    };
+    renderSurface(transport);
+    await settled();
+    const panel = await settlementPanel();
+    await userEvent.click(within(panel).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    expect(await screen.findByText('Saldiert am 16.07.2026')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Aktionen zur Saldierung Q2/2026' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Saldierung stornieren' }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Saldierung stornieren' }));
+    await waitFor(() => expect(screen.queryByText('Saldiert am 16.07.2026')).toBeNull());
+
+    // The model now reads exactly as before the first post. The key must still be a NEW one.
+    const again = await settlementPanel();
+    await userEvent.click(within(again).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    await waitFor(() => expect(keys).toHaveLength(2));
+    expect(keys[1]).not.toBe(keys[0]);
+    expect(keys[1]).toMatch(/^vat_settlement:ws_1:2026-Q2:[0-9a-f-]{36}$/);
+  });
+
+  it('names a spent key when the engine refuses already_reversed_key, and keeps the dialog open', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(
+      transportFor(
+        routes({
+          vat_periods: at(periodsFiledFixture),
+          vat_settlement_post: at({ ok: false, error: 'already_reversed_key', settlementId: 'vatsettle_1', reversalEntryId: 'entry_9' }, 409),
+        }),
+      ),
+    );
+    await settled();
+    const panel = await settlementPanel();
+    await userEvent.click(within(panel).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    expect(await screen.findByText(/wurde storniert\. Schliesse den Dialog/)).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  it('SALDO: names the Vorsteuer balance and links to the journal when the preview refuses saldo_input_vat_booked, and offers no post', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(
+      transportFor({
+        vat_periods: at(periodsSaldoFixture),
+        vat_return: at(saldoFixture),
+        get_company_profile: PROFILE,
+        vat_settlement_preview: at({ ok: false, error: 'saldo_input_vat_booked', period: '2026-H1', method: 'saldo', balance: { 1170: 40500, 1171: 0 }, totalMinor: 40500 }, 409),
+      }),
+    );
+    // A Saldo return has no Ziffer 303 row, so the effektiv `settled()` waiter does not apply here.
+    expect(await screen.findByText(/Die Saldomethode lässt sich nicht gegen Konto 2200 prüfen/)).toBeInTheDocument();
+    const panel = await settlementPanel();
+    expect(within(panel).getByRole('note')).toHaveTextContent(/1170 und 1171 tragen einen Saldo von CHF 405\.00/);
+    expect(within(panel).getByRole('link', { name: 'Journal öffnen' })).toHaveAttribute('href', '/journal');
+    expect(within(panel).queryByRole('button', { name: 'MWST-Konten saldieren' })).toBeNull();
+  });
+
+  it('keeps the dialog open and names the seal when the write is refused into a closed year', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(
+      transportFor(
+        routes({
+          vat_periods: at(periodsFiledFixture),
+          vat_settlement_post: at({ ok: false, error: 'period_locked', period: '2026', kind: 'hard', reason: 'year_close' }, 409),
+        }),
+      ),
+    );
+    await settled();
+    const panel = await settlementPanel();
+    await userEvent.click(within(panel).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    expect(await screen.findByText(/Das Jahr ist abgeschlossen/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Perioden öffnen' })).toHaveAttribute('href', '/periods');
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  it('offers the reverse in the overflow of a posted settlement, behind its own confirm, and sends the settlement id', async () => {
+    vi.setSystemTime(TODAY);
+    const seen: unknown[] = [];
+    const table = routes({ vat_periods: at(periodsFiledFixture), vat_settlement_preview: at(settlementPostedFixture) });
+    const transport: Transport = async (action, input) => {
+      if (action === 'vat_settlement_reverse') {
+        seen.push(input);
+        return at({ ok: true, settlementId: 'vatsettle_1', status: 'reversed' });
+      }
+      return table[action] ?? at({ ok: false, error: 'unknown_action' }, 404);
+    };
+    renderSurface(transport);
+    await settled();
+    const panel = await settlementPanel();
+    expect(within(panel).queryByRole('button', { name: 'MWST-Konten saldieren' })).toBeNull();
+    await userEvent.click(within(panel).getByRole('button', { name: 'Aktionen zur Saldierung Q2/2026' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Saldierung stornieren' }));
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog.querySelector('[data-verb="vat_settlement_reverse"]')).not.toBeNull();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Saldierung stornieren' }));
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ settlementId: 'vatsettle_1', idempotencyKey: 'vat_settlement_reverse:ws_1:vatsettle_1' });
+  });
+});
+
+describe('A38: the panel on a period that is not filed, without the right, and while loading', () => {
+  it('disables the post on an unfiled period and says it waits for the filing', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(transportFor(routes()));
+    await settled();
+    const panel = await settlementPanel();
+    expect(within(panel).getByRole('button', { name: 'MWST-Konten saldieren' })).toBeDisabled();
+    expect(within(panel).getByText(/Wartet auf die Einreichung/)).toBeInTheDocument();
+  });
+
+  it('shows the padlock reason without the post right, and never the enabled action', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(transportFor(routes({ vat_periods: at(periodsFiledFixture) })), 'ws_1', without('post'));
+    await settled();
+    const panel = await settlementPanel();
+    expect(within(panel).getByRole('button', { name: 'MWST-Konten saldieren' })).toBeDisabled();
+    expect(within(panel).getByText('Zum Buchen brauchst du das Recht post.')).toBeInTheDocument();
+  });
+
+  it('says nothing is to settle on an empty period, and shows no action', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(
+      transportFor(routes({ vat_periods: at(periodsFiledFixture), vat_settlement_preview: at({ ...settlementFixture, lines: [], outputMinor: 0, inputMinor: 0, netMinor: 0, nothingToSettle: true }) })),
+    );
+    await settled();
+    const panel = await settlementPanel();
+    expect(within(panel).getByText(/Nichts zu saldieren/)).toBeInTheDocument();
+    expect(within(panel).queryByRole('button', { name: 'MWST-Konten saldieren' })).toBeNull();
+  });
+
+  it('LOADING: keeps the panel in its own skeleton while vat_settlement_preview is genuinely in flight', async () => {
+    vi.setSystemTime(TODAY);
+    const transport = watchReads(hang('vat_settlement_preview', transportFor(routes())));
+    renderSurface(transport);
+    await settled();
+    await transport.started('vat_settlement_preview');
+    const panel = document.querySelector('section.vr-settle') as HTMLElement;
+    expect(within(panel).getByRole('status')).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('has no violations with the settlement dialog open', async () => {
+    vi.setSystemTime(TODAY);
+    const { container } = renderSurface(transportFor(routes({ vat_periods: at(periodsFiledFixture) })));
+    await settled();
+    const panel = await settlementPanel();
+    await userEvent.click(within(panel).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
   });
 });

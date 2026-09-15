@@ -27,6 +27,7 @@ import { Link } from 'react-router-dom';
 
 import { useT, formatDate } from '../../i18n';
 import { ExternalGlyph } from './glyphs';
+import type { SettlementState } from './Settlement';
 
 /** Who stood behind the attestation: the D13 seat kind, or a served member with the display name A24 knows. */
 export interface JourneyActor {
@@ -57,11 +58,18 @@ export interface JourneyStripProps {
   marked: boolean;
   /** The checklist run for this period. Absent or null: the strip renders exactly as before. */
   run?: JourneyRun | null;
+  /**
+   * Step 6 (A38, D129 leg 2): the MWST-Saldierung of the filed period, rendered only when the
+   * surface hands the panel's state over. Absent or null: five steps, exactly as before, because a
+   * workspace whose settlement read refused has no sixth step to show and no sixth step to fake.
+   */
+  settlement?: SettlementState | null;
 }
 
-const STEPS = ['1', '2', '3', '4', '5'] as const;
+const FIVE_STEPS = ['1', '2', '3', '4', '5'] as const;
+const SIX_STEPS = ['1', '2', '3', '4', '5', '6'] as const;
 
-export function JourneyStrip({ computed, checked, marked, run = null }: JourneyStripProps) {
+export function JourneyStrip({ computed, checked, marked, run = null, settlement = null }: JourneyStripProps) {
   const t = useT();
   // Step 3 is done ONLY off the engine's recorded verb evidence (plan finding 1): the file the
   // checklist bound, not the button that downloaded one. Step 4 is never done: it is attested.
@@ -72,13 +80,16 @@ export function JourneyStrip({ computed, checked, marked, run = null }: JourneyS
   // (DESIGN.md C3: an agent origin is named, a machine id never reaches the screen).
   const who = (actor: JourneyActor | null): string =>
     actor !== null && actor.kind === 'member' && actor.name !== null ? actor.name : t(`vat.return.journey.actor.${actor?.kind ?? 'unknown'}`);
-  const done: Record<string, boolean> = { '1': computed, '2': checked, '3': exportedAt !== null, '4': false, '5': marked };
+  // Step 6 is done off the ENGINE's settlement row (the posted date), never off a button click.
+  const settledAt = settlement !== null && settlement.posted ? settlement.postedAt : null;
+  const done: Record<string, boolean> = { '1': computed, '2': checked, '3': exportedAt !== null, '4': false, '5': marked, '6': settledAt !== null };
+  const steps: readonly string[] = settlement === null ? FIVE_STEPS : SIX_STEPS;
   const portalUrl = t('vat.return.journey.portalUrl');
 
   return (
     <>
       <ol className="vr-journey" aria-label={t('vat.return.journey.label')}>
-        {STEPS.map((step) => {
+        {steps.map((step) => {
           const isDone = done[step] === true;
           const label = t(`vat.return.journey.${step}`);
           const mark =
@@ -86,9 +97,11 @@ export function JourneyStrip({ computed, checked, marked, run = null }: JourneyS
               ? t('vat.return.journey.exportedAt', { date: formatDate(exportedAt) })
               : step === '4' && attestedAt !== null
                 ? t('vat.return.journey.attestedAt', { date: formatDate(attestedAt), who: who(attestedBy) })
-                : isDone
-                  ? t('vat.return.journey.done')
-                  : null;
+                : step === '6' && settledAt !== null
+                  ? t('vat.return.journey.settledAt', { date: formatDate(settledAt) })
+                  : isDone
+                    ? t('vat.return.journey.done')
+                    : null;
           return (
             <li key={step} className={isDone ? 'vr-step vr-step--done' : 'vr-step'} data-attested={step === '4' && attestedAt !== null ? 'true' : undefined}>
               <span className="vr-step-no" aria-hidden="true">

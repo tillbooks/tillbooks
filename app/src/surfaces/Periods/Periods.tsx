@@ -9,7 +9,7 @@
  * (§H-IDEMPOTENT). Dates render through the shared `formatDate`, money through `formatMoney`.
  */
 import { useCallback, useEffect, useMemo, useState, useId } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err, type Result } from '../../lib/client';
@@ -23,11 +23,13 @@ import { ActionFeedback } from '../../components/ActionFeedback';
 import { Modal } from '../../components/Modal';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { AuditPanel } from './AuditPanel';
-import { MonthChecklist } from './MonthChecklist';
+import { MonthChecklist, monthBounds } from './MonthChecklist';
+import { AccrualEditor } from './AccrualEditor';
 import { SoftLockGlyph, HardLockGlyph } from './glyphs';
 import { LockGlyph } from '../../components/states/glyphs';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { COMMIT_TARGET_CLASS, useCommitAck } from '../../lib/motion';
+import { parseRunList, YEAR_CLOSE_TEMPLATE_ID } from '../Checklists/model';
 import './Periods.css';
 
 /** Hard locks carrying one of these reasons are legally final and cannot be casually reopened. */
@@ -168,6 +170,8 @@ export function Periods(props: PeriodsProps = {}) {
   const [monthInput, setMonthInput] = useState(() => focusMonth ?? previousMonth());
   const [yearInput, setYearInput] = useState('');
   const [confirmYear, setConfirmYear] = useState<string | null>(null);
+  /** The open `year_close` run per fiscal year label, for the hand-off from the year form. */
+  const [yearRuns, setYearRuns] = useState<Record<string, string>>({});
   // A month close is a period lock on the money path exactly as a year close is: it changes what
   // can be posted and it is awkward to undo. It gets the same confirm gate, not a bare submit.
   const [confirmMonth, setConfirmMonth] = useState<string | null>(null);
@@ -194,6 +198,12 @@ export function Periods(props: PeriodsProps = {}) {
     // surface's `PeriodLock` as it stands: `PeriodLock` is the wider of the two about `lockedAt` and
     // `lockedBy`, which is the safe direction.
     setState({ kind: 'ok', locks: [...body.locks].sort(newestFirst) });
+    // G22 leg 2 (D129, spec §10.12): the open year_close runs, so the year form hands over to the
+    // guided close instead of the bare seal when one exists. A refusal here (no read_books on the
+    // checklists, an older engine) leaves the bare action in place: the hand-off is an addition.
+    const runs = await client.call('checklist_list', { workspaceId, templateId: YEAR_CLOSE_TEMPLATE_ID, status: 'open' });
+    const parsed = isErr(runs.body) ? null : parseRunList(runs.body);
+    setYearRuns(Object.fromEntries((parsed ?? []).map((r) => [r.periodLabel, r.runId])));
   }, [client, workspaceId]);
 
   useEffect(() => {
@@ -517,18 +527,39 @@ export function Periods(props: PeriodsProps = {}) {
               ))}
             </select>
           </label>
-          <button
-            type="submit"
-            className="btn btn--secondary"
-            disabled={!yearValid || noWorkspace || busy}
-          >
-            {t('period.closeYear')}
-          </button>
+          {yearValid && yearRuns[yearInput] !== undefined ? (
+            <>
+              <Link className="btn btn--primary" to={`/checklisten?run=${encodeURIComponent(yearRuns[yearInput] as string)}`} data-testid="period-open-year-close">
+                {t('period.openYearClose')}
+              </Link>
+              <span className="period-note">{t('period.yearCloseRunNote', { year: yearInput })}</span>
+            </>
+          ) : (
+            <>
+              <button
+                type="submit"
+                className="btn btn--secondary"
+                disabled={!yearValid || noWorkspace || busy}
+              >
+                {t('period.closeYear')}
+              </button>
+              <Link className="btn btn--secondary" to="/checklisten">
+                {t('period.guidedYearClose')}
+              </Link>
+            </>
+          )}
         </form>
       </div>
 
       {monthValid && workspaceId !== null && (
         <MonthChecklist workspaceId={workspaceId} period={monthInput} locked={monthLocked} />
+      )}
+
+      {/* A38: the accrual and provision editor beside the month checklist, dated the month end the
+          checklist is closing. Drafts are described here and posted from the list (S4/S5): one
+          posting truth on both faces. */}
+      {monthValid && workspaceId !== null && (
+        <AccrualEditor workspaceId={workspaceId} periodEnd={monthBounds(monthInput).to} />
       )}
 
       <section className="periods-locks" aria-labelledby="periods-locks-title">

@@ -8,7 +8,7 @@
     },
     "item": {
       "checklistItem": {
-        "title": "MWST {period}: {title}",
+        "title": "{period}: {title}",
         "subtitle": "{template}, zuständig: {owner}"
       }
     },
@@ -19,8 +19,12 @@
   "help": {
     "Checklists": {
       "title": "Checklisten",
-      "body": "Eine Checkliste führt dich durch eine wiederkehrende Aufgabe Schritt für Schritt, zuerst durch die MWST-Periode: von den offenen Büchern bis zur eingereichten, gesperrten und bezahlten Abrechnung. Prüfungen, die das System selbst kennt, erfüllen sich von allein; Schritte, die nur du bestätigen kannst, tragen dein Datum und deinen Namen. Jeder Schritt hat eine Frist, und was fällig wird, erscheint in den Pendenzen. Ein Agent geht dieselbe Liste über dieselben Befehle.",
-      "concepts": [],
+      "body": "Eine Checkliste führt dich Schritt für Schritt durch eine wiederkehrende Aufgabe: die MWST-Periode bis zur eingereichten und bezahlten Abrechnung, den Monatsabschluss bis zur Sperre und den Jahresabschluss bis zum versiegelten Jahr. Prüfungen, die das System kennt, erfüllen sich von allein; eine Buchung siehst du zuerst als Vorschau und löst sie dann selbst aus; jede Buchung vor dem Abschluss lässt sich stornieren, der Abschluss nicht. Plausibilitätsprüfungen zeigen dir Formel und Zahlen. Monat und MWST-Periode starten automatisch, das Jahr startest du bewusst.",
+      "concepts": [
+        "jahresabschluss-sperre",
+        "transitorische-aktiven-passiven",
+        "umsatzabstimmung"
+      ],
       "docsPath": "introduction"
     }
   },
@@ -29,10 +33,13 @@
     "loading": "Deine Checklisten werden geladen",
     "backToList": "Zur Übersicht",
     "rangeTo": "bis",
-    "due": "fällig am {date}",
+    "due": "empfohlen bis {date}",
+    "dueStatutory": "Frist: {date}",
     "checkKey": "Prüfung: {key}",
     "needsManage": "Braucht das Recht manage_checklists.",
     "needsFile": "Braucht das Recht vat_file.",
+    "needsPost": "Braucht das Recht post.",
+    "needsPeriods": "Braucht das Recht manage_periods.",
     "denied": {
       "read": "Dir fehlt das Recht read_books, darum siehst du hier keine Checklisten."
     },
@@ -42,7 +49,7 @@
     },
     "empty": {
       "title": "Noch keine Checkliste",
-      "hint": "Starte die MWST-Periode für die letzte abgeschlossene Abrechnungsperiode. Die Schritte und Fristen kommen von selbst."
+      "hint": "Starte die MWST-Periode oder den Monatsabschluss für die letzte abgeschlossene Periode, oder den Jahresabschluss für {year}. Die Schritte und Fristen kommen von selbst."
     },
     "missing": {
       "title": "Diese Checkliste gibt es nicht",
@@ -56,18 +63,27 @@
     },
     "run": {
       "title": "{template} {period}",
-      "progress": "{done} von {total} Schritten"
+      "progress": "{done} von {total} Schritten",
+      "auto": "automatisch gestartet"
     },
     "runStatus": {
       "open": "offen",
       "done": "abgeschlossen",
       "abandoned": "abgebrochen"
     },
+    "template": {
+      "vat_period": "MWST-Periode",
+      "month_close": "Monatsabschluss",
+      "year_close": "Jahresabschluss"
+    },
     "detail": {
       "period": "{period}, {from} bis {to}:",
+      "counts": "Blocker: {blockers}, Hinweise: {hints}",
       "journey": "Schritte der Checkliste",
       "abandoned": "Abgebrochen: {reason}",
-      "done": "Alle Schritte sind erledigt oder nicht zutreffend."
+      "done": "Alle Schritte sind erledigt, nicht zutreffend oder entfallen.",
+      "autostarted": "Automatisch gestartet durch die Regel «{rule} automatisch starten» am {date}.",
+      "automations": "Regel unter Automationen"
     },
     "owner": {
       "human": "du",
@@ -87,18 +103,30 @@
       "doneAt": "erledigt am {date} durch {who}",
       "signed": "freigegeben am {date} durch {who}",
       "attested": "bestätigt am {date} durch {who}",
+      "acknowledged": "zur Kenntnis genommen am {date} durch {who}",
+      "passed": "erfüllt",
+      "posted": "gebucht",
+      "nothingToSettle": "nichts zu saldieren",
+      "derived": "laut Büchern beantwortet",
+      "answered": "beantwortet",
+      "warn": "Hinweis",
       "skipped": "nicht zutreffend",
+      "excluded": "entfällt",
       "stale": "Freigabe hinfällig",
       "unavailable": "Prüfung nicht verfügbar"
     },
     "note": {
       "blockedBy": "Wartet auf: {item}",
       "skipped": "Grund: {reason}",
+      "excludedBy": "Entfällt wegen der Antwort bei «{item}».",
+      "excludedEmpty": "Entfällt: nichts zu buchen.",
       "checkPending": "{check}: {count} offen",
       "checkFailed": "{check}: noch nicht erfüllt",
       "checkUnavailable": "{check}: Prüfung nicht verfügbar",
       "stale": "Die Abrechnung hat sich seit der Freigabe geändert. Berechne sie neu und gib sie nochmals frei.",
-      "preconditionOpen": "Zuerst muss die Prüfung {check} erfüllt sein."
+      "staleStatements": "Die Zahlen haben sich seit der Freigabe geändert. Prüfe Bilanz und Erfolgsrechnung und gib sie nochmals frei.",
+      "preconditionOpen": "Zuerst muss die Prüfung {check} erfüllt sein.",
+      "entries": "Belege: {entries}"
     },
     "check": {
       "no_drafts": "Keine Entwürfe bis Periodenende",
@@ -106,7 +134,10 @@
       "no_missing_tax_codes": "Steuercodes vollständig",
       "vat_return_computed": "Abrechnung berechnet",
       "abstimmung_resolved": "Abstimmung geklärt",
-      "period_locked_vat_filed": "MWST-Periode gesperrt"
+      "period_locked_vat_filed": "MWST-Periode gesperrt",
+      "lock_on_month": "Monat gesperrt",
+      "soft_lock_on_year": "Jahr vorläufig gesperrt",
+      "seal_on_year": "Jahr abgeschlossen"
     },
     "item": {
       "no_drafts": "Keine Entwürfe bis Periodenende",
@@ -117,20 +148,256 @@
       "ech0217_exported": "eCH-0217 exportiert",
       "eportal_filed": "Im ESTV ePortal eingereicht",
       "period_locked": "MWST-Periode sperren",
-      "settlement_booked": "Zahlung oder Gutschrift verbucht"
+      "vat_settled": "MWST-Konten saldiert",
+      "settlement_booked": "Zahlung oder Gutschrift verbucht",
+      "legal_form": "Rechtsform",
+      "vat_method": "MWST-Methode",
+      "month_closes_done": "Monate abgeschlossen",
+      "open_items_debtors": "Offene Kundenrechnungen stimmen mit 1100",
+      "open_items_creditors": "Offene Lieferantenrechnungen stimmen mit 2000",
+      "bank_balance_matches": "Bankauszug per Periodenende stimmt",
+      "bank_balance_typed": "Banksaldo per Jahresende laut Bankauszug",
+      "has_fc_positions": "Fremdwährungspositionen vorhanden?",
+      "fx_preview": "Fremdwährungsbewertung: Vorschau",
+      "fx_posted": "Fremdwährungsbewertung gebucht",
+      "has_assets": "Anlagen vorhanden?",
+      "depreciation_preview": "Abschreibungen: Vorschau",
+      "depreciation_posted": "Abschreibungen gebucht",
+      "depreciation_within_limit": "Abschreibungen im erlaubten Rahmen",
+      "accruals_needed": "Abgrenzungen nötig?",
+      "accruals_preview": "Abgrenzungen: Vorschau",
+      "accruals_posted": "Abgrenzungen gebucht",
+      "accruals_reversed_next_year": "Rückbuchung im neuen Jahr vorhanden",
+      "provisions_needed": "Rückstellungen bilden oder auflösen?",
+      "provisions_preview": "Rückstellungen: Vorschau",
+      "provisions_posted": "Rückstellungen gebucht oder aufgelöst",
+      "vat_accounts_zero": "MWST-Konten per Jahresende auf null",
+      "vat_declared_equals_books": "MWST-Abrechnung stimmt mit den Konten überein",
+      "umsatzabstimmung": "Umsatzabstimmung geprüft",
+      "berichtigung_filed": "Berichtigungsabrechnung eingereicht",
+      "tax_provision_preview": "Steuerrückstellung: Vorschau",
+      "tax_provision_posted": "Steuerrückstellung gebucht",
+      "tax_provision_plausible": "Steuerrückstellung plausibel",
+      "balance_equation": "Bilanz stimmt",
+      "prior_year_comparison": "Vorjahresvergleich",
+      "capital_loss_check": "Kein Kapitalverlust",
+      "statements_signed": "Bilanz und Erfolgsrechnung freigegeben",
+      "treuhaender_handover": "Unterlagen an den Treuhänder übergeben",
+      "soft_lock_on_year": "Bücher vorläufig gesperrt",
+      "gv_approved": "Generalversammlung hat die Jahresrechnung genehmigt",
+      "year_sealed": "Geschäftsjahr abschliessen",
+      "archive_exported": "Abschlussdossier exportiert",
+      "journal_exported": "Journal exportiert",
+      "lock_on_month": "Monat abschliessen"
+    },
+    "choice": {
+      "derived": "Beantwortet durch das System aus den Büchern. Du kannst die Antwort ändern.",
+      "human": "Von dir beantwortet.",
+      "preselected": "Vorausgewählt, noch nicht gespeichert.",
+      "yes": "Ja",
+      "no": "Nein",
+      "legalForm": {
+        "einzelfirma": "Einzelfirma",
+        "gmbh": "GmbH",
+        "ag": "AG"
+      },
+      "vatMethod": {
+        "effektiv": "Effektiv",
+        "saldo": "Saldosteuersatz",
+        "none": "Keine MWST"
+      }
     },
     "act": {
       "open": "Öffnen",
       "resolve": "Klären",
       "compute": "Abrechnung berechnen",
+      "run": "{verb}",
       "export": "Zur MWST-Abrechnung exportieren",
       "attest": "Eingereicht am",
+      "gv": "Genehmigt am",
       "sign": "Abstimmung freigeben",
+      "release": "Freigeben",
       "confirmPayment": "Zahlung bestätigen",
+      "typeBalance": "Saldo eintragen",
       "markFiled": "Als eingereicht markieren",
+      "answer": "Antwort speichern",
+      "seen": "Vorschau geprüft",
+      "fix": "Beheben",
+      "recheck": "Erneut prüfen",
+      "acknowledge": "Zur Kenntnis nehmen",
+      "details": "Details",
+      "collapse": "Einklappen",
+      "openDepreciation": "Zu den Abschreibungen",
+      "undoOnSurface": "Stornieren bei den Abschreibungen",
+      "postAccruals": "Abgrenzungen buchen ({count})",
+      "postProvisions": "Rückstellungen buchen ({count})",
+      "postTaxProvision": "Steuerrückstellung buchen",
+      "settleAll": "Alle saldieren ({count})",
+      "settle": "Saldieren",
+      "undo": "Stornieren",
+      "softLock": "Bücher vorläufig sperren",
+      "unlock": "Sperre aufheben",
+      "seal": "Jahr abschliessen",
+      "working": "Wird ausgeführt",
       "skip": "Nicht zutreffend",
       "reopen": "Wieder öffnen",
       "abandon": "Checkliste abbrechen"
+    },
+    "verb": {
+      "lock_period": "Periode sperren",
+      "unlock_period": "Sperre aufheben",
+      "close_month": "Monat abschliessen",
+      "reopen_month": "Monat wieder öffnen",
+      "close_year": "Jahr abschliessen"
+    },
+    "preview": {
+      "refused": "Die Vorschau konnte nicht berechnet werden: {code}",
+      "empty": "Nichts zu buchen.",
+      "changeAnswer": "Wenn das nicht stimmt, ändere die Antwort oben.",
+      "total": "Total",
+      "provenance": "Stand {verb}, Prüfsumme {hash}.",
+      "postedBelow": "Gebucht, siehe unten."
+    },
+    "previewCol": {
+      "accountNumber": "Konto",
+      "currency": "Währung",
+      "fcAmountMinor": "Fremdwährung",
+      "bookChfMinor": "Buchwert",
+      "revaluedChfMinor": "Bewertet",
+      "diffChfMinor": "Differenz",
+      "assetNumber": "Anlage",
+      "amountMinor": "Betrag",
+      "description": "Text",
+      "kind": "Art",
+      "contraAccountNumber": "Gegenkonto",
+      "balanceAccountNumber": "Bilanzkonto",
+      "reversalDate": "Rückbuchung",
+      "reason": "Grund",
+      "provisionAccountNumber": "Rückstellungskonto",
+      "expenseAccountNumber": "Aufwandkonto"
+    },
+    "previewValue": {
+      "prepaid_expense": "Vorausbezahlter Aufwand",
+      "accrued_income": "Noch nicht fakturierter Ertrag",
+      "accrued_expense": "Noch nicht erhaltener Aufwand",
+      "deferred_income": "Vorausbezahlter Ertrag"
+    },
+    "figure": {
+      "profitBeforeTaxMinor": "Gewinn vor Steuern",
+      "grossProvisionMinor": "Steuerrückstellung brutto",
+      "instalmentsMinor": "Bereits bezahlte Raten",
+      "proposedMinor": "Vorgeschlagene Rückstellung",
+      "rateBp": "Steuersatz in Basispunkten",
+      "asOf": "Stichtag",
+      "openItemsMinor": "Offene Kundenrechnungen",
+      "ledger1100Minor": "Konto 1100",
+      "openBillsMinor": "Offene Lieferantenrechnungen",
+      "onAccountMinor": "Akontozahlungen",
+      "ledger2000Minor": "Konto 2000",
+      "differenceMinor": "Differenz",
+      "aktivenMinor": "Aktiven",
+      "passivenMinor": "Passiven",
+      "debitMinor": "Soll",
+      "creditMinor": "Haben",
+      "equityMinor": "Eigenkapital",
+      "equityAccountsMinor": "Eigenkapitalkonten",
+      "resultMinor": "Jahresergebnis",
+      "kapitalMinor": "Kapital",
+      "reservenMinor": "Gesetzliche Reserven",
+      "baseMinor": "Kapital und Reserven",
+      "thresholdMinor": "Hälfte davon",
+      "account1300Minor": "Konto 1300",
+      "account2300Minor": "Konto 2300",
+      "account1170Minor": "Konto 1170",
+      "account1171Minor": "Konto 1171",
+      "account2200Minor": "Konto 2200",
+      "account2201Minor": "Konto 2201",
+      "typedMinor": "Saldo laut deiner Eingabe",
+      "typedBy": "Eingetragen durch",
+      "typedAt": "Eingetragen am",
+      "statementMinor": "Saldo laut Bankauszug",
+      "ledgerMinor": "Saldo laut Buchhaltung",
+      "revenuePerStatementsMinor": "Ertrag laut Erfolgsrechnung",
+      "adjustedRevenueMinor": "Bereinigter Ertrag",
+      "declaredZiffer200Minor": "Deklarierter Umsatz (Ziffer 200)",
+      "postedMinor": "Gebuchte Rückstellung",
+      "expectedMinor": "Erwartete Rückstellung",
+      "grossMinor": "Brutto",
+      "otherInstalmentsMinor": "Übrige Raten",
+      "toleranceMinor": "Toleranz",
+      "bandPct": "Toleranz in Prozent",
+      "year": "Jahr",
+      "missing": "Ohne Sperre",
+      "exceeding": "Über dem Rahmen",
+      "flagged": "Auffällig",
+      "nonZero": "Nicht auf null",
+      "unfiledPeriods": "Nicht eingereicht",
+      "mismatched": "Abweichend"
+    },
+    "posting": {
+      "unavailable": "Die Prüfung der Buchung ist nicht verfügbar: {reason}",
+      "posted": "Gebucht. Belege: {entries}.",
+      "noEntry": "keine",
+      "reversalOn": "Rückbuchung am {date}.",
+      "nothingToSettle": "Nichts zu saldieren: die MWST-Konten dieser Periode stehen auf null.",
+      "willPost": "Zu buchen: {total}."
+    },
+    "settlement": {
+      "period": "Periode",
+      "state": "Stand",
+      "net": "Netto",
+      "action": "Aktion",
+      "notFiled": "wartet auf die MWST-Periode",
+      "nothing": "nichts zu saldieren",
+      "settled": "saldiert",
+      "unsettled": "offen"
+    },
+    "validationWord": {
+      "pass": "erfüllt",
+      "fail": "nicht erfüllt",
+      "warn": "Hinweis",
+      "unavailable": "nicht verfügbar"
+    },
+    "validation": {
+      "warnHint": "Blockiert den Abschluss nicht.",
+      "unavailable": "Die Prüfung konnte nicht ausgeführt werden: {reason}",
+      "formula": "Formel"
+    },
+    "validationReason": {
+      "first_year": "erstes Geschäftsjahr, kein Vorjahr",
+      "no_capital": "kein Kapital auf den Konten",
+      "no_statement_no_typed_balance": "kein Bankauszug per Periodenende und kein eingetragener Saldo",
+      "unfiled_periods": "noch nicht alle MWST-Perioden eingereicht",
+      "needs_vat_config": "keine MWST-Einstellungen",
+      "no_tax_provision": "noch keine Steuerrückstellung gebucht"
+    },
+    "validationSource": {
+      "statement": "Verglichen mit dem Bankauszug per Periodenende.",
+      "typed": "Verglichen mit dem Saldo, den du eingetragen hast.",
+      "none": "Kein Bankauszug per Periodenende. Importiere den Auszug oder trage den Saldo im Schritt «Banksaldo per Jahresende laut Bankauszug» ein."
+    },
+    "statements": {
+      "loading": "Bilanz und Erfolgsrechnung werden geladen",
+      "aktiven": "Aktiven",
+      "passiven": "Passiven",
+      "reingewinn": "Reingewinn",
+      "stand": "Stand {hash}.",
+      "stale": "Die Freigabe ist hinfällig.",
+      "open": "Zu den Berichten"
+    },
+    "confirm": {
+      "fx": "Bewertet die Fremdwährungspositionen per {date} und bucht die Differenz mit automatischer Rückbuchung.",
+      "undo": "Bucht eine Stornobuchung. Die ursprüngliche Buchung bleibt erhalten.",
+      "undoCount": "Bucht {count} Stornobuchungen. Die ursprünglichen Buchungen bleiben erhalten.",
+      "batch": "Bucht {count} Entwürfe mit total {total}, einen nach dem anderen.",
+      "taxProvision": "Erfasst die Steuerrückstellung von {total} und bucht sie.",
+      "settle": "Überträgt die MWST-Konten der Periode {period} auf Konto 2201.",
+      "settleAll": "Überträgt die MWST-Konten der Perioden {periods} auf Konto 2201, eine nach der anderen.",
+      "softLock": "Sperrt das Geschäftsjahr {period} vorläufig. Die Sperre lässt sich wieder aufheben.",
+      "unlock": "Hebt die vorläufige Sperre wieder auf.",
+      "closeMonth": "Schliesst den Monat {period} weich ab.",
+      "reopenMonth": "Öffnet den Monat wieder.",
+      "seal": "Schliesst das Geschäftsjahr {year} endgültig ab."
     },
     "dialog": {
       "close": "Schliessen",
@@ -138,15 +405,28 @@
     },
     "start": {
       "title": "Checkliste starten",
-      "template": "MWST-Periode",
-      "period": "Abrechnungsperiode",
+      "template": "Checkliste",
+      "period": {
+        "vat_period": "Abrechnungsperiode",
+        "month_close": "Monat",
+        "year_close": "Geschäftsjahr"
+      },
+      "noPeriod": "Noch keine abgeschlossene Periode.",
       "filedSuffix": "(eingereicht)",
       "action": "Checkliste starten",
       "working": "Wird gestartet",
-      "consequence": "Legt die Checkliste mit allen Schritten und Fristen an. Eine Checkliste wird abgebrochen, nie gelöscht.",
+      "consequence": {
+        "vat_period": "Legt die Checkliste mit allen Schritten und Fristen an. Eine Checkliste wird abgebrochen, nie gelöscht.",
+        "month_close": "Legt den Monatsabschluss mit allen Schritten an. Ein Monat startet sonst automatisch, sobald er vorbei ist.",
+        "year_close": "Legt den Jahresabschluss mit allen Schritten und Fristen an. Der letzte Monat des Jahres wird dann nicht mehr einzeln gestartet."
+      },
       "needsConfig": "Ohne MWST-Einstellungen gibt es keine Abrechnungsperioden.",
       "needsConfigCta": "MWST einrichten",
-      "notFilable": "Das ist keine Abrechnungsperiode dieses Jahres. Möglich sind: {periods}"
+      "notFilable": "Das ist keine Abrechnungsperiode dieses Jahres. Möglich sind: {periods}",
+      "notEnded": "Diese Periode ist noch nicht vorbei.",
+      "yearClosed": "Dieses Geschäftsjahr ist bereits abgeschlossen.",
+      "yearInProgress": "Der letzte Monat des Jahres gehört zum laufenden Jahresabschluss.",
+      "yearInProgressCta": "Jahresabschluss öffnen"
     },
     "attest": {
       "title": "Im ESTV ePortal eingereicht",
@@ -160,15 +440,43 @@
       "beforeExport": "Das Datum liegt vor dem Export vom {exportedAt}.",
       "alreadyAttested": "Die Einreichung ist schon am {date} bestätigt. Öffne den Schritt zuerst wieder."
     },
+    "gv": {
+      "title": "Generalversammlung hat die Jahresrechnung genehmigt",
+      "date": "Genehmigt am",
+      "reason": "Grund, warum die Versammlung vor der Freigabe stattfand",
+      "action": "Bestätigen",
+      "working": "Wird bestätigt",
+      "consequence": "Hält das Datum der Genehmigung fest. Die Versammlung selbst findet ausserhalb von TILL statt.",
+      "needsDate": "Gib das Datum der Versammlung an.",
+      "needsReason": "Die Versammlung liegt vor der Freigabe der Jahresrechnung. Gib einen Grund an.",
+      "alreadyAttested": "Die Genehmigung ist schon bestätigt. Öffne den Schritt zuerst wieder."
+    },
     "skip": {
       "title": "{item}: nicht zutreffend",
       "reason": "Grund",
       "action": "Als nicht zutreffend markieren",
       "working": "Wird gespeichert",
-      "consequence": "Der Schritt gilt als nicht zutreffend und bleibt sichtbar."
+      "consequence": "Der Schritt gilt als nicht zutreffend und bleibt sichtbar.",
+      "prefill": {
+        "treuhaender_handover": "Ich schliesse allein ab.",
+        "berichtigung_filed": "Keine Mängel festgestellt.",
+        "bank_balance_typed": "Bankauszug liegt vor.",
+        "prior_year_comparison": "Erstes Geschäftsjahr."
+      }
     },
     "reason": {
       "needed": "Gib einen Grund an."
+    },
+    "acknowledge": {
+      "title": "{item}: zur Kenntnis nehmen",
+      "reason": "Grund",
+      "working": "Wird gespeichert",
+      "consequence": "Die Prüfung bleibt sichtbar und wird bei geänderten Zahlen erneut fällig.",
+      "prefillReviewed": "Geprüft."
+    },
+    "release": {
+      "title": "Bilanz und Erfolgsrechnung {period} freigeben",
+      "consequence": "Gibt Bilanz und Erfolgsrechnung mit dem aktuellen Stand frei. Ändert eine Buchung die Zahlen, wird die Freigabe hinfällig."
     },
     "signoff": {
       "title": "{item}",
@@ -176,9 +484,12 @@
       "working": "Wird freigegeben",
       "reference": "Beleg",
       "referenceHint": "Banktransaktion oder Buchung",
+      "balanceLabel": "Saldo laut Bankauszug in {currency}",
+      "balanceHint": "zum Beispiel 12345.60",
       "needsReference": "Gib den Beleg an, der die Zahlung belegt.",
       "consequenceReview": "Bestätigt die Abstimmung für die aktuell berechnete Abrechnung. Ändert sich die Abrechnung, wird die Freigabe hinfällig.",
-      "consequencePayment": "Bestätigt, dass die Zahlung oder Gutschrift verbucht ist. Der Beleg bleibt am Schritt."
+      "consequencePayment": "Bestätigt, dass die Zahlung oder Gutschrift verbucht ist. Der Beleg bleibt am Schritt.",
+      "consequenceBalance": "Hält den Saldo laut Bankauszug fest. Die Prüfung «Bankauszug stimmt» vergleicht ihn mit der Buchhaltung."
     },
     "abandon": {
       "title": "Checkliste {period} abbrechen",
@@ -186,6 +497,40 @@
       "action": "Abbrechen bestätigen",
       "working": "Wird abgebrochen",
       "consequence": "Die Checkliste bleibt sichtbar und speist keine Pendenzen mehr. Sie wird nicht gelöscht."
+    },
+    "templateHint": {
+      "vat_period": "Von den offenen Büchern bis zur eingereichten, gesperrten und bezahlten Abrechnung.",
+      "month_close": "Prüfungen, Fremdwährungen, Abgrenzungen und die weiche Sperre des Monats.",
+      "year_close": "Vom offenen Jahr bis zum versiegelten Geschäftsjahr, mit Vorschau vor jeder Buchung."
+    },
+    "formula": {
+      "locks_on_all_months": "Jeder Monat der Periode ausser dem letzten trägt eine Sperre.",
+      "open_items_debtors": "Summe der offenen Kundenrechnungen per Stichtag = Saldo Konto 1100.",
+      "bank_balance_matches": "Saldo laut Bankauszug per Periodenende = Saldo des Bankkontos in der Buchhaltung.",
+      "open_items_creditors": "Summe der offenen Lieferantenrechnungen abzüglich Akontozahlungen per Stichtag = Saldo Konto 2000.",
+      "accruals_reversed": "Konto 1300 und Konto 2300 stehen am ersten Tag nach dem Periodenende auf null.",
+      "depreciation_within_limit": "Je Anlage: gebuchte Abschreibung höchstens Satz mal Buchwert (degressiv) oder Anschaffungswert durch Nutzungsdauer (linear), anteilig auf die Monate.",
+      "vat_accounts_zero": "Konto 1170, 1171 und 2200 stehen per Periodenende auf null; Konto 2201 trägt die letzte Saldierung.",
+      "vat_declared_equals_books": "Summe Ziffer 399 = Haben auf Konto 2200; Summe Ziffer 400 und 405 = Soll auf Konto 1170 und 1171.",
+      "umsatzabstimmung": "Ertrag laut Erfolgsrechnung minus Abgrenzungen plus Anlageverkäufe = Summe Ziffer 200 der Abrechnungen.",
+      "tax_provision_plausible": "Gebuchte Steuerrückstellung innerhalb von fünf Prozent der Rückstellung nach Formel (Gewinn mal Satz durch eins plus Satz, abzüglich bezahlter Raten).",
+      "balance_equation": "Summe Aktiven = Summe Passiven per Stichtag; Summe Soll = Summe Haben über die Periode.",
+      "prior_year_comparison": "Je Erfolgskonto: Hinweis, wenn die Veränderung zum Vorjahr über fünfzig Prozent UND über fünftausend Franken liegt.",
+      "capital_loss": "Eigenkapital mindestens die Hälfte aus Kapital und gesetzlichen Reserven."
+    },
+    "choiceConsequence": {
+      "yes": "Die zugehörigen Schritte kommen dazu.",
+      "no": "Die zugehörigen Schritte entfallen.",
+      "legalForm": {
+        "einzelfirma": "Keine Steuerrückstellung, keine Generalversammlung.",
+        "gmbh": "Steuerrückstellung, Kapitalverlust-Prüfung und Gesellschafterversammlung kommen dazu.",
+        "ag": "Steuerrückstellung, Kapitalverlust-Prüfung und Generalversammlung kommen dazu."
+      },
+      "vatMethod": {
+        "effektiv": "MWST-Konten saldieren, Umsatz- und Vorsteuerabstimmung kommen dazu.",
+        "saldo": "MWST-Konten saldieren und Umsatzabstimmung kommen dazu.",
+        "none": "Der ganze MWST-Block entfällt."
+      }
     }
   }
 }

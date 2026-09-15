@@ -103,7 +103,9 @@ test('start: creates the run with every item, owners and due dates; the filing i
   assert.equal(res.periodEnd, '2026-06-30');
   assert.equal(res.items.length, VAT_PERIOD_TEMPLATE.items.length);
   assert.deepEqual(res.items.map((i) => i.itemId), VAT_PERIOD_TEMPLATE.items.map((i) => i.itemId));
-  assert.deepEqual(res.items.map((i) => i.ownerKind), ['system', 'system', 'system', 'agent', 'human', 'agent', 'human', 'human', 'human']);
+  // Ten since leg 2: item 8b (`vat_settled`, the A38 settlement posting) sits between the lock and the payment.
+  assert.deepEqual(res.items.map((i) => i.ownerKind), ['system', 'system', 'system', 'agent', 'human', 'agent', 'human', 'human', 'human', 'human']);
+  assert.equal(item(res, 'vat_settled').dueAt, '2026-08-29');
   assert.equal(item(res, 'eportal_filed').dueAt, '2026-08-29');
   assert.equal(item(res, 'period_locked').dueAt, '2026-08-29');
   assert.equal(item(res, 'settlement_booked').dueAt, '2026-08-29');
@@ -134,7 +136,8 @@ test('start refuses: needs_vat_config without A05, period_not_filable naming the
   const w = world('badperiod');
   const bad = refuse(w.call('checklist_start', { templateId: 'vat_period', period: '2026-H1', idempotencyKey: key('bp') }), 'period_not_filable', 'semester on effektiv');
   assert.deepEqual(bad.periods, ['2026-Q1', '2026-Q2', '2026-Q3', '2026-Q4']);
-  refuse(w.call('checklist_start', { templateId: 'year_close', period: '2026', idempotencyKey: key('ut') }), 'unknown_template', 'unknown template');
+  const unknown = refuse(w.call('checklist_start', { templateId: 'cutover', period: '2026', idempotencyKey: key('ut') }), 'unknown_template', 'unknown template');
+  assert.deepEqual(unknown.known, ['vat_period', 'month_close', 'year_close'], 'the three shipped templates, in picker order');
 });
 
 // --- System checks (3.1 / 3.2) -------------------------------------------------------------------
@@ -353,7 +356,16 @@ test('a full walk reaches the derived done; the run status is never stored', () 
   must(w.call('vat_mark_filed', { period: '2026-Q2', idempotencyKey: key('5') }), 'mark filed');
   const locked = must(w.call('checklist_get', { runId: run.runId }), 'after lock');
   assert.equal(item(locked, 'period_locked').status, 'done');
+  // Leg 2: the settlement posting (8b) is next and flips only through the A38 verb; the payment
+  // sign-off (9) waits on the lock alone, as before, so a payment booked before the transfer is legal.
+  // An empty period has nothing on its tax accounts: the settlement row holds vacuously once the
+  // period is filed (the verb would refuse nothing_to_settle), says so, and is never ticked by hand.
+  assert.equal(item(beforeLock, 'vat_settled').status, 'open', 'not filed yet: nothing holds');
+  assert.equal(item(locked, 'vat_settled').status, 'done');
+  assert.deepEqual(item(locked, 'vat_settled').probeResult.detail, { period: '2026-Q2', nothingToSettle: true });
+  assert.deepEqual(item(locked, 'vat_settled').probeResult.entryIds, []);
   assert.equal(locked.nextItemId, 'settlement_booked');
+  refuse(w.call('checklist_item_complete', { runId: run.runId, itemId: 'vat_settled', idempotencyKey: key('6b') }), 'check_item_live', 'a posting row is never completed by hand');
   must(w.call('checklist_item_complete', { runId: run.runId, itemId: 'settlement_booked', evidence: { kind: 'signoff', ref: 'bank_txn:zkb-2026-08-20' }, idempotencyKey: key('6') }), '9');
   const done = must(w.call('checklist_get', { runId: run.runId }), 'done');
   assert.equal(done.status, 'done');
@@ -363,7 +375,7 @@ test('a full walk reaches the derived done; the run status is never stored', () 
   assert.equal(stored.status, 'open', 'done is derived, never stored');
   const listed = must(w.call('checklist_list', {}), 'list');
   assert.equal(listed.runs[0].status, 'done');
-  assert.equal(listed.runs[0].doneCount, 9);
+  assert.equal(listed.runs[0].doneCount, 10);
 });
 
 test('abandon: needs a reason, stays listed under the filter, every later write refuses run_abandoned', () => {
@@ -441,12 +453,40 @@ test('G15: the provider registers, counts open items due within 14 days (overdue
 
 test('no _rappen column on any checklist table, and every table carries workspace_id', () => {
   assert.equal(/_rappen/.test(CHECKLISTS_SCHEMA_SQL), false);
+  // The table list is READ OFF THE DDL (spec §10.11, F11): a fourth table added to the module can
+  // never dodge this assertion by not being named here.
+  const tables = [...CHECKLISTS_SCHEMA_SQL.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map((m) => m[1]);
+  assert.deepEqual(tables, ['checklist_run', 'checklist_run_item', 'checklist_signoff'], 'the three G22 tables, and only those, as the DDL declares them');
   const w = world('schema');
-  for (const table of ['checklist_run', 'checklist_run_item', 'checklist_signoff']) {
+  for (const table of tables) {
     const cols = w.deps.store.db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    assert.ok(cols.length > 0, `${table} exists in the store`);
     assert.ok(cols.includes('workspace_id'), `${table} carries workspace_id`);
     assert.equal(cols.some((c) => c.endsWith('_rappen') || c.endsWith('_minor')), false, `${table} carries no money column`);
   }
+});
+
+// --- Leg 2 (spec §10.3, §10.2): the optional period and the anchor on the MWST template ----------
+
+test('leg 2: checklist_start without a period picks the last ended MWST period, idempotent on the natural key; the template anchors on the return', () => {
+  const w = world('optional-period');
+  const picked = must(w.call('checklist_start', { templateId: 'vat_period', idempotencyKey: key('np') }), 'start without period');
+  assert.equal(picked.created, true);
+  assert.equal(picked.periodLabel, '2026-Q2', 'the fixture clock is 2026-07-16: Q2 is the last ended quarter');
+  assert.equal(picked.anchorKind, 'vat_return');
+  assert.equal(picked.anchorHash, picked.returnHash);
+  assert.equal(picked.periodKind, 'vat_period');
+  assert.equal(picked.excludedCount, 0, 'the MWST template carries no choice, so nothing is excluded');
+  const again = must(w.call('checklist_start', { templateId: 'vat_period', idempotencyKey: key('np2') }), 'again');
+  assert.equal(again.created, false);
+  assert.equal(again.runId, picked.runId);
+  const explicit = must(w.call('checklist_start', { templateId: 'vat_period', period: '2026-Q2', idempotencyKey: key('np3') }), 'explicit');
+  assert.equal(explicit.runId, picked.runId);
+  const templates = must(w.call('checklist_templates', {}), 'templates');
+  assert.equal(templates.templates.find((t) => t.templateId === 'vat_period').anchor, 'vat_return');
+  // Without A05 the defaulting start refuses the read's own code, exactly like an explicit period.
+  const bare = world('optional-noconfig', { configured: false });
+  refuse(bare.call('checklist_start', { templateId: 'vat_period', idempotencyKey: key('nc') }), 'needs_vat_config', 'no config, no period');
 });
 
 test('§H-TENANT: a second workspace sees nothing of the first (get, list, complete, hub)', () => {

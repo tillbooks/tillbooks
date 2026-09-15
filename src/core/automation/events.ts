@@ -166,6 +166,25 @@ export const AUTOMATION_EVENTS: readonly AutomationEventDef[] = [
   // field off the payload is deferred with it rather than pointed at an unregistered kind.
   { event: 'fx.rate_set', emittedBy: 'record_exchange_rate', entityIdPath: 'result.rateId' },
   { event: 'fx.revaluation_posted', emittedBy: 'post_fx_revaluation', entityIdPath: 'result.entryId' },
+  // D129 Q2: the revert, resolved from the Storno entry it books.
+  { event: 'fx.revaluation_reversed', emittedBy: 'fx_revaluation_reverse', entityIdPath: 'result.stornoEntryId' },
+
+  // --- A38, MWST-Saldierung (D129 leg 2, spec §5) ---------------------------------------------
+  // One moment a rule may react to: a filed period's VAT balances were transferred to 2201. Resolved
+  // from the settlement row's id on the fresh and the replay path alike. No `entityKind`: the
+  // settlement is not a G00 entity kind (spec §6b: nothing to attach to twelve rows a year).
+  { event: 'vat_settlement.posted', emittedBy: 'vat_settlement_post', entityIdPath: 'result.settlementId' },
+
+  // --- A38, Abgrenzungen und Rückstellungen (spec §5) ------------------------------------------
+  // Four moments a rule may react to, each resolved from the id the verb returns on both the fresh
+  // and the replay path: the accrual entry A (`result.entryId`), the Storno C (`result.stornoEntryId`),
+  // the provision formation entry and the release row. The drafts (`*_create`, `*_discard`) emit
+  // nothing: a draft is a proposal, not an event in the books. No `entityKind`: the G00 kinds
+  // `accrual` / `provision` are declared in the spec's §6b and registered with the integration.
+  { event: 'accrual.posted', emittedBy: 'accrual_post', entityIdPath: 'result.entryId' },
+  { event: 'accrual.reversed', emittedBy: 'accrual_reverse', entityIdPath: 'result.stornoEntryId' },
+  { event: 'provision.posted', emittedBy: 'provision_post', entityIdPath: 'result.entryId' },
+  { event: 'provision.released', emittedBy: 'provision_release', entityIdPath: 'result.releaseId' },
 
   // --- A23, multi-client workspaces ------------------------------------------------------------
   // TWO ROWS FOR ONE VERB, told apart by the RESULT PATH. `archive_workspace` covers both

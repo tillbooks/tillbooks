@@ -183,7 +183,7 @@ export function payablesBalanceAsOf(ctx: WorkspaceContext, asOf: string): number
  * out contributes the half the ledger actually holds, and a future payment reversed TODAY
  * contributes the reversal alone: a negative remainder matching the 2000 credit already booked.
  */
-function supplierOnAccountMinor(ctx: WorkspaceContext, asOf: string): number {
+export function supplierOnAccountMinor(ctx: WorkspaceContext, asOf: string): number {
   const row = ctx.store.db
     .prepare(
       `SELECT COALESCE(SUM(
@@ -477,7 +477,7 @@ export function listVendorBills(ctx: WorkspaceContext, input: ListVendorBillsInp
  * void dated after `asOf` leaves the bill open TODAY, and a today-dated void of a future bill
  * contributes the reversal alone (a negative open, matching the debit the ledger already holds).
  */
-function workspaceBaseOpenMinor(ctx: WorkspaceContext, asOf: string): number {
+export function workspaceBaseOpenMinor(ctx: WorkspaceContext, asOf: string): number {
   // G21: a migrated bill has `entry_id` NULL (it posts nothing), so the `entry_id IS NOT NULL`
   // filter would exclude it and `ap_control` would report the whole migrated position as a
   // reconciliation gap forever. Migrated bills join this sum through `origin = 'migrated'`; their

@@ -131,7 +131,7 @@
         {
           "key": "2400",
           "account": {
-            "id": "acc_21",
+            "id": "acc_22",
             "number": "2400",
             "name": "Langfristige Bankschulden",
             "type": "liability"
@@ -155,7 +155,7 @@
         {
           "key": "2800",
           "account": {
-            "id": "acc_24",
+            "id": "acc_25",
             "number": "2800",
             "name": "Grund-, Gesellschafter- oder Stiftungskapital",
             "type": "equity"

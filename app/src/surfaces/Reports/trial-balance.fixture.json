@@ -86,7 +86,7 @@
     },
     {
       "account": {
-        "id": "acc_21",
+        "id": "acc_22",
         "number": "2400",
         "name": "Langfristige Bankschulden",
         "type": "liability"
@@ -99,7 +99,7 @@
     },
     {
       "account": {
-        "id": "acc_24",
+        "id": "acc_25",
         "number": "2800",
         "name": "Grund-, Gesellschafter- oder Stiftungskapital",
         "type": "equity"
@@ -112,7 +112,7 @@
     },
     {
       "account": {
-        "id": "acc_29",
+        "id": "acc_30",
         "number": "3200",
         "name": "Erlöse aus Handelswaren",
         "type": "income"
@@ -125,7 +125,7 @@
     },
     {
       "account": {
-        "id": "acc_30",
+        "id": "acc_31",
         "number": "3400",
         "name": "Erlöse aus Dienstleistungen",
         "type": "income"
@@ -138,7 +138,7 @@
     },
     {
       "account": {
-        "id": "acc_32",
+        "id": "acc_33",
         "number": "3800",
         "name": "Rabatte, Skonti und Gutschriften",
         "type": "income"
@@ -151,7 +151,7 @@
     },
     {
       "account": {
-        "id": "acc_38",
+        "id": "acc_40",
         "number": "4900",
         "name": "Erhaltene Rabatte und Skonti",
         "type": "expense"
@@ -164,7 +164,7 @@
     },
     {
       "account": {
-        "id": "acc_40",
+        "id": "acc_42",
         "number": "5000",
         "name": "Löhne und Gehälter",
         "type": "expense"
@@ -177,7 +177,7 @@
     },
     {
       "account": {
-        "id": "acc_48",
+        "id": "acc_50",
         "number": "6500",
         "name": "Verwaltungs- und Bürokosten",
         "type": "expense"
@@ -190,7 +190,7 @@
     },
     {
       "account": {
-        "id": "acc_52",
+        "id": "acc_54",
         "number": "6800",
         "name": "Abschreibungen und Wertberichtigungen auf Positionen des Anlagevermögens",
         "type": "expense"
@@ -203,7 +203,7 @@
     },
     {
       "account": {
-        "id": "acc_53",
+        "id": "acc_55",
         "number": "6900",
         "name": "Finanzaufwand",
         "type": "expense"

@@ -185,6 +185,16 @@ import { IMPLEMENTATION_PROJECT_SCHEMA_SQL } from '../migration/projectSchema.js
 // G22 checklists (D127): three tables (run, run item, append-only sign-off), all §H-TENANT, none on
 // the money path, no `_rappen` column. References only `workspace`, so its position is safe.
 import { CHECKLISTS_SCHEMA_SQL } from '../checklists/schema.js';
+// A38, Abgrenzungen und Rückstellungen. Four tables (accrual, provision, provision_release,
+// vat_settlement), all §H-TENANT, all on the money path, every money column `_minor`. References
+// `workspace`, `account`, `cost_center` and `journal_entry`, all created in the core DDL above, so it
+// joins the union directly before the checklists (the spec's stated order: after the A22 run table,
+// which is inline core DDL, and before `CHECKLISTS_SCHEMA_SQL`).
+import { ACCRUALS_SCHEMA_SQL } from '../accruals/schema.js';
+// A38 (D129 leg 2), the MWST-Saldierung: one table, §H-TENANT, references `workspace` and
+// `journal_entry` only, so its position after the core ledger tables is safe. The accrual and
+// provision tables (`ACCRUALS_SCHEMA_SQL`, the other half of A38) concatenate immediately before it.
+import { VAT_SETTLEMENT_SCHEMA_SQL } from '../accruals/vatSettlementSchema.js';
 
 /**
  * Additive column migrations (M-3). `CREATE TABLE IF NOT EXISTS` never widens an EXISTING table, so
@@ -213,6 +223,14 @@ export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: st
   // and the module note in src/core/access/schema.ts: this is the whole of served authentication, and
   // the engine never writes a password or a token beside it.
   { table: 'user', column: 'subject', ddl: 'subject TEXT' },
+  // A22 / D129 Q2 (`fx_revaluation_reverse`): the Storno pair a reverted revaluation run links to (the
+  // mirror entry C dated the period end and its next-day reversal D), plus who reverted it and when.
+  // All nullable, so a pre-leg-2 file widens on open with no data migration and every existing run
+  // reads "not reverted", which is the truth about it.
+  { table: 'fx_revaluation', column: 'storno_entry_id', ddl: 'storno_entry_id TEXT REFERENCES journal_entry(id)' },
+  { table: 'fx_revaluation', column: 'storno_reversal_id', ddl: 'storno_reversal_id TEXT REFERENCES journal_entry(id)' },
+  { table: 'fx_revaluation', column: 'reversed_at', ddl: 'reversed_at TEXT' },
+  { table: 'fx_revaluation', column: 'reversed_by', ddl: 'reversed_by TEXT' },
   // M01 US-M01.3 / F-08 (d): is this identity a person or a machine? Constant-defaulted 'human', so a
   // file written before the column existed widens on open with every identity reading as a person; an
   // agent member is created as such by `invite_member` (`kind: 'agent'`) and is the governed seat.
@@ -616,7 +634,10 @@ export const ADDITIVE_INDEXES: readonly { name: string; ddl: string }[] = [
 // Generation 6 (F5-C1): no DDL at all. It is the first purely ROW-level generation: stored
 // automation rules whose `action_tool` the denylist has since denied are disabled once, with an
 // audit line each. See `disableDeniedAutomationRules` in `./migrations.ts`.
-export const SCHEMA_GENERATION = 6;
+// Generation 7 (A38, 2026-09-09): no DDL. Row-level only: every workspace born before A38 added
+// 2330, 3809 and 8900 to the KMU seed receives the three it lacks, by number, nothing it has is
+// touched. See `seedA38Accounts` in `./migrations.ts`.
+export const SCHEMA_GENERATION = 7;
 
 const CORE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS workspace (
@@ -928,6 +949,12 @@ CREATE TABLE IF NOT EXISTS fx_revaluation (
   idempotency_key        TEXT NOT NULL,
   posted_at              TEXT NOT NULL,
   posted_by              TEXT,
+  -- D129 Q2, fx_revaluation_reverse: the Storno pair (mirror entry + its next-day reversal), also in
+  -- ADDITIVE_COLUMNS so an existing file gains them on open.
+  storno_entry_id        TEXT REFERENCES journal_entry(id),
+  storno_reversal_id     TEXT REFERENCES journal_entry(id),
+  reversed_at            TEXT,
+  reversed_by            TEXT,
   UNIQUE (workspace_id, period_end)
 );
 
@@ -1371,4 +1398,4 @@ END;
  * and joins it here. That keeps the money-path DDL beside the code that writes it, and it keeps
  * concurrent capability branches from all editing one 300-line string.
  */
-export const SCHEMA_SQL = `${CORE_SCHEMA_SQL}\n${PAYMENT_SCHEMA_SQL}\n${DEBTORS_SCHEMA_SQL}\n${BANKING_SCHEMA_SQL}\n${ACCESS_SCHEMA_SQL}\n${CUSTOMIZATION_SCHEMA_SQL}\n${AUTOMATION_SCHEMA_SQL}\n${SALES_SCHEMA_SQL}\n${CONTACT_ACTIVITY_SCHEMA_SQL}\n${PURCHASE_SCHEMA_SQL}\n${CAPTURE_SCHEMA_SQL}\n${FILES_SCHEMA_SQL}\n${DUNNING_SCHEMA_SQL}\n${RECURRING_SCHEMA_SQL}\n${QR_MATCH_SCHEMA_SQL}\n${CAMT_SCHEMA_SQL}\n${PAIN001_SCHEMA_SQL}\n${REVIEW_SCHEMA_SQL}\n${AGENT_SCHEMA_SQL}\n${MIGRATION_SCHEMA_SQL}\n${ONBOARDING_SCHEMA_SQL}\n${MOVE_SCHEMA_SQL}\n${GL_ARCHIVE_SCHEMA_SQL}\n${EXTRACTION_MANIFEST_SCHEMA_SQL}\n${PROJECTS_SCHEMA_SQL}\n${TASKS_SCHEMA_SQL}\n${TIME_SCHEMA_SQL}\n${DEALS_SCHEMA_SQL}\n${STOCK_SCHEMA_SQL}\n${SALES_ORDER_SCHEMA_SQL}\n${PURCHASE_ORDER_SCHEMA_SQL}\n${HR_SCHEMA_SQL}\n${RETAINER_SCHEMA_SQL}\n${SIGN_SCHEMA_SQL}\n${PORTAL_SCHEMA_SQL}\n${REMITTANCE_SCHEMA_SQL}\n${REPORTBUILDER_SCHEMA_SQL}\n${MAIL_SCHEMA_SQL}\n${VOICE_SCHEMA_SQL}\n${DRAFTING_SCHEMA_SQL}\n${DATA_SCHEMA_SQL}\n${DOCUMENT_TEMPLATE_SCHEMA_SQL}\n${NOTIFICATIONS_SCHEMA_SQL}\n${PLUGINS_SCHEMA_SQL}\n${DISPATCH_SCHEMA_SQL}\n${PAYROLL_HANDOFF_SCHEMA_SQL}\n${EBILL_SCHEMA_SQL}\n${EBICS_SCHEMA_SQL}\n${MANAGED_SCHEMA_SQL}\n${ASSETS_SCHEMA_SQL}\n${ASSET_MASTER_SCHEMA_SQL}\n${PROCUREMENT_SCHEMA_SQL}\n${INVENTORY_SCHEMA_SQL}\n${DEPRECIATION_SCHEMA_SQL}\n${TRACKING_SCHEMA_SQL}\n${ASSET_TRANSACTION_SCHEMA_SQL}\n${PO_VERSION_SCHEMA_SQL}\n${ASSET_TRANSFER_SCHEMA_SQL}\n${MAINTENANCE_SCHEMA_SQL}\n${MOVEMENT_SCHEMA_SQL}\n${DEPRECIATION_RUN_SCHEMA_SQL}\n${RECEIPT_SCHEMA_SQL}\n${VALUATION_SCHEMA_SQL}\n${LANDED_COST_SCHEMA_SQL}\n${THREE_WAY_MATCH_SCHEMA_SQL}\n${RECONCILIATION_SCHEMA_SQL}\n${STOCKTAKE_SCHEMA_SQL}\n${ADJUST_SCHEMA_SQL}\n${SYNC_SCHEMA_SQL}\n${IMPLEMENTATION_PROJECT_SCHEMA_SQL}\n${CHECKLISTS_SCHEMA_SQL}\n${FILE_UPLOAD_SCHEMA_SQL}`;
+export const SCHEMA_SQL = `${CORE_SCHEMA_SQL}\n${PAYMENT_SCHEMA_SQL}\n${DEBTORS_SCHEMA_SQL}\n${BANKING_SCHEMA_SQL}\n${ACCESS_SCHEMA_SQL}\n${CUSTOMIZATION_SCHEMA_SQL}\n${AUTOMATION_SCHEMA_SQL}\n${SALES_SCHEMA_SQL}\n${CONTACT_ACTIVITY_SCHEMA_SQL}\n${PURCHASE_SCHEMA_SQL}\n${CAPTURE_SCHEMA_SQL}\n${FILES_SCHEMA_SQL}\n${DUNNING_SCHEMA_SQL}\n${RECURRING_SCHEMA_SQL}\n${QR_MATCH_SCHEMA_SQL}\n${CAMT_SCHEMA_SQL}\n${PAIN001_SCHEMA_SQL}\n${REVIEW_SCHEMA_SQL}\n${AGENT_SCHEMA_SQL}\n${MIGRATION_SCHEMA_SQL}\n${ONBOARDING_SCHEMA_SQL}\n${MOVE_SCHEMA_SQL}\n${GL_ARCHIVE_SCHEMA_SQL}\n${EXTRACTION_MANIFEST_SCHEMA_SQL}\n${PROJECTS_SCHEMA_SQL}\n${TASKS_SCHEMA_SQL}\n${TIME_SCHEMA_SQL}\n${DEALS_SCHEMA_SQL}\n${STOCK_SCHEMA_SQL}\n${SALES_ORDER_SCHEMA_SQL}\n${PURCHASE_ORDER_SCHEMA_SQL}\n${HR_SCHEMA_SQL}\n${RETAINER_SCHEMA_SQL}\n${SIGN_SCHEMA_SQL}\n${PORTAL_SCHEMA_SQL}\n${REMITTANCE_SCHEMA_SQL}\n${REPORTBUILDER_SCHEMA_SQL}\n${MAIL_SCHEMA_SQL}\n${VOICE_SCHEMA_SQL}\n${DRAFTING_SCHEMA_SQL}\n${DATA_SCHEMA_SQL}\n${DOCUMENT_TEMPLATE_SCHEMA_SQL}\n${NOTIFICATIONS_SCHEMA_SQL}\n${PLUGINS_SCHEMA_SQL}\n${DISPATCH_SCHEMA_SQL}\n${PAYROLL_HANDOFF_SCHEMA_SQL}\n${EBILL_SCHEMA_SQL}\n${EBICS_SCHEMA_SQL}\n${MANAGED_SCHEMA_SQL}\n${ASSETS_SCHEMA_SQL}\n${ASSET_MASTER_SCHEMA_SQL}\n${PROCUREMENT_SCHEMA_SQL}\n${INVENTORY_SCHEMA_SQL}\n${DEPRECIATION_SCHEMA_SQL}\n${TRACKING_SCHEMA_SQL}\n${ASSET_TRANSACTION_SCHEMA_SQL}\n${PO_VERSION_SCHEMA_SQL}\n${ASSET_TRANSFER_SCHEMA_SQL}\n${MAINTENANCE_SCHEMA_SQL}\n${MOVEMENT_SCHEMA_SQL}\n${DEPRECIATION_RUN_SCHEMA_SQL}\n${RECEIPT_SCHEMA_SQL}\n${VALUATION_SCHEMA_SQL}\n${LANDED_COST_SCHEMA_SQL}\n${THREE_WAY_MATCH_SCHEMA_SQL}\n${RECONCILIATION_SCHEMA_SQL}\n${STOCKTAKE_SCHEMA_SQL}\n${ADJUST_SCHEMA_SQL}\n${SYNC_SCHEMA_SQL}\n${IMPLEMENTATION_PROJECT_SCHEMA_SQL}\n${ACCRUALS_SCHEMA_SQL}\n${VAT_SETTLEMENT_SCHEMA_SQL}\n${CHECKLISTS_SCHEMA_SQL}\n${FILE_UPLOAD_SCHEMA_SQL}`;

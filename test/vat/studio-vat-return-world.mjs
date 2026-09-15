@@ -54,6 +54,7 @@ import { postEntry, ledgerPorts } from '../../dist/core/ledger/index.js';
 import { buildVatLines } from '../../dist/core/vat/index.js';
 import { computeVatReturn, listVatPeriods, markVatPeriodFiled } from '../../dist/core/vat/index.js';
 import { listAccounts } from '../../dist/core/accounts/index.js';
+import { vatSettlementPreview, vatSettlementPost } from '../../dist/core/accruals/index.js';
 import { setup } from './support.mjs';
 
 /** Q2/2026, the period every effektiv world reports. Inclusive ISO days, as the verb takes them. */
@@ -319,4 +320,36 @@ export function liveFiled() {
   );
 
   return { filing, periods, return: after };
+}
+
+/**
+ * A38 (D129 leg 2): the MWST-Saldierung of the filed healthy book, in its two panel states.
+ *
+ * `preview` is what the `/mwst` panel renders on a filed, unsettled Q2/2026: the booked movement on
+ * 2200 and 1170/1171 beside the return's Ziffern (this book reconciles, so every difference is zero)
+ * and the exact lines the post books. `posted` is the same read after `vat_settlement_post`: the
+ * figures unchanged (settlement entries are excluded from the read) and the settlement row present,
+ * which is the state the panel renders its posted line and its overflow from. Both are recordings of
+ * the live engine, never typed.
+ */
+export function liveSettlement() {
+  const world = setup({ method: 'effektiv', timing: 'soll' });
+  const ctx = enforcing(world);
+  seedEffektivBook(ctx);
+  unwrap(markVatPeriodFiled(ctx, { period: '2026-Q2', idempotencyKey: 'a07-gui-settle-file' }), 'vat_mark_filed');
+  const before = unwrap(computeVatReturn(ctx, Q2), 'vat_return');
+
+  const preview = unwrap(vatSettlementPreview(ctx, { period: '2026-Q2' }), 'vat_settlement_preview');
+  assert.equal(preview.filed, true, 'the settlement fixture is of a FILED period');
+  assert.equal(preview.settlement, null, 'the preview recording is of an unsettled period');
+  assert.equal(preview.nothingToSettle, false);
+  assert.equal(preview.differences.netMinor, 0, 'the healthy book declares what it booked');
+
+  unwrap(vatSettlementPost(ctx, { period: '2026-Q2', idempotencyKey: 'a07-gui-settle' }), 'vat_settlement_post');
+  const posted = unwrap(vatSettlementPreview(ctx, { period: '2026-Q2' }), 'vat_settlement_preview');
+  assert.notEqual(posted.settlement, null, 'the posted recording carries the settlement row');
+  const after = unwrap(computeVatReturn(ctx, Q2), 'vat_return');
+  assert.equal(JSON.stringify(after), JSON.stringify(before), 'a settlement must leave the filed return byte-identical');
+
+  return { preview, posted };
 }

@@ -19,6 +19,7 @@ import { makeContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { seedChartOfAccounts } from '../accounts/index.js';
+import { seedDefaultChecklistRules } from '../checklists/autostart.js';
 import { appendAuditLog } from '../ledger/auditLog.js';
 import { ledgerPorts } from '../ledger/index.js';
 import { holdsAnyMembership, seatFirstOwner } from '../access/index.js';
@@ -114,6 +115,12 @@ export function createWorkspace(deps: SetupDeps, input: CreateWorkspaceInput): R
       );
     // Born with the KMU chart (A01).
     seedChartOfAccounts(makeContext(deps.store, { workspaceId: id, clock: deps.clock, ids: deps.ids }));
+    // Born with the two default checklist rules (G22 §10.8, D129): the MWST-Periode and the
+    // Monatsabschluss start themselves on the daily tick once a period has ended; the owner disables
+    // either on /automations and the seed never re-enables it (it keys on the rule id). The author
+    // is the creating actor, the identity the A24 gate runs the firing under; the run the rule starts
+    // records the RULE as its creator. Deferred from N1 to the day the month_close template existed.
+    seedDefaultChecklistRules(makeContext(deps.store, { workspaceId: id, actor: deps.actor ?? 'system', clock: deps.clock, ids: deps.ids }));
     // Stamp the genesis row of the workspace's A03 audit chain: it anchors the chain and proves when
     // and by whom the workspace was created (§H-AUDIT). Actor is 'system' (no user record exists yet).
     appendAuditLog(

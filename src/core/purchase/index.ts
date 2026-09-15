@@ -37,6 +37,9 @@ export {
   readVendorBillRow,
   settledOnVendorBill,
   payablesBalanceAsOf,
+  // G22 leg 2: the two as-of halves of the 2000 reconciliation, read by the open_items_creditors validation.
+  workspaceBaseOpenMinor,
+  supplierOnAccountMinor,
   vendorBillEcho,
   VENDOR_BILL_LIST_CEILING,
 } from './reads.js';

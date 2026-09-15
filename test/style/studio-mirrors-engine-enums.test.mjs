@@ -109,6 +109,16 @@ const MIRRORS = [
     note: 'G02. Where a manifest came from (local file or a configured registry); install refuses anything else with `invalid_input`.',
   },
   {
+    engine: { module: 'dist/core/accruals/index.js', export: 'ACCRUAL_KINDS' },
+    studio: { file: 'app/src/surfaces/Periods/accrual-model.ts', symbol: 'ACCRUAL_KINDS' },
+    note: 'A38. The four OR 958b kinds the editor offers; the engine refuses anything else with `invalid_kind` naming the four.',
+  },
+  {
+    engine: { module: 'dist/core/accruals/index.js', export: 'PROVISION_REASONS' },
+    studio: { file: 'app/src/surfaces/Periods/accrual-model.ts', symbol: 'PROVISION_REASONS' },
+    note: 'A38. The Art. 960e reason list the provision drawer offers; the engine refuses anything else with `invalid_reason` naming the eight.',
+  },
+  {
     engine: { module: 'dist/core/plugins/enums.js', export: 'PLUGIN_STATUSES' },
     studio: { file: 'app/src/surfaces/Extensions/model.ts', symbol: 'PLUGIN_STATUSES' },
     note: 'G02. The plugin lifecycle badge on the Erweiterungen card (glyph + label); installed/disabled/incompatible are the only states the engine writes.',
@@ -187,6 +197,11 @@ const MIRRORS = [
     engine: { module: 'dist/core/time/enums.js', export: 'RATE_CARD_SCOPES' },
     studio: { file: 'app/src/surfaces/Time/model.ts', symbol: 'RATE_CARD_SCOPES' },
     note: 'B01. The Geltung picker on the Tarife card; the engine refuses anything else with invalid_rate_card, and resolveRate precedence depends on exactly this set.',
+  },
+  {
+    engine: { module: 'dist/core/checklists/runs.js', export: 'CHECKLIST_DERIVED_ITEM_STATUSES' },
+    studio: { file: 'app/src/surfaces/Checklists/model.ts', symbol: 'ItemStatus' },
+    note: 'G22 leg 2 (spec §10.1). The derived item status the run detail renders a word for; `excluded` is derived from a choice and never stored, and a Studio that lacks it would render an excluded row as open.',
   },
 ];
 

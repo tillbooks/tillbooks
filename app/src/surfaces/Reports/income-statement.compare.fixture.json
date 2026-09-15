@@ -23,7 +23,7 @@
         {
           "key": "3200",
           "account": {
-            "id": "acc_29",
+            "id": "acc_30",
             "number": "3200",
             "name": "Erlöse aus Handelswaren",
             "type": "income"
@@ -35,7 +35,7 @@
         {
           "key": "3400",
           "account": {
-            "id": "acc_30",
+            "id": "acc_31",
             "number": "3400",
             "name": "Erlöse aus Dienstleistungen",
             "type": "income"
@@ -47,7 +47,7 @@
         {
           "key": "3800",
           "account": {
-            "id": "acc_32",
+            "id": "acc_33",
             "number": "3800",
             "name": "Rabatte, Skonti und Gutschriften",
             "type": "income"
@@ -88,7 +88,7 @@
         {
           "key": "4900",
           "account": {
-            "id": "acc_38",
+            "id": "acc_40",
             "number": "4900",
             "name": "Erhaltene Rabatte und Skonti",
             "type": "expense"
@@ -115,7 +115,7 @@
         {
           "key": "5000",
           "account": {
-            "id": "acc_40",
+            "id": "acc_42",
             "number": "5000",
             "name": "Löhne und Gehälter",
             "type": "expense"
@@ -142,7 +142,7 @@
         {
           "key": "6500",
           "account": {
-            "id": "acc_48",
+            "id": "acc_50",
             "number": "6500",
             "name": "Verwaltungs- und Bürokosten",
             "type": "expense"
@@ -169,7 +169,7 @@
         {
           "key": "6800",
           "account": {
-            "id": "acc_52",
+            "id": "acc_54",
             "number": "6800",
             "name": "Abschreibungen und Wertberichtigungen auf Positionen des Anlagevermögens",
             "type": "expense"
@@ -196,7 +196,7 @@
         {
           "key": "6900",
           "account": {
-            "id": "acc_53",
+            "id": "acc_55",
             "number": "6900",
             "name": "Finanzaufwand",
             "type": "expense"

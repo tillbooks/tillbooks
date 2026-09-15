@@ -74,7 +74,10 @@
         "review": "Buchungen noch nicht freigegeben",
         "fx": "Fremdwährungen neu bewerten"
       }
-    }
+    },
+    "openYearClose": "Jahresabschluss öffnen",
+    "guidedYearClose": "Geführter Jahresabschluss",
+    "yearCloseRunNote": "Für {year} läuft ein geführter Jahresabschluss; der Abschluss ist dort der letzte Schritt."
   },
   "audit": {
     "title": "Prüfprotokoll",
@@ -119,6 +122,9 @@
       "import": "Importiert",
       "confirm": "Bestätigt",
       "book": "Buchung erstellt",
+      "release": "Aufgelöst",
+      "release_reverse": "Auflösung storniert",
+      "discard": "Verworfen",
       "comment": "Kommentiert",
       "flag": "Beanstandet",
       "approve": "Freigegeben",
@@ -143,7 +149,6 @@
       "intake": "Erfasst",
       "extract": "Ausgelesen",
       "commit": "Übernommen",
-      "discard": "Verworfen",
       "export": "Exportiert",
       "enable": "Aktiviert"
     },
@@ -155,6 +160,7 @@
       "exchange_rate": "Wechselkurs",
       "fx_method_election": "Umrechnungsmethode",
       "fx_revaluation": "FX-Neubewertung",
+      "vat_settlement": "MWST-Saldierung",
       "checklist_run": "Checkliste",
       "bank_account": "Bankkonto",
       "saldo_declaration_election": "Saldo-Deklarationsbasis",
@@ -190,9 +196,171 @@
       "inventory_reason_code": "Korrekturgrund",
       "inventory_adjustment": "Bestandeskorrektur",
       "migration_plan": "Übernahmeplan",
-      "sync": "Sync-Publishing"
+      "sync": "Sync-Publishing",
+      "accrual": "Abgrenzung",
+      "provision": "Rückstellung"
     },
     "emptyHint": "TILL schreibt hier jede Buchung, jede Sperre und jede Änderung an deinen Stammdaten mit. Du musst nichts davon selbst erfassen."
+  },
+  "accruals": {
+    "title": "Abgrenzungen und Rückstellungen per {date}",
+    "new": "Abgrenzung erfassen",
+    "drawerTitle": "Abgrenzung erfassen",
+    "kindLabel": "Art der Abgrenzung",
+    "kind": {
+      "prepaid_expense": "Aufwand vorausbezahlt",
+      "accrued_income": "Ertrag noch nicht fakturiert",
+      "accrued_expense": "Aufwand noch nicht fakturiert",
+      "deferred_income": "Ertrag vorausbezahlt erhalten"
+    },
+    "amount": "Betrag",
+    "contraAccount": "Gegenkonto (Erfolgsrechnung)",
+    "description": "Beschreibung",
+    "sourceRef": "Beleg (optional)",
+    "reversalOn": "Rückbuchung am {date}",
+    "previewCaption": "Buchung per Periodenende",
+    "save": "Entwurf speichern",
+    "post": "Buchen",
+    "postAll": "Alle buchen ({count}, {total})",
+    "postAllTitle": "{count} Entwürfe buchen?",
+    "postAllMessage": "{count} Entwürfe mit total {total} werden je einzeln gebucht. Bricht ein Entwurf ab, siehst du, was gebucht ist und was noch wartet.",
+    "postAllAction": "Alle buchen",
+    "reverse": "Rückgängig (Storno)",
+    "discard": "Verwerfen",
+    "cancel": "Abbrechen",
+    "close": "Schliessen",
+    "empty": "Noch keine Abgrenzung erfasst",
+    "emptyHint": "Erfasse eine Abgrenzung oder eine Rückstellung. Der Entwurf zeigt dir die Buchung, bevor etwas gebucht wird.",
+    "listCaption": "Abgrenzungen",
+    "noPost": "Zum Erfassen und Buchen brauchst du das Recht «Buchen» (post).",
+    "accountsLoading": "Kontenplan wird geladen",
+    "accountsFailed": "Kontenplan konnte nicht gelesen werden",
+    "col": {
+      "kind": "Art",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "posted": "Gebucht",
+      "reversed": "Storniert",
+      "discarded": "Verworfen"
+    },
+    "badge": {
+      "already_posted": "bereits gebucht",
+      "already_reversed": "bereits storniert"
+    },
+    "lines": {
+      "account": "Konto",
+      "debit": "Soll",
+      "credit": "Haben",
+      "date": "Datum",
+      "pick": "Konto wählen"
+    },
+    "posted": {
+      "pair": "Gebucht: {entryId}. Rückbuchung am {date}: {reversalEntryId}.",
+      "storno": "Storniert: {entryId}, Rückbuchung des Stornos: {reversalEntryId}.",
+      "one": "Gebucht: {entryId}."
+    },
+    "batch": {
+      "summary": "{posted} gebucht, {refused} abgelehnt, {remaining} noch offen.",
+      "already": "{count} waren bereits gebucht.",
+      "refused": "Ablehnung: {codes}."
+    },
+    "confirm": {
+      "accrual_post": "Abgrenzung buchen?",
+      "provision_post": "Rückstellung buchen?",
+      "accrual_reverse": "Abgrenzung stornieren?",
+      "provision_reverse": "Rückstellung stornieren?",
+      "provision_release_reverse": "Auflösung stornieren?"
+    },
+    "confirmAction": {
+      "accrual_post": "Buchen",
+      "provision_post": "Buchen",
+      "accrual_reverse": "Stornieren",
+      "provision_reverse": "Stornieren",
+      "provision_release_reverse": "Stornieren"
+    },
+    "error": {
+      "invalid_amount": "Gib einen Betrag über null mit höchstens zwei Nachkommastellen ein.",
+      "description": "Gib eine Beschreibung ein.",
+      "period_locked": "Die Periode um den {date} ist gesperrt, es wurde nichts gebucht. Entsperre sie unten bei den Periodensperren.",
+      "missing_account": "Das Konto {number} fehlt im Kontenplan. Lege es unter Konten an.",
+      "generic": "Das hat nicht geklappt. Deine Eingaben bleiben erhalten.",
+      "invalid_account": {
+        "contra_must_be_income_or_expense": "Das Gegenkonto muss ein Erfolgskonto sein (Ertrag oder Aufwand).",
+        "kind_account_type_mismatch": "Dieses Konto passt nicht zur gewählten Art: Ertragsarten brauchen ein Ertragskonto, Aufwandarten ein Aufwandkonto.",
+        "contra_not_found": "Wähle ein Gegenkonto.",
+        "archived": "Dieses Konto ist archiviert.",
+        "provision_account": "Das Rückstellungskonto muss ein Passivkonto 23xx oder 26xx sein.",
+        "expense_not_found": "Wähle ein Aufwandkonto.",
+        "expense_must_be_income_or_expense": "Das Aufwandkonto muss ein Erfolgskonto sein.",
+        "target_not_found": "Wähle ein Zielkonto.",
+        "target_must_be_income_or_expense": "Das Zielkonto muss ein Erfolgskonto sein.",
+        "generic": "Dieses Konto ist hier nicht zulässig."
+      }
+    },
+    "kindHint": {
+      "prepaid_expense": "Du hast bezahlt, die Leistung gehört aber in die nächste Periode (Soll 1300).",
+      "accrued_income": "Du hast geleistet, die Rechnung folgt erst in der nächsten Periode (Soll 1300).",
+      "accrued_expense": "Du hast bezogen, die Rechnung kommt erst in der nächsten Periode (Haben 2300).",
+      "deferred_income": "Du hast fakturiert, die Leistung gehört aber in die nächste Periode (Haben 2300)."
+    }
+  },
+  "provisions": {
+    "new": "Rückstellung erfassen",
+    "drawerTitle": "Rückstellung erfassen",
+    "reasonLabel": "Grund (OR 960e)",
+    "reason": {
+      "garantie": "Garantie",
+      "ferien_ueberzeit": "Ferien und Überzeit",
+      "prozess": "Prozess",
+      "grossreparatur": "Grossreparatur",
+      "sanierung": "Sanierung",
+      "restrukturierung": "Restrukturierung",
+      "steuern": "Steuern",
+      "sonstige": "Sonstige"
+    },
+    "account": "Rückstellungskonto",
+    "expenseAccount": "Aufwandkonto",
+    "openBalance": "Offen",
+    "listCaption": "Rückstellungen",
+    "release": "Auflösen",
+    "releaseTitle": "Rückstellung auflösen",
+    "releaseMessage": "Offen sind {open}. Die Auflösung bucht Soll Rückstellung, Haben Zielkonto.",
+    "releaseDate": "Datum",
+    "targetAccount": "Zielkonto",
+    "col": {
+      "reason": "Grund"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "posted": "Gebucht",
+      "released": "Aufgelöst",
+      "reversed": "Storniert",
+      "discarded": "Verworfen"
+    },
+    "error": {
+      "sonstige": "Für «Sonstige» braucht es eine Beschreibung mit mindestens zehn Zeichen.",
+      "release_exceeds_balance": "Der Betrag übersteigt den offenen Saldo von {open}.",
+      "release_blocked": "Storniere zuerst die Auflösungen (jüngste zuerst), dann die Rückstellung."
+    },
+    "reasonHint": {
+      "garantie": "Regelmässig anfallende Garantiearbeiten (OR 960e Abs. 3 Ziff. 1).",
+      "ferien_ueberzeit": "Noch nicht bezogene Ferien und Überzeit deiner Mitarbeitenden.",
+      "prozess": "Ein hängiges Verfahren, aus dem ein Mittelabfluss zu erwarten ist.",
+      "grossreparatur": "Anstehende grössere Instandsetzungen.",
+      "sanierung": "Sanierung von Sachanlagen (OR 960e Abs. 3 Ziff. 2).",
+      "restrukturierung": "Restrukturierungen (OR 960e Abs. 3 Ziff. 3).",
+      "steuern": "Direkte Steuern des Geschäftsjahres, gegen 8900.",
+      "sonstige": "Ein anderer begründeter Mittelabfluss. Beschreibe ihn mit mindestens zehn Zeichen."
+    },
+    "releases": "Auflösungen",
+    "releasesTitle": "Auflösungen von «{description}»",
+    "noReleases": "Noch keine Auflösung.",
+    "releaseReverse": "Auflösung stornieren",
+    "releaseReversed": "storniert ({entryId})",
+    "releaseLabel": "Auflösung vom {date} über {amount}"
   },
   "help": {
     "Periods": {

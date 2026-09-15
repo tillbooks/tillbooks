@@ -17,6 +17,7 @@
 import type { WorkspaceContext } from '../context.js';
 import type { Result } from '../result.js';
 import { ok, err } from '../result.js';
+import { VAT_FREE_ENTRY_SOURCES } from '../ledger/postEntry.js';
 
 export interface DetectAnomaliesInput {
   period?: unknown;
@@ -51,7 +52,7 @@ export function detectAnomalies(ctx: WorkspaceContext, input: DetectAnomaliesInp
     .prepare(
       `SELECT je.id AS id, je.date AS date,
               COALESCE(SUM(jl.base_debit_minor), 0) AS total,
-              SUM(CASE WHEN jl.tax_code IS NULL AND a.type IN ('income','expense') THEN 1 ELSE 0 END) AS untaxed
+              SUM(CASE WHEN jl.tax_code IS NULL AND a.type IN ('income','expense') AND je.source NOT IN (${VAT_FREE_ENTRY_SOURCES.map(() => '?').join(', ')}) THEN 1 ELSE 0 END) AS untaxed
          FROM journal_entry je
          JOIN journal_line jl ON jl.entry_id = je.id
          JOIN account a ON a.id = jl.account_id
@@ -59,7 +60,7 @@ export function detectAnomalies(ctx: WorkspaceContext, input: DetectAnomaliesInp
         GROUP BY je.id
         ORDER BY je.date, je.id`,
     )
-    .all(ctx.workspaceId, start, end) as { id: string; date: string; total: number; untaxed: number }[];
+    .all(...VAT_FREE_ENTRY_SOURCES, ctx.workspaceId, start, end) as { id: string; date: string; total: number; untaxed: number }[];
 
   const seen = new Map<string, string[]>();
   const duplicateIds: string[] = [];

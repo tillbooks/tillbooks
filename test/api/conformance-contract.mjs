@@ -85,6 +85,31 @@ function seedOverdueInvoice(fx, prefix) {
   return doc.document.id;
 }
 
+/** A38: one accrued-expense draft on the June period end, keyed per scenario so no two collide. */
+function accrualDraft(fx, key) {
+  return {
+    kind: 'accrued_expense',
+    periodEnd: '2026-06-30',
+    amountMinor: 180000,
+    contraAccount: '6500',
+    description: 'Strom Juni, Rechnung im Juli',
+    idempotencyKey: key,
+  };
+}
+
+/** A38: one Garantie provision draft on the June period end, Dr 6800 / Cr 2330. */
+function provisionDraft(fx, key) {
+  return {
+    reason: 'garantie',
+    periodEnd: '2026-06-30',
+    amountMinor: 500000,
+    provisionAccount: '2330',
+    expenseAccount: '6800',
+    description: 'Garantiefälle Halbjahr 2026',
+    idempotencyKey: key,
+  };
+}
+
 /** A balanced two-line draft body, the shape `save_draft` and `post_entry` share. */
 function draftLines(accId, amount = 4200) {
   return [
@@ -1929,6 +1954,110 @@ export const SCENARIOS = {
       ],
     });
     return { workspaceId: fx.workspaceId, periodEnd: '2026-06-30', idempotencyKey: 'fxrv-1' };
+  },
+  // fx_revaluation_reverse (D129 Q2) books the MIRROR PAIR of a posted run (the Storno dated the
+  // period end and its own next-day reversal), so the double call must leave exactly one Storno, one
+  // Storno reversal and one run row carrying the link. The seed is the post scenario's world, posted.
+  fx_revaluation_reverse: (fx) => {
+    fx.call('record_exchange_rate', {
+      baseCurrency: 'EUR',
+      rate: '0.9520',
+      asOf: '2026-06-30',
+      source: 'manual',
+      method: 'daily',
+      idempotencyKey: 'fxrr-rate',
+    });
+    fx.call('post_entry', {
+      date: '2026-06-15',
+      source: 'manual',
+      currency: 'EUR',
+      fxRate: '0.9600',
+      description: 'EUR-Position',
+      idempotencyKey: 'fxrr-pos',
+      lines: [
+        { account: fx.accId('1000'), debit: 1000000 },
+        { account: fx.accId('3200'), credit: 1000000 },
+      ],
+    });
+    const posted = fx.call('post_fx_revaluation', { periodEnd: '2026-06-30', idempotencyKey: 'fxrr-post' });
+    if (posted.ok !== true || posted.runId === null) throw new Error(`fx_revaluation_reverse seed: ${JSON.stringify(posted)}`);
+    return { workspaceId: fx.workspaceId, runId: posted.runId, idempotencyKey: 'fxrr-1' };
+  },
+
+  // --- A38, Abgrenzungen und Rückstellungen --------------------------------------------------------
+  // accrual_post POSTS a PAIR (the accrual dated period end AND its next-period reversal) in one
+  // transaction, and accrual_reverse posts the mirror pair, so the double call is doing its most
+  // valuable work: an accrual posted twice under one key must leave exactly TWO entries, and a Storno
+  // replayed must leave exactly FOUR, compared against every row of every table. The provision verbs
+  // post one entry each; a release replayed must leave ONE release row and ONE entry.
+  accrual_create: (fx) => ({
+    workspaceId: fx.workspaceId,
+    kind: 'accrued_expense',
+    periodEnd: '2026-06-30',
+    amountMinor: 180000,
+    contraAccount: '6500',
+    description: 'Strom Juni, Rechnung im Juli',
+    idempotencyKey: 'acc-create-1',
+  }),
+  accrual_post: (fx) => {
+    const draft = fx.call('accrual_create', accrualDraft(fx, 'acc-post-seed'));
+    return { workspaceId: fx.workspaceId, accrualId: draft.accrual.id, idempotencyKey: 'acc-post-1' };
+  },
+  accrual_reverse: (fx) => {
+    const draft = fx.call('accrual_create', accrualDraft(fx, 'acc-rev-seed'));
+    fx.call('accrual_post', { accrualId: draft.accrual.id, idempotencyKey: 'acc-rev-post' });
+    return { workspaceId: fx.workspaceId, accrualId: draft.accrual.id, reason: 'Rechnung kam doch im Juni', idempotencyKey: 'acc-rev-1' };
+  },
+  accrual_discard: (fx) => {
+    const draft = fx.call('accrual_create', accrualDraft(fx, 'acc-disc-seed'));
+    return { workspaceId: fx.workspaceId, accrualId: draft.accrual.id, reason: 'doppelt erfasst', idempotencyKey: 'acc-disc-1' };
+  },
+  provision_create: (fx) => ({
+    workspaceId: fx.workspaceId,
+    reason: 'garantie',
+    periodEnd: '2026-06-30',
+    amountMinor: 500000,
+    provisionAccount: '2330',
+    expenseAccount: '6800',
+    description: 'Garantiefälle Halbjahr 2026',
+    idempotencyKey: 'prov-create-1',
+  }),
+  provision_post: (fx) => {
+    const draft = fx.call('provision_create', provisionDraft(fx, 'prov-post-seed'));
+    return { workspaceId: fx.workspaceId, provisionId: draft.provision.id, idempotencyKey: 'prov-post-1' };
+  },
+  provision_release: (fx) => {
+    const draft = fx.call('provision_create', provisionDraft(fx, 'prov-rel-seed'));
+    fx.call('provision_post', { provisionId: draft.provision.id, idempotencyKey: 'prov-rel-post' });
+    return {
+      workspaceId: fx.workspaceId,
+      provisionId: draft.provision.id,
+      date: '2026-07-10',
+      amountMinor: 200000,
+      targetAccount: '6800',
+      idempotencyKey: 'prov-rel-1',
+    };
+  },
+  provision_reverse: (fx) => {
+    const draft = fx.call('provision_create', provisionDraft(fx, 'prov-rev-seed'));
+    fx.call('provision_post', { provisionId: draft.provision.id, idempotencyKey: 'prov-rev-post' });
+    return { workspaceId: fx.workspaceId, provisionId: draft.provision.id, reason: 'Fall erledigt', idempotencyKey: 'prov-rev-1' };
+  },
+  provision_release_reverse: (fx) => {
+    const draft = fx.call('provision_create', provisionDraft(fx, 'prov-rr-seed'));
+    fx.call('provision_post', { provisionId: draft.provision.id, idempotencyKey: 'prov-rr-post' });
+    const release = fx.call('provision_release', {
+      provisionId: draft.provision.id,
+      date: '2026-07-10',
+      amountMinor: 200000,
+      targetAccount: '6800',
+      idempotencyKey: 'prov-rr-rel',
+    });
+    return { workspaceId: fx.workspaceId, releaseId: release.releaseId, reason: 'zu früh aufgelöst', idempotencyKey: 'prov-rr-1' };
+  },
+  provision_discard: (fx) => {
+    const draft = fx.call('provision_create', provisionDraft(fx, 'prov-disc-seed'));
+    return { workspaceId: fx.workspaceId, provisionId: draft.provision.id, reason: 'doppelt erfasst', idempotencyKey: 'prov-disc-1' };
   },
 
   // --- A14, payments and matching ----------------------------------------------------------------
@@ -3818,6 +3947,21 @@ export const SCENARIOS = {
     return { workspaceId: fx.workspaceId, runId, reason: 'Falsche Periode gestartet.', idempotencyKey: 'chk-abandon-1' };
   },
 
+  // --- A38, the MWST-Saldierung (D129 leg 2) -------------------------------------------------------
+  // `vat_settlement_post` transfers a FILED quarter's 2200 balance to 2201 INSIDE the filing lock (the
+  // A38 §4.6 carve-out), so the double call is doing its most valuable work: the same key must leave ONE
+  // settlement entry and ONE row, and a period settled twice would double the ESTV liability. The seed
+  // posts one tagged sale into 2026-Q2 (Cr 3200 100'000.00 UST81, Cr 2200 8'100.00) and files the
+  // quarter through A07's own verb, never by writing a lock by hand.
+  vat_settlement_post: (fx) => {
+    seedSettledQuarter(fx, 'vsp', false);
+    return { workspaceId: fx.workspaceId, period: '2026-Q2', idempotencyKey: 'vsp-1' };
+  },
+  vat_settlement_reverse: (fx) => {
+    const settlementId = seedSettledQuarter(fx, 'vsr', true);
+    return { workspaceId: fx.workspaceId, settlementId, idempotencyKey: 'vsr-1' };
+  },
+
   // --- G11, the Eröffnungsprüfung ----------------------------------------------------------------
   // All three writes run over an `opening_balances` step minted through the real G09 verbs. The
   // declare scenario states an expectation; the check scenario runs the real trial-run check (its
@@ -5547,6 +5691,58 @@ export const READ_SCENARIOS = {
   },
   // --- A36, live bank feed: the static bank directory is a pure read over in-package data ---------
   bank_channel_directory: (fx) => ({ workspaceId: fx.workspaceId, query: 'UBS' }),
+  // --- A38, Abgrenzungen und Rückstellungen: the draft reads and the tax helper ------------------
+  // Each seeds a draft (or a posted provision with a release) first, so the read answers with real
+  // lines and a real open balance rather than the empty-workspace path; the snapshot proves the
+  // read itself writes nothing. The tax helper reads a year with revenue and an instalment on 8900,
+  // so its ZStB 27/1 figures are non-zero.
+  accrual_get: (fx) => {
+    const draft = fx.call('accrual_create', accrualDraft(fx, 'acc-get-seed'));
+    return { workspaceId: fx.workspaceId, accrualId: draft.accrual.id };
+  },
+  accrual_list: (fx) => {
+    fx.call('accrual_create', accrualDraft(fx, 'acc-list-seed'));
+    return { workspaceId: fx.workspaceId, periodEnd: '2026-06-30' };
+  },
+  provision_get: (fx) => {
+    const draft = fx.call('provision_create', provisionDraft(fx, 'prov-get-seed'));
+    fx.call('provision_post', { provisionId: draft.provision.id, idempotencyKey: 'prov-get-post' });
+    fx.call('provision_release', {
+      provisionId: draft.provision.id,
+      date: '2026-07-10',
+      amountMinor: 100000,
+      targetAccount: '6800',
+      idempotencyKey: 'prov-get-rel',
+    });
+    return { workspaceId: fx.workspaceId, provisionId: draft.provision.id };
+  },
+  provision_list: (fx) => {
+    fx.call('provision_create', provisionDraft(fx, 'prov-list-seed'));
+    return { workspaceId: fx.workspaceId, status: 'draft' };
+  },
+  tax_provision_preview: (fx) => {
+    fx.call('post_entry', {
+      date: '2026-03-15',
+      source: 'manual',
+      description: 'Beratungshonorar',
+      idempotencyKey: 'tax-prev-rev',
+      lines: [
+        { account: fx.accId('1020'), debit: 90000 },
+        { account: fx.accId('3400'), credit: 90000 },
+      ],
+    });
+    fx.call('post_entry', {
+      date: '2026-05-02',
+      source: 'manual',
+      description: 'Provisorische Steuerrechnung',
+      idempotencyKey: 'tax-prev-inst',
+      lines: [
+        { account: fx.accId('8900'), debit: 10000 },
+        { account: fx.accId('1020'), credit: 10000 },
+      ],
+    });
+    return { workspaceId: fx.workspaceId, periodEnd: '2026-12-31', rateBp: 2000 };
+  },
   // --- M02, the §I sync/publish contract reads (pure over the append-only outbox) ----------------
   // `get_sync_contract` and `sync_stream_status` answer on a fresh workspace (publishing off).
   // `sync_stream_read` enables publishing and posts one entry first, so it reads a real journal.posted
@@ -6419,7 +6615,51 @@ export const READ_SCENARIOS = {
     seedChecklistRun(fx, 'chk-list-read');
     return { workspaceId: fx.workspaceId };
   },
+
+  // A38 (D129 leg 2), the MWST-Saldierung reads. `vat_settlement_preview` derives the settlement model
+  // of a filed, tagged 2026-Q2 live (the movement read, A07's return, the lines) and writes nothing;
+  // `vat_settlement_list` reads over a really-posted settlement; `vat_annual_reconciliation` derives the
+  // two Art. 128 MWSTV reconciliations over the year with one quarter filed. The snapshot proves each
+  // inert and identical twice.
+  vat_settlement_preview: (fx) => {
+    seedSettledQuarter(fx, 'vsp-read', false);
+    return { workspaceId: fx.workspaceId, period: '2026-Q2' };
+  },
+  vat_settlement_list: (fx) => {
+    seedSettledQuarter(fx, 'vsl-read', true);
+    return { workspaceId: fx.workspaceId, year: '2026' };
+  },
+  vat_annual_reconciliation: (fx) => {
+    seedSettledQuarter(fx, 'var-read', false);
+    return { workspaceId: fx.workspaceId, year: '2026' };
+  },
 };
+
+/**
+ * A38's shared world: G22's effektiv/soll workspace with one tagged sale in 2026-Q2 and the quarter
+ * filed through `vat_mark_filed`. With `settle` the quarter is also settled through the real verb, and
+ * the settlement id is returned.
+ */
+function seedSettledQuarter(fx, prefix, settle) {
+  seedChecklistWorld(fx);
+  fx.call('post_entry', {
+    date: '2026-05-15',
+    source: 'manual',
+    description: 'Beratung Mai',
+    idempotencyKey: `${prefix}-sale`,
+    lines: [
+      { account: fx.accId('1100'), debit: 108100 },
+      { account: fx.accId('3200'), credit: 100000, taxCode: 'UST81' },
+      { account: fx.accId('2200'), credit: 8100 },
+    ],
+  });
+  const filed = fx.call('vat_mark_filed', { period: '2026-Q2', idempotencyKey: `${prefix}-file` });
+  if (filed.ok !== true) throw new Error(`seedSettledQuarter filing: ${JSON.stringify(filed)}`);
+  if (!settle) return null;
+  const settled = fx.call('vat_settlement_post', { period: '2026-Q2', idempotencyKey: `${prefix}-settle` });
+  if (settled.ok !== true) throw new Error(`seedSettledQuarter settlement: ${JSON.stringify(settled)}`);
+  return settled.settlementId;
+}
 
 /** G22's shared world: an effektiv/soll workspace with the default tax codes, so 2026-Q2 is filable. */
 function seedChecklistWorld(fx) {
@@ -6624,8 +6864,11 @@ function seedForecastWorld(fx, prefix) {
  * G22 makes it ONE HUNDRED AND TWELVE (+3): `checklist_templates` (shipped data), `checklist_get` and
  * `checklist_list` over a really-started 2026-Q2 run, each deriving the live checks and the
  * computed-return hash and writing nothing; the snapshot proves each inert and identical twice.
+ * A38 (D129 leg 2) makes it ONE HUNDRED AND FIFTEEN (+3): `vat_settlement_preview`, `vat_settlement_list`
+ * and `vat_annual_reconciliation` over a filed, tagged 2026-Q2 (one of them over a really-posted
+ * settlement), each a derivation from the ledger and A07's return, writing nothing.
  */
-export const READ_SCENARIO_FLOOR = 112;
+export const READ_SCENARIO_FLOOR = 120;
 
 /**
  * THE ONE BLESSED READ-VERB WRITER (D96), and nothing else.

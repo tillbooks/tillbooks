@@ -345,6 +345,28 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // action (a rule may feed a rate in); posting the revaluation off it is the step that is withheld,
   // the same shape A19 withholds `set_bank_opening_balance` from automation.
   'post_fx_revaluation',
+  // (b) A38, Abgrenzungen und Rückstellungen: every write, the drafts included. An Abgrenzung or a
+  // Rückstellung is a period-end judgement a human owns and confirms per occasion (OR 958b, 960e;
+  // spec §5, §6b), and a rule that drafted one unattended would put a proposal into the close
+  // nobody described. The reads stay automatable; the `post_fx_revaluation` posture for the rest.
+  'accrual_create',
+  'accrual_post',
+  'accrual_reverse',
+  'accrual_discard',
+  'provision_create',
+  'provision_post',
+  'provision_release',
+  'provision_reverse',
+  'provision_release_reverse',
+  'provision_discard',
+  // D129 Q2: the revert of that revaluation is the same period-end act in the other direction.
+  'fx_revaluation_reverse',
+  // (b) A38's MWST-Saldierung (D129 leg 2): the transfer of a FILED period's VAT balances to 2201,
+  // admitted inside the filing lock under the §4.6 carve-out. A period-end act a human owns and
+  // confirms per occasion (the `post_fx_revaluation` posture, spec §5: "a rule must never accrue,
+  // provision or settle unattended"); the reads stay automatable.
+  'vat_settlement_post',
+  'vat_settlement_reverse',
   // (b) A34: `wage_journal_post` posts the month's aggregate wage journal into the live ledger
   // through A02 `postEntry`, a period-end statutory booking a human owns and confirms per occasion
   // (Pattern P8), never a template firing unattended at 03:00 (spec §5: "an auto-firing wage posting
@@ -546,4 +568,26 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
 /** Is `tool` a verb a rule may never name as its action? */
 export function isNotAutomatable(tool: unknown): boolean {
   return typeof tool === 'string' && NOT_AUTOMATABLE.has(tool);
+}
+
+// G22 leg 2 (D129, spec §10.8): the denylist keyed on the INPUT. `checklist_start` stays automatable
+// (the seeded daily rules start the MWST-Periode and the Monatsabschluss), but a rule naming the
+// `year_close` template is refused at definition time with `template_not_automatable`: the year close
+// is started deliberately. The same shape as `NOT_AUTOMATABLE`, one level down; kept import-free like
+// the set above, and mirrored by `NOT_AUTOMATABLE_TEMPLATE_IDS` in `src/core/checklists/autostart.ts`
+// (a test asserts the two agree).
+export const NOT_AUTOMATABLE_INPUTS: Readonly<Record<string, Readonly<Record<string, ReadonlySet<string>>>>> = {
+  checklist_start: { templateId: new Set(['year_close']) },
+};
+
+/** The input field and value a rule may never fire `tool` with, or undefined when the input is admissible. */
+export function notAutomatableInput(tool: unknown, input: unknown): { field: string; value: string } | undefined {
+  if (typeof tool !== 'string' || input === null || typeof input !== 'object') return undefined;
+  const fields = NOT_AUTOMATABLE_INPUTS[tool];
+  if (fields === undefined) return undefined;
+  for (const [field, denied] of Object.entries(fields)) {
+    const value = (input as Record<string, unknown>)[field];
+    if (typeof value === 'string' && denied.has(value)) return { field, value };
+  }
+  return undefined;
 }

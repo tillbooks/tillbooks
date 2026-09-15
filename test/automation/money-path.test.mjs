@@ -22,7 +22,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { call, count, defineRule, postTemplate, runRows, workspace } from './support.mjs';
+import { call, count, defineRule, postTemplate, runRows, workspace, OWN_RULES } from './support.mjs';
 
 const ENTRIES = 'SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?';
 const LINES = `SELECT COUNT(*) AS n FROM journal_line
@@ -187,7 +187,7 @@ test('MONEY PATH: a rule may not name a READ verb, at save time or at fire time'
   });
   assert.equal(refused.ok, false, 'a read verb was accepted as a rule action');
   assert.equal(refused.error, 'action_not_writable');
-  assert.equal(count(deps, 'SELECT COUNT(*) AS n FROM automation_rule WHERE workspace_id = ?', workspaceId), 0);
+  assert.equal(count(deps, `SELECT COUNT(*) AS n FROM automation_rule WHERE workspace_id = ? AND ${OWN_RULES}`, workspaceId), 0);
 
   // And a verb that does not exist at all is a DIFFERENT mistake, said differently.
   const unknown = call(deps, 'create_automation_rule', {

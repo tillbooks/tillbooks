@@ -45,11 +45,12 @@ export { importExchangeRates, describeRateFeed } from './importRates.js';
 
 export type { ImportExchangeRatesInput, ImportedRate, SkippedRate } from './importRates.js';
 
-export { computeFxRevaluation, postFxRevaluation } from './revaluation.js';
+export { computeFxRevaluation, postFxRevaluation, reverseFxRevaluation } from './revaluation.js';
 
 export type {
   FxPosition,
   FxNeedsRate,
   ComputeFxRevaluationInput,
   PostFxRevaluationInput,
+  ReverseFxRevaluationInput,
 } from './revaluation.js';

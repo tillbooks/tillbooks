@@ -268,6 +268,8 @@ test('every account in the shipped KMU seed lands in the section its number and 
     '2201': 'kurzfristiges_fremdkapital',
     '2260': 'kurzfristiges_fremdkapital',
     '2300': 'kurzfristiges_fremdkapital',
+    // 2330 kurzfristige Rückstellungen: Abs. 2 Ziff. 1 lit. e, SHORT term unlike 2600 (A38).
+    '2330': 'kurzfristiges_fremdkapital',
     '2400': 'langfristiges_fremdkapital',
     '2450': 'langfristiges_fremdkapital',
     '2600': 'langfristiges_fremdkapital',
@@ -294,6 +296,7 @@ test('every result account in the shipped KMU seed lands in its OR Art. 959b pos
     '3800': 'netto_erloese',
     '3805': 'netto_erloese',
     '3806': 'netto_erloese',
+    '3809': 'netto_erloese',
     '4000': 'materialaufwand',
     '4200': 'materialaufwand',
     '4400': 'materialaufwand',
@@ -314,6 +317,8 @@ test('every result account in the shipped KMU seed lands in its OR Art. 959b pos
     '6800': 'abschreibungen',
     '6900': 'finanzergebnis',
     '6949': 'finanzergebnis',
+    // Ziff. 10 direkte Steuern: the 89xx band, never ausserordentlicher Erfolg (A38).
+    '8900': 'direkte_steuern',
   };
   for (const account of KMU_CORE_SEED) {
     if (account.type !== 'income' && account.type !== 'expense') continue;

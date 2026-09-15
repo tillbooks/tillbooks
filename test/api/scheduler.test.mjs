@@ -16,7 +16,7 @@ import { getAction } from '../../dist/api/registry.js';
 import { createScheduler, clampTickMs, resolveTickMs, DEFAULT_TICK_MS, MIN_TICK_MS, MAX_TICK_MS } from '../../dist/api/scheduler.js';
 import { resetDeliveryRuntime, getDeliveryRuntime } from '../../dist/api/runtime-state.js';
 import { freshDeps, mintWorkspace } from './support.mjs';
-import { defineRule, postTemplate } from '../automation/support.mjs';
+import { defineRule, postTemplate, retireSeededChecklistRules } from '../automation/support.mjs';
 
 const ENTRIES = 'SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?';
 const RUNS = 'SELECT COUNT(*) AS n FROM automation_run WHERE workspace_id = ?';
@@ -62,6 +62,9 @@ test('a tick as `system` fires a due schedule rule ONCE across repeated ticks at
   // Author as `studio`: a rule the agent seat creates lands DISABLED and would never fire.
   deps.actor = 'studio';
   const { workspaceId, accId } = mintWorkspace(deps, 'Automat GmbH', 'sch-fire');
+  // G22 (D129) seeds two enabled `schedule.daily` `checklist_start` rules per workspace; retire them so
+  // the run count names only the rule under test (their own idempotency is proven in g22-autostart).
+  retireSeededChecklistRules(deps, workspaceId);
   // A daily schedule rule created by the studio actor lands ENABLED (only the agent seat lands disabled).
   defineRule(
     deps,

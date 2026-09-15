@@ -349,6 +349,16 @@ function soleOf<T>(values: Set<T>): T | null {
  * Output side is the net CREDIT on 2200; input side is the net DEBIT on 1170/1171. Both are read as
  * credits-net-of-debits (output) and debits-net-of-credits (input) so a reversal, which mirrors the
  * entry with every leg flipped, subtracts rather than adding a second time with the wrong sign.
+ *
+ * A38 (D129 leg 2): `source='vat_settlement'` entries and their reversals are EXCLUDED BY NAME. The
+ * year-end MWST-Saldierung transfers a filed period's 2200 / 1170 / 1171 balances to 2201, dated the
+ * period end, and it is admitted over the filing lock precisely because it cannot move a filed figure:
+ * this read is what makes that a fact rather than a promise. Without the exclusion a settled quarter's
+ * booked 2200 movement would read zero, `driftMinor` would equal the whole Ziffer 399, and the bridge
+ * (`bridge.ts`, fed from the same figure) would flip from "stimmt überein" to "ungeklärt" on a period
+ * a human already filed. `test/accruals/a38-vat-settlement.test.mjs` computes the return before and
+ * after four settlements and asserts byte equality. The reversal clause is one subquery rather than a
+ * join on the target's source so an unrelated reversal keeps subtracting as before.
  */
 function bookedVatByEntry(
   ctx: WorkspaceContext,
@@ -366,6 +376,9 @@ function bookedVatByEntry(
          JOIN journal_line l ON l.entry_id = e.id
          JOIN account a ON a.id = l.account_id
         WHERE e.workspace_id = ? AND e.status = 'posted' AND e.date >= ? AND e.date <= ?
+          AND e.source <> 'vat_settlement'
+          AND NOT (e.source = 'reversal' AND e.reverses_entry_id IN
+                   (SELECT id FROM journal_entry WHERE workspace_id = ? AND source = 'vat_settlement'))
         GROUP BY e.id`,
     )
     .all(
@@ -375,6 +388,7 @@ function bookedVatByEntry(
       ctx.workspaceId,
       periodStart,
       periodEnd,
+      ctx.workspaceId,
     ) as { entry_id: string; output_minor: number; input_minor: number }[];
 
   const map = new Map<string, { output: number; input: number }>();

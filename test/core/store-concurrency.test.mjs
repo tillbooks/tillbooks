@@ -11,6 +11,7 @@ import { join } from 'node:path';
 
 import { SqliteStore, DEFAULT_BUSY_TIMEOUT_MS, isBusyError } from '../../dist/core/store/sqlite-store.js';
 import { getAction } from '../../dist/api/registry.js';
+import { KMU_CORE_SEED } from '../../dist/core/accounts/index.js';
 
 function tempDb(name = 'till.db') {
   return join(mkdtempSync(join(tmpdir(), 'till-store-')), name);
@@ -86,11 +87,18 @@ test('a non-busy throw is still unexpected_error, so the new code stays meaningf
 test('a clean close checkpoints the WAL, so till.db-wal does not grow without bound', () => {
   const path = tempDb();
   const store = new SqliteStore({ location: path });
+  // A real id supply. Until 2026-09-10 this generator answered `acc_1` to every call, and the birth
+  // seed's `INSERT OR IGNORE` swallowed the primary-key collision on every seed row after the first:
+  // the workspace was born with ONE account of the whole chart and reported ok. A38's top-up
+  // (`src/core/accounts/topUp.ts`) refuses the collision instead, which is what exposed the fixture.
+  let n = 0;
   const res = getAction('create_workspace').run(
-    { store, clock: { now: () => '2026-07-20T00:00:00.000Z' }, ids: { next: (p) => `${p}_1` }, actor: 'agent' },
+    { store, clock: { now: () => '2026-07-20T00:00:00.000Z' }, ids: { next: (p) => `${p}_${++n}` }, actor: 'agent' },
     { name: 'WAL GmbH', idempotencyKey: 'w' },
   );
-  assert.equal(res.ok, true);
+  assert.equal(res.ok, true, JSON.stringify(res));
+  const { c } = store.db.prepare('SELECT COUNT(*) AS c FROM account').get();
+  assert.equal(c, KMU_CORE_SEED.length, 'the workspace is born with the WHOLE chart, never a silently half-seeded one');
 
   const wal = `${path}-wal`;
   assert.ok(existsSync(wal) && statSync(wal).size > 0, 'the write should have gone through the WAL first');

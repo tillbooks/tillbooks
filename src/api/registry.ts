@@ -87,6 +87,7 @@ import {
   saldoEligibility,
 } from '../core/vat/index.js';
 import { fxActions } from './fx-actions.js';
+import { accrualActions, vatSettlementActions } from './accrual-actions.js';
 import { paymentActions } from './payment-actions.js';
 import { debtorActions } from './debtor-actions.js';
 import { bankActions } from './bank-actions.js';
@@ -827,7 +828,7 @@ const postEntryAction = ctxAction(
 const reverseEntryAction = ctxAction(
   'reverse_entry',
   'write',
-  'Reverse a posted entry by posting its faithful mirror (OR 957a).',
+  'Reverse a posted entry by posting its faithful mirror (OR 957a). Refuses `owned_by` on an entry a capability minted with a row of its own (an MWST-Saldierung, an Abgrenzung, a Rückstellung and their mirrors): reverse those through the owning verb (`vat_settlement_reverse`, `accrual_reverse`, `provision_reverse`, `provision_release_reverse`) so the row moves with the entry.',
   ctxSchema({ entryId: STR, date: STR, description: STR, idempotencyKey: STR }, ['entryId', 'idempotencyKey']),
   (ctx, input) => reverseEntry(ctx, as(input)),
 );
@@ -1581,6 +1582,17 @@ export const ACTIONS: readonly ActionDef[] = [
   // several agents appending to this append-only list at once collide over a line rather than a
   // block. The helpers are passed in rather than imported there, which keeps the module graph acyclic.
   ...fxActions({ ctxAction, ctxSchema, STR }),
+
+  // A38, Abgrenzungen und Rückstellungen. Defined in `./accrual-actions.ts` (N2's block on top, N3's
+  // settlement block below its seam) and spread in as one line, the A22 shape. `accrual` and
+  // `provision` as journal sources are deliberately NOT in POST_ENTRY_SOURCES: only the accrual pair
+  // and the provision verbs write them.
+  ...accrualActions({ ctxAction, ctxSchema, STR, INT }),
+  // The MWST-Saldierung and the annual reconciliation (two writes on `post`, three reads on
+  // `read_books`), the bottom block of the same file; `vat_settlement` as a journal source is likewise
+  // NOT in POST_ENTRY_SOURCES: only `vat_settlement_post` may write one, under the §H-PERIOD carve-out
+  // of A38 §4.6.
+  ...vatSettlementActions({ ctxAction, ctxSchema, STR, INT }),
 
   // A14, payments and matching: the settlement half of the money path. Defined in
   // `./payment-actions.ts` and spread in as one line, the same shape §H-FX established, so

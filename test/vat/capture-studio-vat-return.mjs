@@ -21,6 +21,7 @@ import {
   liveIstRefusal,
   liveNeedsConfig,
   liveFiled,
+  liveSettlement,
 } from './studio-vat-return-world.mjs';
 
 const target = (name) => new URL(`../../app/src/surfaces/VatReturn/${name}`, import.meta.url);
@@ -49,3 +50,7 @@ write('vat-return.needs-config.fixture.json', liveNeedsConfig().return);
 
 const filed = liveFiled();
 write('vat-periods.filed.fixture.json', filed.periods);
+
+const settlement = liveSettlement();
+write('vat-settlement.fixture.json', settlement.preview);
+write('vat-settlement.posted.fixture.json', settlement.posted);

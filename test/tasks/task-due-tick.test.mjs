@@ -11,6 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { getAction } from '../../dist/api/registry.js';
+import { checklistAutostartRuleId } from '../../dist/core/checklists/index.js';
 import { SqliteStore } from '../../dist/core/store/sqlite-store.js';
 import { sequenceIdGen } from '../../dist/core/ids.js';
 
@@ -28,6 +29,12 @@ function world() {
   const ws = getAction('create_workspace').run(deps, { name: 'Tick GmbH', idempotencyKey: 'ws' });
   const workspaceId = ws.workspaceId;
   const call = (name, input) => getAction(name).run(deps, { workspaceId, ...input });
+  // G22 (D129) seeds two daily checklist rules into every workspace; they would co-fire on every tick
+  // below and blur the fired counts, so the fixture retires them through the product's own door.
+  for (const templateId of ['month_close', 'vat_period']) {
+    const off = call('disable_automation_rule', { ruleId: checklistAutostartRuleId(workspaceId, templateId) });
+    assert.equal(off.ok, true, JSON.stringify(off));
+  }
   return { deps, workspaceId, call, setNow: (t) => { instant = t; } };
 }
 

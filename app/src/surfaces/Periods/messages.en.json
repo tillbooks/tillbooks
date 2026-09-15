@@ -74,7 +74,10 @@
         "review": "Entries not yet approved",
         "fx": "Revalue foreign currencies"
       }
-    }
+    },
+    "openYearClose": "Open the year close",
+    "guidedYearClose": "Guided year close",
+    "yearCloseRunNote": "A guided year close is running for {year}; the seal is its last step."
   },
   "audit": {
     "title": "Audit log",
@@ -119,6 +122,9 @@
       "import": "Imported",
       "confirm": "Confirmed",
       "book": "Entry created",
+      "release": "Released",
+      "release_reverse": "Release reversed",
+      "discard": "Discarded",
       "comment": "Commented",
       "flag": "Flagged",
       "approve": "Approved",
@@ -143,7 +149,6 @@
       "intake": "Captured",
       "extract": "Extracted",
       "commit": "Committed",
-      "discard": "Discarded",
       "export": "Exported",
       "enable": "Enabled"
     },
@@ -155,6 +160,7 @@
       "exchange_rate": "Exchange rate",
       "fx_method_election": "Conversion method",
       "fx_revaluation": "FX revaluation",
+      "vat_settlement": "VAT settlement",
       "checklist_run": "Checklist",
       "bank_account": "Bank account",
       "saldo_declaration_election": "Saldo declaration basis",
@@ -190,9 +196,171 @@
       "inventory_reason_code": "Adjustment reason",
       "inventory_adjustment": "Stock adjustment",
       "migration_plan": "Migration plan",
-      "sync": "Sync publishing"
+      "sync": "Sync publishing",
+      "accrual": "Accrual",
+      "provision": "Provision"
     },
     "emptyHint": "TILL records every posting, every lock and every change to your master data here. You do not have to enter any of it yourself."
+  },
+  "accruals": {
+    "title": "Accruals and provisions as of {date}",
+    "new": "New accrual",
+    "drawerTitle": "New accrual",
+    "kindLabel": "Kind of accrual",
+    "kind": {
+      "prepaid_expense": "Prepaid expense",
+      "accrued_income": "Accrued income",
+      "accrued_expense": "Accrued expense",
+      "deferred_income": "Deferred income"
+    },
+    "amount": "Amount",
+    "contraAccount": "Contra account (P&L)",
+    "description": "Description",
+    "sourceRef": "Reference (optional)",
+    "reversalOn": "Reversal on {date}",
+    "previewCaption": "Entry at period end",
+    "save": "Save draft",
+    "post": "Post",
+    "postAll": "Post all ({count}, {total})",
+    "postAllTitle": "Post {count} drafts?",
+    "postAllMessage": "{count} drafts totalling {total} post one by one. If one is refused you see what posted and what is still waiting.",
+    "postAllAction": "Post all",
+    "reverse": "Undo (reversal)",
+    "discard": "Discard",
+    "cancel": "Cancel",
+    "close": "Close",
+    "empty": "No accrual recorded yet",
+    "emptyHint": "Record an accrual or a provision. The draft shows you the entry before anything posts.",
+    "listCaption": "Accruals",
+    "noPost": "Recording and posting needs the “Post” right (post).",
+    "accountsLoading": "Loading the chart of accounts",
+    "accountsFailed": "The chart of accounts could not be read",
+    "col": {
+      "kind": "Kind",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "draft": "Draft",
+      "posted": "Posted",
+      "reversed": "Reversed",
+      "discarded": "Discarded"
+    },
+    "badge": {
+      "already_posted": "already posted",
+      "already_reversed": "already reversed"
+    },
+    "lines": {
+      "account": "Account",
+      "debit": "Debit",
+      "credit": "Credit",
+      "date": "Date",
+      "pick": "Pick an account"
+    },
+    "posted": {
+      "pair": "Posted: {entryId}. Reversal on {date}: {reversalEntryId}.",
+      "storno": "Reversed: {entryId}, reversal of the reversal: {reversalEntryId}.",
+      "one": "Posted: {entryId}."
+    },
+    "batch": {
+      "summary": "{posted} posted, {refused} refused, {remaining} still waiting.",
+      "already": "{count} already posted.",
+      "refused": "Refusal: {codes}."
+    },
+    "confirm": {
+      "accrual_post": "Post the accrual?",
+      "provision_post": "Post the provision?",
+      "accrual_reverse": "Reverse the accrual?",
+      "provision_reverse": "Reverse the provision?",
+      "provision_release_reverse": "Reverse the release?"
+    },
+    "confirmAction": {
+      "accrual_post": "Post",
+      "provision_post": "Post",
+      "accrual_reverse": "Reverse",
+      "provision_reverse": "Reverse",
+      "provision_release_reverse": "Reverse"
+    },
+    "error": {
+      "invalid_amount": "Enter an amount above zero with at most two decimals.",
+      "description": "Enter a description.",
+      "period_locked": "The period around {date} is locked, so nothing was posted. Unlock it under the period locks below.",
+      "missing_account": "Account {number} is missing from the chart. Create it under Accounts.",
+      "generic": "That did not work. Your input is kept.",
+      "invalid_account": {
+        "contra_must_be_income_or_expense": "The contra account must be a P&L account (income or expense).",
+        "kind_account_type_mismatch": "This account does not fit the chosen kind: income kinds need an income account, expense kinds an expense account.",
+        "contra_not_found": "Pick a contra account.",
+        "archived": "This account is archived.",
+        "provision_account": "The provision account must be a liability numbered 23xx or 26xx.",
+        "expense_not_found": "Pick an expense account.",
+        "expense_must_be_income_or_expense": "The expense account must be a P&L account.",
+        "target_not_found": "Pick a target account.",
+        "target_must_be_income_or_expense": "The target account must be a P&L account.",
+        "generic": "This account is not admissible here."
+      }
+    },
+    "kindHint": {
+      "prepaid_expense": "You paid, but the service belongs to the next period (debit 1300).",
+      "accrued_income": "You delivered, but the invoice follows in the next period (debit 1300).",
+      "accrued_expense": "You consumed, but the bill arrives in the next period (credit 2300).",
+      "deferred_income": "You invoiced, but the service belongs to the next period (credit 2300)."
+    }
+  },
+  "provisions": {
+    "new": "New provision",
+    "drawerTitle": "New provision",
+    "reasonLabel": "Reason (OR 960e)",
+    "reason": {
+      "garantie": "Warranty",
+      "ferien_ueberzeit": "Holidays and overtime",
+      "prozess": "Litigation",
+      "grossreparatur": "Major repair",
+      "sanierung": "Refurbishment",
+      "restrukturierung": "Restructuring",
+      "steuern": "Taxes",
+      "sonstige": "Other"
+    },
+    "account": "Provision account",
+    "expenseAccount": "Expense account",
+    "openBalance": "Open",
+    "listCaption": "Provisions",
+    "release": "Release",
+    "releaseTitle": "Release provision",
+    "releaseMessage": "{open} is open. The release posts debit provision, credit target account.",
+    "releaseDate": "Date",
+    "targetAccount": "Target account",
+    "col": {
+      "reason": "Reason"
+    },
+    "status": {
+      "draft": "Draft",
+      "posted": "Posted",
+      "released": "Released",
+      "reversed": "Reversed",
+      "discarded": "Discarded"
+    },
+    "error": {
+      "sonstige": "“Other” needs a description of at least ten characters.",
+      "release_exceeds_balance": "The amount exceeds the open balance of {open}.",
+      "release_blocked": "Reverse the releases first (newest first), then the provision."
+    },
+    "reasonHint": {
+      "garantie": "Regularly recurring warranty work (OR 960e para. 3 no. 1).",
+      "ferien_ueberzeit": "Holidays and overtime your staff have not yet taken.",
+      "prozess": "Pending proceedings expected to cost money.",
+      "grossreparatur": "Larger repairs that are due.",
+      "sanierung": "Refurbishment of fixed assets (OR 960e para. 3 no. 2).",
+      "restrukturierung": "Restructurings (OR 960e para. 3 no. 3).",
+      "steuern": "Direct taxes of the financial year, against 8900.",
+      "sonstige": "Another founded outflow. Describe it in at least ten characters."
+    },
+    "releases": "Releases",
+    "releasesTitle": "Releases of \"{description}\"",
+    "noReleases": "No release yet.",
+    "releaseReverse": "Reverse release",
+    "releaseReversed": "reversed ({entryId})",
+    "releaseLabel": "Release of {date} for {amount}"
   },
   "help": {
     "Periods": {

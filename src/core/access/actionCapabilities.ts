@@ -703,6 +703,28 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // gates on `read_books`, the read twin the A08 statements and `list_journal` already use.
   post_fx_revaluation: 'post',
   fx_revaluation: 'read_books',
+  // D129 Q2: the revert books through `postEntry` too, so it gates on the same `post`.
+  fx_revaluation_reverse: 'post',
+
+  // --- A38, Abgrenzungen und Rückstellungen ----------------------------------------------------
+  // Every write reaches `postEntry` / `reverseEntry` (the draft create and discard are the two that
+  // do not post, and they gate on `post` too: describing what WILL post is the posting domain's act,
+  // the H04 `asset_depreciation_run_create` precedent). Every read is a ledger read, `read_books`.
+  accrual_create: 'post',
+  accrual_post: 'post',
+  accrual_reverse: 'post',
+  accrual_discard: 'post',
+  accrual_get: 'read_books',
+  accrual_list: 'read_books',
+  provision_create: 'post',
+  provision_post: 'post',
+  provision_release: 'post',
+  provision_reverse: 'post',
+  provision_release_reverse: 'post',
+  provision_discard: 'post',
+  provision_get: 'read_books',
+  provision_list: 'read_books',
+  tax_provision_preview: 'read_books',
 
   // --- A14, payments ---------------------------------------------------------------------------
   // ALL THREE POST. `recordPayment` books the settlement through `postEntry`, and `postEntry`
@@ -1243,6 +1265,16 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   checklist_item_skip: 'manage_checklists',
   checklist_item_reopen: 'manage_checklists',
   checklist_abandon: 'manage_checklists',
+
+  // --- A38, Abgrenzungen und Rückstellungen (D129 leg 2) -----------------------------------------
+  // The MWST-Saldierung block. Both writes book through `postEntry` (which asserts `post` for every
+  // caller that reaches it), so they gate on `post`, the same as every other poster on the money path;
+  // the three reads are readings of the books (`read_books`, the `vat_return` domain).
+  vat_settlement_preview: 'read_books',
+  vat_settlement_post: 'post',
+  vat_settlement_reverse: 'post',
+  vat_settlement_list: 'read_books',
+  vat_annual_reconciliation: 'read_books',
 
   // --- G03, onboarding & the demo workspace -----------------------------------------------------
   // The wizard pair rides the register the wrapped A00 steps already live in: the resume pointer's

@@ -11,6 +11,7 @@ import { I18nProvider } from '../../i18n';
 import { WorkspaceProvider } from '../../app/workspace';
 import { watchReads } from '../../test-transport';
 import { AUDIT_ENTITY_KINDS, AUDIT_ACTIONS } from './audit-vocabulary';
+import listAccountsFixture from '../Accounts/list-accounts.fixture.json';
 
 type Handler = RestResponse | ((input: Record<string, unknown>) => RestResponse | Promise<RestResponse>);
 type Handlers = Record<string, Handler>;
@@ -24,6 +25,10 @@ const CHECKLIST_EMPTY: Handlers = {
   list_reconciliation: { status: 200, body: { ok: true, matched: [], unmatched: [], partial: [] } },
   review_status: (input) => ({ status: 200, body: { ok: true, period: input.period, total: 0, approved: 0, flagged: 0, open: 0, entries: [] } }),
   list_vendor_bills: { status: 200, body: { ok: true, bills: [], total: 0, truncated: false } },
+  // A38: the accrual editor's three reads beside the checklist, answered empty for the same reason.
+  accrual_list: { status: 200, body: { ok: true, accruals: [], totalMinor: 0, baseCurrency: 'CHF' } },
+  provision_list: { status: 200, body: { ok: true, provisions: [], openTotalMinor: 0, baseCurrency: 'CHF' } },
+  list_accounts: { status: 200, body: { ...listAccountsFixture, ok: true as const } },
 };
 
 /**
@@ -925,5 +930,32 @@ describe('Periods, one lock sentence (F-07)', () => {
     const line = dialog.querySelector('.consequence-line') as HTMLElement;
     expect(line.getAttribute('data-verb')).toBe('close_year');
     expect(line).toHaveTextContent(SENTENCE);
+  });
+});
+
+describe('Periods, the year_close hand-off (D129 leg 2)', () => {
+  it('opens the guided year close when a run exists for the picked year instead of the bare seal; without one the bare action stays beside a link to start it', async () => {
+    const { calls } = renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      checklist_list: (input) => ({
+        status: 200,
+        body: {
+          ok: true,
+          runs: input.templateId === 'year_close' ? [{ runId: 'yc_2026', templateId: 'year_close', templateLabel: 'Jahresabschluss', periodLabel: '2026', periodStart: '2026-01-01', periodEnd: '2026-12-31', status: 'open', nextItemId: 'year_sealed', openCount: 1, doneCount: 30, skippedCount: 2, itemCount: 33, createdBy: 'studio' }] : [],
+        },
+      }),
+    });
+    await screen.findByText(/No period closed yet/);
+    await waitFor(() => expect(calls.some((c) => c.action === 'checklist_list')).toBe(true));
+    expect(calls.find((c) => c.action === 'checklist_list')?.input).toMatchObject({ templateId: 'year_close', status: 'open' });
+    await userEvent.selectOptions(screen.getByLabelText('Year'), '2026');
+    const link = await screen.findByTestId('period-open-year-close');
+    expect(link.getAttribute('href')).toBe('/checklisten?run=yc_2026');
+    expect(screen.getByText('A guided year close is running for 2026; the seal is its last step.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run year-end close' })).toBeNull();
+    // Another year without a run: the bare seal stays, with the guided close one link away.
+    await userEvent.selectOptions(screen.getByLabelText('Year'), '2025');
+    expect(screen.getByRole('button', { name: 'Run year-end close' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Guided year close' }).getAttribute('href')).toBe('/checklisten');
   });
 });

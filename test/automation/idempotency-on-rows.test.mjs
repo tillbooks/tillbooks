@@ -26,9 +26,9 @@ import assert from 'node:assert/strict';
 
 import { callTool } from '../../dist/api/mcp.js';
 import { handleRest } from '../../dist/api/rest.js';
-import { call, count, defineRule, postTemplate, runRows, workspace } from './support.mjs';
+import { call, count, defineRule, postTemplate, runRows, workspace, OWN_RULES } from './support.mjs';
 
-const RULES = 'SELECT COUNT(*) AS n FROM automation_rule WHERE workspace_id = ?';
+const RULES = `SELECT COUNT(*) AS n FROM automation_rule WHERE workspace_id = ? AND ${OWN_RULES}`;
 const RUNS = 'SELECT COUNT(*) AS n FROM automation_run WHERE workspace_id = ?';
 const ENTRIES = 'SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?';
 const LINES = `SELECT COUNT(*) AS n FROM journal_line

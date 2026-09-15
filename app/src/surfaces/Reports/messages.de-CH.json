@@ -90,7 +90,10 @@
       "asset_acquisition": "Anlagenzugang",
       "asset_depreciation": "Abschreibung",
       "asset_disposal": "Anlagenabgang",
-      "inventory_valuation": "Bestandesbewertung"
+      "inventory_valuation": "Bestandesbewertung",
+      "accrual": "Abgrenzung",
+      "provision": "Rückstellung",
+      "vat_settlement": "MWST-Saldierung"
     },
     "export": {
       "pdf": "Als PDF exportieren",

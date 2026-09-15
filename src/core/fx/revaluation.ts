@@ -17,7 +17,7 @@
  * REALISED difference books to the operating currency-difference accounts (3806/4906) at the settlement
  * rate. If A22's period-end adjustment stayed on the books, that realised figure would double-count the
  * slice A22 already recognised. So every revaluation entry is immediately mirrored by a reversing entry
- * dated the FIRST DAY OF THE NEXT PERIOD (a real §H-AUDIT reversal via `reverseEntry`, never a
+ * dated the FIRST DAY OF THE NEXT PERIOD (a real §H-AUDIT reversal via `reverseOwnedEntry`, never a
  * mutation): on that day the revaluation backs out, the position returns to its original booking basis,
  * and settlement recognises the whole realised difference cleanly. A22 only ever touches the UNREALISED
  * account; realised is A14/A18's job (spec §4, US-A22.4).
@@ -53,9 +53,9 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { requireString, requireDate } from '../ledger/inputGuards.js';
-import { postEntry } from '../ledger/postEntry.js';
+import { postEntry, FX_SOURCE } from '../ledger/postEntry.js';
 import type { LineInput } from '../ledger/postEntry.js';
-import { reverseEntry } from '../ledger/reverseEntry.js';
+import { reverseOwnedEntry } from '../ledger/reverseEntry.js';
 import { baseCurrencyOf, resolveFxRate } from './rates.js';
 import { convertMinor } from './rateMath.js';
 
@@ -66,8 +66,14 @@ import { convertMinor } from './rateMath.js';
  */
 const UNREALISED_FX_ACCOUNT_NUMBER = '6949';
 
-/** The journal source for an FX revaluation entry (§D0 enum). Only this module writes it. */
-const FX_SOURCE = 'fx';
+/**
+ * The verb that OWNS the reversal of every entry this module mints (A, B, C, D). `FX_SOURCE` sits in
+ * `OWNED_REVERSAL_SOURCES` under this name, so the raw `reverse_entry` refuses `owned_by` on the
+ * pair and its mirrors, and the run's own B and D are minted through `reverseOwnedEntry` under it:
+ * only the run row (`fx_revaluation`) knows whether a revaluation stands, and only this module
+ * keeps that row in step with the ledger (critic finding, BLOCKING, 2026-09-10).
+ */
+const FX_OWNER = 'fx_revaluation_reverse';
 
 /**
  * Abort a write transaction with a structured cause. A better-sqlite3 `db.transaction(fn)()` commits
@@ -260,6 +266,13 @@ interface FxRevaluationRunRow {
   posted_at: string;
 }
 
+interface FxRevaluationReverseRow extends FxRevaluationRunRow {
+  period_end: string;
+  storno_entry_id: string | null;
+  storno_reversal_id: string | null;
+  reversed_at: string | null;
+}
+
 /**
  * Post the period-end unrealised revaluation as a balanced entry (source `fx`) plus its next-period
  * reversal, atomically. The money path in miniature (spec §6b Fixed): §H-LEDGER (balanced in base
@@ -382,12 +395,18 @@ export function postFxRevaluation(ctx: WorkspaceContext, input: PostFxRevaluatio
       // partial writes (and memoise the failure under `fxreval:${periodEnd}`), leaving an orphan.
       if (!posted.ok) throw new FxRevalAbort(posted);
 
-      const reversal = reverseEntry(ctx, {
-        entryId: posted.entryId,
-        date: nextPeriodStart,
-        idempotencyKey: `fxreval-rev:${input.periodEnd}`,
-        description: `Storno FX-Neubewertung per ${input.periodEnd}`,
-      });
+      // Minted under the owner: the raw `reverse_entry` refuses A (by source) and B (by what it
+      // reverses), so the run row stays the one truth about whether this revaluation stands.
+      const reversal = reverseOwnedEntry(
+        ctx,
+        {
+          entryId: posted.entryId,
+          date: nextPeriodStart,
+          idempotencyKey: `fxreval-rev:${input.periodEnd}`,
+          description: `Storno FX-Neubewertung per ${input.periodEnd}`,
+        },
+        FX_OWNER,
+      );
       // A reversal blocked by a locked next period must roll the posted revaluation entry back TOO,
       // so the trio commits together or not at all (never a revaluation without its backing Storno).
       if (!reversal.ok) throw new FxRevalAbort(reversal);
@@ -427,6 +446,141 @@ export function postFxRevaluation(ctx: WorkspaceContext, input: PostFxRevaluatio
         reversalId: reversal.reversalId,
         totalUnrealisedMinor,
         reversalDate: nextPeriodStart,
+      });
+    }),
+  );
+}
+
+export interface ReverseFxRevaluationInput {
+  runId: string;
+  idempotencyKey: string;
+}
+
+interface MirrorLineRow {
+  account_id: string;
+  base_debit_minor: number;
+  base_credit_minor: number;
+}
+
+/**
+ * D129 owner question Q2 (A38 §4.9): revert a posted revaluation run so the FX row of the `year_close`
+ * checklist has a "Rückgängig" like every other posting row.
+ *
+ * ## Why a MIRROR PAIR and not `reverseEntry(E)`
+ *
+ * The run already posted E (the revaluation, dated the period end) and R = reverseEntry(E) (its
+ * next-day backing-out). E's reversal slot is taken, so `reverseEntry(E)` is `already_reversed` by
+ * construction, and reversing R alone would leave E standing into the next period. The revert is
+ * therefore the design doc's §7.8 pair: C = the mirror lines of E dated the period end (`source='fx'`,
+ * so the Journal's Quelle filter and `list_journal` still find it as an FX event) and D = the reversal
+ * of C dated the first day after. Every account then nets to zero on BOTH dates, nothing is edited
+ * (§H-AUDIT), and the trio (C, D, the run-row link) commits together or not at all (`FxRevalAbort`).
+ *
+ * ## This verb OWNS the pair
+ *
+ * `fx` is in `OWNED_REVERSAL_SOURCES` under this verb's name, so the raw `reverse_entry` refuses
+ * `owned_by fx_revaluation_reverse` on A, B, C and D alike, and B and D are minted through
+ * `reverseOwnedEntry`. Without that, reversing B raw left the run row reading "standing", this verb
+ * then answered ok on top of it, and the open period carried the revaluation twice over (critic
+ * finding, BLOCKING, 2026-09-10).
+ *
+ * ## Refusals (P9)
+ *
+ *   not_found          no such run in this workspace (§H-TENANT)
+ *   not_posted         a zero-diff run posted nothing, so there is nothing to revert
+ *   already_reversed   the run already carries its Storno pair
+ *   later_run_exists   a run for a LATER period end still stands: revert newest first (the H04 shape),
+ *                      because a later revaluation was computed from a booking basis this one is part of
+ *   period_locked      from `postEntry`, when the period end or the day after is locked (A03)
+ *
+ * §H-IDEMPOTENT on the key (a replay returns the stored result and writes nothing) and on rows (the
+ * `already_reversed` guard). The run row's `storno_entry_id` / `storno_reversal_id` link the pair; the
+ * audit chain stamps `fx_revaluation` / `reverse`.
+ */
+export function reverseFxRevaluation(ctx: WorkspaceContext, input: ReverseFxRevaluationInput): Result {
+  const capable = ctx.capabilities.assert('post');
+  if (!capable.ok) return capable;
+
+  const guard = requireString(input?.runId, 'runId') ?? requireString(input?.idempotencyKey, 'idempotencyKey');
+  if (guard) return guard;
+
+  const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey, 'fx_revaluation_reverse');
+  if (replayed !== undefined) return replayed;
+
+  const run = ctx.store.db
+    .prepare(
+      `SELECT id, period_end, entry_id, reversal_id, total_unrealised_minor, idempotency_key, posted_at,
+              storno_entry_id, storno_reversal_id, reversed_at
+         FROM fx_revaluation WHERE workspace_id = ? AND id = ?`,
+    )
+    .get(ctx.workspaceId, input.runId) as FxRevaluationReverseRow | undefined;
+  if (run === undefined) return err('not_found', { runId: input.runId });
+  if (run.entry_id === null) return err('not_posted', { runId: run.id, periodEnd: run.period_end });
+  if (run.storno_entry_id !== null) {
+    return err('already_reversed', { runId: run.id, stornoEntryId: run.storno_entry_id, reversedAt: run.reversed_at });
+  }
+
+  const later = ctx.store.db
+    .prepare(
+      `SELECT id, period_end FROM fx_revaluation
+        WHERE workspace_id = ? AND period_end > ? AND entry_id IS NOT NULL AND storno_entry_id IS NULL
+        ORDER BY period_end DESC LIMIT 1`,
+    )
+    .get(ctx.workspaceId, run.period_end) as { id: string; period_end: string } | undefined;
+  if (later !== undefined) {
+    return err('later_run_exists', { runId: run.id, periodEnd: run.period_end, blockingRunId: later.id, blockingPeriodEnd: later.period_end });
+  }
+
+  // The mirror of E, read from E's own rows: base-currency lines, so the base columns ARE the lines.
+  const rows = ctx.store.db
+    .prepare('SELECT account_id, base_debit_minor, base_credit_minor FROM journal_line WHERE entry_id = ? ORDER BY rowid')
+    .all(run.entry_id) as MirrorLineRow[];
+  const mirror: LineInput[] = rows.map((r) =>
+    r.base_debit_minor > 0 ? { account: r.account_id, credit: r.base_debit_minor } : { account: r.account_id, debit: r.base_credit_minor },
+  );
+  const nextPeriodStart = firstDayAfter(run.period_end);
+
+  return runGuarded(() =>
+    ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, 'fx_revaluation_reverse', () => {
+      const storno = postEntry(ctx, {
+        date: run.period_end,
+        source: FX_SOURCE,
+        idempotencyKey: `fxreval-storno:${run.id}:${input.idempotencyKey}`,
+        description: `Storno FX-Neubewertung per ${run.period_end}`,
+        lines: mirror,
+      });
+      if (!storno.ok) throw new FxRevalAbort(storno);
+
+      const stornoReversal = reverseOwnedEntry(
+        ctx,
+        {
+          entryId: storno.entryId,
+          date: nextPeriodStart,
+          idempotencyKey: `fxreval-storno-rev:${run.id}:${input.idempotencyKey}`,
+          description: `Rückbuchung Storno FX-Neubewertung per ${run.period_end}`,
+        },
+        FX_OWNER,
+      );
+      if (!stornoReversal.ok) throw new FxRevalAbort(stornoReversal);
+
+      const at = ctx.clock.now();
+      ctx.store.db
+        .prepare(
+          'UPDATE fx_revaluation SET storno_entry_id = ?, storno_reversal_id = ?, reversed_at = ?, reversed_by = ? WHERE workspace_id = ? AND id = ?',
+        )
+        .run(storno.entryId, stornoReversal.reversalId, at, ctx.actor, ctx.workspaceId, run.id);
+      ctx.audit.record({ entityKind: 'fx_revaluation', entityId: run.id, action: 'reverse', actor: ctx.actor, at });
+
+      return ok({
+        runId: run.id,
+        periodEnd: run.period_end,
+        entryId: run.entry_id,
+        reversalId: run.reversal_id,
+        stornoEntryId: storno.entryId,
+        stornoReversalId: stornoReversal.reversalId,
+        stornoReversalDate: nextPeriodStart,
+        totalUnrealisedMinor: run.total_unrealised_minor,
+        reversedAt: at,
       });
     }),
   );

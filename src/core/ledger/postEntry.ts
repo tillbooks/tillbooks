@@ -702,7 +702,56 @@ const VALID_SOURCES = new Set([
   // `source='reversal'` of the entry (via `inventoryValuationReverse`) plus a fresh run (§H-AUDIT).
   // It is NOT the same source as D01's `stock`: J06 owns the OP11 reconciliation and its own run table.
   'inventory_valuation',
+  // A38, Abgrenzungen und Rückstellungen. Two engine-only sources for the same two reasons as the
+  // asset runs: `list_journal` filters on this column, and an Abgrenzung (posted as a PAIR with its
+  // next-period reversal) or a Rückstellung (formed, released, reversed) is a distinct business event.
+  // Both are deliberately absent from `POST_ENTRY_SOURCES` (the agent-facing allow-list) so a caller
+  // cannot forge one through the raw `post_entry` tool with no `accrual` / `provision` row behind it:
+  // only `accrualPost` / `accrualReverse` write `accrual` (each as an atomic pair, the A22 `fx`
+  // shape) and only `provisionPost` / `provisionRelease` write `provision`. The Storno of an accrual
+  // is a NEW `accrual` entry plus its `reversal` (design doc §7.8), never an edit.
+  'accrual',
+  'provision',
+  // A38, the year-end MWST-Saldierung (D129 leg 2): the per-period transfer of the filed period's
+  // 2200 / 1170 / 1171 balances to 2201. Its own value for the two usual reasons (`list_journal`
+  // filters on it, a settlement is a distinct business event) and for a THIRD: it is the one source
+  // beside `close` that §H-PERIOD relaxes for, under the three conditions `rejectSettlementViolations`
+  // and the period check below enforce. Deliberately absent from `POST_ENTRY_SOURCES` (the agent-facing
+  // allow-list), so only `vatSettlementPost` (`src/core/accruals/vatSettlement.ts`) can reach the
+  // relaxation; a correction is a `source='reversal'` of the settlement entry (`vatSettlementReverse`).
+  'vat_settlement',
 ]);
+
+/** The journal source of an A38 MWST settlement entry. Only `vatSettlementPost` writes it. */
+export const VAT_SETTLEMENT_SOURCE = 'vat_settlement';
+
+/**
+ * The journal source of an A22 FX revaluation entry (§D0 enum). Only `src/core/fx/revaluation.ts`
+ * writes it. Declared here, beside `VAT_SETTLEMENT_SOURCE`, so that `reverseEntry.ts` can own it
+ * without importing the revaluation module (which imports `reverseEntry.ts` itself: a cycle would
+ * leave the ownership map reading the constant before it exists).
+ */
+export const FX_SOURCE = 'fx';
+
+/**
+ * The sources whose entries carry NO tax code BY DESIGN: the closing and period-end mechanics of
+ * A22, H04, A38 and A03, and the reversals that mirror them. A scan for "a line on a VAT-defaulted
+ * account without a tax code" (A26's `detect_anomalies`, A25's `prepare_period`, and through them
+ * G22's `no_missing_tax_codes` check) skips these by name, because an Abgrenzung on 6500 or a
+ * Steuerrückstellung on 8900 is not a bookkeeping mistake and must not turn the year's checklist
+ * red the moment the closing entries post (measured at the N4 build, 2026-09-10: the Nomadik walk
+ * flagged its own accrual). A manual entry stays scanned: that is the mistake the scan exists for.
+ */
+export const VAT_FREE_ENTRY_SOURCES: readonly string[] = ['reversal', 'close', FX_SOURCE, 'asset_depreciation', 'accrual', 'provision', VAT_SETTLEMENT_SOURCE];
+
+/**
+ * The ONLY accounts a `source='vat_settlement'` line may name (A38 §4.6, the second of the three
+ * carve-out conditions): the two Vorsteuer accounts, the Umsatzsteuer account, the MWST-Abrechnungskonto
+ * the balances transfer to, and under owner question Q3 the Saldosteuersatz income-reduction account
+ * that carries the flat-rate tax due. Numbers, not ids, because the carve-out is a statement about the
+ * Kontenrahmen KMU roles and a workspace's chart is seeded with exactly these numbers (A01).
+ */
+export const VAT_SETTLEMENT_ACCOUNTS: readonly string[] = ['1170', '1171', '2200', '2201', '3809'];
 
 /**
  * The sources that may STATE base-currency amounts and whose VAT trace hints are accepted verbatim
@@ -731,6 +780,60 @@ function rejectVatTraceOnClose(input: PostEntryInput): Err | null {
     }
   }
   return null;
+}
+
+/**
+ * A38 §4.6, the `source='vat_settlement'` carve-out (D129 leg 2): the MWST-Saldierung joins the `close`
+ * relaxation of §H-PERIOD, because the transfer of a FILED period's 2200 / 1170 / 1171 balances to 2201
+ * is dated the period end and therefore lands inside the `vat_filed` hard lock by construction. The
+ * safety rationale is the same as the close's and it is ENFORCED, not assumed, by THREE conditions:
+ *
+ *   1. no VAT trace on any line (checked here): a settlement moves booked tax between tax accounts, it
+ *      declares nothing, so `computeVatReturn` (which reads tagged lines) can never see it;
+ *   2. every line on one of `VAT_SETTLEMENT_ACCOUNTS` (checked here): the carve-out cannot be used to
+ *      move revenue, cost or cash into a filed period;
+ *   3. never into a `year_close` seal (the period check in `postEntry`): the seal is the strongest
+ *      legal lock and nothing posts over it.
+ *
+ * The A07 bridge and the 2200 drift read (`bookedVatByEntry` in `src/core/vat/abrechnung.ts`) exclude
+ * this source and its reversals by name, so a posted settlement leaves the filed return and the
+ * Abstimmung untouched. `test/ledger/vat-settlement-carveout.test.mjs` asserts all three rejections and
+ * the admission by name.
+ *
+ * Account numbers are resolved through the chart rather than trusted from the caller: a line names an
+ * account ID, and the condition is about the account's ROLE (its Kontenrahmen number).
+ */
+function rejectSettlementViolations(ctx: WorkspaceContext, input: PostEntryInput): Err | null {
+  if (input.source !== VAT_SETTLEMENT_SOURCE) return null;
+  const numberOf = ctx.store.db.prepare('SELECT number FROM account WHERE workspace_id = ? AND id = ?');
+  for (const line of input.lines) {
+    if (line.taxCode !== undefined || line.taxBase !== undefined || line.taxAmount !== undefined) {
+      return err('invalid_line', { account: line.account, reason: 'a settlement carries no VAT trace' });
+    }
+    const row = numberOf.get(ctx.workspaceId, line.account) as { number: string } | undefined;
+    if (row === undefined || !VAT_SETTLEMENT_ACCOUNTS.includes(row.number)) {
+      return err('invalid_line', {
+        account: line.account,
+        reason: 'settlement_account',
+        allowed: [...VAT_SETTLEMENT_ACCOUNTS],
+      });
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether a `source='reversal'` entry mirrors a settlement entry, which admits it through the same
+ * carve-out (A38 §4.6): its faithful mirror carries no trace and touches the same accounts by
+ * construction (`reversalMirrorsTarget` guarantees that), and it is what lets `vatSettlementReverse`
+ * date the Storno inside the filed period so the four accounts net to zero within it.
+ */
+function reversesSettlement(ctx: WorkspaceContext, input: PostEntryInput): boolean {
+  if (input.source !== 'reversal' || input.reversesEntryId === undefined) return false;
+  const target = ctx.store.db
+    .prepare('SELECT source FROM journal_entry WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, input.reversesEntryId) as { source: string } | undefined;
+  return target !== undefined && target.source === VAT_SETTLEMENT_SOURCE;
 }
 
 /**
@@ -977,6 +1080,9 @@ export function postEntry(ctx: WorkspaceContext, input: PostEntryInput): Result<
   const closeVatErr = rejectVatTraceOnClose(input);
   if (closeVatErr) return closeVatErr;
 
+  const settlementErr = rejectSettlementViolations(ctx, input);
+  if (settlementErr) return settlementErr;
+
   // Replay a completed post before any state-dependent guard, so retrying a promoted draft returns
   // the original result instead of `already_posted` (§H-IDEMPOTENT). A reversal's post lives in its
   // own namespace, so reusing the original post key as the reversal key is not a collision.
@@ -1069,9 +1175,14 @@ export function postEntry(ctx: WorkspaceContext, input: PostEntryInput): Result<
   const periodOpen = ctx.periods.assertOpen(input.date);
   if (!periodOpen.ok) {
     // The year-close sealing entry may post over a soft/filing lock, but never into a year-close seal;
-    // every other source honours all locks.
+    // every other source honours all locks. A38 (D129 leg 2): the MWST settlement and its own reversal
+    // share the relaxation (conditions 1 and 2 were enforced above by `rejectSettlementViolations` and
+    // the mirror check; this is condition 3, the seal), because the transfer of a filed period's VAT
+    // balances is dated the period end and lands inside the `vat_filed` lock by construction.
     const isYearSeal = periodOpen.kind === 'hard' && periodOpen.reason === 'year_close';
-    if (input.source !== 'close' || isYearSeal) return periodOpen;
+    const relaxed =
+      input.source === 'close' || input.source === VAT_SETTLEMENT_SOURCE || reversesSettlement(ctx, input);
+    if (!relaxed || isYearSeal) return periodOpen;
   }
 
   return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, scope, () => {

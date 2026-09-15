@@ -86,6 +86,11 @@ export const AUDIT_ENTITY_KINDS = [
   // and its next-period reversal linked. Its own object kind and not `entry`, because it names the
   // revaluation RUN a human confirmed, not the individual journal entry the run produced.
   'fx_revaluation',
+  // A38 MWST-Saldierung (D129 leg 2). The settlement row is the audit record of a filed period's
+  // VAT balances moving to 2201: it stamps `post` when the transfer books inside the filed period
+  // and `reverse` when its Storno does. Its own object kind and not `entry`, because it names the
+  // settled PERIOD a human confirmed, not the journal entry the settlement produced.
+  'vat_settlement',
   'bank_account',
   'saldo_declaration_election',
   'workspace_member',
@@ -245,6 +250,12 @@ export const AUDIT_ENTITY_KINDS = [
   // M02: the §I sync publish dial. Not a data record and not a ledger effect: a workspace-level egress
   // posture whose enable/disable an owner and an auditor both need to see in the trail.
   'sync',
+  // A38, Abgrenzungen und Rückstellungen. Two money-path emitters: an accrual stamps `create`,
+  // `post` (the pair), `reverse` (the Storno pair) and `discard`; a provision stamps the same plus
+  // `release`. Their own object kinds and not `entry`, for the A22 reason: they name the Abgrenzung
+  // or Rückstellung a human described, not the individual journal entries it produced.
+  'accrual',
+  'provision',
 ] as const;
 
 /** Every action the audit log can name. */
@@ -306,6 +317,17 @@ export const AUDIT_ACTIONS = [
   'import',
   'confirm',
   'book',
+  // A38. Two words, each refused a near miss:
+  //   - `release` is not `reverse`: an Auflösung is a NEW posting (Dr provision / Cr target) that
+  //     consumes the provision, never a mirror of the formation; the formation's mirror IS `reverse`.
+  //   - `discard` is not `archive` (nothing is hidden for reference; a draft that never posted is
+  //     retired for good) and not `cancel` (E03's word for a duty): it records that a described
+  //     accrual or provision was withdrawn before it ever reached the journal.
+  'release',
+  //   - `release_reverse` is not `reverse`: it mirrors ONE release (`provision_release_reverse`), the
+  //     provision stands with its balance restored; `reverse` mirrors the formation itself.
+  'release_reverse',
+  'discard',
   // A25. Three words, each refused a near miss:
   //   - `comment` is not `record`: `record` mints a statutory input (a rate, a credit), while a
   //     comment only ever asks a question about a posting that already exists.

@@ -2,9 +2,11 @@
  * A26 US-A26.4, `monthEndChecklist`: aggregate the existing read models into a close checklist. It
  * WRITES NOTHING (readOnlyHint): every item is a count plus its drill-down ids, and the human (or
  * Treuhänder) acts on it. It composes A02 (drafts), A16 (`listOpenItems`) and A07 (`computeVatReturn`)
- * rather than recomputing any of them, and it reports the A22 FX-revaluation item as `not_available`
- * because period-end revaluation is not built yet (spec §0.2), which is the honest state rather than a
- * silent omission.
+ * rather than recomputing any of them. The A22 FX line reads the revaluation run row for the month end
+ * (D129 leg 2, N4): `ok` when the month's revaluation is posted and unreverted or when the books carry
+ * no foreign-currency position at the month end, `attention` when positions exist and no run does
+ * (the count is the positions, the note names a missing rate). Until 2026-09-10 the line said
+ * `not_available` because the revaluation was not built; it is, and the line reads it.
  */
 
 import type { WorkspaceContext } from '../context.js';
@@ -12,6 +14,7 @@ import type { Result } from '../result.js';
 import { ok, err } from '../result.js';
 import { listOpenItems } from '../debtors/index.js';
 import { computeVatReturn } from '../vat/index.js';
+import { computeFxRevaluation } from '../fx/index.js';
 
 export interface MonthEndChecklistInput {
   period?: unknown;
@@ -35,6 +38,33 @@ function monthRange(period: string): { start: string; end: string } | null {
   const daysInMonth = [31, (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const last = daysInMonth[month - 1] as number;
   return { start: `${m[1]}-${m[2]}-01`, end: `${m[1]}-${m[2]}-${String(last).padStart(2, '0')}` };
+}
+
+/** The A22 line of the month-end checklist (see the module docblock). */
+function fxRevaluationItem(ctx: WorkspaceContext, periodEnd: string): ChecklistItem {
+  const run = ctx.store.db
+    .prepare('SELECT id, entry_id, storno_entry_id FROM fx_revaluation WHERE workspace_id = ? AND period_end = ?')
+    .get(ctx.workspaceId, periodEnd) as { id: string; entry_id: string | null; storno_entry_id: string | null } | undefined;
+  if (run !== undefined && run.entry_id !== null && run.storno_entry_id === null) {
+    return { kind: 'fx_revaluation', count: 0, drillIds: [run.entry_id], status: 'ok', note: `posted, run ${run.id}` };
+  }
+  const res = computeFxRevaluation(ctx, { periodEnd });
+  if (!res.ok) {
+    return { kind: 'fx_revaluation', count: 0, drillIds: [], status: 'not_available', note: `fx_revaluation refused: ${res.error ?? 'refused'}` };
+  }
+  const positions = Array.isArray(res.positions) ? (res.positions as { accountId?: string }[]) : [];
+  const needsRate = Array.isArray(res.needsRate) ? (res.needsRate as unknown[]) : [];
+  if (positions.length === 0 && needsRate.length === 0) {
+    return { kind: 'fx_revaluation', count: 0, drillIds: [], status: 'ok', note: 'no foreign-currency position at the month end' };
+  }
+  const drillIds = positions.map((p) => p.accountId).filter((id): id is string => typeof id === 'string');
+  return {
+    kind: 'fx_revaluation',
+    count: positions.length + needsRate.length,
+    drillIds,
+    status: 'attention',
+    note: needsRate.length > 0 ? `${needsRate.length} position(s) without a rate; post_fx_revaluation {periodEnd: ${periodEnd}} once the rates are on file` : `not posted; post_fx_revaluation {periodEnd: ${periodEnd}}`,
+  };
 }
 
 export function monthEndChecklist(ctx: WorkspaceContext, input: MonthEndChecklistInput): Result {
@@ -101,15 +131,9 @@ export function monthEndChecklist(ctx: WorkspaceContext, input: MonthEndChecklis
     });
   }
 
-  // A22 FX revaluation due: NOT AVAILABLE. The rate store is built but period-end revaluation is not
-  // (spec §0.2), so this reports its absence by name rather than silently dropping the check.
-  items.push({
-    kind: 'fx_revaluation',
-    count: 0,
-    drillIds: [],
-    status: 'not_available',
-    note: 'A22 period-end revaluation is not built yet.',
-  });
+  // A22 FX revaluation at the month end: the run row first (posted and not reverted through
+  // fx_revaluation_reverse), then the positions the read would revalue.
+  items.push(fxRevaluationItem(ctx, range.end));
 
   return ok({ period: input.period, items });
 }

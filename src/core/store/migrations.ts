@@ -39,6 +39,7 @@ import type { Database } from 'better-sqlite3';
 import { parseRate } from '../fx/rateMath.js';
 import { NOT_AUTOMATABLE } from '../automation/denylist.js';
 import { appendAuditLog } from '../ledger/auditLog.js';
+import { topUpChartOfAccounts } from '../accounts/topUp.js';
 import { systemIdGen } from '../ids.js';
 import type { SqliteStore } from './sqlite-store.js';
 
@@ -496,6 +497,26 @@ function disableDeniedAutomationRules(db: Database): void {
   }
 }
 
+/** The seed accounts A38 added on 2026-09-09: the short-term provision, the MWST rounding income, the direct taxes. */
+const A38_SEED_ACCOUNTS = ['2330', '3809', '8900'] as const;
+
+/**
+ * Generation 7 (A38): give every workspace the three seed accounts A38 added to the KMU chart.
+ *
+ * `seedChartOfAccounts` runs once, at `create_workspace`, so a book born before A38 never received
+ * 2330, 3809 or 8900 and `tax_provision_preview` read `missingAccounts` on it forever (critic
+ * finding). The top-up inserts by number only where no row exists (`INSERT ... WHERE NOT EXISTS`),
+ * so a renamed, archived or re-typed account of the same number is left exactly as the book tuned
+ * it, and a second run inserts nothing. Scoped to the three numbers on purpose: a seed account a
+ * book deleted deliberately is not resurrected by an unrelated upgrade.
+ */
+function seedA38Accounts(db: Database): void {
+  const workspaces = db.prepare('SELECT id FROM workspace ORDER BY created_at, id').all() as { id: string }[];
+  for (const ws of workspaces) {
+    topUpChartOfAccounts(db, ws.id, systemIdGen, { numbers: A38_SEED_ACCOUNTS });
+  }
+}
+
 export const DATA_MIGRATIONS: readonly DataMigration[] = [
   {
     generation: 1,
@@ -526,5 +547,10 @@ export const DATA_MIGRATIONS: readonly DataMigration[] = [
     generation: 6,
     name: 'denylist-rules: disable stored automation rules whose action is no longer automatable',
     apply: disableDeniedAutomationRules,
+  },
+  {
+    generation: 7,
+    name: 'a38-seed-accounts: add 2330, 3809 and 8900 to every workspace born before A38 seeded them',
+    apply: seedA38Accounts,
   },
 ];

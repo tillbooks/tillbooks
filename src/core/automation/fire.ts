@@ -156,9 +156,26 @@ function occurrenceKey(event: string, rawId: string, input: Record<string, unkno
 }
 
 /** The derived key that makes the TARGET verb refuse a double-execute independently of our index. */
+const DERIVED_KEY_PREFIX = 'auto:';
+const DERIVED_KEY_DIGEST_LENGTH = 16;
 function derivedIdempotencyKey(ruleId: string, eventRef: string): string {
   const digest = createHash('sha256').update(`${ruleId}::${eventRef}`).digest('hex');
-  return `auto:${ruleId}:${digest.slice(0, 16)}`;
+  return `${DERIVED_KEY_PREFIX}${ruleId}:${digest.slice(0, DERIVED_KEY_DIGEST_LENGTH)}`;
+}
+
+/**
+ * The rule id a derived idempotency key names, or undefined for any other key. The reader of the
+ * shape `derivedIdempotencyKey` writes, kept beside it so the two cannot drift: G22's
+ * `checklist_start` records the rule as the run's creator (spec §10.8) when the workspace carries it.
+ * A rule id may itself contain colons (`builtin:checklist_autostart:month_close`), so the digest is
+ * cut off the END, never split off the first colon.
+ */
+export function automationRuleIdOfKey(key: string): string | undefined {
+  if (!key.startsWith(DERIVED_KEY_PREFIX)) return undefined;
+  const body = key.slice(DERIVED_KEY_PREFIX.length);
+  const cut = body.length - DERIVED_KEY_DIGEST_LENGTH - 1;
+  if (cut <= 0 || body[cut] !== ':' || !/^[0-9a-f]+$/.test(body.slice(cut + 1))) return undefined;
+  return body.slice(0, cut);
 }
 
 function enabledRulesFor(ctx: WorkspaceContext, event: string): RuleRow[] {

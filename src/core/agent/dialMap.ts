@@ -52,6 +52,18 @@ export const DIAL_CAPABILITY_FOR_ACTION: Readonly<Record<string, string>> = {
   wage_journal_post: 'post',
   post_vendor_bill: 'post',
   post_fx_revaluation: 'post',
+  // A38: the five entry-minting writes (an accrual posts a pair, a Storno posts the mirror pair, a
+  // provision is formed, released and reversed). The drafts and discards mint nothing and are not
+  // governed, the H04 `asset_depreciation_run_create` precedent.
+  accrual_post: 'post',
+  accrual_reverse: 'post',
+  provision_post: 'post',
+  provision_release: 'post',
+  provision_reverse: 'post',
+  provision_release_reverse: 'post',
+  fx_revaluation_reverse: 'post',
+  vat_settlement_post: 'post',
+  vat_settlement_reverse: 'post',
   expense_claim_approve: 'post',
   asset_acquire: 'post',
   asset_add_capitalisation: 'post',
@@ -134,6 +146,16 @@ export const INPUT_KEYED_DIAL_RULES: ReadonlyArray<InputKeyedDialRule> = [
     },
     why: 'The ePortal attestation is the statutory filing claim vat_mark_filed acts on; an agent may draft it for the owner, never record it alone.',
   },
+  {
+    action: 'checklist_item_complete',
+    capability: 'post',
+    when: (input) => {
+      const evidence = input.evidence;
+      const kind = typeof evidence === 'object' && evidence !== null ? (evidence as { kind?: unknown }).kind : undefined;
+      return kind === 'statements_signoff' || kind === 'gv_attestation';
+    },
+    why: 'The statements sign-off and the GV attestation put a person behind the year\'s figures (G22 §10.1, the close templates); an agent drafts them at the post tier for the owner, never records them alone.',
+  },
 ];
 
 /**
@@ -182,6 +204,15 @@ export const CONSEQUENCE_FOR_ACTION: Readonly<Record<string, string>> = {
   wage_journal_post: 'Posts the month\'s aggregate wage journal as one balanced entry; a wrong journal is reversed, never edited.',
   post_vendor_bill: 'Posts the draft vendor bill to the ledger; the only correction afterwards is a reversing entry.',
   post_fx_revaluation: 'Posts the period-end unrealised currency gain or loss, with its automatic next-period reversal.',
+  accrual_post: 'Posts the accrual and its automatic next-period reversal as one pair; the only correction afterwards is a reversing pair.',
+  accrual_reverse: 'Posts the mirror pair against a posted accrual so every account nets to zero, without rewriting history.',
+  provision_post: 'Posts the provision as an immutable entry; it is released or reversed later, never edited.',
+  provision_release: 'Posts the release of part or all of the provision against the target account; a release is undone only by a reversal.',
+  provision_reverse: 'Posts a reversing entry against the provision formation; it cannot be un-posted.',
+  provision_release_reverse: 'Posts a reversing entry against one release of the provision, restoring its open balance; it cannot be un-posted.',
+  fx_revaluation_reverse: 'Books the mirror of the period-end currency revaluation and its own next-day reversal; the original entries stay on record.',
+  vat_settlement_post: 'Transfers the filed period\'s VAT balances from 2200, 1170 and 1171 to 2201 inside the filed period; the filed return does not change, and the only correction is a reversing entry.',
+  vat_settlement_reverse: 'Reverses the VAT settlement with a mirror entry dated the period end; the settlement stays on record as reversed.',
   expense_claim_approve: 'Approves the expense claim and posts the reimbursement liability to the ledger.',
   asset_acquire: 'Capitalises the asset and posts its acquisition entry; the financial fields lock afterwards.',
   asset_add_capitalisation: 'Posts additional cost onto an acquired asset and raises its book value.',

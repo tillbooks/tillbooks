@@ -52,6 +52,7 @@ import { useChecklistRun } from './useChecklistRun';
 import { MarkFiledDialog } from './MarkFiledDialog';
 import { PeriodPicker } from './PeriodPicker';
 import { RefusalPanel } from './Refusal';
+import { Settlement, type SettlementState } from './Settlement';
 import { useVatExport, VatExportButton, VatExportOutcome } from './VatExport';
 import { LockGlyph } from './glyphs';
 import {
@@ -114,6 +115,10 @@ export function VatReturn() {
   const [confirming, setConfirming] = useState(false);
   const [filingPending, setFilingPending] = useState(false);
   const [filingFailed, setFilingFailed] = useState(false);
+  // A38 (D129 leg 2): the settlement panel's posted state, lifted so the strip's sixth step and the
+  // panel read one fact. Null until the panel has answered (or when its read refused).
+  const [settlementState, setSettlementState] = useState<SettlementState | null>(null);
+  const canPost = useCan(CAP.post);
 
   const year = (selected ?? todayIso()).slice(0, 4);
 
@@ -380,6 +385,7 @@ export function VatReturn() {
         checked={bridge !== null && (bridge.kind === 'match' || bridge.kind === 'notApplicable')}
         marked={filed}
         run={checklist.run}
+        settlement={settlementState}
       />
       <p className="vr-journey-note">{t('vat.return.exportNote')}</p>
 
@@ -429,6 +435,22 @@ export function VatReturn() {
             onOpenEntry={(entryId) => setOpenEntryId(entryId)}
             saldo={view.method === 'saldo'}
           />
+
+          {/* A38 §6 (D129 leg 2): the MWST-Saldierung under the period. The same verb the year_close
+              checklist's vat_settled row calls; its face outside any run. Keyed on the period so a
+              period change remounts the panel with a fresh read. */}
+          {period !== null && (
+            <Settlement
+              key={period.label}
+              workspaceId={workspaceId}
+              period={period.label}
+              filed={filed}
+              currency={currency}
+              canPost={canPost}
+              onOpenEntry={(entryId) => setOpenEntryId(entryId)}
+              onState={setSettlementState}
+            />
+          )}
         </>
       )}
 

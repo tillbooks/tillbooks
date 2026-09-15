@@ -2,27 +2,32 @@
  * G22's named live checks, composing EXISTING reads only (Pattern P5): the A02 draft count the A26
  * month-end checklist already runs, the A20/A21 unreconciled bank rows the G15 hub already counts,
  * the A26 `detectAnomalies` missing-tax-code kind (the same query A25's `preparePeriod` flags), A07's
- * own `computeVatReturn` and its promoted bridge, and A03's `vat_filed` lock the way `vat_periods`
- * reads it. Nothing here recomputes a figure.
+ * own `computeVatReturn` and its promoted bridge, A03's `vat_filed` lock the way `vat_periods` reads
+ * it, and (leg 2) A03's `period_lock` rows the way `list_period_locks` reads them. Nothing here
+ * recomputes a figure.
  *
  * A check that THROWS reports `unavailable` with its key rather than failing the whole read: a
  * checklist row that says "Prüfung nicht verfügbar" is honest; a stack trace on a filing surface is
  * not.
+ *
+ * The two VAT-only checks read the return through the per-read memo (spec §10.2): on the
+ * `vat_period` template that IS the anchor; on a close template it is fetched lazily, and a
+ * workspace without A05 reads `unavailable` with `needs_vat_config` rather than a failing row.
  */
 
 import type { WorkspaceContext } from '../context.js';
-import { computeVatReturn, listVatPeriods, vatBridgeOf, type VatBridge } from '../vat/index.js';
+import { listVatPeriods } from '../vat/index.js';
 import { detectAnomalies } from '../agent/index.js';
-import { monthsOfVatPeriod } from '../vat/abrechnung.js';
-import { returnHashOf } from './hash.js';
+import { fiscalYearOf } from '../ledger/index.js';
+import type { ReadMemo } from './anchor.js';
+import { fiscalYearStartOf, monthsBetween, type ChecklistPeriod } from './periods.js';
 import type { ChecklistCheckKey } from './types.js';
 
-/** The period a run covers, as the checks need it. */
-export interface CheckPeriod {
-  readonly label: string;
-  readonly periodStart: string;
-  readonly periodEnd: string;
-}
+export { liveReturnOf } from './anchor.js';
+export type { LiveReturn } from './anchor.js';
+
+/** The period a run covers, as the checks need it (the resolved period's shape). */
+export type CheckPeriod = ChecklistPeriod;
 
 /** One check's live answer. `passed === null` means the check could not be evaluated. */
 export interface CheckResult {
@@ -32,29 +37,6 @@ export interface CheckResult {
   readonly count?: number;
   /** The reason a check is unavailable (a refusal code or an exception message). */
   readonly reason?: string;
-}
-
-/**
- * The computed return, evaluated ONCE per read and shared by every check and by the evidence
- * binding: `vat_return_computed`, `abstimmung_resolved`, and the hash a verb item is bound to.
- */
-export interface LiveReturn {
-  readonly ok: boolean;
-  readonly error?: string;
-  readonly hash: string | null;
-  readonly bridge: VatBridge | null;
-  readonly payload: Record<string, unknown> | null;
-}
-
-export function liveReturnOf(ctx: WorkspaceContext, period: CheckPeriod): LiveReturn {
-  const res = computeVatReturn(ctx, { periodStart: period.periodStart, periodEnd: period.periodEnd });
-  if (!res.ok) return { ok: false, error: res.error, hash: null, bridge: null, payload: null };
-  const payload = res as unknown as Record<string, unknown>;
-  const bridge =
-    typeof payload.bridge === 'object' && payload.bridge !== null
-      ? (payload.bridge as VatBridge)
-      : vatBridgeOf(payload as never);
-  return { ok: true, hash: returnHashOf(payload), bridge, payload };
 }
 
 function countDrafts(ctx: WorkspaceContext, period: CheckPeriod): number {
@@ -90,11 +72,10 @@ function countUnreconciledBank(ctx: WorkspaceContext, period: CheckPeriod): numb
   return txns.n + credits.n;
 }
 
-/** The A26 anomaly read per month of the period, the `missing_tax_code` kind unioned. */
+/** The A26 anomaly read per month of the period (from its bounds), the `missing_tax_code` kind unioned. */
 function countMissingTaxCodes(ctx: WorkspaceContext, period: CheckPeriod): number {
-  const months = monthsOfVatPeriod(period.label) ?? [];
   const ids = new Set<string>();
-  for (const month of months) {
+  for (const month of monthsBetween(period.periodStart, period.periodEnd)) {
     const res = detectAnomalies(ctx, { period: month });
     if (!res.ok) throw new Error(`detect_anomalies: ${res.error}`);
     const anomalies = Array.isArray(res.anomalies) ? (res.anomalies as { kind: string; entryIds: string[] }[]) : [];
@@ -112,13 +93,38 @@ function periodLockedVatFiled(ctx: WorkspaceContext, period: CheckPeriod): boole
   return match?.filed === true;
 }
 
+// --- A03 lock readers, shared with the probes ---------------------------------------------------
+
+/** A03's lock row for a period label (`YYYY-MM` or `YYYY`), the way `list_period_locks` reads it. */
+export function periodLockOf(ctx: WorkspaceContext, label: string): { kind: string; reason: string | null } | undefined {
+  return ctx.store.db
+    .prepare('SELECT kind, reason FROM period_lock WHERE workspace_id = ? AND period = ?')
+    .get(ctx.workspaceId, label) as { kind: string; reason: string | null } | undefined;
+}
+
+/** The fiscal year label the period end falls in (the run's own label on a `year` run). */
+export function yearLabelOf(ctx: WorkspaceContext, period: CheckPeriod): string {
+  return /^\d{4}$/.test(period.label) ? period.label : fiscalYearOf(period.periodEnd, fiscalYearStartOf(ctx));
+}
+
+/** A soft or hard lock on the month the period ends in. */
+export function lockOnMonth(ctx: WorkspaceContext, period: CheckPeriod): boolean {
+  return periodLockOf(ctx, period.periodEnd.slice(0, 7)) !== undefined;
+}
+
+/** A lock of either kind on the fiscal year (the soft year lock is the "in Abschluss" state; a seal counts). */
+export function lockOnYear(ctx: WorkspaceContext, period: CheckPeriod): boolean {
+  return periodLockOf(ctx, yearLabelOf(ctx, period)) !== undefined;
+}
+
+/** The `year_close` seal on the fiscal year. */
+export function sealOnYear(ctx: WorkspaceContext, period: CheckPeriod): boolean {
+  const lock = periodLockOf(ctx, yearLabelOf(ctx, period));
+  return lock !== undefined && lock.kind === 'hard' && lock.reason === 'year_close';
+}
+
 /** Evaluate one check. Never throws: an exception is an `unavailable` result carrying its message. */
-export function evaluateCheck(
-  ctx: WorkspaceContext,
-  key: ChecklistCheckKey,
-  period: CheckPeriod,
-  live: LiveReturn,
-): CheckResult {
+export function evaluateCheck(ctx: WorkspaceContext, key: ChecklistCheckKey, period: CheckPeriod, memo: ReadMemo): CheckResult {
   try {
     switch (key) {
       case 'no_drafts': {
@@ -133,15 +139,33 @@ export function evaluateCheck(
         const count = countMissingTaxCodes(ctx, period);
         return { key, passed: count === 0, count };
       }
-      case 'vat_return_computed':
-        return live.ok ? { key, passed: true } : { key, passed: false, reason: live.error ?? 'refused' };
+      case 'vat_return_computed': {
+        const live = memo.vatReturn();
+        if (live.ok) return { key, passed: true };
+        // On the VAT template a refused return is a failing row (the run exists to compute it); on a
+        // close template it is a check that cannot be evaluated (no A05, spec §10.2).
+        return memo.anchor.kind === 'vat_return'
+          ? { key, passed: false, reason: live.error ?? 'refused' }
+          : { key, passed: null, reason: live.error ?? 'needs_vat_config' };
+      }
       case 'abstimmung_resolved': {
-        if (!live.ok || live.bridge === null) return { key, passed: false, reason: live.error ?? 'refused' };
+        const live = memo.vatReturn();
+        if (!live.ok || live.bridge === null) {
+          return memo.anchor.kind === 'vat_return'
+            ? { key, passed: false, reason: live.error ?? 'refused' }
+            : { key, passed: null, reason: live.error ?? 'needs_vat_config' };
+        }
         const kind = live.bridge.kind;
         return { key, passed: kind === 'match' || kind === 'notApplicable', count: kind === 'open' ? 1 : 0 };
       }
       case 'period_locked_vat_filed':
         return { key, passed: periodLockedVatFiled(ctx, period) };
+      case 'lock_on_month':
+        return { key, passed: lockOnMonth(ctx, period) };
+      case 'soft_lock_on_year':
+        return { key, passed: lockOnYear(ctx, period) };
+      case 'seal_on_year':
+        return { key, passed: sealOnYear(ctx, period) };
     }
   } catch (e) {
     return { key, passed: null, reason: e instanceof Error ? e.message : String(e) };

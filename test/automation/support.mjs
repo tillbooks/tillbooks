@@ -26,6 +26,26 @@ export const call = (deps, name, input) => getAction(name).run(deps, input);
 export const count = (deps, sql, ...args) => deps.store.db.prepare(sql).get(...args).n;
 
 /**
+ * G22 (D129, N4) seeds two DEFAULT rules into every workspace at creation (`builtin:checklist_autostart:*`,
+ * `schedule.daily`, `checklist_start`). These suites prove G01's own mechanics on the rules they define,
+ * so the fixture retires the defaults through the product's own door (`disable_automation_rule`: a
+ * disabled rule never fires, the row stays) and every rule count names its own rows with this predicate.
+ * The defaults themselves are proven in `test/checklists/g22-autostart.test.mjs`.
+ */
+export const OWN_RULES = "id NOT LIKE 'builtin:checklist_autostart:%'";
+
+export function retireSeededChecklistRules(deps, workspaceId) {
+  const seeded = deps.store.db
+    .prepare("SELECT id FROM automation_rule WHERE workspace_id = ? AND id LIKE 'builtin:checklist_autostart:%'")
+    .all(workspaceId);
+  assert.equal(seeded.length, 2, 'a workspace is born with the two G22 default rules');
+  for (const { id } of seeded) {
+    const res = call(deps, 'disable_automation_rule', { workspaceId, ruleId: id });
+    assert.equal(res.ok, true, `disable_automation_rule refused: ${JSON.stringify(res)}`);
+  }
+}
+
+/**
  * The run log as plain rows, oldest first: what fired, on which occurrence, and how it ended.
  *
  * `redeliveries` is selected because a refused claim is now a durable fact rather than an absence
@@ -46,6 +66,7 @@ export function workspace(seed, actor = 'studio') {
   const deps = freshDeps();
   deps.actor = actor;
   const { workspaceId, accId } = mintWorkspace(deps, 'Automat GmbH', `${seed}-ws`);
+  retireSeededChecklistRules(deps, workspaceId);
   return { deps, workspaceId, accId };
 }
 

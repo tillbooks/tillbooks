@@ -49,7 +49,7 @@ export const MAX_RULE_JSON_BYTES = 16384;
  * checks, and store/migrations.ts imports it to disable stored rules that predate an entry. It is
  * re-exported here so existing consumers keep their import path.
  */
-import { isNotAutomatable } from './denylist.js';
+import { isNotAutomatable, notAutomatableInput } from './denylist.js';
 
 export { NOT_AUTOMATABLE, isNotAutomatable } from './denylist.js';
 
@@ -190,6 +190,14 @@ function shapeProblem(parts: {
         tool: parts.tool,
         reason: 'irreversible_or_compliance_sensitive',
       });
+    }
+    // G22 leg 2 (spec §10.8): the denylist keyed on the INPUT, refused at definition time like the
+    // verb-level one. Both callers hand in the MERGED template, so a patch cannot smuggle it in.
+    if ('inputTemplate' in parts) {
+      const denied = notAutomatableInput(parts.tool, parts.inputTemplate);
+      if (denied !== undefined) {
+        return err('template_not_automatable', { tool: parts.tool, field: denied.field, value: denied.value, reason: 'started_deliberately' });
+      }
     }
   }
   if ('inputTemplate' in parts && !isPlainObject(parts.inputTemplate)) {

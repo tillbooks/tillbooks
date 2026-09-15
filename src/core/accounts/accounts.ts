@@ -12,7 +12,8 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { requireString, optionalText } from '../ledger/inputGuards.js';
 import { applySavedView } from '../customization/views.js';
-import { ACCOUNT_TYPES, KMU_CORE_SEED } from './kmuSeed.js';
+import { ACCOUNT_TYPES } from './kmuSeed.js';
+import { topUpChartOfAccounts } from './topUp.js';
 import type { AccountType } from './kmuSeed.js';
 
 interface AccountRow {
@@ -40,21 +41,10 @@ function mapAccount(row: AccountRow) {
 }
 
 export function seedChartOfAccounts(ctx: WorkspaceContext): Result {
-  const insert = ctx.store.db.prepare(
-    `INSERT OR IGNORE INTO account (id, workspace_id, number, name, type, cost_center_allowed)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  );
+  // The birth seed is the whole-chart case of the top-up the store migration also runs for a
+  // workspace born before a seed account existed (`./topUp.ts`): one insert shape, two callers.
   ctx.store.tx(() => {
-    for (const account of KMU_CORE_SEED) {
-      insert.run(
-        ctx.ids.next('acc'),
-        ctx.workspaceId,
-        account.number,
-        account.name,
-        account.type,
-        account.costCenterAllowed ? 1 : 0,
-      );
-    }
+    topUpChartOfAccounts(ctx.store.db, ctx.workspaceId, ctx.ids);
   });
   const count = ctx.store.db
     .prepare('SELECT COUNT(*) AS c FROM account WHERE workspace_id = ?')

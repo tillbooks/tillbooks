@@ -177,6 +177,7 @@
       "go-live": "Überträgt die Migrationsdaten in die echten Bücher. Der Umstieg lässt sich nicht rückgängig machen."
     },
     "consequenceVerb": {
+      "close_year": "Danach kannst du in diesem Geschäftsjahr nichts mehr buchen und nichts rückgängig machen. Es gibt keinen Weg zurück.",
       "invite_member": "Lädt eine Person oder einen Agenten mit der gewählten Rolle in den Arbeitsbereich ein. Wer den Token einlöst, sieht ab dann die Bücher.",
       "set_role": "Ändert, was ein Mitglied hier sehen und tun darf. Die neuen Rechte gelten ab dem nächsten Aufruf.",
       "revoke_member": "Entzieht einem Mitglied den Zugang zum Arbeitsbereich. Der Entzug gilt ab dem nächsten Aufruf.",

@@ -497,3 +497,134 @@
   color: var(--t-danger);
   font-size: 13px;
 }
+
+/* --- A38, the MWST-Saldierung panel (D129 leg 2) ----------------------------------------------
+   One panel under the form: the booked movement beside the declared Ziffern, the lines behind a
+   disclosure, one primary action. Money right-aligned and tabular; the warn is a sentence, never a
+   filled row. */
+
+.vr-settle {
+  margin-top: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+.vr-settle-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+}
+
+.vr-settle-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.vr-settle-note {
+  margin: var(--t-space-0-5) 0 0;
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.vr-settle-posted {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: var(--t-space-1) 0 0;
+  font-size: 13px;
+}
+
+.vr-settle-glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.vr-settle-empty {
+  margin: var(--t-space-1) 0 0;
+  color: var(--t-text-dim);
+  font-size: 13px;
+}
+
+.vr-settle-table {
+  width: 100%;
+  margin-top: var(--t-space-1);
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.vr-settle-table th,
+.vr-settle-table td {
+  padding: var(--t-space-0-5) 0;
+  border-bottom: 1px solid var(--t-border);
+  text-align: left;
+}
+
+.vr-settle-table th[scope='row'] {
+  font-weight: 500;
+}
+
+.vr-settle-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.vr-settle-account {
+  color: var(--t-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.vr-settle-lines {
+  margin-top: var(--t-space-1);
+  font-size: 13px;
+}
+
+.vr-settle-lines summary {
+  cursor: pointer;
+  color: var(--t-text-dim);
+}
+
+.vr-settle-lines-list {
+  margin: var(--t-space-0-5) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vr-settle-lines-list li {
+  display: grid;
+  grid-template-columns: 4rem 4rem 1fr;
+  gap: var(--t-space-1);
+  padding: 2px 0;
+}
+
+.vr-settle-lines-list .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.vr-settle-line-account {
+  font-variant-numeric: tabular-nums;
+}
+
+.vr-settle-line-side {
+  color: var(--t-text-dim);
+}
+
+.vr-settle-warn {
+  margin: var(--t-space-1) 0 0;
+  color: var(--t-warn);
+  font-size: 13px;
+}
+
+.vr-settle-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-2);
+}
+
+.vr-settle-blocked {
+  color: var(--t-text-dim);
+  font-size: 13px;
+}

@@ -35,6 +35,13 @@ const CONFIRMED = [
   { number: '1171', type: 'asset' }, // Vorsteuer Investitionen und übriger Betriebsaufwand
   { number: '2200', type: 'liability' }, // Geschuldete MWST
   { number: '2201', type: 'liability' }, // Abrechnungskonto MWST
+  // A38 (D129): the accrual balance accounts, the provision accounts and the tax helper's pair.
+  { number: '1300', type: 'asset' }, // Aktive Rechnungsabgrenzung
+  { number: '2300', type: 'liability' }, // Passive Rechnungsabgrenzung
+  { number: '2330', type: 'liability' }, // Kurzfristige Rückstellungen
+  { number: '2600', type: 'liability' }, // Rückstellungen (long-term)
+  { number: '3809', type: 'income' }, // Ertragsminderung MWST Saldosteuersatz (Q3)
+  { number: '8900', type: 'expense' }, // Direkte Steuern (Q4)
 ];
 
 test('the money-path-critical accounts are present with the correct KMU type', () => {
@@ -52,7 +59,9 @@ test('the year-close carry accounts 2979 and 2970 are both equity (A03 depends o
 
 test('every seed account follows the KMU number-range type rule', () => {
   // 1xxx asset; 2xxx liability EXCEPT the equity block (2800/2850/2970/2979); 3xxx income;
-  // 4xxx-6xxx expense. This is the mapping A08 statements and the year-close read.
+  // 4xxx-6xxx expense; 8xxx the betriebsfremder / ausserordentlicher class, of which the seed ships
+  // only the expense account 8900 (A38, D129 Q4), so the class is pinned as expense here. This is
+  // the mapping A08 statements and the year-close read.
   const equityBlock = new Set(['2800', '2850', '2970', '2979']);
   for (const a of KMU_CORE_SEED) {
     const lead = a.number[0];
@@ -61,6 +70,7 @@ test('every seed account follows the KMU number-range type rule', () => {
     else if (lead === '2') expected = equityBlock.has(a.number) ? 'equity' : 'liability';
     else if (lead === '3') expected = 'income';
     else if (lead === '4' || lead === '5' || lead === '6') expected = 'expense';
+    else if (lead === '8') expected = 'expense';
     assert.equal(a.type, expected, `account ${a.number} (${a.name}) type`);
   }
 });
@@ -96,6 +106,9 @@ const EXPECTED_LABELS = {
   '2260': ['Verbindlichkeiten gegenüber Personal', 'Dettes envers le personnel', 'Debiti verso il personale', 'Payables to employees'],
   // OR 959a II.1.d
   '2300': ['Passive Rechnungsabgrenzung', 'Passifs de régularisation', 'Ratei e risconti passivi', 'Deferred income and accrued expenses'],
+  // A38 (D129 Q4): the short-term provisions, TILL's own wording (OR 959a has no heading for them;
+  // they sit under II.1.c and the statutory "Rückstellungen" heading stays on 2600).
+  '2330': ['Kurzfristige Rückstellungen', 'Provisions à court terme', 'Accantonamenti a breve termine', 'Short-term provisions'],
   '2400': ['Langfristige Bankschulden', 'Dettes bancaires à long terme', 'Debiti bancari a lungo termine', 'Long-term bank liabilities'],
   '2450': ['Langfristige Darlehen', 'Prêts à long terme', 'Prestiti a lungo termine', 'Long-term loans'],
   // OR 959a II.2.c
@@ -117,6 +130,8 @@ const EXPECTED_LABELS = {
   // A14's realised currency difference on clearing a RECEIVABLE. An Erlösminderung, because
   // settling a trade receivable is operating activity, and bidirectional so a gain and a loss net.
   '3806': ['Kursdifferenzen auf Forderungen', 'Différences de change sur créances', 'Differenze di cambio su crediti', 'Exchange rate differences on receivables'],
+  // A38 (D129 Q3): the Saldosteuersatz settlement's Ertragsminderung, TILL's own wording.
+  '3809': ['Ertragsminderung MWST Saldosteuersatz', 'Réduction de produits TVA taux de la dette fiscale nette', 'Riduzione ricavi IVA aliquota saldo', 'Revenue reduction net tax rate VAT'],
   '4000': ['Materialaufwand Fertigung', 'Charges de matériel de fabrication', 'Costi per il materiale di produzione', 'Production material costs'],
   '4200': ['Einkauf Handelswaren', 'Achats de marchandises', 'Acquisto di merci', 'Merchandise purchases'],
   '4400': ['Bezogene Fremdleistungen', 'Prestations de tiers', 'Prestazioni di terzi', 'Third-party services purchased'],
@@ -146,6 +161,8 @@ const EXPECTED_LABELS = {
   // account. In the standard numbering 6949 is the loss account; its gain twin 6999 is an Ertrag
   // and is left out of the 4xxx-6xxx block.
   '6949': ['Währungsverluste', 'Pertes de change', 'Perdite di cambio', 'Currency losses'],
+  // A38 (D129 Q4): the direct taxes the Steuerrückstellung is charged to; the one 8xxx account.
+  '8900': ['Direkte Steuern', 'Impôts directs', 'Imposte dirette', 'Direct taxes'],
 };
 
 test('every seed account carries its clean-room label in all four languages', () => {

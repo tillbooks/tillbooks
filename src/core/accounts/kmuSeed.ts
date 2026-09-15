@@ -191,6 +191,15 @@ export const KMU_CORE_SEED: readonly SeedAccount[] = [
     'Passifs de régularisation',
     'Ratei e risconti passivi',
     'Deferred income and accrued expenses'),
+  // A38 (D129 Q4): the SHORT-TERM provisions the Rückstellung verbs and the tax helper post to.
+  // OR Art. 959a Abs. 2 has no separate heading for it (short-term provisions fall under Ziff. 1
+  // lit. c, übrige kurzfristige Verbindlichkeiten; the statutory "Rückstellungen" heading is Ziff. 2
+  // lit. c and stays on 2600 below), so this label is TILL's own wording on the standard number.
+  acc('2330', 'liability', false,
+    'Kurzfristige Rückstellungen',
+    'Provisions à court terme',
+    'Accantonamenti a breve termine',
+    'Short-term provisions'),
   acc('2400', 'liability', false,
     'Langfristige Bankschulden',
     'Dettes bancaires à long terme',
@@ -277,6 +286,15 @@ export const KMU_CORE_SEED: readonly SeedAccount[] = [
     'Différences de change sur créances',
     'Differenze di cambio su crediti',
     'Exchange rate differences on receivables'),
+  // A38 (D129 Q3): the Ertragsminderung a Saldosteuersatz workspace books its MWST due against
+  // (Dr 3809 / Cr 2201) when a filed period is settled. An income account by class and a
+  // contra-revenue by convention, so the net Erlös after Saldosteuer reads off the Erfolgsrechnung.
+  // TILL's own wording (D129); no Kontenrahmen text was reproduced.
+  acc('3809', 'income', cc,
+    'Ertragsminderung MWST Saldosteuersatz',
+    'Réduction de produits TVA taux de la dette fiscale nette',
+    'Riduzione ricavi IVA aliquota saldo',
+    'Revenue reduction net tax rate VAT'),
 
   // 4xxx-6xxx Aufwand. OR Art. 959b Abs. 2 Ziff. 3 to 10.
   acc('4000', 'expense', cc,
@@ -395,4 +413,15 @@ export const KMU_CORE_SEED: readonly SeedAccount[] = [
     'Pertes de change',
     'Perdite di cambio',
     'Currency losses'),
+
+  // 8xxx betriebsfremder und ausserordentlicher Erfolg. The core ships ONE account of the class:
+  // A38 (D129 Q4) the direct taxes the Steuerrückstellung is charged to (Dr 8900 / Cr 2330), and the
+  // account whose debit balance the tax helper reads as the year's provisorische Bezüge. The 8 class
+  // mixes Aufwand and Ertrag in the standard numbering; 8900 is an expense, and the seed's
+  // number-range rule names the class as such.
+  acc('8900', 'expense', cc,
+    'Direkte Steuern',
+    'Impôts directs',
+    'Imposte dirette',
+    'Direct taxes'),
 ];

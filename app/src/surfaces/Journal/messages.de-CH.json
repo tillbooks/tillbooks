@@ -48,7 +48,10 @@
       "asset_acquisition": "Anlagenzugang",
       "asset_depreciation": "Abschreibung",
       "asset_disposal": "Anlagenabgang",
-      "inventory_valuation": "Lagerbewertung"
+      "inventory_valuation": "Lagerbewertung",
+      "accrual": "Abgrenzung",
+      "provision": "Rückstellung",
+      "vat_settlement": "MWST-Saldierung"
     },
     "reversedTag": "Storniert",
     "openReversed": "Stornierte Buchung {label} öffnen",

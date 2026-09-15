@@ -1,12 +1,16 @@
 {
   "name": "tillbooks",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "mcpName": "io.github.tillbooks/tillbooks",
   "description": "TILL (Trusted Independent Ledger Library) is a free, open-source (MIT), local-first Swiss accounting app where an AI agent posts entries, categorizes, drafts and chases invoices, and prepares the MWST-Abrechnung through a first-class MCP interface, with a minimalist Studio for human oversight.",
   "type": "module",
   "license": "MIT",
   "author": "Nomadik GmbH",
   "homepage": "https://tillbooks.ch",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tillbooks/tillbooks.git"
+  },
   "bin": {
     "till": "bin/till.mjs"
   },

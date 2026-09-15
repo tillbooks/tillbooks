@@ -90,8 +90,13 @@ export function renderPromptOverActions(
     const action = getAction(verb);
     return action === undefined ? err('unknown_action', { action: verb }) : runGoverned(deps, action, { workspaceId, ...input });
   };
-  const picked = pickChecklistPeriod((year) => govern('vat_periods', { year }), deps.clock.now().slice(0, 10), args.period);
-  if (!picked.ok) return { description, text: renderChecklistPromptRefusal('vat_periods', picked) };
+  // G22 leg 2 (spec §10.3): the period kind is the template's; a month or year resolves from the clock
+  // and the fiscal year start alone, and `vat_periods` is consulted only for the MWST-Periode.
+  const fiscalYearStart =
+    (deps.store.db.prepare('SELECT fiscal_year_start FROM workspace WHERE id = ?').get(workspaceId) as { fiscal_year_start: string | null } | undefined)
+      ?.fiscal_year_start ?? '01-01';
+  const picked = pickChecklistPeriod((year) => govern('vat_periods', { year }), deps.clock.now().slice(0, 10), args.period, template.periodKind, fiscalYearStart);
+  if (!picked.ok) return { description, text: renderChecklistPromptRefusal(template.periodKind === 'vat_period' ? 'vat_periods' : 'period', picked) };
   const listed = govern('checklist_list', { templateId: template.templateId });
   if (!listed.ok) return { description, text: renderChecklistPromptRefusal('checklist_list', listed) };
   const runs = Array.isArray(listed.runs) ? (listed.runs as { runId: string; periodStart: string }[]) : [];

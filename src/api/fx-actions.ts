@@ -30,6 +30,7 @@ import {
   describeRateFeed,
   computeFxRevaluation,
   postFxRevaluation,
+  reverseFxRevaluation,
 } from '../core/fx/index.js';
 
 export interface ActionHelpers {
@@ -125,6 +126,13 @@ export function fxActions(h: ActionHelpers): ActionDef[] {
       "Post the period-end UNREALISED currency gain/loss as a balanced entry (source `fx`) plus its next-period reversal, atomically. The unrealised difference books to account 6949 against each revalued position, and the entry auto-reverses on the first day of the next period so the REALISED figure at settlement (A14/A18) is never double-counted. Idempotent per `periodEnd`: a re-post with the same key replays, a different key returns `already_posted`, a zero-diff period posts nothing. Refuses `needs_rate` when any open FC position lacks a closing rate, and `period_locked` for a locked target period (A03).",
       ctxSchema({ periodEnd: STR, idempotencyKey: STR }, ['periodEnd', 'idempotencyKey']),
       (ctx, input) => postFxRevaluation(ctx, input as never),
+    ),
+    ctxAction(
+      'fx_revaluation_reverse',
+      'write',
+      "Revert a posted FX revaluation run (D129 Q2): books the mirror of the revaluation entry dated the period end (`source` `fx`) plus its own next-day reversal, atomically, so every position and account 6949 net to zero on both dates and nothing is edited. `runId` is the run `post_fx_revaluation` returned. Refuses `not_posted` for a run that posted nothing, `already_reversed`, `later_run_exists` naming the later period end whose run still stands (revert newest first), and `period_locked` for a locked period. Idempotent on `idempotencyKey`.",
+      ctxSchema({ runId: STR, idempotencyKey: STR }, ['runId', 'idempotencyKey']),
+      (ctx, input) => reverseFxRevaluation(ctx, input as never),
     ),
   ];
 }

@@ -61,6 +61,7 @@ import {
   liveIstRefusal,
   liveNeedsConfig,
   liveFiled,
+  liveSettlement,
 } from './studio-vat-return-world.mjs';
 
 const DIR = new URL('../../app/src/surfaces/VatReturn/', import.meta.url);
@@ -77,6 +78,8 @@ const SALDO_SPLIT = read('vat-return.saldo-split.fixture.json');
 const IST = read('vat-return.ist-refusal.fixture.json');
 const NEEDS_CONFIG = read('vat-return.needs-config.fixture.json');
 const FILED_PERIODS = read('vat-periods.filed.fixture.json');
+const SETTLEMENT = read('vat-settlement.fixture.json');
+const SETTLEMENT_POSTED = read('vat-settlement.posted.fixture.json');
 
 // --- 1. PRESENT ---------------------------------------------------------------------------------
 
@@ -96,6 +99,22 @@ test('A07 fixtures: every recording is the live engine answer, value for value',
   assert.deepEqual(IST, plain(liveIstRefusal()));
   assert.deepEqual(NEEDS_CONFIG, plain(liveNeedsConfig().return));
   assert.deepEqual(FILED_PERIODS, plain(liveFiled().periods));
+
+  const settlement = liveSettlement();
+  assert.deepEqual(SETTLEMENT, plain(settlement.preview));
+  assert.deepEqual(SETTLEMENT_POSTED, plain(settlement.posted));
+});
+
+test('A38 fixtures: the settlement recordings are the two panel states, and the posted one changes no figure', () => {
+  assert.equal(SETTLEMENT.filed, true);
+  assert.equal(SETTLEMENT.settlement, null);
+  assert.equal(SETTLEMENT.nothingToSettle, false);
+  assert.ok(SETTLEMENT.lines.length >= 3, 'an effektiv book with output and two Vorsteuer accounts settles on at least three lines');
+  assert.equal(SETTLEMENT.differences.netMinor, 0);
+  assert.notEqual(SETTLEMENT_POSTED.settlement, null);
+  assert.equal(SETTLEMENT_POSTED.settlement.status, 'posted');
+  assert.equal(SETTLEMENT_POSTED.outputMinor, SETTLEMENT.outputMinor, 'the posted read still shows what was settled');
+  assert.deepEqual(SETTLEMENT_POSTED.lines, SETTLEMENT.lines);
 });
 
 // --- 2. ABSENT ----------------------------------------------------------------------------------

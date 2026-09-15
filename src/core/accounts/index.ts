@@ -20,4 +20,6 @@ export {
   listCostCenters,
 } from './costCenters.js';
 export { ACCOUNT_TYPES, KMU_CORE_SEED } from './kmuSeed.js';
+export { topUpChartOfAccounts } from './topUp.js';
+export type { TopUpChartOptions } from './topUp.js';
 export type { AccountType, SeedAccount } from './kmuSeed.js';

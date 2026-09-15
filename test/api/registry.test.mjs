@@ -122,6 +122,30 @@ const EXPECTED_NAMES = [
   // A22, FX revaluation: the read model and its poster
   'fx_revaluation',
   'post_fx_revaluation',
+  // D129 Q2: the revert of a posted run
+  'fx_revaluation_reverse',
+  // A38, Abgrenzungen und Rückstellungen: the accrual pair, the provisions, the tax helper (N2)
+  'accrual_create',
+  'accrual_post',
+  'accrual_reverse',
+  'accrual_discard',
+  'accrual_get',
+  'accrual_list',
+  'provision_create',
+  'provision_post',
+  'provision_release',
+  'provision_reverse',
+  'provision_release_reverse',
+  'provision_discard',
+  'provision_get',
+  'provision_list',
+  'tax_provision_preview',
+  // A38 (D129 leg 2), the MWST-Saldierung block: two writes, three reads.
+  'vat_settlement_preview',
+  'vat_settlement_post',
+  'vat_settlement_reverse',
+  'vat_settlement_list',
+  'vat_annual_reconciliation',
   // A14, payments and matching: five reads and three writes, every write carrying an explicit
   // intent (owner decision P9) so money never moves as a side effect of anything.
   'preview_payment',
@@ -1048,6 +1072,10 @@ test('post_entry exposes only the business sources', () => {
   // A22: `fx` is engine-only, written only by post_fx_revaluation (with its next-period reversal and
   // fx_revaluation run row), never forgeable through the agent-facing post_entry boundary.
   assert.ok(!POST_ENTRY_SOURCES.includes('fx'));
+  // A38: `accrual` and `provision` are engine-only, written only by the accrual pair and the
+  // provision verbs, never forgeable through the agent-facing post_entry boundary.
+  assert.ok(!POST_ENTRY_SOURCES.includes('accrual'));
+  assert.ok(!POST_ENTRY_SOURCES.includes('provision'));
 });
 
 test('post_entry rejects source=reversal, source=close, and reversesEntryId before the verb', () => {

@@ -71,6 +71,17 @@ const PILOT = {
  */
 const CONVERTED = [
   PILOT,
+  // A38. The accrual post answers BOTH ids of the pair, and the Studio reads `reversalEntryId` for
+  // the "Rückbuchung am" line; `reversalId` is the name `reverseEntry` uses one call down, which is
+  // exactly the neighbour a consumer would reach for. The Storno answers the MIRROR pair's ids, so
+  // `stornoEntryId` and never `entryId` (that is A, which the Storno does not mint). The release's
+  // `openBalanceMinor` is the figure the provisions list renders; `openBalance` is the francs read.
+  { module: './dist/core/accruals/accrual.js', verb: 'accrualPost', field: 'reversalEntryId', absent: 'reversalId' },
+  { module: './dist/core/accruals/accrual.js', verb: 'accrualReverse', field: 'stornoEntryId', absent: 'entryId' },
+  { module: './dist/core/accruals/provision.js', verb: 'provisionRelease', field: 'openBalanceMinor', absent: 'openBalance' },
+  // The release undo answers the MIRROR's id as `reversalEntryId` (the Studio's name for the pair's
+  // other half); `reversalId` is what `reverseOwnedEntry` answers one call down.
+  { module: './dist/core/accruals/provision.js', verb: 'provisionReleaseReverse', field: 'reversalEntryId', absent: 'reversalId' },
   {
     module: './dist/core/fx/rates.js',
     verb: 'resolveFxRate',
@@ -86,13 +97,24 @@ const CONVERTED = [
     field: 'reversalId',
     absent: 'entryId',
   },
+  // The OWNED reversal (A38, critic finding 2026-09-09): the entry point `vat_settlement_reverse`
+  // reaches the mirror through, answering the same `reversalId` as `reverseEntry` and never `entryId`.
+  { module: './dist/core/ledger/reverseEntry.js', verb: 'reverseOwnedEntry', field: 'reversalId', absent: 'entryId' },
   { module: './dist/core/ledger/draft.js', verb: 'saveDraft', field: 'entryId', absent: 'draftId' },
   // G22's engine-side prompt renderer answers `text` (and the open item ids), never a `runId` the
   // way `checklist_get` does: the MCP handler reads `text`, and a rename there is exactly the
   // prompt-versus-verb drift the parity test exists to stop.
   { module: './dist/core/checklists/prompt.js', verb: 'renderChecklistPrompt', field: 'text', absent: 'prompt' },
+  // G22 leg 2's period resolution answers the run's bounds as `periodStart` / `periodEnd` (the
+  // names the run row, the prompt and the A07 period read all share), never `start`: the templates
+  // and the seeded auto-start rule read these names, and a rename here would silently re-date a run.
+  { module: './dist/core/checklists/periods.js', verb: 'resolveChecklistPeriod', field: 'periodStart', absent: 'start' },
   { module: './dist/core/ledger/reads.js', verb: 'getEntry', field: 'entry', absent: 'journalEntry' },
   { module: './dist/core/ledger/reads.js', verb: 'listJournal', field: 'entries', absent: 'rows' },
+  // A38's MWST-Saldierung model (D129 leg 2): the ONE function the preview returns and the post writes,
+  // so its shape is the contract between the two faces. `lines` is what the poster books; `entries` is
+  // the read a caller writes when it mistakes the model for a journal listing.
+  { module: './dist/core/accruals/vatSettlement.js', verb: 'settlementModelOf', field: 'lines', absent: 'entries' },
   // A03's lock read. `canManage` is not an arbitrary absent name: it is one of the two fields
   // `Periods.tsx` actually gated its controls on, off a verb that answers `ok({ locks })` and never
   // sent either. Probing the real phantom keeps this row tied to the defect instead of to a
@@ -282,7 +304,7 @@ const CONVERTED = [
 const UNDECLARED = { module: './dist/core/ledger/draft.js', verb: 'deleteDraft' };
 
 /** The floor for declared payloads. Raise it, deliberately, with each verb converted. */
-const DECLARED_FLOOR = 30;
+const DECLARED_FLOOR = 37;
 
 /**
  * The resolved compiler options of `tsconfig.test.json`, read through TypeScript's own JSONC parser

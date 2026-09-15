@@ -24,6 +24,7 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { computeVatReturn } from '../vat/index.js';
 import { listOpenItems } from '../debtors/index.js';
+import { VAT_FREE_ENTRY_SOURCES } from '../ledger/postEntry.js';
 import { appendReviewEvent, parseReviewPeriod } from './shared.js';
 import { reviewStatus } from './status.js';
 
@@ -85,11 +86,11 @@ function missingTaxCodes(ctx: WorkspaceContext, start: string, end: string): Ano
          JOIN account a ON a.id = l.account_id
         WHERE e.workspace_id = ? AND e.status = 'posted'
           AND e.date >= ? AND e.date <= ?
-          AND e.source NOT IN ('reversal', 'close')
+          AND e.source NOT IN (${VAT_FREE_ENTRY_SOURCES.map(() => '?').join(', ')})
           AND a.vat_code_default IS NOT NULL AND l.tax_code IS NULL
         ORDER BY e.date ASC, e.id ASC`,
     )
-    .all(ctx.workspaceId, start, end) as { entry_id: string; account_number: string }[];
+    .all(ctx.workspaceId, start, end, ...VAT_FREE_ENTRY_SOURCES) as { entry_id: string; account_number: string }[];
   return rows.map((row) => ({
     entryId: row.entry_id,
     comment: `missing_tax_code: account ${row.account_number} declares a VAT default and the line carries none`,

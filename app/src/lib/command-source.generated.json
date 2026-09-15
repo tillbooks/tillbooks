@@ -1,7 +1,7 @@
 {
   "generatedFrom": "src/api/registry.ts via scripts/generate-command-source.mjs",
   "note": "DO NOT EDIT BY HAND. Regenerate: npm run generate:commands. Guarded by command-source-drift.test.mjs.",
-  "verbCount": 758,
+  "verbCount": 779,
   "verbs": [
     {
       "name": "accept_invite",
@@ -24,6 +24,78 @@
       "gateDynamic": false,
       "denylisted": false,
       "dialCapability": null
+    },
+    {
+      "name": "accrual_create",
+      "kind": "write",
+      "reqCount": 5,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null
+    },
+    {
+      "name": "accrual_discard",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null
+    },
+    {
+      "name": "accrual_get",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null
+    },
+    {
+      "name": "accrual_list",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null
+    },
+    {
+      "name": "accrual_post",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post"
+    },
+    {
+      "name": "accrual_reverse",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post"
     },
     {
       "name": "advance_move_step",
@@ -1162,7 +1234,7 @@
     {
       "name": "checklist_start",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "manage_checklists"
@@ -2586,6 +2658,18 @@
       "gateDynamic": false,
       "denylisted": false,
       "dialCapability": null
+    },
+    {
+      "name": "fx_revaluation_reverse",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post"
     },
     {
       "name": "general_ledger",
@@ -6576,6 +6660,102 @@
       "dialCapability": "dun"
     },
     {
+      "name": "provision_create",
+      "kind": "write",
+      "reqCount": 6,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null
+    },
+    {
+      "name": "provision_discard",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null
+    },
+    {
+      "name": "provision_get",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null
+    },
+    {
+      "name": "provision_list",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null
+    },
+    {
+      "name": "provision_post",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post"
+    },
+    {
+      "name": "provision_release",
+      "kind": "write",
+      "reqCount": 4,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post"
+    },
+    {
+      "name": "provision_release_reverse",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post"
+    },
+    {
+      "name": "provision_reverse",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post"
+    },
+    {
       "name": "quotes_accept",
       "kind": "write",
       "reqCount": 0,
@@ -8262,6 +8442,18 @@
       "dialCapability": null
     },
     {
+      "name": "tax_provision_preview",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null
+    },
+    {
       "name": "time_approve",
       "kind": "write",
       "reqCount": 1,
@@ -8606,6 +8798,18 @@
       "dialCapability": null
     },
     {
+      "name": "vat_annual_reconciliation",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null
+    },
+    {
       "name": "vat_code_deactivate",
       "kind": "write",
       "reqCount": 1,
@@ -8785,6 +8989,54 @@
       "gateDynamic": false,
       "denylisted": false,
       "dialCapability": null
+    },
+    {
+      "name": "vat_settlement_list",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null
+    },
+    {
+      "name": "vat_settlement_post",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post"
+    },
+    {
+      "name": "vat_settlement_preview",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null
+    },
+    {
+      "name": "vat_settlement_reverse",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post"
     },
     {
       "name": "vendor_portal_grant",

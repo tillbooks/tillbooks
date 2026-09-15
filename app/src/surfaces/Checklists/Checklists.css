@@ -175,3 +175,188 @@
   font-size: 0.875rem;
   color: var(--t-danger);
 }
+
+/* Leg 2 (D129, design A): the row bodies that open inline under an open row. */
+
+.chk-detail-counts,
+.chk-detail-provenance {
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.chk-detail-provenance {
+  margin: 0;
+}
+
+.chk-run-auto {
+  font-size: 0.8125rem;
+  color: var(--t-text-faint);
+}
+
+.chk-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  margin-top: var(--t-space-2);
+  padding: var(--t-space-2) var(--t-space-3);
+  border-left: 2px solid var(--t-border);
+}
+
+.chk-body-actions,
+.chk-act {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  align-items: center;
+}
+
+.chk-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.chk-choice legend {
+  font-weight: 500;
+  margin-bottom: var(--t-space-1);
+}
+
+.chk-choice-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--t-space-2);
+  align-items: baseline;
+  padding: var(--t-space-1) 0;
+}
+
+.chk-choice-option input {
+  margin: 0;
+}
+
+.chk-choice-label {
+  font-weight: 500;
+}
+
+.chk-choice-consequence {
+  grid-column: 2;
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.chk-choice-source,
+.chk-provenance,
+.chk-preview-empty,
+.chk-posting-posted,
+.chk-posting-will,
+.chk-validation-reason,
+.chk-validation-source,
+.chk-validation-list {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.chk-table-frame {
+  max-height: 24rem;
+  overflow: auto;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+}
+
+.chk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chk-table th,
+.chk-table td {
+  padding: var(--t-space-1) var(--t-space-2);
+  text-align: left;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.chk-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--t-bg-elev);
+  font-weight: 500;
+}
+
+.chk-table tfoot th,
+.chk-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  background: var(--t-bg-elev);
+  font-weight: 600;
+  border-bottom: 0;
+}
+
+.chk-table .t-num {
+  text-align: right;
+}
+
+.chk-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--t-space-1) var(--t-space-3);
+  margin: 0;
+}
+
+.chk-figure {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  font-size: 0.875rem;
+}
+
+.chk-figure dt {
+  color: var(--t-text-dim);
+}
+
+.chk-figure dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.chk-validation-word {
+  margin: 0;
+  font-weight: 500;
+}
+
+.chk-validation-word[data-result='fail'] {
+  color: var(--t-danger);
+}
+
+.chk-validation-word[data-result='unavailable'] {
+  color: var(--t-text-dim);
+}
+
+.chk-validation-hint {
+  font-weight: 400;
+  color: var(--t-text-dim);
+}
+
+.chk-formula summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--t-text-dim);
+}
+
+.chk-formula p {
+  margin: var(--t-space-1) 0 0;
+  font-size: 0.875rem;
+}
+
+.chk-consequence--seal {
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+.chk-dialog-lead {
+  color: var(--t-text);
+}

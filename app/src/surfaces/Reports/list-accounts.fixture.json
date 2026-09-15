@@ -223,6 +223,17 @@
     {
       "id": "acc_21",
       "workspaceId": "ws_1",
+      "number": "2330",
+      "name": "Kurzfristige Rückstellungen",
+      "type": "liability",
+      "vatCodeDefault": null,
+      "costCenterAllowed": false,
+      "archived": false,
+      "inUse": false
+    },
+    {
+      "id": "acc_22",
+      "workspaceId": "ws_1",
       "number": "2400",
       "name": "Langfristige Bankschulden",
       "type": "liability",
@@ -232,7 +243,7 @@
       "inUse": true
     },
     {
-      "id": "acc_22",
+      "id": "acc_23",
       "workspaceId": "ws_1",
       "number": "2450",
       "name": "Langfristige Darlehen",
@@ -243,7 +254,7 @@
       "inUse": false
     },
     {
-      "id": "acc_23",
+      "id": "acc_24",
       "workspaceId": "ws_1",
       "number": "2600",
       "name": "Rückstellungen",
@@ -254,7 +265,7 @@
       "inUse": false
     },
     {
-      "id": "acc_24",
+      "id": "acc_25",
       "workspaceId": "ws_1",
       "number": "2800",
       "name": "Grund-, Gesellschafter- oder Stiftungskapital",
@@ -265,7 +276,7 @@
       "inUse": true
     },
     {
-      "id": "acc_25",
+      "id": "acc_26",
       "workspaceId": "ws_1",
       "number": "2850",
       "name": "Privatkonto",
@@ -276,7 +287,7 @@
       "inUse": false
     },
     {
-      "id": "acc_26",
+      "id": "acc_27",
       "workspaceId": "ws_1",
       "number": "2970",
       "name": "Gewinnvortrag oder Verlustvortrag",
@@ -287,7 +298,7 @@
       "inUse": false
     },
     {
-      "id": "acc_27",
+      "id": "acc_28",
       "workspaceId": "ws_1",
       "number": "2979",
       "name": "Jahresgewinn oder Jahresverlust",
@@ -298,7 +309,7 @@
       "inUse": false
     },
     {
-      "id": "acc_28",
+      "id": "acc_29",
       "workspaceId": "ws_1",
       "number": "3000",
       "name": "Erlöse aus eigener Produktion",
@@ -309,7 +320,7 @@
       "inUse": false
     },
     {
-      "id": "acc_29",
+      "id": "acc_30",
       "workspaceId": "ws_1",
       "number": "3200",
       "name": "Erlöse aus Handelswaren",
@@ -320,7 +331,7 @@
       "inUse": true
     },
     {
-      "id": "acc_30",
+      "id": "acc_31",
       "workspaceId": "ws_1",
       "number": "3400",
       "name": "Erlöse aus Dienstleistungen",
@@ -331,7 +342,7 @@
       "inUse": true
     },
     {
-      "id": "acc_31",
+      "id": "acc_32",
       "workspaceId": "ws_1",
       "number": "3600",
       "name": "Übrige betriebliche Erlöse",
@@ -342,7 +353,7 @@
       "inUse": false
     },
     {
-      "id": "acc_32",
+      "id": "acc_33",
       "workspaceId": "ws_1",
       "number": "3800",
       "name": "Rabatte, Skonti und Gutschriften",
@@ -353,7 +364,7 @@
       "inUse": true
     },
     {
-      "id": "acc_33",
+      "id": "acc_34",
       "workspaceId": "ws_1",
       "number": "3805",
       "name": "Verluste aus Forderungen und Veränderung der Wertberichtigung",
@@ -364,7 +375,7 @@
       "inUse": false
     },
     {
-      "id": "acc_34",
+      "id": "acc_35",
       "workspaceId": "ws_1",
       "number": "3806",
       "name": "Kursdifferenzen auf Forderungen",
@@ -375,7 +386,18 @@
       "inUse": false
     },
     {
-      "id": "acc_35",
+      "id": "acc_36",
+      "workspaceId": "ws_1",
+      "number": "3809",
+      "name": "Ertragsminderung MWST Saldosteuersatz",
+      "type": "income",
+      "vatCodeDefault": null,
+      "costCenterAllowed": true,
+      "archived": false,
+      "inUse": false
+    },
+    {
+      "id": "acc_37",
       "workspaceId": "ws_1",
       "number": "4000",
       "name": "Materialaufwand Fertigung",
@@ -386,7 +408,7 @@
       "inUse": false
     },
     {
-      "id": "acc_36",
+      "id": "acc_38",
       "workspaceId": "ws_1",
       "number": "4200",
       "name": "Einkauf Handelswaren",
@@ -397,7 +419,7 @@
       "inUse": false
     },
     {
-      "id": "acc_37",
+      "id": "acc_39",
       "workspaceId": "ws_1",
       "number": "4400",
       "name": "Bezogene Fremdleistungen",
@@ -408,7 +430,7 @@
       "inUse": false
     },
     {
-      "id": "acc_38",
+      "id": "acc_40",
       "workspaceId": "ws_1",
       "number": "4900",
       "name": "Erhaltene Rabatte und Skonti",
@@ -419,7 +441,7 @@
       "inUse": true
     },
     {
-      "id": "acc_39",
+      "id": "acc_41",
       "workspaceId": "ws_1",
       "number": "4906",
       "name": "Kursdifferenzen auf Verbindlichkeiten",
@@ -430,7 +452,7 @@
       "inUse": false
     },
     {
-      "id": "acc_40",
+      "id": "acc_42",
       "workspaceId": "ws_1",
       "number": "5000",
       "name": "Löhne und Gehälter",
@@ -441,7 +463,7 @@
       "inUse": true
     },
     {
-      "id": "acc_41",
+      "id": "acc_43",
       "workspaceId": "ws_1",
       "number": "5700",
       "name": "Sozialversicherungsbeiträge Arbeitgeber",
@@ -452,7 +474,7 @@
       "inUse": false
     },
     {
-      "id": "acc_42",
+      "id": "acc_44",
       "workspaceId": "ws_1",
       "number": "5800",
       "name": "Übrige Personalkosten",
@@ -463,7 +485,7 @@
       "inUse": false
     },
     {
-      "id": "acc_43",
+      "id": "acc_45",
       "workspaceId": "ws_1",
       "number": "6000",
       "name": "Miete und Nebenkosten Geschäftsräume",
@@ -474,7 +496,7 @@
       "inUse": false
     },
     {
-      "id": "acc_44",
+      "id": "acc_46",
       "workspaceId": "ws_1",
       "number": "6100",
       "name": "Unterhalt und Reparaturen an Anlagen",
@@ -485,7 +507,7 @@
       "inUse": false
     },
     {
-      "id": "acc_45",
+      "id": "acc_47",
       "workspaceId": "ws_1",
       "number": "6200",
       "name": "Fahrzeug- und Transportkosten",
@@ -496,7 +518,7 @@
       "inUse": false
     },
     {
-      "id": "acc_46",
+      "id": "acc_48",
       "workspaceId": "ws_1",
       "number": "6300",
       "name": "Versicherungen, Gebühren und Bewilligungen",
@@ -507,7 +529,7 @@
       "inUse": false
     },
     {
-      "id": "acc_47",
+      "id": "acc_49",
       "workspaceId": "ws_1",
       "number": "6400",
       "name": "Energie und Entsorgung",
@@ -518,7 +540,7 @@
       "inUse": false
     },
     {
-      "id": "acc_48",
+      "id": "acc_50",
       "workspaceId": "ws_1",
       "number": "6500",
       "name": "Verwaltungs- und Bürokosten",
@@ -529,7 +551,7 @@
       "inUse": true
     },
     {
-      "id": "acc_49",
+      "id": "acc_51",
       "workspaceId": "ws_1",
       "number": "6570",
       "name": "Informatik, Software und Lizenzen",
@@ -540,7 +562,7 @@
       "inUse": false
     },
     {
-      "id": "acc_50",
+      "id": "acc_52",
       "workspaceId": "ws_1",
       "number": "6600",
       "name": "Werbung und Marketing",
@@ -551,7 +573,7 @@
       "inUse": false
     },
     {
-      "id": "acc_51",
+      "id": "acc_53",
       "workspaceId": "ws_1",
       "number": "6700",
       "name": "Übriger betrieblicher Aufwand",
@@ -562,7 +584,7 @@
       "inUse": false
     },
     {
-      "id": "acc_52",
+      "id": "acc_54",
       "workspaceId": "ws_1",
       "number": "6800",
       "name": "Abschreibungen und Wertberichtigungen auf Positionen des Anlagevermögens",
@@ -573,7 +595,7 @@
       "inUse": true
     },
     {
-      "id": "acc_53",
+      "id": "acc_55",
       "workspaceId": "ws_1",
       "number": "6900",
       "name": "Finanzaufwand",
@@ -584,10 +606,21 @@
       "inUse": true
     },
     {
-      "id": "acc_54",
+      "id": "acc_56",
       "workspaceId": "ws_1",
       "number": "6949",
       "name": "Währungsverluste",
+      "type": "expense",
+      "vatCodeDefault": null,
+      "costCenterAllowed": true,
+      "archived": false,
+      "inUse": false
+    },
+    {
+      "id": "acc_57",
+      "workspaceId": "ws_1",
+      "number": "8900",
+      "name": "Direkte Steuern",
       "type": "expense",
       "vatCodeDefault": null,
       "costCenterAllowed": true,

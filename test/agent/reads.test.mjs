@@ -67,7 +67,7 @@ test('ledger_qa: a VAT question without a period is refused, never guessed', () 
   deps.store.close();
 });
 
-test('month_end_checklist: dangling drafts are surfaced and FX revaluation is honestly not_available', () => {
+test('month_end_checklist: dangling drafts are surfaced and the FX line reads the A22 run row (ok with no position, never not_available)', () => {
   const deps = freshDeps();
   const { workspaceId, accId } = mintWorkspace(deps);
   call(deps, workspaceId, 'save_draft', {
@@ -84,7 +84,9 @@ test('month_end_checklist: dangling drafts are surfaced and FX revaluation is ho
   const drafts = res.items.find((i) => i.kind === 'dangling_drafts');
   assert.ok(drafts && drafts.count >= 1, 'the pending draft is on the checklist');
   const fx = res.items.find((i) => i.kind === 'fx_revaluation');
-  assert.equal(fx.status, 'not_available', 'A22 revaluation is reported as not built, not silently dropped');
+  assert.equal(fx.status, 'ok', 'no foreign-currency position at the month end: nothing to revalue');
+  assert.equal(fx.count, 0);
+  assert.match(fx.note, /no foreign-currency position/);
   deps.store.close();
 });
 

@@ -5,7 +5,7 @@ abstract: "TILL (Trusted Independent Ledger Library) is a local-first, MCP-nativ
 type: software
 authors:
   - name: "Nomadik GmbH"
-version: 0.0.0
+version: 0.1.0
 license: MIT
 repository-code: "https://github.com/tillbooks/tillbooks"
 url: "https://tillbooks.ch"

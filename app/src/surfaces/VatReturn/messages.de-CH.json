@@ -112,7 +112,9 @@
           "studio": "dich",
           "member": "ein Mitglied",
           "unknown": "jemanden"
-        }
+        },
+        "6": "MWST-Konten saldiert",
+        "settledAt": "saldiert am {date}"
       },
       "recon": {
         "match": "Abstimmung MWST-Konten: stimmt überein",
@@ -158,6 +160,57 @@
         }
       },
       "istNotImplementedCite": "MWSTG Art. 39 Abs. 2"
+    },
+    "settlement": {
+      "title": "MWST-Konten saldieren",
+      "intro": "Überträgt die Salden von {period} auf 2200, 1170 und 1171 per {date} auf 2201 (MWST-Abrechnungskonto), innerhalb der eingereichten Periode. Die eingereichte Abrechnung ändert sich nicht.",
+      "introSaldo": "Überträgt den Saldo von {period} auf 2200 per {date} auf 2201 (MWST-Abrechnungskonto) und bucht die Differenz zur Saldosteuer auf 3809, innerhalb der eingereichten Periode. Vorsteuer wird nie übertragen: Die Saldosteuersatzmethode zieht keine ab. Die eingereichte Abrechnung ändert sich nicht.",
+      "tableCaption": "MWST-Saldierung {period}: gebucht neben deklariert",
+      "col": {
+        "position": "Position",
+        "booked": "Gebucht",
+        "declared": "Deklariert",
+        "difference": "Differenz"
+      },
+      "row": {
+        "output": "Umsatzsteuer",
+        "input": "Vorsteuer",
+        "net": "Netto auf 2201"
+      },
+      "noDifference": "keine",
+      "linesSummary": "{count} Buchungszeilen per {date}",
+      "debit": "Soll",
+      "credit": "Haben",
+      "differenceNote": "Buchhaltung und eingereichte Abrechnung stimmen nicht überein. Die Saldierung überträgt, was gebucht ist; die Differenz bleibt hier sichtbar und gehört in die Jahresabstimmung.",
+      "post": "MWST-Konten saldieren",
+      "reverse": "Saldierung stornieren",
+      "pending": "Wird gebucht …",
+      "postedOn": "Saldiert am {date}",
+      "openEntry": "Buchung öffnen",
+      "actionsFor": "Aktionen zur Saldierung {period}",
+      "empty": "Nichts zu saldieren: Die MWST-Konten haben in dieser Periode keine Bewegung.",
+      "waitFiled": "Wartet auf die Einreichung: Markiere die Periode zuerst als eingereicht.",
+      "padlock": "Zum Buchen brauchst du das Recht post.",
+      "confirmTitle": "MWST-Konten von {period} saldieren?",
+      "confirmBody": "TILL bucht die Übertragung per {date}, innerhalb der eingereichten Periode. Die eingereichte Abrechnung ändert sich nicht; die einzige Korrektur danach ist eine Stornobuchung.",
+      "reverseTitle": "Saldierung von {period} stornieren?",
+      "reverseBody": "TILL bucht eine Stornobuchung per {date}. Die Saldierung bleibt als storniert erhalten; du kannst die Periode danach erneut saldieren.",
+      "openPeriods": "Perioden öffnen",
+      "openChart": "Kontenplan öffnen",
+      "openJournal": "Journal öffnen",
+      "error": {
+        "period_not_filed": "Die Periode ist noch nicht als eingereicht markiert. Die Saldierung wartet auf die Einreichung.",
+        "nothing_to_settle": "Nichts zu saldieren: Die MWST-Konten haben in dieser Periode keine Bewegung.",
+        "already_posted": "Diese Periode ist bereits saldiert.",
+        "already_reversed": "Diese Saldierung ist bereits storniert.",
+        "already_reversed_key": "Die Saldierung, die dieser Vorgang gebucht hatte, wurde storniert. Schliesse den Dialog und saldiere die Periode erneut.",
+        "saldo_input_vat_booked": "Unter der Saldosteuersatzmethode wird keine Vorsteuer abgezogen, aber 1170 und 1171 tragen einen Saldo von {balance}. Korrigiere diese Buchungen zuerst (Storno in der offenen Periode); die Saldierung überträgt nie Vorsteuer auf 2201.",
+        "period_locked": "Das Jahr ist abgeschlossen. Eine Saldierung bucht nie in ein abgeschlossenes Jahr.",
+        "missing_account": "Ein Saldierungskonto fehlt im Kontenplan.",
+        "needs_vat_config": "MWST ist für diesen Arbeitsbereich nicht eingerichtet.",
+        "permission_denied": "Dir fehlt das Recht zu buchen.",
+        "fallback": "Die Saldierung konnte nicht gelesen oder gebucht werden. Es wurde nichts verändert."
+      }
     }
   },
   "help": {

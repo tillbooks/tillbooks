@@ -56,6 +56,10 @@ const SOURCES = [
   'asset_depreciation',
   'asset_disposal',
   'inventory_valuation',
+  // A38, Abgrenzungen und Rückstellungen.
+  'accrual',
+  'provision',
+  'vat_settlement',
 ];
 
 type ListState =

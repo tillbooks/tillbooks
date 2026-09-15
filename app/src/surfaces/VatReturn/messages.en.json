@@ -112,7 +112,9 @@
           "studio": "you",
           "member": "a member",
           "unknown": "someone"
-        }
+        },
+        "6": "VAT accounts settled",
+        "settledAt": "settled on {date}"
       },
       "recon": {
         "match": "VAT account reconciliation: agrees",
@@ -158,6 +160,57 @@
         }
       },
       "istNotImplementedCite": "MWSTG Art. 39 Abs. 2"
+    },
+    "settlement": {
+      "title": "Settle the VAT accounts",
+      "intro": "Transfers the balances of {period} on 2200, 1170 and 1171 to 2201 (VAT settlement account), dated {date}, inside the filed period. The filed return does not change.",
+      "introSaldo": "Transfers the balance of {period} on 2200 to 2201 (VAT settlement account), dated {date}, and books the difference to the flat-rate tax on 3809, inside the filed period. Input VAT is never transferred: the flat-rate method deducts none. The filed return does not change.",
+      "tableCaption": "VAT settlement of {period}: booked beside declared",
+      "col": {
+        "position": "Position",
+        "booked": "Booked",
+        "declared": "Declared",
+        "difference": "Difference"
+      },
+      "row": {
+        "output": "Output VAT",
+        "input": "Input VAT",
+        "net": "Net to 2201"
+      },
+      "noDifference": "none",
+      "linesSummary": "{count} lines, dated {date}",
+      "debit": "Debit",
+      "credit": "Credit",
+      "differenceNote": "The books and the filed return disagree. The settlement moves what is booked; the difference stays visible here and belongs in the annual reconciliation.",
+      "post": "Settle the VAT accounts",
+      "reverse": "Reverse the settlement",
+      "pending": "Posting …",
+      "postedOn": "Settled on {date}",
+      "openEntry": "Open the entry",
+      "actionsFor": "Actions for the settlement of {period}",
+      "empty": "Nothing to settle: the VAT accounts carry no movement in this period.",
+      "waitFiled": "Waits for the filing: mark the period as filed first.",
+      "padlock": "Posting needs the post right.",
+      "confirmTitle": "Settle the VAT accounts of {period}?",
+      "confirmBody": "TILL posts the transfer dated {date}, inside the filed period. The filed return does not change; the only correction afterwards is a reversing entry.",
+      "reverseTitle": "Reverse the settlement of {period}?",
+      "reverseBody": "TILL posts a reversing entry dated {date}. The settlement stays on record as reversed; you can settle the period again afterwards.",
+      "openPeriods": "Open periods",
+      "openChart": "Open the chart of accounts",
+      "openJournal": "Open the journal",
+      "error": {
+        "period_not_filed": "The period is not marked as filed yet. The settlement waits for the filing.",
+        "nothing_to_settle": "Nothing to settle: the VAT accounts carry no movement in this period.",
+        "already_posted": "This period is already settled.",
+        "already_reversed": "This settlement is already reversed.",
+        "already_reversed_key": "The settlement this action had booked was reversed. Close the dialog and settle the period again.",
+        "saldo_input_vat_booked": "The flat-rate method deducts no input VAT, yet 1170 and 1171 carry a balance of {balance}. Correct those entries first (a reversal in the open period); the settlement never transfers input VAT to 2201.",
+        "period_locked": "The year is sealed. A settlement never posts into a closed year.",
+        "missing_account": "A settlement account is missing from the chart of accounts.",
+        "needs_vat_config": "VAT is not set up for this workspace.",
+        "permission_denied": "You lack the right to post.",
+        "fallback": "The settlement could not be read or posted. Nothing was changed."
+      }
     }
   },
   "help": {
