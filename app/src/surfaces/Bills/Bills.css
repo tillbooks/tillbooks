@@ -1,0 +1,252 @@
+/*
+ * A17 Kreditoren styling.
+ *
+ * Every value is a token. Spacing is the 8-pt grid, with 4px reserved for the optical nudges the
+ * design law permits (a hairline offset), never for layout rhythm. Type sizes are the written scale
+ * (K-37): a step and its line height, never a literal.
+ *
+ * THE ACCENT BUDGET ON THIS SURFACE IS TWO: the focus ring (inherited from global.css) and ONE
+ * accent-filled primary action, which is "Rechnung erfassen". The drawer's Buchen replaces it while
+ * the drawer is open, not adds to it, because the list's button is behind a scrim and unreachable.
+ *
+ * MONEY CARRIES NO COLOUR. An open payable reads positive (K-39, D137), as on the Übersicht and in
+ * the payment run: the figure is what is owed, and a minus is left to a real credit (an overpaid bill,
+ * a credit note, a reversal), in the TEXT, so a grayscale printout (a real Treuhänder artefact) reads
+ * exactly what the screen reads. A filled danger row per line would make the hue mean "this is a
+ * bill" instead of "look at this", which is exactly the inflation DESIGN.md forbids. Tabular figures
+ * and `nowrap` come from the shared money cell (DataTable `numeric`, K-18).
+ *
+ * THE ONE COLOURED THING is the reconciliation mismatch band, which is the only genuinely urgent state
+ * on the surface. A passing reconciliation gets no band and no colour at all: an all-clear that gets a
+ * colour makes that colour the background and dulls the real warning.
+ *
+ * A VOIDED ROW IS DIM INK AND NOT STRUCK THROUGH. Strike-through on a table row is unreadable at 14px
+ * and says "deleted", which is the one thing a reversed bill is not: the row and its reversing entry
+ * both survive, on purpose (OR 957a). Its status word ("Storniert") says why it is dim.
+ */
+
+.bills {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The open-total line under the SurfaceHeader. Tabular figures so the amount reads as money, not as
+   running text. The header chrome itself (title, help, primary action) is the shared SurfaceHeader. */
+.bills-total {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.bills-total--pending {
+  min-height: var(--t-lh-lg);
+}
+
+.bills-total-skeleton {
+  display: block;
+  width: 180px;
+  height: 16px;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.bills-dim {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  margin: 0;
+}
+
+/* --- toolbar and filters ------------------------------------------------------------------------- */
+
+.bills-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  align-items: center;
+}
+
+.bills-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* --- the reconciliation band, the one coloured thing on the surface ------------------------------ */
+
+.bills-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.bills-band p {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- the rows (the table frame, sticky header, overflow, opener and alignment are DataTable's) --- */
+
+/* A VOIDED ROW IS DIM INK AND NOT STRUCK THROUGH (see the header). Joined onto DataTable's base row
+   class via `rowClassName`. */
+.bills-row--void {
+  color: var(--t-text-dim);
+}
+
+/* The shared Status word, then the overdue note in dim ink: a number of days, never a chip (K-22). */
+.bills-status {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  white-space: nowrap;
+}
+
+.bills-overdue {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* --- the editor form (hosted in the shared DetailDrawer; the shell, scrim and animation are its) -- */
+
+.bill-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* FLEXIBLE WIDTH, not fixed (P11): a German MWST-code label ("Vorsteuer Investitionen und übriger
+   Betriebsaufwand") runs far longer than its English twin, and a fixed column would clip it. The
+   controls are the shared `.field` and `Select` (K-15), so they follow the density toggle. */
+.bill-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.bill-field .field {
+  width: 100%;
+}
+
+.bill-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.bill-toggle legend {
+  padding: 0 var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bill-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text);
+}
+
+/* --- the posting preview ------------------------------------------------------------------------ */
+
+.bill-preview {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+  padding: var(--t-space-2);
+}
+
+/* IN FLIGHT THE FIGURES TURN DIM rather than presenting the previous answer as current. Dim ink, not
+   opacity (K-36): an opacity-dimmed figure composited under AA. */
+.bill-preview--pending {
+  color: var(--t-text-dim);
+}
+
+.bill-preview h3 {
+  margin: 0 0 var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bill-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+  margin: 0;
+}
+
+.bill-split div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.bill-split dt {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.bill-split dd {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.bill-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bill-note,
+.bill-frozen,
+.bill-cta {
+  margin: var(--t-space-1) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* The A24 courtesy note above the write actions: the reason in words, text and not colour alone. */
+.bill-requires {
+  margin: var(--t-space-1) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* "Trage einen Betrag ein": a sentence someone reads, so dim, never faint (K-36). */
+.bill-dim {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* A money figure inside a sentence (the header total, the reconciliation band) is `.t-money` for nowrap and tabular figures,
+   but it keeps the size of the sentence around it rather than the table type size. */
+.bills-total .t-money,
+.bills-band .t-money {
+  font-size: inherit;
+}

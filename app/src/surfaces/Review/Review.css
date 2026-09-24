@@ -1,0 +1,362 @@
+/**
+ * A25 Review + Export styling (Brass, brand/DESIGN.md).
+ *
+ * D118 B2: the page header is the shared `SurfaceHeader`, the review list is the shared `DataTable`,
+ * and both the flag/comment composer and the Periode-sperren confirm are the shared `Modal`, so the
+ * per-surface header, table and dialog CSS is gone. What stays here is genuinely surface-specific:
+ * the period control, the coverage band, the status tags and row-action buttons, and the three
+ * Export artifact rows.
+ *
+ * One panel treatment (`--t-bg-elev`, one radius, no default border, no shadow stacks). Status is
+ * glyph plus text; the ONE accent is never spent on status (approved rides `--t-success`, open and
+ * flagged ride neutral ink). Money right-aligns with tabular numerals (the DataTable numeric column).
+ * Tap targets follow the two-tier rule (D116): `.rv-action` is a standalone/primary control at 44px;
+ * `.rv-rowbtn` sits in the dense-row band at 32px. The period toggle is the shared Segmented and the
+ * pickers are `.field` inputs (K-11, K-15, D137).
+ */
+
+.rv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* --- the period control: the shared Segmented plus one .field picker --- */
+.rv-period {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.rv-period-value {
+  width: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.rv-period-year {
+  width: 6rem;
+}
+
+/* --- the sticky coverage header (2a) --- */
+.rv-coverage {
+  position: sticky;
+  top: 0;
+  z-index: var(--t-z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-3);
+  padding: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.rv-coverage-counts {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.rv-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.rv-count--approved {
+  color: var(--t-text);
+}
+
+.rv-count--approved .rv-count-glyph {
+  color: var(--t-success);
+}
+
+.rv-count-figure {
+  font-weight: 600;
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.rv-count-sep {
+  color: var(--t-text-faint);
+}
+
+.rv-meter {
+  flex: 1 1 120px;
+  min-width: 96px;
+  height: 8px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  overflow: hidden;
+}
+
+.rv-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--t-success);
+  transition: width var(--t-motion-reveal) var(--t-ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rv-meter-fill {
+    transition: none;
+  }
+}
+
+.rv-coverage-lock {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.rv-lock-reason {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  max-width: 32ch;
+}
+
+/* Standalone / primary controls: the 44px tier (D116). */
+.rv-action {
+  min-height: 44px;
+  height: auto;
+}
+
+/* --- the locked banner --- */
+.rv-locked {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+.rv-locked-glyph {
+  color: var(--t-text-dim);
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.rv-locked-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.rv-locked-body {
+  margin: var(--t-space-0-5) 0 var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  max-width: 60ch;
+}
+
+.rv-allclear {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+}
+
+.rv-allclear-glyph {
+  color: var(--t-success);
+  flex: 0 0 auto;
+}
+
+.rv-allclear-text {
+  margin: 0;
+  color: var(--t-text);
+}
+
+/* --- the review list: cell content on the shared DataTable --- */
+/* A flagged row reads as needing attention: a neutral soft ground (never a second accent), joined
+   onto DataTable's base row class via `rowClassName`. The status column still carries glyph + text,
+   so the tint is a secondary signal, never colour alone. */
+.rv-row--flagged td {
+  background: var(--t-bg-soft);
+}
+
+.rv-date {
+  white-space: nowrap;
+}
+
+.rv-ref {
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.rv-desc {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.rv-comment-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.rv-no-amount {
+  color: var(--t-text-dim);
+}
+
+.rv-rowactions {
+  display: inline-flex;
+  gap: var(--t-space-0-5);
+}
+
+/* Dense-row controls: the 32px band (D116), comfortably above the 24px AA floor. */
+.rv-rowbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+  color: var(--t-text-dim);
+  cursor: pointer;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    border-color var(--t-motion-hover) var(--t-ease-out),
+    color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.rv-rowbtn:hover:not(:disabled) {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+  border-color: var(--t-border-strong);
+}
+
+.rv-rowbtn:disabled {
+  color: var(--t-text-faint);
+  cursor: not-allowed;
+}
+
+.rv-rowbtn--approve:not(:disabled):hover {
+  color: var(--t-success);
+  border-color: var(--t-success);
+}
+
+/* --- the flag/comment composer, inside the shared Modal --- */
+.rv-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.rv-composer-label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+  color: var(--t-text-dim);
+}
+
+/* --- the Periode-sperren confirm body, inside the shared Modal (alertdialog) --- */
+.rv-dialog-body {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.rv-dialog-body + .rv-dialog-body {
+  margin-top: var(--t-space-1);
+}
+
+.rv-dialog-error {
+  margin: var(--t-space-1) 0 0;
+  color: var(--t-danger);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* --- Export: three artifact rows --- */
+.ex-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.ex-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.ex-row-main {
+  flex: 1 1 20rem;
+}
+
+.ex-row-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.ex-row-desc {
+  margin: var(--t-space-0-5) 0 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  max-width: 60ch;
+}
+
+.ex-row-note {
+  margin: var(--t-space-0-5) 0 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  max-width: 60ch;
+}
+
+.ex-row-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.ex-format-static {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+  padding: 0 var(--t-space-1);
+}
+
+.ex-download {
+  gap: var(--t-space-0-5);
+}
+
+/* The export outcomes ride the shared ActionFeedback primitive (components/ActionFeedback). Its CTA
+   (the fix-VAT link, the retry button) is a shared .btn kept at its natural width, never stretched
+   to the full banner. */
+.ex-notice-cta {
+  align-self: flex-start;
+}
+
+/* A soft-closed month (F-07, J4.3): one quiet line saying the review stays open. Not the locked
+   panel: nothing here is sealed, so it gets no glyph and no border, only dim ink. */
+.rv-softclosed {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}

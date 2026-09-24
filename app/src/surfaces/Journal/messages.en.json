@@ -1,0 +1,198 @@
+{
+  "journal": {
+    "title": "Journal",
+    "empty": "No entries yet.",
+    "emptyHint": "Entries appear here once you record the first one.",
+    "emptyAction": "Record your first entry",
+    "noMatch": "No entries match these filters.",
+    "noMatchHint": "The filters hide every entry. Widen the date range or clear them.",
+    "noWorkspaceHint": "The journal belongs to a workspace. Create one first.",
+    "newEntry": "New entry",
+    "openEntry": "Open entry {label}",
+    "booked": "In the books",
+    "reversalTag": "Reversal",
+    "filters": {
+      "legend": "Filter the journal",
+      "from": "From",
+      "to": "To",
+      "account": "Account",
+      "source": "Source",
+      "status": "Status",
+      "all": "All",
+      "apply": "Apply filters",
+      "clear": "Clear filters"
+    },
+    "columns": {
+      "date": "Date",
+      "ref": "Reference",
+      "description": "Description",
+      "amount": "Amount",
+      "source": "Source",
+      "status": "Status"
+    },
+    "source": {
+      "manual": "Manual",
+      "invoice": "Invoice",
+      "payment": "Payment",
+      "import": "Import",
+      "agent": "Agent",
+      "fx": "Foreign currency",
+      "reversal": "Reversal",
+      "close": "Close",
+      "purchase": "Vendor bill",
+      "dunning": "Dunning fee",
+      "credit_note": "Credit note",
+      "camt": "Bank reconciliation",
+      "stock": "Stock valuation",
+      "landed_cost": "Landed cost",
+      "expense_claim": "Expense claim",
+      "asset_acquisition": "Asset acquisition",
+      "asset_depreciation": "Depreciation",
+      "asset_disposal": "Asset disposal",
+      "inventory_valuation": "Inventory valuation",
+      "accrual": "Accrual",
+      "provision": "Provision",
+      "vat_settlement": "VAT settlement"
+    },
+    "reversedTag": "Reversed",
+    "openReversed": "Open reversed entry {label}",
+    "openReversal": "Open reversal {label}",
+    "tablist": "Journal views",
+    "tab": {
+      "live": "Journal"
+    }
+  },
+  "entry": {
+    "post": "Post",
+    "saveDraft": "Save draft",
+    "reverse": "Reverse",
+    "delete": "Delete",
+    "unbalanced": "Debits and credits differ by {difference}.",
+    "fx": {
+      "note": "Foreign currency: {amount} at rate {rate} is {base} in the books.",
+      "mixed": "This entry carries more than one currency or rate. Shown: {amount} at rate {rate}, {base} in the books. Check the lines one by one."
+    },
+    "periodLocked": "This period is locked.",
+    "periodLockedWayOut": "To post this entry, change the booking date to {date}, the nearest open period. Your entered lines are kept.",
+    "periodLockedChangeDate": "Change the booking date",
+    "periodLockedLink": "Manage periods",
+    "permissionDenied": "You do not have permission to post.",
+    "requiresBookkeeper": "Requires the bookkeeper role.",
+    "debit": "Debit",
+    "credit": "Credit",
+    "status": {
+      "draft": "Draft",
+      "posted": "Posted"
+    },
+    "newTitle": "New entry",
+    "editTitle": "Edit draft",
+    "viewTitle": "View entry",
+    "date": "Date",
+    "ref": "Reference",
+    "description": "Description",
+    "account": "Account",
+    "selectAccount": "Select an account",
+    "noAccountMatch": "No account matches what you typed.",
+    "costCenter": "Cost centre",
+    "taxCode": "Tax code",
+    "noCostCenter": "No cost centre",
+    "lines": "Entry lines",
+    "lineN": "Line {number}",
+    "addLine": "Add line",
+    "removeLine": "Remove line {number}",
+    "close": "Close",
+    "cancel": "Cancel",
+    "more": "More actions",
+    "debitTotal": "Debit total",
+    "creditTotal": "Credit total",
+    "balanced": "Balanced",
+    "reversalOf": "Reversal of an earlier entry",
+    "reverseConfirmTitle": "Reverse this entry?",
+    "reverseConfirmBody": "A correction is always an additional entry: TILL posts a reversal with debit and credit swapped. The original entry stays in the journal unchanged, both entries remain visible, and the two cancel each other out.",
+    "reverseConfirmAction": "Post reversal",
+    "deleteConfirmTitle": "Delete this draft?",
+    "deleteConfirmBody": "The draft and its lines are removed for good. A draft has never been posted, so nothing in the books changes, but the draft itself cannot be recovered.",
+    "deleteConfirmAction": "Delete draft",
+    "discardConfirmTitle": "Discard your input?",
+    "discardConfirmBody": "What you entered in this entry is not saved yet and will be lost.",
+    "discardConfirmKeep": "Keep editing",
+    "discardConfirmAction": "Discard",
+    "vatUnreconciled": "The VAT does not reconcile: the tagged lines add up to {expected}, but the VAT accounts book {booked}."
+  },
+  "errors": {
+    "unbalanced": "The entry does not balance. Debits must equal credits.",
+    "period_locked": "The period is locked, so nothing was posted.",
+    "not_a_draft": "That entry is posted and cannot be deleted, only reversed.",
+    "already_reversed": "That entry has already been reversed.",
+    "not_posted": "Only a posted entry can be reversed.",
+    "not_found": "That entry could not be found.",
+    "invalid_line": "A line is invalid. Each line needs an account and exactly one amount.",
+    "invalid_source": "That posting source is not allowed here.",
+    "vat_trace_unreconciled": "The VAT on this entry does not reconcile with the VAT accounts, so nothing was posted.",
+    "unknown_tax_code": "A line uses a tax code that does not exist in this workspace.",
+    "archived_tax_code": "A line uses an archived tax code, so nothing was posted. Choose an active code.",
+    "needs_vat_config": "VAT is not set up for this workspace yet."
+  },
+  "archive": {
+    "tab": "Archive",
+    "provenance": "From the prior system {system}, {from} to {to}. Not part of the TILL document chain.",
+    "requiresReadBooks": "Reading the archive requires the read_books capability.",
+    "empty": "No archive imported",
+    "emptyBody": "The archive holds your prior system's journal, read-only and clearly labelled. It arrives through a migration plan's history step.",
+    "emptyAction": "Open the migration plan",
+    "rowGlyph": "Archive entry",
+    "overflow": "Archive period actions",
+    "pager": "Archive pages",
+    "pagerPrev": "Previous page",
+    "pagerNext": "Next page",
+    "pagerPage": "Page {page} of {pages}",
+    "columns": {
+      "flags": "Flags",
+      "sourceAccount": "Source account",
+      "targetAccount": "TILL account"
+    },
+    "filters": {
+      "legend": "Filter the archive",
+      "sourceAccount": "Source account",
+      "text": "Text"
+    },
+    "query": {
+      "noHits": "No archive entries match these filters.",
+      "clearFilters": "Clear filters"
+    },
+    "row": {
+      "unmapped": "Unmapped",
+      "unbalanced": "Unbalanced in source"
+    },
+    "periods": {
+      "title": "Archived periods",
+      "period": "Period",
+      "entries": "Entries",
+      "retentionUntil": "Retain until",
+      "purged": "Purged",
+      "status": "Status"
+    },
+    "purge": {
+      "action": "Purge expired periods",
+      "fromPeriod": "From period",
+      "toPeriod": "To period",
+      "reason": "Reason",
+      "confirm": "Purge with this reason",
+      "done": "{count} archive entries purged. The purge record stays."
+    },
+    "err": {
+      "retentionActive": "Retention is still running until {until} ({statute}). Nothing was deleted; the refusal is on record.",
+      "purgeDenied": "Purging requires the purge_archive capability.",
+      "purgeFailed": "The purge was refused: {code}"
+    }
+  },
+  "help": {
+    "Journal": {
+      "title": "Journal",
+      "body": "The journal is the immutable list of every entry posted in TILL for this workspace. Posted entries are never rewritten: a correction is always a reversing entry that cancels the mistake visibly.\n\nEvery line carries its account, its amount and, where VAT is involved, its tax code. The return is later computed from that code.\n\nA taken-over prior-system journal appears beside it as its own archive. It is not part of the live chain of records.",
+      "concepts": [
+        "vorsteuer"
+      ]
+    }
+  }
+}

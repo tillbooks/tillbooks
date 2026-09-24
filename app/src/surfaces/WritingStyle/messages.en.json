@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "writingStyle": "Writing style"
+  },
+  "voice": {
+    "panel": {
+      "title": "Writing style"
+    },
+    "loading": "Loading writing style…",
+    "empty": "No writing style learned yet.",
+    "emptyHint": "TILL learns it from the mail you have already sent.",
+    "emptyAction": "Go to Correspondence",
+    "action": {
+      "build": "Learn my writing style",
+      "rebuild": "Learn again"
+    },
+    "account": {
+      "label": "Mail account",
+      "missing": "Connect a local mail store on the Correspondence page first. TILL learns your style from mail you have already sent."
+    },
+    "field": {
+      "exemplars": "Examples used",
+      "built_at": "Learned on",
+      "greeting": "Greeting",
+      "signOff": "Sign-off",
+      "formality": "Form of address",
+      "meanSentenceWords": "Average sentence length",
+      "meanSentenceWordsValue": "{n} words",
+      "languageMix": "Language mix",
+      "languageMixValue": "{de}% German, {en}% English",
+      "model": "Learned with"
+    },
+    "stale": "Your sent mail changed since this was learned.",
+    "corpus": {
+      "note": "TILL reads your sent mail on this Mac. It stores what it learned, not copies of your messages."
+    },
+    "documents": {
+      "title": "Add your own documents",
+      "note": "Optional: pick documents from your files so your professional register is learned too.",
+      "empty": "No text documents in your files yet."
+    },
+    "error": {
+      "corpus_too_small": "TILL needs at least {need} sent messages to learn your writing style. It found {have}.",
+      "unknown_document": "This document could not be found.",
+      "transport": "The writing style could not be loaded.",
+      "permissionDenied": {
+        "read": "You do not have permission to view the writing style.",
+        "write": "You do not have permission to change the writing style."
+      }
+    }
+  },
+  "runtime": {
+    "status": {
+      "title": "Drafting engine",
+      "ready": "Running on this Mac",
+      "absent": "Not installed",
+      "model": "Model",
+      "device": "Device",
+      "reason": "Last load failed: {reason}"
+    },
+    "error": {
+      "needs_local_runtime": "The local drafting engine is not installed. TILL will not use a cloud model instead.",
+      "needs_model_selection": "Choose a model first.",
+      "unknown_model_ref": "This model is not in the installed engine's list. Your previous choice was kept.",
+      "insufficient_ram": "Needs {need} GB RAM. Your Mac has {have} GB."
+    },
+    "picker": {
+      "title": "Model",
+      "recommended": "Recommended for your Mac",
+      "ram": "Needs {gb} GB RAM",
+      "download": "One-time download: {size}",
+      "licence": "Licence",
+      "german": "German",
+      "unmeasured": "not measured",
+      "confirm": "Use this model",
+      "selected": "Selected: {model}",
+      "advanced": "Advanced",
+      "byo": "Use your own model file (.gguf)",
+      "byo_note": "Your own model is unsupported, and we make no promise about the drafts it writes.",
+      "byo_confirm": "Use this file",
+      "updates": "New models arrive when you update the drafting engine. TILL does not check for them online."
+    },
+    "download": {
+      "once": "This downloads once. Afterwards the engine never connects again."
+    }
+  },
+  "help": {
+    "WritingStyle": {
+      "title": "Writing style",
+      "body": "How TILL writes for you: the style profile, learned from your sent mail on this machine, and the choice of local language model. What is stored is what was learned, never a copy of your mail. Without a local runtime installed the page says so openly, and no cloud model is used instead. New models arrive with updates, never through an online check.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

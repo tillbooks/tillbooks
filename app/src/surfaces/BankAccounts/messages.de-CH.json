@@ -1,0 +1,293 @@
+{
+  "nav": {
+    "bankAccounts": "Bankkonten"
+  },
+  "bank": {
+    "title": "Bankkonten",
+    "loading": "Bankkonten werden geladen",
+    "add": "Konto hinzufügen",
+    "edit": "Bearbeiten",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schliessen",
+    "name": "Name",
+    "currency": "Währung",
+    "qrIbanChip": "QR-IBAN, nur Eingang",
+    "rowOpen": "Bankkonto {name} bearbeiten",
+    "rowActionsFor": "Aktionen für {name}",
+    "showArchived": "Archivierte anzeigen",
+    "archive": "Archivieren",
+    "unarchive": "Wiederherstellen",
+    "archivedDone": "«{name}» ist archiviert.",
+    "iban": {
+      "label": "IBAN",
+      "copy": "IBAN von {name} kopieren"
+    },
+    "ledgerAccount": {
+      "label": "Verknüpftes Konto",
+      "choose": "Konto wählen",
+      "unknown": "kein Konto",
+      "foreignHint": "Für ein Fremdwährungskonto legst du üblicherweise ein eigenes Konto an, zum Beispiel 1021 Bankkonto EUR."
+    },
+    "status": {
+      "archived": "Archiviert"
+    },
+    "editor": {
+      "title": {
+        "create": "Bankkonto erfassen",
+        "edit": "Bankkonto bearbeiten",
+        "opening": "Eröffnungssaldo"
+      }
+    },
+    "step": {
+      "label": "Schritte",
+      "account": "Konto",
+      "openingBalance": "Eröffnungssaldo"
+    },
+    "openingBalance": {
+      "label": "Eröffnungssaldo",
+      "date": "Datum",
+      "none": "noch keiner",
+      "zeroNoEntry": "{amount}, keine Buchung",
+      "zeroHint": "Bei 0.00 wird nichts gebucht. Das Konto gilt trotzdem als erfasst.",
+      "post": "Buchen",
+      "later": "Später",
+      "record": "Eröffnungssaldo erfassen",
+      "consequence": "Danach kannst du für dieses Konto keine Eröffnungsbilanz mehr importieren, ohne diese Buchung zuerst zu stornieren.",
+      "preview": {
+        "label": "Gebucht wird",
+        "pending": "wird berechnet",
+        "converted": "umgerechnet zum Kurs {rate}",
+        "contra": "Gegenkonto 9100 Eröffnungsbilanz"
+      }
+    },
+    "fxRate": {
+      "label": "Kurs {currency} zu {base}",
+      "resolved": "Kurs vom {date}, Quelle {source}.",
+      "typed": "Diesen Kurs hast du selber eingetragen.",
+      "typeIt": "Für dieses Datum ist kein Kurs hinterlegt. Trag ihn hier ein.",
+      "remember": "Kurs merken",
+      "notStored": {
+        "text": "Der Saldo ist gebucht. Der Kurs wurde nicht gespeichert.",
+        "conflict": "Für dieses Datum ist schon der Kurs {stored} hinterlegt, und eine gebuchte Zeile kann daran hängen. Trag eine Korrektur auf ein anderes Datum ein.",
+        "denied": "Dir fehlt die Berechtigung, Kurse zu erfassen.",
+        "close": "Fertig"
+      }
+    },
+    "qrIban": {
+      "explainer": "Das ist eine QR-IBAN. Sie kann nur Zahlungen empfangen. Für Zahlungen, die du auslöst, brauchst du zusätzlich eine normale IBAN.",
+      "incomplete": {
+        "text": "Du hast eine QR-IBAN, aber keine normale IBAN. Zahlungen, die du auslöst, brauchen eine normale IBAN.",
+        "action": "Normale IBAN erfassen",
+        "dismiss": "Nicht mehr anzeigen"
+      },
+      "help": {
+        "label": "Hilfe zur IBAN",
+        "title": "QR-IBAN oder normale IBAN"
+      }
+    },
+    "empty": {
+      "list": {
+        "title": "Noch keine Bankkonten erfasst.",
+        "hint": "Hier erfasst du jedes Konto mit seiner IBAN und dem Konto aus deinem Kontenplan, auf das es bucht.",
+        "action": "Konto hinzufügen"
+      },
+      "noAssetAccounts": {
+        "text": "Dein Kontenplan hat noch keine Aktivkonten. Ein Bankkonto braucht eines.",
+        "action": "Kontenplan öffnen"
+      }
+    },
+    "error": {
+      "transport": "Bankkonten konnten nicht geladen werden.",
+      "chart": "Der Kontenplan konnte nicht geladen werden.",
+      "amount": "Trag einen Betrag ein, zum Beispiel 12'500.00.",
+      "invalidIban": {
+        "structure": "Diese IBAN hat nicht die richtige Länge oder Form.",
+        "missing": "Trag die IBAN dieses Kontos ein."
+      },
+      "duplicateIban": {
+        "text": "Diese IBAN ist schon als «{name}» erfasst.",
+        "unknown": "einem anderen Konto"
+      },
+      "needsLedgerAccount": "Wähl das Konto aus deinem Kontenplan, auf das dieses Bankkonto bucht.",
+      "needsAccount9100": {
+        "missing": "In deinem Kontenplan fehlt das Konto 9100 Eröffnungsbilanz. Ohne dieses Konto lässt sich der Saldo nicht buchen.",
+        "missingDetail": "TILL legt es als «9100 Eröffnungsbilanz», Typ Eigenkapital, in deinem Kontenplan an. Sonst ändert sich nichts.",
+        "missingAction": "Konto 9100 anlegen",
+        "archived": "Das Konto 9100 Eröffnungsbilanz ist archiviert. Aktivier es wieder, dann kannst du den Saldo buchen.",
+        "archivedDetail": "Das Konto bleibt, wie es ist. Es wird nur wieder aktiv.",
+        "archivedAction": "Konto 9100 wieder aktivieren",
+        "working": "wird angelegt",
+        "reactivating": "wird aktiviert",
+        "duplicate": "Das Konto 9100 gibt es schon. Lad die Seite neu.",
+        "failed": "Das Konto 9100 konnte nicht angelegt werden.",
+        "denied": "Dir fehlt die Berechtigung, Konten anzulegen. Bitte jemanden mit dieser Berechtigung, 9100 Eröffnungsbilanz zu erfassen.",
+        "toChart": "Kontenplan öffnen"
+      },
+      "notFound": {
+        "text": "Dieses Bankkonto gibt es nicht mehr.",
+        "action": "Zur Liste"
+      },
+      "periodLocked": {
+        "text": "Die Periode {period} ist gesperrt. Buch den Saldo auf ein anderes Datum oder öffne die Periode.",
+        "action": "Perioden öffnen",
+        "unnamed": "dieses Datums"
+      },
+      "needsFxRate": "Für {currency} auf den {date} ist kein Kurs hinterlegt. Trag den Kurs hier ein.",
+      "openingBalanceAlreadySet": "Für dieses Konto ist schon ein Eröffnungssaldo gebucht. Eine Korrektur ist eine Stornobuchung im Journal.",
+      "accountInUse": "Gesperrt, seit der Eröffnungssaldo gebucht ist. Den Namen kannst du weiterhin ändern.",
+      "permissionDenied": {
+        "write": "Dir fehlt die Berechtigung, Bankkonten zu erfassen.",
+        "read": "Dir fehlt die Berechtigung, Bankkonten zu sehen.",
+        "post": "Dir fehlt die Berechtigung, den Eröffnungssaldo zu buchen."
+      }
+    }
+  },
+  "channel": {
+    "title": "Bankkanal",
+    "empty": "Noch kein EBICS-Kanal. Verbinde einen, damit Kontoauszüge und Zahlungsdateien nicht mehr von Hand verarbeitet werden: deine Bank muss EBICS anbieten, und der dateibasierte Weg bleibt in jedem Fall bestehen.",
+    "filePathNote": "Der dateibasierte Kontoauszug-Import und der Zahlungs-Upload bleiben immer verfügbar, mit oder ohne Kanal.",
+    "connect": "Kanal verbinden",
+    "locked": "Das Verwalten eines Bankkanals benötigt die Zahlungsberechtigung.",
+    "kind": {
+      "ebics": "EBICS",
+      "blink": "bLink"
+    },
+    "managed": {
+      "connect": "Über bLink verbinden",
+      "formIntro": "Über bLink erteilst du die Zustimmung direkt in deinem E-Banking, ohne Papierbrief.",
+      "bankRef": "Deine Bank (bLink-Referenz)",
+      "scopePss": "Auch Zahlungsübermittlung erlauben (PSS)",
+      "reconnect": "Neu verbinden"
+    },
+    "consent": {
+      "pending": "Wartet auf deine Bank",
+      "waitingBank": "Das Login deiner Bank öffnet sich, damit du dort die Zustimmung erteilst.",
+      "resume": "Zustimmung fortsetzen",
+      "revoked": "Die Zustimmung wurde bei deiner Bank widerrufen. Verbinde neu, um sie erneut zu erteilen.",
+      "expires": "Zustimmung läuft ab",
+      "scopeMissing": "Diese Verbindung hat keine Zahlungszustimmung. Verbinde neu mit PSS, um Zahlungen zu übermitteln."
+    },
+    "formatUnsupported": "Diese Bank liefert über bLink nur JSON. Die dateibasierten Wege bleiben die Grundlage.",
+    "cloudTier": {
+      "title": "Verwaltete Anbindung",
+      "explainer": "Die verwaltete bLink-Anbindung ist eine optionale Stufe, die dein Eigentümer freischaltet. EBICS und Datei-Import funktionieren auch ohne sie.",
+      "suspended": "Das Anbieterkonto der verwalteten Anbindung ist abgelaufen. Deine EBICS- und Datei-Wege sind nicht betroffen."
+    },
+    "releaseNoteBlink": "Über bLink übermittelt. Gib die Zahlung in deinem eigenen E-Banking frei.",
+    "sharedWith": "Zugeordnete Konten",
+    "lastSync": "Letzte Synchronisation",
+    "sync": "Jetzt synchronisieren",
+    "orderLog": "Auftragsprotokoll",
+    "unmatchedAccount": "Auszug für ein nicht zugeordnetes Konto (zuordnen und erneut synchronisieren)",
+    "transmitInDoubt": "Der Ausgang einer Übermittlung ist unbekannt: eine erneute Übertragung ist gesperrt, bis das Bankprotokoll antwortet.",
+    "pendingRelease": "Wartet auf Freigabe der Bank",
+    "rejectedReason": "Von der Bank abgelehnt",
+    "bankKeysChanged": "Die Schlüssel der Bank haben sich geändert. Der Verkehr ruht, bis du sie ausserhalb des Kanals erneut bestätigst.",
+    "routeAccount": "Konto zuordnen...",
+    "routeAccountLabel": "Konto für die Zuordnung",
+    "disconnectRetire": "Stilllegen",
+    "disconnectBlock": "Sperren (SPR)",
+    "disconnectBlockConfirm": "Diese Verbindung wirklich sperren? Alle Aufträge dieser Verbindung werden angehalten.",
+    "disconnectRetireConfirm": "Diese Verbindung wirklich stilllegen? Der Bankkanal wird dauerhaft beendet.",
+    "disconnectConfirm": "Bestätigen",
+    "disconnectCancel": "Abbrechen",
+    "wizard": {
+      "accessData": "EBICS-Zugangsdaten aus deinem Bankvertrag",
+      "confirmKeys": "Bankschlüssel vergleichen und bestätigen",
+      "hostUrl": "Host-URL",
+      "hostId": "Host-ID",
+      "partnerId": "Partner-ID",
+      "userId": "User-ID"
+    },
+    "orderType": {
+      "ini": "Schlüssel-Initialisierung",
+      "hia": "Identifikationsschlüssel",
+      "hpb": "Bankschlüssel abgeholt",
+      "btd": "Download",
+      "btu": "Upload",
+      "hac": "Auftragsstatus abgeholt",
+      "spr": "Zugang gesperrt"
+    },
+    "orderKind": {
+      "consent": "Zustimmung",
+      "statusReport": "Statusmeldung",
+      "statements": "Kontoauszüge",
+      "transmit": "Übermittlung"
+    },
+    "orderStatus": {
+      "ok": "Erfolgreich",
+      "failed": "Fehlgeschlagen",
+      "bankRejected": "Von der Bank abgelehnt",
+      "pendingRelease": "Wartet auf Freigabe",
+      "intent": "Vorgemerkt"
+    },
+    "error": {
+      "generic": "Etwas ist schiefgelaufen. Auf dem Geldpfad wurde nichts geändert."
+    },
+    "notice": {
+      "noEbicsOffer": "Diese Bank bietet kein EBICS an. Nutze stattdessen den dateibasierten Import- und Upload-Weg.",
+      "needsBankTransport": "Schlüssel wurden erzeugt und der INI-Brief lokal abgelegt. Das Senden an die Bank benötigt einen eingerichteten EBICS-Transport.",
+      "channelUnreachable": "Die Bank war nicht erreichbar. Die letzte Synchronisation bleibt sichtbar; erneut versuchen ist die einzige Aktion.",
+      "bankKeysMismatch": "Die Bankschlüssel stimmten nicht überein. Das ist ein harter Stopp, nie automatisch akzeptiert.",
+      "needsConfirmation": "Dies ist eine bewusste Handlung und benötigt deine Bestätigung.",
+      "permissionDenied": "Dir fehlt die Berechtigung für diese Aktion.",
+      "cloudTier": "Die verwaltete bLink-Anbindung ist eine optionale Stufe, die dein Eigentümer freischaltet. EBICS und Datei-Import funktionieren auch ohne sie.",
+      "consentRevoked": "Die Zustimmung wurde bei deiner Bank widerrufen. Verbinde neu, um sie erneut zu erteilen.",
+      "consentScopeMissing": "Diese Verbindung hat keine Zahlungszustimmung. Verbinde neu mit PSS, um Zahlungen zu übermitteln.",
+      "formatUnsupported": "Diese Bank liefert über bLink nur JSON. Die dateibasierten Wege bleiben die Grundlage.",
+      "cloudTierSuspended": "Das Anbieterkonto der verwalteten Anbindung ist abgelaufen. Deine EBICS- und Datei-Wege sind nicht betroffen.",
+      "alreadyTransmitted": "Dieser Stapel ist bereits über einen anderen Weg unterwegs."
+    },
+    "state": {
+      "draft": "Entwurf",
+      "keysGenerated": "Schlüssel erzeugt",
+      "iniSent": "INI gesendet",
+      "pendingBankActivation": "Wartet auf die Bank",
+      "active": "Aktiv",
+      "bankKeysChanged": "Bankschlüssel geändert",
+      "blocked": "Gesperrt",
+      "retired": "Stillgelegt",
+      "consentPending": "Wartet auf deine Bank",
+      "consentRevoked": "Zustimmung widerrufen",
+      "suspended": "Anbieterkonto ausgesetzt"
+    },
+    "bankPicker": {
+      "label": "Bank",
+      "empty": "Bank nicht gefunden. Trag die EBICS-Zugangsdaten unten von Hand ein.",
+      "feeUnverified": "Ungeprüfte Gebühr"
+    },
+    "keystore": {
+      "title": "Schlüsselablage",
+      "kind": {
+        "file": "Datei, passphrase-verschlüsselt",
+        "keychain": "System-Schlüsselbund",
+        "memory": "nur im Arbeitsspeicher"
+      },
+      "locked": "Gesperrt: die Passphrase wurde in dieser Sitzung nicht eingegeben.",
+      "unlock": "Entsperren",
+      "unavailable": "Die Schlüsseldatei fehlt oder ist beschädigt. Initialisiere die Verbindung neu (der Bankvertrag ist davon nicht betroffen), oder stelle die Datei aus einer Sicherung wieder her.",
+      "notPersistent": "Diese Schlüsselablage übersteht keinen Neustart. Die Schlüssel müssen neu erzeugt werden, falls die App neu startet, bevor du eine dauerhafte Ablage verbindest."
+    },
+    "schedule": {
+      "title": "Automatischer Abruf",
+      "cadence": "Rhythmus",
+      "cadenceOption": {
+        "daily": "Täglich",
+        "weekly": "Wöchentlich",
+        "monthly": "Monatlich"
+      },
+      "egressNote": "Das Einschalten erzeugt eine gespeicherte Regel, die deine Bank nach Zeitplan kontaktiert: geplanter Netzwerkverkehr nach aussen, unbeaufsichtigt.",
+      "inactive": "Dieser Zeitplan ist eingeschaltet, aber nichts treibt ihn an: der lokale M00-Scheduler läuft nicht. Jetzt synchronisieren funktioniert weiterhin, oder starte den Scheduler.",
+      "lastFired": "Zuletzt ausgelöst"
+    }
+  },
+  "help": {
+    "BankAccounts": {
+      "title": "Bankkonten",
+      "body": "Das Register deiner Bankkonten mit IBAN, QR-IBAN und Eröffnungssaldo. Eine QR-IBAN kann nur Zahlungen empfangen; für ausgehende Zahlungen braucht das Register zusätzlich eine normale IBAN, und die Oberfläche weist darauf hin, wenn sie fehlt. Hier verwaltest du auch den EBICS-Kanal und archivierst Konten, die nicht mehr gebraucht werden.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

@@ -1,0 +1,732 @@
+{
+  "nav": {
+    "assetCategories": "Fixed assets",
+    "assets": "Asset register",
+    "depreciation": "Depreciation",
+    "assetLocations": "Asset locations",
+    "depreciationRuns": "Depreciation runs",
+    "assetReconciliation": "Asset reconciliation",
+    "assetMaintenance": "Maintenance",
+    "assetReports": "Asset reports"
+  },
+  "assets": {
+    "common": {
+      "close": "Close"
+    },
+    "method": {
+      "straight_line": "Straight-line",
+      "declining_balance": "Declining balance",
+      "units_of_production": "Units of production",
+      "none": "No depreciation"
+    },
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "fully_depreciated": "Fully depreciated",
+      "disposed": "Disposed",
+      "archived": "Archived"
+    },
+    "categories": {
+      "title": "Fixed asset categories",
+      "new": "New category",
+      "edit": "Edit",
+      "archive": "Archive",
+      "cancel": "Cancel",
+      "save": "Save",
+      "active": "Active",
+      "archived": "Archived",
+      "showArchived": "Show archived",
+      "noWorkspace": "to manage fixed asset categories",
+      "confirmArchive": "Archive category {code}? It leaves the picker but stays resolvable for existing assets.",
+      "empty": {
+        "title": "No categories yet",
+        "hint": "Create the first one so assets can inherit correct accounting defaults.",
+        "cta": "Create first category"
+      },
+      "col": {
+        "code": "Code",
+        "name": "Name",
+        "method": "Method",
+        "life": "Life (months)",
+        "residual": "Residual",
+        "status": "Status"
+      },
+      "rowOpen": "Edit category {code} {name}",
+      "rowActionsFor": "Actions for category {code}",
+      "field": {
+        "code": "Code",
+        "name": "Name",
+        "method": "Depreciation method",
+        "life": "Useful life (months)",
+        "residualPct": "Residual value (basis points)",
+        "residualHint": "0 to 10000 basis points (10000 = 100%).",
+        "assetAccount": "Asset account (cost)",
+        "accumAccount": "Accumulated depreciation account",
+        "expenseAccount": "Depreciation expense account",
+        "costCenter": "Default cost centre",
+        "choose": "Choose an account",
+        "none": "None"
+      },
+      "form": {
+        "title": "Category",
+        "createTitle": "New category",
+        "editTitle": "Edit category"
+      },
+      "error": {
+        "transport": "Could not load categories. Please retry."
+      }
+    },
+    "register": {
+      "title": "Asset register",
+      "new": "New asset",
+      "edit": "Edit",
+      "archive": "Archive",
+      "cancel": "Cancel",
+      "save": "Save",
+      "noWorkspace": "to manage the fixed asset register",
+      "searchPlaceholder": "Search number, name, serial, notes",
+      "confirmArchive": "Archive asset {number}? It leaves the active register but stays readable.",
+      "filter": {
+        "category": "Filter by category",
+        "allCategories": "All categories",
+        "status": "Filter by status",
+        "allStatuses": "All statuses",
+        "clear": "Clear"
+      },
+      "empty": {
+        "title": "No assets yet",
+        "hint": "Create the first one from a category so its accounting defaults are inherited.",
+        "cta": "Create first asset",
+        "noCatTitle": "No categories yet",
+        "noCatHint": "You need at least one fixed asset category before you can create an asset."
+      },
+      "col": {
+        "number": "Number",
+        "name": "Name",
+        "category": "Category",
+        "status": "Status",
+        "acquired": "Acquired",
+        "cost": "Cost",
+        "nbv": "Net book value"
+      },
+      "rowOpen": "Open asset {number} {name}",
+      "rowActionsFor": "Actions for asset {number}",
+      "field": {
+        "category": "Category",
+        "chooseCategory": "Choose a category",
+        "name": "Name",
+        "acquired": "Acquisition date",
+        "cost": "Acquisition cost (CHF)",
+        "method": "Depreciation method",
+        "life": "Useful life (months)",
+        "serial": "Serial number",
+        "notes": "Notes"
+      },
+      "form": {
+        "title": "Asset",
+        "createTitle": "New asset",
+        "editTitle": "Edit asset",
+        "numberLabel": "Number",
+        "locked": "This asset has a posted acquisition, so its financial fields are locked. Descriptive fields can still be edited; a financial correction goes through a transfer, disposal or revaluation."
+      },
+      "error": {
+        "transport": "Could not load the register. Please retry."
+      }
+    },
+    "depreciation": {
+      "title": "Depreciation",
+      "subtitle": "Preview and project depreciation. Nothing is posted here; the period-end run books these amounts.",
+      "noWorkspace": "to preview depreciation",
+      "assetLabel": "Asset",
+      "chooseAsset": "Choose an asset",
+      "period": "Period",
+      "periodHint": "The month to calculate, as YYYY-MM.",
+      "refresh": "Refresh preview",
+      "nextAmount": "Next period",
+      "methodLabel": "Method",
+      "remainingLife": "Remaining life (months)",
+      "remainingUnits": "Remaining units",
+      "isFinal": "Final period",
+      "yes": "Yes",
+      "no": "No",
+      "nbv": "Net book value",
+      "cost": "Acquisition cost",
+      "residual": "Residual value",
+      "unitsThisPeriod": "Units produced this period",
+      "rateBp": "Declining rate (basis points)",
+      "totalUnits": "Total estimated units",
+      "paramHint": "Not stored on the asset yet; supply it to preview this method.",
+      "method": {
+        "straight_line": "Straight-line",
+        "declining_balance": "Declining balance",
+        "units_of_production": "Units of production",
+        "none": "No depreciation"
+      },
+      "methodDesc": {
+        "straight_line": "Even charge across the useful life.",
+        "declining_balance": "A fixed percentage of the net book value each period.",
+        "units_of_production": "Charge driven by units produced.",
+        "none": "Non-depreciating (land, art, low-value items kept at cost)."
+      },
+      "explain": {
+        "straight_line": "Straight-line: the depreciable base is spread evenly across the useful life.",
+        "declining_balance": "Declining balance: a fixed rate is applied to the net book value each period.",
+        "units_of_production": "Units of production: depreciation follows actual usage in the period.",
+        "none": "No depreciation is calculated for this asset."
+      },
+      "reason": {
+        "already_at_residual": "This asset is already at its residual value; no depreciation remains.",
+        "period_already_processed": "This period has already been depreciated.",
+        "non_depreciable": "This asset uses method “none”; no depreciation is calculated.",
+        "missing_production_data": "Supply the units produced (and total estimated units) to depreciate this asset.",
+        "unknown_method": "This asset’s method is not recognised."
+      },
+      "schedule": {
+        "title": "Projected schedule",
+        "period": "Period",
+        "amount": "Depreciation",
+        "accum": "Accumulated",
+        "nbv": "Net book value",
+        "final": "Final",
+        "empty": "No further depreciation to project.",
+        "incomplete": "The schedule is incomplete: supply a units forecast to project a units-of-production asset."
+      },
+      "methods": {
+        "title": "Methods",
+        "hint": "Turn a method off to hide it from the category and asset pickers.",
+        "enabled": "Enabled",
+        "requiresUnits": "Needs units",
+        "requiresRate": "Needs a rate",
+        "col": {
+          "method": "Method",
+          "requires": "Requires",
+          "enabled": "Enabled"
+        }
+      },
+      "empty": {
+        "title": "No assets to depreciate",
+        "hint": "Create an asset in the register first."
+      },
+      "error": {
+        "transport": "Could not load depreciation. Please retry."
+      }
+    },
+    "acquisition": {
+      "record": "Record acquisition",
+      "addCapitalisation": "Add capitalisation",
+      "transactions": "Transactions",
+      "recordTitle": "Record acquisition",
+      "addTitle": "Add capitalisation",
+      "date": "Date",
+      "cost": "Acquisition cost (CHF)",
+      "amount": "Amount (CHF)",
+      "creditAccount": "Credit account",
+      "chooseAccount": "Choose an account",
+      "residual": "Residual value (CHF, optional)",
+      "description": "Description",
+      "preview": "This will post",
+      "debit": "Debit",
+      "credit": "Credit",
+      "post": "Post",
+      "empty": {
+        "title": "No financial events yet",
+        "hint": "Record the acquisition to capitalise this asset."
+      },
+      "col": {
+        "date": "Date",
+        "type": "Type",
+        "amount": "Amount"
+      },
+      "txnType": {
+        "acquisition": "Acquisition",
+        "additional_capitalisation": "Additional capitalisation",
+        "opening": "Opening balance",
+        "depreciation": "Depreciation",
+        "disposal": "Disposal",
+        "revaluation": "Revaluation",
+        "adjustment": "Adjustment"
+      }
+    },
+    "ledger": {
+      "title": "Ledger",
+      "subtitle": "Every financial event on this asset, with the running cost, accumulated depreciation and net book value after each one, and a link to the journal it posted.",
+      "openingBalance": "Opening balance",
+      "openingTitle": "Record opening balance",
+      "openingHint": "Seed the historical cost and accumulated depreciation of an asset that already exists, so the sub-ledger reconciles from day one. This posts one balanced opening journal.",
+      "cost": "Cost (CHF)",
+      "accumulated": "Accumulated depreciation (CHF)",
+      "offsetAccount": "Equity / opening account",
+      "chooseAccount": "Choose an account",
+      "date": "Opening date",
+      "description": "Description",
+      "post": "Post opening balance",
+      "nbv": "Net book value",
+      "col": {
+        "date": "Date",
+        "type": "Type",
+        "deltaCost": "Cost change",
+        "deltaAccum": "Depreciation change",
+        "nbv": "Net book value",
+        "journal": "Journal"
+      },
+      "empty": {
+        "title": "No financial events yet",
+        "hint": "Record the acquisition or an opening balance to capitalise this asset."
+      }
+    },
+    "reconciliation": {
+      "title": "Asset reconciliation",
+      "explainer": "The proof that the fixed-asset sub-ledger equals the General Ledger control accounts, to the Rappen. A non-zero difference is drift: it blocks the period close until it is explained or corrected.",
+      "noWorkspace": "to reconcile fixed assets",
+      "period": "Period",
+      "cutOff": "As at",
+      "runCheck": "Run check",
+      "balancedCount": "Balanced accounts",
+      "driftCount": "Accounts with drift",
+      "checkBalanced": "Balanced: every control account reconciles for {period}. The period close may proceed.",
+      "checkDrift": "Drift on {count} control account(s) for {period}. The period close is blocked until it is corrected.",
+      "noAssets": "No assets contribute to this account at the cut-off.",
+      "role": {
+        "cost": "Cost",
+        "accum": "Accumulated depreciation"
+      },
+      "status": {
+        "balanced": "Balanced",
+        "drift": "Drift"
+      },
+      "col": {
+        "account": "Control account",
+        "role": "Kind",
+        "subLedger": "Sub-ledger",
+        "gl": "General ledger",
+        "delta": "Difference",
+        "status": "Status"
+      },
+      "drill": {
+        "asset": "Asset",
+        "amount": "Balance"
+      },
+      "empty": {
+        "title": "Nothing to reconcile",
+        "hint": "No fixed assets carry a control-account balance at this cut-off."
+      },
+      "error": {
+        "transport": "The reconciliation could not be loaded. Please retry."
+      }
+    },
+    "reports": {
+      "title": "Asset reports",
+      "explainer": "Read-only reports across the whole fixed-asset register: the inventory for the auditor's binder, a depreciation forecast for budgeting, the disposal gain/loss pack, what was capitalised, net book value by dimension, and what is reaching end of life.",
+      "noWorkspace": "to open the fixed-asset reports",
+      "tab": {
+        "register": "Register",
+        "forecast": "Forecast",
+        "disposals": "Disposals",
+        "acquisitions": "Acquisitions",
+        "nbv": "NBV by dimension",
+        "endOfLife": "End of life"
+      },
+      "status": {
+        "draft": "Draft",
+        "active": "Active",
+        "fully_depreciated": "Fully depreciated",
+        "disposed": "Disposed",
+        "archived": "Archived"
+      },
+      "empty": {
+        "title": "Nothing to show",
+        "hint": "No assets match the current filters."
+      },
+      "error": {
+        "transport": "The report could not be loaded. Please retry."
+      },
+      "range": {
+        "from": "From",
+        "to": "To"
+      },
+      "register": {
+        "search": "Search",
+        "searchHint": "Number, name, serial, barcode",
+        "totals": "{count} assets",
+        "col": {
+          "number": "Number",
+          "name": "Name",
+          "category": "Category",
+          "status": "Status",
+          "cost": "Cost",
+          "accum": "Accumulated",
+          "nbv": "Net book value"
+        }
+      },
+      "forecast": {
+        "from": "From period",
+        "to": "To period",
+        "groupBy": "Group by",
+        "group": {
+          "none": "No grouping",
+          "category": "Category",
+          "location": "Location"
+        },
+        "summary": "Projected depreciation: {total}, with {reaching} asset(s) reaching residual in the window.",
+        "productionDataRequired": "A units-of-production asset has no unit forecast, so it contributes nothing. Supply a unit forecast to include it.",
+        "invalidPeriodRange": "The period range is invalid: the end is before the start, or the window is longer than 60 months.",
+        "emptyHint": "No depreciable assets project into this window.",
+        "totalLabel": "Total projected",
+        "col": {
+          "period": "Period",
+          "amount": "Depreciation"
+        }
+      },
+      "disposals": {
+        "emptyTitle": "No disposals in range",
+        "emptyHint": "No asset was disposed of between the selected dates.",
+        "totals": "{count} disposals",
+        "col": {
+          "asset": "Asset",
+          "date": "Disposal date",
+          "nbv": "NBV at disposal",
+          "proceeds": "Proceeds",
+          "gainLoss": "Gain / loss"
+        }
+      },
+      "acquisitions": {
+        "emptyTitle": "Nothing capitalised in range",
+        "emptyHint": "No acquisition or capitalisation was posted between the selected dates.",
+        "totals": "{count} acquisitions",
+        "source": {
+          "manual": "Manual",
+          "vendor_bill": "Vendor bill",
+          "project": "Project",
+          "opening": "Opening balance"
+        },
+        "col": {
+          "asset": "Asset",
+          "date": "Date",
+          "category": "Category",
+          "source": "Source",
+          "cost": "Cost"
+        }
+      },
+      "nbv": {
+        "groupBy": "Group by",
+        "group": {
+          "category": "Category",
+          "location": "Location",
+          "status": "Status",
+          "method": "Depreciation method"
+        },
+        "totalLabel": "Total",
+        "col": {
+          "group": "Group",
+          "count": "Count",
+          "cost": "Cost",
+          "accum": "Accumulated",
+          "nbv": "Net book value"
+        }
+      },
+      "endOfLife": {
+        "mode": "Show",
+        "approaching": "Approaching end of life",
+        "fullyDepreciated": "Fully depreciated",
+        "withinMonths": "Within months",
+        "emptyTitle": "Nothing to flag",
+        "emptyHint": "No asset falls inside the selected window.",
+        "col": {
+          "asset": "Asset",
+          "nbv": "Net book value",
+          "remaining": "Months left",
+          "next": "Next depreciation"
+        }
+      }
+    },
+    "locations": {
+      "title": "Asset locations",
+      "new": "New location",
+      "edit": "Edit",
+      "archive": "Archive",
+      "cancel": "Cancel",
+      "save": "Save",
+      "active": "Active",
+      "archived": "Archived",
+      "showArchived": "Show archived",
+      "noWorkspace": "to manage asset locations",
+      "confirmArchive": "Archive location {code}? It leaves the picker but stays resolvable for existing assets.",
+      "empty": {
+        "title": "No locations yet",
+        "hint": "Create the first one so assets can be assigned to a real place.",
+        "cta": "Create first location"
+      },
+      "col": {
+        "code": "Code",
+        "name": "Name",
+        "parent": "Parent",
+        "status": "Status"
+      },
+      "rowOpen": "Edit location {code} {name}",
+      "rowActionsFor": "Actions for location {code}",
+      "field": {
+        "code": "Code",
+        "name": "Name",
+        "parent": "Parent location",
+        "noParent": "None (root)",
+        "description": "Description"
+      },
+      "form": {
+        "title": "Location",
+        "createTitle": "New location",
+        "editTitle": "Edit location"
+      },
+      "error": {
+        "transport": "Could not load locations. Please retry."
+      }
+    },
+    "transfer": {
+      "action": "Transfer",
+      "title": "Transfer asset",
+      "nonPosting": "A transfer posts nothing: it changes only location and responsible person, no financial values.",
+      "toLocation": "New location",
+      "keepLocation": "Keep current location",
+      "toResponsible": "New responsible person",
+      "effectiveDate": "Transfer date",
+      "reason": "Reason",
+      "confirm": "Record transfer",
+      "none": "-",
+      "history": "Transfer history",
+      "empty": {
+        "title": "No transfers yet",
+        "hint": "The first transfer will appear here."
+      },
+      "col": {
+        "date": "Date",
+        "from": "From",
+        "to": "To",
+        "reason": "Reason"
+      }
+    },
+    "disposal": {
+      "action": "Dispose",
+      "title": "Dispose asset",
+      "explainer": "A disposal is a terminal, posted event: it clears the asset cost and its accumulated depreciation, recognises the proceeds and the book gain or loss, and removes the asset from the active register. A wrong disposal is corrected by reversing the journal, never undone.",
+      "date": "Disposal date",
+      "proceeds": "Proceeds (CHF)",
+      "proceedsAccount": "Proceeds account",
+      "gainLossAccount": "Gain / loss account",
+      "chooseAccount": "Choose an account",
+      "reason": "Reason",
+      "counterparty": "Counterparty (optional)",
+      "preview": "This will post",
+      "cost": "Acquisition cost",
+      "accumulated": "Accumulated depreciation",
+      "nbv": "Net book value",
+      "gain": "Book gain",
+      "loss": "Book loss",
+      "journalPreview": "Journal",
+      "post": "Dispose"
+    },
+    "depreciationRun": {
+      "title": "Depreciation runs",
+      "subtitle": "Calculate the period-end depreciation for every eligible asset, review it, and post it as one balanced journal. A material error is corrected by reversing the run, never by editing history.",
+      "noWorkspace": "Choose a workspace to run depreciation.",
+      "new": "New run",
+      "period": "Period",
+      "calculate": "Calculate",
+      "review": "Draft review",
+      "emptyDraft": "No eligible assets for this period. Nothing to post.",
+      "alreadyPosted": "This period is already posted, so there is nothing left to charge.",
+      "post": "Post",
+      "postConfirmTitle": "Post depreciation run?",
+      "postConfirmBody": "This posts the period's depreciation as one balanced journal for {count} asset(s), CHF {total}. It is corrected only by reversing the run, never by editing history.",
+      "postConfirm": "Post run",
+      "postCancel": "Cancel",
+      "reverse": "Reverse",
+      "reverseTitle": "Reverse run",
+      "reverseHint": "The reversal books a mirror entry and gives the depreciation back to every asset in the run. Say why: the reason is recorded on the reversing entry and on the asset movement.",
+      "reverseReason": "Reason",
+      "reverseConfirm": "Reverse run",
+      "reverseCancel": "Cancel",
+      "rowOpen": "View the run for {period}",
+      "rowActionsFor": "Actions for the run for {period}",
+      "history": "Past runs",
+      "detail": "Run detail",
+      "total": "Total",
+      "unitsFor": "Units produced for",
+      "recalculateWithUnits": "Recalculate with production data",
+      "yes": "Yes",
+      "status": {
+        "draft": "Draft",
+        "posted": "Posted",
+        "reversed": "Reversed"
+      },
+      "col": {
+        "period": "Period",
+        "status": "Status",
+        "assetCount": "Assets",
+        "total": "Total",
+        "asset": "Asset",
+        "amount": "Amount",
+        "accumBefore": "Accumulated before",
+        "accumAfter": "Accumulated after",
+        "nbvAfter": "Net book value after",
+        "final": "Final",
+        "units": "Units",
+        "reason": "Reason"
+      },
+      "empty": {
+        "title": "No depreciation runs yet",
+        "hint": "Choose a period and press Calculate to create the first draft."
+      },
+      "error": {
+        "transport": "The depreciation runs could not be loaded.",
+        "period_locked": "That period is locked, so nothing can be posted into it.",
+        "empty_run": "This run has no eligible assets, so there is nothing to post.",
+        "stale_draft": "An asset changed since this draft was calculated: its depreciation moved, or its value did. Recreate the run.",
+        "run_already_posted": "A run for this period and selection is already posted.",
+        "run_already_exists": "A draft run for this period and selection already exists.",
+        "run_reversed": "This run has been reversed and cannot be posted.",
+        "run_not_posted": "Only a posted run can be reversed.",
+        "already_reversed": "This run is already reversed.",
+        "later_run_exists": "A later run has already posted for one of these assets. Reverse that one first.",
+        "missing_production_data": "This asset is depreciated by output and has no production figure for this period. Enter the units produced, then recalculate.",
+        "missing_units_estimate": "This asset has no estimated total units, so its output cannot be allocated. Set totalEstimatedUnits on the asset first."
+      },
+      "skipped": {
+        "title": "Not depreciated this period",
+        "hint": "These assets were in the selection but produced no charge. Enter the units produced for any asset that is depreciated by output, then recalculate.",
+        "reason": {
+          "missing_production_data": "No production figure for this period",
+          "already_at_residual": "Already at its residual value",
+          "period_already_processed": "This period is already depreciated",
+          "non_depreciable": "Method is none, never depreciates",
+          "unknown_method": "Unknown depreciation method",
+          "zero_amount": "Nothing to charge this period",
+          "asset_terminal": "Disposed or archived, so it no longer depreciates",
+          "filtered_out": "Outside this run: another category or cost centre",
+          "missing_units_estimate": "No estimated total units on the asset, so there is nothing to allocate over"
+        }
+      }
+    },
+    "maintenance": {
+      "title": "Maintenance log",
+      "new": "Add entry",
+      "edit": "Edit",
+      "cancel": "Cancel",
+      "back": "Back",
+      "save": "Save",
+      "asset": "Asset",
+      "totalCost": "Total captured cost",
+      "archivedNote": "This asset is archived. The history stays readable, new entries are blocked.",
+      "noWorkspace": "to manage maintenance entries",
+      "confirmCancel": "Cancel entry “{title}”? It stays visible for audit but is never deleted.",
+      "noAssets": {
+        "title": "No assets yet",
+        "hint": "Create an asset first, then you can record maintenance entries."
+      },
+      "empty": {
+        "title": "No maintenance recorded yet",
+        "hint": "Record the first service event for this asset.",
+        "cta": "Log the first entry"
+      },
+      "status": {
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "type": {
+        "corrective": "Corrective",
+        "preventive": "Preventive",
+        "inspection": "Inspection",
+        "calibration": "Calibration",
+        "upgrade": "Upgrade",
+        "other": "Other"
+      },
+      "filter": {
+        "type": "Type",
+        "allTypes": "All types",
+        "hasCost": "With cost only",
+        "includeCancelled": "Show cancelled"
+      },
+      "col": {
+        "date": "Date",
+        "type": "Type",
+        "title": "Title",
+        "performedBy": "Performed by",
+        "cost": "Cost",
+        "status": "Status"
+      },
+      "rowOpen": "Edit the entry {title} of {date}",
+      "rowActionsFor": "Actions for the entry {title}",
+      "field": {
+        "logDate": "Date",
+        "type": "Type",
+        "title": "Title",
+        "description": "Description",
+        "externalParty": "Performed by (external)",
+        "cost": "Cost",
+        "costTotal": "Total (CHF)",
+        "partsCost": "Parts (CHF)",
+        "labourCost": "Labour (CHF)",
+        "externalReference": "External reference",
+        "notes": "Notes",
+        "cancelReason": "Reason"
+      },
+      "form": {
+        "title": "Maintenance entry",
+        "createTitle": "New maintenance entry",
+        "editTitle": "Edit maintenance entry"
+      },
+      "error": {
+        "transport": "Could not load the maintenance entries. Please try again."
+      }
+    }
+  },
+  "errors": {
+    "duplicate_code": "An entry with this code already exists.",
+    "location_cycle": "That parent location would create a loop in the hierarchy.",
+    "location_inactive": "The target location is archived. Choose an active location.",
+    "location_in_use": "This location is still used by an asset and cannot be archived.",
+    "asset_not_transferable": "A disposed or archived asset cannot be transferred.",
+    "nothing_to_transfer": "Provide a new location or a new responsible person.",
+    "invalid_credit_account": "That credit account does not exist in this workspace.",
+    "credit_account_wrong_type": "The credit account must be a bank, creditor or equity account, not an income or expense account.",
+    "invalid_residual": "The residual value must be between zero and the acquisition cost.",
+    "already_acquired": "This asset already has a primary acquisition. Use Add capitalisation instead.",
+    "already_opened": "This asset already has an opening balance recorded.",
+    "invalid_offset_account": "Choose a valid equity or opening account to carry the net book value.",
+    "reconciliation_drift": "The sub-ledger does not match the General Ledger for one or more control accounts.",
+    "not_acquired": "Record the primary acquisition before adding further capitalisation.",
+    "asset_not_acquirable": "A disposed or archived asset cannot be capitalised.",
+    "source_document_not_found": "The linked source document could not be found in this workspace.",
+    "period_locked": "The chosen date falls in a locked period. Reopen the period or pick another date.",
+    "duplicate_number": "An asset with this number already exists.",
+    "invalid_account_type": "That account is the wrong type for this field.",
+    "invalid_cost_center": "That cost centre does not exist in this workspace.",
+    "invalid_cost": "The acquisition cost must be greater than zero.",
+    "missing_acquisition_date": "An acquisition date is required.",
+    "missing_useful_life": "A useful life is required for this method.",
+    "invalid_useful_life": "The useful life must be a positive number of months.",
+    "invalid_residual_pct": "The residual value must be between 0 and 10000 basis points.",
+    "invalid_residual_rappen": "The residual value must not be negative or above the cost.",
+    "invalid_method": "That depreciation method is not recognised.",
+    "category_in_use": "This category is still used by an asset and cannot be archived.",
+    "category_archived": "This category is archived.",
+    "financial_fields_locked": "This asset has a posted acquisition, so its financial fields can no longer be changed here.",
+    "asset_in_use": "This asset is in service and cannot be archived. Dispose of it instead.",
+    "asset_terminal": "This asset is disposed or archived and can no longer be edited.",
+    "invalid_period": "Enter a valid period as YYYY-MM.",
+    "method_locked": "The “none” method cannot be disabled.",
+    "unknown_method": "That depreciation method is not recognised.",
+    "asset_archived": "This asset is archived. New maintenance entries are blocked; the history stays readable.",
+    "log_locked": "This entry is past the 90-day edit window and can now only be cancelled.",
+    "log_cancelled": "This entry is cancelled. Correct it with a new entry.",
+    "missing_log_date": "Please provide a date.",
+    "log_date_too_far": "The date is too far in the future (more than 30 days).",
+    "invalid_maintenance_type": "Unknown maintenance type."
+  },
+  "help": {
+    "FixedAssets": {
+      "title": "Fixed assets",
+      "body": "Fixed assets: every capitalised asset is created from a category and inherits its depreciation rules and accounts; only what differs is overridden.\n\nDepreciation runs compute and post the periods. Reconciliation compares the register against the ledger's book values.\n\nOnce an asset is posted its financial fields lock. Corrections run through postings, not by rewriting the asset.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

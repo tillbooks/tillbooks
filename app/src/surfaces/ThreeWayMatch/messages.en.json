@@ -1,0 +1,75 @@
+{
+  "nav": {
+    "threeWayMatch": "Match exceptions"
+  },
+  "procurement": {
+    "match": {
+      "title": "Three-way match",
+      "exceptions": "Match exceptions",
+      "detailLabel": "Match detail",
+      "linesCaption": "Line-by-line three-way comparison",
+      "close": "Close",
+      "cancel": "Cancel",
+      "noWorkspace": "Pick a workspace to view match exceptions.",
+      "empty": "No candidate purchase order or receipts for this bill.",
+      "emptyTitle": "No open exceptions.",
+      "emptyHint": "Every posted bill with a candidate order is inside tolerance or already matched.",
+      "review": "Review",
+      "confirm": "Confirm match",
+      "confirmTitle": "Release this bill for payment?",
+      "confirmBody": "The match is inside tolerance. Recording it clears the bill for payment; the record keeps the figures shown here.",
+      "releaseConfirm": "Release for payment",
+      "override": "Override",
+      "overrideConfirm": "Override with reason",
+      "overrideTitle": "Override the variance?",
+      "overrideBody": "The variance is out of tolerance. An override is permanent, clears the bill for payment and stays on the record with your reason.",
+      "reason": "Reason",
+      "reasonRequired": "A reason of at least five characters is required.",
+      "expected": "Expected",
+      "billed": "Billed",
+      "valueVar": "Value variance",
+      "status": {
+        "matched": "Matched",
+        "partial": "Partial",
+        "overridden": "Overridden",
+        "variance": "Variance",
+        "reversed": "Reversed",
+        "nothing_received": "Nothing received",
+        "no_candidate_po": "No candidate order"
+      },
+      "done": {
+        "matched": "Match recorded. The bill is cleared for payment.",
+        "overridden": "Override recorded with your reason."
+      },
+      "col": {
+        "item": "Item",
+        "ordered": "Ordered",
+        "received": "Received",
+        "alreadyBilled": "Already billed",
+        "thisBill": "This bill",
+        "qtyVar": "Qty var.",
+        "status": "Status",
+        "total": "Total",
+        "supplier": "Supplier",
+        "atRisk": "At risk",
+        "age": "Age (days)"
+      },
+      "error": {
+        "no_candidate_po": "No candidate purchase order for this bill.",
+        "nothing_received": "Nothing has been received yet, so there is nothing to bill.",
+        "bill_not_convertible": "This foreign-currency bill has no CHF figure yet: post it first.",
+        "out_of_tolerance": "The variance is out of tolerance. Override with a reason to proceed.",
+        "match_already_exists": "This bill already has an active match.",
+        "reason_required": "A reason of at least five characters is required."
+      }
+    }
+  },
+  "help": {
+    "ThreeWayMatch": {
+      "title": "Match exceptions",
+      "body": "Supplier bills whose three-way match does not add up: ordered, received and billed disagree, or nothing was received at all.\n\nThe list shows the open exceptions with supplier, amount at risk and age. Open a row for the line-by-line comparison.\n\nYou confirm the match when the variance is explainable, or override it with a reason. Both stay documented on the record.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

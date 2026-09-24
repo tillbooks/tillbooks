@@ -1,0 +1,92 @@
+{
+  "nav": {
+    "tasks": "Tasks"
+  },
+  "tasks": {
+    "route": {
+      "title": "Tasks"
+    },
+    "loading": "Loading tasks",
+    "empty": "No tasks yet.",
+    "emptyHint": "Tasks start here or come from invoices, deals and automations.",
+    "rowActions": "Actions for {title}",
+    "section": {
+      "empty": {
+        "overdue": "Nothing overdue.",
+        "today": "Nothing due today.",
+        "upcoming": "Nothing planned.",
+        "done": "Nothing done yet."
+      }
+    },
+    "action": {
+      "create": "New task",
+      "edit": "Edit",
+      "complete": "Mark done",
+      "snooze": "Snooze",
+      "cancel": "Cancel task"
+    },
+    "bucket": {
+      "overdue": "Overdue",
+      "today": "Due today",
+      "upcoming": "Upcoming",
+      "done": "Done"
+    },
+    "status": {
+      "open": "Open",
+      "doing": "In progress",
+      "done": "Done",
+      "cancelled": "Cancelled"
+    },
+    "field": {
+      "due": "Due",
+      "reminder": "Reminder",
+      "assignee": "Assignee",
+      "title": "Title",
+      "recurrence": "Recurrence rule"
+    },
+    "recurring": {
+      "badge": "Recurring",
+      "series_ended": "Series ended."
+    },
+    "snoozed": "snoozed until {until}",
+    "snooze": {
+      "label": "Snooze: {title}",
+      "until": "Snooze until"
+    },
+    "editor": {
+      "label": "Edit: {title}",
+      "createTitle": "New task",
+      "close": "Close",
+      "save": "Save",
+      "discard": "Discard"
+    },
+    "view": {
+      "label": "Saved view",
+      "all": "All tasks"
+    },
+    "notice": {
+      "dismiss": "Dismiss"
+    },
+    "error": {
+      "transport": "The tasks could not be loaded.",
+      "reminder_in_past": "The reminder time is in the past.",
+      "reminder_after_due": "The reminder is after the due date.",
+      "snooze_in_past": "The snooze time is in the past.",
+      "recurrence_invalid": "This recurrence rule is not valid.",
+      "task_not_open": "This task is already finished.",
+      "invalid_status_transition": "This status change is not possible.",
+      "permissionDenied": {
+        "read": "Seeing the task queue needs the \"Read tasks and reminders\" permission.",
+        "write": "Changing tasks needs the \"Create and edit tasks\" permission."
+      }
+    }
+  },
+  "help": {
+    "Tasks": {
+      "title": "Tasks",
+      "body": "Everything due, in one place: tasks from every area, grouped into overdue, due today, upcoming and done. The engine derives each row's bucket at read time; this page only groups. On every row the task can be edited, ticked off, deferred or cancelled directly. Whoever a task is assigned to may always complete it.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

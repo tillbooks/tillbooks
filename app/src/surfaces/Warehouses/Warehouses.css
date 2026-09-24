@@ -1,0 +1,162 @@
+/* J00, Inventory -> Warehouses & Locations. Master-detail split, one accent, glyph+label status.
+   No new colour token (design-canon): every value reuses a --t- token.
+
+   D118 B2 (2026-08-24): the three tables (warehouse master list, location tree, on-hand breakdown),
+   the page header, the two create/edit overlays and the archive confirm are all shared primitives now
+   (DataTable, SurfaceHeader, DetailDrawer, Modal). Their CSS lived here and has been deleted; what
+   remains is only what is genuinely Warehouses-specific: the master-detail layout, the mono code cell,
+   the location/default badges, the archived-row muting, the row-action group and the drawer form
+   fields the DetailDrawer hosts.
+
+   Round 2 (D137): the open warehouse is DataTable's current-row pill, no inset accent bar (K-24);
+   the panes are background steps without a hairline (K-09); a location row opens its editor with
+   its other verbs in one overflow (K-21); "Standard" is a quiet tag and "Archiviert" a Status word
+   (K-22); archived rows read dim, never faint (K-36). */
+
+.wh {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.wh-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.wh-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+/* The master list takes up to 340px, the width its code, name and "Standard" tag need: at 300px the
+   list overflowed its own frame and cut the name to "Standa" (K-19). */
+.wh-split {
+  display: grid;
+  grid-template-columns: minmax(240px, 340px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .wh-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A pane is the elevated panel on the page, separated by the background step and the gap, never a
+   hairline box (K-09). The transparent border keeps its box unchanged. */
+.wh-pane {
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  padding: var(--t-space-1);
+}
+
+.wh-detail {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* An archived warehouse or location reads dim (the Status word carries the state; the ink is the quiet
+   reinforcement and still clears 4.5:1, K-36). Applied to a DataTable row via rowClassName. */
+.wh-archived {
+  color: var(--t-text-dim);
+}
+
+/* The warehouse name cell: the name plus its default/archived badges on one line. */
+.wh-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.wh-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wh-code {
+  font-family: var(--t-font-mono);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* "Standard": a property of the warehouse or location, so a quiet hairline pill in dim ink, never the
+   accent (K-22: a tag is not a state and not a selection). */
+.wh-tag {
+  display: inline-block;
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  margin-left: var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  line-height: 20px;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.wh-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+}
+
+.wh-detail-title {
+  margin: 0;
+  flex: 1;
+}
+
+.wh-detail-actions {
+  display: flex;
+  gap: var(--t-space-0-5);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.wh-subhead {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.wh-h3 {
+  margin: 0;
+  flex: 1;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.wh-onhand-head {
+  margin-top: var(--t-space-2);
+}
+
+.wh-muted {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* The drawer form fields the shared DetailDrawer hosts. The controls themselves are the shared
+   `.field` class (global.css); this is only the label-stacked layout around them. */
+.wh-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.wh-field label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}

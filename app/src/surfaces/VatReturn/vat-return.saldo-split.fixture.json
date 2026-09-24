@@ -1,0 +1,31 @@
+{
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-06-30",
+  "validFrom": "0001-01-01",
+  "unmappedAccounts": [
+    {
+      "accountId": "acc_30",
+      "number": "3200",
+      "name": "Erlöse aus Handelswaren",
+      "grossMinor": 4756400
+    }
+  ],
+  "unmappedGrossMinor": 4756400,
+  "rates": [
+    {
+      "position": 1,
+      "rateBp": 620,
+      "formLine": "323"
+    },
+    {
+      "position": 2,
+      "rateBp": 530,
+      "formLine": "323"
+    }
+  ],
+  "activities": [],
+  "reason": "Turnover was booked on an Ertragskonto that belongs to no approved Tätigkeit, and MWSTV Art. 88 Abs. 1 taxes each Tätigkeit at the rate approved for it.",
+  "hint": "Assign each account above to a Tätigkeit with `vat_configure` (Studio: Einstellungen, MWST, Tätigkeiten). Or elect MWSTV Art. 88 Abs. 6 for this Steuerperiode with `vat_saldo_declaration_basis`, which declares the whole turnover at the highest approved Saldosteuersatz and needs no split.",
+  "ok": false,
+  "error": "saldo_activity_split_required"
+}

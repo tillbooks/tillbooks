@@ -1,0 +1,277 @@
+/* Fixed Assets (H00-H09). The list frame, the page header, the drawers, the confirms, the buttons, the
+   fields (`.field`, K-15), the status words (Status, K-22) and the row verbs (the DataTable overflow,
+   K-21) are the shared primitives, so this file keeps ONLY what is genuinely surface-specific: the
+   filter rows, the money cells in the bespoke preview/summary/reconciliation blocks, and those
+   blocks' own layout. Type on the written scale (K-37); meaning in dim ink, never faint (K-36). */
+
+.fa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* A filter/control row for the surfaces whose filters are date pickers and selects rather than the
+   FilterBar's search-plus-slot (Depreciation, Depreciation Runs, Reports, Reconciliation). The
+   controls are `.field` and the shared Select; this is layout only. */
+.fa-filters {
+  display: flex;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.fa-field-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.fa-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* A code cell: the register number, a location code. Monospace so columns of identifiers line up.
+   Used as DataTable cell content and in the bespoke blocks. */
+.fa-code {
+  font-family: var(--t-font-mono, ui-monospace, monospace);
+  font-weight: 600;
+}
+
+/* A money cell inside the bespoke (non-DataTable) blocks: the summary grid, the preview lines and the
+   reconciliation drill. Each also carries `.t-money` (nowrap, tabular). DataTable's own numeric
+   columns carry `.t-num` instead. */
+.fa-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Row-state hook passed to DataTable via `rowClassName` (DataTable ships no state CSS): an archived
+   or cancelled row is a step dimmer, and its Status word still names the state (K-36). */
+.fa-row-archived td {
+  color: var(--t-text-dim);
+}
+
+/* The financial-fields-locked note shown in the register edit drawer once an asset leaves draft. */
+.fa-locked-note {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  padding: var(--t-space-1);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+  color: var(--t-text-dim);
+}
+
+/* A drawer form field (inside a DetailDrawer body): a label over a `.field`. */
+.fa-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.fa-field label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* A hint carries meaning (what a figure is, what to do next), so it is dim, never faint (K-36). */
+.fa-hint {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* A block heading inside a drawer or under a form (history, schedule, methods, skipped). */
+.fa-drawer-subtitle {
+  margin: var(--t-space-3) 0 var(--t-space-1);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+/* H03, the Depreciation summary card and the methods panel. */
+.fa-summary {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+  margin: var(--t-space-2) 0;
+  background: var(--t-bg-elev);
+}
+
+.fa-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--t-space-2);
+  margin: 0;
+}
+
+.fa-summary-grid dt {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  margin-bottom: var(--t-space-0-5);
+}
+
+.fa-summary-grid dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+/* Money is not the accent: an emphasised figure is plain ink (DESIGN, the money semantics). */
+.fa-amount {
+  color: var(--t-text);
+}
+
+.fa-methods {
+  margin-top: var(--t-space-3);
+}
+
+/* H02/H06/H07: the live preview of the journal lines a post will write. */
+.fa-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  margin: var(--t-space-1) 0;
+}
+
+.fa-preview-title {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.fa-preview-line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--t-space-1);
+  align-items: baseline;
+}
+
+/* H06: the book gain / loss on a disposal preview. Money colour is reserved for negatives: a book
+   gain stays plain text, a book loss carries --t-danger. Both rows are also labelled "Book gain" /
+   "Book loss" in words, so colour is a REDUNDANT cue (WCAG 2.2). */
+.fa-gain {
+  color: var(--t-text);
+}
+
+.fa-loss {
+  color: var(--t-danger);
+}
+
+.fa-recon-cards {
+  display: flex;
+  gap: var(--t-space-2);
+  margin: var(--t-space-2) 0;
+  flex-wrap: wrap;
+}
+
+.fa-recon-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  min-width: 8rem;
+}
+
+.fa-recon-card-drift {
+  border-color: var(--t-danger);
+}
+
+.fa-recon-card-num {
+  font-size: var(--t-font-2xl);
+  line-height: var(--t-lh-2xl);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fa-recon-card-cutoff {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fa-recon-card-label {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.fa-recon-check {
+  padding: var(--t-space-1) var(--t-space-2);
+  border-radius: var(--t-radius-sm);
+  border: 1px solid var(--t-border);
+  margin: var(--t-space-1) 0;
+}
+
+/* The balanced check panel is a neutral check, not the accent: neutral ink plus words, while only
+   the drift state below carries colour. */
+.fa-recon-ok {
+  color: var(--t-text);
+}
+
+.fa-recon-drift {
+  border-color: var(--t-danger);
+  color: var(--t-danger);
+}
+
+/* The reconciliation drill-down: the contributing-assets sub-list under an expanded control account. */
+.fa-recon-drill {
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-sm);
+}
+
+.fa-recon-drill-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--t-space-1);
+  padding: 2px 0;
+}
+
+/* H08: the archived-asset note on the maintenance log, and the forecast's production-data note. */
+.fa-note {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  padding: var(--t-space-1);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+  color: var(--t-text-dim);
+  margin: var(--t-space-1) 0;
+}
+
+/* H08: the maintenance-log cost group (total or parts + labour). */
+.fa-fieldset {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+  margin-bottom: var(--t-space-2);
+}
+
+.fa-fieldset legend {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  padding: 0 var(--t-space-0-5);
+}
+
+.fa-total {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,136 @@
+---
+title: "The threat model of served mode"
+description: "What your proxy must guarantee, what TILL refuses on its own, and how the machine lane holds up."
+---
+
+<Warning>
+  TILL is pre-alpha. Do not run your business on it. This page is the honest version of the trust
+  story, defects and all.
+</Warning>
+
+Served mode is a contract between a reverse proxy and TILL. TILL never becomes an identity
+provider. It stores no password, mints no token, and reads exactly one fact from the proxy: the
+authenticated subject, in one header, only when `TILL_SERVED_MODE=proxy` is set. Everything else
+about who gets in is the proxy's job. This page draws the line between the two.
+
+## What the proxy must guarantee
+
+Authenticate every caller by whatever it trusts. Passkeys through Pocket ID in the shipped recipe;
+OIDC, mTLS, or an access gateway if you bring your own.
+
+Strip any inbound subject header, then set your own. This is the line everything hangs on. A client
+that sends `Till-Authenticated-Subject: ceo@example.ch` must have it deleted, not merged, before
+the proxy writes the verified value. In the shipped Caddyfile that is a `request_header` delete at
+the top of the site (the subject header, the header oauth2-proxy answers with, and the
+`X-Forwarded-User` and `X-Forwarded-Email` names other proxies use) and one `header_up` set on every
+proxied route. Nothing else, and the order matters: Caddy applies a block's deletes after its sets,
+so a `header_up -Till-Authenticated-Subject` beside the set deletes the subject just written. The
+first version of this recipe shipped that line, and every signed-in person would have been refused.
+
+Reach TILL over a link nothing else can use. The recipe puts Caddy in TILL's network namespace and
+dials `127.0.0.1:8788`; no port is published and no other container can route there. That namespace
+is shared in both directions: a code-execution bug in TILL reaches Caddy's listeners, which is why
+Caddy's admin API is off (`admin off`; with it on, TILL could read the live config, agent tokens
+included, and load a new one). Litestream mounts the whole `/data` volume, so a compromised
+Litestream holds the books and the bucket keys. If you move TILL to its own host, the link must be
+loopback, a unix socket, or an mTLS-pinned private network. TILL's refusal to bind a public
+interface is unchanged in served mode.
+
+Present yourself as `localhost` and drop `Origin`. This one is easy to miss. TILL keeps its
+DNS-rebinding guard on in served mode: a `Host` that is not a loopback name answers
+`403 forbidden_host`, and any `Origin` that is not loopback answers `403 forbidden_origin`. The
+proxy sets `Host: localhost` and deletes `Origin`. Because that removes TILL's own CSRF fence, the
+recipe rebuilds it in Caddy: a request carrying an `Origin` that is not the site's own URL is
+refused before authentication. The proofs cover both directions.
+
+Keep the secrets in the environment. The subject header name, the agent tokens, the OIDC client
+secret and the bucket keys live in `.env` and in the proxy's config, never in a workspace. Trust
+configuration a tenant could write would let a compromised workspace widen its own door. Never point
+`TILL_SUBJECT_HEADER` at a forwarded name (`X-Forwarded-User`): the recipe strips those, but the
+contract is that TILL reads one header the proxy alone writes.
+
+Whoever assigns an email in the identity provider assigns an identity in TILL, because the subject is
+the email. In Pocket ID the recipe turns self-service account editing off, keeps signup disabled and
+leaves emails unverified until the admin ticks them by hand; oauth2-proxy refuses an unverified
+email, and that refusal is a fence. With self-edit on, a signed-in teammate could rename themselves
+to the agent seat's subject or to a colleague's invite email before that person enrols, and take the
+seat with their own passkey. The subject is compared byte for byte on every request, so an identity
+provider that changes the case of an email turns a member into a stranger.
+
+## What TILL refuses on its own
+
+With served mode on, a request with no subject header is refused `401 missing_subject` on both
+faces, before any tool is listed. There is no anonymous fallback and no dev actor.
+
+A subject the proxy vouches for but that matches no member holds nothing. It can read `whoami`
+(so the "signed in, not a member" page can render) and redeem an invite. It cannot create a
+workspace (D111), so a stranger cannot mint tenants.
+
+One MCP session is one subject. A reused `mcp-session-id` carrying a different subject is refused
+`401 subject_changed`. Identity is pinned when the session opens, which has a side effect worth
+knowing: the session that redeems an invite is still the stranger it was opened as. Reconnect and
+the next session resolves the member.
+
+Revocation is immediate. TILL keeps no session store to invalidate; every request resolves the
+subject to its membership afresh, so a revoked person fails on their next call whatever the
+identity provider believes.
+
+Misconfiguration fails closed. `TILL_SERVED_MODE=Proxy` (a typo) refuses to start rather than
+dropping quietly to local mode. A blank header name refuses to start.
+
+## The machine lane
+
+An agent cannot do a passkey ceremony, so the recipe gives it a bearer token. Caddy matches
+`Authorization: Bearer <token>` against a value from `.env` and, on a match, sets the subject to
+one fixed string, `TILL_AGENT_SUBJECT`. You invite that subject as a member with a role, so the
+agent is inside TILL's permission model, its audit trail and the A35 dial like any teammate.
+
+What holds: the subject is in the proxy's configuration, not in the request, so a stolen token
+cannot become a different person. With the token empty the lane is shut by an `expression` guard on
+the matcher, which compiles to `"" != ""` and never matches. The header match on its own is not
+enough: it would want the literal value `Bearer ` with a trailing space, which an HTTP/1.1 client
+cannot deliver (Go trims the field) but an HTTP/2 client can, and Caddy negotiates HTTP/2 on every
+TLS listener. The first version of this recipe relied on the header match alone and called the lane
+"shut by construction"; the security review delivered `Bearer ` over HTTP/2 and took the seat. As a
+second fence, compose hands Caddy a subject only when its token is set, so a half-filled pair in
+`.env` renders an empty subject, which TILL refuses.
+
+What does not hold: the token is a bearer credential. Whoever has it is that seat until you rotate
+it (edit `.env`, restart Caddy) or revoke the seat in TILL (takes effect on the next call). Caddy's
+comparison is a plain string match rather than a constant-time one; at 43 random characters over
+TLS that is not a usable oracle, but it is not nothing either, so keep tokens out of chat
+transcripts and out of `docker compose logs`.
+
+Recipe A (Cloudflare) adds one caveat of its own: the Caddy hop trusts
+`Cf-Access-Authenticated-User-Email` without validating the Access JWT, because stock Caddy has no
+validator. So every peer that can reach the hop can name any person, and the recipe keeps that set
+to three processes: the hop binds `127.0.0.1:8080` inside the `till` network namespace, and
+`cloudflared` runs in that namespace too. A container on the compose network or the host itself
+cannot reach it (the header rig proves the published port never arrives). Move the tunnel out of
+the namespace, publish the port or change the bind and you have handed the identity header to a new
+peer; validate the JWT then, or use recipe B. One question stays open until a real tunnel runs:
+whether Cloudflare strips a client-supplied `Cf-Access-Authenticated-User-Email` on a service-token
+request. Until that test is on record, a service-token holder must be assumed able to name any
+person.
+
+## What is proven, and what is not
+
+Proven on a real stack (2026-09-05, `ops/instance/test/`): a forged subject from outside is
+refused or overwritten; a forged `X-Auth-Request-Email` grants nothing; a wrong token is refused;
+`Bearer ` with a trailing space over HTTP/2 is refused; a foreign `Origin` is refused; the Studio
+shell is served only behind the door; a signed-in person (a stand-in answering as oauth2-proxy
+does) reaches TILL as that person alone while every forged identity header rides along, redeems an
+invite and is seated as the owner; a signed-in stranger holds nothing and cannot create a workspace;
+an MCP client is seated through the door and pinned to its subject; a restore from the replica is
+byte-equal. A header rig runs the shipped Caddyfiles with an echo in TILL's place and shows the
+bytes TILL would receive, over HTTP/1.1 and HTTP/2, for both recipes.
+
+Not proven end to end: a real passkey login through Pocket ID and oauth2-proxy. The stand-in
+answers exactly what oauth2-proxy answers for a signed-in person (a 202 with
+`X-Auth-Request-Email`), and everything after that header is the shipped configuration, but nobody
+has yet watched a real browser session cross it. If you run this for real, that is the first thing
+to look at in `docker compose logs caddy`. Also not proven: what Cloudflare does with a
+client-supplied identity header on a service-token request (recipe A, above).
+
+Not in scope: rate limiting, a web application firewall, and the choice of identity provider.
+Those are the proxy's, and the recipe does not pretend otherwise.

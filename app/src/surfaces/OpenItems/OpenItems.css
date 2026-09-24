@@ -1,0 +1,539 @@
+/*
+ * A16 Offene Posten styling.
+ *
+ * Every value is a token. Spacing is the 8-pt grid, with 4px reserved for the optical nudges the
+ * design law permits (a hairline offset), never for layout rhythm. Type sizes are the written scale
+ * (K-37).
+ *
+ * THE ACCENT BUDGET ON THIS SURFACE IS TWO, not three, and the missing one is deliberate: the focus
+ * ring (inherited from global.css) and the selected tab (the shared Tabs, K-11). There is no primary
+ * action, because A16 writes nothing to the ledger. The document number that opens a row is a text
+ * link in the ink at 500 (K-12), never the accent on every row.
+ *
+ * MONEY CARRIES NO ACCENT AND NO COLOUR AT ALL, including the negative amounts a Guthaben produces:
+ * `formatMoney` puts a leading minus on them, so the sign is in the text and a grayscale printout,
+ * which is a real Treuhänder artefact, reads exactly what the screen reads. `tabular-nums` is on
+ * every figure, so the columns line up digit for digit, and no figure wraps (K-18).
+ *
+ * THE ONE COLOURED THING is the mismatch band, and it is the only state on the surface that is
+ * genuinely urgent. The passing reconciliation mark is dim and uncoloured, because an all-clear state
+ * that gets a colour makes that colour the background and dulls the real warning.
+ */
+
+.oi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The tab panel: the filters, the bands and the list, on the same rhythm as the surface. */
+.oi-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  padding-top: var(--t-space-2);
+}
+
+/*
+ * The base-total headline and the reconciliation line, the surface's own summary block under the
+ * shared SurfaceHeader.
+ */
+.oi-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.oi-total {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 500;
+}
+
+.oi-total--pending {
+  min-height: var(--t-lh-lg);
+}
+
+.oi-total-skeleton {
+  display: block;
+  width: 180px;
+  height: 16px;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.oi-reconciled {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.oi-reconciled-glyph {
+  flex: none;
+}
+
+.oi-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --- toolbar and filters (the tabs are the shared Tabs) -------------------------------------------- */
+
+.oi-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.oi-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  align-items: center;
+}
+
+/* A filter label beside its control; the controls are the shared `.field` and Select (K-15). */
+.oi-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* --- the historical cut-off band ---------------------------------------------------------------- */
+
+.oi-asof-band {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.oi-asof-glyph {
+  flex: none;
+}
+
+/* --- the tiles ---------------------------------------------------------------------------------- */
+
+.oi-tile-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+/* K-27: the tiles' label with its help trigger directly beside it: 12px/500 dim (K-23). */
+.oi-tile-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.oi-tile-heading {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.oi-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  flex: 1;
+}
+
+/* A tile is an interactive panel: the elevated ground and the control shadow, no hairline (K-09). A
+   transparent edge is the focus cue's landing place (K-10). */
+.oi-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  align-items: flex-start;
+  min-width: 160px;
+  /* 44px minimum tap target, comfortably exceeded by the three stacked lines. */
+  min-height: 44px;
+  font: inherit;
+  text-align: left;
+  padding: var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  box-shadow: var(--t-shadow-control);
+  cursor: pointer;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.oi-tile:hover {
+  background: var(--t-bg-soft);
+}
+
+/* Selected, and it is the same treatment the selected tab uses: one vocabulary, not two. */
+.oi-tile--on,
+.oi-tile--on:hover {
+  background: var(--t-accent-soft);
+}
+
+.oi-tile-label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.oi-tile-amount {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The count carries meaning (how many items in the bucket), so it is dim, never faint: dim clears
+   AA against both the default tile ground and the selected tile's --t-accent-soft fill. */
+.oi-tile-count {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-tile--skeleton {
+  height: 84px;
+  background: var(--t-bg-soft);
+  box-shadow: none;
+  cursor: default;
+}
+
+.oi-tile-reset {
+  align-self: center;
+}
+
+/* --- the tables --------------------------------------------------------------------------------- */
+
+.oi-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+/* The customer table is hand-rolled (it expands a row in place); it reads the DataTable row tokens
+   (K-20): the row height, the block padding and the cell sides, and the 12px/500 dim head (K-23). */
+.oi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.oi-table th,
+.oi-table td {
+  height: var(--t-row-h);
+  text-align: left;
+  padding: var(--t-row-pad-y) var(--t-cell-pad-x);
+  border-bottom: 1px solid var(--t-border);
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.oi-table thead th {
+  height: var(--t-row-head-h);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.oi-table tbody tr:last-child th,
+.oi-table tbody tr:last-child td {
+  border-bottom-color: transparent;
+}
+
+.oi-num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.oi-money {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The row opener: the document number in the text ink at 500, underlined on hover by `link-inline`
+   (K-12). */
+.oi-doc-link,
+.oi-doc-link:hover {
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+/* A parked row's kind (Guthaben, Vorauszahlung): a word in dim ink, never a chip (K-22). */
+.oi-chip {
+  color: var(--t-text-dim);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* The document cell when it also carries a Mahnstufe (K-29): the link leads, the word trails. */
+.oi-doc-cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+/* The Mahnstufe: a quiet word at the caption step, never a chip; colour never carries the meaning. */
+.oi-dunning-chip {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* The Offen cell with its booked-fee sub-line (K-29): the amount leads, the fee note sits under it. */
+.oi-open-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+
+.oi-fee-note {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* --- the customer tab and its expansion --------------------------------------------------------- */
+
+.oi-customer-cell {
+  min-width: 220px;
+}
+
+.oi-expander {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font: inherit;
+  font-weight: 500;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  padding: 0;
+  min-height: var(--t-control-h);
+  cursor: pointer;
+}
+
+.oi-expander-glyph {
+  flex: none;
+  transition: transform var(--t-motion-pill) var(--t-ease-out);
+}
+
+.oi-expander--on .oi-expander-glyph {
+  transform: rotate(90deg);
+}
+
+.oi-expansion-row > td {
+  background: var(--t-bg-soft);
+}
+
+.oi-expansion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.oi-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-4);
+  margin: 0;
+}
+
+.oi-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.oi-figure dt {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.oi-figure dd {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The note beside a figure is read, so dim, never faint (K-36). */
+.oi-figure-note {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* --- the mismatch band, the one coloured thing on the surface ----------------------------------- */
+
+.oi-mismatch {
+  display: flex;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.oi-mismatch-glyph {
+  flex: none;
+  color: var(--t-danger);
+  margin-top: var(--t-space-0-5);
+}
+
+.oi-mismatch-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.oi-mismatch-title {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-mismatch-detail {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-mismatch-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: center;
+}
+
+.oi-mismatch-causes {
+  margin: 0;
+  padding-left: var(--t-space-3);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+/* --- the bucket-boundaries popover -------------------------------------------------------------- */
+
+/*
+ * The containing block the panel is positioned against. It holds the header overflow, so the panel
+ * opens under the control that summoned it.
+ */
+.oi-popover-anchor {
+  position: relative;
+  flex: none;
+}
+
+/* One overlay tier (K-28): the popover layer token, the elevated ground, one hairline, one shadow. */
+.oi-popover {
+  position: absolute;
+  top: calc(100% + var(--t-space-1));
+  /* Right-aligned to the trigger, because the trigger is at the surface's right edge and a panel
+     growing rightwards from there leaves the viewport. */
+  right: 0;
+  z-index: var(--t-z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  /* 460px where there is room, and never wider than the viewport on a narrow window. */
+  width: max-content;
+  max-width: min(460px, calc(100vw - var(--t-space-4)));
+  border: 1px solid var(--t-border);
+  box-shadow: var(--t-shadow-overlay);
+}
+
+.oi-popover-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+.oi-popover-source,
+.oi-popover-preview,
+.oi-popover-note {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.oi-boundary-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.oi-boundary-input {
+  width: 96px;
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-boundary-unit {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.oi-boundary-add {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+/* A money figure inside a sentence or a figure line (the header total, the on-account note, the
+   reconciliation band) is `.t-money` for nowrap and tabular figures, but keeps the size of the text
+   around it. */
+.oi-total .t-money,
+.oi-figure dd > .t-money,
+.oi-mismatch .t-money {
+  font-size: inherit;
+}
+
+/* The tile figure keeps its own step above the table type. */
+.oi-tile .oi-tile-amount {
+  font-size: var(--t-font-lg);
+}

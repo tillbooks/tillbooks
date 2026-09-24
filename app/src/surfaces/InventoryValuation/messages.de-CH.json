@@ -1,0 +1,138 @@
+{
+  "nav": {
+    "inventoryValuation": "Bewertung"
+  },
+  "invValuation": {
+    "title": "Lagerbewertung",
+    "noWorkspace": "Wähle einen Mandanten, um die Lagerbewertung zu sehen.",
+    "workspaceTotal": "Lagerwert gesamt",
+    "methodsLabel": "Bewertungsmethoden",
+    "methodsTitle": "Bewertungsmethoden",
+    "listLabel": "Lagerartikel",
+    "detailLabel": "Bewertung des Artikels",
+    "selectHint": "Wähle einen Artikel, um seine Bewertung und seine Kostenschichten zu sehen.",
+    "changeDefault": "Standardmethode ändern",
+    "defaultInForce": "Aktuell gilt: {method}",
+    "since": "seit {date}",
+    "isDefault": "Standard",
+    "enableAria": "{method} aktivieren",
+    "effectiveMethod": "Wirksame Methode",
+    "onHand": "Bestand",
+    "unitCost": "Stückkosten",
+    "totalValue": "Bilanzwert",
+    "writeDown": "Abwertung",
+    "lcmApplied": "Niederstwert angewendet",
+    "variance": "Abweichung",
+    "asOf": "Bewertung per",
+    "netRealisableValue": "Netto-Veräusserungswert (Rappen pro Stück)",
+    "nrvHint": "OR 960c: Veräusserungswert abzüglich der noch anfallenden Kosten. Liegt er unter den Anschaffungskosten, wird er zwingend eingesetzt.",
+    "effectiveFrom": "Gültig ab",
+    "reasonHint": "Pflicht, sobald ab diesem Datum schon Bewegungen erfasst sind: die Begründung steht später im Methodenverlauf.",
+    "forceRevaluation": "Neubewertung bestehender Bewegungen bestätigen",
+    "forceHint": "Nötig, wenn ab dem gewählten Datum bereits Bewegungen erfasst sind. Die Umstellung berechnet deren Bewertung neu.",
+    "effectiveFromHint": "Dieses Datum entscheidet, ab wann die Methode gilt, und daran prüft TILL die Periodensperre. Ein bereits abgeschlossenes Jahr lässt sich damit nicht nachträglich neu bewerten.",
+    "noValuation": "Für diesen Artikel gibt es zu diesem Datum keine Bewertung.",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "error": { "transport": "Die Lagerbewertung konnte nicht geladen werden. Bitte versuche es erneut." },
+    "empty": {
+      "title": "Noch keine Lagerartikel",
+      "hint": "Lege zuerst einen Lagerartikel an und erfasse Bewegungen, dann kannst du hier bewerten."
+    },
+    "col": {
+      "method": "Methode",
+      "description": "Beschreibung",
+      "enabled": "Aktiv",
+      "default": "Standard"
+    },
+    "method": {
+      "weighted_average": "Gewogener Durchschnitt",
+      "fifo": "FIFO",
+      "standard_cost": "Standardkosten"
+    },
+    "methodDesc": {
+      "weighted_average": "Alle Zugänge bilden einen gemeinsamen Kostenpool; der Bestand wird zum Durchschnitt daraus bewertet.",
+      "fifo": "Die ältesten Zugänge werden zuerst verbraucht, der Bestand trägt also die jüngsten Einstandspreise.",
+      "standard_cost": "Der Bestand steht zu einem fest gesetzten Standardpreis; die Differenz zum echten Einkauf wird als Abweichung ausgewiesen."
+    },
+    "source": {
+      "item": "Artikel",
+      "workspace": "Mandant",
+      "builtin": "Standard",
+      "override": "Was-wäre-wenn"
+    },
+    "scope": {
+      "workspace": "Mandant",
+      "item": "Artikel"
+    },
+    "layers": {
+      "title": "Kostenschichten (FIFO)",
+      "receiptDate": "Zugang am",
+      "remaining": "Rest",
+      "original": "Zugang",
+      "unitCost": "Stückkosten",
+      "value": "Wert"
+    },
+    "history": {
+      "title": "Methodenverlauf (Stetigkeit)",
+      "empty": "Es wurde noch keine Methode festgelegt, es gilt der gewogene Durchschnitt.",
+      "effectiveFrom": "Gültig ab",
+      "scope": "Geltung",
+      "reason": "Begründung",
+      "actor": "Von",
+      "forced": "erzwungen"
+    },
+    "reason": {
+      "zero_quantity": "Kein Bestand, der Wert ist null.",
+      "negative_quantity": "Der Bestand ist negativ. Ein Minusbestand trägt keinen positiven Buchwert; korrigiere zuerst die Bewegungen.",
+      "insufficient_layers": "Es wurde mehr ausgebucht, als je mit Kosten zugegangen ist. Der Wert stützt sich nur auf die vorhandenen Schichten.",
+      "missing_standard_cost": "Für Standardkosten fehlt der Standardpreis dieses Artikels.",
+      "missing_unit_cost": "Keine der Zugangsbewegungen trägt Stückkosten, deshalb ist der Wert null.",
+      "invalid_unit_cost": "Eine Bewegung trägt negative Stückkosten. TILL rechnet damit nicht weiter, sondern weist es aus.",
+      "invalid_net_realisable_value": "Der Netto-Veräusserungswert muss eine ganze Zahl ab null sein."
+    },
+    "warning": {
+      "missing_unit_cost": "{qty} Stück sind ohne Stückkosten zugegangen und deshalb mit null bewertet, nicht mit dem Durchschnitt der übrigen. Betroffene Bewegungen:",
+      "transfer_cost_ignored": "Eine Umlagerung trägt eigene Stückkosten. Für die Bewertung zählen die Kosten der umgelagerten Ware, nicht der angegebene Wert: sonst würde eine reine Verschiebung den Warenwert verändern.",
+      "unpaired_transfer_leg": "Zu einer Umlagerung fehlt die Gegenbuchung. TILL behandelt sie wie eine gewöhnliche Bewegung und sagt es dir, statt eine Gegenseite zu erfinden."
+    },
+    "basis": {
+      "allocated": "anteilig"
+    },
+    "form": {
+      "defaultTitle": "Standardmethode ändern"
+    },
+    "errors": {
+      "method_disabled": "Diese Methode ist für den Mandanten nicht aktiviert.",
+      "method_is_default": "Diese Methode ist aktuell der Standard. Ändere zuerst den Standard, dann kannst du sie deaktivieren.",
+      "method_change_blocked_open_period": "Der Artikel hat ab diesem Datum bereits Bewegungen, die Umstellung würde ihre Bewertung neu berechnen. Bestätige die Neubewertung und gib eine Begründung an.",
+      "missing_standard_cost": "Für Standardkosten brauchst du einen Standardpreis in Rappen.",
+      "unknown_method": "Diese Bewertungsmethode kennt TILL nicht.",
+      "period_locked": "Dieses Datum liegt in einer abgeschlossenen Periode. Eine Methode lässt sich nicht rückwirkend in ein abgeschlossenes Jahr legen."
+    },
+    "explain": {
+      "none": "Keine Bewertung.",
+      "weightedAverage": "Gewogener Durchschnitt über alle Zugänge bis zum Stichtag.",
+      "fifo": "FIFO: die ältesten Zugänge sind zuerst verbraucht.",
+      "standardCost": "Bestand zum Standardpreis, Abweichung separat ausgewiesen.",
+      "lcm": "Niederstwertprinzip nach OR 960c angewendet, Schicht für Schicht.",
+      "allocated": "Anteil am Gesamtwert des Artikels, nicht eigenständig bewertet.",
+      "locationNeedsAllocation": "Für diese Methode wird ein Standortwert als Anteil am Artikelwert bestimmt, nicht aus den Bewegungen des Standorts allein.",
+      "zeroQuantity": "Kein Bestand am Stichtag.",
+      "negativeQuantity": "Negativer Bestand, kein positiver Buchwert.",
+      "insufficientLayers": "Mehr ausgebucht als mit Kosten zugegangen.",
+      "missingStandardCost": "Kein Standardpreis gesetzt.",
+      "noCostBasis": "Keine Kostenbasis in den Bewegungen.",
+      "invalidUnitCost": "Negative Stückkosten in einer Bewegung.",
+      "invalidNrv": "Ungültiger Netto-Veräusserungswert."
+    }
+  },
+  "help": {
+    "InventoryValuation": {
+      "title": "Lagerbewertung",
+      "body": "Hier legst du fest, nach welcher Methode dein Lager bewertet wird, und liest die Bewertung, die daraus folgt. Die Methodenliste kommt aus der Engine; ein Wechsel gilt ab einem Datum und bleibt als Verlauf nachvollziehbar.\n\nPro Artikel zeigt die Bewertung Bestand, Einstandswert und Gesamtwert, auf Wunsch zu einem Stichtag. Einen tieferen Marktwert erfasst du als Wertberichtigung.\n\nGebucht wird hier nichts: In die Bücher gelangt die Bewertung über die Bestandesbewertung.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

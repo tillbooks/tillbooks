@@ -1,0 +1,90 @@
+/* B02, the Unverrechnet panel and the WIP card. A disjoint stylesheet (Unbilled.tsx owns it),
+   reusing B01's time-table, chips and button tokens: one tree panel and one card, no new primitives.
+   One accent (brass, per brand/DESIGN.md D53), spent only on attention; money never wears it.
+
+   Round 2 (D137): the tree's rows sit on the table rhythm with the quiet 12px/500 head (K-20, K-23),
+   the entry checkbox is the shared 32px check cell (K-14), the money cells are `data-money` and
+   never wrap (K-18), and sizes and gaps are tokens (K-37). */
+
+.time-billing {
+  margin-top: var(--t-space-6);
+}
+
+/* The Unverrechnet PILE is a contact -> project -> phase tree with colspanned group-header rows and a
+   per-entry select column, which the flat DataTable row model cannot express, so it stays a bespoke
+   table. The WIP report beside it IS the shared DataTable (D118 B2). This table used to borrow B01's
+   `.time-table` base; that base was deleted with the timesheet's DataTable adoption, so the tree
+   carries its own here. Only --t-* tokens. */
+.time-billing-tree {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.time-billing-tree th,
+.time-billing-tree td {
+  height: var(--t-row-h);
+  text-align: left;
+  padding: var(--t-row-pad-y) var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: middle;
+}
+
+.time-billing-tree thead th {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.time-billing-tree .time-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-billing-tree .time-billing-contact td {
+  padding-top: var(--t-space-3);
+  border-top: 1px solid var(--t-border);
+}
+
+.time-billing-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-4);
+  margin-top: var(--t-space-3);
+  padding-top: var(--t-space-3);
+  border-top: 1px solid var(--t-border-strong);
+}
+
+.time-billing-footer .btn {
+  margin-inline-start: auto;
+}
+
+.time-billing-wip {
+  margin-top: var(--t-space-6);
+}
+
+.time-billing-wip-title {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  margin-bottom: var(--t-space-2);
+}
+
+/* Separation is the background step, not a box: the forbidden list bans a hairline around a card. */
+.time-billing-wip-card {
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-4);
+}
+
+/* The WIP figure is money, so it is plain ink (never the accent) and tabular so it does not shift. It is
+   the one headline figure of the card, the 2xl step. */
+.time-billing-wip-value {
+  font-size: var(--t-font-2xl);
+  line-height: var(--t-lh-2xl);
+  font-weight: 700;
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: var(--t-space-3);
+}
+

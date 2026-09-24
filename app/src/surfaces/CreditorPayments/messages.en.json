@@ -1,0 +1,89 @@
+{
+  "nav": {
+    "creditorPayments": "Creditor payments"
+  },
+  "pay": {
+    "title": "Creditor payments",
+    "error": {
+      "permission_denied": "You do not have permission to view payment runs."
+    },
+    "empty": {
+      "title": "Nothing to pay.",
+      "hint": "There are no open creditor bills right now.",
+      "toBills": "Go to vendor bills"
+    },
+    "selectBills": "Select bills",
+    "selectOne": "Select {vendor}",
+    "column": {
+      "vendor": "Vendor",
+      "due": "Due",
+      "amount": "Amount",
+      "reference": "Reference"
+    },
+    "status": {
+      "alreadyBatched": "Already in a payment run",
+      "draft": "Draft",
+      "generated": "Generated",
+      "paid": "Paid",
+      "discarded": "Discarded"
+    },
+    "needsCreditorIban": "Vendor IBAN missing",
+    "addCreditorIban": "Add IBAN",
+    "needsMasterData": "Requires the master-data capability",
+    "profile": {
+      "title": "Add IBAN for {vendor}",
+      "ibanLabel": "IBAN or QR-IBAN",
+      "save": "Save",
+      "saving": "Saving…",
+      "close": "Close"
+    },
+    "unsupportedCurrency": "Currency not supported",
+    "referenceKind": {
+      "qrr": "QR reference",
+      "scor": "Creditor Reference",
+      "free_text": "Free text",
+      "none": "None"
+    },
+    "debtorAccount": "Debtor account",
+    "needsBankAccount": "No bank account available",
+    "executionDate": "Execution date",
+    "selectedTotal": "Selected total",
+    "generate": "Generate pain.001",
+    "generating": "Generating…",
+    "needsCapability": "Requires the payments capability",
+    "valid": "File is valid",
+    "summary": "{n} payments, {total}, execution {date}.",
+    "download": "Download file",
+    "transmitNote": {
+      "manual": "This file is not sent automatically: upload it to your e-banking yourself.",
+      "channel": "A transmission channel is configured: transmission runs through its own dedicated approval."
+    },
+    "markPaidAction": "Mark paid",
+    "markPaid": {
+      "confirmTitle": "Did the bank execute this payment?",
+      "confirmLabel": "I confirm the bank executed this transfer.",
+      "confirm": "Confirm",
+      "confirming": "Confirming…",
+      "close": "Close"
+    },
+    "valueDate": "Value date",
+    "cancel": "Cancel",
+    "newBatch": "New payment run",
+    "paidOn": "Paid on {date}.",
+    "toBillsLink": "Go to vendor bills",
+    "transmit": "Send to bank",
+    "transmitLocked": "Sending to the bank needs the payment capability.",
+    "pendingRelease": "Uploaded to the bank. Release it in your bank's own approval flow to complete the payment; nothing is booked as paid until the debit appears on a statement.",
+    "transmitDegraded": "No EBICS channel is available, so nothing was sent: upload the downloaded file to your e-banking as usual.",
+    "transmitError": "The transmission could not be completed. The batch is unchanged; nothing was paid.",
+    "pickAccountInCurrency": "Choose an account in {currency}"
+  },
+  "help": {
+    "CreditorPayments": {
+      "title": "Creditor payments",
+      "body": "Here you select open vendor bills and generate a payment file your e-banking reads. TILL transfers nothing itself: you download the file and release it at your bank. Only once the bank has executed do you mark the batch as paid here; only then do the bills count as settled.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

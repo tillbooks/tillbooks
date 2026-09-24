@@ -1,0 +1,77 @@
+{
+  "direction": "incoming",
+  "date": "2026-07-20",
+  "amountMinor": 90000,
+  "currency": "CHF",
+  "bankAccount": {
+    "id": "acc_2",
+    "number": "1020",
+    "label": "Bankkonto"
+  },
+  "counterparty": {
+    "kind": "customer",
+    "id": "contact_1",
+    "name": "Muster AG"
+  },
+  "reference": {
+    "kind": "none",
+    "value": null,
+    "valid": true,
+    "display": null,
+    "error": null
+  },
+  "allocatedMinor": 90000,
+  "onAccountMinor": 0,
+  "remainderMinor": 0,
+  "baseAmountMinor": 90000,
+  "rows": [
+    {
+      "targetKind": "document",
+      "targetId": "doc_3",
+      "number": "R-2026-0003",
+      "currency": "CHF",
+      "dueDate": "2026-07-10",
+      "grossMinor": 25000,
+      "paidMinor": 0,
+      "openMinor": 25000,
+      "allocatedMinor": 90000,
+      "paymentAmountMinor": 90000,
+      "skontoMinor": 0,
+      "skontoVatMinor": 0,
+      "writeOffMinor": 0,
+      "settlementMinor": 90000,
+      "settlementBaseMinor": 90000,
+      "resultingOpenMinor": -65000,
+      "resultingStatus": "issued",
+      "writeOffOfferedMinor": 0
+    }
+  ],
+  "legs": [
+    {
+      "accountId": "acc_2",
+      "accountNumber": "1020",
+      "accountLabel": "Bankkonto",
+      "debitMinor": 90000,
+      "creditMinor": 0
+    },
+    {
+      "accountId": "acc_4",
+      "accountNumber": "1100",
+      "accountLabel": "Forderungen aus Lieferungen und Leistungen",
+      "debitMinor": 0,
+      "creditMinor": 90000
+    }
+  ],
+  "istVat": null,
+  "fx": null,
+  "writeOffThresholdMinor": 100,
+  "balanced": true,
+  "error": {
+    "code": "allocation_exceeds_open",
+    "documentId": "doc_3",
+    "number": "R-2026-0003",
+    "amountMinor": 90000,
+    "openMinor": 25000
+  },
+  "ok": true
+}

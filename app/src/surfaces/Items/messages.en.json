@@ -1,0 +1,191 @@
+{
+  "item": {
+    "title": "Products",
+    "new": "New item",
+    "editTitle": "Edit item",
+    "createVariantTitle": "New variant of {name}",
+    "name": "Name",
+    "currency": "Currency",
+    "taxCode": "VAT code",
+    "taxNone": "None",
+    "revenueAccount": "Revenue account",
+    "revenueNone": "None",
+    "categoryNone": "No category",
+    "itemNone": "No item",
+    "kindNone": "Unspecified",
+    "unitNone": "No unit",
+    "archive": "Archive",
+    "unarchive": "Restore",
+    "delete": "Delete",
+    "archived": "Archived",
+    "edit": "Edit",
+    "rowActions": "More actions for item {name}",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "search": "Search items",
+    "showArchived": "Show archived",
+    "savedView": "Saved view",
+    "allItems": "All items",
+    "categories": "Categories",
+    "newCategory": "New category",
+    "categoryNamePrompt": "Name of the new category",
+    "categoryChildPrompt": "Name of the new subcategory of {name}",
+    "categoryRenamePrompt": "New name for {name}",
+    "categoryNameRequired": "Please enter a name.",
+    "categoryNewChild": "New subcategory",
+    "categoryRename": "Rename",
+    "categoryDelete": "Delete category",
+    "categoryActions": "Actions for category {name}",
+    "confirmDeleteCategory": "Delete the category {name}? The items stay, they end up without a category.",
+    "confirmDeleteCategoryConfirm": "Delete category",
+    "confirmDelete": "Delete the item {name} for good? This cannot be undone. Archiving keeps it readable in history.",
+    "confirmDeleteConfirm": "Delete for good",
+    "referencedBy": "Still used by: {refs}",
+    "archiveInstead": "Archive instead",
+    "ref": {
+      "document_line": "document lines",
+      "price_list_item": "price lists",
+      "variant": "variants",
+      "stock_movement": "stock movements",
+      "custom_field_value": "custom fields"
+    },
+    "empty": "No items yet.",
+    "emptyArchived": "No archived items.",
+    "emptySearch": "No item matches the search.",
+    "noWorkspaceHint": "Items belong to a workspace. Create one first.",
+    "nameRequired": "Please enter a name.",
+    "priceRequired": "Please enter a valid price (e.g. 150.50).",
+    "costPriceRequired": "Please enter a valid cost price (e.g. 90.00).",
+    "invalidRevenueAccount": "The revenue account must be an income account (3xxx).",
+    "unknownTaxCode": "This VAT code is unknown.",
+    "emptyHint": "Items are your products and services with a price and a VAT rate, ready to invoice.",
+    "emptySearchHint": "Adjust the search term or show archived items.",
+    "clearSearch": "Clear the search",
+    "tableCaption": "Item catalogue",
+    "tabsLabel": "View",
+    "col": {
+      "name": "Name",
+      "price": "Price",
+      "taxCode": "VAT",
+      "category": "Category",
+      "unit": "Unit",
+      "actions": "Actions"
+    },
+    "tab": {
+      "catalog": "Catalog"
+    },
+    "field": {
+      "sku": "SKU",
+      "kind": "Type",
+      "sales_price": "Sales price",
+      "cost_price": "Cost price",
+      "unit": "Unit",
+      "category": "Category",
+      "track_stock": "Track stock",
+      "reorder_point_qty": "Reorder point"
+    },
+    "kind": {
+      "product": "Product",
+      "service": "Service"
+    },
+    "unit": {
+      "piece": "piece",
+      "hour": "hour",
+      "day": "day",
+      "kg": "kg",
+      "g": "g",
+      "l": "l",
+      "m": "m",
+      "m2": "m2",
+      "m3": "m3",
+      "flat": "flat rate"
+    },
+    "action": {
+      "create_variant": "New variant"
+    },
+    "error": {
+      "sku_taken": "This SKU is already in use.",
+      "services_not_stockable": "Services cannot track stock.",
+      "stock_on_hand_nonzero": "Stock on hand must be zero before disabling stock tracking."
+    }
+  },
+  "pricelists": {
+    "tab": {
+      "title": "Price lists"
+    },
+    "action": {
+      "create": "New price list",
+      "setPrice": "Set price",
+      "resolve": "Resolve price",
+      "unsetPrice": "Remove price",
+      "delete": "Delete price list"
+    },
+    "scopeLabel": "Scope",
+    "scope": {
+      "contact": "Customer",
+      "segment": "Segment"
+    },
+    "source": {
+      "base": "Base price",
+      "segment": "Segment price",
+      "contact": "Customer price"
+    },
+    "field": {
+      "valid_from": "Valid from"
+    },
+    "item": "Item",
+    "prices": "Prices",
+    "resolve": "Resolve price",
+    "empty": "No price lists yet.",
+    "emptyHint": "A price list holds customer- or segment-specific prices; without one, an item resolves to its base price.",
+    "emptyPrices": "No price is set in this list yet.",
+    "contactNone": "No customer",
+    "contactTaken": "{name} (already has a price list)",
+    "listActions": "Actions for price list {name}",
+    "rowActions": "Actions for the price of {name}",
+    "confirmDelete": "Delete the price list {name} and every price in it? Existing documents keep the price they were created with.",
+    "confirmDeleteConfirm": "Delete price list",
+    "confirmUnset": "Remove the price for {name} from this list? {name} then resolves to the next scope, or to its base price.",
+    "confirmUnsetConfirm": "Remove price",
+    "needName": "Give the price list a name.",
+    "needContact": "Choose the customer the list applies to.",
+    "needSegment": "Name the segment the list applies to.",
+    "needItem": "Choose an item.",
+    "needAmount": "Enter an amount, e.g. 150.50 or 150,50.",
+    "needValidFrom": "Enter a date as YYYY-MM-DD, e.g. 2026-01-01.",
+    "needResolveItem": "Choose the item whose price you want resolved.",
+    "error": {
+      "scope_taken_named": "This scope already has the price list {name}. Edit that one instead of creating a second."
+    }
+  },
+  "errors": {
+    "item_referenced": "This item is still in use, so it cannot be deleted. Archive it instead, which keeps it readable in posted documents.",
+    "item_archived": "This item is archived. Restore it before pricing it.",
+    "price_list_referenced": "This price list is still in use, so it cannot be deleted.",
+    "scope_ambiguous": "A price list applies either to one customer or to one segment, never to both and never to neither.",
+    "scope_taken": "This scope already has a price list. Edit the existing one instead of creating a second.",
+    "contact_not_found": "That customer does not exist in this workspace.",
+    "invalid_price": "That price is not valid. Enter an amount of 0.00 or more.",
+    "invalid_cost_price": "That cost price is not valid. Enter an amount of 0.00 or more.",
+    "invalid_reorder_point": "That reorder point is not valid. Enter a quantity of 0 or more.",
+    "invalid_currency": "That currency is not supported. CHF, EUR and USD are available.",
+    "invalid_unit": "That unit does not exist. Pick one from the list.",
+    "invalid_kind": "That type does not exist. Pick product or service.",
+    "invalid_revenue_account": "The revenue account must be an income account (3xxx).",
+    "category_not_found": "That category does not exist in this workspace.",
+    "category_in_use": "That category is still in use. Reassign its items and subcategories first.",
+    "category_nesting_too_deep": "Categories go two levels deep. A subcategory cannot hold another one.",
+    "category_cycle": "A category cannot be filed under itself.",
+    "variant_chain_not_allowed": "Variants go one level deep. A variant cannot have variants of its own.",
+    "parent_not_found": "The parent record could not be found."
+  },
+  "help": {
+    "Items": {
+      "title": "Products",
+      "body": "The item master: everything you sell or buy, with categories, variants, tax code and prices.\n\nIn the catalog you create and edit items, filtered by category on the left; variants sit indented under their parent. The second tab holds the price lists.\n\nArchiving is a soft flag: the item stays, history included. A hard delete only succeeds for an item nothing references any more.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

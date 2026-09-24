@@ -1,0 +1,194 @@
+{
+  "nav": {
+    "group": {
+      "bank": "Bank"
+    },
+    "payments": "Zahlungen"
+  },
+  "payment": {
+    "title": "Zahlungen",
+    "caption": "Zahlungen",
+    "record": "Zahlung erfassen",
+    "post": "Zahlung buchen",
+    "allocate": "Zuweisen",
+    "cancel": "Abbrechen",
+    "retry": "Erneut versuchen",
+    "search": "Suche",
+    "resetFilter": "Filter zurücksetzen",
+    "close": "Schliessen",
+    "amount": "Betrag",
+    "date": "Datum",
+    "bankAccount": "Konto",
+    "documentCount": "{n} Belege",
+    "candidates": "Vorschläge",
+    "candidatesCount": "{n} von {total} offenen Posten",
+    "openAmount": "Offen",
+    "afterwardsOpen": "danach offen",
+    "candidate": {
+      "vendorBill": "Kreditorenrechnung"
+    },
+    "dueDate": "fällig {date}",
+    "skonto": "Skonto",
+    "distributeOldest": "Rest auf die ältesten offenen Posten verteilen",
+    "reverse": "Stornieren",
+    "createAdvice": "Zahlungsavis erstellen",
+    "reversedLink": "Storno vom {date} ansehen",
+    "settledAlready": "Bereits beglichen",
+    "refreshCandidates": "Vorschläge neu laden",
+    "openDocument": "Beleg öffnen",
+    "direction": {
+      "all": "Alle",
+      "incoming": "Eingehend",
+      "outgoing": "Ausgehend"
+    },
+    "column": {
+      "date": "Datum",
+      "direction": "Richtung",
+      "counterparty": "Gegenpartei",
+      "amount": "Betrag",
+      "allocatedTo": "Zugewiesen an",
+      "account": "Konto",
+      "status": "Status",
+      "document": "Beleg",
+      "due": "Fällig"
+    },
+    "statement": {
+      "label": "Zuteilung",
+      "rest": "Rest",
+      "skonto": "Skonto (inkl. MWST)",
+      "credit": "Guthaben"
+    },
+    "reference": {
+      "label": "Referenz",
+      "qrr": "QR-Referenz erkannt",
+      "scor": "Creditor Reference erkannt",
+      "freeText": "Freitext, wird für die Suche verwendet",
+      "hint": "Referenz oder Freitext aus der Zahlung"
+    },
+    "writeOff": {
+      "label": "Differenz ausbuchen",
+      "noun": "Ausbuchung"
+    },
+    "onAccount": {
+      "label": "Als Guthaben parken",
+      "field": "Guthaben",
+      "chip": "Guthaben {amount}",
+      "for": "Guthaben {amount} für {name}"
+    },
+    "remainder": {
+      "open": "Noch zuzuweisen: {amount}",
+      "over": "Zu viel zugewiesen: {amount}",
+      "done": "Vollständig zugewiesen"
+    },
+    "preview": {
+      "label": "Buchung (Vorschau)",
+      "show": "Buchung anzeigen",
+      "hide": "Buchung ausblenden",
+      "debit": "Soll",
+      "credit": "Haben",
+      "istVat": "Davon MWST (Ist), erfasst am {date}: {amount}",
+      "fx": "Realisierte Kursdifferenz",
+      "fxRate": "Kurs {rate} vom {date}",
+      "stale": "Die Vorschau wird neu berechnet."
+    },
+    "status": {
+      "posted": "Gebucht",
+      "reversed": "Storniert"
+    },
+    "counterparty": {
+      "label": "Gegenpartei",
+      "customer": "Kunde",
+      "supplier": "Lieferant"
+    },
+    "allocateCredit": {
+      "label": "Guthaben zuweisen",
+      "warning": "Diese Zuweisung lässt sich nur rückgängig machen, indem du die ganze Zahlung stornierst. Damit wird auch die erste Zuweisung wieder offen."
+    },
+    "match": {
+      "exact_reference": "Referenz stimmt",
+      "exact_amount_customer": "Betrag und Kunde stimmen",
+      "amount_tolerance": "Betrag ähnlich, Differenz {amount}",
+      "manual": "Manuell gewählt"
+    },
+    "empty": {
+      "list": "Noch keine Zahlungen.",
+      "listHint": "Jede Zahlung, die du oder der Agent erfasst, erscheint hier.",
+      "filtered": "Keine Zahlungen in dieser Richtung.",
+      "filteredHint": "Die Auswahl blendet alle Zahlungen aus.",
+      "noOpenItems": "Es gibt keine offenen Posten.",
+      "noOpenItemsIssue": "Rechnung ausstellen",
+      "noMatch": "Kein offener Posten passt zu dieser Zahlung.",
+      "noMatchWiden": "Suche erweitern",
+      "noMatchJournal": "Keine Kundenzahlung? Buchung erfassen",
+      "preview": "Noch nichts zugewiesen.",
+      "allocations": "Noch keinem Beleg zugewiesen."
+    },
+    "error": {
+      "transport": "Zahlungen konnten nicht geladen werden.",
+      "candidates": "Vorschläge konnten nicht geladen werden.",
+      "preview": "Die Vorschau konnte nicht berechnet werden.",
+      "detail": "Details konnten nicht geladen werden.",
+      "allocation_mismatch": "Die Summe der Zuweisungen ergibt nicht den Zahlbetrag. Es fehlen {amount}.",
+      "allocation_target_side_mismatch": "Die Zahlung und der gewählte Posten stehen auf verschiedenen Seiten der Buchhaltung: Geld, das über die Debitoren lief, kann keine Kreditorenrechnung begleichen, und Geld über die Kreditoren keinen Kundenbeleg.",
+      "allocation_counterparty_mismatch": "Eine Zahlung begleicht nur Posten einer einzigen Gegenpartei. Der gewählte Posten gehört einer anderen. Erfass dafür eine separate Zahlung.",
+      "allocation_direction_mismatch": "Die Richtung dieser Zahlung passt nicht zum gewählten Posten: Eine ausgehende Zahlung kann keine Forderung begleichen, eine eingehende keine Verbindlichkeit, und eine Gutschrift wird nur ausgehend zurückerstattet. Prüf die Richtung dieser Zahlung.",
+      "allocation_exceeds_open": "{number} ist nur noch mit {open} offen, du weist {amount} zu.",
+      "skonto_exceeds_open": "Das Skonto von {skonto} ist grösser als der offene Betrag von {open} auf {number}.",
+      "needs_counterparty": "Ein Guthaben braucht einen Kunden. Wähl zuerst, von wem das Geld kommt.",
+      "needs_bank_account": "Zuerst ein Bank- oder Kassenkonto hinterlegen.",
+      "needs_account": "Für diese Buchung fehlt ein Konto im Kontenplan.",
+      "period_locked": "Periode {period} ist gesperrt. In einer gesperrten Periode wird nichts gebucht.",
+      "document_already_settled": "{number} wurde inzwischen beglichen.",
+      "already_reversed": "Diese Zahlung ist bereits storniert.",
+      "needs_fx_rate": "Für {pair} fehlt der Kurs vom {date}.",
+      "permission_denied": "Dir fehlt die Berechtigung, Zahlungen zu buchen.",
+      "reference_check_digit": "Prüfziffer stimmt nicht. Prüf die Referenz noch einmal.",
+      "reference_unknown": "Diese Referenz gehört zu keinem offenen Posten in diesem Arbeitsbereich.",
+      "currency_mismatch": "Eine Zahlung in {payCur} kann einen Beleg in {docCur} nicht begleichen.",
+      "intent_required": "Die Zahlung wurde ohne ausdrückliche Absicht gesendet und darum nicht gebucht.",
+      "unexpected": "Die Zahlung konnte nicht gebucht werden."
+    },
+    "errorCta": {
+      "needs_bank_account": "Zur Einrichtung",
+      "period_locked": "Perioden öffnen",
+      "needs_fx_rate": "Kurs hinterlegen",
+      "document_already_settled": "Vorschläge neu laden",
+      "currency_mismatch": "Buchung im Journal erfassen"
+    },
+    "errorExplain": {
+      "needs_fx_rate": "Ohne Kurs wird nichts umgerechnet und nichts gebucht. Hinterleg den Kurs, dann rechnet TILL die Zahlung um."
+    },
+    "confirm": {
+      "post": "Zahlung über {amount} buchen?",
+      "postDetail": "Die Buchung wird erstellt und lässt sich nur mit einem Storno rückgängig machen.",
+      "postSuppress": "Nicht mehr anzeigen",
+      "reverse": "Zahlung vom {date} über {amount} stornieren? Es wird eine Stornobuchung erstellt. Die Zahlung und ihre Buchung bleiben erhalten, und {number} ist danach wieder offen.",
+      "reverseWhole": "Eine Zahlung wird immer ganz storniert. Für eine andere Zuweisung stornierst du und erfasst sie neu.",
+      "reverseDate": "Storno-Datum",
+      "discard": "Deine Eingaben verwerfen?",
+      "discardConfirm": "Verwerfen",
+      "discardKeep": "Weiter bearbeiten"
+    },
+    "openRow": "Zahlung vom {date} über {amount} öffnen",
+    "rowActionsFor": "Aktionen für die Zahlung vom {date} über {amount}",
+    "detail": {
+      "title": "Zahlung vom {date} über {amount}",
+      "allocations": "Zuweisungen",
+      "legs": "Buchung",
+      "source": "Quelle",
+      "sourceValue": {
+        "manual": "Manuell"
+      },
+      "journalEntry": "Buchung ansehen",
+      "documentMissing": "Beleg nicht gefunden"
+    }
+  },
+  "help": {
+    "Payments": {
+      "title": "Zahlungen",
+      "body": "Hier erfasst du eingehende und ausgehende Zahlungen und ordnest sie den offenen Rechnungen zu. Eine Zahlung verändert nie eine Rechnung selbst: Sie wird ihr zugeordnet, und der offene Betrag ergibt sich aus der Differenz. Teilzahlungen, Überzahlungen und Sammelzahlungen sind normale Fälle und bleiben in der Zuordnung sichtbar.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

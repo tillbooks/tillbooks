@@ -1,0 +1,480 @@
+/**
+ * A35: the dock and the /agent surface. The dock is a flex SIBLING of <main> (push, never overlay,
+ * D90 D-2); below the 960px main floor the open dock takes the content area and its narrow-hint row
+ * into /agent shows instead. One accent per surface: the card's primary carries it only on the card
+ * the surface is about (data-accent), everything else is neutral ink.
+ */
+
+/* ------------------------------------------------------------------------------------ the dock */
+
+.agent-dock {
+  flex: 0 0 380px;
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--t-border);
+  background: var(--t-bg);
+  overflow: hidden;
+}
+
+.agent-dock-toggle {
+  position: fixed;
+  right: 0;
+  bottom: var(--t-space-6);
+  z-index: var(--t-z-menu);
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-right: none;
+  border-radius: var(--t-radius-md) 0 0 var(--t-radius-md);
+  color: var(--t-text);
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.agent-dock-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.agent-dock-session {
+  font-weight: 600;
+  margin: 0;
+}
+
+.agent-dock-client {
+  color: var(--t-text-dim);
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.agent-dock-head-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  flex-shrink: 0;
+}
+
+.agent-dock-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.agent-dock-empty,
+.agent-dock-noruntime {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.agent-dock-foot {
+  border-top: 1px solid var(--t-border);
+  padding: var(--t-space-2);
+}
+
+.agent-composer {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.agent-composer-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The 960px main floor: below it, the open dock takes the content area (the honest trade). The
+ * narrow-hint row renders only in that state. */
+.agent-dock-narrow {
+  display: none;
+}
+
+@media (max-width: 1600px) {
+  .agent-dock {
+    flex: 1 1 auto;
+    width: auto;
+  }
+  .frame:has(.agent-dock) > main {
+    display: none;
+  }
+  .agent-dock-narrow {
+    display: block;
+    padding: var(--t-space-1) var(--t-space-2);
+    margin: 0;
+    color: var(--t-text-dim);
+    font-size: var(--t-font-body);
+    line-height: var(--t-lh-body);
+    border-bottom: 1px solid var(--t-border);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .agent-dock {
+    transition: width var(--t-motion-reveal) var(--t-ease-out);
+  }
+}
+
+/* ------------------------------------------------------------------------------------ the turns */
+
+.agent-turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.agent-turn-head {
+  display: flex;
+  gap: var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.agent-turn-text {
+  margin: var(--t-space-1) 0 0;
+}
+
+.agent-turn-outcome {
+  margin: var(--t-space-1) 0 0;
+  font-weight: 500;
+}
+
+.agent-trace {
+  list-style: none;
+  margin: var(--t-space-1) 0 0;
+  padding: 0 0 0 var(--t-space-2);
+  border-left: 1px solid var(--t-border);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.trace-row-line {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 32px;
+  flex-wrap: wrap;
+}
+
+.trace-status {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  white-space: nowrap;
+}
+
+.trace-status[data-status='fehlgeschlagen'],
+.trace-status[data-status='verweigert'] {
+  color: var(--t-danger);
+}
+
+.trace-label {
+  flex: 1 1 auto;
+}
+
+.trace-dial,
+.trace-duration {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.trace-details,
+.vorschlag-details {
+  background: var(--t-bg-code);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1);
+  overflow-x: auto;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.trace-error {
+  color: var(--t-danger);
+  margin-left: var(--t-space-1);
+}
+
+/* ------------------------------------------------------------------------------------- the card */
+
+.vorschlag-card {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.vorschlag-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vorschlag-kicker {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.vorschlag-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.vorschlag-consequence {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.vorschlag-readback {
+  margin: 0;
+}
+
+.vorschlag-readback-row {
+  display: flex;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.vorschlag-readback-row dt {
+  color: var(--t-text-dim);
+  min-width: 96px;
+}
+
+.vorschlag-readback-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.vorschlag-provenance,
+.vorschlag-strong,
+.vorschlag-needs {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.vorschlag-approve {
+  align-self: stretch;
+  min-height: 44px;
+}
+
+.vorschlag-confirm p {
+  margin: 0 0 var(--t-space-1);
+}
+
+.vorschlag-confirm-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* "No, and tell it why" (J5.6): the optional reason, one quiet field between the sentence and the
+ * two buttons. The control itself is the shared `.field`; only the stacking is local. */
+.vorschlag-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 var(--t-space-1);
+}
+
+.vorschlag-reason-label {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* The decision beside a drafting call: a word, in neutral ink, never a coloured badge. */
+.trace-decision {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* ---------------------------------------------------------------------------------- the surface */
+
+/* The page header (SurfaceHeader), the tab strip (Tabs) and both the Gespräche and Berechtigungen
+ * tables are shared primitives now (D118 B2 / D135): DataTable owns the frame, the sticky header and
+ * the right-aligned tabular numeric columns, so this surface no longer carries any table CSS. */
+
+.agent-running {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.agent-queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 640px;
+}
+
+.agent-group-head {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  margin: var(--t-space-3) 0 var(--t-space-1);
+}
+
+.agent-trust-window {
+  color: var(--t-text-dim);
+}
+
+.agent-trust-nohistory,
+.agent-trust-disagree,
+.agent-trust-statutory {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* The Stufe cell stacks the level word over its muted context lines (disagreement, attribution,
+ * strong-default reason, no-history), so a row that used to spill into extra table rows now reads
+ * top-to-bottom inside its one aligned cell. */
+.agent-trust-stufe {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The D103 ceremonies (grant-confirm, the D-3 suggestion) sit beneath the aligned table, one quiet
+ * bordered block per capability, so the grid above them stays clean. */
+.agent-trust-ceremony {
+  margin: var(--t-space-1) 0 var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  max-width: 640px;
+}
+
+.agent-trust-ceremony p {
+  margin: 0 0 var(--t-space-1);
+}
+
+.agent-trust-ceremony-label {
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.agent-session-meta {
+  color: var(--t-text-dim);
+}
+
+.agent-month {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin-bottom: var(--t-space-2);
+}
+
+.agent-month-label {
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+  text-align: center;
+}
+
+.agent-month-empty {
+  color: var(--t-text-dim);
+}
+
+.agent-trust-grantedby {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.vorschlag-amount-figure {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------------- Verbindung */
+
+.agent-connect {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 640px;
+}
+
+.agent-connect-intro {
+  margin: 0;
+}
+
+.agent-connect-mode {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.agent-connect-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.agent-connect-line,
+.agent-connect-hint,
+.agent-connect-empty {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.agent-connect-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.agent-connect-url {
+  font-family: var(--t-font-mono, monospace);
+  background: var(--t-bg-code);
+  border-radius: var(--t-radius-sm);
+  padding: 0 var(--t-space-1);
+}
+
+.agent-connect-config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  align-items: flex-start;
+}
+
+.agent-connect-code {
+  margin: 0;
+  width: 100%;
+  background: var(--t-bg-code);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-2);
+  overflow-x: auto;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.agent-connect-clients {
+  margin: 0;
+  padding-left: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

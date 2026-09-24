@@ -1,0 +1,227 @@
+/* Projects (B00): the master list and the project drawer. Every value is a token (--t-*), no hex and
+   no new colour; one accent, and a state is always the shared Status word (glyph plus label).
+
+   D118 B2 (2026-08-23): the list table, the page header, the search/status controls row and the
+   create/edit overlay are all shared primitives (DataTable, SurfaceHeader, FilterBar, Modal).
+   Round 2 (D137): the list takes the full width and the project opens in the wide DetailDrawer
+   (K-19), the row's opener, overflow and current-row pill are DataTable's (K-21, K-24), the fields
+   are the shared `.field` (K-15) and the budget bar is ink, not the accent (K-12). What remains is
+   only what is genuinely Projects-specific: the list cell content, the drawer body with its Budget
+   vs. Ist figures and phase table, and the editor form rhythm the Modal hosts. */
+
+.projects {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* List cell content. The list itself is the shared DataTable; these style what sits inside its cells.
+   The code never wraps: it identifies the row (K-19). */
+.projects-code {
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.projects-name {
+  font-weight: 500;
+}
+
+/* F1 (money critic, 1280px): the text columns give way, the figures never do. A name or a client with
+   one long unbroken token (an email-like code, a pasted URL) used to hold its column at that token's
+   width and push Budget and Marge out past the frame edge. `anywhere` lets such a token break so the
+   list fits the ~1000px content width at 1280 with the rail open; the figures keep their `nowrap`. */
+.projects-name,
+.projects-contact {
+  overflow-wrap: anywhere;
+}
+
+/* A sub-project is indented under its parent (the hierarchy DataTable renders as a flat, ordered list). */
+.projects-name--child {
+  display: inline-block;
+  padding-left: var(--t-space-2);
+}
+
+.projects-contact {
+  color: var(--t-text-dim);
+}
+
+/* A money figure never wraps and aligns on its tabular digits (K-18). */
+.projects-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* B03: the computed Marge cell on a list row, fed by costing_pl_list. */
+.projects-margin {
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* The drawer body: the meta line and actions, the Budget vs. Ist panel, the phases, Projekterfolg. */
+.projects-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.projects-detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  align-items: flex-start;
+}
+
+.projects-detail-meta {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.projects-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.projects-readonly {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+/* The deep-link out of the empty contact picker (accent as an interactive signal, not decoration). */
+.projects-inline-link {
+  color: var(--t-accent);
+}
+
+.projects-budget-panel h3,
+.projects-phases h3 {
+  margin: 0 0 var(--t-space-1);
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+/* The Budget vs. Ist bar is a quantity, not a selection or an action, so it never spends the accent
+   (K-12): the fill is the strong ink step on the soft track. It grows by transform, never width. */
+.projects-budget-bar {
+  height: 8px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  overflow: hidden;
+}
+
+.projects-budget-bar-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--t-border-strong);
+  border-radius: var(--t-radius-full);
+  transform-origin: left center;
+  transition: transform var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.projects-budget-figures {
+  display: flex;
+  gap: var(--t-space-3);
+  margin: var(--t-space-1) 0 0;
+  flex-wrap: wrap;
+}
+
+.projects-budget-figures dt {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* The figures keep the body size: `.t-money` brings the tabular digits and the no-wrap. */
+.projects-budget-figures dd {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 500;
+}
+
+.projects-over,
+.projects-warning {
+  margin: var(--t-space-1) 0 0;
+}
+
+.projects-phases-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.projects-phases-empty {
+  color: var(--t-text-dim);
+}
+
+/* The phase table is a small, Projects-specific sub-table nested in the drawer with an inline
+   Erledigt control and a trailing add-form: kept bespoke rather than the ledger DataTable, on the
+   table rhythm and the quiet head (K-20, K-23). */
+.projects-phase-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.projects-phase-table th,
+.projects-phase-table td {
+  height: var(--t-row-h);
+  padding: var(--t-row-pad-y) var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  text-align: left;
+}
+
+.projects-phase-table thead th {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.projects-phase-table .projects-num {
+  text-align: right;
+}
+
+.projects-phase-form {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: flex-end;
+  margin-top: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.projects-phase-form-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.projects-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.projects-field-row {
+  display: flex;
+  gap: var(--t-space-2);
+}
+
+.projects-field-row .projects-field {
+  flex: 1;
+}
+
+.projects-hint {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  min-height: var(--t-lh-sm);
+}
+
+/* The editor form fields stack on the 8-pt grid inside the shared Modal body. */
+.projects-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}

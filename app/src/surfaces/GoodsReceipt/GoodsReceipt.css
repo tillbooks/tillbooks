@@ -1,0 +1,169 @@
+/* I02, Einkauf -> Wareneingänge. Receipt-centric master-detail split, one accent, glyph+label status
+   and inspection badges. No new colour token (design-canon): every value reuses a --t- token.
+
+   D118 B2 (2026-08-24): the receipt master list and the line table are the shared `DataTable` now
+   (frame overflow, sticky header, density and the five states in one place); the page header is the
+   shared `SurfaceHeader`, the create and add-line overlays are the shared `DetailDrawer`. The
+   per-surface CSS that duplicated the list buttons, the line table, the page header, the buttons and
+   the drawer chrome has been deleted. What remains is genuinely GoodsReceipt-specific: the
+   master-detail layout, the status/inspection badges, the selection and over-delivery row cues, the
+   mono movement cell, the over-receipt/issue markers, the audit trail, the hold panel and the
+   label-stacked drawer form fields the DetailDrawer hosts.
+
+   There is no FilterBar: this surface has no search or filter row (only the receipt list and a
+   "new receipt" action), and the B2 rule is not to invent a search row that never existed.
+
+   Round 2 (D137): the open receipt is DataTable's current-row pill and the over-delivery a Status word
+   in its row, so both inset edges are gone (K-24); every state is a Status word, the dingbats with
+   them (K-22); the panes and the hold panel are background steps without a hairline (K-09); dates
+   are TT.MM.JJJJ and actors are named (K-38). */
+
+.gr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.gr-split {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .gr-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A pane is the elevated panel on the page, never a hairline box (K-09). */
+.gr-pane {
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  padding: var(--t-space-1);
+}
+
+.gr-detail {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The receipt list cell: the number stacked over its meta line (order, supplier, date). */
+.gr-list-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gr-list-number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.gr-list-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-0-5);
+}
+
+.gr-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.gr-detail-title {
+  margin: 0;
+}
+
+.gr-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.gr-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.gr-mono {
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.gr-issue {
+  display: inline-flex;
+  margin: 0 var(--t-space-0-5) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.gr-subtitle {
+  margin: var(--t-space-1) 0 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.gr-total {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The hold panel: a background step inside the pane, never a box around it (K-09). */
+.gr-hold {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1);
+}
+
+.gr-trail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.gr-muted {
+  color: var(--t-text-dim);
+}
+
+.gr-hint {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* The drawer form fields the shared DetailDrawer hosts. The controls themselves are the shared
+   `.field` class (global.css); this is only the label-stacked layout around them. */
+.gr-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.gr-field label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}

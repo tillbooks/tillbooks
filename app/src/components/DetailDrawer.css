@@ -1,0 +1,106 @@
+/* DetailDrawer (D118 B2). One right-side detail panel. Only --t-* tokens, the scrim included (K-28,
+   D137): the drawer sits on the overlay tier `--t-z-overlay` over `--t-scrim`, with ONE shadow
+   (`--t-shadow-overlay`) and ONE hairline. The header stays put, the body owns its own scroll. */
+
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--t-z-overlay);
+  display: flex;
+  justify-content: flex-end;
+  background: var(--t-scrim);
+}
+
+/* The panel is pinned to the right and is a flex column: a fixed header, a scrolling body, then the
+   provenance and the action row pinned to the foot. It composes `.panel` for its ground and takes
+   the dialog radius (`lg`, by role, K-28) on its two inner corners; the outer edge is the window's,
+   so it stays square.
+
+   Two widths (K-30, D137). The default 480px holds a record's fields in one column. `wide` is 720px
+   for a form that is a grid (the journal composer: account, debit, credit, cost centre, tax code per
+   line), and below 720px of viewport both are a full-width sheet, because `min()` hands the whole
+   window over rather than squeezing the grid. */
+.drawer {
+  --drawer-width: 480px;
+  display: flex;
+  flex-direction: column;
+  width: min(var(--drawer-width), 100%);
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--t-radius-lg) 0 0 var(--t-radius-lg);
+  border-left: 1px solid var(--t-border);
+  box-shadow: var(--t-shadow-overlay);
+}
+
+.drawer[data-width='wide'] {
+  --drawer-width: 720px;
+}
+
+/* The header does not scroll: title, an optional extra strip, and the close control at the edge. */
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2) var(--t-space-3);
+  background: var(--t-bg-soft);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.drawer-title {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.drawer-head-extra {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex: 0 0 auto;
+}
+
+.drawer-close {
+  flex: 0 0 auto;
+}
+
+/* The one scroll region: a long record scrolls here while the header and footer stay in view. The
+   gutter is reserved so the fields do not shove sideways when the bar appears (B1). */
+.drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding: var(--t-space-3);
+  color: var(--t-text);
+  /* S1: this is the drawer's OWN scroll region, so a DataTable nested here must stick its thead at
+     the drawer's top, not below the page header. The page-level --surface-header-height inherits
+     down the DOM tree (a drawer renders as a descendant of <main>, no portal), so reset it to 0 for
+     everything inside the drawer. */
+  --surface-header-height: 0px;
+}
+
+/* The quiet C3 provenance line sits between the body and the actions, softly separated. */
+.drawer-provenance {
+  flex: 0 0 auto;
+  padding: var(--t-space-1) var(--t-space-3);
+  border-top: 1px solid var(--t-border);
+}
+
+/* Actions pinned to the foot, primary at the right edge. */
+.drawer-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2) var(--t-space-3);
+  border-top: 1px solid var(--t-border);
+}
+
+/* The Reveal moment (D122 D-I): the drawer lives on the right edge and slides in from it in
+   `--t-motion-reveal`; its head, body and foot follow with the 30 ms stagger (motion.css,
+   `.motion-reveal--right` and `data-motion-item`). The global reduced-motion rule zeroes it. */

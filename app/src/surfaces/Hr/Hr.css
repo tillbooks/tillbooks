@@ -1,0 +1,72 @@
+/* Personal (E02) + Lohn (A34). The tablist, page header and every list table come from the shared
+   Studio primitives (Tabs, SurfaceHeader, DataTable); only genuinely surface-specific styling lives
+   here. Tokens only, no hardcoded colour.
+
+   Round 2 (D137): the full-width accent bar `.hr-cta` is gone (K-08): the add action sits in the
+   page header at its natural width, the claim decisions in each row's overflow (K-21), the wage
+   buchung is the one tinted commit; states are Status words, not text glyphs (K-22); the inputs are
+   the shared `.field` (K-15); a cancelled absence reads dim with its word, never opacity-faded
+   (K-36); the Lohn cards are background steps without a hairline (K-09). */
+
+.hr { display: flex; flex-direction: column; gap: var(--t-space-2); }
+
+/* The inline add-employee form: a quiet wrap of fields and its two buttons. */
+.hr-form { display: flex; flex-wrap: wrap; gap: var(--t-space-1); align-items: center; }
+
+/* Per-tab content wrapper inside a tab panel: stacks the optional form and the table. */
+.hr-panel { display: flex; flex-direction: column; gap: var(--t-space-2); }
+
+/* A cancelled absence row reads dim and says "Storniert" in its status cell (K-36). */
+.hr-cancelled td,
+.hr-cancelled th { color: var(--t-text-dim); }
+
+.hr-hint {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* --- Lohn (A34) hand-off cards --- */
+
+.payroll { gap: var(--t-space-3); }
+
+.payroll-oss { margin: 0; }
+
+/* Each hand-off step is a panel on the elevated ground, so the export, the wage buchung and the
+   history read as three distinct steps; the background step separates them, never a hairline box. */
+.payroll-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-3);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+}
+
+.payroll-card h2 {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.payroll-card p { margin: 0; }
+
+/* A card's action at its natural width, never a bar across the card. */
+.payroll-action { align-self: flex-start; }
+
+.payroll-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  max-width: 16rem;
+}
+
+.payroll-field span {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.payroll-preview { display: flex; flex-direction: column; gap: var(--t-space-2); }

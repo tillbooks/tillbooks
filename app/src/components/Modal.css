@@ -1,0 +1,77 @@
+/* Modal (D118 B2). One centred-overlay treatment for the whole Studio. Only --t-* tokens, the scrim
+   included (K-28, D137): the overlay tier is `--t-z-overlay`, the ground behind it is `--t-scrim`,
+   and the panel is `--t-bg-elev` with ONE shadow (`--t-shadow-overlay`) and ONE hairline. */
+
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--t-z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--t-space-3);
+  background: var(--t-scrim);
+}
+
+/* The panel composes `.panel` (the --t-bg-elev ground). An overlay is not a third elevation step:
+   one shadow, one hairline, and the dialog radius (`lg`, by role). Never a shadow stack or a blur. */
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: calc(100vh - var(--t-space-6));
+  overflow: hidden;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-lg);
+  box-shadow: var(--t-shadow-overlay);
+}
+
+/* The header stays put; only the body scrolls (see .modal-body). A soft strip, one step off the
+   panel, per the two-step elevation scale. */
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2) var(--t-space-3);
+  background: var(--t-bg-soft);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+/* The body owns its own scroll so a long dialog never grows the page behind the scrim. The gutter is
+   reserved so content does not shove sideways when the bar appears (B1). */
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding: var(--t-space-3);
+  color: var(--t-text);
+  /* S1: this is the modal's OWN scroll region, so a DataTable nested here must stick its thead at
+     the modal's top, not below the page header. The page-level --surface-header-height inherits
+     down the DOM tree (a modal renders as a descendant of <main>, no portal), so reset it to 0 for
+     everything inside the modal. */
+  --surface-header-height: 0px;
+}
+
+/* Actions sit bottom-right (save/confirm at the right edge), secondary to their left. */
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2) var(--t-space-3);
+  border-top: 1px solid var(--t-border);
+}
+
+/* The Reveal moment (D122 D-I): the modal lives in the middle, so it rises by `--t-travel` in
+   `--t-motion-reveal`; its head, body and foot follow with the 30 ms stagger (motion.css,
+   `.motion-reveal--center` and `data-motion-item`). The reduced-motion rule in tokens.css zeroes it. */

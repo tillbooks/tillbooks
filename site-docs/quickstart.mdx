@@ -1,0 +1,57 @@
+---
+title: "Quickstart"
+description: "Install TILL from npm and connect it to your agent."
+---
+
+<Note>
+  TILL is pre-alpha. It installs and runs, but do not keep real books on it yet.
+</Note>
+
+## Install
+
+TILL is on npm as `tillbooks`. Installing it globally puts the `till` command on your path:
+
+```bash
+npm install -g tillbooks
+```
+
+## Check it runs
+
+```bash
+till help
+```
+
+prints the command list. `till up` starts the Studio, the human oversight GUI. The ledger is created
+at `~/.till/till.db`; set `TILL_DB_PATH` to put it somewhere else.
+
+## Connect an agent
+
+TILL speaks MCP over stdio. Point your MCP client at `till mcp`, or let `npx` fetch the package for
+you. No API key is needed:
+
+```json
+{
+  "mcpServers": {
+    "tillbooks": {
+      "command": "npx",
+      "args": ["-y", "tillbooks", "mcp"]
+    }
+  }
+}
+```
+
+## From source
+
+To work on TILL itself, build it from a checkout:
+
+```bash
+git clone https://github.com/tillbooks/tillbooks.git
+cd tillbooks
+npm install
+npm run build
+node bin/till.mjs help
+```
+
+See [the agent interface](/mcp/overview) for the verbs it exposes, and
+[run TILL inside an agent](/mcp/run-inside-agent) if you would rather not run it on a machine of your
+own.

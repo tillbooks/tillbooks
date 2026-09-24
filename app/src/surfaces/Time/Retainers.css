@@ -1,0 +1,68 @@
+/* B04, the Mandate tab. Reuses B01's list/row shell: no new colour, no new panel treatment. The
+   burn-down signal is always words and numbers, never colour alone (WCAG 2.2 AA).
+
+   Round 2 (D137): the burn-down fill is ink, not the accent, and grows by transform on the reveal
+   token (K-12, K-41; its local reduced-motion block is gone, the global kill switch covers it); the
+   row verbs sit in the row's overflow (K-21); the status and the over-cap line are Status words
+   (K-22); sizes, gaps and radii are tokens (K-37). */
+
+.retainer {
+  margin-top: var(--t-space-4);
+}
+
+.retainer-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.retainer-head-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.retainer-form {
+  margin-block: var(--t-space-2);
+}
+
+.retainer-warn {
+  margin: var(--t-space-0-5) 0;
+}
+
+/* The burn-down meter: a quantity, so the fill is the strong ink step on the soft track and never
+   spends the accent (K-12). */
+.retainer-burn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 12rem;
+}
+
+.retainer-burn-bar {
+  position: relative;
+  height: 8px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  overflow: hidden;
+}
+
+.retainer-burn-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--t-border-strong);
+  transform-origin: left center;
+  transition: transform var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.retainer-burn-label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.retainer-overcap {
+  font-weight: 600;
+}

@@ -1,0 +1,132 @@
+{
+  "asOf": "2026-03-31",
+  "baseCurrency": "CHF",
+  "sections": [
+    {
+      "key": "umlaufvermoegen",
+      "side": "aktiven",
+      "labels": {
+        "de": "Umlaufvermögen",
+        "fr": "Actif circulant",
+        "it": "Attivo circolante",
+        "en": "Current assets"
+      },
+      "cite": "OR Art. 959a Abs. 1 Ziff. 1",
+      "lines": [],
+      "subtotalMinor": 0
+    },
+    {
+      "key": "anlagevermoegen",
+      "side": "aktiven",
+      "labels": {
+        "de": "Anlagevermögen",
+        "fr": "Actif immobilisé",
+        "it": "Attivo fisso",
+        "en": "Non-current assets"
+      },
+      "cite": "OR Art. 959a Abs. 1 Ziff. 2",
+      "lines": [],
+      "subtotalMinor": 0
+    },
+    {
+      "key": "uebrige_aktiven",
+      "side": "aktiven",
+      "labels": {
+        "de": "Übrige Aktiven",
+        "fr": "Autres actifs",
+        "it": "Altri attivi",
+        "en": "Other assets"
+      },
+      "cite": "OR Art. 959a Abs. 3",
+      "lines": [],
+      "subtotalMinor": 0
+    },
+    {
+      "key": "kurzfristiges_fremdkapital",
+      "side": "passiven",
+      "labels": {
+        "de": "Kurzfristiges Fremdkapital",
+        "fr": "Capitaux étrangers à court terme",
+        "it": "Capitale di terzi a breve termine",
+        "en": "Current liabilities"
+      },
+      "cite": "OR Art. 959a Abs. 2 Ziff. 1",
+      "lines": [],
+      "subtotalMinor": 0
+    },
+    {
+      "key": "langfristiges_fremdkapital",
+      "side": "passiven",
+      "labels": {
+        "de": "Langfristiges Fremdkapital",
+        "fr": "Capitaux étrangers à long terme",
+        "it": "Capitale di terzi a lungo termine",
+        "en": "Non-current liabilities"
+      },
+      "cite": "OR Art. 959a Abs. 2 Ziff. 2",
+      "lines": [],
+      "subtotalMinor": 0
+    },
+    {
+      "key": "eigenkapital",
+      "side": "passiven",
+      "labels": {
+        "de": "Eigenkapital",
+        "fr": "Capitaux propres",
+        "it": "Capitale proprio",
+        "en": "Equity"
+      },
+      "cite": "OR Art. 959a Abs. 2 Ziff. 3",
+      "lines": [
+        {
+          "key": "ergebnisvortrag",
+          "account": null,
+          "labels": {
+            "de": "Gewinnvortrag oder Verlustvortrag",
+            "fr": "Bénéfice reporté ou perte reportée",
+            "it": "Utile o perdita riportati",
+            "en": "Profit or loss carried forward"
+          },
+          "cite": "OR Art. 959a Abs. 2 Ziff. 3 lit. f",
+          "balanceMinor": 0
+        },
+        {
+          "key": "jahresergebnis",
+          "account": null,
+          "labels": {
+            "de": "Jahresgewinn oder Jahresverlust",
+            "fr": "Bénéfice ou perte de l'exercice",
+            "it": "Utile o perdita dell'esercizio",
+            "en": "Annual profit or annual loss"
+          },
+          "cite": "OR Art. 959a Abs. 2 Ziff. 3 lit. g",
+          "balanceMinor": 0
+        }
+      ],
+      "subtotalMinor": 0
+    },
+    {
+      "key": "uebrige_passiven",
+      "side": "passiven",
+      "labels": {
+        "de": "Übrige Passiven",
+        "fr": "Autres passifs",
+        "it": "Altri passivi",
+        "en": "Other liabilities"
+      },
+      "cite": "OR Art. 959a Abs. 3",
+      "lines": [],
+      "subtotalMinor": 0
+    }
+  ],
+  "aktivenMinor": 0,
+  "passivenMinor": 0,
+  "noActivity": true,
+  "reconciles": true,
+  "reconciliation": {
+    "aktivenEqualPassiven": true,
+    "ledgerNetsToZero": true,
+    "everyAccountClassifiedOnce": true
+  },
+  "ok": true
+}

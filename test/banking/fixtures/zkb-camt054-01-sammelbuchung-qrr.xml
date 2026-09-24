@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FIXTURE (SYNTHETIC, ISO-faithful): camt.054.001.08 ZKB-style collective-booking (Sammelbuchung).
+
+  HONESTY NOTE. Like its zkb-shape-camt053-*.xml siblings, every value in this file is invented. It
+  was hand-built (Datalink order types Z54/ZS4/ZQR) to the SIX Swiss Payment Standards Cash Management
+  guidelines (camt.054.001.08, ISO MR 2019) and the ZKB Datalink shape, then validated well-formed.
+  Every party, IBAN, reference and order id is a fixed fictitious test value; the amounts are the fact
+  under test. A future shape change is modelled here with invented values too: fixtures in shipped
+  paths are synthetic by construction.
+
+  (This header names elements in prose without angle brackets on purpose: the regex parser scans the
+  whole payload, so a literal tag token inside a comment would be miscounted as a real element.)
+
+  WHAT THIS SHAPE PROVES (and camt.053 could not):
+    - the real ISO 20022 notification element is Ntfctn (NOT the malformed Ntfcn an earlier parser
+      revision looked for): a real camt.054 must be DETECTED as camt.054 at all.
+    - ONE booked collective credit Ntry (the single line the bank also posts on the camt.053) whose
+      NtryDtls carries a Btch header plus THREE TxDtls, one per underlying QR-bill payment: the D81
+      fan-out is one bank_txn per TxDtls.
+    - the three per-detail Amt (1500.00 + 2750.50 + 999.95) sum EXACTLY to the Ntry Amt (5250.45) to
+      the Rappen: the parser's sum-check accounts for the whole collective booking or refuses it.
+    - two details carry a 27-digit Swiss QR reference (QRR, under Tp/CdOrPrtry/Prtry) and one carries an
+      ISO 11649 creditor reference (SCOR, RF..., under Tp/CdOrPrtry/Cd), each extracted from its detail.
+    - camt.054 carries NO Bal element (SPS 2.3 p.53): opening/closing balances are absent, by design.
+
+  If ZKB (or ISO) ever changes this serialization, these break. That is the point.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.054.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <BkToCstmrDbtCdtNtfctn>
+    <GrpHdr>
+      <MsgId>CAMT054-CH-SAMMEL-20260415-0001</MsgId>
+      <CreDtTm>2026-04-15T23:59:00</CreDtTm>
+    </GrpHdr>
+    <Ntfctn>
+      <Id>NTFCTN-CH-20260415-0001</Id>
+      <CreDtTm>2026-04-15T23:59:00</CreDtTm>
+      <FrToDt>
+        <FrDtTm>2026-04-15T00:00:00</FrDtTm>
+        <ToDtTm>2026-04-15T23:59:59</ToDtTm>
+      </FrToDt>
+      <Acct>
+        <Id>
+          <IBAN>CH9300762011623852957</IBAN>
+        </Id>
+        <Ccy>CHF</Ccy>
+        <Ownr>
+          <Nm>Muster Trading AG</Nm>
+        </Ownr>
+        <Svcr>
+          <FinInstnId>
+            <BICFI>ZKBKCHZZ80A</BICFI>
+          </FinInstnId>
+        </Svcr>
+      </Acct>
+      <TxsSummry>
+        <TtlNtries>
+          <NbOfNtries>1</NbOfNtries>
+          <Sum>5250.45</Sum>
+          <TtlNetNtry>
+            <Amt>5250.45</Amt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+          </TtlNetNtry>
+        </TtlNtries>
+        <TtlCdtNtries>
+          <NbOfNtries>1</NbOfNtries>
+          <Sum>5250.45</Sum>
+        </TtlCdtNtries>
+      </TxsSummry>
+      <!-- The single collective credit booking; three underlying payments fan out below. -->
+      <Ntry>
+        <NtryRef>ZKB-SAMMEL-20260415-778</NtryRef>
+        <Amt Ccy="CHF">5250.45</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>
+          <Cd>BOOK</Cd>
+        </Sts>
+        <BookgDt>
+          <Dt>2026-04-15</Dt>
+        </BookgDt>
+        <ValDt>
+          <Dt>2026-04-15</Dt>
+        </ValDt>
+        <AcctSvcrRef>ZKB2026041500000778</AcctSvcrRef>
+        <BkTxCd>
+          <Domn>
+            <Cd>PMNT</Cd>
+            <Fmly>
+              <Cd>RCDT</Cd>
+              <SubFmlyCd>VCOM</SubFmlyCd>
+            </Fmly>
+          </Domn>
+        </BkTxCd>
+        <NtryDtls>
+          <Btch>
+            <NbOfTxs>3</NbOfTxs>
+            <TtlAmt Ccy="CHF">5250.45</TtlAmt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+          </Btch>
+          <!-- Detail 1: QR reference (QRR) -->
+          <TxDtls>
+            <Refs>
+              <AcctSvcrRef>ZKB2026041500000778-01</AcctSvcrRef>
+              <EndToEndId>NOTPROVIDED</EndToEndId>
+            </Refs>
+            <Amt Ccy="CHF">1500.00</Amt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+            <RltdPties>
+              <Dbtr>
+                <Pty>
+                  <Nm>Robert Schneider AG</Nm>
+                  <PstlAdr>
+                    <StrtNm>Rue du Lac</StrtNm>
+                    <BldgNb>1268</BldgNb>
+                    <PstCd>2501</PstCd>
+                    <TwnNm>Biel</TwnNm>
+                    <Ctry>CH</Ctry>
+                  </PstlAdr>
+                </Pty>
+              </Dbtr>
+              <DbtrAcct>
+                <Id>
+                  <IBAN>CH5800791123000889012</IBAN>
+                </Id>
+              </DbtrAcct>
+            </RltdPties>
+            <RmtInf>
+              <Strd>
+                <CdtrRefInf>
+                  <Tp>
+                    <CdOrPrtry>
+                      <Prtry>QRR</Prtry>
+                    </CdOrPrtry>
+                  </Tp>
+                  <Ref>210000000003139471430009017</Ref>
+                </CdtrRefInf>
+              </Strd>
+            </RmtInf>
+          </TxDtls>
+          <!-- Detail 2: QR reference (QRR) -->
+          <TxDtls>
+            <Refs>
+              <AcctSvcrRef>ZKB2026041500000778-02</AcctSvcrRef>
+              <EndToEndId>NOTPROVIDED</EndToEndId>
+            </Refs>
+            <Amt Ccy="CHF">2750.50</Amt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+            <RltdPties>
+              <Dbtr>
+                <Pty>
+                  <Nm>Muster Handels GmbH</Nm>
+                  <PstlAdr>
+                    <StrtNm>Bahnhofstrasse</StrtNm>
+                    <BldgNb>17</BldgNb>
+                    <PstCd>8001</PstCd>
+                    <TwnNm>Zürich</TwnNm>
+                    <Ctry>CH</Ctry>
+                  </PstlAdr>
+                </Pty>
+              </Dbtr>
+              <DbtrAcct>
+                <Id>
+                  <IBAN>CH1204835000626882001</IBAN>
+                </Id>
+              </DbtrAcct>
+            </RltdPties>
+            <RmtInf>
+              <Strd>
+                <CdtrRefInf>
+                  <Tp>
+                    <CdOrPrtry>
+                      <Prtry>QRR</Prtry>
+                    </CdOrPrtry>
+                  </Tp>
+                  <Ref>210000000003456789012345675</Ref>
+                </CdtrRefInf>
+              </Strd>
+            </RmtInf>
+          </TxDtls>
+          <!-- Detail 3: ISO 11649 creditor reference (SCOR) -->
+          <TxDtls>
+            <Refs>
+              <AcctSvcrRef>ZKB2026041500000778-03</AcctSvcrRef>
+              <EndToEndId>INV-2026-0442</EndToEndId>
+            </Refs>
+            <Amt Ccy="CHF">999.95</Amt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+            <RltdPties>
+              <Dbtr>
+                <Pty>
+                  <Nm>Baumann + Partner</Nm>
+                  <PstlAdr>
+                    <StrtNm>Dorfstrasse</StrtNm>
+                    <BldgNb>4</BldgNb>
+                    <PstCd>3000</PstCd>
+                    <TwnNm>Bern</TwnNm>
+                    <Ctry>CH</Ctry>
+                  </PstlAdr>
+                </Pty>
+              </Dbtr>
+              <DbtrAcct>
+                <Id>
+                  <IBAN>CH7304835000626882002</IBAN>
+                </Id>
+              </DbtrAcct>
+            </RltdPties>
+            <RmtInf>
+              <Strd>
+                <CdtrRefInf>
+                  <Tp>
+                    <CdOrPrtry>
+                      <Cd>SCOR</Cd>
+                    </CdOrPrtry>
+                  </Tp>
+                  <Ref>RF18539007547034</Ref>
+                </CdtrRefInf>
+                <AddtlRmtInf>Rechnung INV-2026-0442</AddtlRmtInf>
+              </Strd>
+            </RmtInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>SAMMELGUTSCHRIFT QR-RECHNUNGEN</AddtlNtryInf>
+      </Ntry>
+    </Ntfctn>
+  </BkToCstmrDbtCdtNtfctn>
+</Document>

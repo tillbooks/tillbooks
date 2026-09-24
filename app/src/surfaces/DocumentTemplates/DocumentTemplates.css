@@ -1,0 +1,104 @@
+/* G05, Vorlagen: the two-pane branding editor. One elevated panel treatment, one accent (the
+   primary Speichern / Als Standard festlegen actions), default state as glyph + label, never
+   colour alone. The rendered-document canvas inside the preview is the USER'S letterhead; the
+   chrome around it stays Studio-neutral. */
+
+.doctpl {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.doctpl-lede,
+.doctpl-muted {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.doctpl-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .doctpl-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.doctpl-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* The DataTable owns the list frame, the sticky header and the five states. What stays here is the
+   surface-specific row state (an archived template reads dimmer) and the per-row action cluster. */
+.doctpl-row--archived {
+  color: var(--t-text-dim);
+}
+
+.doctpl-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  padding: 1rem;
+}
+
+.doctpl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  border: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.doctpl-field legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.doctpl-radio,
+.doctpl-check {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.doctpl-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.doctpl-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  padding: 1rem;
+}
+
+.doctpl-preview-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.doctpl-preview-pdf {
+  width: 100%;
+  min-height: 24rem;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}

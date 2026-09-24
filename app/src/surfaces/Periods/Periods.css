@@ -1,0 +1,490 @@
+/* Periods surface styles (A03). Tokens only, no hex, no new colours. 8-pt grid throughout, the
+   written type scale (K-37). Depth is one border plus a background step, never a shadow, matching the
+   shell (global.css). Status uses glyph plus text; colour is a secondary cue on top of the
+   always-present label. */
+
+.periods {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  max-width: 960px;
+}
+
+/* The page header (title, help) is the shared SurfaceHeader; the section headings below are the
+   surface's own. */
+.periods-subtitle {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+  margin: 0 0 var(--t-space-2);
+}
+
+.periods-locks {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Action forms (close a month, run the year-end close). */
+.periods-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+  padding: var(--t-space-2);
+}
+
+/* The two close forms (a field plus its action) wrap instead of overflowing: on a narrow viewport the
+   button drops below its field rather than pushing off the edge. `min-width: 0` lets the field column
+   shrink to the available width instead of forcing a horizontal scroll. */
+.period-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--t-space-1);
+}
+
+.period-form .period-field {
+  min-width: 0;
+}
+
+/* A field label over its control. The controls are the shared `.field` and Select (K-15), so no
+   input rule of its own lives here. */
+.period-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+/* Lock grid: the table frame, sticky header, overflow, density, the row overflow (K-21), the current
+   row's pill (K-24) and the five states are the shared DataTable. What stays here is surface-specific:
+   the period and date cells read tabular, and the row-state hook signals soft vs hard alongside the
+   always-present state badge. */
+.period-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* Row-state hook (DataTable ships no state CSS). A hard, sealing-adjacent lock reads a shade heavier
+   than a soft one; the state badge, not colour, is the primary cue, so this stays subtle. */
+.period-row--hard > :is(td, th) {
+  background: var(--t-bg-soft);
+}
+
+/* Lock state badge: glyph plus text. Soft = warn (amber), hard = full ink (the accent is never spent on status). */
+.period-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.period-state-soft {
+  color: var(--t-warn);
+}
+
+.period-state-hard {
+  color: var(--t-text);
+}
+
+.period-state-text {
+  color: var(--t-text);
+}
+
+/* A sealed lock: its reason, then "Gesetzlich versiegelt" with the lock glyph in dim ink. The row
+   offers no control at all, so the words say why (never a control shown and then refused). */
+.period-sealed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.period-sealed-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* Action feedback rides the shared ActionFeedback primitive (components/ActionFeedback). */
+
+/* Confirm dialog for a period lock is the shared Modal (scrim, focus trap, alertdialog role, footer).
+   Only the body copy is the surface's own. */
+.period-confirm-message {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+/* Audit panel. The chain status and a broken-chain banner stay in view; the trail itself is behind
+   the "Verlauf" disclosure (K-25). */
+.audit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+.audit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.audit-title {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+  margin: 0;
+}
+
+/* The disclosure: a quiet text control with a chevron that turns a quarter when open, the count of
+   entries in dim tabular figures. A transparent edge is where the focus cue lands (K-10). */
+.audit-toggle {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--t-space-1);
+  min-height: var(--t-control-h);
+  padding: 0 var(--t-space-1);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  font: inherit;
+  font-weight: 500;
+  color: var(--t-text);
+  cursor: pointer;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.audit-toggle:hover {
+  background: var(--t-bg-soft);
+}
+
+.audit-toggle-chevron {
+  color: var(--t-text-dim);
+  transition: transform var(--t-motion-pill) var(--t-ease-out);
+}
+
+.audit-toggle-chevron[data-open] {
+  transform: rotate(90deg);
+}
+
+.audit-toggle-count {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.audit-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.audit-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+.audit-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.audit-more-count {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chain-verification badge: glyph plus text. Verified = full ink, broken = danger (the accent is never spent on status). */
+.audit-chain {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.audit-chain-ok {
+  color: var(--t-text);
+}
+
+.audit-chain-broken {
+  color: var(--t-danger);
+}
+
+.audit-chain-text {
+  color: var(--t-text);
+}
+
+.audit-broken-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-md);
+  color: var(--t-danger);
+}
+
+.audit-broken-text {
+  margin: 0;
+  color: var(--t-text);
+}
+
+/* The audit trail is the shared DataTable; only the timestamp cell's tabular treatment is local. */
+.audit-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* The month-end checklist (F-07, J4.1): one panel per chosen month, each line a count plus the link
+   to the surface that resolves it. Status is carried by the count and the words; the only colour is
+   the warn tone on a line that needs a look, never the accent (spent on the close control). The links
+   are text links in the ink with the hover underline (`link-inline`, K-12). */
+.period-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+}
+
+.period-checklist-summary,
+.period-checklist-locked,
+.period-checklist-wayout {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.period-checklist-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.period-checklist-line {
+  display: grid;
+  grid-template-columns: 3ch 1fr auto;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  padding: var(--t-space-0-5) 0;
+  border-top: 1px solid var(--t-border);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.period-checklist-line:first-child {
+  border-top: 0;
+}
+
+.period-checklist-link {
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+.period-checklist-count {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  color: var(--t-text-dim);
+}
+
+.period-checklist-line--attention .period-checklist-count {
+  color: var(--t-warn);
+  font-weight: 600;
+}
+
+.period-checklist-line--not_available .period-checklist-label,
+.period-checklist-line--not_available .period-checklist-detail {
+  color: var(--t-text-dim);
+}
+
+.period-checklist-detail {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A38: the accrual and provision editor (the panel, its drawer form, the live lines preview). */
+.accrual-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+.accrual-editor-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+}
+
+.accrual-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.accrual-editor-batch {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.accrual-feedback {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.accrual-feedback--error {
+  color: var(--t-danger);
+}
+
+.accrual-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.accrual-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.accrual-picker legend,
+.accrual-form > .period-field {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.accrual-picker-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--t-space-1);
+  align-items: baseline;
+  min-height: 44px;
+}
+
+.accrual-picker-name {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text);
+}
+
+.accrual-picker-hint {
+  grid-column: 2;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.accrual-field-error {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-danger);
+}
+
+.accrual-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  margin-top: var(--t-space-2);
+  padding-top: var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+}
+
+/* The preview and releases tables scroll horizontally in their own container on a narrow viewport,
+   so a long account name never clips or pushes the modal wider. The table keeps its natural sizing. */
+.accrual-lines-wrap {
+  overflow-x: auto;
+}
+
+/* The preview lines, on the row tokens (K-20) with the 12px/500 dim head (K-23). */
+.accrual-lines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.accrual-lines-caption {
+  text-align: start;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+  padding-bottom: var(--t-space-0-5);
+}
+
+.accrual-lines th,
+.accrual-lines td {
+  height: var(--t-row-h);
+  padding: var(--t-row-pad-y) var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  text-align: start;
+}
+
+.accrual-lines th {
+  height: var(--t-row-head-h);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.accrual-lines .t-num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.accrual-status {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-0-5);
+}
+
+.accrual-badge {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.accrual-row--discarded > :is(td, th),
+.accrual-row--reversed > :is(td, th) {
+  color: var(--t-text-dim);
+}
+
+.accrual-row-actions {
+  display: inline-flex;
+  gap: var(--t-space-0-5);
+}
+
+/* The year result inside the close feedback is `.t-money` for nowrap and tabular figures, at the
+   size of the feedback line around it. */
+.periods .action-feedback__detail .t-money {
+  font-size: inherit;
+}

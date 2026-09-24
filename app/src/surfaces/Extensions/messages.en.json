@@ -1,0 +1,81 @@
+{
+  "nav": { "extensions": "Extensions" },
+  "plugin": {
+    "panel": { "title": "Extensions" },
+    "lede": "Third-party extensions add tools, screens, report sources and automation actions to TILL. Each runs in an isolated frame with only the permissions you grant, any network access is fenced by its host rather than by TILL, and none can open a second path to your ledger.",
+    "tab": { "installed": "Installed", "browse": "Browse" },
+    "action": {
+      "install": "Install",
+      "browse": "Browse",
+      "enable": "Enable",
+      "disable": "Disable",
+      "uninstall": "Uninstall",
+      "restart": "Restart",
+      "review": "Review and install",
+      "viewScreen": "Open panel"
+    },
+    "status": {
+      "installed": "Installed",
+      "disabled": "Disabled",
+      "incompatible": "Incompatible"
+    },
+    "incompatible": { "reason": "Requires core version {range}, installed is {version}." },
+    "card": {
+      "version": "Version {version}",
+      "capabilities": "{count} capabilities",
+      "grantedOf": "{granted} of {requested} permissions granted",
+      "byline": "Installed by {actor}"
+    },
+    "review": {
+      "title": "This extension requests",
+      "subtitle": "{name}, version {version}",
+      "confirm": "Install with the checked permissions",
+      "noScopes": "This extension requests no permissions.",
+      "compatWarning": "This extension is not compatible with the current core version and will install disabled.",
+      "cancel": "Cancel"
+    },
+    "screen": { "title": "{name} panel", "sandboxNote": "This panel runs in an isolated frame that cannot read the rest of the Studio. It stays empty until a host serves its content, and any network access is fenced by that host, not by this panel." },
+    "empty": "No extensions installed.",
+    "registry": {
+      "empty": "No extension registry connected.",
+      "emptyHint": "You can always install an extension from a local file.",
+      "no_results": "No results for “{query}”.",
+      "unreachable": "The extension registry cannot be reached right now.",
+      "searchLabel": "Search the extension registry",
+      "searchPlaceholder": "Search extensions",
+      "search": "Search",
+      "clear": "Clear",
+      "stale": "Showing the last known results."
+    },
+    "needsPermission": "This needs the \"install and manage extensions\" permission.",
+    "confirm": { "uninstall": "Uninstall {name}? Its settings will be removed." },
+    "error": {
+      "manifest_checksum_failed": "This extension file failed its integrity check and was not installed.",
+      "invalid_manifest": "This file is not a valid extension.",
+      "capability_forbidden": "This extension tried to register a protected posting action and was rejected.",
+      "capability_name_conflict": "This extension's '{name}' conflicts with an existing one.",
+      "registry_unreachable": "The extension registry could not be reached. Showing the last known results.",
+      "needs_registry": "No extension registry is connected.",
+      "plugin_crashed": "This extension stopped responding.",
+      "plugin_incompatible": "This extension is not compatible with the current core version.",
+      "plugin_downgrade_refused": "A newer version of this extension is already installed.",
+      "plugin_not_found": "This extension is no longer installed.",
+      "permission_denied": "You do not have permission to manage extensions.",
+      "generic": "Something went wrong. Please try again."
+    },
+    "feedback": {
+      "installed": "The extension is installed.",
+      "enabled": "The extension is enabled.",
+      "disabled": "The extension is disabled.",
+      "uninstalled": "The extension is uninstalled."
+    }
+  },
+  "help": {
+    "Extensions": {
+      "title": "Extensions",
+      "body": "Extensions shows which plugins are installed in this workspace and what each one is allowed to do. Before any install you review the requested permissions and decide yourself. A plugin gets only the permissions you see and confirm at install; its screens run in an isolated frame and talk to TILL only through defined interfaces.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

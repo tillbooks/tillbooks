@@ -1,0 +1,66 @@
+{
+  "account": {
+    "id": "acc_2",
+    "number": "1020",
+    "name": "Bankkonto",
+    "type": "asset"
+  },
+  "naturalSide": "debit",
+  "period": {
+    "start": "2026-01-01",
+    "end": "2026-03-31"
+  },
+  "baseCurrency": "CHF",
+  "groupBy": "kmu",
+  "kmuClass": "1",
+  "openingMinor": 2000000,
+  "lines": [
+    {
+      "date": "2026-02-03",
+      "entryId": "entry_3",
+      "ref": "RE-0002",
+      "description": "Warenverkauf",
+      "source": "manual",
+      "debitMinor": 540500,
+      "creditMinor": 0,
+      "runningMinor": 2540500
+    },
+    {
+      "date": "2026-02-25",
+      "entryId": "entry_5",
+      "ref": null,
+      "description": "Loehne Februar",
+      "source": "manual",
+      "debitMinor": 0,
+      "creditMinor": 600000,
+      "runningMinor": 1940500
+    },
+    {
+      "date": "2026-03-05",
+      "entryId": "entry_6",
+      "ref": null,
+      "description": "Bürokosten",
+      "source": "manual",
+      "debitMinor": 0,
+      "creditMinor": 120000,
+      "runningMinor": 1820500
+    },
+    {
+      "date": "2026-03-20",
+      "entryId": "entry_9",
+      "ref": null,
+      "description": "Kreditzins",
+      "source": "manual",
+      "debitMinor": 0,
+      "creditMinor": 25000,
+      "runningMinor": 1795500
+    }
+  ],
+  "closingMinor": 1795500,
+  "noActivity": false,
+  "reconciles": true,
+  "reconciliation": {
+    "closingTiesToLedger": true
+  },
+  "ok": true
+}

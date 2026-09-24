@@ -1,0 +1,415 @@
+/**
+ * M02 Sync & hosting panel. The Setup panel treatment (`--t-bg-elev`, `--t-radius-md`), the shared
+ * `.diag-*` prose rhythm, and the shared button/state tokens. One accent, per brand/DESIGN.md: the
+ * Brass accent is spent ONLY on the switch's focus ring, never as a standing badge on either dial
+ * state, so neither ON nor OFF looks like the rewarded path (spec §6, no dark pattern toward enabling).
+ */
+
+.sync-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  padding: var(--t-space-4);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  max-width: 42rem;
+}
+
+.sync-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.sync-dial-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--t-space-1);
+}
+
+/* A real switch (role="switch"): the track + thumb are decoration, the state text carries the meaning
+   so the position is never the only signal (brand/DESIGN.md, never colour or position alone). */
+/* K-07 (D137): a standalone switch on a wide layout, so its target is the 44px D116 tier (it
+   measured 24px). The transparent border is the edge the focus cue turns brass (K-10); it comes out
+   of the inline padding, so the switch does not grow. */
+.sync-dial {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: 44px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  padding: 0 calc(var(--t-space-1) - 1px);
+  cursor: pointer;
+  color: var(--t-text);
+  font: inherit;
+}
+
+.sync-dial:disabled {
+  cursor: not-allowed;
+  color: var(--t-text-dim);
+}
+
+.sync-dial:focus-visible {
+  /* The one place the accent is allowed: a focus ring is not a standing badge. */
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.sync-dial-track {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 24px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  border: 1px solid var(--t-border);
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.sync-dial-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-text-dim);
+  /* The thumb's travel is the pill moment; its colour follows on the hover beat (K-41). */
+  transition:
+    transform var(--t-motion-pill) var(--t-ease-out),
+    background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+/* ON is neutral ink, NOT the accent: the accent stays reserved as the one go/safe signal. */
+.sync-dial[aria-checked='true'] .sync-dial-track {
+  background: var(--t-text);
+  border-color: var(--t-text);
+}
+
+.sync-dial[aria-checked='true'] .sync-dial-thumb {
+  transform: translateX(16px);
+  background: var(--t-bg-elev);
+}
+
+.sync-dial-state {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.sync-dial-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  max-width: 22rem;
+  text-align: right;
+}
+
+.sync-lock-glyph {
+  flex: none;
+  color: var(--t-text-dim);
+}
+
+.sync-posture {
+  margin: 0;
+  max-width: 60ch;
+}
+
+/* The machine values: plain label + raw value in the code surface, tabular so `headSeq` never
+   shimmies as it advances, neutral ink and no colour (design §1, spec §6 locale rule). */
+.sync-values {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  margin: 0;
+}
+
+.sync-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.sync-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  color: var(--t-text-dim);
+}
+
+.sync-value {
+  margin: 0;
+  padding: 2px var(--t-space-1);
+  background: var(--t-bg-code);
+  border-radius: var(--t-radius-sm);
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text);
+}
+
+.sync-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.sync-consumer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.sync-consumer-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+/* The consumer status line: the E07 status-line family shape (glyph + label), sibling to
+   EgressIndicator. `unknown` is calm dim ink; a future `ok` lag line has its home here. */
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  color: var(--t-text);
+}
+
+.sync-status--unknown {
+  color: var(--t-text-dim);
+}
+
+.sync-status-glyph {
+  font-size: var(--t-font-sm);
+  line-height: 1;
+}
+
+.sync-status--unknown .sync-status-glyph {
+  color: var(--t-text-dim);
+}
+
+.sync-status-label {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  max-width: 60ch;
+}
+
+/* The exit box: a header-strip sub-block on the soft surface. Fronts G04, reimplements nothing. */
+.sync-exit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-3);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+}
+
+.sync-exit-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.sync-exit-body {
+  margin: 0;
+  color: var(--t-text-dim);
+  max-width: 60ch;
+}
+
+.sync-exit-link {
+  align-self: flex-start;
+  color: var(--t-text);
+}
+
+.sync-tier-note {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  max-width: 72ch;
+}
+
+/* --- M03 journey (N4a): the Hosting block, checklist and V3a inline error ---------------------- */
+
+.hosting-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding-block: var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.hosting-model {
+  margin: 0;
+}
+
+.hosting-rungs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.hosting-rung {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-2);
+}
+
+.hosting-rung-choice {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-2);
+  background: none;
+  /* K-10: the edge the focus cue turns brass, out of the padding. */
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  padding: calc(var(--t-space-1) - 1px) calc(var(--t-space-1) - 1px);
+  color: var(--t-text);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+/* The drawn radio mark (K-22: it replaced the ●/○ text dingbats): an empty ring, filled with the
+   ink when checked. aria-checked on the button carries the state; the mark only shows it. */
+.hosting-rung-mark {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--t-text-dim);
+  border-radius: var(--t-radius-full);
+}
+
+.hosting-rung-choice[aria-checked='true'] .hosting-rung-mark {
+  border-color: var(--t-text);
+  box-shadow: inset 0 0 0 3px var(--t-bg-elev);
+  background: var(--t-text);
+}
+
+.hosting-rung-choice:disabled {
+  color: var(--t-text-dim);
+  cursor: default;
+}
+
+.hosting-rung-label {
+  font-weight: 600;
+}
+
+.hosting-rung-now,
+.hosting-rung-soon,
+.hosting-step-note {
+  color: var(--t-text-dim);
+  font-weight: 400;
+}
+
+.hosting-rung-hint {
+  color: var(--t-text-dim);
+}
+
+.hosting-guide-link {
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+.hosting-guide-link:hover {
+  text-decoration: underline;
+}
+
+.hosting-start {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.hosting-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.hosting-checklist-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.hosting-checklist-title {
+  font-weight: 600;
+}
+
+.hosting-checklist-pos {
+  color: var(--t-text-dim);
+}
+
+.hosting-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.hosting-step {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+/* The mark and its label stay on ONE line. Without this, a long step label (the static exit
+   box's step 2) wraps as a whole flex item to the next line and the checkbox sits orphaned
+   above it; a zero flex-basis label never wraps away from its mark, it wraps its own text. */
+.hosting-step-mark {
+  flex: none;
+  display: inline-flex;
+  align-self: center;
+  color: var(--t-text-dim);
+}
+
+.hosting-step--done .hosting-step-mark {
+  color: var(--t-success);
+}
+
+.hosting-step-label {
+  flex: 1 1 0;
+  min-width: 12ch;
+}
+
+.hosting-step--done .hosting-step-label {
+  color: var(--t-text-dim);
+}
+
+.hosting-checklist-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.hosting-compare,
+.hosting-stale,
+.hosting-mismatch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.hosting-inline-error {
+  color: var(--t-danger, var(--t-text));
+}

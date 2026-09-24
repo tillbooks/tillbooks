@@ -1,0 +1,50 @@
+{
+  "manifest_version": "0.3",
+  "name": "tillbooks",
+  "display_name": "TILL",
+  "version": "0.0.0",
+  "description": "Swiss accounting your agent can actually use: the TILL ledger over MCP.",
+  "long_description": "TILL (Trusted Independent Ledger Library) is a local-first Swiss accounting engine your agent drives over MCP: it posts double-entry journal entries, categorises and chases invoices, and prepares the MWST-Abrechnung. This extension runs `till mcp` as a local stdio server on your own machine. Your books stay on your disk; the extension opens no outbound socket. If no database exists yet, the first tool call that needs one guides you to create_workspace or restore_backup.",
+  "author": {
+    "name": "Nomadik GmbH",
+    "url": "https://tillbooks.ch"
+  },
+  "homepage": "https://tillbooks.ch",
+  "license": "MIT",
+  "keywords": ["accounting", "swiss", "mwst", "ledger", "local-first", "mcp"],
+  "server": {
+    "type": "node",
+    "entry_point": "server.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server.mjs"],
+      "env": {
+        "TILL_DB_PATH": "${user_config.db_path}",
+        "TILL_SUPPORT_DIR": "${user_config.support_dir}"
+      }
+    }
+  },
+  "user_config": {
+    "db_path": {
+      "type": "string",
+      "title": "Ledger database path",
+      "description": "Path to your TILL SQLite ledger. Leave blank for the default (~/.till/till.db). The extension bundles no database; point this at an existing .till.db to adopt it.",
+      "required": false,
+      "default": ""
+    },
+    "support_dir": {
+      "type": "directory",
+      "title": "Support directory",
+      "description": "Where TILL keeps machine-scoped state (diagnostics, backups). Leave blank for the default (~/.till).",
+      "required": false,
+      "default": ""
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "linux"],
+    "runtimes": {
+      "node": ">=20.0.0"
+    }
+  }
+}

@@ -1,0 +1,537 @@
+{
+  "nav": {
+    "migration": "Data migration"
+  },
+  "migration": {
+    "title": "Data migration",
+    "noWorkspaceHint": "A data migration belongs to a workspace. Create one first.",
+    "loading": "Loading the migration plan",
+    "error": "The migration plan could not be loaded",
+    "denied": "You need the right \"Run data migrations\" to see this. Ask a workspace owner to grant it.",
+    "empty": {
+      "title": "No data migration planned yet",
+      "body": "A migration is a scoped, resumable, auditable plan for moving a book across, not a one-off import.",
+      "cta": "Add export files"
+    },
+    "next": "Next step",
+    "verb": {
+      "migration_preview_step": "Preview the step",
+      "migration_trial_load_step": "Trial-load the step",
+      "migration_commit_step": "Commit the step",
+      "migration_rollback_step": "Reverse the step",
+      "migration_readiness": "Check readiness",
+      "migration_get_plan": "Open the plan"
+    },
+    "journey": {
+      "export": "Export",
+      "discover": "Discover",
+      "map": "Map",
+      "trial": "Trial run",
+      "check": "Check",
+      "golive": "Go live",
+      "verified": "Verified"
+    },
+    "extraction": {
+      "title": "What has to come out of the old system",
+      "create": "Create export list",
+      "empty": "The export list tracks what to get out of the old system, in time. It is instantiated from the source system's guide.",
+      "item": {
+        "open": "Open",
+        "exported": "Exported",
+        "notUsed": "Not used",
+        "blocked": "Blocked"
+      },
+      "rung": {
+        "1": "Native export",
+        "2": "Report export",
+        "3": "Browser companion",
+        "4": "Paginated capture",
+        "5": "Data-handover letter"
+      },
+      "rungGated": "Planned, not yet available",
+      "deadline": "Access to {source} for {n} more days",
+      "deadlineExpired": "Access to {source} ended on {date}",
+      "complete": "All exports recorded",
+      "letter": {
+        "create": "Create data-handover letter"
+      },
+      "rowCount": "{n} rows",
+      "dateRange": "{from} to {to}",
+      "files": "{n} files",
+      "verifyTerms": "Check the deadline against your contract"
+    },
+    "plan": {
+      "state": {
+        "draft": "Draft",
+        "planned": "Planned",
+        "trial": "Trial run",
+        "live": "Live",
+        "closed": "Closed",
+        "abandoned": "Abandoned"
+      },
+      "close": "Finish the migration",
+      "closeConfirm": "Finishing the migration marks it done. Every step must be settled and no control may be failing.",
+      "closeBlocked": "The migration cannot be finished yet: {blocker}",
+      "abandonBlocked": "The migration could not be abandoned: {blocker}",
+      "identity": "{source}, transfer date {date}",
+      "identityNoDate": "{source}",
+      "identityNoSource": "Transfer date {date}",
+      "identityUnknown": "Migration with no source or transfer date",
+      "prepared": "{identity}: prepared, productive from {date}",
+      "selectorLabel": "Plan",
+      "abandon": "Abandon the migration",
+      "abandonConfirm": "Abandon the migration? The Testmandant is discarded. Belege for steps already committed are retained."
+    },
+    "source": {
+      "adapter": "Format",
+      "worksheet": "Worksheet",
+      "bundle": "Archive contents",
+      "uploadProgress": "Upload progress"
+    },
+    "map": {
+      "taxPresetPending": "The ESTV codes for this source are not verified yet. Map the tax codes by hand."
+    },
+    "step": {
+      "state": {
+        "pending": "Pending",
+        "mapped": "Mapped",
+        "previewed": "Previewed",
+        "trialLoaded": "Trial-loaded",
+        "checked": "Checked",
+        "committed": "Committed",
+        "verified": "Verified",
+        "diverged": "Diverged",
+        "failed": "Failed",
+        "rolledBack": "Rolled back",
+        "skipped": "Skipped"
+      }
+    },
+    "actor": {
+      "you": "you",
+      "agent": "an agent",
+      "system": "the system"
+    },
+    "approval": {
+      "pending": "Waiting for your approval",
+      "approve": "Approve",
+      "error": "The approval could not be saved. Try again."
+    },
+    "diverged": {
+      "title": "The check after the migration disagrees with the trial run",
+      "reverse": "Reverse this step",
+      "reverseError": "The reversal did not go through. The step is still marked diverged.",
+      "restoreHint": "The second way back: restore a backup, under",
+      "restoreLink": "Data & Backup"
+    },
+    "testmandant": {
+      "banner": {
+        "title": "You are working in the Testmandant",
+        "plan": "A trial run of this migration plan, not your real books"
+      },
+      "empty": {
+        "title": "No Testmandant yet",
+        "body": "A Testmandant is a disposable trial workspace that behaves exactly like a real one, so you can browse your own books in TILL before committing to them."
+      },
+      "create": "Create the Testmandant",
+      "diff": {
+        "title": "Compare with the live workspace",
+        "loading": "Comparing ...",
+        "error": "The comparison could not be loaded.",
+        "noLive": "There is no live workspace with this UID to compare against yet.",
+        "same": "No differences: both sides hold the same row count per data class.",
+        "row": "{class}: {testmandant} in the Testmandant, {live} live"
+      },
+      "goProductive": "Go productive",
+      "waitForStichtag": "Going productive opens on the transfer date {date}. Until then everything stays prepared in the test tenant.",
+      "toIntake": "Go to the migration",
+      "confirmLabel": "Type the company name to go productive",
+      "irreversible": "This cannot be undone. The Testmandant can no longer be discarded afterwards.",
+      "discard": "Discard the Testmandant",
+      "discardConfirm": "Discard the Testmandant for real? The throwaway workspace is deleted. Belege from steps that already went live are kept.",
+      "more": "More",
+      "wentLive": "This workspace is now your real books.",
+      "err": {
+        "checkNotClean": "The opening check is not clean yet. Resolve every control before going productive.",
+        "containsDemoRows": "This Testmandant still holds sample data and can never become real books.",
+        "needsCompanyProfile": "The company profile is incomplete. Add the legal form and UID first.",
+        "liveWorkspaceExists": "A live workspace already exists for this UID. Run the migration against it instead.",
+        "confirmMismatch": "The name does not match the company's legal name.",
+        "notATestmandant": "This is not a Testmandant.",
+        "planAlreadyLive": "This plan is already live.",
+        "generic": "That did not work. Try again."
+      }
+    },
+    "dataClass": {
+      "opening_balances": "Opening balances",
+      "open_items_ar": "Open receivables",
+      "open_items_ap": "Open payables",
+      "bank_statements": "Bank statements",
+      "vat_history": "VAT history",
+      "chart_of_accounts": "Chart of accounts",
+      "tax_codes": "Tax codes",
+      "contacts": "Contacts",
+      "items": "Items",
+      "payment_terms": "Payment terms",
+      "bank_accounts": "Bank accounts",
+      "documents": "Documents",
+      "gl_history": "Ledger history"
+    },
+    "intake": {
+      "stepsLabel": "Data migration steps",
+      "step": {
+        "files": "Files",
+        "plan": "Plan",
+        "scope": "Scope"
+      },
+      "drop": {
+        "hint": "Drag the export files here or choose them. TILL reads them without posting anything.",
+        "choose": "Choose files"
+      },
+      "uploadError": {
+        "tooLarge": "The file is too large and could not be stored.",
+        "integrity": "The upload did not match its checksum and was rejected. Try uploading it again.",
+        "generic": "The file could not be stored."
+      },
+      "discoverError": "The files could not be discovered.",
+      "file": {
+        "adapter": "Format",
+        "rows": "Rows",
+        "asAt": "Export date",
+        "noAsAt": "no date in the file"
+      },
+      "failure": {
+        "unparseable": "This file could not be read.",
+        "generic": "This file could not be processed.",
+        "encoding": "Encoding: {value}",
+        "delimiter": "Delimiter: {value}",
+        "retry": "Try again",
+        "remove": "Remove from the batch",
+        "force": "Force a format",
+        "forceHint": "If TILL read this file wrong, choose the right format and try again.",
+        "forceAdapter": "Format",
+        "forceEncoding": "Encoding",
+        "forceDelimiter": "Delimiter",
+        "forceAuto": "Auto",
+        "forceRetry": "Retry with this format",
+        "delimiterName": {
+          "comma": "Comma",
+          "semicolon": "Semicolon",
+          "tab": "Tab"
+        }
+      },
+      "reason": {
+        "noHeaderRow": "No header row could be found.",
+        "notYetReadable": "This format cannot be read yet.",
+        "encrypted": "The file is encrypted and must be unlocked first.",
+        "corrupt": "The file is damaged or incomplete.",
+        "worksheetNotFound": "The chosen worksheet was not found.",
+        "notAZip": "This is not a valid ZIP archive.",
+        "notAbaconnect": "This is not an AbaConnect file.",
+        "sourceIntegrityMismatch": "The file does not match its checksum. Upload it again.",
+        "unparseable": "This file could not be read.",
+        "invalidInput": "This file could not be processed."
+      },
+      "continue": "Continue",
+      "back": "Back",
+      "plan": {
+        "source": "Source system",
+        "cutover": "Transfer date",
+        "cutoverHint": "The position from which TILL keeps the books. A future date works: you prepare everything now and go productive from the transfer date. Where the file carries a date, it is filled in here.",
+        "create": "Create the plan",
+        "err": {
+          "cutoverInFuture": "The transfer date has not arrived yet. You can go productive from that day.",
+          "invalidDate": "The date is not valid.",
+          "generic": "The plan could not be created."
+        }
+      },
+      "scope": {
+        "title": "What gets migrated",
+        "body": "Choose per data class whether it belongs in the migration. Nothing is imported by accident.",
+        "unavailable": "{cls} is not available in the first scope yet ({owner}).",
+        "confirm": "Confirm the scope",
+        "err": {
+          "generic": "The scope could not be saved."
+        }
+      }
+    },
+    "mapping": {
+      "title": "Mapping",
+      "kind": {
+        "column": "Columns",
+        "account": "Accounts",
+        "tax": "Taxes"
+      },
+      "error": "The mapping could not be loaded.",
+      "empty": "This mapping has no entries yet. Upload a source file first.",
+      "col": {
+        "source": "Source",
+        "target": {
+          "column": "Field in TILL",
+          "account": "Account in TILL",
+          "tax": "Tax code in TILL"
+        }
+      },
+      "targetFor": "Target for {source}",
+      "complete": "Fully mapped.",
+      "blocking": {
+        "title": "{n} entries are not mapped yet and carry a balance."
+      },
+      "ignorable": "{n} entries with no balance can be skipped.",
+      "collapsed": "Several sources collapse onto {target} ({n}).",
+      "conflict": "{source}: you chose {target}, the template proposed {template}.",
+      "suggestSource": {
+        "adapter_preset": "Suggested from the source format's preset.",
+        "locale_pack": "Suggested from the locale pack.",
+        "saved_template": "Suggested from your saved mapping template.",
+        "fuzzy": "Suggested from a name similarity, please check.",
+        "none": "No suggestion found, map by hand."
+      },
+      "saved": "Mapping saved.",
+      "suggest": "Suggest",
+      "save": "Save",
+      "saveError": "The mapping could not be saved. Try again.",
+      "suggestError": "No suggestion could be loaded. Try again."
+    },
+    "controlTotals": {
+      "title": "Source totals",
+      "body": "Declare the totals the old system stated. A control nobody declares stays \"not checked\" and never green.",
+      "kind": "Control",
+      "scope": {
+        "account": "Account",
+        "workspace": "Workspace",
+        "accountHint": "Account number"
+      },
+      "amount": "Amount",
+      "amountHint": "In francs, for example 12'345.60.",
+      "amountInvalid": "The amount is not valid. Give it in francs, for example 12'345.60.",
+      "err": {
+        "unknownKind": "This control is not known.",
+        "generic": "The total could not be saved."
+      },
+      "declare": "Declare a total",
+      "declaredTitle": "Declared totals",
+      "declaredRow": "{kind} ({scope}): {amount}",
+      "redeclare": {
+        "title": "Declare the total again",
+        "body": "This control already has a declared total. Declaring again replaces it and resets the computed side until the next check answers it. This is deliberate, not a silent overwrite.",
+        "confirm": "Replace the total"
+      }
+    },
+    "readiness": {
+      "title": "Readiness for going live",
+      "error": "Readiness could not be loaded.",
+      "ready": "Ready to go live.",
+      "readyWithOneWaiver": "Ready, with 1 exception.",
+      "readyWithWaivers": "Ready, with {n} exceptions.",
+      "blockedOne": "Not ready yet: 1 open item.",
+      "blocked": "Not ready yet: {n} open items.",
+      "item": {
+        "scopeEmpty": "Nothing is in scope yet",
+        "backupRequired": "Backup before the first migration",
+        "vatStraddled": "VAT period split at the transfer date",
+        "cutoverPending": "Transfer date not reached yet"
+      },
+      "reason": {
+        "scopeEmpty": "Nothing is in scope yet",
+        "cutoverPending": "Everything is prepared. You can go productive from the transfer date.",
+        "stepOpen": "The step is still {state}",
+        "diverged": "The check after the migration disagrees with the trial run",
+        "backupRequired": "A backup is needed before the first migration into the real books",
+        "vatStraddled": "The transfer date falls inside a VAT period",
+        "extractionIncomplete": "The export list is not complete yet",
+        "sourceAccessExpiring": "Access to the old system is expiring soon"
+      },
+      "owner": {
+        "prefix": "Next: {owner}"
+      },
+      "straddle": {
+        "ranges": "Old system {oldFrom} to {oldTo}, TILL {tillFrom} to {tillTo}."
+      },
+      "waiver": "{control} ({scope}) set aside"
+    },
+    "openItems": {
+      "title": "Open items",
+      "ar": "Debtors",
+      "ap": "Creditors",
+      "import": "Import",
+      "preview": "Preview",
+      "controlAr": "Control 1100 Debtors",
+      "controlAp": "Control 2000 Creditors",
+      "difference": "Difference: {amount}",
+      "asserted": "Ties out",
+      "notAsserted": "Not yet checked",
+      "notAssertedHint": "Import is blocked until the tie-out is asserted. Run the Eröffnungsprüfung first, then check again here.",
+      "recheck": "Check again",
+      "empty": "No open items loaded yet",
+      "loading": "Checking the open items",
+      "denied": "You need the right \"Commit migration\" to import open items. Ask a workspace owner to grant it.",
+      "importedCount": "{count} open items imported",
+      "acknowledge": "Import despite the open difference",
+      "totalMismatch": "The parts do not add up to the invoice total",
+      "contactUnmapped": "Contact not mapped yet",
+      "vendorUnmapped": "Vendor not mapped yet",
+      "taxUnresolved": "Tax code not resolvable at the document date",
+      "needsFxRate": "No rate recorded at the cut-over date",
+      "invalidRow": "This row is incomplete",
+      "priorYearArchived": "Settled prior-year detail belongs in the read-only archive",
+      "genericRefusal": "This row was refused",
+      "origin": "Carried over",
+      "rowRefused": "{number}: {reason}",
+      "panelHint": "Each row was mapped upstream; import posts nothing of its own.",
+      "cancelConfirm": "Cancel this carried-over item? The opening balance is corrected by a reversing entry."
+    }
+  },
+  "implProject": {
+    "title": "Implementation project",
+    "denied": "You need the \"manage implementation\" right to see the project. Ask a workspace owner to grant it.",
+    "error": "The implementation project could not be loaded",
+    "empty": "An implementation project holds the phases, decisions, sign-offs and the parallel run above the migration plan, so they survive the people who made them.",
+    "continueWithout": "Continue without a project",
+    "next": "Next step",
+    "needsManage": "Needs the \"manage implementation\" right",
+    "create": "Create implementation project",
+    "createFailed": "The project could not be created",
+    "createField": {
+      "sourceSystem": "Source system",
+      "cutoverDate": "Cutover date",
+      "mwstMethod": "VAT method"
+    },
+    "phase": {
+      "discovery": "Discovery",
+      "extraction": "Extraction",
+      "mapping": "Mapping",
+      "rehearsal": "Rehearsal",
+      "cutover": "Cutover",
+      "parallelRun": "Parallel run",
+      "live": "Live",
+      "closed": "Closed",
+      "liveLabel": "Stabilisation"
+    },
+    "owner": {
+      "human": "you",
+      "agent": "an agent",
+      "system": "the system"
+    },
+    "task": {
+      "blockedBy": "Waiting on: {item}",
+      "evidenceRequired": "Evidence needed: {kind}",
+      "notApplicable": "Not applicable",
+      "done": "Done"
+    },
+    "signoff": {
+      "title": "Sign-offs",
+      "pending": "Waiting for your signature",
+      "voided": "Void (evidence changed)",
+      "record": "Sign off",
+      "needsCommit": "Needs commit_migration",
+      "kind": {
+        "conversionDate": "Conversion date",
+        "mwstMethod": "VAT method",
+        "mappingApproval": "Mapping approved",
+        "tieout": "Tie-out",
+        "contactMerge": "Contact merge",
+        "goNogo": "Go/no-go",
+        "rollbackTrigger": "Rollback trigger",
+        "parallelRunClose": "Parallel-run close",
+        "sourceCancellation": "Source cancellation"
+      }
+    },
+    "decision": {
+      "title": "Decisions",
+      "record": "Record a decision"
+    },
+    "parallel": {
+      "title": "Parallel run",
+      "empty": "No comparison figures recorded yet",
+      "declare": "Record comparison figures",
+      "notAsserted": "Not checked yet",
+      "difference": "Difference: {amount}",
+      "recheck": "Re-check",
+      "windowMismatch": "The period does not align to the window",
+      "methodChangeNeedsSignoff": "A method change needs a Treuhänder sign-off",
+      "status": {
+        "passed": "Checked",
+        "failed": "Difference"
+      }
+    },
+    "runbook": {
+      "title": "Choose a runbook template",
+      "instantiate": "Apply template"
+    },
+    "close": "Close project",
+    "closeBlockedBy": "Still open: {item}",
+    "roster": {
+      "title": "Implementations across all mandates",
+      "empty": "No implementation planned yet",
+      "hidden": "No access to this mandate",
+      "daysToCutover": "{n} days to cutover"
+    }
+  },
+  "check": {
+    "title": "Eröffnungsprüfung",
+    "run": "Check",
+    "empty": "Nothing has been checked yet. The Eröffnungsprüfung proves that the opening position TILL holds is the one the old system had: declare the source totals, then run the check.",
+    "error": "The check could not be loaded",
+    "clean": "Every control passed or was set aside: the opening position ties to the source.",
+    "ready": {
+      "withOneWaiver": "Ready, with 1 exception",
+      "withWaivers": "Ready, with {n} exceptions"
+    },
+    "hash": "Check hash",
+    "status": {
+      "passed": "Passed",
+      "failed": "Failed",
+      "notAsserted": "Not checked",
+      "notComputable": "Not computable",
+      "waived": "Waived"
+    },
+    "kind": {
+      "trialBalanceBalanced": "Trial balance is balanced",
+      "trialBalanceMatchesSource": "Trial balance matches the source",
+      "arControl": "Open receivables against the control account",
+      "apControl": "Open payables against the control account",
+      "bankControl": "Bank opening balance against the statement",
+      "vatBalanceAtCutover": "VAT position at the transfer date",
+      "rowCount": "Row count",
+      "documentIntegrity": "Source file integrity",
+      "sourceAsAt": "Export date against the transfer date"
+    },
+    "declared": "Declared",
+    "computed": "Computed",
+    "difference": "Difference",
+    "declare": "Declare a total",
+    "waive": {
+      "action": "Set aside",
+      "reason": "Reason",
+      "needsReason": "Give a reason so the exception stays traceable"
+    },
+    "waivers": {
+      "count": "{n} controls set aside"
+    },
+    "export": "Export the report",
+    "exported": "Saved as {filename}",
+    "notComputable": {
+      "reason": "Missing input"
+    },
+    "recover": {
+      "fixOpening": "Correct the opening balance",
+      "newExport": "Upload a new export",
+      "fixOpeningHint": "Correct the source totals or the mapping above, then check again.",
+      "newExportHint": "Upload a fresh export with the correct transfer date in the intake step above.",
+      "recheck": "Check again"
+    },
+    "actionError": {
+      "run": "The check could not be run",
+      "waive": "The exception could not be saved",
+      "export": "The report could not be exported"
+    }
+  },
+  "help": {
+    "Migration": {
+      "title": "Data migration",
+      "body": "Taking over from an existing system runs here as a plan with steps: discovery, mapping, a trial run, going live and verification.\n\nEvery step shows its state and who acts next: you, an agent or the system. A step that moves money waits for your approval instead of running silently.\n\nIf the takeover diverges, there are real ways back: reverse or restore.",
+      "concepts": [],
+      "docsPath": "quickstart"
+    }
+  }
+}

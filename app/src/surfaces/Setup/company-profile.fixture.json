@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "profile": {
+    "workspaceId": "ws_test",
+    "name": "Muster Grafik",
+    "legalForm": "gmbh",
+    "baseCurrency": "CHF",
+    "fiscalYearStart": "01-01",
+    "vatMethod": "effektiv",
+    "vatAccounting": "soll",
+    "creditorName": "Muster Grafik GmbH",
+    "creditorAddress": {
+      "street": "Bahnhofstrasse",
+      "buildingNo": "1",
+      "zip": "8001",
+      "town": "Zürich",
+      "country": "CH"
+    },
+    "creditorIban": "CH44 3199 9123 0008 8901 2",
+    "uid": "CHE-123.456.789",
+    "mwstNo": "CHE-123.456.789 MWST",
+    "createdAt": "2026-07-19T10:00:00.000Z",
+    "ledgerLocked": false
+  }
+}

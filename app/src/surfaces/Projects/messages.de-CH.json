@@ -1,0 +1,134 @@
+{
+  "nav": {
+    "projects": "Projekte"
+  },
+  "errors": {
+    "code_taken": "Projektcode bereits vergeben.",
+    "invalid_dates": "Enddatum muss nach dem Startdatum liegen.",
+    "parent_cycle": "Ein Projekt kann nicht sein eigenes Überprojekt sein.",
+    "parent_not_found": "Dieses Überprojekt gibt es nicht.",
+    "has_children": "Unterprojekte zuerst löschen oder umhängen.",
+    "project_closed": "Dieses Projekt ist abgeschlossen und kann nicht mehr bearbeitet werden.",
+    "project_not_found": "Dieses Projekt gibt es nicht mehr.",
+    "phase_not_found": "Diese Phase gibt es nicht mehr.",
+    "not_draft": "Nur Projektentwürfe lassen sich löschen. Schliesse das Projekt stattdessen ab.",
+    "project_referenced": "Auf diesem Entwurf hängen bereits Daten (Felder oder Dateien).",
+    "project_has_open_time": "Projekt hat offene Zeiteinträge.",
+    "invalid_transition": "Dieser Statuswechsel ist nicht möglich.",
+    "invalid_status": "Diesen Status gibt es nicht.",
+    "needs_fx_rate": "Für diese Währung ist kein Kurs erfasst. Erfasse einen Kurs oder gib ihn direkt an."
+  },
+  "project": {
+    "route": {
+      "title": "Projekte"
+    },
+    "col": {
+      "code": "Code",
+      "name": "Name",
+      "client": "Kunde",
+      "status": "Status",
+      "budget": "Budget",
+      "actions": "Aktionen"
+    },
+    "noWorkspaceHint": "Wähle zuerst einen Mandanten, dann siehst du dessen Projekte.",
+    "action": {
+      "create": "Neues Projekt",
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "activate": "Aktivieren",
+      "hold": "Pausieren",
+      "resume": "Fortsetzen",
+      "close": "Abschliessen",
+      "reopen": "Wieder öffnen"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "active": "Aktiv",
+      "on_hold": "Pausiert",
+      "closed": "Abgeschlossen"
+    },
+    "list": {
+      "aria": "Projektliste",
+      "searchLabel": "Projekte durchsuchen",
+      "search": "Suchen (Code oder Name)",
+      "statusFilter": "Nach Status filtern",
+      "allStatuses": "Alle Status",
+      "rowActions": "Aktionen für {name}",
+      "subprojectOf": "Unterprojekt von {code}"
+    },
+    "detail": {
+      "contact": "Kunde",
+      "dates": "Laufzeit",
+      "code": "Code",
+      "parent": "Überprojekt",
+      "statusMenu": "Status ändern",
+      "close": "Projekt schliessen"
+    },
+    "phase": {
+      "title": "Phasen",
+      "add": "Phase hinzufügen",
+      "name": "Bezeichnung",
+      "budget": "Budget",
+      "milestone": "Meilenstein",
+      "done": "Erledigt",
+      "doneOn": "Erledigt am {date}",
+      "empty": "Keine Phasen.",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "markDone": "Phase {name} als erledigt markieren"
+    },
+    "budget": {
+      "title": "Budget vs. Ist",
+      "budget": "Budget",
+      "actual": "Ist-Kosten",
+      "remaining": "Verbleibend",
+      "hours": "Stunden",
+      "over": "Budget überschritten",
+      "barLabel": "Budgetauslastung: {pct}%"
+    },
+    "warning": {
+      "phase_budgets": "Phasenbudgets übersteigen das Projektbudget."
+    },
+    "editor": {
+      "createTitle": "Neues Projekt",
+      "editTitle": "Projekt bearbeiten",
+      "name": "Name",
+      "contact": "Kunde",
+      "contactEmptyHint": "Noch keine Kontakte. Lege zuerst einen Kontakt an.",
+      "contactCreate": "Kontakt anlegen",
+      "code": "Projektcode",
+      "codePlaceholder": "Wird automatisch vergeben",
+      "currency": "Währung",
+      "fxRate": "Kurs zu {base}",
+      "fxRateHint": "Nur nötig, wenn kein Kurs erfasst ist.",
+      "budget": "Budget ({currency})",
+      "budgetHours": "Budget (Stunden)",
+      "startsOn": "Beginn",
+      "endsOn": "Ende",
+      "parent": "Übergeordnetes Projekt",
+      "parentNone": "Keines",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "invalidBudget": "Bitte gib einen gültigen Betrag ein.",
+      "invalidHours": "Bitte gib ganze Stunden ein."
+    },
+    "confirm": {
+      "delete": "Diesen Projektentwurf löschen?",
+      "deleteConfirm": "Löschen",
+      "cancel": "Abbrechen"
+    },
+    "empty": "Noch keine Projekte.",
+    "emptyHint": "Ein Projekt bündelt Budget, Phasen und später Zeit und Spesen für einen Kunden.",
+    "emptySearch": "Kein Projekt passt zum Filter.",
+    "clearSearch": "Suche zurücksetzen",
+    "readonly": "Nur Lesezugriff"
+  },
+  "help": {
+    "Projects": {
+      "title": "Projekte",
+      "body": "Deine Projekte mit Phasen, Terminen und Budget. Links die filterbare Liste, verschachtelt mit Unterprojekten; rechts das gewählte Projekt mit Status, Kunde, Terminen und dem Vergleich von Budget und Ist, gespeist aus den tatsächlichen Buchungen. Phasen hakst du direkt in der Tabelle ab. Löschen lässt sich nur ein Entwurf; alles andere behält seine Geschichte.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

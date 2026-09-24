@@ -1,0 +1,80 @@
+{
+  "nav": {
+    "inventory": "Inventory"
+  },
+  "stock": {
+    "route": { "title": "Inventory" },
+    "reason": {
+      "receipt": "Receipt",
+      "issue": "Issue",
+      "adjust": "Adjust",
+      "transfer": "Transfer",
+      "return": "Return"
+    },
+    "action": {
+      "record_movement": "Record movement",
+      "run_valuation": "Run valuation"
+    },
+    "movement": {
+      "item": "Item",
+      "location": "Location",
+      "qty": "Quantity",
+      "unit_cost": "Unit cost",
+      "reason_label": "Reason",
+      "notes": "Notes",
+      "saved": "Movement recorded."
+    },
+    "method": {
+      "label": "Method",
+      "fifo": "FIFO",
+      "weighted_avg": "Weighted average"
+    },
+    "valuation": {
+      "as_of": "As of",
+      "preview": "Preview",
+      "total": "Inventory value",
+      "value": "Value",
+      "unposted_delta": "Unposted delta",
+      "posted": "Valuation posted.",
+      "stetigkeit": "The valuation method differs from the last run (consistency, OR 958c)."
+    },
+    "badge": { "low": "Low stock" },
+    "empty": "No stock-tracked items.",
+    "empty_cta": "Manage items",
+    "toast": { "dismiss": "Dismiss" },
+    "dialog": { "cancel": "Cancel", "save": "Save" },
+    "stocktake": {
+      "title": "Stocktake",
+      "open": "Start stocktake",
+      "book_qty": "Book quantity",
+      "counted_qty": "Counted quantity",
+      "diff": "Difference",
+      "commit": "Post differences",
+      "empty": "No open stocktake.",
+      "frozen_at": "Frozen at",
+      "committed": "Stocktake committed. Inventar filed.",
+      "confirmTitle": "Post stocktake differences?",
+      "confirmConsequence": "Posting writes a permanent inventory adjustment for each of the {n} counted variances and files the statutory Inventar (Bestandesnachweis, OR 958c). Posted movements are immutable and can only be corrected by a compensating movement."
+    },
+    "error": {
+      "insufficient_stock": "Not enough stock available.",
+      "period_locked": "The period is locked; valuation cannot post.",
+      "invalid_qty": "Enter a quantity other than zero.",
+      "invalid_reason": "Choose a valid reason.",
+      "stocktake_not_open": "This stocktake is no longer open.",
+      "uncounted_lines": "Some lines are not counted yet.",
+      "valuation_out_of_order": "A later valuation already exists; value the latest date instead.",
+      "needs_inventory_accounts": "The inventory accounts (1200/4200) are missing.",
+      "not_found": "That record could not be found.",
+      "forbidden": "You do not have permission for this action."
+    }
+  },
+  "help": {
+    "Inventory": {
+      "title": "Inventory",
+      "body": "Inventory shows on-hand per item and location and flags low stock. Recording a movement is the one way stock changes; there is no direct overwrite. Valuation computes the period-end stock value and shows the entry before anything is posted. The stocktake counts, shows the difference, and posts it only after your review.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

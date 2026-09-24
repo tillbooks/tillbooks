@@ -1,0 +1,139 @@
+{
+  "nav": {
+    "attention": "Attention"
+  },
+  "attention": {
+    "title": "Attention",
+    "loading": "Loading what is waiting for you",
+    "retry": "Try again",
+    "refresh": "Refresh",
+    "stand": "As of {time}",
+    "incomplete": "incomplete",
+    "subtitle": {
+      "work": "Waiting for you"
+    },
+    "error": {
+      "total": "The attention hub could not be loaded."
+    },
+    "padlock": {
+      "title": "Nothing to show you here",
+      "body": "You do not hold the read rights for any of the work queues, so there is nothing to list. Ask a workspace owner to grant you one.",
+      "ask": "Ask a question"
+    },
+    "empty": {
+      "title": "All clear.",
+      "hint": "Payments, reminders and documents that need a decision from you appear here.",
+      "action": "Go to the overview"
+    },
+    "area": {
+      "bank": "Bank",
+      "sales": "Sales",
+      "system": "System",
+      "accounting": "Accounting"
+    },
+    "areaIndex": {
+      "title": "By area"
+    },
+    "allAreas": "All areas",
+    "singleAreaEmpty": "Nothing is waiting in {area}.",
+    "new": "new",
+    "providerFailed": "{queue} could not be loaded.",
+    "urgency": {
+      "overdue": "overdue",
+      "due": "due",
+      "open": "open"
+    },
+    "queue": {
+      "qrMatch": "Reconciliation",
+      "dunningRun": "Dunning",
+      "reviewFlag": "Flags"
+    },
+    "queueLabel": {
+      "qr_match": "Reconciliation",
+      "dunning_run": "Dunning",
+      "agent_action": "Proposals",
+      "review_flag": "Flags"
+    },
+    "collapsedWith": "also in {queue}",
+    "overflow": {
+      "label": "Actions for {title}",
+      "copyRef": "Copy reference",
+      "createTask": "Create a task"
+    },
+    "item": {
+      "qrMatch": {
+        "title": "Payment without a match",
+        "subtitle": "{bank}"
+      },
+      "dunningRun": {
+        "title": "Dunning run waiting for approval",
+        "subtitle": "{count} invoices, proposed on {date}"
+      },
+      "reviewFlag": {
+        "title": "Entry flagged",
+        "subtitle": "{date} · {description}",
+        "reason": "Flagged by {reviewer}: {reason}",
+        "reasonByAgent": "Flagged by the agent: {reason}",
+        "reasonByStudio": "Flagged in the Studio: {reason}",
+        "reasonByUnknown": "Flagged: {reason}",
+        "reasonSelf": "Flagged by you: {reason}"
+      }
+    },
+    "events": {
+      "title": "Events",
+      "showAll": "Show all",
+      "collapse": "Show less",
+      "loading": "Loading",
+      "error": "Events could not be loaded.",
+      "empty": "No notifications yet."
+    },
+    "rail": {
+      "loading": "Attention count is loading",
+      "error": "The attention count could not be loaded",
+      "count": "{count} waiting"
+    },
+    "act": {
+      "openReconciliation": "Open in reconciliation",
+      "openDunning": "Open reminder run",
+      "openEntry": "Open entry",
+      "resolveFlag": "Approve as reviewed",
+      "issueDunningRun": "Issue reminder run",
+      "suggested": "Suggested: {number}",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "Why are you rejecting it?",
+      "rejectConfirm": "Yes, reject",
+      "rejectKeep": "Keep",
+      "busy": "Running",
+      "dismissFeedback": "Dismiss",
+      "taskCreated": "Task created.",
+      "done": {
+        "apply": "Payment applied and posted.",
+        "dismiss": "Filed: not a customer payment.",
+        "approve": "Proposal approved and executed.",
+        "approve_allow": "Proposal approved. The agent will run this kind directly from now on.",
+        "reject": "Proposal rejected. Nothing was posted.",
+        "resolve": "Flag resolved, entry approved.",
+        "issue": "Reminder run issued."
+      },
+      "error": {
+        "generic": "That did not work. The row stays: try again or open the page it belongs to.",
+        "period_locked": "The period is locked: nothing can be posted there any more.",
+        "permission_denied": "You do not have the right for this.",
+        "cannot_self_approve": "Your own proposal needs a second person to approve it.",
+        "already_applied": "This payment has been matched in the meantime.",
+        "already_paid": "This invoice is already settled.",
+        "currency_mismatch": "The currencies differ: record the payment with a conversion under Payments.",
+        "already_executed": "This proposal has been executed in the meantime.",
+        "not_found": "This row no longer exists. The list reloads."
+      }
+    }
+  },
+  "help": {
+    "Attention": {
+      "title": "Attention",
+      "body": "Pendenzen is the one place that shows what is waiting for a decision from you: the most urgent items first, then an index per area and the latest events.\n\nEvery row carries its decision: the two or three buttons its own page also offers, the reason it is waiting, and the sentence saying what the posting does. Only the hard case opens the page.\n\nAreas you may not read do not appear at all. When nothing waits, the list says so plainly.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

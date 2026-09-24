@@ -1,0 +1,536 @@
+{
+  "nav": {
+    "checklists": "Checklists"
+  },
+  "attention": {
+    "queue": {
+      "checklistItemsDue": "Checklists: items due"
+    },
+    "item": {
+      "checklistItem": {
+        "title": "{period}: {title}",
+        "subtitle": "{template}, owner: {owner}"
+      }
+    },
+    "act": {
+      "openChecklist": "Open checklist"
+    }
+  },
+  "help": {
+    "Checklists": {
+      "title": "Checklists",
+      "body": "A checklist walks you through a recurring job step by step: the VAT period up to the filed and paid return, the month close up to the lock, the year close up to the sealed year.\n\nChecks the system knows fulfil themselves. A posting shows you a preview first and you trigger it yourself; plausibility checks show you the formula and the figures.\n\nEvery posting before the close can be reversed, the close cannot. The month and the VAT period start by themselves; the year you start deliberately.",
+      "concepts": [
+        "jahresabschluss-sperre",
+        "transitorische-aktiven-passiven",
+        "umsatzabstimmung"
+      ],
+      "docsPath": "introduction"
+    }
+  },
+  "checklists": {
+    "title": "Checklists",
+    "loading": "Loading your checklists",
+    "backToList": "Back to the list",
+    "rangeTo": "to",
+    "due": "recommended by {date}",
+    "dueStatutory": "Deadline: {date}",
+    "checkKey": "Check: {key}",
+    "needsManage": "Needs the manage_checklists right.",
+    "needsFile": "Needs the vat_file right.",
+    "needsPost": "Needs the post right.",
+    "needsPeriods": "Needs the manage_periods right.",
+    "denied": {
+      "read": "You lack the read_books right, so no checklist is shown here."
+    },
+    "error": {
+      "transport": "The checklists could not be loaded.",
+      "refused": "Refused: {code}"
+    },
+    "empty": {
+      "title": "No checklist yet",
+      "hint": "Start the VAT period or the month close for the last period that has ended, or the year close for {year}. The steps and deadlines come by themselves."
+    },
+    "missing": {
+      "title": "This checklist does not exist",
+      "hint": "The link points at no checklist in this workspace."
+    },
+    "group": {
+      "open": "Open ({count})",
+      "openEmpty": "Nothing open.",
+      "done": "Done ({count})",
+      "abandoned": "Abandoned ({count})"
+    },
+    "run": {
+      "title": "{template} {period}",
+      "progress": "{done} of {total} steps",
+      "auto": "started automatically"
+    },
+    "runStatus": {
+      "open": "open",
+      "done": "done",
+      "abandoned": "abandoned"
+    },
+    "template": {
+      "vat_period": "VAT period",
+      "month_close": "Month close",
+      "year_close": "Year close"
+    },
+    "detail": {
+      "period": "{period}, {from} to {to}:",
+      "counts": "Blockers: {blockers}, notes: {hints}",
+      "journey": "Checklist steps",
+      "abandoned": "Abandoned: {reason}",
+      "done": "Every step is done, not applicable or dropped.",
+      "autostarted": "Started automatically by the rule \"{rule} start automatically\" on {date}.",
+      "automations": "Rule under Automations"
+    },
+    "owner": {
+      "human": "you",
+      "agent": "an agent",
+      "system": "the system"
+    },
+    "actor": {
+      "agent": "the agent",
+      "studio": "you",
+      "member": "a member",
+      "unknown": "someone"
+    },
+    "state": {
+      "open": "open",
+      "fulfilled": "fulfilled",
+      "done": "done",
+      "doneAt": "done on {date} by {who}",
+      "signed": "signed off on {date} by {who}",
+      "attested": "attested on {date} by {who}",
+      "acknowledged": "acknowledged on {date} by {who}",
+      "passed": "fulfilled",
+      "posted": "posted",
+      "nothingToSettle": "nothing to settle",
+      "derived": "answered from the books",
+      "answered": "answered",
+      "warn": "note",
+      "skipped": "not applicable",
+      "excluded": "dropped",
+      "stale": "sign-off void",
+      "unavailable": "check unavailable"
+    },
+    "note": {
+      "blockedBy": "Waits on: {item}",
+      "skipped": "Reason: {reason}",
+      "excludedBy": "Dropped because of the answer at \"{item}\".",
+      "excludedEmpty": "Dropped: nothing to post.",
+      "checkPending": "{check}: {count} pending",
+      "checkFailed": "{check}: not fulfilled yet",
+      "checkUnavailable": "{check}: check unavailable",
+      "stale": "The return changed since the sign-off. Recompute it and sign off again.",
+      "staleStatements": "The figures changed since the sign-off. Review the balance sheet and income statement and sign off again.",
+      "preconditionOpen": "The check {check} has to pass first.",
+      "entries": "Entries: {entries}"
+    },
+    "check": {
+      "no_drafts": "No drafts up to the period end",
+      "bank_reconciled": "Bank reconciled",
+      "no_missing_tax_codes": "Tax codes complete",
+      "vat_return_computed": "Return computed",
+      "abstimmung_resolved": "Bridge resolved",
+      "period_locked_vat_filed": "VAT period locked",
+      "lock_on_month": "Month locked",
+      "soft_lock_on_year": "Year provisionally locked",
+      "seal_on_year": "Year closed"
+    },
+    "item": {
+      "no_drafts": "No drafts up to the period end",
+      "bank_reconciled": "Bank reconciled",
+      "tax_codes_complete": "Tax codes complete",
+      "vat_return_computed": "Return computed",
+      "abstimmung_reviewed": "Bridge reviewed",
+      "ech0217_exported": "eCH-0217 exported",
+      "eportal_filed": "Filed in the ESTV ePortal",
+      "period_locked": "Lock the VAT period",
+      "vat_settled": "VAT accounts settled",
+      "settlement_booked": "Payment or credit booked",
+      "legal_form": "Legal form",
+      "vat_method": "VAT method",
+      "month_closes_done": "Months closed",
+      "open_items_debtors": "Open customer invoices match 1100",
+      "open_items_creditors": "Open vendor bills match 2000",
+      "bank_balance_matches": "Bank statement at the period end matches",
+      "bank_balance_typed": "Bank balance at the year end per statement",
+      "has_fc_positions": "Foreign-currency positions?",
+      "fx_preview": "FX revaluation: preview",
+      "fx_posted": "FX revaluation posted",
+      "has_assets": "Fixed assets?",
+      "depreciation_preview": "Depreciation: preview",
+      "depreciation_posted": "Depreciation posted",
+      "depreciation_within_limit": "Depreciation within the allowed range",
+      "accruals_needed": "Accruals needed?",
+      "accruals_preview": "Accruals: preview",
+      "accruals_posted": "Accruals posted",
+      "accruals_reversed_next_year": "Reversal in the new year present",
+      "provisions_needed": "Form or release provisions?",
+      "provisions_preview": "Provisions: preview",
+      "provisions_posted": "Provisions posted or released",
+      "vat_accounts_zero": "VAT accounts at zero at the year end",
+      "vat_declared_equals_books": "VAT returns agree with the accounts",
+      "umsatzabstimmung": "Turnover reconciliation reviewed",
+      "berichtigung_filed": "Correction return filed",
+      "tax_provision_preview": "Tax provision: preview",
+      "tax_provision_posted": "Tax provision posted",
+      "tax_provision_plausible": "Tax provision plausible",
+      "balance_equation": "Balance sheet balances",
+      "prior_year_comparison": "Prior-year comparison",
+      "capital_loss_check": "No capital loss",
+      "statements_signed": "Balance sheet and income statement released",
+      "treuhaender_handover": "Documents handed to the fiduciary",
+      "soft_lock_on_year": "Books provisionally locked",
+      "gv_approved": "General meeting approved the annual accounts",
+      "year_sealed": "Close the fiscal year",
+      "archive_exported": "Closing dossier exported",
+      "journal_exported": "Journal exported",
+      "lock_on_month": "Close the month"
+    },
+    "choice": {
+      "derived": "Answered by the system from the books. You can change the answer.",
+      "human": "Answered by you.",
+      "preselected": "Pre-selected, not saved yet.",
+      "yes": "Yes",
+      "no": "No",
+      "legalForm": {
+        "einzelfirma": "Sole proprietorship",
+        "gmbh": "GmbH",
+        "ag": "AG"
+      },
+      "vatMethod": {
+        "effektiv": "Effective",
+        "saldo": "Net tax rate",
+        "none": "No VAT"
+      }
+    },
+    "act": {
+      "open": "Open",
+      "resolve": "Resolve",
+      "compute": "Compute the return",
+      "run": "{verb}",
+      "export": "Export on the VAT return",
+      "attest": "Filed on",
+      "gv": "Approved on",
+      "sign": "Sign off the bridge",
+      "release": "Release",
+      "confirmPayment": "Confirm the payment",
+      "typeBalance": "Enter the balance",
+      "markFiled": "Mark as filed",
+      "answer": "Save answer",
+      "seen": "Preview reviewed",
+      "fix": "Fix",
+      "recheck": "Check again",
+      "acknowledge": "Acknowledge",
+      "details": "Details",
+      "collapse": "Collapse",
+      "openDepreciation": "Go to depreciation",
+      "undoOnSurface": "Reverse under depreciation",
+      "postAccruals": "Post accruals ({count})",
+      "postProvisions": "Post provisions ({count})",
+      "postTaxProvision": "Post the tax provision",
+      "settleAll": "Settle all ({count})",
+      "settle": "Settle",
+      "undo": "Reverse",
+      "softLock": "Lock the books provisionally",
+      "unlock": "Lift the lock",
+      "seal": "Close the year",
+      "working": "Running",
+      "skip": "Not applicable",
+      "reopen": "Reopen",
+      "abandon": "Abandon checklist"
+    },
+    "verb": {
+      "lock_period": "Lock the period",
+      "unlock_period": "Lift the lock",
+      "close_month": "Close the month",
+      "reopen_month": "Reopen the month",
+      "close_year": "Close the year"
+    },
+    "preview": {
+      "refused": "The preview could not be computed: {code}",
+      "empty": "Nothing to post.",
+      "changeAnswer": "If that is wrong, change the answer above.",
+      "total": "Total",
+      "provenance": "As of {verb}, checksum {hash}.",
+      "postedBelow": "Posted, see below."
+    },
+    "previewCol": {
+      "accountNumber": "Account",
+      "currency": "Currency",
+      "fcAmountMinor": "Foreign currency",
+      "bookChfMinor": "Book value",
+      "revaluedChfMinor": "Revalued",
+      "diffChfMinor": "Difference",
+      "assetNumber": "Asset",
+      "amountMinor": "Amount",
+      "description": "Text",
+      "kind": "Kind",
+      "contraAccountNumber": "Contra account",
+      "balanceAccountNumber": "Balance account",
+      "reversalDate": "Reversal",
+      "reason": "Reason",
+      "provisionAccountNumber": "Provision account",
+      "expenseAccountNumber": "Expense account"
+    },
+    "previewValue": {
+      "prepaid_expense": "Prepaid expense",
+      "accrued_income": "Income not yet invoiced",
+      "accrued_expense": "Expense not yet received",
+      "deferred_income": "Deferred income"
+    },
+    "figure": {
+      "profitBeforeTaxMinor": "Profit before tax",
+      "grossProvisionMinor": "Gross tax provision",
+      "instalmentsMinor": "Instalments already paid",
+      "proposedMinor": "Proposed provision",
+      "rateBp": "Tax rate in basis points",
+      "asOf": "As of",
+      "openItemsMinor": "Open customer invoices",
+      "ledger1100Minor": "Account 1100",
+      "openBillsMinor": "Open vendor bills",
+      "onAccountMinor": "On-account payments",
+      "ledger2000Minor": "Account 2000",
+      "differenceMinor": "Difference",
+      "aktivenMinor": "Assets",
+      "passivenMinor": "Liabilities and equity",
+      "debitMinor": "Debit",
+      "creditMinor": "Credit",
+      "equityMinor": "Equity",
+      "equityAccountsMinor": "Equity accounts",
+      "resultMinor": "Result of the year",
+      "kapitalMinor": "Capital",
+      "reservenMinor": "Statutory reserves",
+      "baseMinor": "Capital and reserves",
+      "thresholdMinor": "Half of it",
+      "account1300Minor": "Account 1300",
+      "account2300Minor": "Account 2300",
+      "account1170Minor": "Account 1170",
+      "account1171Minor": "Account 1171",
+      "account2200Minor": "Account 2200",
+      "account2201Minor": "Account 2201",
+      "typedMinor": "Balance as you entered it",
+      "typedBy": "Entered by",
+      "typedAt": "Entered on",
+      "statementMinor": "Balance per bank statement",
+      "ledgerMinor": "Balance per the books",
+      "revenuePerStatementsMinor": "Revenue per income statement",
+      "adjustedRevenueMinor": "Adjusted revenue",
+      "declaredZiffer200Minor": "Declared turnover (Ziffer 200)",
+      "postedMinor": "Posted provision",
+      "expectedMinor": "Expected provision",
+      "grossMinor": "Gross",
+      "otherInstalmentsMinor": "Other instalments",
+      "toleranceMinor": "Tolerance",
+      "bandPct": "Tolerance in percent",
+      "year": "Year",
+      "missing": "Without lock",
+      "exceeding": "Above the range",
+      "flagged": "Flagged",
+      "nonZero": "Not at zero",
+      "unfiledPeriods": "Not filed",
+      "mismatched": "Mismatched"
+    },
+    "posting": {
+      "unavailable": "The posting check is unavailable: {reason}",
+      "posted": "Posted. Entries: {entries}.",
+      "noEntry": "none",
+      "reversalOn": "Reversal on {date}.",
+      "nothingToSettle": "Nothing to settle: the VAT accounts of this period are at zero.",
+      "willPost": "To post: {total}."
+    },
+    "settlement": {
+      "period": "Period",
+      "state": "State",
+      "net": "Net",
+      "action": "Action",
+      "notFiled": "waits on the VAT period",
+      "nothing": "nothing to settle",
+      "settled": "settled",
+      "unsettled": "open"
+    },
+    "validationWord": {
+      "pass": "fulfilled",
+      "fail": "not fulfilled",
+      "warn": "Note",
+      "unavailable": "unavailable"
+    },
+    "validation": {
+      "warnHint": "Does not block the close.",
+      "unavailable": "The check could not run: {reason}",
+      "formula": "Formula"
+    },
+    "validationReason": {
+      "first_year": "first fiscal year, no prior year",
+      "no_capital": "no capital on the accounts",
+      "no_statement_no_typed_balance": "no bank statement at the period end and no entered balance",
+      "unfiled_periods": "not every VAT period is filed yet",
+      "needs_vat_config": "no VAT settings",
+      "no_tax_provision": "no tax provision posted yet"
+    },
+    "validationSource": {
+      "statement": "Compared with the bank statement at the period end.",
+      "typed": "Compared with the balance you entered.",
+      "none": "No bank statement at the period end. Import the statement or enter the balance in the step \"Bank balance at the year end per statement\"."
+    },
+    "statements": {
+      "loading": "Loading the balance sheet and income statement",
+      "aktiven": "Assets",
+      "passiven": "Liabilities and equity",
+      "reingewinn": "Net profit",
+      "stand": "As of {hash}.",
+      "stale": "The release is void.",
+      "open": "Go to reports"
+    },
+    "confirm": {
+      "fx": "Revalues the foreign-currency positions as of {date} and posts the difference with its automatic reversal.",
+      "undo": "Posts a reversing entry. The original entry stays on record.",
+      "undoCount": "Posts {count} reversing entries. The original entries stay on record.",
+      "batch": "Posts {count} drafts totalling {total}, one after another.",
+      "taxProvision": "Records the tax provision of {total} and posts it.",
+      "settle": "Transfers the VAT accounts of period {period} to account 2201.",
+      "settleAll": "Transfers the VAT accounts of periods {periods} to account 2201, one after another.",
+      "softLock": "Locks the fiscal year {period} provisionally. The lock can be lifted again.",
+      "unlock": "Lifts the provisional lock.",
+      "closeMonth": "Soft-closes the month {period}.",
+      "reopenMonth": "Reopens the month.",
+      "seal": "Closes the fiscal year {year} for good."
+    },
+    "dialog": {
+      "close": "Close",
+      "cancel": "Cancel"
+    },
+    "start": {
+      "title": "Start a checklist",
+      "template": "Checklist",
+      "period": {
+        "vat_period": "Filing period",
+        "month_close": "Month",
+        "year_close": "Fiscal year"
+      },
+      "noPeriod": "No period has ended yet.",
+      "filedSuffix": "(filed)",
+      "action": "Start checklist",
+      "working": "Starting",
+      "consequence": {
+        "vat_period": "Creates the checklist with every step and deadline. A checklist is abandoned, never deleted.",
+        "month_close": "Creates the month close with every step. A month otherwise starts by itself once it has ended.",
+        "year_close": "Creates the year close with every step and deadline. The last month of the year is then no longer started on its own."
+      },
+      "needsConfig": "Without VAT settings there are no filing periods.",
+      "needsConfigCta": "Set up VAT",
+      "notFilable": "That is not a filing period of this year. Possible: {periods}",
+      "notEnded": "This period has not ended yet.",
+      "yearClosed": "This fiscal year is already closed.",
+      "yearInProgress": "The last month of the year belongs to the running year close.",
+      "yearInProgressCta": "Open the year close"
+    },
+    "attest": {
+      "title": "Filed in the ESTV ePortal",
+      "portal": "Open the ESTV ePortal (outside TILL)",
+      "portalUrl": "https://www.estv.admin.ch/de/mwst-online-abrechnen",
+      "date": "Filed on",
+      "action": "Confirm",
+      "working": "Confirming",
+      "consequence": "Marks the step as filed. The period is not locked by this.",
+      "needsDate": "Give the filing date.",
+      "beforeExport": "The date lies before the export on {exportedAt}.",
+      "alreadyAttested": "The filing is already attested on {date}. Reopen the step first."
+    },
+    "gv": {
+      "title": "General meeting approved the annual accounts",
+      "date": "Approved on",
+      "reason": "Reason the meeting took place before the release",
+      "action": "Confirm",
+      "working": "Confirming",
+      "consequence": "Records the date of the approval. The meeting itself takes place outside TILL.",
+      "needsDate": "Give the date of the meeting.",
+      "needsReason": "The meeting lies before the release of the annual accounts. Give a reason.",
+      "alreadyAttested": "The approval is already attested. Reopen the step first."
+    },
+    "skip": {
+      "title": "{item}: not applicable",
+      "reason": "Reason",
+      "action": "Mark as not applicable",
+      "working": "Saving",
+      "consequence": "The step counts as not applicable and stays visible.",
+      "prefill": {
+        "treuhaender_handover": "I close on my own.",
+        "berichtigung_filed": "No deficiencies found.",
+        "bank_balance_typed": "A bank statement is on file.",
+        "prior_year_comparison": "First fiscal year."
+      }
+    },
+    "reason": {
+      "needed": "Give a reason."
+    },
+    "acknowledge": {
+      "title": "{item}: acknowledge",
+      "reason": "Reason",
+      "working": "Saving",
+      "consequence": "The check stays visible and falls due again when the figures change.",
+      "prefillReviewed": "Reviewed."
+    },
+    "release": {
+      "title": "Release the balance sheet and income statement {period}",
+      "consequence": "Releases the balance sheet and income statement as they stand. If a posting changes the figures, the release becomes void."
+    },
+    "signoff": {
+      "title": "{item}",
+      "action": "Sign off",
+      "working": "Signing off",
+      "reference": "Reference",
+      "referenceHint": "Bank transaction or journal entry",
+      "balanceLabel": "Balance per bank statement in {currency}",
+      "balanceHint": "for example 12345.60",
+      "needsReference": "Name the reference that proves the payment.",
+      "consequenceReview": "Confirms the bridge for the return as computed now. If the return changes, the sign-off becomes void.",
+      "consequencePayment": "Confirms that the payment or credit is booked. The reference stays on the step.",
+      "consequenceBalance": "Records the balance per bank statement. The check \"bank statement matches\" compares it with the books."
+    },
+    "abandon": {
+      "title": "Abandon checklist {period}",
+      "reason": "Reason",
+      "action": "Confirm abandon",
+      "working": "Abandoning",
+      "consequence": "The checklist stays visible and feeds no attention items any more. It is not deleted."
+    },
+    "templateHint": {
+      "vat_period": "From the open books to the filed, locked and paid return.",
+      "month_close": "Checks, foreign currencies, accruals and the soft lock of the month.",
+      "year_close": "From the open year to the sealed fiscal year, with a preview before every posting."
+    },
+    "formula": {
+      "locks_on_all_months": "Every month of the period except the last carries a lock.",
+      "open_items_debtors": "Sum of open customer invoices as of the date = balance of account 1100.",
+      "bank_balance_matches": "Balance per bank statement at the period end = balance of the bank account in the books.",
+      "open_items_creditors": "Sum of open vendor bills less on-account payments as of the date = balance of account 2000.",
+      "accruals_reversed": "Account 1300 and account 2300 are at zero on the first day after the period end.",
+      "depreciation_within_limit": "Per asset: posted depreciation at most rate times book value (declining) or cost over useful life (straight line), pro rata to the months.",
+      "vat_accounts_zero": "Accounts 1170, 1171 and 2200 are at zero at the period end; account 2201 carries the last settlement.",
+      "vat_declared_equals_books": "Sum of Ziffer 399 = credits on account 2200; sum of Ziffer 400 and 405 = debits on accounts 1170 and 1171.",
+      "umsatzabstimmung": "Revenue per income statement minus accruals plus asset disposals = sum of Ziffer 200 of the returns.",
+      "tax_provision_plausible": "Posted tax provision within five percent of the provision per formula (profit times rate over one plus rate, less instalments paid).",
+      "balance_equation": "Sum of assets = sum of liabilities and equity as of the date; sum of debits = sum of credits over the period.",
+      "prior_year_comparison": "Per income account: a note when the change against the prior year exceeds fifty percent AND five thousand francs.",
+      "capital_loss": "Equity at least half of capital and statutory reserves."
+    },
+    "choiceConsequence": {
+      "yes": "The related steps are added.",
+      "no": "The related steps are dropped.",
+      "legalForm": {
+        "einzelfirma": "No tax provision, no general meeting.",
+        "gmbh": "Tax provision, capital-loss check and members' meeting are added.",
+        "ag": "Tax provision, capital-loss check and general meeting are added."
+      },
+      "vatMethod": {
+        "effektiv": "Settling the VAT accounts, turnover and input tax reconciliation are added.",
+        "saldo": "Settling the VAT accounts and the turnover reconciliation are added.",
+        "none": "The whole VAT block is dropped."
+      }
+    }
+  }
+}

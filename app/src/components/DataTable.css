@@ -1,0 +1,400 @@
+/* DataTable (D118 B2, round 2 D137). The one ledger/list table. Only --t-* tokens. This CSS is the
+   canonical replacement for the pay-, journal-, ct- and item- per-surface table styling, so it is
+   complete on its own: frame overflow and its edges, sticky header, the row as a number, alignment,
+   the opener, the selection pill and the table's own loading shape. */
+
+/* The wrap holds the frame and the two overflow edges (K-19). It is positioned so the edges can sit
+   on the frame's sides, and it is NOT a scroll container, so the sticky header logic below holds. */
+.data-table-wrap {
+  position: relative;
+}
+
+/* The frame owns the horizontal overflow, so a wide table scrolls sideways INSIDE itself and never
+   shoves the page body. Thin tokenised bar (inherited from the root, B1) with its gutter reserved.
+
+   F-04 (friction ledger, Phase 2): the frame is a scroll container ONLY while the table really
+   overflows it (DataTable.tsx measures that and stamps `data-overflow`). The bare frame stays
+   `overflow: visible`, and that is load-bearing: an `overflow-x: auto` frame computes `overflow-y`
+   to auto too, which made the frame the nearest scrolling ancestor of the sticky `thead th`. The
+   header then resolved `top: var(--surface-header-height)` against the FRAME (whose scrollport top
+   is the table's own top) and was pushed down by the whole page-header height onto the first data
+   row, on every list surface, at scrollTop 0. With the frame transparent to scrolling, <main> is
+   the one scrollport for the page header and the column labels alike, and the offset is exact. */
+.data-table-frame {
+  width: 100%;
+}
+
+/* K-19: an overflowing frame always draws its bar (`scroll`, not `auto`: the macOS overlay bar is
+   invisible at rest, which is how "Bearb" read as a column name), and the edges below mark the
+   sides that still hide content. */
+.data-table-frame[data-overflow] {
+  overflow-x: scroll;
+  scrollbar-gutter: stable;
+}
+
+/* The edges: one control-boundary line on each side that has more to show (the owner's K-19 pick).
+   No shade: a gradient painted over a figure at the edge dropped the last Rappen digit to 2.3:1
+   (C1 critic, F2). The line paints over the table (the raised tier) but under the sticky page
+   header (the sticky tier), never takes a pointer, and fades in with the hover beat. */
+.data-table-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: var(--t-z-raised);
+  width: var(--t-space-2);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--t-motion-hover) var(--t-ease-out);
+}
+
+.data-table-edge--start {
+  left: 0;
+  border-left: 1px solid var(--t-border-strong);
+}
+
+.data-table-edge--end {
+  right: 0;
+  border-right: 1px solid var(--t-border-strong);
+}
+
+.data-table-wrap[data-more-start] > .data-table-edge--start,
+.data-table-wrap[data-more-end] > .data-table-edge--end {
+  opacity: 1;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  /* Density-aware table type: 14px in Komfortabel, one step down in Kompakt (tokens.css). */
+  font-size: var(--t-font-table);
+  line-height: var(--t-lh-body);
+  color: var(--t-text);
+  /* Tree-indent channel: 0 by default (flat model), overridden inline per nested row by its depth.
+     Defined here so it is a real custom property, not an undefined var resolving to initial. */
+  --t-row-depth: 0;
+}
+
+/* The header sticks to the top of the scrolling main, so column labels stay while a long ledger
+   scrolls under them. It carries its own ground so rows never show through as they pass beneath.
+
+   S1 (N5 sweep): the SurfaceHeader is ALSO sticky at the top of that same one scroll region
+   (.frame > main), so a bare top:0 here pinned the labels at the SAME line and the opaque, higher-z
+   page header painted over them on every list surface. Stick BELOW the page header instead: both
+   resolve their sticky against the one main scrollport, so offsetting by the header's height lands
+   the labels just under it. --surface-header-height is published by SurfaceHeader.tsx as the header's
+   MEASURED rendered height (subtitle, density and wrapping included), so this is always exact with no
+   per-surface tuning. It falls back to 0 when no header is in scope (nothing to clear, so top:0 is
+   right there). The header stays on the raised tier, below the page header's sticky tier, so the
+   labels never overlap the title.
+
+   F-04: this offset is correct ONLY while <main> is the sticky containing block, which is the
+   non-overflowing frame's case above. A frame that scrolls sideways is itself the containing
+   block, so inside it the header pins to `top: 0` (its natural position, no displacement, and it
+   scrolls away with the page: a wide table trades its sticky labels for its sideways scroll rather
+   than covering its first row).
+
+   K-23: heads are quiet. 12px at weight 500 in the dim ink, sentence case (no transform), so a label
+   is dimmer AND smaller than the data but never bold and dim. The strip is its own height token. */
+.data-table thead th {
+  position: sticky;
+  top: var(--surface-header-height, 0px);
+  z-index: var(--t-z-raised);
+  height: var(--t-row-head-h);
+  padding: 0 var(--t-cell-pad-x);
+  background: var(--t-bg-soft);
+  border-bottom: 1px solid var(--t-border);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.data-table-frame[data-overflow] thead th {
+  top: 0;
+}
+
+/* Left-align text, right-align money and numbers. Never centre (design law). */
+.data-table [data-align='start'] {
+  text-align: left;
+}
+
+.data-table [data-align='end'] {
+  text-align: right;
+}
+
+/* The sort control fills its header cell so the whole label is the hit target; it is a quiet button,
+   not an accent one. The glyph trails the label and follows text alignment. The transparent border
+   is the focus cue's landing place (K-10). */
+.data-table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.data-table-sort:hover {
+  color: var(--t-text);
+}
+
+.data-table-sort:focus-visible {
+  outline: none;
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+}
+
+.data-table [data-align='end'] .data-table-sort {
+  flex-direction: row-reverse;
+}
+
+.data-table-sort-glyph {
+  display: inline-flex;
+  color: var(--t-text-faint);
+}
+
+/* The active sort column reads in the full ink, and its glyph takes the accent as an attention
+   signal (the selected sort is one of the three things the accent is for). */
+.data-table th[aria-sort='ascending'] .data-table-sort,
+.data-table th[aria-sort='descending'] .data-table-sort {
+  color: var(--t-text);
+}
+
+.data-table th[aria-sort='ascending'] .data-table-sort-glyph,
+.data-table th[aria-sort='descending'] .data-table-sort-glyph {
+  color: var(--t-accent);
+}
+
+/* K-20: the row is a NUMBER, not its content. Every body cell (the `<td>`s and the row-header `<th>`
+   alike) is `--t-row-h` tall: 36px in Komfortabel, 32px in Kompakt, both on the D116 band. The sides
+   are `--t-cell-pad-x`. A table rule is one of the few places a hairline is earned. */
+.data-table tbody :is(td, th) {
+  height: var(--t-row-h);
+  padding: var(--t-row-pad-y) var(--t-cell-pad-x);
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: middle;
+}
+
+/* The leading cell reads in the text ink at 500: the row's name, and its opener when it has one. */
+.data-table tbody th[scope='row'] {
+  font-weight: 500;
+  color: var(--t-text);
+}
+
+/* A cell that holds a control gives up its vertical padding, and the control is capped at the row,
+   so a button, a field or a select never grows the row (the 36px button that made a 53px row). */
+.data-table tbody :is(td, th):has(> :is(.btn, .field, .select, .select-trigger, .overflow-menu, .check-cell, button, input, select)) {
+  padding-block: 0;
+}
+
+.data-table tbody :is(td, th) :is(.btn, .field, .select-trigger, input:not([type='checkbox']):not([type='radio']), select) {
+  max-height: var(--t-row-h);
+}
+
+/* K-18: a figure never breaks. `nowrap` is the guarantee: value, sign and currency stay on one line
+   and the column takes the figure's full width from the wrapping text columns. The 10ch floor is only
+   a floor for short figures; it does NOT cover "CHF -123'456.78" (about 15ch), nowrap does. */
+.data-table :is(td, th).t-num {
+  white-space: nowrap;
+  min-width: 10ch;
+}
+
+/* The totals row (an optional <tfoot>). It reads as a summary, not another data row: its own soft
+   ground, a firmer top rule to close the column off, and the stronger weight a sum earns. Height and
+   padding follow the same row tokens as the body, so a total lines up with the figures above it. */
+.data-table tfoot td {
+  height: var(--t-row-h);
+  padding: var(--t-row-pad-y) var(--t-cell-pad-x);
+  border-top: 2px solid var(--t-border);
+  background: var(--t-bg-soft);
+  font-weight: 600;
+  color: var(--t-text);
+  vertical-align: middle;
+}
+
+/* A group header row (the optional grouped/tree model). It spans every column in one cell and reads
+   as a divider between piles: its own soft ground and a hairline, the label in the text ink at 500
+   (a label is never bold and dim, K-23). Height and padding follow the row tokens. */
+.data-table tbody td.data-table-group-cell {
+  height: var(--t-row-h);
+  padding: var(--t-row-pad-y) var(--t-cell-pad-x);
+  border-bottom: 1px solid var(--t-border);
+  background: var(--t-bg-soft);
+  font-weight: 500;
+  color: var(--t-text);
+  text-align: left;
+}
+
+/* Indent a nested group header and the leading cell of a nested row by the tree depth. One step per
+   level, keyed off the inline --t-row-depth the component sets; depth 0 gets the base padding. */
+.data-table tbody :is(td, th)[data-indented] {
+  padding-inline-start: calc(var(--t-cell-pad-x) + var(--t-row-depth, 0) * var(--t-space-3));
+}
+
+/* The disclosure control fills the header cell so the whole label toggles the group. A quiet button,
+   never the accent one; the chevron carries the state and rotates a quarter turn when open. */
+.data-table-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.data-table-group-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+}
+
+.data-table-group-chevron {
+  display: inline-flex;
+  color: var(--t-text-dim);
+  transition: transform var(--t-motion-pill) var(--t-ease-out);
+}
+
+/* Collapsed points right; open rotates it to point down, so the direction is the state and never
+   colour alone. */
+.data-table-group-chevron[data-open] {
+  transform: rotate(90deg);
+}
+
+/* A clickable row is a real affordance: a hover fill (the neutral background step, never the accent)
+   on every cell, with the hover beat, and a pointer cursor. */
+.data-table-row--clickable {
+  cursor: pointer;
+}
+
+.data-table-row--clickable > :is(td, th) {
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.data-table-row--clickable:hover > :is(td, th) {
+  background: var(--t-bg-soft);
+}
+
+/* K-10: a row that is itself the control (`onRowClick`) draws its focus on its cells, because a
+   table row paints no box-shadow of its own: one brass line round the whole row, the border cue of
+   "Sehr subtil" stretched to the row. Not a side bar (K-24): all four sides. */
+.data-table-row--clickable:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.data-table-row--clickable:focus-visible > :is(td, th) {
+  box-shadow:
+    inset 0 1px 0 var(--t-focus-border),
+    inset 0 -1px 0 var(--t-focus-border);
+}
+
+.data-table-row--clickable:focus-visible > :first-child {
+  box-shadow:
+    inset 1px 0 0 var(--t-focus-border),
+    inset 0 1px 0 var(--t-focus-border),
+    inset 0 -1px 0 var(--t-focus-border);
+}
+
+.data-table-row--clickable:focus-visible > :last-child {
+  box-shadow:
+    inset -1px 0 0 var(--t-focus-border),
+    inset 0 1px 0 var(--t-focus-border),
+    inset 0 -1px 0 var(--t-focus-border);
+}
+
+.data-table-row--clickable:focus-visible > :first-child:last-child {
+  box-shadow: inset 0 0 0 1px var(--t-focus-border);
+}
+
+/* K-21: the route opener. A real link in the leading cell, in the text ink at 500 (never the accent:
+   an accent on every row is no signal), underlined on hover as the text-link cue, while the row's
+   hover fill says the whole line opens. The transparent border is the focus cue's landing place. */
+.data-table-open {
+  margin: 0 -1px;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.data-table-open:hover {
+  color: var(--t-text);
+  text-decoration: underline;
+}
+
+.data-table-open:focus-visible {
+  outline: none;
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+}
+
+/* K-24: selection is the pill, on EVERY cell of the row (the row-header `<th>` included, which is
+   where the old treatment left a hole), with the accent ink on the leading cell. No side bar, no
+   inset shadow, no ring. It outranks the hover fill, so a selected row keeps its tint under the
+   pointer. */
+.data-table .data-table-row[data-selected] > :is(td, th) {
+  background: var(--t-accent-soft);
+}
+
+.data-table .data-table-row[data-selected] > [data-lead],
+.data-table .data-table-row[data-selected] > [data-lead] .data-table-open {
+  color: var(--t-accent);
+}
+
+/* K-14: the checkbox column. The `.check-cell` label is the target (the dense band); the cell only
+   holds it snug to the leading edge. */
+.data-table :is(td, th).data-table-check {
+  width: 1%;
+  padding-block: 0;
+  padding-inline-end: 0;
+}
+
+/* K-21: the one trailing overflow. The cell shrinks to the trigger and sits flush right. */
+.data-table :is(td, th).data-table-actions {
+  width: 1%;
+  padding-block: 0;
+  padding-inline: 0 var(--t-space-0-5);
+  white-space: nowrap;
+}
+
+/* K-34: the table's own loading shape. The head strip and each row are exactly the heights the real
+   ones take, so nothing moves when the data lands. Invisible for the first 200ms (the component
+   reveals it), so a fast local read never flashes it; `visibility` keeps its box. */
+.data-table-skeleton[data-pending] {
+  visibility: hidden;
+}
+
+.data-table-skeleton-head {
+  height: var(--t-row-head-h);
+  background: var(--t-bg-soft);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.data-table-skeleton-row {
+  display: flex;
+  align-items: center;
+  height: var(--t-row-h);
+  padding: 0 var(--t-cell-pad-x);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.data-table-skeleton-bar {
+  width: 100%;
+  height: var(--t-space-2);
+}
+
+.data-table-skeleton-row:last-child .data-table-skeleton-bar {
+  width: 60%;
+}

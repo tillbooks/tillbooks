@@ -1,0 +1,184 @@
+/**
+ * M00 first-run flow. Three equal doors on a responsive grid, the one panel treatment (the elevated
+ * ground on the page, no border: the hairline is earned, not issued), one typeface, no invented
+ * accent (the doors are neutral; the one primary action carries the accent the button system owns).
+ * The page wears the shared SurfaceHeader (K-07) and sits in <main>'s own inset, like every surface.
+ * The runtime line sits quiet at the foot.
+ */
+
+.firstrun {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  max-width: 64rem;
+}
+
+.firstrun-intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  max-width: 60ch;
+}
+
+.firstrun-lead {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.firstrun-doors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--t-space-2);
+}
+
+.firstrun-door {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-3);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.firstrun-door-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.firstrun-door-hint {
+  margin: 0;
+  color: var(--t-text-dim);
+  max-width: 40ch;
+}
+
+/* The adopt door's closing sentence sits at the door's foot, like the buttons of the other two. */
+.firstrun-door-foot {
+  margin-top: auto;
+}
+
+.firstrun-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.firstrun-adopt-cmd {
+  margin: 0;
+  padding: var(--t-space-2);
+  background: var(--t-bg);
+  border-radius: var(--t-radius-md);
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* F-05: the demo line under the doors. Prose-weight, wraps on a narrow viewport, the hint dimmer. */
+.firstrun-demo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  margin: 0;
+  color: var(--t-text);
+}
+
+.firstrun-demo-hint {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.firstrun-foot {
+  border-top: 1px solid var(--t-border);
+  padding-top: var(--t-space-2);
+}
+
+.runtime-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.runtime-line-mode {
+  margin: 0;
+}
+
+.runtime-line-glyph {
+  margin-right: var(--t-space-0-5);
+  vertical-align: text-bottom;
+}
+
+.runtime-line-scheduler,
+.runtime-line-caveat {
+  margin: 0;
+}
+
+.runtime-line-caveat {
+  max-width: 60ch;
+  color: var(--t-text);
+}
+
+/* --- M03 journey (N4a): the pre-commitment residency lead -------------------------------------- */
+
+.firstrun-residency {
+  color: var(--t-text-dim);
+  margin: 0;
+}
+
+/* The restore door's pick list (F-06, J7.2): the bundles this machine can see, one radio each, the
+   typed path behind the last option. A bundle from another generation stays visible and named,
+   disabled rather than hidden. */
+.firstrun-picklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin: 0 0 var(--t-space-2);
+  padding: 0;
+  border: 0;
+}
+
+.firstrun-picklist legend {
+  padding: 0;
+  margin-bottom: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.firstrun-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.firstrun-pick input {
+  margin-top: 3px;
+}
+
+.firstrun-pick-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.firstrun-pick--incompatible .firstrun-pick-main,
+.firstrun-pick-note {
+  color: var(--t-text-dim);
+}
+
+.firstrun-pick-note {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.firstrun-generation,
+.firstrun-verified {
+  margin: 0 0 var(--t-space-1);
+}

@@ -1,0 +1,113 @@
+{
+  "nav": {
+    "dunning": "Mahnwesen"
+  },
+  "dunning": {
+    "title": "Mahnwesen",
+    "subtitle": "Überfällige Rechnungen gestuft mahnen.",
+    "toOpenItems": "Zur OP-Liste",
+    "toSetup": "Zur Einrichtung",
+    "propose": "Mahnlauf vorschlagen",
+    "proposeDenied": "Mahnlauf vorschlagen (keine Berechtigung)",
+    "issue": "Ausstellen",
+    "issueDenied": "Ausstellen (keine Berechtigung)",
+    "issueDeniedPost": "Ausstellen (Buchen-Berechtigung fehlt)",
+    "recoverFee": "Gebühr nachbuchen",
+    "feeStillLocked": "Die Periode ist weiterhin gesperrt: die Mahngebühr konnte noch nicht verbucht werden.",
+    "send": "Versenden",
+    "sendDenied": "Versenden (keine Berechtigung)",
+    "currentRun": "Mahnlauf vom {date}",
+    "reviewCaption": "Rechnungen in diesem Mahnlauf",
+    "historyCaption": "Verlauf der Mahnläufe",
+    "history": "Mahnläufe",
+    "savedView": "Ansicht",
+    "allRuns": "Alle Mahnläufe",
+    "level1": "1. Mahnung",
+    "level2": "2. Mahnung",
+    "level3": "3. Mahnung",
+    "daysOverdue": "Tage überfällig",
+    "minInterval": "Min. Tage seit letzter Mahnung",
+    "fee": "Mahngebühr (CHF)",
+    "feeAccount": "Ertragskonto",
+    "interestNote": "Verzugszins ausweisen",
+    "interestRate": "Zinssatz (%)",
+    "status": {
+      "proposed": "Vorgeschlagen",
+      "issued": "Ausgestellt",
+      "sent": "Versendet"
+    },
+    "column": {
+      "runDate": "Datum",
+      "status": "Status",
+      "debtors": "Debitoren",
+      "items": "Rechnungen",
+      "maxLevel": "Höchste Stufe",
+      "debtor": "Debitor",
+      "invoice": "Rechnung",
+      "level": "Stufe",
+      "dueDate": "Fällig am",
+      "daysOverdue": "Tage überfällig",
+      "open": "Offen",
+      "fee": "Gebühr",
+      "interest": "Verzugszins"
+    },
+    "downloadLetter": "Mahnbrief für {debtor} herunterladen",
+    "letterSent": "versendet",
+    "changed": {
+      "paid": "bezahlt",
+      "partiallyPaid": "teilweise bezahlt",
+      "cancelled": "storniert",
+      "credited": "gutgeschrieben"
+    },
+    "changedBadge": "seit Ausstellung {reason}",
+    "changedLetterHeld": "Seit Ausstellung {reason}: diesen Brief nicht wie ausgestellt versenden, die geforderte Summe stimmt nicht mehr. Der Rest folgt mit der nächsten Mahnung.",
+    "noEmail": "keine E-Mail-Adresse, bitte Brief manuell zustellen",
+    "noOverdue": "Keine überfälligen Rechnungen: es gibt nichts zu mahnen.",
+    "alreadyProposed": "Der Mahnlauf für dieses Datum existiert bereits: er wird unten angezeigt.",
+    "nothingToIssue": "Alle vorgeschlagenen Rechnungen sind inzwischen bezahlt: nichts auszustellen.",
+    "needsCreditorAddress": "Für den Mahnbrief fehlt die Absenderadresse.",
+    "needsEmailTransport": "Kein E-Mail-Versand eingerichtet: lade die Briefe herunter und versende sie manuell.",
+    "feeSkippedLockedPeriod": "Der Mahnlauf wurde ausgestellt, die Mahngebühr aber nicht verbucht: die Periode ist gesperrt.",
+    "feeNotDemanded": "nicht gefordert",
+    "alreadyIssuedUseRecovery": "Dieser Mahnlauf ist bereits ausgestellt. Die Mahngebühr ist noch offen: buche sie mit «Gebühr nachbuchen» nach.",
+    "feeSkippedShort": "(Gebühr nicht verbucht)",
+    "empty": {
+      "title": "Noch keine Mahnläufe.",
+      "hint": "Ein Mahnlauf liest die überfälligen Rechnungen aus der OP-Liste und schlägt pro Rechnung die nächste Mahnstufe vor."
+    },
+    "error": {
+      "transport": "Die Mahnläufe konnten nicht geladen werden.",
+      "action": "Die Aktion ist fehlgeschlagen. Versuche es noch einmal.",
+      "permissionDenied": {
+        "read": "Dir fehlt die Berechtigung, das Mahnwesen zu lesen."
+      }
+    },
+    "config": {
+      "title": "Einstellungen",
+      "hint": "Die drei Mahnstufen sind eine Geschäftskonvention, keine gesetzliche Frist. Alle drei werden zusammen gespeichert.",
+      "intervalHint": "Der Mindestabstand hält die Mahnungen auseinander: eine höhere Stufe wird erst erreicht, wenn so viele Tage seit der vorherigen Mahnung vergangen sind. Eine längst überfällige Rechnung eskaliert dadurch Brief für Brief statt alle auf einmal. Standard sind 10 Tage.",
+      "feeHint": "Eine Mahngebühr hat keine gesetzliche Grundlage: sie ist nur zulässig, wenn sie vertraglich vereinbart und angemessen ist. Eine erhobene Gebühr wird immer verbucht, und ihre MWST folgt automatisch den Steuersätzen der gemahnten Rechnung.",
+      "interestHint": "Der Verzugszins beträgt von Gesetzes wegen 5% pro Jahr (Art. 104 OR); nur ein höherer vertraglicher Satz ist zulässig. Er wird auf dem offenen Rechnungsbetrag berechnet (effektive Tage, 365-Tage-Jahr), auf dem Brief ausgewiesen und nie verbucht.",
+      "pickAccount": "Konto wählen",
+      "save": "Einstellungen speichern",
+      "saveDenied": "Einstellungen speichern (keine Berechtigung)",
+      "saved": "Gespeichert.",
+      "error": {
+        "interestFloor": "Der Zinssatz liegt unter dem gesetzlichen Satz von 5% (Art. 104 OR).",
+        "needsAccount": "Eine verbuchte Gebühr braucht ein Ertragskonto.",
+        "invalid": "Die Einstellungen sind unvollständig: prüfe die Stufen."
+      }
+    },
+    "unknownDebtor": "Unbekannter Debitor",
+    "unnumbered": "Ohne Nummer",
+    "rowOpen": "Mahnlauf vom {date} öffnen"
+  },
+  "help": {
+    "Dunning": {
+      "title": "Mahnwesen",
+      "body": "Das Mahnwesen arbeitet in Läufen: Vorschlagen sammelt die überfälligen offenen Posten, du prüfst den Lauf und stellst dann aus und versendest. Stufen, Fristen, Gebühren und Verzugszins kommen aus deiner Mahnrichtlinie; jede Zahl im Lauf ist eingefroren und nachvollziehbar. Ausstellen und Versenden sind getrennte, bewusste Schritte.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

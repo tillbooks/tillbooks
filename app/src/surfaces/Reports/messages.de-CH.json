@@ -1,0 +1,203 @@
+{
+  "nav": {
+    "reports": "Auswertungen"
+  },
+  "reports": {
+    "title": "Auswertungen",
+    "loading": "Auswertung wird geladen",
+    "tablist": "Auswertung wählen",
+    "headerActions": "Weitere Exporte",
+    "delta": "Δ",
+    "account": "Konto",
+    "total": "Total",
+    "subtotal": "Zwischentotal",
+    "aktiven": "Aktiven",
+    "passiven": "Passiven",
+    "totalAktiven": "Total Aktiven",
+    "totalPassiven": "Total Passiven",
+    "reingewinn": "Jahresgewinn",
+    "reinverlust": "Jahresverlust",
+    "reingewinnOderReinverlust": "Jahresgewinn oder Jahresverlust",
+    "openingBalance": "Eröffnungssaldo",
+    "closingBalance": "Schlusssaldo",
+    "lineCount": "{n} Zeilen",
+    "rowActionsFor": "Kontoblatt für {account} öffnen",
+    "openEntry": "Buchung öffnen",
+    "noOpening": "Keine Eröffnung",
+    "asOf": "Stichtag",
+    "currencyNote": "Alle Beträge in {currency}",
+    "tab": {
+      "trialBalance": "Saldenbilanz",
+      "balanceSheet": "Bilanz",
+      "incomeStatement": "Erfolgsrechnung",
+      "generalLedger": "Kontoblatt"
+    },
+    "heading": {
+      "trialBalance": "Saldenbilanz {from} bis {to}",
+      "balanceSheet": "Bilanz per {date}",
+      "incomeStatement": "Erfolgsrechnung {from} bis {to}",
+      "generalLedger": "Kontoblatt {account} {from} bis {to}"
+    },
+    "period": {
+      "from": "Von",
+      "to": "Bis"
+    },
+    "compare": {
+      "label": "Vergleich",
+      "none": "kein",
+      "priorPeriod": "Vorperiode",
+      "priorYear": "Vorjahr",
+      "columnBalance": "Saldo per {date}",
+      "archive": "Vorsystem (Archiv)"
+    },
+    "picker": {
+      "pick": "Konto auswählen",
+      "search": "Konto suchen",
+      "showArchived": "Archivierte anzeigen",
+      "archived": "Archiviert",
+      "list": "Konten",
+      "loading": "Konten werden geladen",
+      "noMatch": "Kein Konto passt zu dieser Suche.",
+      "clearSearch": "Suche löschen"
+    },
+    "column": {
+      "opening": "Eröffnung",
+      "debit": "Soll",
+      "credit": "Haben",
+      "balance": "Saldo",
+      "date": "Datum",
+      "ref": "Beleg",
+      "description": "Text",
+      "source": "Herkunft",
+      "name": "Bezeichnung",
+      "number": "Konto"
+    },
+    "source": {
+      "close": "Abschluss",
+      "invoice": "Rechnung",
+      "payment": "Zahlung",
+      "reversal": "Storno",
+      "import": "Import",
+      "agent": "Agent",
+      "fx": "Kursdifferenz",
+      "purchase": "Kreditorenrechnung",
+      "dunning": "Mahngebühr",
+      "credit_note": "Gutschrift",
+      "camt": "Bankauszug (camt)",
+      "stock": "Lagerbewertung",
+      "landed_cost": "Einstandsnebenkosten",
+      "expense_claim": "Spesenabrechnung",
+      "asset_acquisition": "Anlagenzugang",
+      "asset_depreciation": "Abschreibung",
+      "asset_disposal": "Anlagenabgang",
+      "inventory_valuation": "Bestandesbewertung",
+      "accrual": "Abgrenzung",
+      "provision": "Rückstellung",
+      "vat_settlement": "MWST-Saldierung"
+    },
+    "export": {
+      "pdf": "Als PDF exportieren",
+      "csv": "Als CSV exportieren",
+      "working": "Wird erstellt",
+      "needsAccount": "Wähl zuerst ein Konto, dann kannst du das Kontoblatt exportieren.",
+      "notArchival": "Das PDF ist eine Druckdatei, kein PDF/A.",
+      "archiveCompare": "Der Vorsystem-Vergleich ist eine Bildschirmspalte; exportiere ohne Vergleich."
+    },
+    "empty": {
+      "trialBalance": "Keine Buchungen in dieser Periode. Sobald du buchst, steht hier jedes Konto mit seinem Saldo.",
+      "trialBalanceAction": "Buchung erfassen",
+      "structure": "Keine Buchungen in dieser Periode. Die Gliederung steht trotzdem, mit 0.00 auf jeder Position.",
+      "structureAction": "Buchung erfassen",
+      "ledgerNoMovement": "In dieser Periode hat sich auf diesem Konto nichts bewegt. Eröffnungssaldo und Schlusssaldo stehen oben und unten.",
+      "noAccountPicked": "Wähl ein Konto, dann siehst du jede Buchung darauf mit laufendem Saldo.",
+      "noWorkspaceHint": "Richte zuerst einen Arbeitsbereich ein, dann kannst du auswerten."
+    },
+    "reconciled": {
+      "trial": "Stimmt mit dem Journal überein",
+      "balance": "Aktiven und Passiven stimmen überein, und das Journal geht auf.",
+      "ledger": "Der Schlusssaldo stimmt mit dem Journal überein",
+      "hintLabel": "Was die Abstimmung prüft",
+      "hintTitle": "Was verglichen wurde",
+      "hintBody": "Verglichen wurden zwei Rechenwege über dieselben Buchungen: die Summen dieser Auswertung und eine unabhängige Abfrage im Journal. Das prüft die Periodengrenzen und die Vollständigkeit. Es prüft nicht, ob ein Konto im richtigen Abschnitt steht."
+    },
+    "mismatch": {
+      "title": "Diese Auswertung stimmt nicht mit dem Journal überein.",
+      "action": "Journal öffnen",
+      "debitEqualsCredit": "Soll und Haben sind nicht gleich. In einem Buch, das durch TILL geschrieben wurde, kann das nicht passieren: die Datei stammt vermutlich aus einem Import oder einer Wiederherstellung.",
+      "closingTiesToLedger": "Der berechnete Schlusssaldo weicht von der Abfrage im Journal ab. Meist liegt das an einer Periodengrenze.",
+      "everyAccountRenderedOnce": "Es fehlen Konten in dieser Auswertung, oder eines steht doppelt drin. Die Summen können trotzdem aufgehen.",
+      "aktivenEqualPassiven": "Aktiven und Passiven unterscheiden sich. Das ist ein Fehler in der Zuordnung der Konten zu den Abschnitten, nicht in deinen Buchungen.",
+      "ledgerNetsToZero": "Das Journal geht nicht auf null auf. Das betrifft die Datenbank selbst, nicht diese Auswertung.",
+      "everyAccountClassifiedOnce": "Nicht jedes Konto ist genau einmal in einem Abschnitt gelandet.",
+      "resultTiesToLedger": "Die Summe der Positionen ergibt nicht denselben Wert wie die Abfrage nach Kontoart."
+    },
+    "balanceSheet": {
+      "coverage": "Die Abschnitte sind Gruppierungen über deinen Kontenplan, nicht die Positionsnamen von OR Art. 959a.",
+      "coverageLabel": "Was die Gliederung abdeckt",
+      "coverageTitle": "OR Art. 959a und diese Bilanz",
+      "coverageHint": "OR Art. 959a verlangt 24 einzeln benannte Positionen in fester Reihenfolge. TILL bildet die sieben Obergruppen ab und listet darunter deine Konten nach Nummer. Mit dem mitgelieferten Kontenrahmen KMU ergibt das die richtige Reihenfolge. Wenn du deine Konten umnummerierst, stimmt die Reihenfolge nicht mehr, und keine Abstimmung merkt das."
+    },
+    "computedEquity": {
+      "label": "Warum diese Positionen kein Konto haben",
+      "title": "Berechnete Positionen",
+      "hint": "Diese beiden Positionen werden aus dem Ergebnis berechnet, sie sind nicht auf ein Konto gebucht. Darum lässt sich hier nichts aufklappen."
+    },
+    "incomeStatement": {
+      "signNote": "Jede Position steht als Beitrag zum Gewinn: Ertrag positiv, Aufwand negativ.",
+      "closedYearLabel": "Abschlussbuchung und Erfolgsrechnung",
+      "closedYearTitle": "Ein abgeschlossenes Jahr",
+      "closedYearHint": "Die Abschlussbuchung zählt hier nicht mit, in der Bilanz dagegen schon. Darum zeigt ein abgeschlossenes Jahr hier seinen echten Erfolg und in der Bilanz das Ergebnis im Eigenkapital."
+    },
+    "generalLedger": {
+      "naturalSideLabel": "Vorzeichen auf diesem Konto",
+      "naturalSideTitle": "Soll oder Haben",
+      "naturalSide": {
+        "debit": "Dieses Konto steht normalerweise im Soll.",
+        "credit": "Dieses Konto steht normalerweise im Haben, darum ist der Saldo hier negativ und in der Bilanz positiv."
+      },
+      "signFromStatement": "Im Kontoblatt steht der Saldo so, wie ihn das Journal führt. In der Erfolgsrechnung steht er mit umgekehrtem Vorzeichen, weil dort jede Position als Beitrag zum Gewinn gezeigt wird.",
+      "closedYearNote": "In dieser Periode liegt eine Abschlussbuchung. Sie steht hier drin und in der Erfolgsrechnung nicht, darum kann der Schlusssaldo null sein, obwohl das Konto im Jahr bewegt wurde."
+    },
+    "trialBalance": {
+      "totalsLabel": "Warum hier null steht",
+      "totalsTitle": "Eröffnung und Saldo im Total",
+      "totalsNetToZero": "Ein Buch, das aufgeht, summiert sich in der Eröffnungs- und in der Saldo-Spalte auf null. Steht dort etwas anderes als 0.00, stimmt etwas nicht."
+    },
+    "kmuClass": {
+      "unclassifiedLabel": "Konten ohne Klasse",
+      "unclassifiedTitle": "Ausserhalb des Kontenrahmens",
+      "unclassifiedHint": "Diese Konten liegen ausserhalb der Nummernbereiche des Kontenrahmens KMU. In der Bilanz landen sie unter «Übrige Aktiven» oder «Übrige Passiven»."
+    },
+    "error": {
+      "transport": "Die Auswertung konnte nicht geladen werden.",
+      "transportRetry": "Erneut versuchen",
+      "needsChart": "Dein Arbeitsbereich hat noch keinen Kontenplan. Ohne Konten gibt es nichts auszuwerten.",
+      "needsChartAction": "Kontenplan öffnen",
+      "invalidPeriod": "Das Enddatum liegt vor dem Startdatum.",
+      "invalidDate": "Das ist kein gültiges Datum. Format: TT.MM.JJJJ.",
+      "accountNotFound": "Dieses Konto gibt es in deinem Kontenplan nicht mehr. Wähl ein anderes.",
+      "export": "Die Datei konnte nicht erstellt werden. Es wurde nichts heruntergeladen.",
+      "exportRetry": "Erneut versuchen",
+      "permissionDenied": "Dir fehlt die Berechtigung, Auswertungen zu sehen.",
+      "accountList": "Die Konten konnten nicht geladen werden."
+    },
+    "comparative": {
+      "prior": "Vorsystem {system}, {from} bis {to}",
+      "noData": "Keine Daten im Archiv für diesen Zeitraum",
+      "partialPeriod": "Zeitraum unvollständig im Archiv"
+    },
+    "cite": {
+      "citeLabel": "Rechtsgrundlage zu {section}",
+      "citeBody": "Diese Position folgt der gesetzlichen Gliederung."
+    }
+  },
+  "help": {
+    "Reports": {
+      "title": "Abschluss",
+      "body": "Bilanz, Erfolgsrechnung, Saldenbilanz und Kontoblatt, berechnet aus dem Journal in seiner gesetzlichen Gliederung. Jede Position trägt ihre Rechtsgrundlage als Zitat. Die Zahlen sind jederzeit nachvollziehbar: Ein Klick auf eine Position führt zum Kontoblatt, das jede Buchung dahinter zeigt. Exportiert wird dieselbe Berechnung, darum können Bildschirm und Datei nie voneinander abweichen.",
+      "concepts": [
+        "verrechnungssteuer"
+      ]
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "period": "2026-Q2",
+  "periodStart": "2026-04-01",
+  "periodEnd": "2026-06-30",
+  "method": "effektiv",
+  "filed": true,
+  "outputMinor": 370220,
+  "inputMinor": 210600,
+  "netMinor": 159620,
+  "lines": [
+    {
+      "role": "output",
+      "accountNumber": "2200",
+      "accountId": "acc_17",
+      "debitMinor": 370220,
+      "creditMinor": 0
+    },
+    {
+      "role": "input_1170",
+      "accountNumber": "1170",
+      "accountId": "acc_6",
+      "debitMinor": 0,
+      "creditMinor": 178200
+    },
+    {
+      "role": "input_1171",
+      "accountNumber": "1171",
+      "accountId": "acc_7",
+      "debitMinor": 0,
+      "creditMinor": 32400
+    },
+    {
+      "role": "output",
+      "accountNumber": "2201",
+      "accountId": "acc_18",
+      "debitMinor": 0,
+      "creditMinor": 159620
+    }
+  ],
+  "declared": {
+    "outputMinor": 370220,
+    "inputMinor": 210600,
+    "netMinor": 159620
+  },
+  "differences": {
+    "outputMinor": 0,
+    "inputMinor": 0,
+    "netMinor": 0
+  },
+  "nothingToSettle": false,
+  "settlement": null,
+  "ok": true
+}

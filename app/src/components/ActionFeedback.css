@@ -1,0 +1,67 @@
+/* The shared transient / success feedback banner. One shape for every surface's confirmation, the
+   sibling of the error banner. bg-elev ground with a tone-coloured hairline and glyph; the glyph
+   SHAPE plus the text carry the status, so colour is never the only signal (DESIGN.md, Status). */
+.action-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.action-feedback__glyph {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--t-text-dim);
+}
+
+.action-feedback__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.action-feedback__message {
+  margin: 0;
+  color: var(--t-text);
+}
+
+.action-feedback__detail {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* The dismiss control is the shared secondary button; it only needs to hold its own width. */
+.action-feedback__dismiss {
+  flex: 0 0 auto;
+}
+
+/* Tone: the coloured hairline and glyph. success / warn / error each sit >=25 dE from the accent and
+   from each other (the measured gate in tokens.css); info is the neutral notice, so it takes the
+   strong border and the dim glyph, no status colour to claim. */
+.action-feedback--success {
+  border-color: var(--t-success);
+}
+.action-feedback--success .action-feedback__glyph {
+  color: var(--t-success);
+}
+
+.action-feedback--warn {
+  border-color: var(--t-warn);
+}
+.action-feedback--warn .action-feedback__glyph {
+  color: var(--t-warn);
+}
+
+.action-feedback--error {
+  border-color: var(--t-danger);
+}
+.action-feedback--error .action-feedback__glyph {
+  color: var(--t-danger);
+}

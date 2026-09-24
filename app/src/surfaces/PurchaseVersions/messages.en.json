@@ -1,0 +1,73 @@
+{
+  "nav": {
+    "poVersions": "PO versions"
+  },
+  "poVersions": {
+    "title": "PO versions",
+    "noWorkspace": "Choose a workspace to see purchase-order versions.",
+    "error": {
+      "transport": "The purchase orders could not be loaded."
+    },
+    "empty": {
+      "title": "No purchase orders yet.",
+      "hint": "Once a purchase order is sent, you can version and amend it here.",
+      "action": "Go to Purchasing"
+    },
+    "col": {
+      "number": "Number",
+      "status": "Status",
+      "total": "Total"
+    },
+    "list": {
+      "caption": "Purchase orders"
+    },
+    "status": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "received": "Received",
+      "closed": "Closed",
+      "cancelled": "Cancelled"
+    },
+    "detail": {
+      "title": "Purchase order"
+    },
+    "versions": {
+      "title": "Versions",
+      "empty": "No version recorded yet.",
+      "version": "Version"
+    },
+    "vstatus": {
+      "active": "Active",
+      "superseded": "Superseded"
+    },
+    "amend": {
+      "title": "Amendment",
+      "reason": "Reason",
+      "qty": "Quantity",
+      "unitPrice": "Unit price",
+      "impactTitle": "Impact",
+      "delta": "Committed-value change"
+    },
+    "violation": {
+      "qty_below_received": "Quantity cannot fall below the quantity already received.",
+      "line_has_receipts": "A line that has receipts cannot be removed.",
+      "line_not_found": "The line no longer exists."
+    },
+    "action": {
+      "back": "Back",
+      "amend": "Amend",
+      "cancel": "Cancel",
+      "preview": "Preview",
+      "submit": "Submit for approval",
+      "apply": "Apply"
+    }
+  },
+  "help": {
+    "PurchaseVersions": {
+      "title": "PO versions",
+      "body": "Every change to a live purchase order happens here as a new version, never by rewriting the old one. The list shows your orders; the detail carries the immutable version timeline with the reason behind each change.\n\nThe detail also holds the amendment workspace: adjust quantities and prices of the open lines, preview the effect on the committed value, then apply or submit for approval.\n\nThe amended document is rendered but never sent automatically.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

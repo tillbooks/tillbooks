@@ -1,0 +1,212 @@
+{
+  "nav": {
+    "reconciliation": "Matching"
+  },
+  "qrmatch": {
+    "title": "Payment matching",
+    "subtitle": "Match incoming payments to open invoices.",
+    "record": "Record credit",
+    "savedView": "View",
+    "savedViewAll": "All",
+    "counts": "{open} open ({review} to review, {unmatched} unmatched) · {applied} applied",
+    "col": {
+      "date": "Value date",
+      "amount": "Amount",
+      "reference": "Reference",
+      "match": "Invoice",
+      "state": "Status",
+      "actions": "Actions"
+    },
+    "confidence": {
+      "high": "Confident",
+      "medium": "Needs review",
+      "none": "Unmatched"
+    },
+    "reason": {
+      "exact_open": "Reference and amount match exactly",
+      "exact_open_plus_fee": "Amount equals invoice plus reminder fee",
+      "amount_short": "Amount is below the open amount",
+      "amount_over": "Amount is above the open amount",
+      "currency_differs": "Currency differs from the invoice",
+      "no_invoice": "No open invoice for this reference",
+      "already_paid": "The invoice is already settled",
+      "ambiguous_reference": "Several open invoices claim this reference",
+      "reference_invalid": "The reference has an invalid check digit",
+      "no_reference": "No structured reference"
+    },
+    "state": {
+      "applied": "Applied",
+      "dismissed": "Not a customer payment"
+    },
+    "noReference": "No reference",
+    "noMatch": "No invoice matched",
+    "applyFull": "Apply",
+    "review": "Review",
+    "reviewTitle": "Review the payment for {invoice}",
+    "reviewCancel": "Cancel",
+    "rowActionsFor": "Actions for the credit of {amount}",
+    "matchManually": "Match manually",
+    "override": "Override",
+    "reviewDetail": "Invoice {invoice}: open {open}, difference {delta}.",
+    "feeShare": "Of which reminder fee: {fee} (parked as credit balance).",
+    "applyPartial": "Book as partial payment",
+    "applyAsFull": "Accept as full payment ({loss} loss)",
+    "autoApply": "Apply confident matches automatically (exact reference and exact amount only)",
+    "empty": "No incoming payments to match yet",
+    "emptyHint": "Record a bank credit to match it against an open invoice.",
+    "denied": "Requires the permission to book payments",
+    "deniedRead": "You need sales read access to see the matching queue.",
+    "deniedNote": "You are missing the permission for that.",
+    "alreadyPaid": "This invoice is already settled.",
+    "periodLocked": "The period is locked: the payment cannot be booked there.",
+    "currencyMismatch": "The currencies differ: record the payment with its conversion under Payments.",
+    "needsBankAccount": "The bank account is not registered.",
+    "toPeriods": "Go to periods",
+    "toBankAccounts": "Go to bank accounts",
+    "error": {
+      "action": "That did not work. Try again.",
+      "record": "The credit could not be recorded."
+    },
+    "form": {
+      "account": "Bank account",
+      "accountPick": "Choose a bank account",
+      "amount": "Amount (CHF)",
+      "valueDate": "Value date",
+      "reference": "Reference (QRR or RF)",
+      "payer": "Payer",
+      "submit": "Add to the queue"
+    },
+    "overrideAudit": "Applied by {who} on {when}. A correction reverses the payment and books anew.",
+    "overridePick": "Correct invoice",
+    "overridePickNone": "Choose no invoice",
+    "overrideApply": "Match and book",
+    "overrideReapply": "Reverse and rematch",
+    "overrideUnmatch": "Remove the match",
+    "overrideDismiss": "Not a customer payment",
+    "close": "Close",
+    "lossAboveThreshold": "The remainder of {loss} exceeds the write-off ceiling ({threshold}): record the payment with a deliberate write-off under Payments.",
+    "toPayments": "Record under Payments",
+    "remainingOpen": "Still open: {open}",
+    "creditedShare": "Of which offset by credit note: {credited}."
+  },
+  "camt": {
+    "rowActionsFor": "Actions for the movement of {amount}",
+    "import": "Import statement",
+    "denied": "Requires the permission to book payments",
+    "duplicate": "This statement was already imported; nothing was recorded twice.",
+    "noEntryRef": "No reference",
+    "seeQueue": "Decide it in the queue above",
+    "confirm": "Match",
+    "createEntry": "Book",
+    "form": {
+      "account": "Bank account",
+      "file": "camt.053/054 file",
+      "fileDrop": "Drop the statement here",
+      "submit": "Import",
+      "allowDuplicates": "This really is a second, genuine booking (not a re-delivery)"
+    },
+    "col": {
+      "entryRef": "Reference"
+    },
+    "state": {
+      "matched": "Matched",
+      "unmatched": "Unmatched",
+      "partial": "Partial"
+    },
+    "board": {
+      "title": "Bank statement",
+      "reconciled": "Reconciled to the account balance",
+      "notReconciled": "Not yet reconciled to the account balance",
+      "close": "Close",
+      "empty": "This statement carries no transactions",
+      "emptyHint": "Import another statement to see its movements."
+    },
+    "dialog": {
+      "pickBill": "Vendor bill",
+      "pickEntry": "Or: link an existing entry (entry ID)",
+      "entryIdPlaceholder": "Entry ID",
+      "confirmBill": "Match to bill",
+      "confirmEntry": "Link entry",
+      "pickContra": "Contra account",
+      "description": "Description",
+      "book": "Book",
+      "split": "Split",
+      "contraPlaceholder": "Type an account number, e.g. 6900",
+      "noAccountMatch": "No account matches what you typed."
+    },
+    "preview": {
+      "title": "Posting preview",
+      "soll": "Debit",
+      "haben": "Credit",
+      "total": "Total",
+      "target": "Target",
+      "loading": "Computing the preview",
+      "unavailable": "The posting preview is not available here: this movement's bank account is not linked to a ledger account. Booking itself still works.",
+      "bankUnlinked": "Bank account without a ledger account"
+    },
+    "werkbank": {
+      "title": "Split the movement",
+      "bankFact": "Bank movement",
+      "candidates": "Open vendor bills",
+      "allocate": "Allocate",
+      "rest": "Remainder",
+      "restDone": "Fully allocated",
+      "book": "Book",
+      "empty": "No open vendor bills.",
+      "restOpen": "Allocate the whole amount before booking: {amount} is still open.",
+      "over": "The allocation exceeds the movement by {amount}."
+    },
+    "error": {
+      "schemaInvalid": "The file could not be read: check that it is a valid camt.053/054 XML file.",
+      "ibanMismatch": "The IBAN in the file does not match the chosen bank account.",
+      "import": "The import failed.",
+      "confirm": "The match failed.",
+      "createEntry": "The booking failed.",
+      "currencyMismatch": "The currency differs from the base currency: book this under Payments or as a manual entry.",
+      "statementAmended": "This statement was already imported, but the new file differs: {changes}. The existing entries were NOT overwritten.",
+      "statementAmendedUnnamed": "the content differs",
+      "wrongDirection": "This entry is a credit (money coming in) and cannot be booked as an outgoing payment. For a returned payment, reverse it under Payments."
+    },
+    "needsBankAccount": "The bank account is not registered.",
+    "skipped": "{count} entries were not imported (already present or unreadable).",
+    "needsReview": "Needs review: no suggestion reached the review threshold",
+    "needsReviewShort": "Needs review",
+    "suggestion": {
+      "reason": {
+        "amount": "exact amount",
+        "valueDate": "value date within window",
+        "counterparty": "counterparty matches",
+        "reference": "reference matches"
+      },
+      "target": "Suggested: {name}",
+      "batch": "Payment batch",
+      "batchMismatch": "The batch total does not match this transaction: use the manual split below",
+      "confirmBatch": "Confirm batch payment",
+      "none": "No counterpart found: book the line as an expense or split it."
+    },
+    "statements": {
+      "title": "Bank statements",
+      "col": {
+        "period": "Period",
+        "account": "Bank account",
+        "lines": "Lines",
+        "open": "State"
+      },
+      "until": "to",
+      "open": "Open",
+      "openNamed": "Open statement {id}",
+      "allMatched": "All matched",
+      "openCount": "{n} open",
+      "empty": "No bank statement imported yet.",
+      "emptyHint": "Import a camt.053 file from your bank. Its lines then show up here, and you see what is still open."
+    }
+  },
+  "help": {
+    "Reconciliation": {
+      "title": "Payment matching",
+      "body": "Incoming payments meet their invoices here. On top sits the queue of QR credits with suggestions to accept, review or correct; every decision is made on the row it concerns.\n\nWhen you import a bank statement, its own list to allocate and post appears below.\n\nCredits are always decided in the queue above, so the same decision has only one place.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

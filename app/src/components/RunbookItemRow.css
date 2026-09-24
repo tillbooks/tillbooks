@@ -1,0 +1,75 @@
+/* The shared runbook item row (G20 tasks, G22 checklist items). One panel treatment, status by word. */
+
+.runbook-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2) var(--t-space-3);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.runbook-item[aria-current='step'] {
+  /* The journey position: the selection tint, the one accent spend on this list. */
+  background: var(--t-accent-soft);
+}
+
+.runbook-item--compact {
+  padding: var(--t-space-1) var(--t-space-3);
+  color: var(--t-text-dim);
+}
+
+.runbook-item-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1) var(--t-space-3);
+  align-items: baseline;
+}
+
+.runbook-item-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  font-weight: 500;
+  color: var(--t-text);
+}
+
+.runbook-item--compact .runbook-item-title {
+  font-weight: 400;
+}
+
+.runbook-item-owner,
+.runbook-item-status,
+.runbook-item-due {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+/* The due date is a figure: tabular through the shared `.t-num` class on the element (K-20: the
+   tabular rule lives once, in the tokens), sized here like its neighbours. */
+.runbook-item .runbook-item-due {
+  margin-left: auto;
+  font-size: var(--t-font-body);
+}
+
+.runbook-item[data-overdue='true'] .runbook-item-due {
+  color: var(--t-warn);
+}
+
+.runbook-item[data-attention='true'] .runbook-item-title {
+  color: var(--t-warn);
+}
+
+.runbook-item-note {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.runbook-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  align-items: center;
+}

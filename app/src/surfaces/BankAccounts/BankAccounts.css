@@ -1,0 +1,553 @@
+/*
+ * A19 Bankkonten styling.
+ *
+ * Every value is a token. Spacing is the 8-pt grid, with 4px kept for the optical nudges the design
+ * law permits (a chip's inner padding), never for layout rhythm.
+ *
+ * THE ACCENT BUDGET, and the one place it needs stating. With the drawer open two accent-filled
+ * controls are technically in the DOM: the list's "Konto hinzufügen" and the drawer's "Speichern".
+ * The scrim dims the surface behind, so exactly one is live and one is visibly inert, which is the
+ * shipped Payments plus PaymentAllocator shape and not a deviation. The opening-balance step's
+ * "Buchen" is `btn--accent` rather than `btn--primary` for a different reason: it posts to the
+ * ledger, which is the consequential-go treatment IssueDialog established, and it never appears at
+ * the same time as Speichern, because the drawer advances between the two steps.
+ *
+ * THE ARCHIVED ROW IS DIMMED AND CARRIES THE WORD "ARCHIVIERT". The dimming alone would be
+ * colour-only signalling, and the dim value stays above the 4.5:1 body-text floor in both themes
+ * because `--t-text-dim` is the token that guarantees it: the row is not given a lower-contrast
+ * colour of its own.
+ */
+
+.bank {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.bank-toggle,
+.bank-check {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+}
+
+/* --- the completeness note and the undo line ---------------------------------------------------- */
+
+.bank-note,
+.bank-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+}
+
+.bank-note-text {
+  margin: 0;
+  max-width: 70ch;
+}
+
+.bank-note-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: center;
+}
+
+/* --- the register table (DataTable owns the frame, header, states and density) ------------------ */
+
+/* The one row-state class DataTable delegates to the consumer (its `rowClassName` hook ships no state
+   CSS of its own): an archived row dims to `--t-text-dim`, which stays above the 4.5:1 body-text floor
+   in both themes, and carries the word "Archiviert" too, so the dimming is never the only signal. */
+.bank-row--archived td {
+  color: var(--t-text-dim);
+}
+
+/* The name is plain text: the whole row opens the account (K-21), where a 44px bespoke button used to
+   be the only target. The Status word for an archived account sits beside it. */
+.bank-row-name {
+  margin-right: var(--t-space-1);
+}
+
+.bank-iban {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  margin-right: var(--t-space-1);
+}
+
+.bank-money {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bank-opening-date {
+  color: var(--t-text-dim);
+}
+
+/* A word-only chip (D19/U4): a neutral surface with text, never a colour carrying the meaning. */
+.bank-chip {
+  display: inline-block;
+  /* 4px inner padding: an optical nudge, which the design law permits. */
+  padding: var(--t-space-0-5) var(--t-space-1);
+  margin-left: var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* --- the drawer contents (DetailDrawer owns the scrim, panel, header and focus trap) ------------- */
+
+/* The drawer inputs are the shared `.field` (K-15); this only makes them fill the drawer column and
+   reads a read-only value as a step dimmer. */
+.bank-input {
+  width: 100%;
+}
+
+.bank-input[readonly] {
+  background: var(--t-bg-soft);
+  color: var(--t-text-dim);
+}
+
+/* --- the opening-balance step ------------------------------------------------------------------- */
+
+.bank-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* "Show the journey": two steps, and which one is current, so Save-then-post is not a surprise. */
+.bank-journey {
+  display: flex;
+  gap: var(--t-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  /* The step names carry meaning, so dim, never faint (K-36); the current step is full ink at 500. */
+  color: var(--t-text-dim);
+}
+
+.bank-journey-step--done {
+  color: var(--t-text-dim);
+}
+
+.bank-journey-step--on {
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+/*
+  The base-currency readout, immediately above the consequence line and the Buchen button, because it
+  is the last thing an operator should read before an irreversible click. The figure is the only bold
+  thing in the block: everything beside it (the rate, the contra account) is context for it.
+*/
+.bank-preview {
+  margin: 0;
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+  max-width: 60ch;
+}
+
+.bank-preview-amount {
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text);
+}
+
+.bank-preview-note {
+  color: var(--t-text-dim);
+}
+
+.bank-consequence {
+  margin: 0;
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+  max-width: 60ch;
+}
+
+.bank-blocked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+}
+
+.bank-blocked-text {
+  margin: 0;
+  font-size: var(--t-font-md);
+  max-width: 60ch;
+}
+
+/* --- A36: the keystore card, the Automatischer Abruf toggle, the bank picker ------------------- */
+
+.bank-channel-keystore,
+.bank-channel-schedule {
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-1) 0;
+}
+
+.bank-channel-keystore-title {
+  color: var(--t-text);
+}
+
+.bank-channel-keystore-unavailable {
+  margin: 0;
+  color: var(--t-text);
+}
+
+.bank-channel-keystore-notice,
+.bank-channel-schedule-note,
+.bank-channel-schedule-cadence,
+.bank-channel-schedule-lastfired {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.bank-channel-schedule-inactive {
+  margin: 0;
+  color: var(--t-text);
+}
+
+.bank-channel-schedule-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  color: var(--t-text);
+}
+
+/* A36-U4: the connect wizard as a stacked field list, each input under its own visible, persistent
+   label (never placeholder-only). The group heading names the whole set. */
+.bank-channel-connect {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin-top: var(--t-space-1);
+}
+
+.bank-channel-fieldset-label {
+  margin: 0;
+  font-size: var(--t-font-md);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.bank-channel-connect > label:not(.bank-channel-scope) {
+  margin: var(--t-space-0-5) 0 calc(-1 * var(--t-space-0-5));
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+}
+
+/* The same word-only badge `.bank-chip` uses: a neutral surface with text, never a colour claiming
+   verification the engine never gave (spec §4: `feeNote.verified` is always false). */
+.bank-channel-fee-badge {
+  display: inline-block;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  margin-left: var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+}
+
+.bank-channel-picker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+}
+
+.bank-channel-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--t-space-0-5) 0;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.bank-channel-picker-option,
+.bank-channel-picker-empty,
+.bank-channel-picker-loading {
+  padding: var(--t-space-1) var(--t-space-2);
+  cursor: pointer;
+  font-size: var(--t-font-md);
+}
+
+.bank-channel-picker-empty,
+.bank-channel-picker-loading {
+  color: var(--t-text-dim);
+  cursor: default;
+}
+
+.bank-channel-picker-option--active {
+  background: var(--t-bg-soft);
+}
+
+.bank-channel-picker-bic {
+  color: var(--t-text-dim);
+  margin-left: var(--t-space-1);
+  font-size: var(--t-font-sm);
+}
+
+.bank-channel-picked {
+  padding: var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+  font-size: var(--t-font-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.bank-channel-picked p {
+  margin: 0;
+}
+
+.bank-channel-picked-note {
+  color: var(--t-text-dim);
+}
+
+.bank-channel-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--t-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--t-z-overlay);
+}
+
+.bank-channel-dialog {
+  padding: var(--t-space-3);
+  max-width: 420px;
+  width: calc(100% - var(--t-space-4));
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.bank-channel-dialog h2 {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  font-weight: 600;
+}
+
+.bank-channel-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+}
+
+.bank-channel-dialog-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  justify-content: flex-end;
+}
+
+/* --- A37 UX pass: the channel panel + its state cards -------------------------------------------
+   The channel list (both the EBICS and the managed bLink rail) shipped as browser-default <ul><li>:
+   a disc bullet, no card surface, no token spacing. These rules give it the one panel treatment the
+   design law asks for. Separation is a background STEP (--t-bg-soft on the --t-bg-elev panel), never
+   a border-around-everything, and every value is a token. */
+
+.bank-channel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+}
+
+/* K-26: the two ways in share one row: the EBICS button, then the managed path as a quiet text link. */
+.bank-channel-connect-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+/* A text link in button clothing: the ink, 500, underlined on hover (the link-inline voice, K-12),
+   with a transparent border so the focus cue has a box (K-10). */
+.bank-channel-link {
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-underline-offset: 3px;
+}
+
+.bank-channel-link:hover {
+  text-decoration: underline;
+}
+
+/* Full-bleed members span the panel; bare buttons keep their natural width (a full-width secondary
+   button reads as heavy and undecided). */
+.bank-channel-list,
+.bank-channel-notice,
+.bank-channel-empty,
+.bank-channel-file-note,
+.bank-channel-connect {
+  align-self: stretch;
+}
+
+.bank-channel-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.bank-channel-empty,
+.bank-channel-file-note,
+.bank-channel-locked {
+  margin: 0;
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+  max-width: 80ch;
+}
+
+/* The OP4 honest degradation (and any P9 code) rides the shared ActionFeedback primitive
+   (components/ActionFeedback), tone "info" so it takes no status colour: the word carries the
+   meaning. Only the reading width stays the surface's own. */
+.bank-channel-notice {
+  max-width: 80ch;
+}
+
+.bank-channel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* One card per connection: an inset step off the elevated panel, no border. */
+.bank-channel-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+}
+
+.bank-channel-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--t-space-0-5);
+  font-weight: 500;
+  color: var(--t-text);
+}
+
+.bank-channel-kind {
+  color: var(--t-text-dim);
+  font-weight: 400;
+}
+
+.bank-channel-host {
+  color: var(--t-text-dim);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-channel-accounts,
+.bank-channel-lastsync,
+.bank-channel-consent-expires,
+.bank-channel-consent-pending,
+.bank-channel-consent-note,
+.bank-channel-release,
+.bank-channel-unmatched {
+  margin: 0;
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+  max-width: 80ch;
+}
+
+.bank-channel-accounts {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The word carries the meaning; danger lives on the glyph, never a filled red row (design law: a
+   minus sign reads as a fact, a red box reads as an emergency). So these stay full-ink copy. */
+.bank-channel-consent-revoked,
+.bank-channel-suspended,
+.bank-channel-rejected,
+.bank-channel-indoubt,
+.bank-channel-warn {
+  margin: 0;
+  font-size: var(--t-font-md);
+  color: var(--t-text);
+  max-width: 80ch;
+}
+
+.bank-channel-managed-explainer {
+  margin: 0;
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+  max-width: 80ch;
+}
+
+.bank-channel-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  color: var(--t-text);
+}
+
+.bank-channel-managed-actions,
+.bank-channel-disconnect {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-0-5);
+}
+
+.bank-channel-orderlog {
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+}
+
+.bank-channel-orderlog summary {
+  cursor: pointer;
+  color: var(--t-text);
+}
+
+.bank-channel-orderlog ul {
+  list-style: none;
+  margin: var(--t-space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}

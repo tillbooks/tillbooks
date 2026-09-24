@@ -1,0 +1,104 @@
+{
+  "nav": {
+    "overview": "Übersicht"
+  },
+  "dashboard": {
+    "attentionStrip": {
+      "loading": "Deine Pendenzen werden geladen",
+      "error": "Die Anzahl offener Pendenzen konnte nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "allClear": "Im Moment wartet nichts auf dich.",
+      "count": "{count} warten auf dich"
+    },
+    "mandates": {
+      "label": "Mandate",
+      "switchTo": "Zu {name} wechseln",
+      "count": "{count} warten",
+      "allClear": "nichts wartet",
+      "loading": "wird gelesen",
+      "error": "nicht gelesen",
+      "retry": "Erneut versuchen",
+      "showAll": "Alle {count} Mandate anzeigen"
+    },
+    "route": {
+      "title": "Übersicht"
+    },
+    "tile": {
+      "revenue": "Umsatz",
+      "cash": "Flüssige Mittel",
+      "ar_aging": "Debitoren offen",
+      "ap_aging": "Kreditoren offen",
+      "utilisation": "Auslastung",
+      "project_margin": "Projektmarge",
+      "mwst_due": "MWST fällig",
+      "stock_value": "Lagerwert"
+    },
+    "range": {
+      "label": "Zeitraum",
+      "month": "Monat",
+      "quarter": "Quartal",
+      "year": "Jahr",
+      "custom": "Benutzerdefiniert",
+      "from": "Von",
+      "to": "Bis"
+    },
+    "trend": {
+      "label": "Trend gegenüber Vorperiode: {value}"
+    },
+    "empty": {
+      "title": "Noch keine Kacheln.",
+      "hint": "Sobald du buchst, erfasst oder fakturierst, erscheinen hier deine Kennzahlen.",
+      "ar": "Noch keine offenen Rechnungen."
+    },
+    "error": {
+      "invalid_range": "Enddatum liegt vor dem Startdatum.",
+      "read": "Die Kennzahlen konnten nicht geladen werden."
+    },
+    "degraded": {
+      "needs_vat_config": "MWST nicht konfiguriert."
+    },
+    "more_tiles": "Weitere Kacheln werden mit der Einrichtung zusätzlicher Module verfügbar.",
+    "omitted_note": "Weitere Kacheln erfordern zusätzliche Rechte.",
+    "setup": {
+      "title": "Ersteinrichtung",
+      "lead": "Deine Bücher sind noch leer. Diese Schritte bringen dich zu deiner ersten Buchung.",
+      "dismiss": "Ausblenden",
+      "done": "erledigt",
+      "step": {
+        "profile": "Firmenprofil vervollständigen",
+        "vat": "MWST einrichten",
+        "accounts": "Kontenplan prüfen",
+        "contacts": "Ersten Kontakt anlegen oder importieren",
+        "items": "Ersten Artikel anlegen",
+        "invoice": "Erste Rechnung erstellen"
+      }
+    },
+    "view": {
+      "label": "Ansicht",
+      "default": "Standardansicht",
+      "personalGroup": "Meine Ansichten",
+      "sharedGroup": "Geteilte Ansichten",
+      "save": "Ansicht speichern",
+      "name": "Name",
+      "shared": "Für alle im Arbeitsbereich",
+      "confirm": "Speichern",
+      "save_failed": "Ansicht konnte nicht gespeichert werden.",
+      "fallback_note": "Gespeicherte Ansicht nicht verfügbar, Standardansicht wird angezeigt."
+    },
+    "doors": {
+      "label": "Häufige Aktionen",
+      "book": "Buchen",
+      "backup": "Sichern",
+      "demo": "Demo ausprobieren",
+      "demoBusy": "Demo wird erstellt"
+    }
+  },
+  "help": {
+    "Uebersicht": {
+      "title": "Übersicht",
+      "body": "Die Startseite deiner Bücher: eine Wand aus Kennzahlen, jede mit Wert, Stand und einem Weg in die Fläche dahinter. Berechnet wird alles in der Engine; diese Seite setzt nur zusammen.\n\nDen Zeitraum wählst du oben. Eine Zusammenstellung lässt sich als Ansicht speichern und wieder aufrufen.\n\nEine Kachel, deren Modul nicht eingerichtet ist, wandert hinter den Hinweis auf weitere Kacheln, statt eine falsche Null zu zeigen.",
+      "concepts": [],
+      "docsPath": "quickstart"
+    }
+  }
+}

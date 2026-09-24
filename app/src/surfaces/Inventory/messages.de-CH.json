@@ -1,0 +1,80 @@
+{
+  "nav": {
+    "inventory": "Lager"
+  },
+  "stock": {
+    "route": { "title": "Lager" },
+    "reason": {
+      "receipt": "Zugang",
+      "issue": "Abgang",
+      "adjust": "Korrektur",
+      "transfer": "Umlagerung",
+      "return": "Retoure"
+    },
+    "action": {
+      "record_movement": "Bewegung erfassen",
+      "run_valuation": "Bewertung ausführen"
+    },
+    "movement": {
+      "item": "Artikel",
+      "location": "Lagerort",
+      "qty": "Menge",
+      "unit_cost": "Stückkosten",
+      "reason_label": "Grund",
+      "notes": "Notizen",
+      "saved": "Bewegung erfasst."
+    },
+    "method": {
+      "label": "Methode",
+      "fifo": "FIFO",
+      "weighted_avg": "Gewichteter Durchschnitt"
+    },
+    "valuation": {
+      "as_of": "Stichtag",
+      "preview": "Vorschau",
+      "total": "Lagerwert",
+      "value": "Wert",
+      "unposted_delta": "Nicht gebuchte Differenz",
+      "posted": "Bewertung gebucht.",
+      "stetigkeit": "Die Bewertungsmethode weicht vom letzten Lauf ab (Stetigkeit, OR 958c)."
+    },
+    "badge": { "low": "Bestand niedrig" },
+    "empty": "Keine lagergeführten Artikel.",
+    "empty_cta": "Artikel verwalten",
+    "toast": { "dismiss": "Schliessen" },
+    "dialog": { "cancel": "Abbrechen", "save": "Speichern" },
+    "stocktake": {
+      "title": "Inventur",
+      "open": "Inventur eröffnen",
+      "book_qty": "Buchbestand",
+      "counted_qty": "Gezählter Bestand",
+      "diff": "Differenz",
+      "commit": "Differenzen buchen",
+      "empty": "Keine offene Inventur.",
+      "frozen_at": "Eingefroren am",
+      "committed": "Inventur abgeschlossen. Inventar abgelegt.",
+      "confirmTitle": "Inventurdifferenzen buchen?",
+      "confirmConsequence": "Beim Buchen wird für jede der {n} gezählten Abweichungen eine dauerhafte Lagerbewegung gebucht und das gesetzliche Inventar (Bestandesnachweis nach OR 958c) abgelegt. Gebuchte Bewegungen sind unveränderlich und lassen sich nur durch eine Gegenbewegung korrigieren."
+    },
+    "error": {
+      "insufficient_stock": "Nicht genügend Lagerbestand verfügbar.",
+      "period_locked": "Die Periode ist gesperrt; die Bewertung kann nicht gebucht werden.",
+      "invalid_qty": "Bitte eine Menge ungleich null eingeben.",
+      "invalid_reason": "Bitte einen gültigen Grund wählen.",
+      "stocktake_not_open": "Diese Inventur ist nicht mehr offen.",
+      "uncounted_lines": "Einige Positionen sind noch nicht gezählt.",
+      "valuation_out_of_order": "Es besteht bereits eine spätere Bewertung; bitte den neuesten Stichtag bewerten.",
+      "needs_inventory_accounts": "Die Bestandeskonten (1200/4200) fehlen.",
+      "not_found": "Dieser Datensatz wurde nicht gefunden.",
+      "forbidden": "Dir fehlt die Berechtigung für diese Aktion."
+    }
+  },
+  "help": {
+    "Inventory": {
+      "title": "Lager",
+      "body": "Lager zeigt den Bestand je Artikel und Lagerort und markiert tiefe Bestände. Eine Bewegung erfassen ist der eine Weg, auf dem sich Bestand ändert; direktes Überschreiben gibt es nicht. Die Bewertung rechnet den Lagerwert zum Periodenende aus und zeigt die Buchung, bevor etwas verbucht wird. Die Inventur zählt, zeigt die Differenz und verbucht sie erst nach deiner Prüfung.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

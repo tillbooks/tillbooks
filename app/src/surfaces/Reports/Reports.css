@@ -1,0 +1,519 @@
+/*
+ * A08 Auswertungen styling.
+ *
+ * Every value is a token. Spacing is the 8-pt grid, with 4px kept for the optical nudges the design
+ * law permits, never for layout rhythm. Type sizes are the written scale (K-37).
+ *
+ * THE ACCENT BUDGET ON THIS SURFACE IS THREE, which is the whole allowance: the focus ring (inherited
+ * from global.css), the selected tab (the shared Tabs, K-11), and the ONE primary action, the PDF
+ * export (K-08: an export is never the tinted `.btn--accent`, which is the commit of a money write).
+ * Money carries no colour at all, including every negative figure on the Erfolgsrechnung, because
+ * `formatMoney` puts a leading minus on them and a grayscale printout is a real Treuhänder artefact.
+ *
+ * THE ONE EXCEPTION IS A NEGATIVE RESULT. `--t-danger` is spent on exactly one figure on this whole
+ * surface: a result that came out negative, which renders as JAHRESVERLUST with its own word beside
+ * it. Colouring every expense line would make red the background of the statement and dull the one
+ * figure that genuinely needs attention. `rp-result--loss` is strictly `< 0`, so a break-even result
+ * keeps `--t-text`: it reads "Jahresgewinn oder Jahresverlust" and is not an alarm.
+ *
+ * THE PASSING RECONCILIATION IS DIM AND UNCOLOURED, and the failing band is the only coloured status
+ * here. An all-clear state that gets a colour makes that colour the background and dulls the real
+ * warning. Both carry a glyph AND a sentence, so neither is colour-only or glyph-only.
+ *
+ * `tabular-nums` IS ON EVERY MONEY COLUMN, every date column and every account number, so the columns
+ * line up digit for digit and a Δ column does not shift as the figures change. Every money cell also
+ * carries the shared `.t-money` (nowrap and the density's table type, K-18/K-20).
+ *
+ * THE DRILL CHEVRON IS PERSISTENT, never a `group-hover` reveal: an affordance that only exists under
+ * a mouse does not exist for a keyboard or a touch screen.
+ */
+
+.rp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The tab panel: the toolbar and the statement, on the surface's rhythm. */
+.rp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  padding-top: var(--t-space-2);
+}
+
+/* The page header (title, inline help, export actions) is the shared SurfaceHeader primitive
+   (D118). The currency note and the reconciliation verdict keep their own status block under it. */
+.rp-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.rp-currency {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.rp-currency--pending {
+  min-height: var(--t-lh-md);
+}
+
+.rp-line-skeleton {
+  display: block;
+  width: 160px;
+  height: 12px;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.rp-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --- the reconciliation ------------------------------------------------------------------------ */
+
+.rp-reconciled {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.rp-reconciled-glyph {
+  flex: none;
+}
+
+.rp-mismatch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.rp-mismatch-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-weight: 600;
+  color: var(--t-danger);
+}
+
+.rp-mismatch-glyph {
+  flex: none;
+}
+
+.rp-mismatch-list {
+  margin: 0;
+  padding-left: var(--t-space-3);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text);
+}
+
+/* --- toolbar (the tabs are the shared Tabs) ---------------------------------------------------- */
+
+.rp-toolbar {
+  display: flex;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+/* A field label over its control; the controls are the shared `.field` and Select (K-15). */
+.rp-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.rp-field-error {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-danger);
+}
+
+/* --- the account picker ------------------------------------------------------------------------ */
+
+.rp-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.rp-picker-search,
+.rp-picker-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.rp-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* A list row: the neutral hover step, a transparent edge for the focus cue (K-10). */
+.rp-picker-option {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  width: 100%;
+  min-height: var(--t-row-h);
+  padding: var(--t-space-0-5) var(--t-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  color: var(--t-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.rp-picker-option:hover {
+  background: var(--t-bg-soft);
+}
+
+.rp-picker-error,
+.rp-picker-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* "archiviert" is a word, so dim ink at the caption step, never a chip (K-22). */
+.rp-chip {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* --- the export -------------------------------------------------------------------------------- */
+
+.rp-export {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--t-space-1);
+}
+
+.rp-export-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.rp-export-note {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  text-align: right;
+  max-width: 32ch;
+}
+
+.rp-export-error {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-danger);
+}
+
+/* --- the statements ---------------------------------------------------------------------------- */
+
+.rp-statement {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.rp-statement-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+/* The permanent OR Art. 959a coverage note. A single dimmed line: not a banner, not a warning
+   colour, not an icon. `--t-text-dim` is the token that guarantees the 4.5:1 body-text floor in both
+   themes, so the most important sentence on the Bilanz is never given a colour of its own. */
+.rp-coverage,
+.rp-sign-note,
+.rp-note,
+.rp-ledger-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.rp-zero-band {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.rp-table-wrap {
+  overflow-x: auto;
+}
+
+/* The statement tables are hand-rolled (grouped, collapsible, with subtotal rows), and they read the
+   DataTable row tokens (K-20): a text row is `--t-row-h` with `--t-row-pad-y` / `--t-cell-pad-x`, the
+   head `--t-row-head-h` in 12px/500 dim (K-23), so Kompakt reaches them like every other table. */
+.rp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.rp-table th,
+.rp-table td {
+  height: var(--t-row-h);
+  padding: var(--t-row-pad-y) var(--t-cell-pad-x);
+  border-bottom: 1px solid var(--t-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.rp-table thead th {
+  height: var(--t-row-head-h);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* A cell that holds a drill or collapse control gives up its block padding and the control fills
+   the row, so the row stays the row height and the whole cell is the target. */
+.rp-table :is(td, th):has(> :is(.rp-drill, .rp-line-drill, .rp-collapse)) {
+  padding-block: 0;
+}
+
+.rp-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rp-table thead th.rp-num {
+  text-align: right;
+}
+
+.rp-money,
+.rp-numeric-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-dim {
+  color: var(--t-text-dim);
+}
+
+/* Chart data, never abbreviated: it wraps rather than truncating, because an operator following a
+   row into /accounts has to find the name they just read. */
+.rp-name {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.rp-group th,
+.rp-side th,
+.rp-section th {
+  font-weight: 600;
+}
+
+.rp-side th {
+  padding-top: var(--t-space-3);
+}
+
+.rp-subtotal th,
+.rp-subtotal td,
+.rp-table tfoot th,
+.rp-table tfoot td {
+  font-weight: 600;
+  border-top: 1px solid var(--t-border-strong);
+}
+
+/* The drill and collapse controls: quiet text controls that fill their cell's row height, with a
+   transparent edge for the focus cue (K-10). */
+.rp-collapse,
+.rp-line-drill,
+.rp-drill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: var(--t-row-h);
+  padding: 0 var(--t-space-1);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.rp-collapse:hover,
+.rp-line-drill:hover,
+.rp-drill:hover {
+  background: var(--t-bg-soft);
+}
+
+.rp-collapse--wide,
+.rp-line-drill {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rp-chev {
+  flex: none;
+  transition: transform var(--t-motion-pill) var(--t-ease-out);
+}
+
+.rp-chev--open {
+  transform: rotate(90deg);
+}
+
+.rp-line-chev {
+  flex: none;
+  color: var(--t-text-dim);
+}
+
+/* The two computed equity positions are facts with no affordance: no link, no hover state, no
+   cursor change. A row that is not a link is not a dead end; a row that looks like one and opens
+   nothing is. */
+.rp-line--computed .rp-line-label {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-weight: 400;
+  cursor: default;
+}
+
+.rp-row-action {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* --- the Erfolgsrechnung's wrapping list ------------------------------------------------------- */
+
+.rp-positions,
+.rp-position-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rp-position {
+  border-bottom: 1px solid var(--t-border);
+}
+
+.rp-position-head,
+.rp-position-line {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+/* The statutory heading of position 2 runs to 129 characters in German, so the label wraps and the
+   figure stays on its own right-aligned column. Truncating a statutory heading is not available. */
+.rp-position-label {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.rp-position-figure {
+  flex: none;
+  min-width: 14ch;
+}
+
+.rp-position-lines {
+  padding-left: var(--t-space-4);
+  padding-bottom: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.rp-result {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  margin: 0;
+  padding-top: var(--t-space-2);
+  font-weight: 600;
+}
+
+.rp-result-word {
+  flex: 1 1 auto;
+}
+
+.rp-result-figure {
+  flex: none;
+  min-width: 14ch;
+}
+
+/* The one accent-free alarm on the surface: a negative result, carrying its own WORD as well as its
+   colour and its sign, so a grayscale printout reads exactly what the screen reads. */
+.rp-result--loss {
+  color: var(--t-danger);
+}
+
+.rp-balance-row th {
+  font-weight: 600;
+}
+
+.rp-pending {
+  min-height: 200px;
+}

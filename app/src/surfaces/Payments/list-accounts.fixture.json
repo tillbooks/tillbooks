@@ -1,0 +1,38 @@
+{
+  "accounts": [
+    {
+      "id": "acc_1",
+      "workspaceId": "ws_1",
+      "number": "1000",
+      "name": "Kassenbestand",
+      "type": "asset",
+      "vatCodeDefault": null,
+      "costCenterAllowed": false,
+      "archived": false,
+      "inUse": false
+    },
+    {
+      "id": "acc_2",
+      "workspaceId": "ws_1",
+      "number": "1020",
+      "name": "Bankkonto",
+      "type": "asset",
+      "vatCodeDefault": null,
+      "costCenterAllowed": false,
+      "archived": false,
+      "inUse": false
+    },
+    {
+      "id": "acc_29",
+      "workspaceId": "ws_1",
+      "number": "3400",
+      "name": "Erlöse aus Dienstleistungen",
+      "type": "income",
+      "vatCodeDefault": null,
+      "costCenterAllowed": true,
+      "archived": false,
+      "inUse": false
+    }
+  ],
+  "ok": true
+}

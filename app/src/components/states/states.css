@@ -1,0 +1,53 @@
+/* The five-state primitives' own rules (round 2, D137). Only --t-* tokens. The shared blocks
+   (`.skeleton`, `.state-panel`, `.error-banner` base) still live in global.css; this file carries
+   what the components added in round 2 and loads after global.css, so it wins at equal specificity. */
+
+/* K-34: a skeleton region is in the DOM from the first commit but invisible for the first 200ms
+   (`useRevealAfterDelay` removes `data-pending`), so a ten-millisecond local read never flashes one.
+   `visibility`, not `display`: the region keeps its box, so nothing shifts when it appears. */
+.skeleton-region[data-pending] {
+  visibility: hidden;
+}
+
+/* Tiles: equal columns (set inline from `columns`), the panel gap between them. */
+.skeleton-region--grid {
+  display: grid;
+  gap: var(--t-space-2);
+}
+
+/* K-35: the error banner. One glyph carries the danger colour (a shape and the words, never colour
+   alone); the ground is --t-danger-soft with no border, so the banner reads as a state of the page,
+   not a red box shouting over it; the title reads in the text ink at 600. The base layout lives in
+   global.css (`.error-banner`); these rules restate what round 2 changed and win by load order. */
+.error-banner {
+  border: 0;
+  background: var(--t-danger-soft);
+}
+
+.error-glyph {
+  color: var(--t-danger);
+}
+
+.error-content {
+  min-width: 0;
+}
+
+.error-title {
+  color: var(--t-text);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+/* Retry and "Report this error" in one row, 16px apart. */
+.error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-2);
+  margin-top: var(--t-space-1);
+}
+
+.error-actions .error-retry {
+  margin-top: 0;
+}

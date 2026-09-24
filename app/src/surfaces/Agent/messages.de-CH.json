@@ -1,0 +1,263 @@
+{
+  "help": {
+    "Agent": {
+      "title": "Agent",
+      "body": "Hier behältst du den Agenten im Blick. Lies das Gespräch, um zu sehen, was er getan hat und warum, und arbeite dann die Vorschläge ab.\n\nDer Agent erfasst jeden Schreibvorgang als Vorschlag, statt ihn zu buchen; du genehmigst oder lehnst jeden einzeln ab. Unter Vertrauen legst du fest, wie weit jede Art von Handlung als vertraut gilt, von immer fragen bis automatisch ausführen.\n\nDiese Freigabe erteilst nur du: Kein Agent kann sein eigenes Vertrauen erhöhen.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  },
+  "attention": {
+    "area": {
+      "system": "System"
+    },
+    "queue": {
+      "agentAction": "Vorschläge des Agenten"
+    },
+    "item": {
+      "agentAction": {
+        "title": "Vorschlag wartet auf Genehmigung",
+        "subtitle": "{tool}"
+      }
+    }
+  },
+  "agent": {
+    "title": "Agent",
+    "tab": {
+      "gespraeche": "Gespräche",
+      "vorschlaege": "Vorschläge",
+      "berechtigungen": "Berechtigungen",
+      "verbindung": "Verbindung"
+    },
+    "archive": {
+      "empty": {
+        "title": "Noch keine Sitzung",
+        "hint": "Verbinde einen MCP-Client, dann steht hier jeder Schritt, den der Agent macht.",
+        "action": "Agent verbinden"
+      },
+      "col": {
+        "datum": "Datum",
+        "client": "Client",
+        "schritte": "Schritte",
+        "buchungen": "Buchungen",
+        "vorschlaege": "Vorschläge",
+        "status": "Status"
+      },
+      "running": "läuft",
+      "back": "Zur Liste",
+      "unknownClient": "Unbekannter Client",
+      "month": "Monat",
+      "monthPrev": "Voriger Monat",
+      "monthNext": "Nächster Monat",
+      "monthEmpty": "Keine Sitzungen in diesem Monat.",
+      "caption": "Agent-Sitzungen, neueste zuerst"
+    },
+    "turn": {
+      "agentLabel": "Agent",
+      "userLabel": "Du",
+      "reads": "{n} Abfragen ausgeführt",
+      "readsOne": "1 Abfrage ausgeführt",
+      "writes": "{n} Schreibvorgänge ausgeführt",
+      "writesOne": "1 Schreibvorgang ausgeführt",
+      "drafted": "Vorschlag erfasst, wartet auf Freigabe",
+      "denied": "Aufruf verweigert",
+      "partialBooked": "In den Büchern: {verbs}",
+      "partialNothingBooked": "Nichts in den Büchern",
+      "partialFailed": "{n} fehlgeschlagen",
+      "partialDrafted": "{n} Vorschläge warten auf Freigabe",
+      "partialDraftedOne": "1 Vorschlag wartet auf Freigabe"
+    },
+    "trace": {
+      "steps": "{n} Schritte",
+      "stepsOne": "1 Schritt",
+      "more": "{n} weitere Schritte",
+      "details": "Details",
+      "rejectedWith": "Abgelehnt: {reason}",
+      "rejectedNoReason": "Abgelehnt",
+      "approved": "Genehmigt",
+      "status": {
+        "gelesen": "gelesen",
+        "ausgefuehrt": "ausgeführt",
+        "entwurf": "Entwurf",
+        "verweigert": "verweigert",
+        "fehlgeschlagen": "fehlgeschlagen"
+      }
+    },
+    "card": {
+      "title": "Vorschlag",
+      "approve": "Genehmigen",
+      "approveAllow": "Genehmigen und künftig automatisch",
+      "reject": "Ablehnen",
+      "rejectConfirm": "Ablehnen? Der Vorschlag ist danach erledigt und muss neu erfasst werden.",
+      "rejectYes": "Ja, ablehnen",
+      "rejectNo": "Behalten",
+      "rejectReasonLabel": "Begründung (optional)",
+      "rejectReasonHint": "Erscheint im Verlauf, damit der Agent den Grund kennt.",
+      "details": "Details",
+      "level": "Stufe: {level}",
+      "provenance": "Vorgeschlagen von {actor} am {date}",
+      "needs": "Benötigt: Agent-Freigabe",
+      "needsHint": "Zur Mitgliederverwaltung",
+      "executed": "Genehmigt und ausgeführt",
+      "rejected": "Abgelehnt",
+      "grantHint": "Die Freigabe gilt künftig für alle Vorschläge dieser Art und bleibt jederzeit widerrufbar.",
+      "selfHint": "Der eigene Vorschlag braucht eine zweite Person zur Freigabe."
+    },
+    "queue": {
+      "empty": "Nichts zu genehmigen.",
+      "emptyHint": "Der Agent erfasst Vorschläge, statt direkt zu buchen. Was er darf, steuerst du unter Vertrauen.",
+      "group": {
+        "geld": "Geld",
+        "system": "System"
+      }
+    },
+    "trust": {
+      "col": {
+        "was": "Was",
+        "stufe": "Stufe",
+        "vorgeschlagen": "Vorgeschlagen",
+        "genehmigt": "Genehmigt",
+        "abgelehnt": "Abgelehnt",
+        "automatisch": "Automatisch",
+        "aktion": "Aktion"
+      },
+      "caption": "Berechtigungen: {group}",
+      "window": "Fenster: {from} bis {to}",
+      "level": {
+        "ask": "fragen",
+        "auto": "automatisch"
+      },
+      "fragtImmer": "fragt immer",
+      "storedVsEffective": "gespeichert: {stored}, wirksam: {effective}",
+      "noHistory": "Noch nichts vorgeschlagen",
+      "grantAction": "Automatisch erlauben",
+      "revokeAction": "Wieder fragen",
+      "grantConfirm": "{capability} künftig ohne Nachfrage ausführen? Die Freigabe ist jederzeit widerrufbar und wird dir zugeschrieben.",
+      "grantYes": "Ja, erlauben",
+      "grantNo": "Abbrechen",
+      "strongReason": "Diese Handlung ist nach aussen unumkehrbar und fragt darum standardmässig immer. Eine ausdrückliche Freigabe hebt das auf.",
+      "suggest": "{approved} von {proposed} Vorschlägen genehmigt, keiner abgelehnt. Soll der Agent das künftig direkt ausführen?",
+      "suggestDismiss": "Nein, weiter fragen",
+      "statutoryNote": "Der Verlauf hier ist betrieblich. Der revisionssichere Export bleibt bei Treuhand-Export (A25).",
+      "grantedBy": "von {actor} am {date}"
+    },
+    "connect": {
+      "intro": "Verbinde deinen MCP-Client (Claude Desktop, Cursor und weitere) mit TILL. TILL kann die Konfiguration deines Clients nicht selbst schreiben, darum kopierst du den Block unten in deinen Client.",
+      "endpoint": {
+        "heading": "Endpunkt",
+        "http": "TILL läuft als Server. Dein Client erreicht ihn unter dieser Adresse:",
+        "stdio": "TILL läuft lokal über die Kommandozeile. Dein Client startet ihn mit dem Befehl till mcp (stdio), eine Adresse braucht es dafür nicht.",
+        "unknown": "Der Laufzeitmodus ist gerade nicht lesbar. Der Block unten funktioniert für einen lokalen Start über die Kommandozeile.",
+        "copyUrl": "Adresse kopieren"
+      },
+      "config": {
+        "heading": "Client-Konfiguration",
+        "hint": "Kopiere diesen Block in die MCP-Einstellungen deines Clients. Er startet TILL lokal mit dem Befehl till mcp.",
+        "copy": "Konfiguration kopieren"
+      },
+      "clients": {
+        "heading": "Zuletzt verbunden",
+        "empty": "Noch kein Client verbunden. Sobald einer TILL aufruft, steht er hier."
+      }
+    },
+    "dock": {
+      "toggle": "Agent",
+      "close": "Einklappen",
+      "session": "Sitzung",
+      "since": "seit {time}",
+      "running": "läuft",
+      "empty": "Die Sitzung läuft. Noch keine Schritte.",
+      "openArchive": "Im Verlauf öffnen",
+      "narrowHint": "Zu wenig Platz für Tabelle und Agent nebeneinander. Der Verlauf hat eine eigene Seite.",
+      "composerPlaceholder": "Frag deine Bücher …",
+      "composerSend": "Fragen",
+      "noRuntime": "Gespräche laufen heute in deinem MCP-Client. Ein lokales Modell richtest du unter Schreibstil ein."
+    },
+    "capability": {
+      "post": "Buchen",
+      "issue": "Ausstellen",
+      "send": "Senden",
+      "dun": "Mahnen",
+      "pay": "Zahlen",
+      "vat-file": "MWST einreichen",
+      "customize": "Anpassen",
+      "plugin-install": "Plugins",
+      "close-period": "Periode schliessen",
+      "go-live": "Produktiv gehen"
+    },
+    "consequence": {
+      "post": "Bucht unwiderruflich ins Journal. Die einzige Korrektur ist eine Stornobuchung.",
+      "issue": "Stellt das Dokument endgültig aus. Ausgestellt heisst unveränderbar.",
+      "send": "Versendet nach aussen. Gesendet lässt sich nicht zurückholen.",
+      "dun": "Löst den Mahnlauf aus und erhöht die Mahnstufe der Debitoren.",
+      "pay": "Bucht eine Zahlung und gleicht offene Posten aus.",
+      "vat-file": "Meldet die MWST-Periode als eingereicht. Eine eingereichte Periode ist abgeschlossen.",
+      "customize": "Ändert die Struktur der Aufzeichnung für den ganzen Arbeitsbereich.",
+      "plugin-install": "Installiert fremden Code mit den gewährten Berechtigungen.",
+      "close-period": "Versiegelt eine Rechnungsperiode gegen weitere Buchungen. Ein harter Abschluss lässt sich nicht wieder öffnen.",
+      "go-live": "Überträgt die Migrationsdaten in die echten Bücher. Der Umstieg lässt sich nicht rückgängig machen."
+    },
+    "consequenceVerb": {
+      "close_year": "Danach kannst du in diesem Geschäftsjahr nichts mehr buchen und nichts rückgängig machen. Es gibt keinen Weg zurück.",
+      "invite_member": "Lädt eine Person oder einen Agenten mit der gewählten Rolle in den Arbeitsbereich ein. Wer den Token einlöst, sieht ab dann die Bücher.",
+      "set_role": "Ändert, was ein Mitglied hier sehen und tun darf. Die neuen Rechte gelten ab dem nächsten Aufruf.",
+      "revoke_member": "Entzieht einem Mitglied den Zugang zum Arbeitsbereich. Der Entzug gilt ab dem nächsten Aufruf.",
+      "define_role": "Legt neu fest, welche Rechte eine Rolle hat, für alle, die diese Rolle haben."
+    },
+    "verb": {
+      "post_entry": "Buchung erfassen",
+      "reverse_entry": "Buchung stornieren",
+      "issue_invoice": "Rechnung ausstellen",
+      "issue_credit_note": "Gutschrift ausstellen",
+      "send_invoice": "Rechnung senden",
+      "propose_dunning_run": "Mahnlauf vorschlagen",
+      "issue_dunning_run": "Mahnlauf ausstellen",
+      "send_dunning_run": "Mahnlauf senden",
+      "record_payment": "Zahlung erfassen",
+      "allocate_payment": "Zahlung zuordnen",
+      "reverse_payment": "Zahlung stornieren",
+      "vat_mark_filed": "MWST als eingereicht markieren",
+      "checklist_item_complete": "Checklisten-Schritt abschliessen",
+      "define_field": "Feld anlegen",
+      "install_plugin": "Plugin installieren",
+      "invite_member": "Mitglied einladen",
+      "set_role": "Rolle ändern",
+      "revoke_member": "Zugang entziehen",
+      "define_role": "Rolle festlegen",
+      "ledger_qa": "Frage an die Bücher",
+      "list_accounts": "Konten gelesen",
+      "list_journal": "Journal gelesen",
+      "month_end_checklist": "Monatsabschluss geprüft",
+      "detect_anomalies": "Auffälligkeiten gesucht"
+    },
+    "field": {
+      "amount": "Betrag",
+      "soll": "Soll",
+      "haben": "Haben",
+      "date": "Datum",
+      "source": "Quelle",
+      "description": "Beschreibung",
+      "direction": "Richtung",
+      "amountMinor": "Betrag",
+      "period": "Periode",
+      "periodStart": "Periode von",
+      "periodEnd": "Periode bis",
+      "invoiceId": "Rechnung",
+      "creditNoteId": "Gutschrift",
+      "entryId": "Buchung",
+      "runId": "Mahnlauf",
+      "contactId": "Kontakt",
+      "bankAccountId": "Bankkonto",
+      "currency": "Währung",
+      "ref": "Referenz",
+      "intent": "Zweck",
+      "entityKind": "Datensatz-Art",
+      "key": "Feldschlüssel",
+      "type": "Typ",
+      "name": "Name",
+      "asOf": "Stichtag",
+      "paymentId": "Zahlung",
+      "reference": "Referenz"
+    }
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "nav": {
+    "salesOrders": "Aufträge"
+  },
+  "so": {
+    "tab": {
+      "title": "Aufträge"
+    },
+    "loading": "Aufträge werden geladen",
+    "empty": "Noch keine Aufträge.",
+    "emptyBackorders": "Keine Lieferrückstände.",
+    "invoiceLinked": "Verknüpfte Rechnungen:",
+    "action": {
+      "new": "Neuer Auftrag",
+      "confirm": "Bestätigen",
+      "deliver": "Lieferschein erstellen und ausliefern",
+      "invoice": "Rechnung erstellen",
+      "cancel": "Auftrag stornieren",
+      "from_quote": "In Auftrag umwandeln",
+      "addLine": "Position hinzufügen",
+      "removeLine": "Position entfernen"
+    },
+    "filter": {
+      "backorders": "Nur Lieferrückstände",
+      "clear": "Alle Aufträge zeigen"
+    },
+    "badge": {
+      "backorder": "Lieferrückstand"
+    },
+    "field": {
+      "number": "Nummer",
+      "contact": "Kundin",
+      "contactPick": "Kontakt wählen",
+      "status": "Status",
+      "lines": "Positionen",
+      "item": "Artikel",
+      "freeText": "Freitext",
+      "lineDesc": "Beschreibung",
+      "qty": "Menge",
+      "price": "Einzelpreis",
+      "ordered": "Bestellt",
+      "delivered": "Geliefert",
+      "invoiced": "Fakturiert",
+      "location": "Lager",
+      "locationPick": "Lager wählen"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "confirmed": "Bestätigt",
+      "partially_delivered": "Teilweise geliefert",
+      "delivered": "Geliefert",
+      "invoiced": "Fakturiert",
+      "cancelled": "Storniert"
+    },
+    "notes": {
+      "title": "Lieferscheine"
+    },
+    "editor": {
+      "save": "Speichern",
+      "discard": "Verwerfen"
+    },
+    "drawer": {
+      "close": "Schliessen"
+    },
+    "error": {
+      "transport": "Die Aufträge konnten nicht geladen werden.",
+      "no_lines": "Ein Auftrag braucht mindestens eine Position zum Bestätigen.",
+      "over_delivery": "Menge übersteigt die offene Restmenge.",
+      "insufficient_stock": "Nicht genügend Bestand vorhanden, Lager prüfen.",
+      "has_deliveries": "Aufträge mit ausgestellten Lieferscheinen können nicht storniert werden.",
+      "nothing_to_invoice": "Noch nichts Geliefertes zu fakturieren.",
+      "invalid_transition": "Dieser Schritt ist im aktuellen Status nicht möglich.",
+      "not_issued": "Nur ausgestellte Lieferscheine können gedruckt werden.",
+      "invalid_reference": "Diese Referenz existiert nicht.",
+      "unknown_item": "Dieser Artikel existiert nicht.",
+      "invalid_qty": "Gib eine ganze, positive Menge ein.",
+      "permissionDenied": {
+        "read": "Du hast keine Berechtigung, Aufträge zu sehen.",
+        "write": "Du hast keine Berechtigung, Aufträge zu ändern."
+      }
+    },
+    "unknownContact": "Unbekannter Kontakt",
+    "unknownItem": "Unbekannter Artikel",
+    "rowOpen": "Auftrag {row} öffnen",
+    "emptyHint": "Aufträge erscheinen hier, sobald du einen anlegst oder eine Offerte umwandelst.",
+    "emptyBackordersHint": "Jeder Auftrag ist vollständig geliefert."
+  },
+  "dn": {
+    "action": {
+      "render": "Lieferschein drucken / herunterladen"
+    },
+    "filed": "Abgelegt",
+    "status": {
+      "issued": "Ausgestellt",
+      "draft": "Entwurf"
+    }
+  },
+  "help": {
+    "SalesOrders": {
+      "title": "Aufträge",
+      "body": "Die Brücke vom Auftrag über die Lieferung zur Rechnung. Bestätigen hält die Zuteilung fest, gebucht wird dabei nichts. Ein Lieferschein wird erstellt und ausgestellt; erst das Ausstellen bewegt den Lagerbestand. Die Rechnung entsteht daraus als Entwurf im Belegbereich, wo sie geprüft und gestellt wird. Rückstände zeigt der eigene Filter: bestellte Mengen, die noch nicht geliefert sind.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

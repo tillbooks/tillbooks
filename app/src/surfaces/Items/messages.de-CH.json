@@ -1,0 +1,191 @@
+{
+  "item": {
+    "title": "Artikel",
+    "new": "Neuer Artikel",
+    "editTitle": "Artikel bearbeiten",
+    "createVariantTitle": "Neue Variante von {name}",
+    "name": "Bezeichnung",
+    "currency": "Währung",
+    "taxCode": "MWST-Code",
+    "taxNone": "Keiner",
+    "revenueAccount": "Ertragskonto",
+    "revenueNone": "Keines",
+    "categoryNone": "Keine Kategorie",
+    "itemNone": "Kein Artikel",
+    "kindNone": "Nicht angegeben",
+    "unitNone": "Keine Einheit",
+    "archive": "Archivieren",
+    "unarchive": "Wiederherstellen",
+    "delete": "Löschen",
+    "archived": "Archiviert",
+    "edit": "Bearbeiten",
+    "rowActions": "Weitere Aktionen für Artikel {name}",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schliessen",
+    "search": "Artikel suchen",
+    "showArchived": "Archivierte anzeigen",
+    "savedView": "Gespeicherte Ansicht",
+    "allItems": "Alle Artikel",
+    "categories": "Kategorien",
+    "newCategory": "Neue Kategorie",
+    "categoryNamePrompt": "Name der neuen Kategorie",
+    "categoryChildPrompt": "Name der neuen Unterkategorie von {name}",
+    "categoryRenamePrompt": "Neuer Name für {name}",
+    "categoryNameRequired": "Bitte gib einen Namen ein.",
+    "categoryNewChild": "Unterkategorie anlegen",
+    "categoryRename": "Umbenennen",
+    "categoryDelete": "Kategorie löschen",
+    "categoryActions": "Aktionen für Kategorie {name}",
+    "confirmDeleteCategory": "Kategorie {name} löschen? Die Artikel bleiben, sie sind danach ohne Kategorie.",
+    "confirmDeleteCategoryConfirm": "Kategorie löschen",
+    "confirmDelete": "Artikel {name} endgültig löschen? Das lässt sich nicht rückgängig machen. Archivieren behält ihn in der Historie.",
+    "confirmDeleteConfirm": "Endgültig löschen",
+    "referencedBy": "Noch verwendet: {refs}",
+    "archiveInstead": "Stattdessen archivieren",
+    "ref": {
+      "document_line": "Belegzeilen",
+      "price_list_item": "Preislisten",
+      "variant": "Varianten",
+      "stock_movement": "Lagerbewegungen",
+      "custom_field_value": "eigene Felder"
+    },
+    "empty": "Noch keine Artikel.",
+    "emptyArchived": "Keine archivierten Artikel.",
+    "emptySearch": "Kein Artikel passt zur Suche.",
+    "noWorkspaceHint": "Artikel gehören zu einem Arbeitsbereich. Lege zuerst einen an.",
+    "nameRequired": "Bitte gib eine Bezeichnung ein.",
+    "priceRequired": "Bitte gib einen gültigen Preis ein (z. B. 150.50).",
+    "costPriceRequired": "Bitte gib einen gültigen Einstandspreis ein (z. B. 90.00).",
+    "invalidRevenueAccount": "Das Ertragskonto muss ein Ertragskonto (3xxx) sein.",
+    "unknownTaxCode": "Dieser MWST-Code ist unbekannt.",
+    "emptyHint": "Artikel sind deine Produkte und Leistungen mit Preis und MWST-Satz, bereit für die Rechnung.",
+    "emptySearchHint": "Passe den Suchbegriff an oder blende archivierte Artikel ein.",
+    "clearSearch": "Suche zurücksetzen",
+    "tableCaption": "Artikelkatalog",
+    "tabsLabel": "Ansicht",
+    "col": {
+      "name": "Bezeichnung",
+      "price": "Preis",
+      "taxCode": "MWST",
+      "category": "Kategorie",
+      "unit": "Einheit",
+      "actions": "Aktionen"
+    },
+    "tab": {
+      "catalog": "Katalog"
+    },
+    "field": {
+      "sku": "Artikelnummer",
+      "kind": "Art",
+      "sales_price": "Verkaufspreis",
+      "cost_price": "Einstandspreis",
+      "unit": "Einheit",
+      "category": "Kategorie",
+      "track_stock": "Lagerführung",
+      "reorder_point_qty": "Meldebestand"
+    },
+    "kind": {
+      "product": "Produkt",
+      "service": "Dienstleistung"
+    },
+    "unit": {
+      "piece": "Stück",
+      "hour": "Stunde",
+      "day": "Tag",
+      "kg": "kg",
+      "g": "g",
+      "l": "l",
+      "m": "m",
+      "m2": "m2",
+      "m3": "m3",
+      "flat": "Pauschal"
+    },
+    "action": {
+      "create_variant": "Variante anlegen"
+    },
+    "error": {
+      "sku_taken": "Diese Artikelnummer ist bereits vergeben.",
+      "services_not_stockable": "Für Dienstleistungen ist keine Lagerführung möglich.",
+      "stock_on_hand_nonzero": "Der Lagerbestand muss null sein, bevor die Lagerführung deaktiviert wird."
+    }
+  },
+  "pricelists": {
+    "tab": {
+      "title": "Preislisten"
+    },
+    "action": {
+      "create": "Preisliste anlegen",
+      "setPrice": "Preis festlegen",
+      "resolve": "Preis ermitteln",
+      "unsetPrice": "Preis entfernen",
+      "delete": "Preisliste löschen"
+    },
+    "scopeLabel": "Geltungsbereich",
+    "scope": {
+      "contact": "Kunde",
+      "segment": "Segment"
+    },
+    "source": {
+      "base": "Basispreis",
+      "segment": "Segmentpreis",
+      "contact": "Kundenpreis"
+    },
+    "field": {
+      "valid_from": "Gültig ab"
+    },
+    "item": "Artikel",
+    "prices": "Preise",
+    "resolve": "Preis ermitteln",
+    "empty": "Noch keine Preislisten.",
+    "emptyHint": "Eine Preisliste enthält kunden- oder segmentspezifische Preise; ohne sie gilt der Basispreis des Artikels.",
+    "emptyPrices": "In dieser Liste ist noch kein Preis festgelegt.",
+    "contactNone": "Kein Kunde",
+    "contactTaken": "{name} (hat schon eine Preisliste)",
+    "listActions": "Aktionen für Preisliste {name}",
+    "rowActions": "Aktionen für den Preis von {name}",
+    "confirmDelete": "Preisliste {name} samt allen Preisen löschen? Bestehende Belege behalten den Preis, mit dem sie erstellt wurden.",
+    "confirmDeleteConfirm": "Preisliste löschen",
+    "confirmUnset": "Preis für {name} aus dieser Liste entfernen? Danach gilt für {name} der nächste Geltungsbereich, sonst der Basispreis.",
+    "confirmUnsetConfirm": "Preis entfernen",
+    "needName": "Gib der Preisliste einen Namen.",
+    "needContact": "Wähle den Kunden, für den die Liste gilt.",
+    "needSegment": "Gib das Segment an, für das die Liste gilt.",
+    "needItem": "Wähle einen Artikel.",
+    "needAmount": "Gib einen Betrag ein, z. B. 150.50 oder 150,50.",
+    "needValidFrom": "Gib ein Datum als JJJJ-MM-TT ein, z. B. 2026-01-01.",
+    "needResolveItem": "Wähle den Artikel, dessen Preis du ermitteln willst.",
+    "error": {
+      "scope_taken_named": "Für diesen Geltungsbereich gibt es schon die Preisliste {name}. Bearbeite sie, statt eine zweite anzulegen."
+    }
+  },
+  "errors": {
+    "item_referenced": "Dieser Artikel wird noch verwendet und lässt sich darum nicht löschen. Archiviere ihn stattdessen, dann bleibt er in verbuchten Belegen lesbar.",
+    "item_archived": "Dieser Artikel ist archiviert. Stelle ihn wieder her, bevor du ihn bepreist.",
+    "price_list_referenced": "Diese Preisliste wird noch verwendet und lässt sich darum nicht löschen.",
+    "scope_ambiguous": "Eine Preisliste gilt entweder für einen Kunden oder für ein Segment, nie für beides und nie für keines.",
+    "scope_taken": "Für diesen Geltungsbereich gibt es schon eine Preisliste. Bearbeite die bestehende, statt eine zweite anzulegen.",
+    "contact_not_found": "Diesen Kunden gibt es in diesem Arbeitsbereich nicht.",
+    "invalid_price": "Dieser Preis ist ungültig. Gib einen Betrag ab 0.00 ein.",
+    "invalid_cost_price": "Dieser Einstandspreis ist ungültig. Gib einen Betrag ab 0.00 ein.",
+    "invalid_reorder_point": "Dieser Meldebestand ist ungültig. Gib eine Menge ab 0 ein.",
+    "invalid_currency": "Diese Währung wird nicht geführt. Möglich sind CHF, EUR und USD.",
+    "invalid_unit": "Diese Einheit gibt es nicht. Wähle eine aus der Liste.",
+    "invalid_kind": "Diese Art gibt es nicht. Wähle Produkt oder Dienstleistung.",
+    "invalid_revenue_account": "Das Ertragskonto muss ein Ertragskonto (3xxx) sein.",
+    "category_not_found": "Diese Kategorie gibt es in diesem Arbeitsbereich nicht.",
+    "category_in_use": "Diese Kategorie wird noch verwendet. Weise die Artikel und Unterkategorien zuerst um.",
+    "category_nesting_too_deep": "Kategorien gehen zwei Ebenen tief. Eine Unterkategorie kann keine weitere enthalten.",
+    "category_cycle": "Eine Kategorie kann sich nicht selbst untergeordnet werden.",
+    "variant_chain_not_allowed": "Varianten gehen eine Ebene tief. Von einer Variante entsteht keine weitere Variante.",
+    "parent_not_found": "Der übergeordnete Eintrag wurde nicht gefunden."
+  },
+  "help": {
+    "Items": {
+      "title": "Artikel",
+      "body": "Der Artikelstamm: alles, was du verkaufst oder einkaufst, mit Kategorien, Varianten, Steuercode und Preisen.\n\nIm Katalog erfasst und bearbeitest du Artikel, links nach Kategorie gefiltert; Varianten stehen eingerückt unter ihrem Artikel. Der zweite Reiter führt die Preislisten.\n\nArchivieren ist eine weiche Markierung: Der Artikel bleibt samt Historie erhalten. Endgültig löschen lässt sich nur, was nirgends mehr referenziert wird.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

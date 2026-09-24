@@ -1,0 +1,272 @@
+/*
+ * A21 Abgleich styling.
+ *
+ * Every value is a token; spacing sits on the 8-pt grid, type on the written scale (K-37). THE
+ * ACCENT BUDGET IS ONE: "Gutschrift erfassen" is the single accent-filled control, because it is where
+ * the queue starts. Every row decision is secondary.
+ *
+ * CONFIDENCE IS GLYPH PLUS TEXT, NEVER A COLOUR CHIP (DESIGN.md, spec §6): `high` is a deliberate
+ * green go-signal check (`--t-success`, the settle-ready positive status, never the accent), while
+ * `medium` and `none` are neutral outline glyphs distinguished by shape. The Rappen delta renders
+ * as plain text. A grayscale printout reads the same as the screen.
+ *
+ * THE QUEUE IS THE SHARED DataTable (K-26): the row tokens, the quiet head and one overflow per row;
+ * the row's one decision stays visible in its own cell, and the review of a probable match opens as
+ * a dialog instead of a second row pushed into the queue.
+ */
+
+.qr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The camt board's own panel header (an <h2> sub-section, not the surface header) keeps this flex
+   block; the surface's page header is the shared SurfaceHeader primitive. */
+.qr__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.qr__subtitle {
+  color: var(--t-text-dim);
+  margin: var(--t-space-0-5) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.qr__view,
+.qr__dial {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.qr__note {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text);
+  display: flex;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+/* f2: the visible denied-reason note beside a disabled money-path control (the reason a disabled
+   button's title cannot carry to a hover or to assistive tech). */
+.qr__denied-note {
+  margin: var(--t-space-1) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.qr__counts {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.qr-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.qr-ref {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A second line under a reference or a match (the payer, the contact, what is still open), at the
+   caption step in dim ink. */
+.qr-payer {
+  display: block;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 400;
+}
+
+.qr-muted {
+  color: var(--t-text-dim);
+}
+
+.qr-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.qr-glyph {
+  color: var(--t-text-dim);
+  flex-shrink: 0;
+}
+
+/* The high-confidence match: a deliberate green go-signal (settle-ready), never the accent. Status
+   has its own colours; the accent is spent only on focus and the single primary action. */
+.qr-glyph--high {
+  color: var(--t-success);
+}
+
+/* A36-U5: the needs-review signal, glyph plus a visible word, dim like the reason line it sits by. */
+.qr-needs-review {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin-left: var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+/* A decided queue row reads in dim ink; its state word ("Übernommen", "Abgelegt") says why. */
+.qr-row--decided > :is(td, th) {
+  color: var(--t-text-dim);
+}
+
+/* The camt board's DataTable row-state hook (rowClassName): a settled (matched) movement is quiet,
+   like a decided queue row. Unmatched and partial keep the default ink. State is never colour-only,
+   so the glyph-plus-text cell carries the meaning; this only dims the rows already closed. */
+.camt-row--matched > :is(td, th) {
+  color: var(--t-text-dim);
+}
+
+/* The camt row's one visible decision (the others are in its overflow, K-21). */
+.qr-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* The review dialog's body: the delta, the shares and, above the threshold, the deliberate route. */
+.qr-review__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.qr-review__panel p {
+  margin: 0;
+}
+
+.qr-form {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: var(--t-space-3);
+}
+
+/* A field label over its control; the controls are the shared `.field`, Select and FileDrop (K-13,
+   K-15). */
+.qr-form label,
+.qr-form .qr-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* The three centred overlays (Korrigieren, Zuordnen, Buchen) and the review are the shared Modal;
+   the scrim, panel and foot are its CSS. Only the dialog BODY content keeps its own styling below. */
+.qr-dialog__credit,
+.qr-dialog__audit {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.qr-dialog__audit {
+  color: var(--t-text-dim);
+}
+
+.qr-dialog__pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* A36-U3: the posting preview shown before a settlement books (fast dialog and Werkbank alike). Money
+   stays in --t-text, tabular figures line up (`.qr-num`), Soll/Haben are words, one accent budget. */
+.qr-dim {
+  color: var(--t-text-dim);
+}
+
+.camt-suggestion-target {
+  color: var(--t-text);
+}
+
+.camt-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-1) 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.camt-preview-title {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.camt-preview-target {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.camt-preview-legs {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.camt-preview-legs td {
+  padding: var(--t-space-0-5) 0;
+  color: var(--t-text);
+}
+
+.camt-preview-total td {
+  border-top: 1px solid var(--t-border);
+  font-weight: 600;
+}
+
+.camt-werkbank-fact {
+  color: var(--t-text);
+}
+
+/* A20's camt board: the imported statement's own lanes, shown below the A21 queue. Same table,
+   same glyph-plus-text state convention, same one-accent budget (its own controls stay secondary). */
+.qr-board {
+  padding: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.camt-suggestion-none {
+  color: var(--t-text-dim);
+}
+
+/* A money figure inside a sentence (the dialog credit line, the batch mismatch, the werkbank fact)
+   is `.t-money` for nowrap and tabular figures, but keeps the size of the text around it. */
+.qr-dialog__credit .t-money,
+.qr-payer .t-money,
+.camt-werkbank-fact .t-money {
+  font-size: inherit;
+}

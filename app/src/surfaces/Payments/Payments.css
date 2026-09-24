@@ -1,0 +1,646 @@
+/*
+ * A14 payments styling.
+ *
+ * Every value is a token. Spacing is the 8-pt grid, with 4px reserved for the optical nudges the
+ * design law permits (a hairline offset), never for layout rhythm. Type sizes are the written scale
+ * (K-37).
+ *
+ * The accent budget is spent exactly three ways across this surface, as the law requires: the focus
+ * ring (inherited), the selected row (DataTable), and the ONE primary action (Zahlung buchen /
+ * Zahlung erfassen). The direction switch is a Segmented control, a neutral raise (K-11). Money
+ * carries no accent at all. Status is the shared Status word, never a colour alone.
+ */
+
+.pay {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The page header is the shared SurfaceHeader primitive (D118 B2). */
+
+.pay-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --- toolbar ----------------------------------------------------------------------------------- */
+
+.pay-toolbar {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: center;
+}
+
+/* --- the list (the shared DataTable, K-26) ------------------------------------------------------ */
+
+/* Money right-aligns and uses tabular numerals: a figure that shifts as it updates is not trusted. */
+.pay-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pay-dim {
+  color: var(--t-text-dim);
+}
+
+/* A reversed payment reads in dim ink; its Status word ("Storniert") says why (K-36). */
+.pay-row--reversed > :is(td, th) {
+  color: var(--t-text-dim);
+}
+
+/* The "Zugewiesen an" cell with a Guthaben: the allocation, the credit as a quiet note, and its one
+   live verb. One line, the row height held (K-20). */
+.pay-allocated {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.pay-credit {
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* The drawer the row opens (K-26). */
+.pay-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.pay-drawer-note {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.pay-link {
+  color: var(--t-text);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.pay-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A booked Mahngebühr candidate (K-29): a label, not a link, because its target is a dunning_item
+   row rather than a routable document. Plain text, so it reads as what it is. */
+.pay-cand-fee {
+  color: var(--t-text);
+}
+
+/* --- the Werkbank (S2), a wide two-pane modal over the list (D113) ------------------------------- */
+
+/* One overlay tier (K-28): the scrim token behind the workbench, on the overlay layer. */
+.pay-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--t-z-overlay);
+  background: var(--t-scrim);
+}
+
+/*
+ * The workbench itself: a wide modal centred over the scrim, not a side drawer. It is the densest
+ * task in the product, so on a wide screen it spends the width on the shape of the work rather than
+ * living in ~560 of 1440 pixels. `max-height` + the panel's own scroll keep it inside the viewport.
+ */
+.pay-wb {
+  position: fixed;
+  inset: 0;
+  z-index: var(--t-z-overlay);
+  margin: auto;
+  width: min(1120px, calc(100% - var(--t-space-6)));
+  max-height: calc(100% - var(--t-space-6));
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-lg);
+  box-shadow: var(--t-shadow-overlay);
+  padding: var(--t-space-3);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.pay-wb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.pay-wb-title {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+.pay-wb-close {
+  flex: none;
+}
+
+.pay-warning {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/*
+ * THE PANEL: one surface, two panes, a single hairline between them (the one place the design law
+ * permits a border, a table rule). No two bordered cards, no third background step: both panes sit on
+ * the same `--t-bg-elev` the workbench is painted with, so dark parity is free.
+ */
+.pay-wb-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
+  gap: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+/* LEFT: the candidates. Scrolls independently so tens of open items never push the decision away. */
+.pay-wb-left {
+  min-width: 0;
+  padding-right: var(--t-space-3);
+  border-right: 1px solid var(--t-border);
+  overflow: auto;
+  max-height: 62vh;
+}
+
+/* RIGHT: the decision column. Sticky, so the statement, the legs and the Rest stay in view while the
+   left pane scrolls, and the one write control is always reachable. */
+.pay-wb-right {
+  min-width: 0;
+  padding-left: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  align-self: start;
+  position: sticky;
+  top: 0;
+}
+
+/* The STALE state: a figure the engine has not confirmed is never presentable as fact, so the whole
+   decision column turns to dim ink while a new preview is in flight and the confirm is held. Dim ink,
+   not opacity (K-36): an opacity-dimmed figure composited under AA. */
+.pay-wb-right--stale {
+  color: var(--t-text-dim);
+}
+
+/*
+ * Below ~1100px the two panes STACK into the order the work happens (money, candidates, statement,
+ * bar). One component, both widths: the left pane stops scrolling on its own and the right pane stops
+ * being sticky, so the whole workbench scrolls as one column exactly like the drawer it replaced.
+ */
+@media (max-width: 1100px) {
+  .pay-wb {
+    width: min(720px, calc(100% - var(--t-space-4)));
+  }
+
+  .pay-wb-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pay-wb-left {
+    padding-right: 0;
+    border-right-color: transparent;
+    border-bottom: 1px solid var(--t-border);
+    padding-bottom: var(--t-space-3);
+    overflow: visible;
+    max-height: none;
+  }
+
+  .pay-wb-right {
+    padding-left: 0;
+    padding-top: var(--t-space-3);
+    position: static;
+  }
+}
+
+/* --- the candidate table (S4) ------------------------------------------------------------------- */
+
+/* On the row tokens (K-20), with the 12px/500 dim head (K-23). */
+.pay-cand-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.pay-cand-table th {
+  height: var(--t-row-head-h);
+  text-align: left;
+  padding: var(--t-row-pad-y) var(--t-space-2);
+  font-weight: 500;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  border-bottom: 1px solid var(--t-border);
+  position: sticky;
+  top: 0;
+  z-index: var(--t-z-sticky);
+  background: var(--t-bg-elev);
+}
+
+.pay-cand-row td {
+  height: var(--t-row-h);
+  padding: var(--t-row-pad-y) var(--t-space-2);
+}
+
+.pay-cand-sub td {
+  padding: 0 var(--t-space-2) var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.pay-cand-row--stale .pay-cand-doc {
+  text-decoration: line-through;
+}
+
+.pay-cand-row--stale td,
+.pay-cand-sub--stale td {
+  color: var(--t-text-dim);
+}
+
+.pay-cand-party {
+  color: var(--t-text);
+}
+
+/* The allocation field is the shared `.field` (K-15); only its width and money alignment are local. */
+.pay-cand-amount .field {
+  width: 120px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-cand-reason {
+  display: block;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  margin-bottom: var(--t-space-0-5);
+}
+
+.pay-cand-controls {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.pay-cand-stale {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* --- the Zuteilung statement (S5, the decision column) ------------------------------------------ */
+
+.pay-statement-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.pay-statement-table td {
+  padding: var(--t-space-0-5) var(--t-space-1);
+}
+
+.pay-statement-table td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A settlement term (Skonto, Ausbuchung) is not cash: indented and dim, taught by position. */
+.pay-statement-term td {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.pay-statement-term td:first-child {
+  padding-left: var(--t-space-3);
+}
+
+/* The Rest is the closing line of the statement, over a hairline: the one place a rule is earned. */
+.pay-statement-rest td {
+  border-top: 1px solid var(--t-border);
+  font-weight: 500;
+}
+
+/* The remainder reaching exactly 0 is a success state (fully allocated), so it carries the success
+   colour, never the accent: the accent is reserved for actions and attention, not status. */
+.pay-statement-rest--done td {
+  color: var(--t-success);
+}
+
+/* --- the money row, stacked first (P8) ---------------------------------------------------------- */
+
+.pay-money {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+/* A field label over its control; the controls are the shared `.field` and Select (K-15). */
+.pay-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  flex: 1 1 160px;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.pay-field--wide {
+  flex: 1 1 100%;
+}
+
+/* The Guthaben field in the sticky bar: sized to its money, so it never crowds the confirm. */
+.pay-field--inline {
+  flex: 0 0 auto;
+  width: 132px;
+}
+
+.pay-field .field[inputmode='decimal'] {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.pay-hint {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.pay-hint--bad {
+  color: var(--t-danger);
+}
+
+.pay-inline-empty {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text);
+}
+
+/* --- section titles and the "danach offen" figure ---------------------------------------------- */
+
+.pay-section-title {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+  margin: 0 0 var(--t-space-1);
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: baseline;
+}
+
+.pay-count {
+  font-weight: 400;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.pay-after {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* --- the preview legs (S5, inside the decision column) ------------------------------------------ */
+
+.pay-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.pay-legs {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.pay-legs td {
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.pay-preview-line {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- errors ------------------------------------------------------------------------------------- */
+
+.pay-error {
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.pay-error-message {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text);
+}
+
+.pay-error-explain {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.pay-error-actions {
+  display: flex;
+  gap: var(--t-space-2);
+}
+
+/* --- the remainder + confirm, at the foot of the decision column -------------------------------- */
+
+/*
+ * The write control lives at the foot of the sticky right pane, so it is always in view without the
+ * bar itself needing to stick. It carries the running remainder, the Guthaben field and P12b's reason
+ * beside the two buttons, and wraps rather than pushing the confirm off the edge on a narrow pane.
+ */
+.pay-remainder {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2) 0 0;
+  border-top: 1px solid var(--t-border);
+}
+
+.pay-remainder-text {
+  flex: 1 1 100%;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The primary action bottom-right, the secondary to its left (the design law's one primary). */
+.pay-remainder-actions {
+  display: flex;
+  gap: var(--t-space-2);
+  margin-left: auto;
+}
+
+.pay-blocked-reason {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  text-align: right;
+}
+
+/* --- dialogs ------------------------------------------------------------------------------------ */
+
+/* The confirm sits over the workbench: the scrim token, not an opaque page (K-28). */
+.pay-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--t-z-overlay);
+  background: var(--t-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--t-space-3);
+}
+
+.pay-confirm {
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-lg);
+  box-shadow: var(--t-shadow-overlay);
+  padding: var(--t-space-3);
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.pay-confirm-message {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  color: var(--t-text);
+}
+
+.pay-confirm-detail {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/*
+ * A14-U1 (the A14 UX gate BLOCKER): the P9 "Nicht mehr anzeigen" suppress control governs whether the
+ * money-path confirmation is ever shown again, and it was a bare 13x13px native checkbox, failing even
+ * the WCAG 2.5.8 AA 24px floor. The native input is KEPT (it carries the label association, the focus
+ * ring and the keyboard behaviour, per DESIGN.md, and must never be swapped for a div): its painted box
+ * is raised to the 24px AA floor, and because the `<label>` WRAPS it, the whole 44px-tall row is the
+ * hit target, reaching TILL's own stricter 44px number without a caricature 44px box.
+ */
+.pay-confirm-suppress {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 44px;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  cursor: pointer;
+}
+
+.pay-confirm-suppress input[type='checkbox'] {
+  inline-size: 24px;
+  block-size: 24px;
+  flex: none;
+  cursor: pointer;
+}
+
+.pay-confirm-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--t-space-2);
+}
+
+/* --- the detail panel (S3, inside the row's drawer) --------------------------------------------- */
+
+.pay-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.pay-detail-title {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.pay-detail-empty {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.pay-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.pay-detail-list li {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: baseline;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.pay-detail-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* A money figure inside a dim sub-line (Skonto, Ausbuchung, danach offen, the FX line) is `.t-money`
+   for nowrap and tabular figures, but keeps the size of the line around it. */
+.pay-dim .t-money,
+.pay-preview-line .t-money {
+  font-size: inherit;
+}

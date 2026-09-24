@@ -1,0 +1,93 @@
+/* Inventory (Lager), the D01 surface. Every value is a token (--t-*): no hex, no second accent.
+   Buttons use the shared .btn system (global.css), so the surface spends the Brass accent only where
+   the design law allows it (the one primary, the consequential accent). Panels separate by the
+   --t-bg-elev elevation step, never by a border around every card (DESIGN.md forbidden list).
+
+   D118 B2: the page header (SurfaceHeader), every table (DataTable) and the movement dialog (Modal)
+   are shared primitives now, so their per-surface CSS is gone. What stays is stock-specific: the
+   low-stock badge, the panels, the panel/dialog form fields, the toast, the count field. */
+
+/* No inner pad of its own (K-06): <main> already carries the page gutter, so a second 24px pushed the
+   title 24px right and down of every other surface. */
+.inventory {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  max-width: 60rem;
+}
+
+/* A panel is the elevation step on the page ground, not a boxed card. Depth from --t-bg-elev + radius. */
+.inventory__panel {
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+}
+
+.inventory__panel h2 {
+  margin: 0 0 var(--t-space-2);
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.inventory__row {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+/* The movement dialog's form, hosted inside the shared Modal body: a stacked column of labelled
+   fields, the same field idiom the valuation/Inventur panel rows use. */
+.inventory__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* A label above its control. The controls are the shared `.field` (K-15). */
+.inventory__row label,
+.inventory__form label,
+.inventory__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.inventory__warn {
+  color: var(--t-warn);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* Success/error notice: a neutral elevated strip, never the accent tint (the accent is a signal,
+   not decoration). It carries a real dismiss control so a keyboard user can close it. */
+.inventory__toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+}
+
+.inventory__toast-close {
+  flex: 0 0 auto;
+}
+
+/* The counting field in a stocktake row: the shared `.field`, narrow, right-aligned tabular numerals
+   like the columns beside it. */
+.inventory__count {
+  width: 5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory__frozen {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}

@@ -1,0 +1,81 @@
+/* A31 Belegeingang. Only --t-* tokens, no new palette (DESIGN.md), the 8-pt grid and the written type
+   scale (K-37). The page header, the file picker (FileDrop, K-13), the queue table, the status words
+   (Status, K-22), the buttons and the review drawer are the shared primitives; what is left here is
+   genuinely Capture-specific: the notice, the field key/value table and its provenance/confidence
+   notes, the commit target set and the pickers. */
+
+.capture__notice {
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+  margin: 0 0 var(--t-space-2);
+}
+
+/* The overflow trigger's cell: it is its own click target inside a clickable row. */
+.capture__rowActions {
+  display: inline-flex;
+}
+
+/* The field proposal: a key/value table inside the review drawer, on the row tokens (K-20). */
+.capture__fields {
+  margin-top: var(--t-space-1);
+}
+.capture__fields table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.capture__fields th,
+.capture__fields td {
+  text-align: left;
+  padding: var(--t-row-pad-y) var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: top;
+}
+.capture__val {
+  font-variant-numeric: tabular-nums;
+}
+.capture__prov,
+.capture__conf {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+.capture__docref {
+  color: var(--t-text-dim);
+  margin: 0;
+}
+
+.capture__target {
+  border: 0;
+  display: flex;
+  gap: var(--t-space-2);
+  padding: 0;
+  margin: var(--t-space-2) 0 0;
+}
+
+/* F-03 (J3.1): the two pickers the commit needs, inside the review drawer. */
+.capture__pickers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-2);
+}
+.capture__picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+.capture__picker > span {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+.capture__consequence {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+.capture__committed {
+  margin: 0;
+}

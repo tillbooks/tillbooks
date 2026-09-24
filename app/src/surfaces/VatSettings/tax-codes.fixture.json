@@ -1,0 +1,86 @@
+{
+  "ok": true,
+  "taxCodes": [
+    {
+      "code": "AUSGENOMMEN",
+      "kind": "exempt",
+      "rateBp": 0,
+      "formLine": "230",
+      "label": "Von der Steuer ausgenommen (Art. 21)",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "BEZUG",
+      "kind": "reverse_charge",
+      "rateBp": 810,
+      "formLine": "383",
+      "label": "Bezugsteuer (Art. 45)",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "EXPORT0",
+      "kind": "zero",
+      "rateBp": 0,
+      "formLine": "220",
+      "label": "Export, echt befreit (Art. 23)",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "IMPORT",
+      "kind": "import",
+      "rateBp": 0,
+      "formLine": "400",
+      "label": "Einfuhrsteuer (Art. 50)",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "UST26",
+      "kind": "output",
+      "rateBp": 260,
+      "formLine": "313",
+      "label": "Umsatzsteuer 2.6% (reduziert)",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "UST38",
+      "kind": "output",
+      "rateBp": 380,
+      "formLine": "343",
+      "label": "Umsatzsteuer 3.8% (Beherbergung)",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "UST81",
+      "kind": "output",
+      "rateBp": 810,
+      "formLine": "303",
+      "label": "Umsatzsteuer 8.1% (Normalsatz)",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "VST-I",
+      "kind": "input",
+      "rateBp": 0,
+      "formLine": "405",
+      "label": "Vorsteuer Investitionen und übriger Betriebsaufwand",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "VST-M",
+      "kind": "input",
+      "rateBp": 0,
+      "formLine": "400",
+      "label": "Vorsteuer Material, Waren, Dienstleistungen",
+      "active": true,
+      "validFrom": null
+    }
+  ]
+}

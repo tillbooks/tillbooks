@@ -1,0 +1,117 @@
+{
+  "nav": {
+    "deals": "Pipeline"
+  },
+  "deals": {
+    "route": {
+      "title": "Pipeline"
+    },
+    "loading": "Loading the pipeline",
+    "empty": "No deals yet.",
+    "emptyColumn": "No deals in this stage.",
+    "search": "Search deals",
+    "weighted": {
+      "label": "Weighted"
+    },
+    "pipeline": {
+      "label": "Pipeline",
+      "first": "Default"
+    },
+    "view": {
+      "label": "View",
+      "all": "All deals"
+    },
+    "filter": {
+      "showClosed": "Show closed",
+      "clear": "Clear filters"
+    },
+    "action": {
+      "create": "New deal",
+      "move": "Stage",
+      "markWon": "Mark as won",
+      "markLost": "Mark as lost",
+      "reopen": "Reopen",
+      "to_quote": "Convert to quote"
+    },
+    "status": {
+      "open": "Open",
+      "won": "Won",
+      "lost": "Lost"
+    },
+    "field": {
+      "contact": "Contact",
+      "contactPick": "Pick a contact",
+      "title": "Title",
+      "value": "Value",
+      "currency": "Currency",
+      "probability": "Probability",
+      "expectedClose": "Expected close",
+      "weighted": "Weighted value",
+      "status": "Status",
+      "quote": "Quote",
+      "quoteLinked": "Open quotes"
+    },
+    "editor": {
+      "save": "Save",
+      "discard": "Discard"
+    },
+    "lost": {
+      "label": "Mark deal as lost: {title}",
+      "reason": "Reason"
+    },
+    "drawer": {
+      "close": "Close details"
+    },
+    "activity": {
+      "label": "Log an activity",
+      "kind": "Kind",
+      "body": "Note",
+      "reminder": "Reminder",
+      "log": "Log",
+      "kinds": {
+        "note": "Note",
+        "call": "Call",
+        "email": "Email",
+        "meeting": "Meeting",
+        "task": "Task"
+      }
+    },
+    "settings": {
+      "open": "Edit pipeline",
+      "title": "Edit pipeline",
+      "stageName": "Stage name",
+      "addStage": "Add stage"
+    },
+    "customization": {
+      "save_view": "Save view",
+      "viewName": "View name"
+    },
+    "error": {
+      "transport": "The pipeline could not be loaded.",
+      "contact_not_found": "That contact does not exist.",
+      "stage_not_in_pipeline": "That stage does not belong to this pipeline.",
+      "lost_reason_required": "A reason is required to mark a deal lost.",
+      "terminal_stage_use_mark": "A deal reaches a closing stage through Won/Lost, not by moving it.",
+      "deal_closed": "This deal is closed. Reopen it first.",
+      "needs_fx_rate": "No current exchange rate is recorded for this currency.",
+      "reminder_in_past": "The reminder time is in the past.",
+      "invalid_activity_kind": "That activity kind does not exist.",
+      "needs_quotes_module": "The quotes feature is not available here.",
+      "pipeline_has_no_open_stage": "This pipeline has no open stage.",
+      "permissionDenied": {
+        "read": "You lack the permission to see the pipeline.",
+        "write": "You lack the permission to edit deals."
+      }
+    },
+    "unknownContact": "Unknown contact",
+    "emptyHint": "Deals appear here once you record a sales opportunity."
+  },
+  "help": {
+    "Deals": {
+      "title": "Pipeline",
+      "body": "The pipeline shows your open deals as columns per stage, with the weighted total in the header. A card changes stage through its stage picker; won or lost runs through its own closing step, with a reason collected on a loss. With no open deals the total shows a dash rather than a fabricated zero.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

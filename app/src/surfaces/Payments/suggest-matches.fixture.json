@@ -1,0 +1,64 @@
+{
+  "reference": {
+    "kind": "none",
+    "value": null,
+    "valid": true,
+    "display": null,
+    "error": null,
+    "status": null
+  },
+  "openItemCount": 2,
+  "referenceMatchCount": 0,
+  "writeOffThresholdMinor": 100,
+  "candidates": [
+    {
+      "targetKind": "document",
+      "targetId": "doc_2",
+      "number": "R-2026-0002",
+      "contactId": "contact_2",
+      "contactName": "Beispiel GmbH",
+      "currency": "CHF",
+      "dueDate": "2026-08-02",
+      "daysOverdue": 0,
+      "grossMinor": 50000,
+      "paidMinor": 0,
+      "openMinor": 50000,
+      "status": "issued",
+      "reference": {
+        "kind": "qrr",
+        "value": "000000000000000000202600029"
+      },
+      "kind": "exact_amount_customer",
+      "reason": "exact_amount_customer",
+      "deltaMinor": 0,
+      "prefillMinor": 50000,
+      "settled": false,
+      "disabledReason": null
+    },
+    {
+      "targetKind": "document",
+      "targetId": "doc_3",
+      "number": "R-2026-0003",
+      "contactId": "contact_1",
+      "contactName": "Muster AG",
+      "currency": "CHF",
+      "dueDate": "2026-07-10",
+      "daysOverdue": 9,
+      "grossMinor": 25000,
+      "paidMinor": 0,
+      "openMinor": 25000,
+      "status": "issued",
+      "reference": {
+        "kind": "qrr",
+        "value": "000000000000000000202600037"
+      },
+      "kind": null,
+      "reason": null,
+      "deltaMinor": -25000,
+      "prefillMinor": 0,
+      "settled": false,
+      "disabledReason": null
+    }
+  ],
+  "ok": true
+}

@@ -1,0 +1,71 @@
+{
+  "nav": {
+    "reportBuilder": "Reports"
+  },
+  "reportBuilder": {
+    "route": { "title": "Reports" },
+    "tab": { "title": "Reports" },
+    "denied": "You do not have permission to view reports.",
+    "empty": "No reports yet.",
+    "emptyHint": "A report pulls data from one source and runs as CSV or PDF.",
+    "rowActions": "Actions for {name}",
+    "empty_result": "No data for these filters.",
+    "action": {
+      "create": "New report",
+      "run": "Run",
+      "download": "Download",
+      "schedule": "Schedule",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "clear_schedule": "Clear schedule"
+    },
+    "confirm": { "title": "Delete {name}?", "body": "The report and its schedule are removed.", "delete": "Delete report" },
+    "field": {
+      "name": "Name",
+      "source": "Data source",
+      "format": "Format",
+      "columns": "Columns",
+      "additional": "Additional fields",
+      "recipients": "Recipients",
+      "frequency": "Frequency",
+      "time": "Time",
+      "weekday": "Weekday",
+      "dayOfMonth": "Day of month"
+    },
+    "col": {
+      "name": "Name",
+      "source": "Source",
+      "format": "Format",
+      "schedule": "Schedule",
+      "lastRun": "Last run",
+      "actions": "Actions"
+    },
+    "freq": { "daily": "Daily", "weekly": "Weekly", "monthly": "Monthly" },
+    "preview": { "count": "{count} rows" },
+    "run": { "success": "{count} rows", "retain": "Retain" },
+    "delivery": { "cloud_tier": "Scheduled e-mail delivery is a cloud feature. Local runs always work.", "cloudShort": "Email delivery (cloud)" },
+    "retention": { "badge": "Retained 10 years (OR 958f)" },
+    "error": {
+      "source_unavailable": "Data source not available in this workspace.",
+      "invalid_schedule": "Only daily, weekly or monthly schedules are supported.",
+      "invalid_field": "A filter references a field the source does not publish.",
+      "columns_empty": "Pick at least one column.",
+      "retention_locked": "This report has retained runs (OR 958f) and cannot be deleted before the retention period ends.",
+      "generic": "Something went wrong."
+    },
+    "builder": { "title": "New report", "editTitle": "Edit report" },
+    "scheduleLabel": { "daily": "Daily, {at}", "weekly": "Weekly, {weekday}, {at}", "monthly": "Monthly, on day {day}, {at}" },
+    "weekday": { "0": "Sunday", "1": "Monday", "2": "Tuesday", "3": "Wednesday", "4": "Thursday", "5": "Friday", "6": "Saturday" }
+  },
+  "help": {
+    "ReportBuilder": {
+      "title": "Reports",
+      "body": "Your own reports over your data: you pick a source, columns, filters and sorting, and save the whole as a report. A run appends its outcome with a row count to the history; the download is what the run produced. Schedules with delivery are a cloud feature and are labelled as such.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

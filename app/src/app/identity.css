@@ -1,0 +1,197 @@
+/*
+ * M01 identity chip (the G15 shell-chrome slot). A quiet chrome control in the rail footer utility
+ * cluster: glyph plus text, ZERO accent (the accent stays reserved for a surface's own primary
+ * action), and a token focus ring like every other rail control. It shows only in served mode, so on
+ * a laptop none of this renders. Every colour is a token; no hardcoded values.
+ */
+
+.rail-identity {
+  position: relative;
+  width: 100%;
+}
+
+/* The chip itself: a full-width, left-aligned button reading "person-glyph subject / role". */
+.rail-identity-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  width: 100%;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rail-identity-btn:hover {
+  border-color: var(--t-border-strong);
+}
+
+.rail-identity-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+}
+
+/* The collapsed-rail form: a square glyph button, the label carried only on the accessible name. */
+.rail-identity-btn--icon {
+  width: auto;
+  justify-content: center;
+  padding: var(--t-space-0-5);
+}
+
+.rail-identity-glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+/* Subject over role, both truncating rather than widening the rail. */
+.rail-identity-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rail-identity-subject {
+  color: var(--t-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-identity-role {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-xs);
+  line-height: var(--t-lh-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The disclosure: the details whoami returns, in a small elevated panel above the chip. */
+.rail-identity-details {
+  position: absolute;
+  bottom: calc(100% + var(--t-space-0-5));
+  left: 0;
+  z-index: var(--t-z-rail);
+  min-width: 100%;
+  max-width: 20rem;
+  padding: var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-md);
+  box-shadow: var(--t-shadow-control);
+}
+
+.rail-identity-dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--t-space-0-5) var(--t-space-2);
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.rail-identity-dl dt {
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.rail-identity-dl dd {
+  margin: 0;
+  color: var(--t-text);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * M03 invite (N4b): the redemption control on the not-a-member page (spec M03 §4 V6). One field, one
+ * action, the inline refusal below the field. It inherits the state panel's measure; every colour is
+ * a token.
+ */
+.identity-redeem {
+  margin-top: var(--t-space-3);
+  text-align: left;
+}
+
+.identity-redeem-lead {
+  margin: 0 0 var(--t-space-1);
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.identity-redeem-label {
+  display: block;
+  margin-bottom: var(--t-space-0-5);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.identity-redeem-row {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: stretch;
+}
+
+.identity-redeem-row .field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.identity-redeem-error {
+  margin: var(--t-space-1) 0 0;
+  color: var(--t-danger);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* The raw role id beside its word in the details disclosure (the humanized label's tooltip law). */
+.rail-identity-raw {
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-xs);
+  line-height: var(--t-lh-xs);
+  color: var(--t-text-dim);
+}
+
+/*
+ * F-11 / J6.4: the served-login pages as FULL pages. No rail, no switcher, no palette trigger: a
+ * quiet head (the app title, the theme toggle) and the page itself, centred, on the page ground.
+ */
+.identity-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--t-bg);
+  color: var(--t-text);
+}
+
+.identity-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--t-space-2) var(--t-space-4);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.identity-page-title {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.identity-page-main {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--t-space-8) var(--t-space-4);
+}
+
+.identity-page-main > .state-panel {
+  width: min(100%, 36rem);
+}

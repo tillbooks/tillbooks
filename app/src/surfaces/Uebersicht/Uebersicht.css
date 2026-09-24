@@ -1,0 +1,156 @@
+/* F00, die Übersicht: the KPI tile wall. One accent, elevated cards, tabular money.
+   The page header is the shared SurfaceHeader (D118 B2); the range is the shared Segmented control
+   (K-11: its chosen segment is a neutral raise, never a second brass block beside "Buchen", K-12);
+   only the control row and the tile grid stay bespoke here, since a KPI tile wall is not a
+   DataTable. Sizes are the type-scale tokens (K-37), spacing the 8-pt grid. */
+
+.uebersicht-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+  flex-wrap: wrap;
+  margin-top: var(--t-space-1);
+}
+
+/* The shared saved-view picker rides the control row. Cap its trigger so a long view name does not
+   stretch the row into (or over) the range control, and let the label shrink so the whole control
+   wraps below it on a narrow home rather than colliding with it. */
+.uebersicht-controls .saved-view-picker {
+  min-width: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.uebersicht-controls .saved-view-picker .select-trigger {
+  max-width: 12rem;
+}
+
+/* Ansicht speichern (a shared .btn--secondary) sits at the end of the row; push it to the right on a
+   wide home so it does not crowd the picker, and let it wrap under the controls on a narrow one. */
+.uebersicht-save {
+  margin-left: auto;
+}
+
+.uebersicht-custom,
+.uebersicht-save-form {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.uebersicht-custom label,
+.uebersicht-save-form label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.uebersicht-caption {
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+  margin: var(--t-space-0-5) 0 0;
+}
+
+.uebersicht-range-error {
+  color: var(--t-danger);
+  margin: var(--t-space-1) 0 0;
+}
+
+.uebersicht-note {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  margin: var(--t-space-2) 0 0;
+}
+
+.uebersicht-save-error {
+  color: var(--t-danger);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.uebersicht-grid {
+  list-style: none;
+  margin: var(--t-space-2) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--t-space-2);
+}
+
+/* The skeleton stands in the same grid geometry as the tiles it waits for (K-34). */
+.uebersicht-grid-skeleton {
+  margin: var(--t-space-2) 0 0;
+}
+
+/* The tile is the box; whether it reads as a control is the variant's job. A drillable tile composes
+   the Wave 1 `.panel--interactive` (pointer, resting control shadow, hover-lift); an inert tile takes
+   `.uebersicht-tile--inert` and stays a flat, static readout.
+   K-09 (D137): no hairline. The elevated ground on the page and the shadow already separate a tile;
+   a border on top was the "box around every card" the design law names. The border stays, in
+   transparent, because it is the edge the focus cue turns brass (K-10). */
+.uebersicht-tile {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+}
+
+/* Inert: no drill, so no pointer and no lift. A flatter surface (no control shadow) reads as a
+   static figure rather than a button. */
+.uebersicht-tile--inert {
+  cursor: default;
+  box-shadow: none;
+}
+
+/* Focus is the shared treatment: the global :focus-visible ring (tokens.css) carries it, so this
+   surface no longer restates a local hard outline. */
+
+.uebersicht-tile-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.uebersicht-glyph {
+  color: var(--t-text-dim);
+}
+
+.uebersicht-label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* KPI values are mostly money: plain body ink, never the accent (the accent is for actions only).
+   A money figure also carries `.t-money` (tabular, never wraps); the tile-scoped selector keeps the
+   headline size over that utility's table size, whatever order the sheets load in. */
+.uebersicht-tile .uebersicht-value {
+  font-size: var(--t-font-xl);
+  line-height: var(--t-lh-xl);
+  font-weight: 600;
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.uebersicht-trend {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.uebersicht-asof {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}

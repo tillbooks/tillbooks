@@ -1,0 +1,229 @@
+/* G08 Diagnostics & feedback panel, on the Betrieb (Operations) surface.
+   Tokens only: no hex, no new colours. 8-pt grid (4px optical nudges only). Depth is the panel's
+   own background step, never a shadow or a gradient. The accent is NOT spent here: this panel's
+   controls are quiet by design, because the accent belongs to the feedback dialog's one primary
+   action and an accent on a privacy switch would read as a recommendation to turn it on. */
+
+/* The surface's single column. Same gap and same measure as the profile surface, so the operational
+   panels keep the workspace rhythm rather than starting a second layout of their own. */
+.operations-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  max-width: 720px;
+}
+
+/* Prose blocks cap at the ~72-character measure the design law sets for reading text. */
+.diag-prose {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  max-width: 64ch;
+  color: var(--t-text);
+}
+
+.diag-prose-dim {
+  color: var(--t-text-dim);
+}
+
+.diag-subtitle {
+  margin: var(--t-space-1) 0 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+/* The opt-in. A real checkbox with a real label: the control is the affordance, so it is never a
+   styled div, and the hint is tied to it with aria-describedby rather than sitting nearby. */
+.diag-switch {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--t-space-0-5) var(--t-space-1);
+  padding: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+}
+
+.diag-switch > label {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 500;
+  color: var(--t-text);
+}
+
+.diag-switch-box {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--t-accent);
+}
+
+/* The hint spans the full width under the control, so German (about 30% longer) wraps into the
+   panel rather than pushing the checkbox off its row. */
+.diag-switch-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  max-width: 64ch;
+}
+
+.diag-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.diag-disclosure .diag-subtitle {
+  margin: 0;
+}
+
+/* The journal and the report log are dense tables in a 720px surface, so the wrapper scrolls
+   horizontally rather than the page doing it. The Studio has no breakpoints and no mobile target,
+   and this invents none: it is the one honest answer for a table with more columns than room. */
+.diag-table-wrap {
+  overflow-x: auto;
+}
+
+.diag-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.diag-table th,
+.diag-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  white-space: nowrap;
+}
+
+.diag-table thead th {
+  color: var(--t-text-dim);
+  font-weight: 600;
+  background: var(--t-bg-soft);
+  white-space: nowrap;
+}
+
+.diag-table time {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Stack frames read as what they are: install-relative source locations, one per line. */
+.diag-frames {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diag-frames code,
+.diag-log-path {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  background: var(--t-bg-code);
+  border-radius: var(--t-radius-sm);
+  padding: 0 4px;
+}
+
+.diag-log-subject {
+  display: block;
+  font-weight: 500;
+  white-space: normal;
+  max-width: 32ch;
+}
+
+/* The artifact path is visible as selectable text, not only copyable: "reveal in Finder" is not
+   something a browser tab can do, and a clipboard call can fail silently. It wraps rather than
+   holding the row open: a temp-directory path is long enough to push the other four columns out of
+   the panel, which running the panel showed and the jsdom tests could not. */
+.diag-log-path {
+  display: block;
+  margin-top: 2px;
+  max-width: 32ch;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Status is a glyph plus its text, never colour alone, and "Prepared" is the only state there is. */
+.diag-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text-dim);
+}
+
+.diag-empty {
+  margin: 0;
+  padding: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text);
+}
+
+.diag-journal-foot,
+.diag-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.diag-journal-foot > .field-hint,
+.diag-pager > .field-hint {
+  margin: 0;
+}
+
+.diag-skeleton-cell {
+  display: block;
+  height: 16px;
+  width: 64px;
+}
+
+/* The Clear now confirmation is now the shared Modal primitive (D118 B2): the bespoke overlay, panel,
+   title and footer styling are deleted. Only the body paragraph keeps a panel-local muted treatment. */
+.diag-confirm-body {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* --- G20 cross-client implementation roster (metadata only, blocked-first) ---
+   8-pt tokens throughout. The blocked signal is a glyph + the word "Blockiert" (.impl-roster-flag),
+   NEVER the row colour alone: recolouring the whole row was a DESIGN.md/WCAG 1.4.1 violation (status
+   is icon plus text, always), so `[data-attention]` no longer paints, it only marks the row for the
+   flag the markup now carries. Dim support copy uses --t-text-dim (a chosen, AA-cleared step in both
+   themes), never `opacity`, which dilutes contrast unpredictably over whatever ground it lands on. */
+.impl-roster { display: flex; flex-direction: column; gap: var(--t-space-1); }
+.impl-roster-rows { list-style: none; padding: 0; margin: 0; }
+.impl-roster-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  align-items: center;
+  padding: var(--t-space-0-5) 0;
+}
+.impl-roster-client { font-weight: 600; }
+.impl-roster-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-warn);
+  font-weight: 500;
+}
+.impl-roster-flag-glyph { color: var(--t-warn); flex: 0 0 auto; }
+.impl-roster-blocker, .impl-roster-days { color: var(--t-text-dim); font-size: var(--t-font-md); line-height: var(--t-lh-md); }
+.impl-roster-hidden { color: var(--t-text-dim); font-style: italic; }
+.impl-roster-empty { color: var(--t-text-dim); margin: 0; }

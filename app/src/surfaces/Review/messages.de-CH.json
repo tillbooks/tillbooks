@@ -1,0 +1,114 @@
+{
+  "nav": {
+    "review": "Prüfung",
+    "export": "Export",
+    "group": {
+      "treuhaender": "Treuhänder"
+    }
+  },
+  "review": {
+    "title": "Prüfung",
+    "subtitle": "Kommentiere, markiere und gib die gebuchten Buchungen einer Periode frei und sperre sie, sobald alles sauber ist.",
+    "permission": "Für die Prüfung der Bücher brauchst du die Treuhänder-Rolle. Bitte einen Workspace-Besitzer, sie dir zu geben.",
+    "coverage": "Abdeckung",
+    "lockPeriod": "Periode sperren",
+    "toExport": "Zum Export",
+    "locked": "{period} ist gesperrt",
+    "lockedBody": "Die Zahlen dieser Periode sind versiegelt. Eine Korrektur läuft über eine spätere, offene Periode als Stornierung, nie als Änderung hier.",
+    "softClosed": "{period} ist weich abgeschlossen: neue Buchungen werden abgewiesen, die Prüfung bleibt offen. Sperren kannst du, sobald alles freigegeben ist.",
+    "approveAll": {
+      "action": "Alle freigeben ({count})",
+      "working": "Wird freigegeben",
+      "title": "{count} offene Buchungen freigeben?",
+      "body": "Freigeben ist ein Prüfvermerk, keine Buchung: die Buchungen bleiben, wie sie sind. Markierte Buchungen ({flagged}) bleiben markiert, bis du sie einzeln beurteilst.",
+      "confirm": "{count} freigeben",
+      "failed": "{count} Buchungen konnten nicht freigegeben werden. Lade neu und versuch es nochmals."
+    },
+    "empty": "Keine Bewegungen in dieser Periode",
+    "emptyHint": "Hier wurde nichts gebucht, also gibt es noch nichts zu prüfen.",
+    "allApproved": "Nichts zu prüfen, alles freigegeben. Du kannst die Periode sperren oder zum Export gehen.",
+    "noAmount": "Kein Betrag",
+    "comment": "Kommentieren",
+    "flag": "Markieren",
+    "approve": "Freigeben",
+    "flagReason": "Grund für die Markierung",
+    "commentText": "Dein Kommentar",
+    "cancel": "Abbrechen",
+    "flagSubmit": "Buchung markieren",
+    "commentSubmit": "Kommentar hinzufügen",
+    "close": "Schliessen",
+    "status": {
+      "open": "offen",
+      "flagged": "markiert",
+      "approved": "freigegeben"
+    },
+    "col": {
+      "date": "Datum",
+      "ref": "Referenz",
+      "description": "Beschreibung",
+      "amount": "Betrag",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "period": {
+      "granularity": "Periodentyp",
+      "month": "Monat",
+      "year": "Jahr",
+      "monthLabel": "Monat",
+      "yearLabel": "Jahr"
+    },
+    "lock": {
+      "locked": "Gesperrt",
+      "alreadyLocked": "Diese Periode ist bereits gesperrt.",
+      "needsManagePeriods": "Zum Sperren brauchst du das Recht, Perioden zu verwalten.",
+      "notClean": "Jede Buchung muss freigegeben und keine markiert sein, bevor du sperren kannst.",
+      "confirmTitle": "{period} sperren?",
+      "confirmBody": "Das betrifft die Buchungen von {from} bis {to}.",
+      "failed": "Die Periode konnte nicht gesperrt werden. Versuch es nochmals.",
+      "cancel": "Abbrechen",
+      "confirm": "Periode sperren",
+      "locking": "Sperren"
+    }
+  },
+  "export": {
+    "title": "Export",
+    "subtitle": "Erstelle das Journal, die Abschlüsse und die MWST-Zahlen, die eine Periode fürs Einreichen braucht.",
+    "permission": "Für den Export der Bücher brauchst du die Treuhänder-Rolle. Bitte einen Workspace-Besitzer, sie dir zu geben.",
+    "formatLabel": "Format",
+    "format": {
+      "csv": "CSV",
+      "pdf": "PDF"
+    },
+    "working": "Wird erstellt",
+    "download": "Herunterladen",
+    "empty": "Diese Periode hatte keine Bewegungen. Die Datei enthält nur die Titelzeilen.",
+    "needsVatConfig": "Die MWST ist noch nicht eingerichtet, also gibt es keine Zahlen zum Exportieren.",
+    "needsVatConfigCta": "MWST einrichten",
+    "error": "Der Export konnte nicht erstellt werden.",
+    "retry": "Nochmals versuchen",
+    "journal": "Journal",
+    "journalDesc": "Jede gebuchte Zeile der Periode als locale-neutrale CSV, die sich sauber wieder importieren lässt.",
+    "statements": "Abschlüsse",
+    "statementsDesc": "Bilanz und Erfolgsrechnung, je eine Datei.",
+    "vat": "MWST-Zahlen",
+    "vatDesc": "Die Zahlen der MWST-Abrechnung, eine Zeile pro Ziffer.",
+    "vatWorkingPaper": "Ein Arbeitspapier, das du neben den Jahresabschluss legst, nicht die Upload-Datei für die ESTV (das ist die eCH-0217-Datei auf dem MWST-Bildschirm)."
+  },
+  "help": {
+    "Review": {
+      "title": "Prüfung",
+      "body": "Geh die gebuchten Buchungen einer Periode durch: kommentiere, was du hinterfragen willst, markiere, was falsch aussieht, und gib frei, was du geprüft hast.\n\nDie Zeile oben zählt, was erledigt ist und was offen bleibt. Der Sperren-Knopf bleibt aus, bis alles freigegeben und nichts markiert ist.\n\nEin Kommentar oder eine Markierung ändert eine gebuchte Buchung nie. Eine Korrektur ist eine Stornierung in einer späteren Periode.",
+      "concepts": [
+        "steuerperiode"
+      ]
+    },
+    "Export": {
+      "title": "Export",
+      "body": "Erstelle die Dateien, die eine Periode fürs Einreichen braucht: das ganze Journal als CSV, die du wieder importieren kannst, Bilanz und Erfolgsrechnung als PDF oder CSV, und die MWST-Zahlen als Arbeitspapier. Jede Zeile behält ihr eigenes Format und lädt ihre eigene Datei. Das MWST-Arbeitspapier gehört neben den Jahresabschluss; es ist nicht die Upload-Datei fürs Steuerportal. Eine leere Periode wird trotzdem exportiert und enthält nur die Titelzeilen.",
+      "concepts": [
+        "steuerperiode",
+        "ziffer"
+      ]
+    }
+  }
+}

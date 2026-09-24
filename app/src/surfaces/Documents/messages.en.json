@@ -1,0 +1,393 @@
+{
+  "nav": {
+    "group": {
+      "sales": "Sales"
+    },
+    "documents": "Documents"
+  },
+  "document": {
+    "title": "Documents",
+    "new": "New document",
+    "search": "Search documents",
+    "empty": "No documents yet",
+    "emptyHint": "Quotes, orders, invoices and credit notes appear here.",
+    "noMatch": "No documents found",
+    "noMatchHint": "No document matches this filter.",
+    "clearFilters": "Reset filters",
+    "loadError": "Documents could not be loaded.",
+    "truncatedNotice": "Showing the first {ceiling} of {total} documents.",
+    "truncatedHint": "Use the filters to narrow the list.",
+    "noWorkspaceHint": "Set up a workspace first, then you can create documents.",
+    "savedView": "View",
+    "overdue": "overdue",
+    "draftNumber": "(draft)",
+    "rowActions": "Actions for {name}",
+    "dialog": {
+      "close": "Close"
+    },
+    "column": {
+      "number": "Number",
+      "type": "Type",
+      "customer": "Customer",
+      "date": "Date",
+      "total": "Total",
+      "status": "Status"
+    },
+    "type": {
+      "all": "All",
+      "quote": "Quote",
+      "order": "Order",
+      "invoice": "Invoice",
+      "creditNote": "Credit note"
+    },
+    "status": {
+      "draft": "Draft",
+      "issued": "Issued",
+      "sent": "Sent",
+      "accepted": "Accepted",
+      "declined": "Declined",
+      "confirmed": "Confirmed",
+      "partiallyPaid": "Partially paid",
+      "settled": "Settled",
+      "converted": "Converted",
+      "cancelled": "Cancelled",
+      "expired": "Expired",
+      "superseded": "Superseded"
+    },
+    "action": {
+      "issue": "Issue",
+      "send": "Send",
+      "accept": "Mark as accepted",
+      "decline": "Mark as declined",
+      "confirm": "Confirm",
+      "expire": "Mark as expired",
+      "supersede": "Supersede",
+      "convert": "Convert",
+      "convertToOrder": "Convert to order",
+      "convertToInvoice": "Convert to invoice",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "edit": "Edit",
+      "open": "Open",
+      "openTarget": "Open target",
+      "back": "Back to documents",
+      "cancelConfirm": "Cancel this document? A reversing entry will be created. The document and its entry are kept.",
+      "deleteDraftConfirm": "Delete this draft?"
+    },
+    "illegalTransition": "This step is not possible for the current state.",
+    "needsLines": "Add a position first.",
+    "needsCustomer": "Choose a customer first.",
+    "periodLocked": "The period {period} is locked.",
+    "periodLockedLink": "Open periods",
+    "genericError": "The document could not be updated.",
+    "denied": "You do not have permission to create or edit documents.",
+    "editor": {
+      "newTitle": "New document",
+      "customer": "Customer",
+      "pickCustomer": "Choose a customer",
+      "noContacts": "No customers yet. Create a contact first.",
+      "toContacts": "Go to contacts",
+      "date": "Date",
+      "currency": "Currency",
+      "notes": "Note",
+      "notesPlaceholder": "Internal note on the document",
+      "position": "Position",
+      "description": "Description",
+      "descriptionPlaceholder": "Service or item",
+      "quantity": "Quantity",
+      "unitPrice": "Unit price",
+      "vat": "VAT",
+      "amount": "Amount",
+      "addLine": "Add position",
+      "removeLine": "Remove position {number}",
+      "subtotal": "Subtotal",
+      "total": "Total",
+      "vatSummary": "VAT summary",
+      "saveDraft": "Save draft",
+      "saved": "Saved",
+      "reasonNoCustomer": "Choose a customer first.",
+      "reasonNoLines": "Add a position first.",
+      "reasonNeedsFxRate": "No rate for {currency} on {date}.",
+      "reasonFxMethod": "The rate for {currency} does not match the conversion basis elected for tax period {taxPeriod}.",
+      "noContactsInline": "No customers yet. Add the first one right here:",
+      "newCustomer": "New customer",
+      "newCustomerName": "Customer name",
+      "createCustomer": "Add customer",
+      "newCustomerCancel": "Cancel",
+      "customerCreated": "{name} is added as a customer and selected.",
+      "customerCreateFailed": "The customer could not be added. Try again or add them under Contacts."
+    },
+    "detail": {
+      "timeline": "Status history",
+      "positions": "Positions",
+      "notFound": "Document not found",
+      "notFoundHint": "This document does not exist or was removed.",
+      "vatSummary": "VAT summary",
+      "ledgerEntry": "View entry",
+      "source": "Created from source",
+      "target": "Open target document",
+      "waitingPayment": "waiting for payment",
+      "convertedToast": "Created from {number}",
+      "issuedAck": "{number} is issued.",
+      "actor": {
+        "you": "you",
+        "agent": "Agent",
+        "system": "System"
+      },
+      "issuedAndSentAck": "{number} is issued and sent to {email}.",
+      "issuedNotSentAck": "{number} is issued but not yet sent to {email}."
+    },
+    "issue": {
+      "title": "Issue document",
+      "numberLine": "A number will be assigned.",
+      "postingLine": "An entry for {total} will be created.",
+      "immutabilityLine": "Issued documents can no longer be edited, only cancelled.",
+      "quoteLine": "The quote is issued and receives a number.",
+      "confirm": "Issue",
+      "cancel": "Cancel"
+    },
+    "dirty": {
+      "indicator": "Not saved",
+      "confirm": "You have changes that are not saved yet. Discard them?",
+      "discard": "Discard",
+      "keep": "Keep editing"
+    }
+  },
+  "invoice": {
+    "terms": {
+      "title": "Terms",
+      "dueDate": "Payable by",
+      "paymentTerms": "Customer payment terms",
+      "termsDays": "{days} days",
+      "applyTerms": "Apply terms",
+      "reference": "Payment reference",
+      "referencePending": "The reference is built from the invoice number when you issue."
+    },
+    "qr": {
+      "title": "QR payment part",
+      "readiness": "QR readiness",
+      "ready": "All set: the address, the IBAN and the currency are in order.",
+      "pendingIssue": "The QR payment part appears when you issue the invoice. Before that, the reference would be made up.",
+      "missingAddress": "The customer address is incomplete, missing: {fields}.",
+      "fixAddress": "Complete the address",
+      "fixCreditorAddress": "Complete your own address",
+      "needsIban": "No IBAN is stored for this workspace. Without one there is no QR payment part.",
+      "toSetup": "Add an IBAN",
+      "unsupportedCurrency": "There is no QR payment part in {currency}.",
+      "qrIbanChfOnly": "From {date} your QR-IBAN carries CHF only, so {currency} gets no payment part.",
+      "field": {
+        "street": "Street",
+        "zip": "Postal code",
+        "city": "Town",
+        "country": "Country"
+      },
+      "reference": "Reference",
+      "referenceHelpLabel": "What this reference is",
+      "referenceHelp": {
+        "qrr": {
+          "title": "QR reference (QRR)",
+          "body": "A 27-digit reference that belongs to your QR-IBAN. Your bank reports it back when the payment arrives. That is how TILL matches the payment to this invoice."
+        },
+        "scor": {
+          "title": "Creditor Reference (SCOR)",
+          "body": "The international reference under ISO 11649, for an ordinary IBAN. It starts with RF and carries a check digit, so a typo shows up."
+        }
+      },
+      "amount": "Amount",
+      "dueBy": "Payable by {date}",
+      "guideline": "Guideline",
+      "igVersion": "SIX Implementation Guidelines {version}",
+      "graphicLabel": "Swiss QR-bill payment code",
+      "graphicDense": "This code is dense. At print size its modules fall below the 0.4 mm the guideline asks for. If a scan fails, shorten the additional information.",
+      "graphicUndrawable": "The payment data is too long for a Swiss QR Code. Shorten the address or the additional information.",
+      "showPayload": "Show raw payload",
+      "hidePayload": "Hide raw payload",
+      "payloadLabel": "Swiss Payments Code",
+      "unavailable": "No QR payment part"
+    },
+    "currency": {
+      "baseOption": "{currency} (ledger currency)",
+      "other": "Other currency",
+      "otherCode": "Currency code",
+      "otherHint": "Three letters per ISO 4217, for example USD.",
+      "qr": {
+        "qrr": "The payment part is created at issue, with a QR reference.",
+        "scor": "The payment part is created at issue, with a SCOR reference.",
+        "noIban": "Without a stored IBAN there is no payment part in any currency.",
+        "unsupported": "The QR payment part allows CHF and EUR only. You can invoice and post in {currency}, it simply gets no payment part.",
+        "chfOnly": "From {date} a QR-IBAN carries CHF only, so an invoice in {currency} dated on or after that gets no payment part.",
+        "chfOnlyRemedy": "A plain IBAN would still get you a payment part, with a SCOR reference instead. That is our inference: SIX says nothing about a creditor who holds only a QR-IBAN.",
+        "chfOnlyValidity": "Invoices you issue before then stay payable. Version 2.3 remains valid until November 2027."
+      }
+    },
+    "fx": {
+      "title": "Conversion",
+      "base": "{currency} is your ledger currency. TILL converts nothing here and stores no rate.",
+      "loading": "TILL is looking up the rate.",
+      "rate": "Rate",
+      "rateLine": "1 {currency} = {rate} {baseCurrency}",
+      "asOf": "Rate dated",
+      "basis": "Basis",
+      "origin": "Origin",
+      "willPost": "When you issue it, TILL posts this invoice in {baseCurrency} at this rate. The converted amounts then sit on the entry.",
+      "postedTitle": "Conversion at posting",
+      "billed": "Billed",
+      "booked": "Booked",
+      "vatBilled": "VAT billed",
+      "vatBooked": "VAT booked",
+      "postedNote": "This is how the document sits in the books. TILL converted it at this rate when it was issued, and a rate recorded later does not change that.",
+      "vatNote": "The {baseCurrency} VAT is the figure your Swiss VAT return is filed on. TILL reads it off the posting instead of multiplying the rate out: the posting rounds once on the side total, so an amount times a rate lands a Rappen off often enough to matter.",
+      "needsRateNoPosting": "There is no admissible rate for {currency} on {date}. You can still issue this document, which posts nothing. The invoice it becomes will need the rate.",
+      "needsRateEmpty": "No rate has been recorded for this workspace yet.",
+      "needsRateNone": "There are rates for {currency}, but none covers this date.",
+      "needsRateStale": "The newest rate is dated {date} and is therefore older than {days} days.",
+      "recordRate": "Record a rate",
+      "methodNotElected": "The rate for {currency} is on the {method} basis. For tax period {taxPeriod} you are on {electedMethod}.",
+      "methodLocked": "The basis for {taxPeriod} is settled, a foreign-currency entry is already posted. You can switch from {period} onward.",
+      "methodFix": "Record the rate on the {method} basis.",
+      "denied": "You lack the permission to read rates.",
+      "error": "The rate could not be loaded.",
+      "retry": "Try again",
+      "method": {
+        "daily": "Daily rate (selling foreign currency)",
+        "monthly_avg": "Monthly average rate",
+        "bank": "Bank rate",
+        "group": "Group rate"
+      },
+      "source": {
+        "manual": "Recorded by hand",
+        "rate_api": "Rate feed",
+        "explicit": "Supplied",
+        "base": "Ledger currency"
+      }
+    },
+    "pdf": {
+      "open": "PDF",
+      "title": "Invoice as PDF",
+      "download": "Download",
+      "close": "Close",
+      "loading": "TILL is creating the PDF.",
+      "error": "The PDF could not be created.",
+      "retry": "Try again",
+      "size": "{kb} KB",
+      "withQr": "With QR payment part",
+      "withoutQr": "Without QR payment part",
+      "preview": "Invoice preview",
+      "previewHint": "Not every browser displays PDFs inline. If the preview stays blank, download the file. It is complete."
+    },
+    "send": {
+      "title": "Send invoice",
+      "to": "To",
+      "emailPlaceholder": "name@example.ch",
+      "attachment": "Attachment",
+      "confirm": "Send",
+      "cancel": "Cancel",
+      "sentTo": "Sent to {email}",
+      "downloadInstead": "Download PDF",
+      "toSetup": "Set up email sending"
+    },
+    "issue": {
+      "title": "Issue invoice",
+      "vatLine": "Of which VAT {tax}.",
+      "noQrLine": "This invoice gets no QR payment part:",
+      "sendLine": "Then email it to {email}",
+      "confirmAndSend": "Issue and send"
+    },
+    "error": {
+      "needsQrIban": "Without a stored IBAN there is no QR payment part. The invoice itself stays valid.",
+      "needsCreditorAddress": "Your own address is incomplete, so the QR payment part cannot be built.",
+      "needsCustomerAddress": "The customer address is incomplete, so the QR payment part cannot be built.",
+      "needsCustomer": "Choose a customer first.",
+      "needsCustomerEmail": "No email is stored for this customer. Enter one, or download the PDF.",
+      "needsEmailConfig": "No email sending is configured. Download the PDF and send it by hand, or set sending up.",
+      "needsEmailTransport": "Email sending is set up, but this installation cannot send. Download the PDF and send it by hand.",
+      "needsQrBill": "This invoice has no QR payment part, so a Swiss customer could not pay it. TILL did not send it.",
+      "needsQrBillUnknown": "TILL could not work out why. Check the IBAN and both addresses.",
+      "sendOutcomeUnknown": "An earlier attempt already reached the mail server, and TILL never learned whether the invoice went out. It may be with the customer, so TILL did not repeat the send. Check the mailbox before you send again.",
+      "needsConfirmation": "Sending reaches the customer, so confirm that step yourself.",
+      "needsFxRate": "No rate for {currency} on {date}.",
+      "fxMethodNotElected": "The recorded rate is on a different conversion basis than the one elected for this tax period.",
+      "fxMethodLocked": "The conversion basis of this tax period is settled, a foreign-currency entry is already posted.",
+      "qrIbanChfOnly": "Under SIX version 2.4 a QR-IBAN carries CHF only. The invoice stays valid, it just gets no payment part.",
+      "unsupportedCurrency": "The QR payment part allows CHF and EUR only.",
+      "zeroTotal": "An invoice for zero gets no QR payment part.",
+      "invalidQrBill": "The QR payment part does not meet the SIX guidelines yet.",
+      "notAvailable": "A draft has no number yet, so it has neither a reference nor a PDF.",
+      "sendFailed": "Sending did not work. The invoice stays issued, so you can try again.",
+      "notAnInvoice": "This document is not an invoice."
+    }
+  },
+  "creditNote": {
+    "create": "Create credit note",
+    "createAction": "Create draft",
+    "forInvoice": "For invoice {number}",
+    "remainingNet": "Still creditable (net): {amount}",
+    "scope": "What to credit",
+    "full": "The whole invoice",
+    "partial": "Selected positions",
+    "partialAmount": "An amount (net)",
+    "amountLabel": "Amount in {currency} (net)",
+    "grossReadout": "Resulting gross (incl. VAT): {amount}",
+    "quantityFor": "Quantity for {line}",
+    "reason": "Reason (optional)",
+    "total": "Credit total (net): {amount}",
+    "overCap": "At most {amount} is still creditable on this invoice.",
+    "reference": "To the credited invoice",
+    "listForInvoice": "Credit notes for this invoice",
+    "issue": {
+      "title": "Issue credit note",
+      "postingLine": "A posting of {total} is created. It reduces what the customer owes."
+    },
+    "linesDerived": "The positions of a credit note are derived from the invoice and cannot be edited here.",
+    "changeSelectionHint": "To change the selection, delete this draft and create a new credit note from the invoice.",
+    "overCredit": "At most {amount} is still open for credit notes on this invoice.",
+    "lineOverCredit": "Position {position} has only {lineAmount} (net) left to credit; the invoice as a whole still allows {amount}."
+  },
+  "ebill": {
+    "title": "eBill delivery",
+    "empty": "eBill delivers this invoice into your customer's e-banking. Prepare the payload here, then transmit it once a network partner is connected.",
+    "loadError": "The eBill status for this invoice could not be loaded.",
+    "prepare": "Prepare for eBill",
+    "retryPrepare": "Prepare again",
+    "transmit": "Transmit",
+    "downloadArtifact": "Download payload",
+    "statusLabel": "Status",
+    "hintLabel": "Note",
+    "partnerStatusLabel": "Partner status",
+    "conformanceLabel": "Conformance",
+    "recoveryLabel": "Next step",
+    "pdfaPending": "PDF/A-3b pending: the payload is filed locally but not yet transmit-ready (A11 open item).",
+    "submittingHint": "Transmitting, outcome unconfirmed. A retry may reach the partner twice.",
+    "status": {
+      "prepared": "Prepared",
+      "submitting": "Transmitting, outcome unconfirmed",
+      "transmitted": "Transmitted",
+      "failed": "Failed"
+    },
+    "partnerStatus": {
+      "nwpPending": "With the network partner",
+      "open": "Open",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "completed": "Completed"
+    },
+    "cloudTierCard": "No eBill connector is configured. Transmission needs a certified network-partner contract and the cloud connector enabled. The payload above stays downloadable so you can upload it by hand.",
+    "needsBillerPid": "No eBill-Biller-ID is configured.",
+    "setupLink": "Open Setup",
+    "notConformant": "The payload is not yet eBill-conformant and was not transmitted: {detail}.",
+    "invalidState": "This invoice cannot be prepared for eBill in its current state.",
+    "rejectedRecovery": "Send the invoice by email instead, or correct it via a credit note and a new invoice. The posted invoice is never edited.",
+    "prepareLocked": "Preparing an eBill payload needs the issue permission.",
+    "transmitLocked": "Transmitting needs the send permission."
+  },
+  "help": {
+    "Documents": {
+      "title": "Documents",
+      "body": "Every document in one list: quotes, orders, invoices and credit notes, filterable by kind and status. From here you start a new document.\n\nA draft can be deleted. An issued document is immutable and is cancelled with a visible reversal when needed.\n\nIf you account on agreed consideration, VAT is owed on issuing the invoice, not on receipt of payment.",
+      "concepts": [
+        "vereinbarte-entgelte"
+      ],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

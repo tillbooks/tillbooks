@@ -1,0 +1,72 @@
+{
+  // The ROOT test suites' type check. `tsconfig.json` has `rootDir: "src"` and
+  // `include: ["src/**/*.ts"]`, so every file under `test/` sits outside it BY CONSTRUCTION: no
+  // `exclude` key was ever needed to hold the suites out of the compiler, and deleting one would
+  // not have let them in. 151 `.mjs` files and 1234 assertions, the ledger and the money path
+  // among them, were checked by nothing at all. This config is the second program that reads them.
+  //
+  // WHY `.mjs` WITH `allowJs` RATHER THAN A RENAME TO `.ts`.
+  //
+  // `npm test` is `node --test test/*.test.mjs test/*/*.test.mjs`, run against `dist/` after
+  // `pretest` builds it. Renaming the suites to `.ts` would put a compile step between the source
+  // and the runner for every suite, which is a change to how the money path is TESTED made in
+  // service of type checking. `allowJs` reads the files exactly as node runs them, so nothing about
+  // the runtime moves. The cost is weaker inference, which is real and is written down below.
+  //
+  // WHY `checkJs` IS FALSE AND EACH FILE OPTS IN WITH `// @ts-check`.
+  //
+  // `checkJs: true` checks every `.js`/`.mjs` in the PROGRAM, and the program is not the include
+  // list: `test/fixtures/*.mjs` pulls in `scripts/lib/xls.mjs` and `scripts/lib/xlsx.mjs` through a
+  // plain import, so a blanket `checkJs` puts files outside `test/` under judgement too. It also
+  // makes the gate all-or-nothing across 151 files at once, which is not a landable unit and so
+  // ends as a gate nobody turns on. Per-file `// @ts-check` makes coverage a countable set that
+  // grows one suite at a time and is green at every step. It is also greppable, which is what lets
+  // `test/style/root-tests-are-type-checked.test.mjs` state the coverage as a number instead of a
+  // claim. That guard is what stops the set shrinking again.
+  //
+  // WHAT THIS CHECK DOES NOT CATCH, stated plainly so nobody reads it as more than it is:
+  //
+  //  - `noImplicitAny` is OFF, and it costs MORE than the name suggests. Yes, untyped callback and
+  //    helper parameters infer as `any`. But in a JS file the flag ALSO governs whether reading an
+  //    absent property off an object inferred from a literal is an error, because TypeScript treats
+  //    such objects as expandos. Measured, not assumed, on 2026-07-26:
+  //
+  //        // @ts-check
+  //        const mk = (c) => ({ a: c, b: 1 });
+  //        console.log(mk(2).nope);
+  //
+  //    With this config: SILENT. With `--noImplicitAny` added: `TS2339: Property 'nope' does not
+  //    exist on type '{ a: any; b: number; }'`. That is not academic. Converting these suites
+  //    introduced exactly one runtime regression, a read of `.ok` off a local helper's return value
+  //    that no longer carried it, and this config watched it go by; `npm test` caught it instead.
+  //
+  //    What survives, and it is the part that matters most here, is TS2339 against a DECLARED type:
+  //    reading `.rates` off a `ParsedFeed | ParsedFeedError` is still an error, so "a suite asserts
+  //    a shape the engine does not return" is still caught. What is lost is the same mistake made
+  //    against a shape the suite built itself.
+  //
+  //    Turning the flag on costs ~1100 further errors, near enough all of them TS7006 on arrow
+  //    parameters that would be JSDoc-annotated purely to satisfy it. That is a project, not a
+  //    footnote, and it is the single highest-value follow-up to this file.
+  //
+  //    The other SHAPE errors against the `dist/*.d.ts` the suites import all fire as they are:
+  //    TS2345 wrong argument, TS2322 wrong assignment, TS2353 excess property, TS2554 wrong arity.
+  //  - A `.mjs` file cannot carry a type annotation, so a generic call is inferred, never pinned.
+  //  - A file WITHOUT `// @ts-check` is read for its exported types and judged not at all.
+  //
+  // Everything else from the root config stays on, including `strict`,
+  // `useUnknownInCatchVariables`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` and
+  // `noUnusedLocals`. Those are not decoration: `noUncheckedIndexedAccess` is what turns a raw
+  // `better-sqlite3` row into something a suite has to prove before it reads it.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,
+    "sourceMap": false,
+    "allowJs": true,
+    "checkJs": false,
+    "noImplicitAny": false
+  },
+  "include": ["test/**/*.mjs"]
+}

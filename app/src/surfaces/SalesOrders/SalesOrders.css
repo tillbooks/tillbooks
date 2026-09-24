@@ -1,0 +1,131 @@
+/* D03 Aufträge: one accent (brass), tabular numerals on quantities.
+
+   D118 B2 (2026-08-24): the order list is the shared DataTable, the page header the shared
+   SurfaceHeader, and both overlays the shared DetailDrawer. The per-surface CSS that duplicated the
+   list table (its rows, hover and open highlight), the page header and title, and the drawer chrome
+   and its action row has been deleted; the shared primitives own all of that. Round 2: the drawer's
+   line table is a DataTable too, every state is the shared `Status` word (K-22), the inputs are
+   `.field` (K-15), and every size and gap is a token (K-37). What remains is genuinely D03-specific:
+   the backorder toggle, the create form and its line grid the drawer body hosts, the delivery-note
+   list and the deliver sub-form. */
+
+.so {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The backorder filter is a standalone toggle riding the SurfaceHeader actions: the label carries the
+   whole hit area so a native checkbox's ~16px does not set the target size (D116 standalone tier,
+   44px). */
+.so-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 44px;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  cursor: pointer;
+}
+
+/* The create form the DetailDrawer body hosts. The drawer supplies the panel ground and padding, so
+   this carries only the field rhythm, not its own chrome. */
+.so-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.so-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.so-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+}
+
+.so-line-row {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.so-line-desc {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+/* The quantity and the price right-align their tabular figures and keep room for the value. */
+.so-line-qty {
+  width: 8ch;
+  text-align: right;
+}
+
+.so-line-price {
+  width: 14ch;
+  text-align: right;
+}
+
+/* A state word and the backorder word beside it, on one line. */
+.so-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.so-dim {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* The delivery-note list the drawer body hosts. */
+.so-notes h3 {
+  margin: var(--t-space-2) 0 var(--t-space-1);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+.so-notes ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.so-notes li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.so-note-number {
+  font-weight: 500;
+}
+
+/* The deliver sub-form: a location select and its go action, softly separated from the record above
+   it by a top rule rather than its own boxed chrome (the drawer supplies the ground). */
+.so-deliver {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  margin-top: var(--t-space-2);
+  padding-top: var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+  align-items: flex-start;
+}

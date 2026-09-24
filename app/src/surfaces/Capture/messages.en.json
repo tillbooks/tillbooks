@@ -1,0 +1,121 @@
+{
+  "nav": {
+    "captureInbox": "Document capture"
+  },
+  "capture": {
+    "route": {
+      "title": "Document capture"
+    },
+    "review": {
+      "title": "Review"
+    },
+    "original": {
+      "ref": "Original document"
+    },
+    "action": {
+      "drop": "Drop a document or choose a file",
+      "choose": "Choose a document",
+      "commit": "Commit",
+      "discard": "Discard",
+      "reextract": "Extract again",
+      "more": "More",
+      "back": "Back",
+      "commitAndPost": "Commit and post"
+    },
+    "col": {
+      "received": "Received",
+      "status": "Status"
+    },
+    "target": {
+      "legend": "Commit as",
+      "bill": "Vendor bill",
+      "expense": "Expense claim line"
+    },
+    "commit": {
+      "requires": "Requires bookkeeper",
+      "consequenceWithTax": "TILL creates the supplier bill and posts it right away, with input VAT {code}.",
+      "consequenceNoTax": "TILL creates the supplier bill and posts it right away, without VAT.",
+      "consequenceNeedsTax": "Choose the input VAT code first. Then TILL creates the supplier bill and posts it right away."
+    },
+    "status": {
+      "needs_review": "To review",
+      "committed": "Committed",
+      "discarded": "Discarded"
+    },
+    "provenance": {
+      "qr": "QR payload",
+      "swico": "Billing info (Swico)",
+      "local_model": "Local model",
+      "agent": "Agent",
+      "operator": "Manual"
+    },
+    "confidence": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "empty": {
+      "queue": "No documents to review.",
+      "queueHint": "A document you choose appears here for review.",
+      "fields": "No fields recognised.",
+      "fieldsHintManual": "Enter the fields manually.",
+      "fieldsHintNoqr": "No QR code was found. Enter the fields manually."
+    },
+    "duplicate": "This file is already in the queue.",
+    "field": {
+      "vendor_name": "Vendor",
+      "vendor_uid": "Vendor UID",
+      "vendor_contact_id": "Vendor (matched)",
+      "iban": "IBAN",
+      "reference": "Reference",
+      "reference_type": "Reference type",
+      "amount": "Amount",
+      "currency": "Currency",
+      "invoice_no": "Invoice number",
+      "invoice_date": "Invoice date",
+      "due_date": "Due date",
+      "customer_reference": "Customer reference",
+      "vat_rate": "VAT rate",
+      "vat_breakdown": "VAT breakdown",
+      "import_vat": "Import VAT",
+      "payment_conditions": "Payment conditions",
+      "expense_account_id": "Expense account",
+      "tax_code": "Tax code"
+    },
+    "error": {
+      "unsupported_mime": "This file type cannot be captured.",
+      "file_unreadable": "The file could not be read.",
+      "needs_vendor": "Pick a vendor before committing.",
+      "needs_account": "Pick an expense account before committing.",
+      "needs_amount": "No amount was extracted; enter one before committing.",
+      "invalid_state": "This capture is already committed or discarded.",
+      "no_matching_tax_code": "No configured VAT code matches this rate.",
+      "needs_open_claim": "Pick or create an expense claim before committing."
+    },
+    "pick": {
+      "vendor": "Assign supplier",
+      "vendorPlaceholder": "Pick a supplier or type a name",
+      "noVendor": "No supplier matches. Add one under Contacts.",
+      "account": "Expense account",
+      "accountPlaceholder": "Type an account number, e.g. 4200",
+      "noAccount": "No account matches what you typed.",
+      "tax": "Input VAT",
+      "taxChoose": "Choose a code",
+      "taxNone": "No VAT"
+    },
+    "postRefused": "The bill is saved as a draft but not posted yet. Post it under Payables.",
+    "committed": {
+      "posted": "Committed and posted.",
+      "drafted": "Committed. The posting is waiting for approval.",
+      "openBill": "Open the bill"
+    }
+  },
+  "help": {
+    "Capture": {
+      "title": "Document capture",
+      "body": "The capture inbox is the review queue for captured documents: the original on one side, the proposed fields on the other. Every field carries its provenance, whether the value was read by machine from the QR-bill or corrected by hand.\n\nCommitting a vendor bill creates it and posts it in one step. The expense account and the input VAT code are pre-filled from the supplier's last bill, and the line above the button says what will post.\n\nAn expense lands as a line on an expense claim.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+/**
+ * C4 consequence line: a quiet sentence, never a badge. Neutral ink, a calm glyph, aligned to the
+ * text. The accent and danger colours belong to the action button, never to this line, so a dialog
+ * full of these never becomes a wall of coloured warnings (the owner-banned slop pattern). The glyph
+ * is the icon set's info mark (K-37), not a text dingbat from a fallback font.
+ */
+
+.consequence-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  margin: var(--t-space-1) 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* 16px on a 20px line: the 2px nudge centres the mark on the first line of the sentence. */
+.consequence-line-glyph {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--t-text-dim);
+}
+
+.consequence-line-text {
+  flex: 1 1 auto;
+}

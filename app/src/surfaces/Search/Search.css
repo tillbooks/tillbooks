@@ -1,0 +1,422 @@
+/* G07 Suche and the G16 command palette. One accent (the selected facet chip and the active palette
+   row's ink), elevated panels, no blur. Sizes, radii, the overlay tier and the scrim are tokens
+   (K-37, K-28). */
+
+.search-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* K-04: the results page has no field of its own. Under the header sit the query it answers (the
+   palette opens on it to change it) and the entity facets. */
+.search-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.search-query {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.search-query-term {
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+.search-saved {
+  padding: var(--t-space-2);
+}
+
+.search-saved-title {
+  margin: 0 0 var(--t-space-1);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.search-saved-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.search-partial {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.search-group {
+  padding: var(--t-space-2);
+}
+
+.search-group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0 0 var(--t-space-1);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.search-hit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A hit is a row that opens its record: the title in ink at 500 (K-12), the snippet dim under it.
+   The transparent border is the focus cue's edge (K-10); it comes out of the padding. */
+.search-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: calc(var(--t-space-1) - 1px);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.search-hit:hover {
+  background: var(--t-bg-soft);
+}
+
+.search-hit-title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.search-hit-snippet {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.search-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.search-save-form {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* --- The palette overlay (K-28: one overlay tier; K-43: the cmdk geometry) --------------------- */
+
+/* Portaled to <body> at the palette tier, above a drawer, a dialog and their scrims, on the one
+   translucent scrim token: the page it acts on stays visible behind it. */
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--t-z-palette);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  background: var(--t-scrim);
+}
+
+/* One overlay: the elevated ground, one hairline, one shadow, the menu radius. The list scrolls
+   inside it; the panel itself does not. */
+.palette {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100vw - var(--t-space-4)));
+  max-height: 76vh;
+  padding: var(--t-space-1);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  box-shadow: var(--t-shadow-overlay);
+}
+
+/* The shortcut sheet shares the overlay but is a short read surface: it may scroll whole. */
+.palette.shortcut-sheet {
+  overflow-y: auto;
+  padding: var(--t-space-2);
+}
+
+.palette-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 calc(var(--t-space-2) - 1px);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font: inherit;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  appearance: none;
+  transition: border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.palette-input::placeholder {
+  color: var(--t-text-dim);
+}
+
+/* The app's shared soft focus treatment (one accent, no glow beyond the 2px ring): the accent border
+   plus the tinted ring, and the native outline suppressed because the ring already carries focus. */
+.palette-input:focus {
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+  outline: none;
+}
+
+.palette-hint {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.palette-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin: var(--t-space-1) 0 0;
+  padding: 0;
+}
+
+/* K-43: the rows scroll inside a capped height with the thin native bar; the ask tail below them
+   never scrolls away. */
+.palette-scroll {
+  max-height: min(400px, 60vh);
+  overflow-y: auto;
+}
+
+/* A group heading: 12px/500 dim (K-23), decorative (the group's aria-label names it). */
+.palette-group {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: var(--t-space-1) 0 var(--t-space-0-5);
+  padding: 0 var(--t-space-1);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.palette-overflow {
+  margin-left: auto;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+/* Link policy (Agent 1): standalone links carry no resting underline, only on hover/focus. */
+.palette-overflow:hover,
+.palette-overflow:focus-visible {
+  text-decoration: underline;
+}
+
+/* G17's Begriffe overflow: an inert narrow-the-query line. Not a button, not a row, no route to
+   point at, never the default selection (design row 2.3). */
+.palette-narrow {
+  margin: 0;
+  padding: 2px var(--t-space-1) var(--t-space-0-5);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+/* K-43: one 40px row. The glyph, the label (truncating), and the kind word at the end of the SAME
+   line: a row never wraps its kind onto a second line. */
+.palette-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 40px;
+  padding: 0 var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  cursor: pointer;
+}
+
+.palette-row--active {
+  background: var(--t-bg-soft);
+  color: var(--t-accent);
+}
+
+.palette-row-glyph {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.palette-row--active .palette-row-glyph {
+  color: currentColor;
+}
+
+.palette-row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: 40px;
+  margin-top: var(--t-space-1);
+  padding: 0 var(--t-space-1);
+  border-top: 1px solid var(--t-border);
+}
+
+/* --- G16 command palette additions (sections, verb rows, footer token, result region) --------- */
+.palette-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+.palette-section {
+  list-style: none;
+}
+
+/* C1: the "Frag den Agenten" tail lane, set off from the command sections by a hairline so the two
+   lanes of the one omnibox read as distinct without a second input. Quiet: no accent, no fill. */
+.palette-section--ask {
+  margin-top: var(--t-space-1);
+  padding-top: var(--t-space-0-5);
+  border-top: 1px solid var(--t-border);
+}
+
+.palette-section-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A verb row's kind hint (open/run) and, when denied, the required capability. The hint tells the
+   operator whether Enter runs the verb inline or opens its surface (US-G16.5), so it carries meaning
+   and uses --t-text-dim. It is written in the case the catalogue gives it: no CSS case transform. */
+.palette-row-kind,
+.palette-row-denied {
+  flex: 0 0 auto;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* A denied verb: dim ink and its required capability in words, never an opacity fade (K-36). */
+.palette-row--disabled {
+  color: var(--t-text-dim);
+  cursor: not-allowed;
+}
+
+/* The active row's verb NAME, a persistent dim monospace token in the footer (US-G16.7). */
+.palette-verb-token {
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* The footer legend ("Enter to act, Esc to close"). It is instructional AND is the third leg the
+   no-visible-label palette input leans on (§6), so it must be legible: --t-text-dim. */
+.palette-legend {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  margin-right: auto;
+}
+
+.palette-result {
+  margin-top: var(--t-space-1);
+  padding: var(--t-space-1) var(--t-space-2);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.palette-result--error {
+  color: var(--t-danger);
+}
+
+/* --- The shortcut sheet (a read surface, same panel ground as the palette) -------------------- */
+.shortcut-heading {
+  margin: 0 0 var(--t-space-2);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+.shortcut-group {
+  margin-bottom: var(--t-space-2);
+}
+
+/* A shortcut-sheet group header (Global / Navigation / Overlay): it names a group, so it carries
+   meaning and uses --t-text-dim (DESIGN.md: faint carries no essential meaning); 12px/500 (K-23). */
+.shortcut-group-label {
+  margin: 0 0 var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--t-space-0-5) 0;
+}
+
+.shortcut-keys {
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: 0 var(--t-space-0-5);
+}

@@ -1,0 +1,149 @@
+{
+  "nav": {
+    "personal": "Personal"
+  },
+  "hr": {
+    "route": {
+      "title": "Personal"
+    },
+    "tab": {
+      "employees": "Mitarbeitende",
+      "absences": "Abwesenheiten",
+      "claims": "Spesen",
+      "lohn": "Lohn"
+    },
+    "noWorkspace": "Wähle einen Mandanten, um das Team zu sehen.",
+    "denied": {
+      "title": "Kein Zugriff",
+      "body": "Du hast keine Berechtigung, Personaldaten zu sehen."
+    },
+    "action": {
+      "add": "Mitarbeitende hinzufügen",
+      "save": "Speichern",
+      "cancel": "Abbrechen"
+    },
+    "employee": {
+      "name": "Name",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "pct": "Beschäftigungsgrad",
+      "startsOn": "Eintrittsdatum",
+      "ahv": "AHV-Nr.",
+      "ahv_restricted": "AHV-Nr. (zugriffsbeschränkt)"
+    },
+    "absence": {
+      "kind": {
+        "vacation": "Ferien",
+        "sick": "Krankheit",
+        "other": "Andere"
+      },
+      "col": {
+        "kind": "Art",
+        "period": "Zeitraum"
+      },
+      "cancelled": "Storniert"
+    },
+    "claim": {
+      "title": "Abrechnung",
+      "status": "Status",
+      "total": "Total",
+      "readonly": "Du kannst Abrechnungen ansehen, aber nicht erstellen oder genehmigen."
+    },
+    "empty": {
+      "employees": "Noch keine Mitarbeitenden.",
+      "absences": "Keine Abwesenheiten in diesem Zeitraum.",
+      "claims": "Noch keine Spesenabrechnungen."
+    },
+    "error": {
+      "load": "Die Liste konnte nicht geladen werden.",
+      "forbidden": "Das ist dir nicht erlaubt.",
+      "permission_denied": "Das ist dir nicht erlaubt.",
+      "invalid_pct": "Der Beschäftigungsgrad muss eine ganze Zahl zwischen 1 und 100 sein.",
+      "invalid_dates": "Das Enddatum liegt vor dem Startdatum.",
+      "self_approval": "Eigene Spesen können nicht selbst genehmigt werden.",
+      "period_locked": "Die Periode ist gesperrt; die Rückerstattung kann nicht gebucht werden.",
+      "invalid_transition": "Diese Abrechnung ist nicht im passenden Status dafür.",
+      "receipt_required": "Für Positionen über CHF 50 ist ein Beleg erforderlich.",
+      "empty_claim": "Vor dem Einreichen mindestens eine Position erfassen.",
+      "needs_employee_contact": "Verknüpfe zuerst einen Kontakt (Lieferantenrolle) mit der Person.",
+      "reason_required": "Für eine Ablehnung ist ein Grund erforderlich."
+    }
+  },
+  "spesen": {
+    "status": {
+      "draft": "Entwurf",
+      "submitted": "Eingereicht",
+      "approved": "Genehmigt",
+      "reimbursed": "Erstattet",
+      "rejected": "Abgelehnt",
+      "cancelled": "Storniert"
+    },
+    "action": {
+      "approve": "Genehmigen & buchen",
+      "reject": "Ablehnen",
+      "reimburse": "Rückerstattung vorbereiten"
+    },
+    "reject": {
+      "default": "Bitte den fehlenden Beleg nachreichen."
+    },
+    "rowActions": "Aktionen für Spesen {title}"
+  },
+  "payroll": {
+    "oss": {
+      "note": "Die Datei bleibt auf diesem Gerät. TILL übermittelt nichts an Lohnanbieter."
+    },
+    "export": {
+      "title": "Übergabe",
+      "cta": "Übergabe exportieren",
+      "first": "Erstexport, vollständiger Bestand.",
+      "mutations": "Änderungen seit letzter Übergabe: {count}",
+      "withAhv": "AHV-Nummern enthalten",
+      "noAhv": "Ohne AHV-Nummern erstellt (Berechtigung fehlt)"
+    },
+    "import": {
+      "title": "Lohnbuchung",
+      "date": "Buchungsdatum",
+      "cta": "Lohndatei hochladen",
+      "post": "Buchen"
+    },
+    "preview": {
+      "account": "Konto",
+      "debit": "Soll",
+      "credit": "Haben"
+    },
+    "history": {
+      "title": "Verlauf",
+      "empty": "Noch keine Übergaben.",
+      "type": "Art",
+      "date": "Datum",
+      "detail": "Detail",
+      "posted": "Gebuchte Buchung {entry}",
+      "kind": {
+        "export": "Export",
+        "posting": "Buchung"
+      }
+    },
+    "requiresManage": "Erfordert Personalverwaltung.",
+    "requiresPost": "Erfordert Buchhaltung.",
+    "err": {
+      "load": "Der Verlauf konnte nicht geladen werden.",
+      "no_employees": "Noch keine Mitarbeitenden.",
+      "unbalanced": "Soll und Haben weichen voneinander ab.",
+      "period_locked": "Die Periode ist gesperrt; die Lohnbuchung kann nicht gebucht werden.",
+      "unknown_account": "Eine Zeile nennt ein Konto, das nicht im Kontenplan ist.",
+      "missing_columns": "Der Datei fehlen account_number, debit_rappen oder credit_rappen.",
+      "unsupported_currency": "Eine Lohnbuchung wird in CHF gebucht; entferne die Währungsspalte.",
+      "invalid_amount": "Ein Betrag ist kein ganzzahliger Rappen-Wert.",
+      "forbidden": "Das darfst du nicht.",
+      "permission_denied": "Das darfst du nicht."
+    }
+  },
+  "help": {
+    "Hr": {
+      "title": "Personal",
+      "body": "Personal bündelt drei Abläufe: Mitarbeitende, Abwesenheiten und Spesen. Personendaten sind besonders geschützt: Die AHV-Nummer wird maskiert angezeigt, und wer keine Personalrechte hat, sieht nur die eigenen Einträge. Eine Spese kann nie von der Person freigegeben werden, die sie eingereicht hat. Die Lohnabrechnung selbst findet ausserhalb von TILL statt; hier entsteht die Übergabe dafür.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

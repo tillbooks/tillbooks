@@ -1,0 +1,139 @@
+{
+  "method": "effektiv",
+  "timing": "soll",
+  "vintage": "current",
+  "periodStart": "2026-04-01",
+  "periodEnd": "2026-06-30",
+  "saldoActivities": [],
+  "saldoDeclarationBasis": null,
+  "lines": [
+    {
+      "code": "200",
+      "label": "Total der vereinbarten bzw. vereinnahmten Entgelte, inkl. optierte Leistungen, Entgelte aus Übertragungen im Meldeverfahren sowie aus Leistungen im Ausland (weltweiter Umsatz)",
+      "baseMinor": 4820000,
+      "taxMinor": 0,
+      "rateBp": null,
+      "kind": null,
+      "entryIds": [
+        "entry_1",
+        "entry_2",
+        "entry_3"
+      ]
+    },
+    {
+      "code": "220",
+      "label": "Von der Steuer befreite Leistungen (u.a. Exporte, Art. 23), von der Steuer befreite Leistungen an begünstigte Einrichtungen und Personen (Art. 107 Abs. 1 Bst. a)",
+      "baseMinor": 200000,
+      "taxMinor": 0,
+      "rateBp": null,
+      "kind": null,
+      "entryIds": [
+        "entry_1",
+        "entry_2",
+        "entry_3"
+      ]
+    },
+    {
+      "code": "289",
+      "label": "Total Ziff. 220 bis 280",
+      "baseMinor": 200000,
+      "taxMinor": 0,
+      "rateBp": null,
+      "kind": null,
+      "entryIds": [
+        "entry_1",
+        "entry_2",
+        "entry_3"
+      ]
+    },
+    {
+      "code": "299",
+      "label": "Steuerbarer Gesamtumsatz (Ziff. 200 abzüglich Ziff. 289)",
+      "baseMinor": 4620000,
+      "taxMinor": 0,
+      "rateBp": null,
+      "kind": null,
+      "entryIds": [
+        "entry_1",
+        "entry_2",
+        "entry_3"
+      ]
+    },
+    {
+      "code": "303",
+      "label": "Normal 8,1% (ab 01.01.2024)",
+      "baseMinor": 4400000,
+      "taxMinor": 356400,
+      "rateBp": 810,
+      "kind": "output",
+      "entryIds": [
+        "entry_1"
+      ]
+    },
+    {
+      "code": "313",
+      "label": "Reduziert 2,6% (ab 01.01.2024)",
+      "baseMinor": 220000,
+      "taxMinor": 5720,
+      "rateBp": 260,
+      "kind": "output",
+      "entryIds": [
+        "entry_2"
+      ]
+    },
+    {
+      "code": "383",
+      "label": "Bezugsteuer (ab 01.01.2024)",
+      "baseMinor": 100000,
+      "taxMinor": 8100,
+      "rateBp": 810,
+      "kind": "reverse_charge",
+      "entryIds": [
+        "entry_6"
+      ]
+    },
+    {
+      "code": "400",
+      "label": "Vorsteuer auf Material- und Dienstleistungsaufwand",
+      "baseMinor": 2200000,
+      "taxMinor": 178200,
+      "rateBp": 810,
+      "kind": null,
+      "entryIds": [
+        "entry_4",
+        "entry_6"
+      ]
+    },
+    {
+      "code": "405",
+      "label": "Vorsteuer auf Investitionen und übrigem Betriebsaufwand",
+      "baseMinor": 400000,
+      "taxMinor": 32400,
+      "rateBp": 810,
+      "kind": "input",
+      "entryIds": [
+        "entry_5"
+      ]
+    }
+  ],
+  "totalTaxDueMinor": 370220,
+  "totalInputTaxMinor": 210600,
+  "payableMinor": 159620,
+  "creditMinor": 0,
+  "empty": false,
+  "reconciled": false,
+  "reconciliation": {
+    "applicable": true,
+    "outputVatAccount": "2200",
+    "outputVatBookedMinor": 355370,
+    "driftMinor": 14850
+  },
+  "bridge": {
+    "account": "2200",
+    "returnMinor": 370220,
+    "bookedMinor": 355370,
+    "kind": "open",
+    "unexplainedMinor": 14850
+  },
+  "ok": true
+}

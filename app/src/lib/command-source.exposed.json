@@ -1,0 +1,20 @@
+{
+  "note": "Authored (not generated): the curated set of registry verbs the palette exposes BY NAME, each with a human label key (en + de-CH) and a handoff/direct-run decision. Every other registry verb is reached through its rail surface (records come live from G07). Guarded by command-source-drift.test.mjs: every name must be a live verb, every capability must match the live gate, every directRunSafe must satisfy the four safety properties, and every label key must exist in both locales. A verb is the product's feature list, so the SET is identical for every workspace; a role that lacks a verb's capability sees the row disabled, never hidden (D90 D-4).",
+  "commands": [
+    { "name": "egress_self_test", "kind": "direct-run", "labelKey": "command.egress_self_test.label", "targetRoute": "/setup", "directRunSafe": true },
+    { "name": "detect_anomalies", "kind": "direct-run", "labelKey": "command.detect_anomalies.label", "targetRoute": "/journal", "directRunSafe": true },
+    { "name": "post_entry", "kind": "handoff", "labelKey": "command.post_entry.label", "aliasKey": "command.post_entry.aliases", "targetRoute": "/journal", "directRunSafe": false },
+    { "name": "reverse_entry", "kind": "handoff", "labelKey": "command.reverse_entry.label", "targetRoute": "/journal", "directRunSafe": false },
+    { "name": "record_payment", "kind": "handoff", "labelKey": "command.record_payment.label", "aliasKey": "command.record_payment.aliases", "targetRoute": "/payments", "directRunSafe": false },
+    { "name": "issue_invoice", "kind": "handoff", "labelKey": "command.issue_invoice.label", "targetRoute": "/documents", "directRunSafe": false },
+    { "name": "create_document", "kind": "handoff", "labelKey": "command.create_document.label", "aliasKey": "command.create_document.aliases", "targetRoute": "/documents", "directRunSafe": false },
+    { "name": "send_invoice", "kind": "handoff", "labelKey": "command.send_invoice.label", "targetRoute": "/documents", "directRunSafe": false },
+    { "name": "create_contact", "kind": "handoff", "labelKey": "command.create_contact.label", "aliasKey": "command.create_contact.aliases", "targetRoute": "/contacts", "directRunSafe": false },
+    { "name": "create_item", "kind": "handoff", "labelKey": "command.create_item.label", "aliasKey": "command.create_item.aliases", "targetRoute": "/items", "directRunSafe": false },
+    { "name": "propose_dunning_run", "kind": "handoff", "labelKey": "command.propose_dunning_run.label", "targetRoute": "/dunning", "directRunSafe": false },
+    { "name": "quotes_create", "kind": "handoff", "labelKey": "command.quotes_create.label", "aliasKey": "command.quotes_create.aliases", "targetRoute": "/quotes", "directRunSafe": false },
+    { "name": "sales_order_create", "kind": "handoff", "labelKey": "command.sales_order_create.label", "aliasKey": "command.sales_order_create.aliases", "targetRoute": "/sales-orders", "directRunSafe": false },
+    { "name": "requisition_upsert", "kind": "handoff", "labelKey": "command.requisition_upsert.label", "aliasKey": "command.requisition_upsert.aliases", "targetRoute": "/requisitions", "directRunSafe": false },
+    { "name": "export_journal", "kind": "handoff", "labelKey": "command.export_journal.label", "targetRoute": "/reports", "directRunSafe": false }
+  ]
+}

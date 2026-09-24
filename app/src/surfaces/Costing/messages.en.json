@@ -1,0 +1,70 @@
+{
+  "costing": {
+    "tab": { "title": "Profitability" },
+    "card": {
+      "revenue": "Revenue",
+      "cost": "Cost",
+      "margin": "Margin",
+      "marginPct": "Margin %"
+    },
+    "component": {
+      "time": "Time",
+      "expenses": "Expenses",
+      "purchases": "Purchases",
+      "accrued_purchases": "Accrued purchases",
+      "committed": "Committed",
+      "revenue": "Revenue"
+    },
+    "basis": {
+      "label": "Valuation basis",
+      "bill": "At bill rates",
+      "cost": "At cost rates"
+    },
+    "hint": {
+      "costRateMissing": "No cost rate configured; bill rate used.",
+      "unattributable": "Some cost components cannot be attributed to a project yet; their zeros are missing attribution, not measurements."
+    },
+    "budget": {
+      "title": "Budget vs actual",
+      "budget": "Budget",
+      "costToDate": "Cost to date",
+      "remaining": "Budget remaining",
+      "consumed": "Consumed",
+      "hours": "Hours",
+      "overBudget": "Over budget"
+    },
+    "drill": {
+      "title": "Entries",
+      "component": "Component",
+      "date": "Date",
+      "source": "Source",
+      "detail": "Detail",
+      "amount": "Amount",
+      "minutes": "{minutes} min",
+      "timeEntry": "Time entry",
+      "invoiceLine": "Invoice line",
+      "creditNoteLine": "Credit note line",
+      "vendorBill": "Vendor bill",
+      "poLine": "Purchase order line",
+      "empty": "No entries in this component.",
+      "aria": "Profitability source entries"
+    },
+    "empty": "No cost or revenue yet.",
+    "denied": "You do not have access to project profitability.",
+    "list": { "margin": "Margin" },
+    "noMarginPct": "–"
+  },
+  "errors": {
+    "fx_base_missing": "Some entries are missing a CHF base amount; the P&L cannot mix currencies.",
+    "invalid_component": "This report component does not exist.",
+    "field_not_found": "This grouping field does not exist or is not a select field."
+  },
+  "help": {
+    "Costing": {
+      "title": "Profitability",
+      "body": "Project profitability shows a project's revenue, cost and margin, computed from recorded time, expenses and purchases. The budget-versus-actual comparison and the component breakdown show where every figure comes from. When a cost rate is missing the panel says so instead of computing with zero; without revenue the margin stays empty rather than wrong.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

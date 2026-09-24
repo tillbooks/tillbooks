@@ -1,0 +1,73 @@
+{
+  "nav": {
+    "poVersions": "Bestellversionen"
+  },
+  "poVersions": {
+    "title": "Bestellversionen",
+    "noWorkspace": "Wähle einen Mandanten, um Bestellversionen zu sehen.",
+    "error": {
+      "transport": "Die Bestellungen konnten nicht geladen werden."
+    },
+    "empty": {
+      "title": "Noch keine Bestellungen.",
+      "hint": "Sobald eine Bestellung gesendet ist, kannst du sie hier versionieren und ändern.",
+      "action": "Zum Einkauf"
+    },
+    "col": {
+      "number": "Nummer",
+      "status": "Status",
+      "total": "Total"
+    },
+    "list": {
+      "caption": "Bestellungen"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "sent": "Gesendet",
+      "received": "Erhalten",
+      "closed": "Abgeschlossen",
+      "cancelled": "Storniert"
+    },
+    "detail": {
+      "title": "Bestellung"
+    },
+    "versions": {
+      "title": "Versionen",
+      "empty": "Noch keine Version erfasst.",
+      "version": "Version"
+    },
+    "vstatus": {
+      "active": "Aktiv",
+      "superseded": "Ersetzt"
+    },
+    "amend": {
+      "title": "Änderung",
+      "reason": "Grund",
+      "qty": "Menge",
+      "unitPrice": "Einzelpreis",
+      "impactTitle": "Auswirkung",
+      "delta": "Verpflichtungsänderung"
+    },
+    "violation": {
+      "qty_below_received": "Die Menge darf nicht unter die bereits erhaltene Menge fallen.",
+      "line_has_receipts": "Eine Position mit Wareneingang kann nicht entfernt werden.",
+      "line_not_found": "Die Position existiert nicht mehr."
+    },
+    "action": {
+      "back": "Zurück",
+      "amend": "Ändern",
+      "cancel": "Abbrechen",
+      "preview": "Vorschau",
+      "submit": "Zur Genehmigung",
+      "apply": "Anwenden"
+    }
+  },
+  "help": {
+    "PurchaseVersions": {
+      "title": "Bestellversionen",
+      "body": "Jede Änderung an einer laufenden Bestellung entsteht hier als neue Version, nie als Umschreiben der alten. Die Liste zeigt deine Bestellungen; im Detail steht die unveränderliche Versionsgeschichte mit dem Grund jeder Änderung.\n\nDort findest du auch den Bereich zum Anpassen: Mengen und Preise der offenen Positionen ändern, die Auswirkung auf den bestellten Wert prüfen, dann anwenden oder zur Freigabe einreichen.\n\nDas angepasste Dokument wird erstellt, aber nie automatisch versendet.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

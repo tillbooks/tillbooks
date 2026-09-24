@@ -1,0 +1,50 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "TILL",
+  "description": "Swiss accounting your agent can actually use. Open source, MIT, local-first.",
+  "colors": {
+    "primary": "#7a5a16",
+    "light": "#e0b444",
+    "dark": "#7a5a16"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Agent interface",
+            "pages": ["mcp/overview", "mcp/run-inside-agent"]
+          },
+          {
+            "group": "Switzerland",
+            "pages": ["swiss/qr-bill", "swiss/mwst"]
+          },
+          {
+            "group": "Self-hosting",
+            "pages": ["self-hosting/under-an-hour", "self-hosting/served-access", "self-hosting/threat-model", "self-hosting/cost-sheet"]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "tillbooks.ch",
+        "href": "https://tillbooks.ch"
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "website": "https://tillbooks.ch"
+    }
+  }
+}

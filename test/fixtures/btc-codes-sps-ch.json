@@ -1,0 +1,460 @@
+{
+  "$comment": "Generated from the SIX xlsx, not hand-transcribed. Do not edit by hand; re-extract with scripts/extract-btc.mjs.",
+  "source": {
+    "title": "List of BTC codes used in Switzerland",
+    "publisher": "SIX Group (Swiss Payment Standards)",
+    "url": "https://www.six-group.com/dam/download/banking-services/standardization/sps/btc-codes-sps-en.xlsx",
+    "linkedFrom": "https://www.six-group.com/en/products-services/banking-services/payment-standardization/standards/iso-20022.html",
+    "statedVersion": "1.0",
+    "statedAsOf": "2024-02-20",
+    "retrieved": "2026-07-19",
+    "versionCaveat": "The workbook states version 1.0 as of 2024-02-20, yet contains rows marked 'valid from 20.8.2024'. The stated date is therefore stale relative to the content. Treat the file, not its metadata, as authoritative.",
+    "normalization": "Soft hyphens removed; non-breaking hyphens and en dashes folded to plain hyphens. Code values are untouched.",
+    "languageEditions": "SIX publishes en, de and fr (there is no it edition). All three carry the identical 48 code rows in the same order, verified 2026-07-19; only the labels differ.",
+    "authority": "SIX publishes the CH list separately from the ISO external code sets. ISO remains the registry of record for code existence, but NOT via the quarterly ExternalCodeSets release: that release registers the three BTC set names without enumerating their values. The BTC values are published separately, and are extracted in test/fixtures/btc-codes-iso-20022.json.",
+    "crossCheckedAgainstIso": "2026-07-19: all 48 rows verified against ISO BTC codification v7.0 (2023-10-30) and description v7.1 (May 2025). Every triple is an ISO-permitted combination; nothing is deprecated. See docs/planning/btc-swiss-bank-transaction-codes.md."
+  },
+  "notes": [
+    "BkTxCd is a mandatory C-level element in camt.053. Domain/Family/SubFamily are each a separate ISO external code set.",
+    "Sheet 'CH-specific (mandatory)' is binding on all Swiss financial institutions. Sheet 'CH general (usual)' is customary usage, not mandated.",
+    "Two Real-Time Credit Transfer rows carry prose instead of a sub-family code. subFamily is null for those and the sheet text is preserved in subFamilyNote. No code was invented."
+  ],
+  "chSpecificMandatory": [
+    {
+      "domain": "PMNT",
+      "family": "ICDT",
+      "subFamily": "VCOM",
+      "domainName": "Payments",
+      "familyName": "Issued Credit Transfers",
+      "subFamilyName": "Credit Transfer With Agreed Commercial Information",
+      "swissMarketIndividualization": "Domestic QRR or SCOR payment instruction"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IDDT",
+      "subFamily": "PMDD",
+      "domainName": "Payments",
+      "familyName": "Issued Direct Debits",
+      "subFamilyName": "Direct Debit Payment",
+      "swissMarketIndividualization": "Credit from direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IDDT",
+      "subFamily": "RCDD",
+      "domainName": "Payments",
+      "familyName": "Issued Direct Debits",
+      "subFamilyName": "Reversal Due To Payment Cancellation Request",
+      "swissMarketIndividualization": "Debit from chargeback direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IDDT",
+      "subFamily": "UPDD",
+      "domainName": "Payments",
+      "familyName": "Issued Direct Debits",
+      "subFamilyName": "Reversal Due To Return/ Unpaid Direct Debit",
+      "swissMarketIndividualization": "Debit from chargeback direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IDDT",
+      "subFamily": "PRDD",
+      "domainName": "Payments",
+      "familyName": "Issued Direct Debits",
+      "subFamilyName": "Reversal Due To Payment Reversal",
+      "swissMarketIndividualization": "Debit from chargeback direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCDT",
+      "subFamily": "VCOM",
+      "domainName": "Payments",
+      "familyName": "Received Credit Transfers",
+      "subFamilyName": "Credit Transfer With Agreed Commercial Information",
+      "swissMarketIndividualization": "Incoming payment with structured reference, QR-IBAN incoming payment, domestic SCOR incoming payment."
+    },
+    {
+      "domain": "PMNT",
+      "family": "RDDT",
+      "subFamily": "PMDD",
+      "domainName": "Payments",
+      "familyName": "Received Direct Debits",
+      "subFamilyName": "Direct Debit",
+      "swissMarketIndividualization": "Debit from direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RDDT",
+      "subFamily": "PRDD",
+      "domainName": "Payments",
+      "familyName": "Received Direct Debits",
+      "subFamilyName": "Reversal Due To Payment Reversal",
+      "swissMarketIndividualization": "Credit from chargeback direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IRCT",
+      "subFamily": null,
+      "domainName": "Payments",
+      "familyName": "Issued Real-Time Credit Transfer",
+      "subFamilyName": "Domestic Credit Transfer",
+      "swissMarketIndividualization": "Debit from domestic instant payment (valid from 20.8.2024)",
+      "subFamilyNote": "Subfamily does not change to \"normal\" payments"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RRCT",
+      "subFamily": null,
+      "domainName": "Payments",
+      "familyName": "Received Real-Time Credit Transfer",
+      "subFamilyName": "Domestic Credit Transfer",
+      "swissMarketIndividualization": "Credit from domestic instant payment (valid from 20.8.2024)",
+      "subFamilyNote": "Subfamily does not change to \"normal\" payments"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IRCT",
+      "subFamily": "RRTN",
+      "domainName": "Payments",
+      "familyName": "Issued Real-Time Credit Transfer",
+      "subFamilyName": "Reversal Due To Payment Return",
+      "swissMarketIndividualization": "Reversal of a credit (due to revocation) based on a domestic instant payment (valid from 20.8.2024)"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RRCT",
+      "subFamily": "RRTN",
+      "domainName": "Payments",
+      "familyName": "Received Real-Time Credit Transfer",
+      "subFamilyName": "Reversal Due To Payment Return",
+      "swissMarketIndividualization": "Domestic instant payment debit chargeback (due to an undeliverable transfer or revocation) based on a domestic instant payment (valid from 20.8.2024)"
+    }
+  ],
+  "chGeneral": [
+    {
+      "domain": "PMNT",
+      "family": "CNTR",
+      "subFamily": "CDPT",
+      "domainName": "Payments",
+      "familyName": "Counter Transactions",
+      "subFamilyName": "Cash Deposit",
+      "swissMarketIndividualization": "Cash deposit at counter"
+    },
+    {
+      "domain": "PMNT",
+      "family": "CNTR",
+      "subFamily": "CWDL",
+      "domainName": "Payments",
+      "familyName": "Counter Transactions",
+      "subFamilyName": "Cash Withdrawal",
+      "swissMarketIndividualization": "Cash withdrawal at counter"
+    },
+    {
+      "domain": "PMNT",
+      "family": "CNTR",
+      "subFamily": "CHKD",
+      "domainName": "Payments",
+      "familyName": "Counter Transactions",
+      "subFamilyName": "Check Deposit",
+      "swissMarketIndividualization": "Check cashing at counter"
+    },
+    {
+      "domain": "PMNT",
+      "family": "CCRD",
+      "subFamily": "CDPT",
+      "domainName": "Payments",
+      "familyName": "Customer Card Transactions",
+      "subFamilyName": "Cash Deposit",
+      "swissMarketIndividualization": "Deposit at machine with card"
+    },
+    {
+      "domain": "PMNT",
+      "family": "CCRD",
+      "subFamily": "CWDL",
+      "domainName": "Payments",
+      "familyName": "Customer Card Transactions",
+      "subFamilyName": "Cash Withdrawal",
+      "swissMarketIndividualization": "Withdrawal from machine with card"
+    },
+    {
+      "domain": "PMNT",
+      "family": "CCRD",
+      "subFamily": "XBCW",
+      "domainName": "Payments",
+      "familyName": "Customer Card Transactions",
+      "subFamilyName": "Cross-Border Cash Withdrawal",
+      "swissMarketIndividualization": "Withdrawal from machine abroad with card"
+    },
+    {
+      "domain": "PMNT",
+      "family": "CCRD",
+      "subFamily": "POSD",
+      "domainName": "Payments",
+      "familyName": "Customer Card Transactions",
+      "subFamilyName": "Point-of-Sale (EFT/POS) Payment - Debit Card",
+      "swissMarketIndividualization": "Payment with card at POS"
+    },
+    {
+      "domain": "PMNT",
+      "family": "ICHQ",
+      "subFamily": "CCHQ",
+      "domainName": "Payments",
+      "familyName": "Issued Cheques",
+      "subFamilyName": "Cheque",
+      "swissMarketIndividualization": "Check debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "ICHQ",
+      "subFamily": "XBCQ",
+      "domainName": "Payments",
+      "familyName": "Issued Cheques",
+      "subFamilyName": "Foreign Cheque",
+      "swissMarketIndividualization": "Check debit abroad"
+    },
+    {
+      "domain": "PMNT",
+      "family": "ICDT",
+      "subFamily": "AUTT",
+      "domainName": "Payments",
+      "familyName": "Issued Credit Transfers",
+      "subFamilyName": "Automatic Transfer",
+      "swissMarketIndividualization": "Electronic payment order"
+    },
+    {
+      "domain": "PMNT",
+      "family": "ICDT",
+      "subFamily": "DMCT",
+      "domainName": "Payments",
+      "familyName": "Issued Credit Transfers",
+      "subFamilyName": "Domestic Credit Transfer",
+      "swissMarketIndividualization": "Paper-bound payment order"
+    },
+    {
+      "domain": "PMNT",
+      "family": "ICDT",
+      "subFamily": "BOOK",
+      "domainName": "Payments",
+      "familyName": "Issued Credit Transfers",
+      "subFamilyName": "Internal Book Transfer",
+      "swissMarketIndividualization": "Account transfer debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "ICDT",
+      "subFamily": "SALA",
+      "domainName": "Payments",
+      "familyName": "Issued Credit Transfers",
+      "subFamilyName": "Payroll/Salary Payment",
+      "swissMarketIndividualization": "Salary payment instruction"
+    },
+    {
+      "domain": "PMNT",
+      "family": "ICDT",
+      "subFamily": "PRCT",
+      "domainName": "Payments",
+      "familyName": "Issued Credit Transfers",
+      "subFamilyName": "Priority Credit Transfer",
+      "swissMarketIndividualization": "Priority payment instruction"
+    },
+    {
+      "domain": "PMNT",
+      "family": "ICDT",
+      "subFamily": "RRTN",
+      "domainName": "Payments",
+      "familyName": "Issued Credit Transfers",
+      "subFamilyName": "Reversal Due To Payment Return",
+      "swissMarketIndividualization": "Chargeback payment"
+    },
+    {
+      "domain": "PMNT",
+      "family": "ICDT",
+      "subFamily": "ESCT",
+      "domainName": "Payments",
+      "familyName": "Issued Credit Transfers",
+      "subFamilyName": "SEPA Credit Transfer",
+      "swissMarketIndividualization": "SEPA payment instruction"
+    },
+    {
+      "domain": "PMNT",
+      "family": "ICDT",
+      "subFamily": "STDO",
+      "domainName": "Payments",
+      "familyName": "Issued Credit Transfers",
+      "subFamilyName": "Standing Order",
+      "swissMarketIndividualization": "Standing order"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IDDT",
+      "subFamily": "XBDD",
+      "domainName": "Payments",
+      "familyName": "Issued Direct Debits",
+      "subFamilyName": "Cross-Border Direct Debit",
+      "swissMarketIndividualization": "Credit from abroad from direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IDDT",
+      "subFamily": "BBDD",
+      "domainName": "Payments",
+      "familyName": "Issued Direct Debits",
+      "subFamilyName": "SEPA B2B Direct Debit",
+      "swissMarketIndividualization": "Credit from SEPA B2B direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IDDT",
+      "subFamily": "ESDD",
+      "domainName": "Payments",
+      "familyName": "Issued Direct Debits",
+      "subFamilyName": "SEPA Core Direct Debit",
+      "swissMarketIndividualization": "Credit from SEPA Core direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCHQ",
+      "subFamily": "CCHQ",
+      "domainName": "Payments",
+      "familyName": "Received Cheques",
+      "subFamilyName": "Cheque",
+      "swissMarketIndividualization": "Check credit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCHQ",
+      "subFamily": "CQRV",
+      "domainName": "Payments",
+      "familyName": "Received Cheques",
+      "subFamilyName": "Cheque Reversal",
+      "swissMarketIndividualization": "Chargeback check"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCHQ",
+      "subFamily": "URCQ",
+      "domainName": "Payments",
+      "familyName": "Received Cheques",
+      "subFamilyName": "Cheque Under Reserve",
+      "swissMarketIndividualization": "Check credit receipt reserved"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCDT",
+      "subFamily": "ATXN",
+      "domainName": "Payments",
+      "familyName": "Received Credit Transfers",
+      "subFamilyName": "ACH Transaction",
+      "swissMarketIndividualization": "Interbank incoming payment"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCDT",
+      "subFamily": "AUTT",
+      "domainName": "Payments",
+      "familyName": "Received Credit Transfers",
+      "subFamilyName": "Automatic Transfer",
+      "swissMarketIndividualization": "Electronic incoming payment"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCDT",
+      "subFamily": "XBCT",
+      "domainName": "Payments",
+      "familyName": "Received Credit Transfers",
+      "subFamilyName": "Cross-Border Credit Transfer",
+      "swissMarketIndividualization": "Foreign incoming payment"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCDT",
+      "subFamily": "DMCT",
+      "domainName": "Payments",
+      "familyName": "Received Credit Transfers",
+      "subFamilyName": "Domestic Credit Transfer",
+      "swissMarketIndividualization": "Paper-bound incoming payment"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCDT",
+      "subFamily": "BOOK",
+      "domainName": "Payments",
+      "familyName": "Received Credit Transfers",
+      "subFamilyName": "Internal Book Transfer",
+      "swissMarketIndividualization": "Account transfer credit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCDT",
+      "subFamily": "SALA",
+      "domainName": "Payments",
+      "familyName": "Received Credit Transfers",
+      "subFamilyName": "Payroll/Salary Payment",
+      "swissMarketIndividualization": "Salary incoming payment"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RCDT",
+      "subFamily": "ESCT",
+      "domainName": "Payments",
+      "familyName": "Received Credit Transfers",
+      "subFamilyName": "SEPA Credit Transfer",
+      "swissMarketIndividualization": "SEPA incoming payment"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RDDT",
+      "subFamily": "BBDD",
+      "domainName": "Payments",
+      "familyName": "Received Direct Debits",
+      "subFamilyName": "SEPA B2B Direct Debit",
+      "swissMarketIndividualization": "Debit from SEPA B2B direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RDDT",
+      "subFamily": "ESDD",
+      "domainName": "Payments",
+      "familyName": "Received Direct Debits",
+      "subFamilyName": "SEPA Core Direct Debit",
+      "swissMarketIndividualization": "Debit from SEPA Core direct debit"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IRCT",
+      "subFamily": "ESCT",
+      "domainName": "Payments",
+      "familyName": "Issued Real-Time Credit Transfer",
+      "subFamilyName": "SEPA Credit Transfer",
+      "swissMarketIndividualization": "Debit from SEPA Instant Credit Transfer"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RRCT",
+      "subFamily": "ESCT",
+      "domainName": "Payments",
+      "familyName": "Received Real-Time Credit Transfer",
+      "subFamilyName": "SEPA Credit Transfer",
+      "swissMarketIndividualization": "Credit from SEPA Instant Credit Transfer"
+    },
+    {
+      "domain": "PMNT",
+      "family": "IRCT",
+      "subFamily": "RRTN",
+      "domainName": "Payments",
+      "familyName": "Issued Real-Time Credit Transfer",
+      "subFamilyName": "Reversal Due To Payment Return",
+      "swissMarketIndividualization": "SEPA Credit Transfer Instant chargeback (resulting from undeliverable transfer or revocation)"
+    },
+    {
+      "domain": "PMNT",
+      "family": "RRCT",
+      "subFamily": "RRTN",
+      "domainName": "Payments",
+      "familyName": "Received Real-Time Credit Transfer",
+      "subFamilyName": "Reversal Due To Payment Return",
+      "swissMarketIndividualization": "SEPA Credit Transfer Instant chargeback (resulting from undeliverable transfer or revocation)"
+    }
+  ]
+}

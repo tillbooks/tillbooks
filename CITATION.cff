@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use TILL, please cite it as below."
+title: TILL
+abstract: "TILL (Trusted Independent Ledger Library) is a local-first, MCP-native Swiss accounting engine an agent can drive, with a human oversight Studio. Append-only ledger, QR-bill, MWST, ISO 20022."
+type: software
+authors:
+  - name: "Nomadik GmbH"
+version: 1.0.0-rc.1
+license: MIT
+repository-code: "https://github.com/tillbooks/tillbooks"
+url: "https://tillbooks.ch"
+keywords:
+  - accounting
+  - switzerland
+  - mcp
+  - agent
+  - local-first
+  - double-entry-bookkeeping

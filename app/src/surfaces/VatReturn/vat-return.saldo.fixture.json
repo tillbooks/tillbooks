@@ -1,0 +1,67 @@
+{
+  "method": "saldo",
+  "timing": "soll",
+  "vintage": "current",
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-06-30",
+  "saldoActivities": [],
+  "saldoDeclarationBasis": "per_activity",
+  "lines": [
+    {
+      "code": "200",
+      "label": "Total der vereinbarten bzw. vereinnahmten Entgelte, inkl. Entgelte aus Übertragungen im Meldeverfahren sowie aus Leistungen im Ausland (weltweiter Umsatz)",
+      "baseMinor": 4982120,
+      "taxMinor": 0,
+      "rateBp": null,
+      "kind": null,
+      "entryIds": [
+        "entry_1",
+        "entry_2"
+      ]
+    },
+    {
+      "code": "299",
+      "label": "Steuerbarer Gesamtumsatz (Ziff. 200 abzüglich Ziff. 289)",
+      "baseMinor": 4982120,
+      "taxMinor": 0,
+      "rateBp": null,
+      "kind": null,
+      "entryIds": [
+        "entry_1",
+        "entry_2"
+      ]
+    },
+    {
+      "code": "323",
+      "label": "Saldosteuersatz Leistungen ab 01.01.2024",
+      "baseMinor": 4982120,
+      "taxMinor": 308891,
+      "rateBp": 620,
+      "kind": "output",
+      "entryIds": [
+        "entry_1",
+        "entry_2"
+      ]
+    }
+  ],
+  "totalTaxDueMinor": 308891,
+  "totalInputTaxMinor": 0,
+  "payableMinor": 308891,
+  "creditMinor": 0,
+  "empty": false,
+  "reconciled": null,
+  "reconciliation": {
+    "applicable": false,
+    "outputVatAccount": "2200",
+    "outputVatBookedMinor": 362120,
+    "driftMinor": -53229
+  },
+  "bridge": {
+    "account": "2200",
+    "returnMinor": 308891,
+    "bookedMinor": 362120,
+    "kind": "notApplicable",
+    "unexplainedMinor": 0
+  },
+  "ok": true
+}

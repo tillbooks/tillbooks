@@ -1,0 +1,344 @@
+/* TILL design tokens: the Brass system (D53, 29.07.2026, superseding Pine).
+   Light is the default ground; dark is a first-class parity theme, never an afterthought.
+   One restrained accent (brass, the metal of the drawer), spent only on attention, never decoration.
+   One typeface (Inter, self-hosted, 700 max weight).
+   House style: no em dash characters in any copy. See brand/DESIGN.md.
+
+   WHY BRASS AND NOT PINE. Pine put a green accent next to a green success colour, and the two
+   measured 8.5 dE apart in dark, which is below the ~10 where the eye stops seeing two colours.
+   The line this file's own design law carried, that success "never reads as the accent", was
+   therefore false in dark. It is a structural problem, not a shade problem: status is green, amber
+   and red, so a brand accent has to clear all three, and measuring the candidates said only
+   achromatic ink and blue can. Blue is the Ink palette D5 already retired. So the accent moved to
+   the one colour that is neither a status nor an arbitrary choice: the brass of a cash drawer.
+
+   Warning is therefore ORANGE, not amber, and that is a consequence rather than a preference:
+   brass occupies amber. The remaining squeeze is warn against danger, held at 25.4 dE in light and
+   27.3 in dark. Do not "tidy" warn back toward yellow without re-measuring; it will collide with
+   the accent, and the whole point of this system is that status and brand never blur.
+
+   EVERY PAIR IS MEASURED, not asserted. Both themes clear 18 contrast gates (4.5:1 text on all
+   four grounds, 3:1 for control boundaries and the accent) and all 6 status/accent separation
+   pairs at >= 25 dE. Re-run those numbers before changing any value here.
+
+   Anti-slop guardrails baked in here: no near-black ground, no neon accent, no gray box around
+   every card (separation comes from a background step and space, not a border on everything).
+   The dark ground is L* 11.5, deliberately lifted off the OLED black the previous dark theme used
+   (L* 6.0), which brand/DESIGN.md bans by name as an AI tell and which that theme was.
+
+   Contrast law, MEASURED in the browser on computed styles, never asserted:
+   `--t-border-strong` is the CONTROL boundary (input, secondary button) and carries the WCAG 1.4.11
+   non-text minimum of 3:1 against the panel it sits on. `--t-border` is a DECORATIVE hairline (panel
+   edge, table rule), deliberately softer: 1.4.11 does not apply to it, and pushing it to 3:1 would
+   put the gray box back around every card that the line above forbids.
+
+   Note on the elevation step: an earlier revision of this file claimed a page-to-panel step of
+   roughly 1.6:1. That is not reachable in a dark theme on a near-black ground (it would need a
+   mid-gray panel), and the measured step is about 1.1:1 in both themes. Elevation is NOT the
+   separation mechanism here. The control boundary is. Do not re-add that target. */
+
+:root,
+[data-theme='light'] {
+  /* Tell the browser which scheme its OWN widgets render in. Without this, every UA-painted
+     control (checkbox, radio, select popup, scrollbar, date picker) keeps its light rendering
+     regardless of the theme, and in dark an UNCHECKED checkbox paints as a solid white square
+     that reads as checked. On the money path that misreports state, so this is a correctness
+     property, not a polish one. It has to be declared per theme, not derived from the OS, because
+     the operator can pick a theme that disagrees with the OS. */
+  color-scheme: light;
+
+  /* surfaces: a two-step scale on a warm paper ground */
+  --t-bg: #f7f4ee;        /* page */
+  --t-bg-soft: #ece7dd;   /* header strip inside a panel, hover fills */
+  --t-bg-elev: #fffdf8;   /* elevated panel, and the field ground */
+  --t-bg-code: #efe9de;
+  --t-border: #ddd6c8;        /* decorative hairline: panel edges, table rules */
+  --t-border-strong: #8c8577; /* CONTROL boundary: input, secondary button. Measured 3.33:1 on page, 3.60:1 on panel */
+
+  /* text: one solid walnut ink for copy, two dimmer steps for support */
+  --t-text: #1f1b16;
+  --t-text-dim: #5b554b;
+  --t-text-faint: #8c8577;
+
+  /* accent: brass, the metal of the drawer. The one go / focus / selected signal. */
+  --t-accent: #7a5a16;
+  --t-accent-dim: #5e450f;                   /* hover / pressed / stronger */
+  --t-accent-soft: rgba(122, 90, 22, 0.10);  /* tinted fill: active nav, selection */
+  --t-on-accent: #ffffff;                    /* text/icon on an accent-filled surface */
+
+  /* status: measured clear of the accent and of each other, and never the only carrier of meaning.
+     Warn is a burnt ORANGE rather than amber because the accent is brass; see the header. */
+  --t-success: #2f7a4e;   /* 47.4 dE from the accent */
+  --t-warn: #994200;      /* 28.3 dE from the accent, 25.4 from danger */
+  --t-danger: #a3302f;
+  --t-danger-soft: rgba(163, 48, 47, 0.10);
+  /* Text/icon on a danger-FILLED surface (a destructive button, a danger hover fill). Its own token,
+     NOT a borrow of --t-on-accent: the on-colour is tuned to the danger fill, so the two stay
+     decoupled if either fill moves. White on the dark-red light fill measures 6.9:1, well past the
+     WCAG 1.4.3 AA 4.5:1 for normal text (and the 3:1 UI minimum). */
+  --t-on-danger: #ffffff;
+
+  /* a subtle lift for a raised CONTROL (a button), distinct from the flat panel treatment */
+  --t-shadow-control: 0 1px 2px rgba(31, 27, 22, 0.14);
+  /* A deeper lift for an interactive tile ON HOVER (D135 B1): a static .panel stays flat, an
+     interactive one carries --t-shadow-control at rest and rises to this on hover, so the two read
+     apart before the pointer arrives. */
+  --t-shadow-lift: 0 6px 18px rgba(31, 27, 22, 0.14);
+
+  /* The one overlay tier (UI polish round 2, K-28, D137). Every overlay (popover, menu, listbox,
+     palette, dialog, drawer) is the --t-bg-elev ground, ONE hairline and ONE shadow, never a third
+     elevation step. The overlay shadow equals the tile lift today and is its own name so the two
+     can move apart. The scrim is a walnut-tinted veil, never the near-black the old literals painted
+     (`rgba(0, 0, 0, 0.4)` in four places, and one opaque palette ground). */
+  --t-shadow-overlay: 0 6px 18px rgba(31, 27, 22, 0.14);
+  --t-scrim: rgba(31, 27, 22, 0.4);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Walnut, not charcoal, and L* 11.5 rather than the old L* 6.0. A dark ground with real hue
+     reads as the same material as the light theme rather than as a filter over it. */
+  --t-bg: #221e19;
+  --t-bg-soft: #2f2921;
+  --t-bg-elev: #29241e;
+  --t-bg-code: #191612;
+  --t-border: #453e34;        /* decorative hairline: panel edges, table rules */
+  --t-border-strong: #79705f; /* CONTROL boundary: input, secondary button. Measured 3.39:1 on page, 3.15:1 on panel */
+
+  --t-text: #efe8dc;
+  --t-text-dim: #b0a898;
+  --t-text-faint: #79705f;
+
+  --t-accent: #e0b444;      /* brass, brightened for a filled control on a dark ground */
+  --t-accent-dim: #eec964;
+  --t-accent-soft: rgba(224, 180, 68, 0.15);
+  --t-on-accent: #221e19;   /* the dark-mode accent is light, so text on it goes dark */
+
+  --t-success: #74be9a;   /* 61.3 dE from the accent, against 8.5 in the palette this replaced */
+  --t-warn: #e2743a;      /* orange, because brass owns amber */
+  --t-danger: #f88484;    /* lifted from #f26868 (D137, C1 F3): 4.96:1 on the selection tint over the page, 4.60:1 over a panel; 31.3 dE76 from warn */
+  --t-danger-soft: rgba(248, 132, 132, 0.15);
+  /* On the LIGHT danger fill white would drop to 3.0:1 here, so the dark walnut ink carries it: dark
+     text on the #f88484 fill measures 6.8:1, past the 4.5:1 AA text minimum. Same dark value as
+     --t-on-accent by coincidence of the palette, but declared separately on purpose so danger and
+     accent never share one on-colour. */
+  --t-on-danger: #221e19;
+
+  --t-shadow-control: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --t-shadow-lift: 0 8px 22px rgba(0, 0, 0, 0.5);
+
+  /* K-28: on a dark ground a shadow reads only when it is deep, so the overlay keeps the lift's
+     depth; the scrim darkens the walnut by half rather than veiling it. */
+  --t-shadow-overlay: 0 8px 22px rgba(0, 0, 0, 0.5);
+  --t-scrim: rgba(0, 0, 0, 0.5);
+}
+
+:root {
+  /* type */
+  --t-font: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --t-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* 8-pt grid. 4px is for optical nudges only. */
+  --t-space-0-5: 4px;
+  --t-space-1: 8px;
+  --t-space-2: 16px;
+  --t-space-3: 24px;
+  --t-space-4: 32px;
+  --t-space-6: 48px;
+  --t-space-8: 64px;
+
+  --t-radius-sm: 6px;
+  --t-radius-md: 10px;
+  --t-radius-lg: 14px;
+  --t-radius-full: 9999px;
+
+  /* The stacking order, as tokens (UI polish round 2, K-28, D137). Before this the Studio carried 15
+     z-index values, six of them for overlays (40/50/60/1000/1100/3000), and Cmd+K mounted the palette
+     at 50 UNDER an open drawer's scrim at 1000: the one omnibox typed into an invisible field. The
+     palette and the feedback dialog sit ABOVE the overlay tier, so both open from inside a drawer;
+     the Select listbox tops everything because it opens from inside any of them. A z-index in the
+     Studio is one of these, `auto` or `0`. */
+  --t-z-raised: 1;      /* a row lifted over its neighbours (a dragged favourite) */
+  --t-z-sticky: 2;      /* a sticky table head, the rail splitter */
+  --t-z-popover: 30;    /* a help popover, a tooltip */
+  --t-z-menu: 40;       /* an overflow menu, the workspace switcher, the hamburger */
+  --t-z-rail: 60;       /* the mobile rail drawer and its scrim, the icon-rail flyout, the skip link */
+  --t-z-overlay: 1000;  /* a drawer or modal and its scrim */
+  --t-z-palette: 1100;  /* the command palette, the feedback dialog, the palette-opened help panel */
+  --t-z-listbox: 3000;  /* the portaled Select listbox */
+
+  /* Focus (the owner's "Sehr subtil" pick). No detached outline: the control's border shifts to
+     the accent and a faint 2px accent-soft halo sits just outside it, so a focused field reads as
+     one soft accent edge, not a double box. Both tokens reference the accent pair, which is themed,
+     so the ring and border resolve per theme. The indicator is never removed (WCAG 2.4.7). */
+  --t-focus-ring: 0 0 0 2px var(--t-accent-soft);
+  --t-focus-border: var(--t-accent);
+
+  /* Density (D118 B3). The root carries a data-density attribute; Komfortabel is the ground and
+     Kompakt tightens control height, table type and money-row rhythm for dense, Treuhänder-grade
+     table work. Only the SHARED control and money-cell primitives read these, so the one toggle
+     costs nothing per surface. Kompakt never crosses the D116 dense-band floor of 32px: a compact
+     control is still a WCAG 2.5.8-safe target. Komfortabel values equal the current look, so the
+     default view does not shift when this lands. */
+  --t-control-h: 36px;    /* shared control height: .btn, .field, .form-row inputs */
+  --t-row-pad-y: 8px;     /* vertical padding of a table row's cells */
+  --t-font-table: 14px;   /* money and number table type; 14px == the body size in Komfortabel */
+
+  /* A table row is a NUMBER, not whatever its tallest cell happens to be (UI polish round 2, K-20,
+     D137). Measured before this: nineteen first-row heights from 37.5 to 108.5px, because a 36px
+     button made a 53px row and six ghost buttons a 109px one, and Kompakt reached half the tables.
+     A text row is 36px (32px in Kompakt, the D116 dense floor, where the old 14px line plus 2x4px
+     padding came to 26); the head row is 32px in both; a cell's inline padding is 16px (8px in
+     Kompakt). A cell never holds a control taller than its row. */
+  --t-row-h: 36px;
+  --t-row-head-h: 32px;
+  --t-cell-pad-x: 16px;
+
+  /* The written type scale (UI polish round 2, K-37, D137). Seven sizes, each with the one line
+     height it travels with, theme-independent like density. Before this the Studio carried 35
+     font-size values, 129 of them resolving to fractional pixels, and the most common size (13px)
+     was not the body size. A surface reaches for a step here; it never types a pixel size.
+       xs    11/16  badge numbers only
+       sm    12/16  captions, table heads, section labels, kbd
+       md    13/18  secondary lines, dense Kompakt tables, small buttons
+       body  14/20  running interface text
+       lg    16/24  section and dialog titles
+       xl    20/28  surface titles
+       2xl   24/32  the one headline figure (the Übersicht total, a closing sum) */
+  --t-font-xs: 11px;
+  --t-font-sm: 12px;
+  --t-font-md: 13px;
+  --t-font-body: 14px;
+  --t-font-lg: 16px;
+  --t-font-xl: 20px;
+  --t-font-2xl: 24px;
+  --t-lh-xs: 16px;
+  --t-lh-sm: 16px;
+  --t-lh-md: 18px;
+  --t-lh-body: 20px;
+  --t-lh-lg: 24px;
+  --t-lh-xl: 28px;
+  --t-lh-2xl: 32px;
+
+  /* Motion: the Responsive vocabulary (D122 D-I, 2026-09-05). Three moments, one ease pair, and
+     everything else inherits. Motion is NOT themed: these live in the theme-independent root block,
+     exactly like density, so light and dark share every value by construction. The reduced-motion
+     block at the foot of this file zeroes every duration and delay these feed, and
+     `test/style/motion-tokens.test.mjs` holds the set, the values and the kill switch in place.
+     The JS side (`app/src/lib/motion.ts`) mirrors the milliseconds as its fallback table; the same
+     test pins the two to each other.
+
+     Navigate: the new surface enters in nav-in (a fade) from `--t-travel` on the travel side
+               (ease-out), the travel settling in the nav-out beat; the rail pill changes in `pill`
+               regardless. (D-I's 80 ms exit of the old surface was built on the View Transitions
+               API, measured to hold and drop the pointer, and withdrawn: see DESIGN.md.)
+     Commit:   the pressed control scales to `--t-press-scale` in `press`; the new or updated row
+               lands in `commit` from `--t-travel` above; a check draws in `commit` beside the
+               words; an accent-soft tint on the row decays over `tint`.
+     Reveal:   a dock, drawer or disclosure slides from the edge it lives on in `reveal`; its items
+               follow with a `stagger` per item over at most three items. A stagger of at most 30 ms
+               per item over at most three items is a delay inside the budget, not a fourth duration.
+     Hover:    (UI polish round 2, K-41, D137) the one beat under the pointer: a shared primitive's
+               background, ink and edge colour ease in `hover`, and nothing else. Before it the
+               button glided and the select beside it snapped, two feels on one screen. Keyboard
+               repeats (arrows in the tree and the palette) never animate. */
+  --t-motion-nav-out: 80ms;
+  --t-motion-nav-in: 200ms;
+  --t-motion-pill: 120ms;
+  --t-motion-press: 80ms;
+  --t-motion-commit: 180ms;
+  --t-motion-tint: 720ms;
+  --t-motion-reveal: 200ms;
+  --t-motion-stagger: 30ms;
+  --t-motion-hover: 120ms;
+  --t-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --t-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --t-travel: 8px;
+  --t-press-scale: 0.98;
+}
+
+/* Kompakt: one denser tier. Theme-independent, so it lives outside the light/dark blocks and keys
+   only off the density attribute. Control height lands EXACTLY on the 32px D116 floor, never below. */
+[data-density='kompakt'] {
+  --t-control-h: 32px;
+  --t-row-pad-y: 4px;
+  --t-font-table: 13px;
+  --t-row-h: 32px;
+  --t-cell-pad-x: 8px;
+}
+
+/* Every money figure, account number, and date column. Money that shifts as it
+   updates is money you do not trust. */
+.t-num,
+.t-money,
+td[data-money] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  /* Density-aware table type: the body 14px in Komfortabel, one step down in Kompakt. Applied on the
+     shared money/number utility, so every ledger's figures follow the one density toggle. */
+  font-size: var(--t-font-table);
+}
+
+/* A money figure never breaks (UI polish round 2, K-18, D137). Measured before this: /bills set
+   "CHF" on one line and "-3'200.00" on the next in 36 of 86 money cells, /items in 17 of 17, because
+   nothing stopped the cell from wrapping at the space. A wrapped amount reads as two values and the
+   right-aligned figure loses its currency. `nowrap` holds a money column at the width of its widest
+   formatted value, and the text columns beside it give up the width instead; the `10ch` on the cell
+   is a floor for a column of short amounts, never the fit (nowrap is what guarantees the fit).
+   Display only: no figure, sign or rounding changes. */
+.t-money,
+td[data-money] {
+  white-space: nowrap;
+}
+
+td.t-money,
+td[data-money] {
+  min-width: 10ch;
+}
+
+/* A checked box or radio is a SELECTED item, which is one of the three things the accent is for.
+   The UA default is a system blue that belongs to no palette here. `accent-color` recolours the
+   check without replacing the native control, so the keyboard and assistive-tech behaviour stays
+   exactly what the platform ships. Pairs with `color-scheme` above: that decides the unchecked
+   ground, this decides the checked fill. */
+:where(input[type='checkbox'], input[type='radio'], progress, input[type='range']) {
+  accent-color: var(--t-accent);
+}
+
+/* The focus indicator is soft (accent border plus a faint accent-soft halo) and is never removed.
+
+   SPECIFICITY (0,2,0), ON PURPOSE (UI polish round 2, K-10, D137). `:is()` takes the specificity of
+   its most specific argument (`[tabindex]`, (0,1,0)) and `:focus-visible` adds (0,1,0). The earlier
+   form was `:where(...):focus-visible`, and its comment called it specificity 0; it was (0,1,0),
+   because the pseudo-class OUTSIDE `:where()` still counts. Every single-class rule that set a border
+   and loaded later (`.select-trigger`, `.rail-search`, every tab family) therefore kept its grey
+   border under focus, and all that arrived was the 2px halo at 1.15:1. At (0,2,0) the brass border
+   beats any single-class resting rule. A control's own `:focus-visible` rule is also (0,2,0) and
+   loads later, so it still wins where it must: the raised `.btn--primary` and `.panel--interactive`
+   restate the ring together with their resting shadow in global.css.
+
+   The border cue needs a border to colour: a control with no visible edge carries a transparent 1px
+   one (global.css), which is what turns brass here. `test/style/focus-border-cue.test.mjs` holds both
+   halves. */
+:is(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+}
+
+/* Motion is a courtesy, not a personality. Honour the OS setting everywhere. The DELAYS are
+   zeroed too: a 0.001ms animation behind a 3s delay is still a 3s wait for the end state, which
+   is the motion the setting asked to remove. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

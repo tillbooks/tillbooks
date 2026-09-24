@@ -1,0 +1,67 @@
+/*
+ * F00's "Wartet auf dich" strip. It spends ZERO accent (the count is not attention-coloured); the
+ * whole row is one quiet link into /attention, with the focus ring the only accent it ever shows.
+ * One panel treatment (K-09): the elevated ground, no hairline; the transparent border is the edge
+ * the focus cue turns brass on the link variant (K-10).
+ */
+.att-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: 44px;
+  padding: calc(var(--t-space-1) - 1px) calc(var(--t-space-2) - 1px);
+  margin-bottom: var(--t-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text);
+}
+
+.att-strip--muted {
+  color: var(--t-text-dim);
+  background: var(--t-bg-soft);
+}
+
+/* K-34: the loading strip is a placeholder line in the strip's measure. */
+.att-strip--pending {
+  background: var(--t-bg-soft);
+}
+
+.att-strip-skeleton {
+  flex: 1 1 auto;
+  height: var(--t-lh-md);
+  max-width: 16rem;
+}
+
+.att-strip--link {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.att-strip--link:hover {
+  background: var(--t-bg-soft);
+}
+
+/* Focus is the shared global :focus-visible ring (tokens.css); no local outline restated here. */
+
+.att-strip-count {
+  font-weight: 600;
+}
+
+.att-strip-lead {
+  color: var(--t-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A decorative chevron: faint is for decorative glyphs (K-36); the words carry the meaning. */
+.att-strip-go {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--t-text-faint);
+}

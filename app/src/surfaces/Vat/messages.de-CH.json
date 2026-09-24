@@ -1,0 +1,47 @@
+{
+  "vat": {
+    "line": {
+      "code": "MWST-Code",
+      "none": "Keine MWST",
+      "net": "Netto",
+      "tax": "MWST",
+      "gross": "Brutto",
+      "assessedTax": "Veranlagte Steuer",
+      "reverseCharge": "Bezugsteuer",
+      "import": "Einfuhrsteuer",
+      "reverseChargePreview": "bucht Umsatzsteuer und Vorsteuer je {amount}",
+      "exemptNoDeduction": "Ausgenommen (kein Vorsteuerabzug)",
+      "zeroRated": "Echt befreit (Export)"
+    },
+    "group": {
+      "output": "Umsatzsteuer",
+      "input": "Vorsteuer",
+      "special": "Speziell",
+      "exempt": "Befreit"
+    },
+    "doc": {
+      "summary": "MWST-Übersicht",
+      "perRate": "Je Satz",
+      "base": "Basis",
+      "totalTax": "Total MWST",
+      "noVat": "Keine MWST auf diesem Beleg"
+    },
+    "error": {
+      "unknownCode": "Unbekannter MWST-Code.",
+      "archivedCode": "Code archiviert, wähle einen anderen.",
+      "vatAccountTag": "Setze den MWST-Code auf die Ertrags- oder Aufwandzeile, nicht auf das MWST-Konto selbst."
+    },
+    "needsConfig": "MWST ist für diesen Arbeitsbereich noch nicht eingerichtet.",
+    "needsConfigCta": "MWST einrichten"
+  },
+  "help": {
+    "Vat": {
+      "title": "MWST-Übersicht",
+      "body": "Die MWST-Übersicht eines Belegs: pro Satz die Basis und die darauf entfallende Steuer, darunter das Total. Das Total ist die Summe der Steuern der einzelnen Positionen und stimmt darum genau mit ihnen überein. Beträge stehen in der Währung des Belegs. Sonderfälle wie Bezugsteuer oder Einfuhr tragen ihre Kennzeichnung; ein Beleg ohne MWST sagt das ausdrücklich.",
+      "concepts": [
+        "vorsteuer"
+      ],
+      "docsPath": "swiss/mwst"
+    }
+  }
+}

@@ -1,0 +1,132 @@
+/**
+ * E07 Vertrauen panel. Prose the limits list must be READ, not skimmed, so it is capped near 72
+ * characters (brand/DESIGN.md). One accent, never spent here: the panel makes no promise, so it
+ * reaches for no go/safe colour.
+ */
+
+.trust {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 42rem;
+}
+
+.trust-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.trust-title {
+  margin: 0;
+}
+
+.trust-scope {
+  color: var(--t-text-dim);
+  max-width: 60ch;
+}
+
+/* M02: the publishing-on availability line. Plain ink (not a status colour, not the accent): a
+   glyph + text sibling of the egress family, present only while the stream is published. */
+.trust-publishing {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  margin: 0;
+  color: var(--t-text);
+  max-width: 60ch;
+}
+
+.trust-publishing-glyph {
+  flex: 0 0 auto;
+   color: var(--t-text-dim);
+}
+
+.trust-check {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.trust-prompt {
+  margin: 0;
+  max-width: 48ch;
+}
+
+.trust-passed {
+  color: var(--t-text);
+}
+
+.trust-note {
+  color: var(--t-text-dim);
+}
+
+.trust-violated {
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-2);
+  color: var(--t-danger);
+}
+
+.trust-offenders {
+  margin: var(--t-space-1) 0;
+  padding-left: var(--t-space-3);
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.trust-limits ul {
+  margin: var(--t-space-1) 0 0;
+  padding-left: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.trust-limits li {
+  max-width: 72ch;
+  color: var(--t-text-dim);
+}
+
+.trust-model-note {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  max-width: 72ch;
+}
+
+/* --- M03 journey (N4a): the data-location line ------------------------------------------------- */
+
+.trust-location {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.trust-location-link {
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+.trust-location-link:hover {
+  text-decoration: underline;
+}
+
+/* The self-test's setup refusal (F-10, J7.6): one lead line, then one door per missing piece. */
+.trust-note-lead {
+  margin: 0 0 var(--t-space-1);
+}
+
+.trust-setup-list {
+  margin: 0;
+  padding-left: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}

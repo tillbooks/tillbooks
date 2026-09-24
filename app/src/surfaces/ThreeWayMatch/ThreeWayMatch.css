@@ -1,0 +1,93 @@
+/* I04, Einkauf -> Abgleich-Ausnahmen. Since the D118 money-path wave the exception list is the shared
+   DataTable, the header is the shared SurfaceHeader, the detail is the shared DetailDrawer, and the
+   confirm/override step is the shared Modal (alertdialog). What is left here is genuinely
+   I04-specific: the per-line variance emphasis, the panel layout and the three-way totals summary.
+
+   Round 2 (D137): every state is the shared Status word, so the bordered and success-edged badges,
+   the success-green and danger-red sentences are gone (K-22); the open exception is DataTable's
+   current-row pill, so the background wash is gone (K-24); the override reason is the shared
+   `.field`, so its field rule is gone (K-15); sizes and gaps are tokens (K-37). */
+
+.twm-surface {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* Per-line variance emphasis inside the comparison DataTable. Neutral by law: a variance line reads
+   heavier, a blocked line (nothing received / no candidate) dims, and the Status word carries the
+   actual meaning, never colour alone. */
+.twm-line--variance td {
+  font-weight: 600;
+}
+
+.twm-line--blocked td,
+.twm-line--blocked th {
+  color: var(--t-text-dim);
+}
+
+/* The panel: the embeddable evaluate -> confirm / override body (spec §6). */
+.twm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.twm-panel h3 {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+/* A line that holds one Status word (the evaluation, the outcome, a refusal). */
+.twm-state {
+  margin: 0;
+}
+
+/* The three-way totals summary. NOT a plain column sum (expected value, billed base-net and the
+   aggregate value variance are three engine figures, not one column total), so it stays bespoke
+   rather than forcing DataTable's per-column footer. Every figure renders VERBATIM from the engine
+   evaluation; nothing is re-summed here. */
+.twm-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  margin: 0;
+  padding-top: var(--t-space-1);
+  border-top: 1px solid var(--t-border);
+}
+
+.twm-totals div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.twm-totals dt {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.twm-totals dd {
+  margin: 0;
+}
+
+.twm-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-1);
+}
+
+/* The override reason field, hosted in the confirm Modal: a label over its `.field`. */
+.twm-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.twm-note {
+  margin: 0;
+  color: var(--t-text-dim);
+}

@@ -1,0 +1,162 @@
+/* J04, Inventory -> Cycle Counts / Inventur. What remains after the D118 B2 primitive adoption is
+   genuinely surface-specific: the master split and its session picker list, the per-session action
+   bar, the status badges, the review/committed banners, the variance +/- colouring and the create
+   form fields. The page header, the line table chrome, the drawer chrome and the button set now come
+   from SurfaceHeader, DataTable, DetailDrawer and the shared `.btn`/`.field` classes. No new colour
+   token (design-canon): every value reuses a --t- token.
+
+   Round 2 (D137): the panes are background steps without a hairline (K-09); a session is a list row
+   whose current one is the pill with `aria-current` (K-17, K-22); states are Status words, so the
+   bordered, accent-edged and dashed badges are gone (K-22); sizes and gaps are tokens (K-37). */
+
+.cc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.cc-split {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .cc-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A pane is the elevated panel on the page, never a hairline box (K-09). */
+.cc-pane {
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  padding: var(--t-space-1);
+}
+
+.cc-detail {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.cc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* A session is a list row: a quiet button with a transparent 1px border (where the focus cue lands,
+   K-10), the hover a neutral step, the current session the tinted pill (the rail's own treatment). */
+.cc-list-item {
+  width: 100%;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.cc-list-item:hover {
+  background: var(--t-bg-soft);
+}
+
+.cc-list-item[aria-current='true'] {
+  background: var(--t-accent-soft);
+}
+
+.cc-li-main {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.cc-li-type {
+  font-weight: 500;
+}
+
+.cc-li-sub {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.cc-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.cc-detail-title {
+  margin: 0;
+}
+
+.cc-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+/* Variance sign colouring inside the DataTable's numeric cell: over/under carries weight, never
+   colour alone (the +/- sign and the badge carry the meaning; WCAG 2.2 AA). */
+.cc-pos {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.cc-neg {
+  color: var(--t-text-dim);
+  font-weight: 600;
+}
+
+/* The narrow whole-unit count input. Chrome comes from the shared `.field`; this only sizes it and
+   right-aligns the figure to sit under the numeric column header. */
+.cc-count-input {
+  width: 5rem;
+  text-align: right;
+}
+
+.cc-muted {
+  color: var(--t-text-dim);
+}
+
+.cc-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.cc-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.cc-field label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.cc-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}

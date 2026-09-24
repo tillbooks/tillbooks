@@ -1,0 +1,135 @@
+{
+  "nav": {
+    "correspondence": "Korrespondenz"
+  },
+  "mail": {
+    "route": {
+      "title": "Korrespondenz"
+    },
+    "loading": "Korrespondenz wird geladen…",
+    "empty": "Noch keine Korrespondenz.",
+    "emptyConnectHint": "Verbinde einen lokalen Mail-Speicher, dann erscheinen hier deine Threads.",
+    "emptyIndexHint": "Lies deinen Mail-Speicher neu ein, dann erscheinen hier deine Threads.",
+    "section": {
+      "empty": "Keine Threads."
+    },
+    "bucket": {
+      "needs_reply": "Antwort nötig",
+      "drafted": "Entwurf bereit",
+      "done": "Erledigt"
+    },
+    "action": {
+      "connect": "Lokalen Mail-Speicher verbinden",
+      "reindex": "Neu einlesen",
+      "open": "Öffnen",
+      "close": "Schliessen",
+      "discard": "Abbrechen"
+    },
+    "connect": {
+      "no_password": "Kein Passwort nötig. TILL liest den Mail-Speicher auf diesem Mac und meldet sich nie bei deinem Anbieter an.",
+      "supported": "Unterstützt: Apple Mail, Thunderbird.",
+      "adapter": "Mail-Programm",
+      "adapter_apple_mail": "Apple Mail",
+      "adapter_thunderbird": "Thunderbird",
+      "storePath": "Pfad zum Mail-Speicher",
+      "address": "E-Mail-Adresse"
+    },
+    "account": {
+      "title": "Konto",
+      "connected": "Verbunden: {address}",
+      "lastIndexed": "Zuletzt eingelesen: {at}",
+      "never": "Noch nie eingelesen"
+    },
+    "draft": {
+      "in_drafts": "Der Entwurf liegt in deinem Entwurfsordner. Du prüfst ihn und sendest ihn.",
+      "badge": "Entwurf bereit"
+    },
+    "thread": {
+      "messages": "{count} Nachrichten",
+      "last": "Zuletzt: {at}",
+      "noSubject": "(kein Betreff)"
+    },
+    "direction": {
+      "inbound": "eingehend",
+      "outbound": "ausgehend"
+    },
+    "msg": {
+      "stale": "Diese Nachricht hat sich seit dem Einlesen geändert."
+    },
+    "field": {
+      "label": "Kennzeichnung",
+      "none": "Keine"
+    },
+    "column": {
+      "direction": "Richtung",
+      "subject": "Betreff",
+      "messages": "Nachrichten",
+      "last": "Zuletzt"
+    },
+    "view": {
+      "label": "Ansicht",
+      "all": "Alle"
+    },
+    "error": {
+      "needs_mailstore": "Kein lokaler Mail-Speicher gefunden.",
+      "unknown_mail_adapter": "Dieser Ordner ist kein Mail-Speicher, den TILL lesen kann.",
+      "drafts_not_writable": "In den Entwurfsordner kann nicht geschrieben werden.",
+      "message_moved": "Diese Nachricht liegt nicht mehr dort, wo sie eingelesen wurde.",
+      "transport": "Die Korrespondenz konnte nicht geladen werden.",
+      "permissionDenied": {
+        "read": "Für die Korrespondenz fehlt die Berechtigung «Lokalen Mail-Index und Threads lesen».",
+        "write": "Dafür fehlt die Berechtigung «Lokalen Mail-Speicher verbinden und Entwürfe schreiben»."
+      }
+    }
+  },
+  "draft": {
+    "pane": {
+      "title": "Entwurf"
+    },
+    "empty": "Noch kein Entwurf.",
+    "generating": "Wird lokal geschrieben…",
+    "action": {
+      "generate": "Entwurf erstellen",
+      "regenerate": "Neu erstellen"
+    },
+    "hint": {
+      "shorter": "Kürzer",
+      "formal": "Förmlicher"
+    },
+    "grounded": {
+      "on": "Buchhaltung einbezogen",
+      "off": "Nur Schreibstil",
+      "facts": "Verwendete Angaben",
+      "no_history": "Keine Buchhaltungsdaten für diesen Kontakt."
+    },
+    "fact": {
+      "invoice": "Rechnung {number} offen",
+      "due": "fällig {date}",
+      "total": "Total offen"
+    },
+    "model": {
+      "changed": "Mit einem anderen Modell erstellt."
+    },
+    "review": {
+      "note": "Du prüfst und sendest in deiner Mail-App. TILL sendet nie."
+    },
+    "error": {
+      "nothing_to_reply_to": "Die letzte Nachricht hier ist von dir.",
+      "needs_voice_profile": "Lerne zuerst deinen Schreibstil, unter Schreibstil.",
+      "needs_local_runtime": "Keine lokale Entwurfs-Engine installiert. Nichts weicht in eine Cloud aus.",
+      "needs_mailstore": "Der Mail-Speicher ist nicht lesbar. Prüfe das verbundene Konto.",
+      "source_changed": "Diese Nachricht hat sich geändert. Bitte neu einlesen und erneut versuchen.",
+      "draft_gone": "Dieser Entwurf liegt nicht mehr in deinem Entwurfsordner.",
+      "generation_failed": "Das lokale Modell konnte diesen Entwurf nicht schreiben. Der Versuch ist protokolliert.",
+      "forbidden": "Dafür fehlt die Berechtigung «Entwürfe erstellen»."
+    }
+  },
+  "help": {
+    "Correspondence": {
+      "title": "Korrespondenz",
+      "body": "Die Korrespondenz zeigt deine geschäftliche E-Mail über alle Kontakte hinweg: was unbeantwortet ist, was zu welchem Kontakt gehört und was du ablegen willst. TILL liest dafür den lokalen Mailbestand, den dein Mailprogramm bereits führt; es gibt kein Passwort und keinen Versand aus TILL heraus. Ein fertiger Entwurf landet im Entwurfsordner deines Mailprogramms, wo du ihn prüfst und selbst sendest.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

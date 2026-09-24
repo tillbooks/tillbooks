@@ -1,0 +1,32 @@
+{
+  "workspaces": [
+    {
+      "workspaceId": "ws_3",
+      "name": "Beispiel Bau AG",
+      "legalForm": "ag",
+      "baseCurrency": "EUR",
+      "fiscalYearStart": "01-01",
+      "archived": false,
+      "createdAt": "2026-07-16T00:00:00.000Z"
+    },
+    {
+      "workspaceId": "ws_2",
+      "name": "Alpstein Treuhand GmbH",
+      "legalForm": "gmbh",
+      "baseCurrency": "CHF",
+      "fiscalYearStart": "01-01",
+      "archived": false,
+      "createdAt": "2026-07-16T00:00:00.000Z"
+    },
+    {
+      "workspaceId": "ws_1",
+      "name": "Muster Grafik",
+      "legalForm": "einzelfirma",
+      "baseCurrency": "CHF",
+      "fiscalYearStart": "01-01",
+      "archived": false,
+      "createdAt": "2026-07-16T00:00:00.000Z"
+    }
+  ],
+  "ok": true
+}

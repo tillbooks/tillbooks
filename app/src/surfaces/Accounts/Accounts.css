@@ -1,0 +1,278 @@
+/* Accounts surface styles (A01). Tokens only, no hex, no new colours. 8-pt grid throughout.
+   Depth is one border plus a background step, never a shadow, matching the shell (global.css). */
+
+.accounts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 960px;
+}
+
+/* The page header (SurfaceHeader) and the filter/search row (FilterBar) are shared primitives now
+   (D118 B2); the show-archived checkbox rides the FilterBar filter slot with the shared `.acc-checkbox`
+   below. Their bespoke CSS has been deleted. What remains here is genuinely Accounts-specific: the
+   grouped account list with its name openers, the cost-centre section, and the drawer form fields.
+   The account-type chip is gone (K-26): the group heading already names the type on every row. */
+
+/* Grouped list. */
+.acc-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.acc-group {
+  overflow: hidden;
+}
+
+/* A disclosure button: a transparent border on every side (K-10) so the focus cue has a box, with the
+   visible hairline only underneath. */
+.acc-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  width: 100%;
+  border: 1px solid transparent;
+  border-bottom-color: var(--t-border);
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-group-title {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+  margin: 0;
+}
+
+/* The disclosure caret is the shared chevron glyph (no text dingbat), a quarter turn when closed. The
+   global reduced-motion rule in tokens.css stills the turn (K-41), so no local block. */
+.cc-caret {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--t-text-dim);
+  transition: transform var(--t-motion-pill) var(--t-ease-out);
+}
+
+.cc-caret--collapsed {
+  transform: rotate(-90deg);
+}
+
+.acc-list,
+.cc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.acc-row,
+.cc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.acc-row:last-child,
+.cc-row:last-child {
+  border-bottom: 0;
+}
+
+.acc-num {
+  flex: 0 0 72px;
+  color: var(--t-text-dim);
+}
+
+.acc-name,
+.cc-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The account name is the row's opener (K-21/K-12): the ink at 500, underlined on hover, with a
+   transparent border so the focus cue has a box (K-10). It keeps the name column's ellipsis. */
+.acc-name-open {
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  text-underline-offset: 3px;
+}
+
+.acc-name-open:hover {
+  text-decoration: underline;
+}
+
+/* An archived row is a step dimmer, never faint (K-36): the Status word beside the name names it. */
+.acc-row-archived,
+.acc-row-archived .acc-name,
+.acc-row-archived .cc-name {
+  color: var(--t-text-dim);
+}
+
+.acc-actions {
+  display: inline-flex;
+  gap: var(--t-space-1);
+  flex: 0 0 auto;
+}
+
+/* Drawer form: the fields stack with a rhythm inside the shared DetailDrawer body (which owns the
+   scroll and padding). */
+.acc-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* Fields. */
+.acc-field,
+.acc-field-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.acc-field-label {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* The inputs are the shared `.field` (K-15); this only makes them fill the drawer column. */
+.acc-input {
+  width: 100%;
+}
+
+.acc-field-error {
+  color: var(--t-danger);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.acc-field-warn {
+  color: var(--t-warn);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.acc-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+/* Accounts' OWN create/edit drawer and its OWN destructive confirms are shared primitives now
+   (D118 B2): DetailDrawer and Modal (via AccountConfirm), so the bespoke `.acc-drawer-*` shell and
+   the `.acc-confirm-*` overlay Accounts used are gone. AccountConfirm's message sits inside the
+   Modal body (which owns padding and scroll), so it only resets the default paragraph margin. */
+.acc-modal-confirm-message {
+  margin: 0;
+}
+
+/* The BESPOKE ConfirmDialog in this folder is a de-facto SHARED component (Documents, Items,
+   PriceLists, Projects import `../Accounts/ConfirmDialog`, and Items imports this stylesheet for it).
+   Migrating it to Modal would force a title header onto five surfaces outside this task's ownership,
+   so its markup stays. Its overlay takes the one overlay layer and the shared scrim (K-28), which
+   every consumer inherits without a markup change. */
+.acc-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--t-z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--t-space-3);
+  background: var(--t-scrim);
+}
+
+.acc-confirm {
+  max-width: 400px;
+  padding: 0;
+}
+
+.acc-confirm-message {
+  margin: 0;
+  padding: var(--t-space-3);
+}
+
+.acc-confirm-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+}
+
+/* The cost-centre section header. Shared the drawer-head rule before it was deleted; now stated on
+   its own. */
+.cc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+/* The cost-centre inline create form's action row. Shared the drawer/confirm foot rule before those
+   were deleted; now stated on its own. */
+.cc-create-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+}
+
+/* Cost-centre section. */
+.cc-section {
+  overflow: hidden;
+}
+
+.cc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: transparent;
+  color: var(--t-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cc-title {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+  margin: 0;
+}
+
+.cc-body {
+  padding: var(--t-space-1) 0;
+}
+
+.cc-create {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.cc-empty {
+  color: var(--t-text-dim);
+  margin: 0;
+  padding: var(--t-space-2);
+}

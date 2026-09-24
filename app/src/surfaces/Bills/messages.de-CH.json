@@ -1,0 +1,123 @@
+{
+  "nav": {
+    "bills": "Kreditoren",
+    "group": {
+      "purchasing": "Einkauf"
+    }
+  },
+  "bills": {
+    "title": "Kreditoren",
+    "headerTotal": "Offen {total}",
+    "list": {
+      "caption": "Liste der Kreditorenrechnungen"
+    },
+    "new": "Rechnung erfassen",
+    "vendor": "Lieferant",
+    "billDate": "Rechnungsdatum",
+    "dueDate": "Fällig",
+    "vendorReference": "Rechnungsnummer des Lieferanten",
+    "net": "Netto",
+    "gross": "Brutto",
+    "vat": "MWST",
+    "amountIs": "Der Betrag ist",
+    "vatCode": "Vorsteuer",
+    "noVat": "Keine MWST",
+    "expenseAccount": "Aufwand- oder Aktivkonto",
+    "chooseVendor": "Lieferant wählen",
+    "chooseAccount": "Konto wählen",
+    "costCenter": "Kostenstelle",
+    "noCostCenter": "Keine",
+    "project": "Projekt",
+    "noProject": "Keines",
+    "receipt": "Beleg (Referenz)",
+    "post": "Buchen",
+    "saveDraft": "Als Entwurf speichern",
+    "saveReceipt": "Beleg speichern",
+    "discard": "Entwurf verwerfen",
+    "void": "Stornieren",
+    "close": "Schliessen",
+    "pay": "Zahlung erfassen",
+    "payDenied": "Zahlung erfassen (erfordert die Buchhalter-Rolle)",
+    "requiresBookkeeper": "Erfordert die Buchhalter-Rolle.",
+    "overdueDays": "{n} Tage überfällig",
+    "noReference": "Ohne Nummer",
+    "noDueDate": "Kein Datum",
+    "unknownVendor": "Unbekannter Lieferant",
+    "rowOpen": "Rechnung {row} öffnen",
+    "rowActionsFor": "Aktionen für {row}",
+    "column": {
+      "reference": "Nummer",
+      "gross": "Brutto",
+      "open": "Offen",
+      "status": "Status"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "posted": "Gebucht",
+      "partly_paid": "Teilweise bezahlt",
+      "paid": "Bezahlt",
+      "void": "Storniert"
+    },
+    "frozen": {
+      "posted": "Diese Rechnung ist gebucht. Gebuchtes wird nie überschrieben: korrigiere sie mit einer Storno-Buchung. Den Beleg kannst du weiterhin nachtragen.",
+      "void": "Diese Rechnung ist storniert. Die Storno-Buchung steht im Journal."
+    },
+    "preview": {
+      "title": "Was gebucht wird",
+      "none": "Trage einen Betrag ein, dann zeigt TILL hier die Aufteilung.",
+      "saldo": "Mit der Saldosteuersatz-Methode ist die Vorsteuer schon im Satz enthalten (MWSTG Art. 37), darum wird der ganze Betrag als Aufwand gebucht und nichts separat zurückgefordert."
+    },
+    "needsVendor": {
+      "body": "Du hast noch keinen Lieferanten erfasst.",
+      "action": "Kontakt anlegen"
+    },
+    "filter": {
+      "allStatuses": "Alle",
+      "allVendors": "Alle Lieferanten",
+      "vendorById": "Lieferant {id}"
+    },
+    "reconciliation": {
+      "mismatch": "Die Liste und das Konto 2000 Kreditoren weichen um {difference} ab: Liste {list}, Konto {ledger}.",
+      "hint": "TILL rechnet beides unabhängig aus. Eine Abweichung heisst, dass auf 2000 etwas gebucht wurde, das nicht aus einer Kreditorenrechnung kommt."
+    },
+    "empty": {
+      "title": "Noch keine Lieferantenrechnungen.",
+      "hint": "Rechnungen deiner Lieferanten erscheinen hier, sobald du sie erfasst.",
+      "filtered": {
+        "title": "Keine Rechnung passt zu diesem Filter.",
+        "hint": "Der Filter blendet alle Rechnungen aus. Setz ihn zurück.",
+        "action": "Filter zurücksetzen"
+      }
+    },
+    "editor": {
+      "newTitle": "Lieferantenrechnung erfassen",
+      "title": "Rechnung {ref}"
+    },
+    "error": {
+      "transport": "TILL konnte das gerade nicht speichern. Versuch es nochmals.",
+      "options": "TILL konnte Lieferanten, Konten und MWST-Codes nicht laden.",
+      "needsVendor": "Wähl einen Lieferanten aus.",
+      "vendorRole": "Dieser Kontakt ist nur als Kunde erfasst. Gib ihm zusätzlich die Rolle Lieferant, oder wähl einen anderen.",
+      "needsAccount": "Das gewählte Konto geht nicht. Nimm ein Aufwand- oder Aktivkonto, das TILL nicht selber bebucht.",
+      "needsInputTaxCode": "Dieser MWST-Code beschreibt Umsatz, nicht Einkauf. Nimm einen Vorsteuer-Code, Bezugsteuer, Einfuhrsteuer, oder keinen.",
+      "periodLocked": "Diese Periode ist gesperrt, darum kann TILL nicht auf das Rechnungsdatum buchen.",
+      "alreadySettled": "Auf diese Rechnung ist schon eine Zahlung gebucht. Storniere zuerst die Zahlung.",
+      "alreadyPosted": "Diese Rechnung ist bereits gebucht.",
+      "alreadyVoid": "Diese Rechnung ist bereits storniert.",
+      "needsFxRate": "Für dieses Rechnungsdatum fehlt der Wechselkurs. Erfass ihn zuerst.",
+      "permissionDenied": {
+        "write": "Dazu fehlt dir die Berechtigung Buchen.",
+        "read": "Dazu fehlt dir die Berechtigung, die Bücher zu lesen."
+      }
+    }
+  },
+  "help": {
+    "Bills": {
+      "title": "Kreditoren",
+      "body": "Die Kreditorenliste: jede Lieferantenrechnung mit ihrem offenen Betrag, ihrer Fälligkeit und ihrem Status. Auf diesen Rechnungen entsteht die Vorsteuer.\n\nHier erfasst du eine neue Rechnung. Bezahlt wird über dieselbe Zahlungszuordnung wie überall im Produkt, damit es nur einen Abgleichsweg gibt.\n\nDie Liste bindet sich an das Kreditorenkonto der Buchhaltung zurück. Eine Abweichung wird ausgewiesen statt versteckt.",
+      "concepts": [
+        "vorsteuer"
+      ]
+    }
+  }
+}

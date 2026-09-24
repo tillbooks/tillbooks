@@ -1,0 +1,212 @@
+/* G06, Posteingang: the delivery queue. One accent, elevated row panels, glyph+label status. */
+
+.inbox {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.inbox-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.inbox-title {
+  margin: 0;
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+/* The unread figure is TEXT beside the title (never colour alone), the number G15's bell reuses. */
+.inbox-unread {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 400;
+  color: var(--t-text-dim);
+}
+
+.inbox-view-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.inbox-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  margin: 0.5rem 0;
+}
+
+.inbox-count {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.inbox-section-empty {
+  margin: 0 0 0.5rem;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.inbox-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.inbox-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+}
+
+.inbox-row-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.inbox-status {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  white-space: nowrap;
+}
+
+/* An unread row reads in the heavier weight; the state itself is the Status word (K-22), never the
+   accent, which marks focus, selection and the one primary action. */
+.inbox-row--unread .inbox-row-summary {
+  font-weight: 600;
+}
+
+.inbox-row-summary {
+  flex: 1 1 12rem;
+}
+
+.inbox-section--unread .inbox-row-summary {
+  font-weight: 600;
+}
+
+.inbox-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.inbox-event {
+  font-family: var(--t-font-mono, ui-monospace, monospace);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.inbox-row-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.inbox-prefs {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.inbox-prefs-hint,
+.inbox-prefs-cloud {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.inbox-prefs-saved {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.inbox-prefs-group {
+  margin: 0.5rem 0 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* The German channel/digest labels run longer than English: the grid reserves for de-CH. */
+.inbox-pref-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.inbox-pref-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 11rem;
+}
+
+.inbox-pref-cadence {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  min-width: 14rem;
+}
+
+.inbox-override-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.inbox-override-event {
+  font-family: var(--t-font-mono, ui-monospace, monospace);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  min-width: 12rem;
+}
+
+.inbox-override-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.inbox-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -1,0 +1,160 @@
+{
+  "nav": {
+    "purchasing": "Einkauf"
+  },
+  "po": {
+    "tab": {
+      "orders": "Bestellungen",
+      "open": "Offene Mengen",
+      "prices": "Lieferantenpreise",
+      "scorecard": "Scorecard"
+    },
+    "scorecard": {
+      "supplier": "Lieferant",
+      "supplierPick": "Lieferant wählen",
+      "window": "Zeitraum",
+      "windowDays": "Letzte {n} Tage",
+      "noData": "–",
+      "error": "Die Lieferantenleistung konnte nicht geladen werden.",
+      "emptyWindow": "Keine Aktivität in diesem Zeitraum",
+      "emptyWindowHint": "Zeitraum erweitern oder einen Lieferanten mit aktuellen Wareneingängen wählen.",
+      "emptyRank": "Noch keine Lieferanten mit Aktivität in diesem Zeitraum.",
+      "exceptions": "Wichtigste Abweichungen",
+      "alertsTitle": "Lieferanten, die Aufmerksamkeit brauchen",
+      "leaderboard": "Rangliste der Lieferanten",
+      "rankSupplier": "Lieferant",
+      "rankScore": "Wert",
+      "rankActivity": "Wareneingänge",
+      "rankDelta": "Trend",
+      "unit": {
+        "days": "T"
+      },
+      "light": {
+        "green": "im Ziel",
+        "amber": "beobachten",
+        "red": "unter Ziel",
+        "none": "keine Daten"
+      },
+      "metric": {
+        "otif_pct": "Termin- und mengengerecht",
+        "on_time_pct": "Termingerechte Lieferung",
+        "in_full_pct": "Mengenerfüllung",
+        "avg_delay_days": "Durchschnittliche Verspätung",
+        "qty_variance_pct": "Mengenabweichung",
+        "price_variance_pct": "Preisabweichung",
+        "match_override_rate": "Quote überschriebener Abgleiche",
+        "rejection_rate": "Ablehnungsquote",
+        "overall_score": "Gesamtwert"
+      },
+      "exception": {
+        "late_delivery": "Verspätete Lieferung",
+        "short_shipment": "Unterlieferung",
+        "price_override": "Preisüberschreibung",
+        "rejection": "Ablehnung bei Prüfung"
+      }
+    },
+    "title": "Einkauf",
+    "loading": "Bestellungen werden geladen",
+    "empty": "Keine Bestellungen.",
+    "emptyOpen": "Keine offenen Mengen.",
+    "emptyPrices": "Keine Lieferantenpreise.",
+    "emptyMatch": "Keine passende Bestellung.",
+    "match": {
+      "ok": "Abgeglichen",
+      "overridden": "Trotz Abweichung freigegeben",
+      "override": "Trotz Abweichung freigeben"
+    },
+    "action": {
+      "new": "Neue Bestellung",
+      "send": "Bestellung senden",
+      "receipt": "Wareneingang erfassen",
+      "closeShort": "Restmenge schliessen",
+      "cancel": "Bestellung stornieren",
+      "revise": "Bestellung revidieren",
+      "match": "Rechnung abgleichen",
+      "addLine": "Position hinzufügen",
+      "removeLine": "Position entfernen",
+      "save": "Speichern",
+      "discard": "Verwerfen",
+      "back": "Zurück",
+      "addPrice": "Lieferantenpreis erfassen",
+      "more": "Weitere Aktionen für Bestellung {number}"
+    },
+    "list": {
+      "caption": "Bestellungen"
+    },
+    "open": {
+      "caption": "Offene Mengen"
+    },
+    "prices": {
+      "caption": "Lieferantenpreise"
+    },
+    "lines": {
+      "caption": "Bestellpositionen"
+    },
+    "field": {
+      "number": "Nummer",
+      "supplier": "Lieferant",
+      "supplierPick": "Lieferant wählen",
+      "status": "Status",
+      "revision": "Revision {n}",
+      "lines": "Positionen",
+      "item": "Artikel",
+      "qty": "Menge",
+      "price": "Einstandspreis",
+      "ordered": "Bestellt",
+      "received": "Erhalten",
+      "billed": "Verrechnet",
+      "open": "Offen",
+      "location": "Lager",
+      "locationPick": "Lager wählen",
+      "receiveQty": "Eingangsmenge",
+      "expectedOn": "Erwartet am",
+      "validFrom": "Gültig ab",
+      "leadTime": "Lieferfrist (Tage)",
+      "sku": "Lieferanten-SKU"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "sent": "Gesendet",
+      "received": "Erhalten",
+      "closed": "Abgeschlossen",
+      "cancelled": "Storniert"
+    },
+    "sent": {
+      "artifact": "Beleg erstellt, nicht übermittelt"
+    },
+    "receipts": {
+      "title": "Wareneingänge",
+      "movement": "D01-Bewegung"
+    },
+    "matches": {
+      "title": "Abgleiche"
+    },
+    "error": {
+      "transport": "Die Bestellungen konnten nicht geladen werden.",
+      "no_lines": "Eine Bestellung braucht mindestens eine Position zum Senden.",
+      "over_receipt": "Menge übersteigt die offene Bestellmenge.",
+      "variance_exceeded": "Abweichung übersteigt die Toleranz.",
+      "has_receipts": "Diese Bestellung hat Wareneingänge und kann nicht storniert werden. Bitte stattdessen die Restmenge schliessen.",
+      "nothing_received": "Für diese Bestellung wurde noch nichts erhalten.",
+      "qty_below_received": "Menge darf nicht unter die bereits erhaltene Menge fallen.",
+      "already_matched": "Diese Rechnung wurde bereits abgeglichen.",
+      "invalid_transition": "Dieser Schritt ist im aktuellen Status nicht möglich.",
+      "invalid_reference": "Diese Referenz existiert nicht.",
+      "invalid_qty": "Gib eine ganze, positive Menge ein.",
+      "permissionDenied": {
+        "read": "Du hast keine Berechtigung, den Einkauf zu sehen.",
+        "write": "Du hast keine Berechtigung, den Einkauf zu ändern."
+      }
+    }
+  },
+  "help": {
+    "Purchasing": {
+      "title": "Einkauf",
+      "body": "Der Einkauf von der Bestellung über den Wareneingang bis zum Abgleich mit der Rechnung. Daneben führst du hier die offenen Mengen und die Lieferantenpreise.\n\nEine Bestellung durchläuft ihre Stationen: senden, Wareneingang erfassen, kurz schliessen, stornieren oder anpassen. Was möglich ist, folgt ihrem Status.\n\nDer Wareneingang bewegt den Lagerbestand. Geld bucht dieser Bereich nicht, das geschieht erst mit der Lieferantenrechnung.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

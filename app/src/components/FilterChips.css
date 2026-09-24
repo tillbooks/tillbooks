@@ -1,0 +1,69 @@
+/* FilterChips (K-11, D137). Only --t-* tokens. A row of 24px round toggle chips. Off: a quiet
+   hairline pill in dim ink. On: the selected-item pill (--t-accent-soft ground, accent ink). */
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+/* 24px tall, fully round (the owner's K-11 pick). The ::after reaches 4px above and below the
+   border box, so the target is 32px, the D116 dense floor, while the chip stays small in the bar; the 8px row gap keeps
+   two wrapped rows' extensions from overlapping. The 1px border is the rest hairline and the focus
+   cue's landing place (K-10). */
+.filter-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  height: 24px;
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  background: none;
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    color var(--t-motion-hover) var(--t-ease-out),
+    border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.filter-chip::after {
+  content: '';
+  position: absolute;
+  /* An absolute box is placed against the PADDING box, inside the 1px border: -5px reaches 4px past
+     the border box (measured: -4px 0 gave a 30px target), and -1px covers the border's width. */
+  inset: -5px -1px;
+}
+
+.filter-chip:hover {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+}
+
+/* On: the pill. The border goes transparent so the tint alone reads as the shape. */
+.filter-chip[aria-pressed='true'],
+.filter-chip[aria-pressed='true']:hover {
+  background: var(--t-accent-soft);
+  border-color: transparent;
+  color: var(--t-accent);
+}
+
+/* The count reads as a figure beside the word: tabular (the shared .t-num), the chip's own size. */
+.filter-chip .filter-chip-count {
+  font-size: inherit;
+  color: inherit;
+}
+
+.filter-chip:focus-visible {
+  outline: none;
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+}

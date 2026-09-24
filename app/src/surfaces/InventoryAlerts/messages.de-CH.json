@@ -1,0 +1,100 @@
+{
+  "nav": {
+    "inventoryAlerts": "Bestand & Alarme"
+  },
+  "inventory": {
+    "alerts": {
+      "title": "Bestand & Alarme",
+      "subtitle": "Eine reine Lese-Ansicht über das ganze Lager: Alarme, Bestandsposition, tiefe Bestände, Bewertungsabweichung, Ladenhüter, Inventuren und Nachbestell-Kandidaten, je ein strukturierter Aufruf.",
+      "reportsLabel": "Auswertungen",
+      "noWorkspace": "Wähle einen Mandanten, um die Lager-Alarme zu sehen.",
+      "emptyTitle": "Nichts anzuzeigen",
+      "emptyHint": "Keine passenden Lagerdaten für diese Auswertung und diesen Filter.",
+      "asOf": "Stichtag",
+      "since": "Seit",
+      "yes": "Ja",
+      "no": "Nein",
+      "report": {
+        "alerts": "Alarme",
+        "stockPosition": "Bestandsposition",
+        "lowStock": "Tiefe Bestände",
+        "reorderCandidates": "Nachbestell-Kandidaten",
+        "slowMovers": "Ladenhüter",
+        "anomalies": "Anomalien",
+        "valuationStatus": "Bewertungsstatus",
+        "cycleCounts": "Inventuren"
+      },
+      "severity": {
+        "critical": "Kritisch",
+        "warning": "Warnung",
+        "info": "Info"
+      },
+      "type": {
+        "negative_stock": "Negativer Bestand",
+        "large_issue": "Grosser Abgang",
+        "large_adjustment": "Grosse Korrektur",
+        "unlinked_high_value_issue": "Nicht verknüpfter Abgang mit hohem Wert",
+        "valuation_drift": "Bewertungsabweichung",
+        "open_stocktake_overdue": "Überfällige Inventur",
+        "lot_near_expiry": "Los kurz vor Verfall",
+        "low_stock": "Tiefer Bestand"
+      },
+      "headline": {
+        "lot_expired": "Los verfallen"
+      },
+      "action": {
+        "investigate_movements": "Bewegungen prüfen",
+        "review_adjustment": "Korrektur prüfen",
+        "review_issue": "Abgang prüfen",
+        "link_source_document": "Beleg verknüpfen",
+        "run_valuation": "Bewertung ausführen",
+        "complete_stocktake": "Inventur abschliessen",
+        "review_lot": "Los prüfen",
+        "create_requisition": "Bestellanforderung erstellen"
+      },
+      "col": {
+        "severity": "Schweregrad",
+        "type": "Typ",
+        "title": "Titel",
+        "summary": "Zusammenfassung",
+        "action": "Vorgeschlagener Schritt",
+        "item": "Artikel",
+        "sku": "Artikelnummer",
+        "location": "Lagerort",
+        "qty": "Menge",
+        "value": "Wert",
+        "currentQty": "Bestand",
+        "reorderPoint": "Meldebestand",
+        "shortfall": "Fehlmenge",
+        "suggestedQty": "Vorschlagsmenge",
+        "daysOfCover": "Reichweite (Tage)",
+        "daysIdle": "Tage ohne Abgang",
+        "status": "Status",
+        "currentValue": "Aktueller Wert",
+        "lastPosted": "Zuletzt gebucht",
+        "drift": "Abweichung",
+        "driftPct": "Abweichung %",
+        "session": "Inventur",
+        "freezeAt": "Eingefroren am",
+        "uncounted": "Nicht gezählt",
+        "overdue": "Überfällig"
+      },
+      "total": {
+        "critical": "Kritisch",
+        "warning": "Warnung",
+        "info": "Info",
+        "positions": "Positionen",
+        "qty": "Menge total",
+        "value": "Wert total"
+      }
+    }
+  },
+  "help": {
+    "InventoryAlerts": {
+      "title": "Bestand & Alarme",
+      "body": "Bestand und Alarme ist die reine Lesesicht über das ganze Lager: ein Berichtwähler mit Warnmeldungen, Bestandslage, tiefen Beständen, Nachbestellkandidaten, Ladenhütern, Auffälligkeiten und dem Stand von Bewertung und Zählungen. Jede Zahl kommt fertig gerechnet aus der Engine; die Oberfläche rechnet nichts selbst. Verändert wird hier nichts, gehandelt wird auf den jeweiligen Lageroberflächen.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

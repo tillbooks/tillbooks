@@ -1,0 +1,244 @@
+{
+  "members": {
+    "title": "Zugriff",
+    "noWorkspaceHint": "Wähle zuerst einen Mandanten, dann siehst du, wer darauf Zugriff hat.",
+    "unclaimed": "Auf diesen Mandanten hat noch niemand Zugriff angemeldet, darum ist im Moment alles offen. Wer als Erstes jemanden einlädt, wird damit selbst Eigentümer.",
+    "notAMember": "Du gehörst nicht zu diesem Mandanten. Lesen kannst du, ändern nicht.",
+    "tab": {
+      "members": "Personen",
+      "roles": "Rollen"
+    },
+    "invite": "Einladen",
+    "list": {
+      "aria": "Personen mit Zugriff auf diesen Mandanten"
+    },
+    "emailLabel": "E-Mail",
+    "emailPlaceholder": "name@firma.ch",
+    "roleLabel": "Rolle",
+    "kindLabel": "Art",
+    "kind": {
+      "human": "Person",
+      "agent": "Agent"
+    },
+    "kindHint": {
+      "agent": "Ein Agent bekommt einen eigenen Sitz: seine Schreibvorgänge landen als Vorschläge, bis du sie freigibst, und jeder Aufruf steht im Verlauf."
+    },
+    "rowKind": {
+      "agent": "Agent"
+    },
+    "invited": "Einladung vorbereitet. TILL verschickt keine E-Mail: gib den Code oder Link selbst weiter.",
+    "reinvited": "Einladung erneuert: der alte Code ist abgelaufen, nur der neue gilt. TILL verschickt keine E-Mail: gib den Code oder Link selbst weiter.",
+    "inviteToken": "Einladungscode",
+    "inviteLink": "Einladungslink",
+    "copyLink": "Einladungslink kopieren",
+    "goOnline": {
+      "notice": "Einladungen brauchen eine online erreichbare TILL-Instanz (eigener Server oder verwaltet): lokal gibt es keine zweite Anmeldung.",
+      "link": "Online gehen"
+    },
+    "revoke": "Zugriff entziehen",
+    "revoked": "Zugriff entzogen.",
+    "revokeConfirm": {
+      "title": "Zugriff entziehen?",
+      "body": "{name} verliert den Zugriff auf diesen Mandanten ab der nächsten Anfrage. Eine neue Einladung stellt ihn wieder her.",
+      "confirm": "Zugriff entziehen",
+      "cancel": "Abbrechen"
+    },
+    "roleChanged": "Rolle geändert. Die neue Rolle gilt ab dem nächsten Aufruf.",
+    "roleSaved": "Rolle gespeichert.",
+    "roleArchived": "Rolle archiviert.",
+    "dismiss": "Schliessen",
+    "empty": "Nur du",
+    "emptyHint": "Lade eine Buchhalterin oder deinen Treuhänder ein, dann teilst du dir diese Bücher.",
+    "emptyHintLocal": "Nur diese Installation führt diese Bücher. Für eine zweite Person braucht es eine online erreichbare Instanz; der Hinweis beim Einladungsformular zeigt den Weg.",
+    "localSession": "Diese Installation",
+    "boundTo": "Sitzung: {actor}",
+    "actor": {
+      "studio": "Studio auf diesem Gerät",
+      "agent": "MCP-Agent"
+    },
+    "agentIsOwner": "Der MCP-Agent ist als Eigentümer eingetragen und darf damit alles. Wer an die MCP-Schnittstelle kommt, hat dieselben Rechte. Gib ihm unten eine engere Rolle, sobald du weisst, was er tun soll.",
+    "column": {
+      "person": "Person",
+      "role": "Rolle",
+      "status": "Status",
+      "since": "Seit",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "pending": "Eingeladen",
+      "active": "Aktiv"
+    },
+    "role": {
+      "owner": "Eigentümer",
+      "viewer": "Nur lesen",
+      "bookkeeper": "Buchhaltung",
+      "treuhaender": "Treuhänder",
+      "agent": "Agent"
+    },
+    "roles": {
+      "define": "Rolle definieren",
+      "edit": "Bearbeiten",
+      "archive": "Archivieren",
+      "fixed": "Fest",
+      "name": "Name der Rolle",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "noCapabilities": "Keine Rechte",
+      "memberCount": "{count} Person(en)",
+      "group": {
+        "reading": "Lesen",
+        "money": "Geld",
+        "compliance": "Abschluss und MWST",
+        "governance": "Verwaltung"
+      }
+    },
+    "error": {
+      "generic": "Das hat nicht geklappt. Es wurde nichts geändert.",
+      "permission_denied": "Dir fehlt das nötige Recht für diese Aktion. Es wurde nichts geändert.",
+      "permissionNamed": "Dafür brauchst du das Recht \"{capability}\". Es wurde nichts geändert.",
+      "last_owner": "Das ist der einzige Eigentümer. Ernenne zuerst jemand anderen, sonst kommt niemand mehr an diese Bücher.",
+      "already_member": "Diese Person hat bereits Zugriff auf diesen Mandanten.",
+      "unknown_role": "Diese Rolle gibt es hier nicht.",
+      "unknown_capability": "\"{capability}\" ist kein Recht, das TILL kennt. Eine Rolle kann nur bestehende Rechte neu zusammenstellen.",
+      "builtin_fixed": "Eigentümer und Nur lesen sind fest. Diese beiden Rollen lassen sich nicht ändern und nicht archivieren.",
+      "role_in_use": "Diese Rolle ist noch vergeben. Weise die betroffenen Personen zuerst einer anderen Rolle zu.",
+      "member_not_found": "Diese Person gehört nicht (mehr) zu diesem Mandanten.",
+      "role_not_found": "Diese Rolle gibt es nicht mehr.",
+      "invite_expired": "Diese Einladung ist abgelaufen. Lade die Person erneut ein.",
+      "invite_not_found": "Diesen Einladungscode kennt TILL nicht.",
+      "actor_already_bound": "Diese Sitzung gehört bereits zu einer anderen Person. Nimm die Einladung aus der Sitzung an, für die sie gedacht ist.",
+      "actor_already_member": "Diese Sitzung hat hier bereits Zugriff. Ändere ihre Rolle in der Liste, statt sie einzuladen.",
+      "member_kind_mismatch": "Diese Adresse ist TILL schon als etwas anderes bekannt (Person oder Agent). Die Art gehört zur Identität und lässt sich nicht per Einladung ändern."
+    }
+  },
+  "capability": {
+    "read_books": "Bücher und Auswertungen lesen",
+    "read_vat": "MWST-Daten lesen",
+    "read_sales": "Belege und Zahlungen lesen",
+    "read_master_data": "Stammdaten lesen",
+    "read_members": "Zugriffsliste und Rollen lesen",
+    "read_automations": "Automatisierungen und deren Verlauf lesen",
+    "read_file_content": "Inhalt abgelegter Dateien herunterladen",
+    "post": "Buchen",
+    "pay": "Zahlungen erfassen",
+    "issue": "Belege erstellen und ausstellen",
+    "send": "Belege versenden",
+    "dun": "Mahnwesen führen",
+    "manage_periods": "Perioden abschliessen",
+    "unlock_period": "Perioden entsperren",
+    "vat_file": "MWST-Abrechnung als eingereicht markieren",
+    "review": "Buchungen prüfen und freigeben",
+    "export": "Abschlüsse exportieren (Journal, Abschluss, MWST)",
+    "manage_vat_config": "MWST-Einstellungen verwalten",
+    "inventory": {
+      "setup": "Bewertungsmethode für das Lager festlegen"
+    },
+    "manage_chart": "Kontenplan verwalten",
+    "manage_master_data": "Stammdaten verwalten",
+    "contacts": {
+      "merge": "Kontakte zusammenführen und anonymisieren"
+    },
+    "purchasing": {
+      "match": "Kreditorenrechnungen mit Bestellung und Wareneingang abgleichen",
+      "match_override": "Dreiwegabgleich übersteuern und stornieren"
+    },
+    "tasks": {
+      "read": "Aufgaben und Erinnerungen lesen",
+      "write": "Aufgaben anlegen und bearbeiten"
+    },
+    "time": {
+      "read": "Zeiteinträge und Tarife lesen",
+      "write": "Zeit erfassen und bearbeiten",
+      "approve": "Zeit freigeben und sperren"
+    },
+    "deals": {
+      "read": "Deals und Pipeline lesen",
+      "write": "Deals anlegen, verschieben und abschliessen"
+    },
+    "billing": {
+      "read": "Unverrechnete Zeit und WIP lesen",
+      "generate": "Rechnungsentwürfe aus Zeit erstellen"
+    },
+    "retainer": {
+      "manage": "Mandate verwalten und deren Rechnungen erzeugen"
+    },
+    "costing": {
+      "read": "Projekterfolg und Margen lesen"
+    },
+    "procurement": {
+      "landed_cost": "Landkosten auf Vorräte verteilen"
+    },
+    "reports": {
+      "read": "Berichte und deren Läufe lesen",
+      "write": "Berichte erstellen, bearbeiten und planen",
+      "run": "Berichte ausführen und herunterladen"
+    },
+    "sign": {
+      "write": "Signaturanfragen erstellen und verwalten",
+      "send": "Dokumente zur elektronischen Signatur versenden"
+    },
+    "portal": {
+      "manage": "Portal-Zugänge für Kunden freigeben und widerrufen"
+    },
+    "hr": {
+      "read": "Personal, Abwesenheiten und Spesen lesen",
+      "manage": "Mitarbeitende und Abwesenheiten verwalten",
+      "sensitive": "AHV-Nummer lesen und schreiben"
+    },
+    "mail": {
+      "read": "Lokalen Mail-Index und Threads lesen",
+      "write": "Lokalen Mail-Speicher verbinden und Entwürfe schreiben"
+    },
+    "spesen": {
+      "submit": "Spesenabrechnungen erstellen und einreichen",
+      "approve": "Spesenabrechnungen genehmigen und ablehnen"
+    },
+    "manage_files": "Dateien ablegen, verschlagworten und ersetzen",
+    "manage_settings": "Firmen- und Mandanteneinstellungen",
+    "manage_members": "Zugriff und Rollen verwalten",
+    "manage_custom_fields": "Eigene Felder verwalten",
+    "manage_saved_views": "Geteilte Ansichten verwalten",
+    "manage_document_templates": "Dokumentvorlagen verwalten",
+    "manage_dispatch_texts": "Versandtexte verwalten",
+    "manage_automations": "Automatisierungen verwalten",
+    "manage_plugins": "Erweiterungen installieren und verwalten",
+    "manage_agent_dial": "Freigabe-Regler des Agenten verwalten",
+    "manage_import": "Datenübernahmen durchführen und ihre Zuordnungen verwalten",
+    "commit_migration": "Eine Datenübernahme in die echten Bücher übernehmen",
+    "manage_implementation": "Ein Einführungsprojekt führen (Phasen, Aufgaben, Entscheide, Parallellauf)",
+    "manage_checklists": "Checklisten führen (MWST-Periode starten, Schritte erledigen, bestätigen, überspringen)",
+    "promote_workspace": "Einen Testmandanten produktiv setzen",
+    "purge_archive": "Abgelaufene Vorsystem-Archivperioden bereinigen",
+    "manage_data_export": "Den ganzen Arbeitsbereich exportieren und sichern",
+    "manage_sync": "Den Sync-Publish-Stream ein- oder ausschalten",
+    "sync": {
+      "read": "Den Sync-Publish-Stream lesen (Integrationsschnittstelle)"
+    },
+    "landscape": {
+      "read": "Die Umgebungslandschaft ansehen",
+      "manage": "Umgebungen erstellen, wechseln, zurücksetzen und löschen",
+      "retain_secrets": "Echte Zugangsgeheimnisse beim Kopieren behalten (nur als Eigentümer)"
+    },
+    "diagnostics": {
+      "read": "Aufgezeichnete Fehlerdetails lesen"
+    },
+    "voice": {
+      "read": "Schreibstil-Profil lesen und Beispiele abrufen",
+      "write": "Schreibstil lernen und lokales Modell wählen"
+    },
+    "draft": {
+      "write": "Lokale Antwortentwürfe erstellen und neu erstellen"
+    },
+    "egress": {
+      "read": "Den Offline-Nachweis und die Vertrauensanzeige lesen"
+    }
+  },
+  "help": {
+    "Members": {
+      "title": "Zugriff",
+      "body": "Wer diese Bücher öffnen darf und was jede Rolle dabei kann. Der Reiter Mitglieder zeigt alle Personen mit Zugriff und ihrer Rolle; hier lädst du ein, änderst Rollen und entziehst Zugriff. Der Reiter Rollen beschreibt, welche Rechte hinter einer Rolle stehen. Solange niemand eingeladen wurde, ist der Arbeitsbereich offen; mit der ersten Einladung übernimmt die einladende Person die Eigentümerrolle.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

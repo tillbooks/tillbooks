@@ -1,0 +1,243 @@
+/* G08 §6, the feedback dialog.
+ *
+ * Tokens only, 8-pt spacing. The dialog is an overlay like every other (K-28, D137): `--t-bg-elev`
+ * with ONE shadow (`--t-shadow-overlay`), ONE hairline and the dialog radius, over the shared
+ * `--t-scrim`. It is portaled to `document.body` and sits on the PALETTE tier, above the drawer
+ * overlay, because "Report this error" is offered from inside drawers: at its old z 40 it opened
+ * UNDER the drawer scrim at 1000, invisible and still holding the focus. The width cap is the
+ * spec's: `min(560px, calc(100vw - var(--t-space-4)))`, so the dialog cannot overflow a narrow
+ * window.
+ *
+ * Nothing here spends the accent. The one accent in this dialog is `.btn--primary` on the single
+ * primary action, which comes from the shared control system in `global.css`.
+ */
+
+.fb-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--t-z-palette);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--t-space-2);
+  background: var(--t-scrim);
+}
+
+.fb-dialog {
+  width: min(560px, calc(100vw - var(--t-space-4)));
+  max-height: calc(100vh - var(--t-space-4));
+  overflow-y: auto;
+  padding: var(--t-space-3);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-lg);
+  box-shadow: var(--t-shadow-overlay);
+}
+
+.fb-title {
+  margin: 0 0 var(--t-space-2);
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+.fb-subtitle {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+.fb-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.fb-body p {
+  margin: 0;
+  max-width: 72ch;
+  line-height: var(--t-lh-body);
+}
+
+/* The three kinds. A real fieldset with a real legend: the group needs a name, and a styled div
+   would give a screen reader three unrelated radios. */
+.fb-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fb-legend {
+  padding: 0;
+  margin: 0 0 var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.fb-kind,
+.fb-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  cursor: pointer;
+}
+
+.fb-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.fb-field > label {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.fb-field .field {
+  width: 100%;
+}
+
+/* The inline denial reason (D15). Danger colour AND a text sentence: the colour is never the
+   carrier, it only reinforces what the words already say. */
+.fb-problem {
+  margin: 0;
+  color: var(--t-danger);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.fb-diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+}
+
+/* Exactly what would travel, rendered by the same function that writes the artifact. It scrolls
+   inside its own box so a long stack never widens the dialog. */
+.fb-preview {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-code);
+  color: var(--t-text-dim);
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.fb-none,
+.fb-notice {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.fb-path code {
+  padding: 2px var(--t-space-0-5);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-code);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  word-break: break-all;
+}
+
+.fb-copied {
+  margin: 0;
+  color: var(--t-success);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.fb-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+  padding-top: var(--t-space-1);
+}
+
+/* The rail footer now holds two controls (Send feedback, then the theme toggle) where it held one.
+   The rule lives here rather than in `global.css` because this change owns the second control and
+   not the shell stylesheet; this file is statically imported by `FeedbackProvider`, so it is in the
+   bundle wherever the button is. */
+.rail-footer {
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* "Report this error" inside an error banner. A quiet text link, deliberately: an accent on every
+   error banner would spend the accent on every screen at once. It is a text link, so the hover
+   underline is its explicit opt-in (DESIGN.md, Links). The transparent 1px border is the focus cue's
+   landing place (K-10): the ring turns it brass without moving the text. */
+.error-report {
+  align-self: flex-start;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.error-report:hover {
+  color: var(--t-text);
+  text-decoration: underline;
+}
+
+/* The crash panel. It is a page, not a dialog: the router below it is gone, so there is nothing to
+   sit on top of. The danger glyph is paired with the heading text, never colour alone. */
+.crash-panel {
+  max-width: 560px;
+  margin: var(--t-space-6) auto;
+  padding: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.crash-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.crash-glyph {
+  flex: 0 0 auto;
+  color: var(--t-danger);
+}
+
+.crash-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+.crash-body {
+  margin: 0;
+  max-width: 72ch;
+  line-height: var(--t-lh-body);
+}
+
+.crash-foot {
+  display: flex;
+  gap: var(--t-space-1);
+}
+

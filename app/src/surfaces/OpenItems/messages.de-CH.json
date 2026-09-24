@@ -1,0 +1,143 @@
+{
+  "nav": {
+    "openItems": "Offene Posten"
+  },
+  "openItems": {
+    "title": "Offene Posten",
+    "loading": "Offene Posten werden geladen",
+    "headerTotal": "{total} offen",
+    "headerActions": "Aktionen für die offenen Posten",
+    "rowActions": "Aktionen",
+    "rowActionsFor": "Aktionen für {row}",
+    "tab": {
+      "byDocument": "Nach Beleg",
+      "byCustomer": "Nach Kunde"
+    },
+    "asOf": "Stand",
+    "showAll": "Alle anzeigen",
+    "noDate": "kein Datum",
+    "noDueDate": "kein Fälligkeitsdatum",
+    "noOverdue": "nicht überfällig",
+    "noCustomer": "Ohne Kunde",
+    "filter": {
+      "allCurrencies": "Alle Währungen",
+      "allCustomers": "Alle Kunden",
+      "customerById": "Kunde {id}"
+    },
+    "column": {
+      "document": "Beleg",
+      "customer": "Kunde",
+      "issueDate": "Rechnung",
+      "dueDate": "Fällig",
+      "open": "Offen",
+      "currency": "Währung",
+      "daysOverdue": "Überfällig",
+      "itemCount": "Offene Posten",
+      "oldestOverdue": "Längste Überfälligkeit"
+    },
+    "kind": {
+      "onAccount": {
+        "credit": "Guthaben",
+        "refund": "Rückzahlung, nicht zugewiesen"
+      }
+    },
+    "onAccountNote": {
+      "credit": "bereits abgezogen",
+      "refund": "bereits enthalten"
+    },
+    "balance": {
+      "total": "Offen total",
+      "itemsCaption": "Offene Posten dieses Kunden"
+    },
+    "table": {
+      "caption": "Offene Posten nach Beleg"
+    },
+    "days": "{n} Tage",
+    "dunningLevel": "Mahnstufe {level}",
+    "dunningFee": "davon Mahngebühr {amount}",
+    "bucket": {
+      "upTo": "0 bis {days} Tage",
+      "between": "{from} bis {to} Tage",
+      "beyond": "Über {days} Tage",
+      "count": "{n} Posten"
+    },
+    "tiles": {
+      "label": "Aufteilung nach Fälligkeit",
+      "heading": "Nach Fälligkeit",
+      "help": {
+        "label": "Hilfe zur Aufteilung nach Fälligkeit",
+        "title": "Was die Aufteilung zeigt",
+        "body": "Die Aufteilung zeigt, wie lange ein Betrag schon offen ist. Sie ist eine Darstellung und keine Frist: sie ändert weder die Summe noch die Übereinstimmung mit 1100."
+      }
+    },
+    "editBoundaries": "Aufteilung nach Fälligkeit anpassen",
+    "boundaries": {
+      "default": "Du siehst die Standardgrenzen.",
+      "chosen": "Du siehst deine eigenen Grenzen.",
+      "field": "Grenze {n}",
+      "days": "Tage",
+      "remove": "Grenze {n} entfernen",
+      "add": "Grenze hinzufügen",
+      "preview": "Ergibt: {buckets}",
+      "note": "Das ist eine Darstellung, keine Frist. Die Summe und die Übereinstimmung mit 1100 ändern sich nicht.",
+      "save": "Speichern",
+      "cancel": "Abbrechen"
+    },
+    "assignCredit": "Zuweisen",
+    "recordPayment": "Zahlung erfassen",
+    "reconciled": {
+      "statement": "Stimmt mit 1100 Forderungen aus Lieferungen und Leistungen überein",
+      "glyph": "Stimmt überein",
+      "filteredTotal": "Arbeitsbereich total {total}, stimmt mit 1100 überein"
+    },
+    "asOfBanner": {
+      "text": "Stand {date}. Zahlungen nach diesem Datum zählen nicht mit.",
+      "action": "Auf heute"
+    },
+    "mismatch": {
+      "title": "Die offenen Posten und Konto 1100 unterscheiden sich um {difference}.",
+      "body": "Die Liste zeigt {list}, das Konto {ledger}.",
+      "action": "Journal öffnen",
+      "disclosure": "Was jetzt?",
+      "cause": {
+        "direct": "Eine Buchung direkt auf 1100, die zu keiner Rechnung und zu keiner Zahlung gehört.",
+        "document": "Eine Rechnung auf 1100, deren Beleg nach dem Buchen verändert wurde.",
+        "fxSkonto": "Eine Fremdwährungsrechnung mit Skonto kann um einen Rappen abweichen."
+      }
+    },
+    "empty": {
+      "nothingOpen": {
+        "title": "Alles bezahlt, keine offenen Posten.",
+        "hint": "Sobald eine Rechnung ausgestellt und noch nicht bezahlt ist, erscheint sie hier.",
+        "action": "Rechnung ausstellen"
+      },
+      "filtered": {
+        "title": "Keine offenen Posten für diese Auswahl.",
+        "hint": "Setz die Auswahl zurück, dann siehst du wieder alle offenen Posten.",
+        "action": "Filter zurücksetzen"
+      }
+    },
+    "error": {
+      "transport": "Offene Posten konnten nicht geladen werden.",
+      "permissionDenied": {
+        "read": "Dir fehlt die Berechtigung, offene Posten zu sehen.",
+        "write": "Dir fehlt die Berechtigung, die Aufteilung nach Fälligkeit zu ändern."
+      },
+      "boundaries": {
+        "empty": "Es braucht mindestens eine Grenze.",
+        "positive": "Die Grenzen müssen ganze Zahlen über null sein.",
+        "increasing": "Jede Grenze muss grösser sein als die davor.",
+        "max": "Mehr als sechs Zeiträume werden unübersichtlich."
+      }
+    }
+  },
+  "help": {
+    "OpenItems": {
+      "title": "Offene Posten",
+      "body": "Die OP-Liste zeigt, welche Rechnungen noch nicht oder nur teilweise bezahlt sind, mit Fälligkeit und Altersstruktur. Sie entsteht aus den gestellten Rechnungen und den erfassten Zahlungen; du führst sie nicht von Hand. Wer nach vereinbarten Entgelten abrechnet, schuldet die MWST auf diesen Posten bereits, auch wenn das Geld noch aussteht.",
+      "concepts": [
+        "vereinbarte-entgelte"
+      ]
+    }
+  }
+}

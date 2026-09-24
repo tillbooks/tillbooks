@@ -1,0 +1,50 @@
+{
+  "bankAccounts": [
+    {
+      "id": "bank_3",
+      "name": "Altes Kontokorrent",
+      "iban": "CH5604835012345678009",
+      "isQrIban": false,
+      "receiveOnly": false,
+      "currency": "CHF",
+      "ledgerAccountId": "acc_2",
+      "ledgerAccountNumber": "1020",
+      "openingBalanceMinor": null,
+      "openingBalanceDate": null,
+      "openingEntryId": null,
+      "archived": true,
+      "createdAt": "2026-07-19T00:00:00.000Z"
+    },
+    {
+      "id": "bank_1",
+      "name": "PostFinance QR",
+      "iban": "CH4431999123000889012",
+      "isQrIban": true,
+      "receiveOnly": true,
+      "currency": "CHF",
+      "ledgerAccountId": "acc_2",
+      "ledgerAccountNumber": "1020",
+      "openingBalanceMinor": 1250000,
+      "openingBalanceDate": "2026-07-19",
+      "openingEntryId": "entry_1",
+      "archived": false,
+      "createdAt": "2026-07-19T00:00:00.000Z"
+    },
+    {
+      "id": "bank_2",
+      "name": "Raiffeisen EUR",
+      "iban": "CH9300762011623852957",
+      "isQrIban": false,
+      "receiveOnly": false,
+      "currency": "EUR",
+      "ledgerAccountId": "acc_2",
+      "ledgerAccountNumber": "1020",
+      "openingBalanceMinor": null,
+      "openingBalanceDate": null,
+      "openingEntryId": null,
+      "archived": false,
+      "createdAt": "2026-07-19T00:00:00.000Z"
+    }
+  ],
+  "ok": true
+}

@@ -1,0 +1,244 @@
+{
+  "members": {
+    "title": "Access",
+    "noWorkspaceHint": "Pick a workspace first, then you can see who has access to it.",
+    "unclaimed": "Nobody has claimed access to this workspace yet, so everything is currently open. Whoever invites someone first becomes the owner.",
+    "notAMember": "You are not part of this workspace. You can read, but not change anything.",
+    "tab": {
+      "members": "People",
+      "roles": "Roles"
+    },
+    "invite": "Invite",
+    "list": {
+      "aria": "People with access to this workspace"
+    },
+    "emailLabel": "Email",
+    "emailPlaceholder": "name@company.ch",
+    "roleLabel": "Role",
+    "kindLabel": "Kind",
+    "kind": {
+      "human": "Person",
+      "agent": "Agent"
+    },
+    "kindHint": {
+      "agent": "An agent gets a seat of its own: its writes wait as proposals until you approve them, and every call is on record."
+    },
+    "rowKind": {
+      "agent": "Agent"
+    },
+    "invited": "Invite prepared. TILL sends no mail: hand the code or link over yourself.",
+    "reinvited": "Invitation renewed: the old code has expired, only the new one works. TILL sends no e-mail: pass the code or link on yourself.",
+    "inviteToken": "Invite code",
+    "inviteLink": "Invite link",
+    "copyLink": "Copy the invite link",
+    "goOnline": {
+      "notice": "Invitations need a TILL instance that is reachable online (your own server or managed): locally there is no second sign-in.",
+      "link": "Go online"
+    },
+    "revoke": "Remove access",
+    "revoked": "Access removed.",
+    "revokeConfirm": {
+      "title": "Revoke access?",
+      "body": "{name} loses access to this client from the next request on. A new invitation restores it.",
+      "confirm": "Revoke access",
+      "cancel": "Cancel"
+    },
+    "roleChanged": "Role changed. It applies from their next call.",
+    "roleSaved": "Role saved.",
+    "roleArchived": "Role archived.",
+    "dismiss": "Close",
+    "empty": "Just you",
+    "emptyHint": "Invite a bookkeeper or your Treuhänder, and you share these books.",
+    "emptyHintLocal": "Only this install keeps these books. A second person needs an instance reachable online; the notice by the invite form shows the way.",
+    "localSession": "This installation",
+    "boundTo": "Session: {actor}",
+    "actor": {
+      "studio": "Studio on this machine",
+      "agent": "MCP agent"
+    },
+    "agentIsOwner": "The MCP agent is seated as an owner, so it may do anything. Whoever reaches the MCP socket has the same rights. Give it a narrower role below once you know what it should do.",
+    "column": {
+      "person": "Person",
+      "role": "Role",
+      "status": "Status",
+      "since": "Since",
+      "actions": "Actions"
+    },
+    "status": {
+      "pending": "Invited",
+      "active": "Active"
+    },
+    "role": {
+      "owner": "Owner",
+      "viewer": "Read only",
+      "bookkeeper": "Bookkeeper",
+      "treuhaender": "Treuhänder",
+      "agent": "Agent"
+    },
+    "roles": {
+      "define": "Define a role",
+      "edit": "Edit",
+      "archive": "Archive",
+      "fixed": "Fixed",
+      "name": "Role name",
+      "save": "Save",
+      "cancel": "Cancel",
+      "noCapabilities": "No rights at all",
+      "memberCount": "{count} person(s)",
+      "group": {
+        "reading": "Reading",
+        "money": "Money",
+        "compliance": "Close and VAT",
+        "governance": "Administration"
+      }
+    },
+    "error": {
+      "generic": "That did not work. Nothing was changed.",
+      "permission_denied": "You do not have the right for this action. Nothing was changed.",
+      "permissionNamed": "This needs the \"{capability}\" right. Nothing was changed.",
+      "last_owner": "This is the only owner. Make somebody else an owner first, or nobody can reach these books.",
+      "already_member": "This person already has access to this workspace.",
+      "unknown_role": "That role does not exist here.",
+      "unknown_capability": "\"{capability}\" is not a right TILL knows. A role can only recombine rights that already exist.",
+      "builtin_fixed": "Owner and Read only are fixed. They cannot be changed and cannot be archived.",
+      "role_in_use": "Somebody still holds this role. Move them to another role first.",
+      "member_not_found": "This person is no longer part of this workspace.",
+      "role_not_found": "That role no longer exists.",
+      "invite_expired": "This invite has expired. Invite the person again.",
+      "invite_not_found": "TILL does not know that invite code.",
+      "actor_already_bound": "This session already belongs to somebody else. Accept the invite from the session it was meant for.",
+      "actor_already_member": "This session already has access here. Change its role in the list instead of inviting it.",
+      "member_kind_mismatch": "TILL already knows this address as something else (a person or an agent). The kind belongs to the identity and cannot be changed by an invitation."
+    }
+  },
+  "capability": {
+    "read_books": "Read the books and reports",
+    "read_vat": "Read VAT data",
+    "read_sales": "Read documents and payments",
+    "read_master_data": "Read master data",
+    "read_members": "Read the access list and roles",
+    "read_automations": "Read automation rules and their history",
+    "read_file_content": "Download the contents of a stored file",
+    "post": "Post entries",
+    "pay": "Record payments",
+    "issue": "Create and issue documents",
+    "send": "Send documents",
+    "dun": "Run dunning",
+    "manage_periods": "Close periods",
+    "unlock_period": "Unlock periods",
+    "vat_file": "Mark a VAT return as filed",
+    "review": "Review and sign off on entries",
+    "export": "Export filings (journal, statements, VAT)",
+    "manage_vat_config": "Manage VAT settings",
+    "inventory": {
+      "setup": "Choose the inventory valuation method"
+    },
+    "manage_chart": "Manage the chart of accounts",
+    "manage_master_data": "Manage master data",
+    "contacts": {
+      "merge": "Merge and anonymise contacts"
+    },
+    "purchasing": {
+      "match": "Match vendor bills to orders and receipts",
+      "match_override": "Override and reverse three-way matches"
+    },
+    "tasks": {
+      "read": "Read tasks and reminders",
+      "write": "Create and edit tasks"
+    },
+    "time": {
+      "read": "Read time entries and rates",
+      "write": "Track and edit time",
+      "approve": "Approve and lock timesheets"
+    },
+    "deals": {
+      "read": "Read deals and the pipeline",
+      "write": "Create, move and close deals"
+    },
+    "billing": {
+      "read": "Read unbilled time and WIP",
+      "generate": "Create invoice drafts from time"
+    },
+    "retainer": {
+      "manage": "Manage retainers and generate their invoices"
+    },
+    "costing": {
+      "read": "Read project profitability and margins"
+    },
+    "procurement": {
+      "landed_cost": "Allocate landed costs onto inventory"
+    },
+    "reports": {
+      "read": "Read reports and their run history",
+      "write": "Build, edit and schedule reports",
+      "run": "Run and download reports"
+    },
+    "sign": {
+      "write": "Create and manage signature requests",
+      "send": "Send documents for e-signature"
+    },
+    "portal": {
+      "manage": "Grant and revoke customer portal access"
+    },
+    "hr": {
+      "read": "Read personnel, absences and expense claims",
+      "manage": "Manage employees and absences",
+      "sensitive": "Read and write the AHV number"
+    },
+    "mail": {
+      "read": "Read the local mail index and threads",
+      "write": "Connect a local mail store and write drafts"
+    },
+    "spesen": {
+      "submit": "Create and submit expense claims",
+      "approve": "Approve and reject expense claims"
+    },
+    "manage_files": "File, tag and supersede stored files",
+    "manage_settings": "Company and workspace settings",
+    "manage_members": "Manage access and roles",
+    "manage_custom_fields": "Manage custom fields",
+    "manage_saved_views": "Manage shared views",
+    "manage_document_templates": "Manage document templates",
+    "manage_dispatch_texts": "Manage dispatch texts",
+    "manage_automations": "Manage automation rules",
+    "manage_plugins": "Install and manage extensions",
+    "manage_agent_dial": "Manage the agent approval dial",
+    "manage_import": "Run data migrations and manage their mappings",
+    "commit_migration": "Commit a migration into the live books",
+    "manage_implementation": "Run an implementation project (phases, tasks, decisions, parallel run)",
+    "manage_checklists": "Run checklists (start the VAT period, complete, attest and skip items)",
+    "promote_workspace": "Make a Testmandant productive (go live)",
+    "purge_archive": "Purge expired prior-system archive periods",
+    "manage_data_export": "Export and back up the whole workspace",
+    "manage_sync": "Turn the sync publish stream on or off",
+    "sync": {
+      "read": "Read the sync publish stream (integration surface)"
+    },
+    "landscape": {
+      "read": "See the environment landscape",
+      "manage": "Create, switch, reset and delete environments",
+      "retain_secrets": "Keep live access secrets in a copy (owner only)"
+    },
+    "diagnostics": {
+      "read": "Read recorded error details"
+    },
+    "voice": {
+      "read": "Read the writing-style profile and retrieve its examples",
+      "write": "Learn the writing style and choose the local model"
+    },
+    "draft": {
+      "write": "Create and regenerate local reply drafts"
+    },
+    "egress": {
+      "read": "Read the offline proof and the trust indicator"
+    }
+  },
+  "help": {
+    "Members": {
+      "title": "Access",
+      "body": "Who may open these books and what each role allows. The members tab lists everyone with access and their role; here you invite people, change roles and revoke access. The roles tab describes which rights sit behind a role. While nobody has been invited, the workspace is open; with the first invite the inviting person takes the owner role.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

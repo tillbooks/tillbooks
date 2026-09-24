@@ -1,0 +1,109 @@
+{
+  "nav": {
+    "warehouses": "Warehouses"
+  },
+  "warehouses": {
+    "title": "Warehouses & locations",
+    "noWorkspace": "to manage warehouses and locations",
+    "showArchived": "Show archived",
+    "newWarehouse": "New warehouse",
+    "listLabel": "Warehouses",
+    "detailLabel": "Selected warehouse",
+    "selectHint": "Select a warehouse to see its locations.",
+    "default": "Default",
+    "archived": "Archived",
+    "makeDefault": "Make default",
+    "edit": "Edit",
+    "archive": "Archive",
+    "cancel": "Cancel",
+    "save": "Save",
+    "confirmTitle": "Confirm archive",
+    "confirmArchiveWarehouse": "Archive warehouse {code}? Its empty locations are archived too; it stays resolvable for existing movements.",
+    "confirmArchiveLocation": "Archive location {code}? It leaves the pickers but keeps its movement history.",
+    "empty": {
+      "title": "No warehouses yet",
+      "hint": "Create one, or let the system create the Main default so stock movements have somewhere to go.",
+      "cta": "Create first warehouse",
+      "ensure": "Or create the Main default automatically"
+    },
+    "form": {
+      "title": "Warehouse",
+      "createTitle": "New warehouse",
+      "editTitle": "Edit warehouse"
+    },
+    "field": {
+      "code": "Code",
+      "name": "Name",
+      "city": "City",
+      "description": "Description"
+    },
+    "locations": {
+      "title": "Locations",
+      "new": "New location",
+      "empty": "No locations in this warehouse yet.",
+      "col": {
+        "code": "Code",
+        "name": "Name",
+        "type": "Type",
+        "actions": "Actions"
+      },
+      "type": {
+        "zone": "Zone",
+        "aisle": "Aisle",
+        "shelf": "Shelf",
+        "bin": "Bin",
+        "staging": "Staging",
+        "other": "Other"
+      },
+      "form": {
+        "title": "Location",
+        "createTitle": "New location",
+        "editTitle": "Edit location"
+      },
+      "field": {
+        "code": "Code",
+        "name": "Name",
+        "type": "Type",
+        "noType": "No type",
+        "parent": "Parent location",
+        "rootParent": "None (top level)",
+        "description": "Description"
+      },
+      "actionsFor": "Actions for location {code}"
+    },
+    "balance": {
+      "title": "On hand by location",
+      "empty": "No stock recorded in this warehouse yet.",
+      "col": {
+        "item": "Item",
+        "location": "Location",
+        "qty": "On hand"
+      }
+    },
+    "error": {
+      "transport": "Could not load warehouses. Please retry."
+    },
+    "errors": {
+      "invalid_code": "The code must be between 1 and 20 characters.",
+      "duplicate_code": "A record with this code already exists here.",
+      "parent_warehouse_mismatch": "The parent location must be in the same warehouse.",
+      "location_cycle": "A location cannot be moved under itself or one of its descendants.",
+      "location_has_stock": "This location (or a descendant) still holds stock and cannot be archived.",
+      "location_in_use": "An open stocktake references this location; it cannot be archived.",
+      "cannot_archive_default": "The default cannot be archived. Set another default first.",
+      "warehouse_archived": "This warehouse is archived.",
+      "location_archived": "This location is archived.",
+      "invalid_location_type": "That location type is not recognised.",
+      "max_depth_exceeded": "The location hierarchy is too deep."
+    },
+    "actionsFor": "Actions for warehouse {code}"
+  },
+  "help": {
+    "Warehouses": {
+      "title": "Warehouses & locations",
+      "body": "The structure of your stock: warehouses with their nested locations, so every movement carries an explicit place and on-hand can be read per location.\n\nOn the left the warehouse list with default and status; on the right the selected warehouse's location tree and its on-hand by location. Creating and editing happen in the side drawer.\n\nArchived warehouses disappear from the pickers while their history remains.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

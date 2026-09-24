@@ -1,0 +1,405 @@
+/*
+ * G15 Pendenzen. The design law applies verbatim: ONE accent, spent only on the focus ring, the
+ * selected row and at most one primary. The attention count and the rail fragment spend ZERO accent;
+ * status is the shared Status word (glyph plus text, never colour alone); only `überfällig` carries
+ * `--t-warn`; money is a right-aligned figure in Inter with tabular figures (K-40), never monospace.
+ * Two-step elevation, no blur, no glass. Type sizes are the written scale (K-37).
+ *
+ * K-06 (D137): no page padding of its own. `<main>` already carries the 24px gutter, and a second 24px
+ * here pushed the title 24px right and down against every other surface.
+ */
+
+.att {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  max-width: 880px;
+}
+
+.att-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * The page header (title, inline help, stand + refresh actions) is the shared SurfaceHeader (D118 B2).
+ * Only the two Attention-specific spans that ride in the actions slot stay below.
+ */
+
+.att-stand {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.att-incomplete {
+  color: var(--t-warn);
+}
+
+/* Section labels: 12px/500 dim, sentence case (K-23), never bold and dim. */
+.att-section-title {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+  margin: 0;
+}
+
+.att-work,
+.att-index,
+.att-events {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.att-work-head,
+.att-events-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+/* A count, so tabular figures in the one typeface. */
+.att-total {
+  margin-left: auto;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.att-provider-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-soft);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-warn);
+}
+
+/* --- the item list ------------------------------------------------------------------------------ */
+
+.att-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+/*
+ * A row is two lines: the open button with its overflow, then the decision strip. The strip spends
+ * NO accent of its own: every decision button is the same secondary (K-40), the sentences are dim
+ * ink, and the reject confirm is the shared danger fill.
+ */
+.att-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.att-row-line {
+  display: flex;
+  align-items: stretch;
+  gap: var(--t-space-1);
+}
+
+.att-row-open {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 5.5rem 1fr auto;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: 44px;
+  padding: var(--t-space-1) var(--t-space-2);
+  text-align: left;
+  background: var(--t-bg-elev);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  color: var(--t-text);
+  cursor: pointer;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.att-row-open:hover {
+  background: var(--t-bg-soft);
+}
+
+/* K-24 / K-40: the focused entry is the selection pill, the accent-soft tint, and nothing else: no
+   accent ring, no bar, and its decision button stays a secondary. */
+.att-row-open[aria-current='true'] {
+  background: var(--t-accent-soft);
+}
+
+.att-row-open:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+}
+
+.att-urgency {
+  white-space: nowrap;
+}
+
+.att-urgency--overdue .status-word-label {
+  font-weight: 600;
+}
+
+.att-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.att-row-title {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 500;
+  color: var(--t-text);
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.att-row-subtitle {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "zusammen mit ...": words someone reads, so dim, never faint (K-36). */
+.att-collapsed {
+  color: var(--t-text-dim);
+}
+
+/* "neu" is a word, not a chip (K-22): dim ink at the caption step. */
+.att-new {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+/* K-40: money in Inter with tabular figures. The `.t-money` utility carries the tnum feature and the
+   no-wrap guarantee (K-18); the figure is never clipped. */
+.att-amount {
+  color: var(--t-text);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.att-row-overflow {
+  display: flex;
+  align-items: center;
+}
+
+.att-area-empty {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  align-items: flex-start;
+}
+
+/* --- the area index ----------------------------------------------------------------------------- */
+
+.att-index-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.att-index-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: 44px;
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  color: var(--t-text);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.att-index-row:hover {
+  background: var(--t-bg-soft);
+}
+
+/* The open area is the selection pill (K-24), not an accent edge. */
+.att-index-row[aria-current='true'] {
+  background: var(--t-accent-soft);
+}
+
+.att-index-row:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+}
+
+.att-index-label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.att-index-urgency {
+  display: inline-flex;
+  color: var(--t-text-dim);
+}
+
+.att-index-urgency--overdue {
+  color: var(--t-warn);
+}
+
+.att-index-count {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* A decorative chevron: the one place the faint edge tone belongs. */
+.att-index-chevron {
+  color: var(--t-text-faint);
+}
+
+/* --- the events zone ---------------------------------------------------------------------------- */
+
+.att-events-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.att-events-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.att-events-status {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.att-events-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A date someone reads: dim, never faint (K-36). */
+.att-events-meta {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.att-events-empty,
+.att-events-error {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  margin: 0;
+}
+
+/* --- the decision strip under a row (F-01) ------------------------------------------------------ */
+
+.att-decide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin: 0 var(--t-space-4) 0 calc(var(--t-space-2) + 5.5rem + var(--t-space-2));
+  padding: var(--t-space-1) 0 var(--t-space-2);
+}
+
+.att-decide-reason,
+.att-decide-consequence,
+.att-decide-hint {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.att-decide-suggested {
+  color: var(--t-text);
+}
+
+.att-decide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+/* "Wird ausgeführt": a state someone reads, so dim, never faint (K-36). */
+.att-decide-busy {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.att-decide-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.att-decide-reason-label {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+@media (max-width: 640px) {
+  .att-decide {
+    margin-left: var(--t-space-2);
+    margin-right: var(--t-space-2);
+  }
+}

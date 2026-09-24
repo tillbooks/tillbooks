@@ -1,0 +1,180 @@
+/*
+ * A15 Mahnwesen styling.
+ *
+ * Every value is a token; spacing sits on the 8-pt grid and type sizes on the written scale (K-37).
+ * ONE PRIMARY: "Mahnlauf vorschlagen" in the header, where the flow starts. Ausstellen is the tinted
+ * `.btn--accent` only when it books a Mahngebühr (else secondary), Gebühr nachbuchen always books, the
+ * one role that button keeps (K-08); Versenden books nothing and is secondary. The two never show at once with a second accent.
+ *
+ * A LEVEL IS A NUMBERED CHIP, NEVER A COLOUR RAMP. 1./2./3. Mahnung as a traffic light is exactly
+ * the decoration DESIGN.md forbids: the number carries the meaning, the chip only groups the digits,
+ * and a grayscale printout reads the same as the screen. Status is the shared `Status` word (K-22)
+ * for the same reason. Money carries no colour anywhere on this surface. Panels separate by their
+ * ground, never a hairline (K-09).
+ */
+
+.dunning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.dunning-dim {
+  color: var(--t-text-dim);
+  margin: var(--t-space-0-5) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.dunning-note {
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  padding: var(--t-space-2) var(--t-space-2);
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+}
+
+.dunning-note p {
+  margin: 0;
+}
+
+.dunning-current,
+.dunning-config-panel {
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  padding: var(--t-space-2);
+}
+
+.dunning-current-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  margin-bottom: var(--t-space-2);
+}
+
+.dunning-current-head h2,
+.dunning-history-head h2 {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+.dunning-current-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.dunning-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.dunning-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.dunning-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-variant-numeric: tabular-nums;
+  padding: 0 var(--t-space-0-5);
+}
+
+.dunning-letters {
+  list-style: none;
+  margin: var(--t-space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.dunning-letters li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+/* The run the review panel is showing wears DataTable's selection pill and `aria-current`
+   (`isRowCurrent`, K-24), so this surface ships no row-selection CSS of its own. */
+
+.dunning-error {
+  color: var(--t-danger);
+  margin: 0;
+}
+
+/* K-31: a named invoice that changed since issue. A real warning (never dimmed away): the shared
+   Status word in its warn tone, a glyph plus text so it reads on a grayscale printout, kept one step
+   small so it rides beside the figure it warns about. */
+.dunning-changed {
+  display: inline-flex;
+  margin-left: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.dunning-config-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.dunning-config {
+  margin-top: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.dunning-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--t-space-2);
+}
+
+.dunning-config-level {
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.dunning-config-level legend {
+  font-weight: 600;
+  padding: 0 var(--t-space-0-5);
+}
+
+.dunning-config-level label,
+.dunning-config-level .dunning-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.dunning-config-level .dunning-config-check {
+  flex-direction: row;
+  align-items: center;
+}

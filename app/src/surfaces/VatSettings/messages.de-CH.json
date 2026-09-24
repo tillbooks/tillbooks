@@ -1,0 +1,203 @@
+{
+  "vat": {
+    "settings": {
+      "title": "MWST-Einstellungen"
+    },
+    "noWorkspace": "Kein Arbeitsbereich ausgewählt.",
+    "noWorkspaceHint": "Richte zuerst einen Arbeitsbereich ein, um die MWST zu konfigurieren.",
+    "emptyTitle": "MWST ist für diesen Arbeitsbereich noch nicht aktiviert.",
+    "emptyHint": "Aktiviere die MWST, um die Standard-Steuercodes zu erhalten und Methode sowie Abrechnungsart festzulegen.",
+    "enable": "MWST aktivieren",
+    "save": "Speichern",
+    "saving": "Wird gespeichert",
+    "saved": "Gespeichert",
+    "cancel": "Abbrechen",
+    "method": {
+      "label": "Methode",
+      "effektiv": "Effektiv",
+      "saldo": "Saldosteuersatz",
+      "none": "Keine"
+    },
+    "timing": {
+      "label": "Abrechnungsart",
+      "ist": "Ist (vereinnahmt)",
+      "soll": "Soll (vereinbart)"
+    },
+    "registered": "MWST-pflichtig",
+    "registeredHint": "Dieser Arbeitsbereich rechnet MWST ab.",
+    "vatNumber": "MWST-Nummer",
+    "vatNumberPlaceholder": "CHE-123.456.789 MWST",
+    "saldo": {
+      "title": "Saldosteuersätze",
+      "hint": "Ein Satz je Geschäftstätigkeit mit mehr als 10% des Umsatzes (seit 1.1.2025 ohne feste Obergrenze).",
+      "max": "Ein Satz je Geschäftstätigkeit.",
+      "rate": "Saldosteuersatz",
+      "position": "Saldosteuersatz {n}",
+      "choose": "Satz wählen",
+      "add": "Satz hinzufügen",
+      "remove": "Satz {n} entfernen",
+      "ziffer": "Ziffer {ziffer}",
+      "duplicate": "Dieser Satz ist bereits erfasst.",
+      "empty": "Noch kein Saldosteuersatz erfasst. Füge mindestens einen hinzu.",
+      "noInputDeduction": "Unter dem Saldosteuersatz wird die Vorsteuer nicht separat abgezogen.",
+      "noInputDeductionCite": "MWSTG Art. 37"
+    },
+    "activity": {
+      "title": "Tätigkeiten",
+      "hintRequired": "Bei mehreren bewilligten Saldosteuersätzen musst du die Erträge je Satz getrennt verbuchen. Ordne dazu jeder Tätigkeit ihre Ertragskonten zu.",
+      "hintOptional": "Mit einem einzigen Saldosteuersatz brauchst du keine Zuordnung. Sobald ein zweiter Satz dazukommt, wird sie nötig.",
+      "empty": "Noch keine Tätigkeit erfasst.",
+      "add": "Tätigkeit hinzufügen",
+      "removeShort": "Entfernen",
+      "remove": "Tätigkeit {name} entfernen",
+      "nameLabel": "Name der Tätigkeit {n}",
+      "namePlaceholder": "z. B. Restauration",
+      "rateLabel": "Saldosteuersatz für {name}",
+      "accounts": "Ertragskonten",
+      "noAccounts": "Dieser Kontenplan führt keine Ertragskonten.",
+      "orphan": "Dieser Satz ist oben nicht mehr bewilligt. Wähle einen bewilligten Satz oder entferne die Tätigkeit.",
+      "contested": "Diese Konten sind mehrfach zugeordnet: {accounts}. Ein Ertragskonto gehört zu genau einer Tätigkeit.",
+      "hintRequiredCite": "MWSTV Art. 84 Abs. 3"
+    },
+    "branch": {
+      "title": "Was hat sich geändert?",
+      "close": "Schliessen",
+      "why": "Dieser Arbeitsbereich enthält bereits verbuchte Umsätze, für die die bisherige Bewilligung gilt. Beide Möglichkeiten führen zu unterschiedlichen Zahlen, darum liegt die Entscheidung bei dir.",
+      "legend": "Art der Änderung",
+      "grant": "Die ESTV hat neue Sätze bewilligt",
+      "correction": "Die bisherige Bewilligung war falsch erfasst",
+      "validFrom": "Gültig ab",
+      "validFromHint": "Ab welchem Tag gelten die neuen Sätze?",
+      "newLastDay": "Die bisherige Bewilligung (ab {from}) gilt neu bis {until}. Bereits eingereichte Perioden bleiben unverändert.",
+      "correctionHint": "Die offene Bewilligung wird überschrieben. Frühere Bewilligungen und bereits eingereichte Perioden bleiben unverändert."
+    },
+    "basis": {
+      "title": "Abrechnungsart der Steuerperiode {period}",
+      "hint": "Freiwillig: du kannst den gesamten steuerbaren Umsatz zum höchsten bewilligten Saldosteuersatz abrechnen (MWSTV Art. 88 Abs. 6). Das vereinfacht die Abrechnung und erhöht in der Regel die Steuer.",
+      "legend": "Grundlage der Deklaration",
+      "perActivity": "Je Tätigkeit zum bewilligten Satz (Art. 88 Abs. 1)",
+      "highestRate": "Gesamter Umsatz zum höchsten Satz (Art. 88 Abs. 6)",
+      "notCarried": "Die Wahl gilt nur für diese Steuerperiode und wird nicht ins Folgejahr übernommen."
+    },
+    "history": {
+      "title": "Bewilligungsverlauf",
+      "hint": "Unter dem Saldosteuersatz steht auf keiner Buchungszeile ein Satz. Dieser Verlauf ist deshalb der einzige Nachweis, mit welchen Sätzen eine eingereichte Periode gerechnet wurde.",
+      "open": "Ab {from}, laufend",
+      "closed": "{from} bis {until}"
+    },
+    "codes": {
+      "title": "Steuercodes",
+      "seed": "Standardcodes anlegen",
+      "empty": "Noch keine Steuercodes vorhanden.",
+      "add": "Code hinzufügen"
+    },
+    "code": {
+      "code": "Code",
+      "kindLabel": "Art",
+      "rate": "Satz",
+      "rateBpLabel": "Satz (Basispunkte)",
+      "rateBpHint": "810 = 8.1%",
+      "formLine": "Ziffer",
+      "label": "Bezeichnung",
+      "statusLabel": "Status",
+      "status": {
+        "active": "aktiv",
+        "archived": "archiviert"
+      },
+      "archive": "Archivieren",
+      "rowActionsFor": "Aktionen für Code {code}",
+      "reactivate": "Reaktivieren",
+      "confirmArchiveTitle": "Diesen Steuercode archivieren?",
+      "confirmArchive": "Code {code} erscheint auf neuen Belegen nicht mehr. Bereits gebuchte Zeilen, die ihn verwenden, lösen weiterhin auf, es ändert sich also nichts an bereits Eingereichtem. Du kannst ihn später wieder reaktivieren.",
+      "confirmArchiveClose": "Code behalten",
+      "kind": {
+        "output": "Umsatzsteuer",
+        "input": "Vorsteuer",
+        "reverseCharge": "Bezugsteuer",
+        "import": "Einfuhrsteuer",
+        "exempt": "Ausgenommen",
+        "zero": "Echt befreit (0%)",
+        "none": "Keine"
+      }
+    },
+    "account": {
+      "default": "Standard-Steuercode"
+    },
+    "error": {
+      "invalidSaldoRate": "Satz nicht auf der aktuellen ESTV-Liste.",
+      "rateUnit": "Bitte Basispunkte als ganze Zahl 0..10000 eingeben (810 = 8.1%).",
+      "invalidVatNumber": "Format muss CHE-###.###.### MWST sein.",
+      "invalidActivity": "Eine Tätigkeit ist unvollständig oder nennt einen Satz, den diese Bewilligung nicht führt.",
+      "unknownAccount": "Ein zugeordnetes Ertragskonto gibt es in diesem Kontenplan nicht.",
+      "generationFiled": "Für diese Bewilligung ist bereits eine Periode eingereicht. Erfasse die neuen Sätze als neue Bewilligung und reiche für die gesendeten Perioden eine Korrekturabrechnung ein.",
+      "grantOutOfOrder": "Eine neue Bewilligung beginnt nach der bisherigen. Wähle einen späteren Tag oder korrigiere die offene Bewilligung."
+    },
+    "needsRegistration": "Aktiviere zuerst die MWST für diesen Arbeitsbereich.",
+    "explainer": {
+      "what": "Zwei Einstellungen bestimmen, welche Zahl in deiner Abrechnung steht: die Methode (Effektiv oder {saldo}) und die Abrechnungsart ({soll} oder {ist}).",
+      "default": "MWST aktivieren setzt Methode und Abrechnungsart auf Effektiv und Soll, den gesetzlichen Normalfall. Beides kannst du später ändern; ein Wechsel gilt aber erst ab Beginn einer Steuerperiode, und Saldosteuersatz und Ist musst du bei der ESTV beantragen."
+    },
+    "notLiable": "Nicht MWST-pflichtig",
+    "notLiableState": {
+      "title": "Dieser Arbeitsbereich rechnet keine MWST ab.",
+      "hint": "Das ist als Antwort gespeichert, nicht als Lücke. Wird dein Unternehmen MWST-pflichtig, aktivierst du die MWST hier; die Antwort ist jederzeit umkehrbar."
+    },
+    "consequence": {
+      "effektiv": "Du rechnest die MWST auf deinem Umsatz zum gesetzlichen Satz ab und ziehst die {vorsteuer} separat ab.",
+      "saldo": "Du rechnest den Umsatz zu einem von der ESTV bewilligten Satz ab. Die Vorsteuer ist darin enthalten. Den Satz musst du vor dem Wechsel bei der ESTV beantragen.",
+      "soll": "Die MWST wird fällig, wenn du die Rechnung stellst, auch wenn sie noch nicht bezahlt ist. Das ist der gesetzliche Normalfall.",
+      "ist": "Die MWST wird fällig, wenn die Zahlung eingeht. Diese Abrechnungsart musst du bei der ESTV beantragen."
+    },
+    "binding": {
+      "method": "Ein Wechsel gilt erst ab Beginn einer {steuerperiode}. Den Saldosteuersatz musst du mindestens eine Steuerperiode behalten; nach einem Wechsel zu Effektiv kannst du frühestens nach drei Jahren zurück.",
+      "methodCite": "MWSTG Art. 37 Abs. 1 und 4",
+      "timing": "Die gewählte Abrechnungsart musst du mindestens eine Steuerperiode behalten.",
+      "timingCite": "MWSTG Art. 39 Abs. 3"
+    },
+    "eligibility": {
+      "limits": "Zulässig bis {turnoverLimit} steuerbarem Umsatz und bis {taxLimit} Steuer im Jahr. Beides muss zutreffen. Die Steuer je Satz kann TILL vor der Bewilligung nicht rechnen.",
+      "measured": "Dein steuerbarer Umsatz {year}: {amount}.",
+      "none": "Dieser Arbeitsbereich hat noch keine Umsätze.",
+      "failed": "Der Umsatz konnte nicht geladen werden.",
+      "retry": "Erneut versuchen"
+    },
+    "term": {
+      "soll": "Soll",
+      "ist": "Ist",
+      "vorsteuer": "Vorsteuer",
+      "steuerperiode": "Steuerperiode"
+    }
+  },
+  "help": {
+    "VatSettings": {
+      "title": "MWST-Einstellungen",
+      "body": "Hier legst du fest, wie dieser Arbeitsbereich die MWST abrechnet: Methode, Abrechnungsart, MWST-Nummer und Steuercodes. Unter dem Saldosteuersatz pflegst du zusätzlich die bewilligten Sätze und ihre Tätigkeiten.\n\nMethode und Abrechnungsart sind bindende Wahlen: Ein Wechsel gilt erst ab Beginn einer Steuerperiode und braucht teils eine Bewilligung der ESTV. Was du hier einstellst, bestimmt jede spätere Abrechnung.",
+      "concepts": [
+        "saldosteuersatz",
+        "vereinbarte-entgelte",
+        "vereinnahmte-entgelte",
+        "vorsteuer",
+        "steuerperiode"
+      ],
+      "docsPath": "swiss/mwst",
+      "bindingElections": [
+        {
+          "id": "vat-method",
+          "options": [
+            "vat.consequence.effektiv",
+            "vat.consequence.saldo"
+          ],
+          "bindingFacts": "vat.binding.method"
+        },
+        {
+          "id": "vat-timing",
+          "options": [
+            "vat.consequence.soll",
+            "vat.consequence.ist"
+          ],
+          "bindingFacts": "vat.binding.timing"
+        }
+      ]
+    }
+  }
+}

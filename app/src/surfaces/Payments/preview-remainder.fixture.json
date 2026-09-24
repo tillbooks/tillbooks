@@ -1,0 +1,50 @@
+{
+  "direction": "incoming",
+  "date": "2026-07-20",
+  "amountMinor": 108100,
+  "currency": "CHF",
+  "bankAccount": {
+    "id": "acc_2",
+    "number": "1020",
+    "label": "Bankkonto"
+  },
+  "counterparty": {
+    "kind": "customer",
+    "id": "contact_2",
+    "name": "Beispiel GmbH"
+  },
+  "reference": {
+    "kind": "none",
+    "value": null,
+    "valid": true,
+    "display": null,
+    "error": null
+  },
+  "allocatedMinor": 0,
+  "onAccountMinor": 108100,
+  "remainderMinor": 108100,
+  "baseAmountMinor": 108100,
+  "rows": [],
+  "legs": [
+    {
+      "accountId": "acc_2",
+      "accountNumber": "1020",
+      "accountLabel": "Bankkonto",
+      "debitMinor": 108100,
+      "creditMinor": 0
+    },
+    {
+      "accountId": "acc_4",
+      "accountNumber": "1100",
+      "accountLabel": "Forderungen aus Lieferungen und Leistungen",
+      "debitMinor": 0,
+      "creditMinor": 108100
+    }
+  ],
+  "istVat": null,
+  "fx": null,
+  "writeOffThresholdMinor": 100,
+  "balanced": true,
+  "error": null,
+  "ok": true
+}

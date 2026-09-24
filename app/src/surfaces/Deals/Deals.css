@@ -1,0 +1,346 @@
+/* C01, Pipeline: the deal board.
+ *
+ * Separation comes from the two-step background scale (`--t-bg` page, `--t-bg-elev` panel/column,
+ * `--t-bg-soft` the strip inside a panel) and from spacing, NEVER from a box around every card: the
+ * design law's forbidden list bans "a 1px gray border around every card". Columns lift off the page
+ * as elevated panels; cards recede to the page ground inside them; sub-forms take the soft strip so
+ * they read against both a card (bg) and the drawer (elev). One accent, spent only on focus. Status
+ * is the shared `Status` word (K-22), never a dingbat. Money is `.t-money` (tabular, never wraps,
+ * K-18). Every gap is on the 8-pt grid via tokens and every type size is the written scale (K-37).
+ *
+ * D118 B2 (2026-08-23): the page header is the shared SurfaceHeader and the filter row the shared
+ * FilterBar, so the per-surface header and controls-row CSS is gone. What remains is genuinely
+ * C01-specific: the weighted pill, the board columns and cards, the non-modal two-pane detail pane
+ * (deliberately NOT the modal DetailDrawer), the inline create/settings panels, and the board-shaped
+ * loading skeleton. The `.deals-picker`/`.deals-toggle` labels style the controls hosted in the
+ * FilterBar slot.
+ */
+
+.deals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The weighted-total pill: a soft strip fill reads as a pill without issuing a hairline. It sits on
+   its own line between the header and the filter row, so it shrinks to its content. */
+.deals-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-height: 32px;
+  padding: var(--t-space-0-5) var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-full);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  align-self: flex-start;
+}
+
+/* Toolbar controls sit in the denser ~32px band (D116 toolbar tier), comfortably above the 24px
+   AA floor: the header packs several controls and a 44px row would cost real density. */
+.deals-picker,
+.deals-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 32px;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* Board + drawer: two panes side by side when a deal is open, so opening a card never pushes its
+   detail below a horizontally-scrolling board and off-screen. Stacks on narrow widths. */
+.deals-workspace {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: flex-start;
+}
+
+.deals-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.deals-board {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: var(--t-space-1);
+}
+
+.deals-column {
+  flex: 1 1 14rem;
+  min-width: 13rem;
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-1);
+}
+
+.deals-column-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  margin: 0 0 var(--t-space-1);
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.deals-count {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 400;
+  color: var(--t-text-dim);
+}
+
+.deals-column-empty {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.deals-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+/* A card recedes to the page ground inside its elevated column: the background step is the
+   separation, so no hairline is issued around every card. */
+.deals-card {
+  background: var(--t-bg);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.deals-card-main {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  /* A transparent border so the focus cue has an edge to turn brass (K-10). */
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+}
+
+/* `all: unset` above strips the outline the global :focus-visible rule would set, so the ring is
+   restored here with the canonical accent token (never a hardcoded hex). */
+.deals-card-main:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.deals-card-title {
+  font-weight: 600;
+}
+
+.deals-card-contact {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.deals-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.deals-move {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* Top-level panels lift off the page as an elevated surface, no default border. */
+.deals-editor,
+.deals-settings {
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* Inline sub-forms appear inside a card (bg) AND inside the drawer (elev); the soft strip reads
+   against both grounds in light and dark. */
+.deals-lost-form,
+.deals-activity {
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.deals-editor {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.deals-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.deals-form-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.deals-settings-stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.deals-settings-stages li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.deals-settings-stage-meta {
+  color: var(--t-text-dim);
+}
+
+.deals-settings-add,
+.deals-settings-view {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+/* The right-side detail drawer: an elevated panel, sticky so it stays in view while the board
+   scrolls, no default border. */
+.deals-drawer {
+  flex: 0 0 26rem;
+  position: sticky;
+  top: var(--t-space-2);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.deals-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.deals-drawer-head h2 {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.deals-drawer-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--t-space-0-5) var(--t-space-2);
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.deals-drawer-facts dt {
+  color: var(--t-text-dim);
+}
+
+.deals-drawer-facts dd {
+  margin: 0;
+}
+
+.deals-base,
+.deals-lost-reason {
+  color: var(--t-text-dim);
+}
+
+.deals-drawer-actions {
+  display: flex;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+/* Below the two-pane width the drawer stops being a side column and stacks under the board. */
+@media (max-width: 60rem) {
+  .deals-workspace {
+    flex-direction: column;
+  }
+
+  .deals-drawer {
+    position: static;
+    flex-basis: auto;
+    align-self: stretch;
+    max-width: 32rem;
+  }
+}
+
+/* The loading state traces the real board: columns, each with a title bar and a couple of card
+   blocks, never a bare stack of rows or a spinner in a panel that knows its shape. */
+.deals-board-skeleton {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: flex-start;
+}
+
+.deals-skeleton-column {
+  flex: 1 1 14rem;
+  min-width: 13rem;
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.deals-skeleton-title {
+  height: 16px;
+  width: 55%;
+}
+
+.deals-skeleton-card {
+  height: 56px;
+  width: 100%;
+}
+
+.deals-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}

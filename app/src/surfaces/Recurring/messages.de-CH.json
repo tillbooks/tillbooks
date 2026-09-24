@@ -1,0 +1,123 @@
+{
+  "nav": {
+    "recurring": "Serien"
+  },
+  "recurring": {
+    "title": "Serienrechnungen",
+    "lede": "Wiederkehrende Rechnungen, einmal eingerichtet: TILL erstellt jede fällige Periode als Entwurf zur Durchsicht, oder stellt sie automatisch aus, wenn du das so eingestellt hast.",
+    "noWorkspaceHint": "Öffne zuerst eine Buchhaltung, dann siehst du deren Serien hier.",
+    "needsPermission": "Dafür brauchst du das Recht «Ausstellen».",
+    "new": "Neue Serie",
+    "saved": "Die Serie ist gespeichert.",
+    "paused": "Die Serie ist pausiert.",
+    "resumed": "Die Serie läuft weiter.",
+    "endedNow": "Die Serie ist beendet. Erstellte Rechnungen bleiben erhalten.",
+    "customerGone": "Kunde entfernt",
+    "autoIssueBadge": "Auto",
+    "savedView": "Ansicht",
+    "savedViewDefault": "Alle Serien",
+    "savedViewPersonal": "Meine Ansichten",
+    "savedViewShared": "Geteilte Ansichten",
+    "customDaysShort": "alle {n} Tage",
+    "tick": {
+      "now": "Jetzt ausführen",
+      "done": "Ausgeführt. Neue Rechnungen: {n}.",
+      "nothingDue": "Ausgeführt. Es war nichts fällig."
+    },
+    "empty": {
+      "title": "Noch keine Serien",
+      "hint": "Eine Serie erstellt eine wiederkehrende Rechnung von selbst: Retainer, Abo oder Wartungspauschale. Lege die erste mit «Neue Serie» an."
+    },
+    "col": {
+      "name": "Name",
+      "customer": "Kunde",
+      "interval": "Rhythmus",
+      "amount": "Betrag (netto)",
+      "nextRun": "Nächste Rechnung",
+      "status": "Status",
+      "controls": "Steuerung",
+      "period": "Periode",
+      "outcome": "Ergebnis",
+      "document": "Beleg"
+    },
+    "interval": {
+      "monthly": "Monatlich",
+      "quarterly": "Vierteljährlich",
+      "yearly": "Jährlich",
+      "custom": "Eigener Rhythmus"
+    },
+    "status": {
+      "active": "Aktiv",
+      "paused": "Pausiert",
+      "ended": "Beendet"
+    },
+    "action": {
+      "edit": "Bearbeiten",
+      "pause": "Pausieren",
+      "resume": "Weiterführen",
+      "end": "Beenden"
+    },
+    "outcome": {
+      "drafted": "Entwurf erstellt",
+      "issued": "Rechnung ausgestellt",
+      "discarded": "Periode verworfen",
+      "skipped_locked": "Übersprungen, Periode gesperrt",
+      "failed": "Fehlgeschlagen"
+    },
+    "history": {
+      "title": "Erstellte Rechnungen",
+      "empty": "Diese Serie hat noch keine Rechnung erstellt. Die nächste Ausführung erstellt die erste.",
+      "draft": "Entwurf öffnen",
+      "skippedHint": "Ein wartender Entwurf gehört dir: stelle ihn von Hand aus oder verwirf ihn. Die Serie läuft in beiden Fällen von selbst weiter, und eine verworfene Periode wird nie erneut verrechnet.",
+      "close": "Schliessen"
+    },
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "z. B. Beratung Muster AG",
+      "customer": "Kunde",
+      "customerNone": "Kunde wählen …",
+      "positions": "Positionen",
+      "lineDescription": "Beschreibung",
+      "lineDescriptionPlaceholder": "Ohne Eingabe gilt der Name der Serie",
+      "lineQuantity": "Menge",
+      "linePrice": "Preis (CHF)",
+      "lineVat": "MWST-Code",
+      "lineRemove": "Entfernen",
+      "lineAdd": "Position hinzufügen",
+      "interval": "Rhythmus",
+      "customDays": "Alle wie viele Tage?",
+      "anchorDate": "Erste Rechnung am",
+      "endDate": "Endet am (optional)",
+      "maxOccurrences": "Höchstens so viele Rechnungen (optional)",
+      "dueDays": "Zahlbar innert Tagen (optional)",
+      "autoIssue": "Automatisch ausstellen",
+      "autoIssueHint": "Ohne Häkchen erstellt jede fällige Periode einen Entwurf zur Durchsicht. Mit Häkchen stellt TILL die Rechnung sofort aus: fortlaufende Nummer, MWST und Buchung wie bei jeder von Hand ausgestellten Rechnung.",
+      "autoIssueConfirmTitle": "Automatisches Ausstellen einschalten",
+      "autoIssueConfirm": "Automatisch ausstellen? Ab dem nächsten Lauf stellt TILL jede fällige Rechnung dieser Serie ohne Rückfrage aus und verbucht sie: fortlaufende Nummer, MWST und Buchung, ohne dass jemand sie vorher prüft.",
+      "autoIssueConfirmAction": "Automatisch ausstellen",
+      "autoIssueConfirmCancel": "Bei Entwürfen bleiben",
+      "notes": "Bemerkungen",
+      "save": "Speichern",
+      "cancel": "Abbrechen"
+    },
+    "error": {
+      "needs_customer": "Wähle zuerst einen Kunden.",
+      "needs_positions": "Die Serie braucht mindestens eine Position mit einem gültigen Preis.",
+      "end_before_anchor": "Das Enddatum liegt vor der ersten Rechnung. Wähle ein Enddatum nach dem Startdatum.",
+      "schedule_ended": "Diese Serie ist beendet und kann nicht mehr geändert werden. Lege bei Bedarf eine neue an.",
+      "not_found": "Diese Serie gibt es nicht mehr.",
+      "invalid_input": "Eine Eingabe ist ungültig. Prüfe Rhythmus und Daten.",
+      "as_of_in_future": "Ein Datum in der Zukunft kann nicht ausgeführt werden.",
+      "period_locked": "Die Zielperiode ist gesperrt. Der Entwurf bleibt erhalten und wird nach dem Entsperren ausgestellt.",
+      "illegal_transition": "Der Beleg dieser Periode ist in einem anderen Zustand, als die Serie erwartet. Öffne ihn über die Historie."
+    }
+  },
+  "help": {
+    "Recurring": {
+      "title": "Serienrechnungen",
+      "body": "Eine Serie ist die stehende Anweisung, pro Periode eine Rechnung zu erzeugen. Hier legst du Rhythmus, Laufzeit und Inhalt fest, hältst Serien an und führst sie weiter.\n\nDas Protokoll der Läufe verbindet jede erzeugte Rechnung mit ihrer Serie: So liest du zu jeder Serie, was jede Periode hervorgebracht hat. Standardmässig entsteht ein Entwurf zum Prüfen, keine unbeaufsichtigte Buchung.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "nav": {
+    "inventoryReasonCodes": "Reason codes"
+  },
+  "reasonCodes": {
+    "title": "Adjustment reason codes",
+    "new": "New reason code",
+    "edit": "Edit",
+    "archive": "Archive",
+    "rowActions": "Actions for {code}",
+    "save": "Save",
+    "close": "Close",
+    "showArchived": "Show archived",
+    "noteRequiredMark": "Note required",
+    "noWorkspace": "Select a workspace to manage adjustment reason codes.",
+    "selectHint": "Select a reason code.",
+    "col": {
+      "code": "Code",
+      "name": "Name",
+      "category": "Category",
+      "note": "Note",
+      "state": "State",
+      "actions": "Actions"
+    },
+    "state": {
+      "active": "Active",
+      "archived": "Archived"
+    },
+    "category": {
+      "shrinkage": "Shrinkage",
+      "damage": "Damage",
+      "found": "Found",
+      "count_variance": "Count variance",
+      "obsolescence": "Obsolescence",
+      "theft": "Theft",
+      "quality": "Quality",
+      "correction": "Correction",
+      "reversal": "Reversal",
+      "system": "System",
+      "other": "Other"
+    },
+    "form": {
+      "title": "Reason code",
+      "titleNew": "New reason code",
+      "titleEdit": "Edit reason code",
+      "code": "Code",
+      "name": "Name",
+      "category": "Category",
+      "requiresNote": "Require a note on every adjustment",
+      "defaultForStocktake": "Default for stocktake variances",
+      "description": "Description"
+    },
+    "empty": {
+      "title": "No reason codes yet",
+      "hint": "Create your first reason code so every stock adjustment can be classified.",
+      "cta": "Create a reason code"
+    },
+    "list": {
+      "caption": "Catalog of adjustment reason codes"
+    },
+    "error": {
+      "transport": "The reason codes could not be loaded."
+    },
+    "errors": {
+      "duplicate_code": "A reason code with this code already exists in this workspace."
+    }
+  },
+  "help": {
+    "ReasonCodes": {
+      "title": "Adjustment reason codes",
+      "body": "The catalog of reasons inventory adjustments are justified with: code, name, category and whether a note is required. What you maintain here appears as the picker when recording an adjustment, so every stock change stays linked to a named reason. Archiving removes a reason from the pickers without touching history: old adjustments keep their reason.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

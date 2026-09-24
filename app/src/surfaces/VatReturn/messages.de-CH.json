@@ -1,0 +1,229 @@
+{
+  "nav": {
+    "mwst": {
+      "group": "MWST",
+      "abrechnung": "Abrechnung",
+      "settings": "Einstellungen"
+    }
+  },
+  "vat": {
+    "return": {
+      "title": "MWST-Abrechnung",
+      "subtitle": "{method} · {timing} · {from} bis {to}",
+      "subtitlePending": "Abrechnungsart und Zeitraum werden geladen.",
+      "method": {
+        "effektiv": "Effektiv",
+        "saldo": "Saldo"
+      },
+      "timing": {
+        "soll": "Soll (vereinbart)",
+        "ist": "Ist (vereinnahmt)"
+      },
+      "payable": "Zu bezahlender Betrag",
+      "credit": "Guthaben der steuerpflichtigen Person",
+      "markFiled": "Als eingereicht markieren",
+      "markFiledPending": "Wird gesperrt …",
+      "markFiledFailed": "Die Periode konnte nicht gesperrt werden. Es wurde nichts verändert.",
+      "cancel": "Abbrechen",
+      "confirmClose": "Dialog schliessen",
+      "rangeTo": "bis",
+      "activePeriodLabel": "Aktive Abrechnungsperiode",
+      "pickPeriod": "Zeitraum wählen",
+      "periodTrigger": "Zeitraum: {period}",
+      "periodMenu": "Abrechnungsperiode wählen",
+      "periodsFailed": "Die Abrechnungsperioden konnten nicht geladen werden.",
+      "periodNotEnded": "Die Periode läuft noch. Als eingereicht markieren kannst du sie danach.",
+      "period": {
+        "open": "offen",
+        "ready": "bereit",
+        "filed": "eingereicht"
+      },
+      "periods": {
+        "empty": "Für diesen Arbeitsbereich sind noch keine Abrechnungsperioden definiert.",
+        "emptyHint": "Abrechnungsart und Steuerperiode legst du in den MWST-Einstellungen fest."
+      },
+      "col": {
+        "ziffer": "Ziff.",
+        "label": "Bezeichnung",
+        "turnover": "Umsatz CHF",
+        "tax": "Steuer CHF"
+      },
+      "section": {
+        "turnover": "I. Umsatz",
+        "deductions": "Abzüge",
+        "taxCalc": "II. Steuerberechnung",
+        "inputTax": "Vorsteuer",
+        "taxCredit": "Steueranrechnung",
+        "settlement": "Abrechnung",
+        "otherFlows": "III. Andere Mittelflüsse (Art. 18 Abs. 2)",
+        "unmapped": "Weitere Ziffern aus der Berechnung"
+      },
+      "taxCreditNote": "Die Steueranrechnung stammt aus den ESTV-Formularen 1050, 1055 und 1056. TILL berechnet sie nicht und zeigt darum keinen Betrag an: eine Null wäre eine Angabe, die niemand geprüft hat.",
+      "saldoPayableNote": "Ziff. 500 rechnet ohne die Steueranrechnung. Wenn du eine geltend machst, ist der Betrag, den du wirklich zahlst, tiefer.",
+      "drill": "Buchungen zu Ziffer {ziffer} anzeigen",
+      "drillFailed": "Die Buchungen konnten nicht geladen werden.",
+      "drillCapped": "{shown} von {count} Buchungen. Die restlichen findest du im Journal.",
+      "empty": "Keine steuerbare Tätigkeit in diesem Zeitraum.",
+      "emptyHint": "Die Abrechnung wird trotzdem erwartet. Du reichst sie als Nullmeldung ein.",
+      "emptyCta": "Journal öffnen",
+      "exportNote": "Schritt 3: TILL erstellt die eCH-0217-Datei (Version 2.0.0) und du lädst sie herunter. In Schritt 4 lädst du sie selbst im ESTV ePortal hoch: eine Schnittstelle zur ESTV gibt es nicht.",
+      "export": {
+        "action": "eCH-0217-Datei exportieren",
+        "working": "Datei wird erstellt …",
+        "title": {
+          "uid": "MWST-Nummer fehlt oder ist unbrauchbar",
+          "rateSplit": "Mehrere Steuersätze auf einer Ziffer",
+          "byHand": "Dieser Zeitraum lässt sich nicht als Datei abbilden",
+          "recompute": "Die Abrechnung liess sich nicht mehr berechnen",
+          "failed": "Die Datei konnte nicht erstellt werden"
+        },
+        "uid": "Jede eCH-0217-Deklaration nennt die UID der Firma. Im Firmenprofil steht keine oder keine im Format CHE-###.###.###, darum lässt sich die Datei nicht erstellen.",
+        "uidCta": "Firmenprofil öffnen",
+        "rateSplit": "Ziffer {ziffern} enthält Umsätze zu mehr als einem Steuersatz. Die Datei nennt pro Zeile genau einen Satz, und ein Satz, den dieser Umsatz nicht getragen hat, wäre eine falsche Deklaration. Prüfe die MWST-Codes der Buchungen dahinter und trenne sie, dann exportiere erneut.",
+        "rateSplitCta": "Buchungen zu Ziffer {ziffer} prüfen",
+        "byHand": {
+          "unmapped": "Die Abrechnung enthält Ziffer {ziffern}, für die eCH-0217 v2.0.0 kein Feld hat. Die Datei wäre um diesen Betrag zu kurz, und das würdest du auf dem Formular nicht sehen.",
+          "saldoRates": "Für diesen Arbeitsbereich sind {count} Saldosteuersätze hinterlegt. Das ESTV-Formular hat zwei Zeilen dafür (Ziff. 323 und 333) und keine dritte.",
+          "currency": "Dieser Arbeitsbereich führt die Bücher in {currency}. Die MWST-Abrechnung wird in Franken eingereicht (MWSTV Art. 45), und eCH-0217 kennt kein Feld für eine Währung.",
+          "remedy": "Diesen Zeitraum reichst du im ePortal von Hand ein. Die Zahlen dafür stehen auf dieser Seite."
+        },
+        "portalCta": "ESTV ePortal öffnen",
+        "recompute": "Für die Datei wird die Abrechnung neu berechnet, und dabei hat die Berechnung abgelehnt. Meist hat sich die MWST-Einrichtung inzwischen geändert. Lade die Abrechnung neu: der Grund steht dann auf dieser Seite.",
+        "reloadCta": "Abrechnung neu laden",
+        "failed": "Es wurde nichts verändert und keine Datei geschrieben.",
+        "retryCta": "Erneut exportieren",
+        "crossCheckTitle": "Die ESTV wird eine andere Steuer errechnen",
+        "crossCheck": "Die Datei nennt pro Satz nur Satz und Umsatz, keinen Steuerbetrag. Daraus errechnet die ESTV {recomputed}. Deine Buchungen ergeben {booked}, also eine Differenz von {difference}.",
+        "crossCheckCause": "Meist stammt das aus Fremdwährungsbelegen, wo einmal pro Beleg gerundet wird. Die Datei ist gültig, und du weisst die Differenz jetzt hier statt erst bei der ESTV."
+      },
+      "journey": {
+        "label": "Ablauf der Abrechnung",
+        "done": "erledigt",
+        "1": "berechnet",
+        "2": "geprüft",
+        "3": "exportiert",
+        "4": "im ePortal eingereicht (du, ausserhalb von TILL)",
+        "5": "als eingereicht markiert",
+        "portalUrl": "https://www.estv.admin.ch/de/mwst-online-abrechnen",
+        "exportedAt": "exportiert am {date}",
+        "attestedAt": "bestätigt am {date} durch {who}",
+        "openRun": "Zur Checkliste",
+        "actor": {
+          "agent": "den Agenten",
+          "studio": "dich",
+          "member": "ein Mitglied",
+          "unknown": "jemanden"
+        },
+        "6": "MWST-Konten saldiert",
+        "settledAt": "saldiert am {date}"
+      },
+      "recon": {
+        "match": "Abstimmung MWST-Konten: stimmt überein",
+        "open": "Abstimmung MWST-Konten: {amount} ungeklärt",
+        "notApplicableShort": "Abstimmung MWST-Konten: nicht anwendbar",
+        "noAccountShort": "Abstimmung MWST-Konten: nicht möglich",
+        "notApplicable": "Die Saldomethode lässt sich nicht gegen Konto 2200 prüfen, weil verrechnete und geschuldete MWST auseinanderfallen (Art. 37 MWSTG).",
+        "noAccount": "Das MWST-Konto fehlt im Kontenplan, darum lässt sich die Abrechnung nicht gegen die Buchhaltung prüfen.",
+        "noAccountCta": "Kontenplan öffnen",
+        "group": {
+          "output": "Umsatzsteuer"
+        },
+        "line399": "Ziff. 399 Total geschuldete Steuer",
+        "booked": "Bewegung Konto {account}",
+        "unexplained": "ungeklärt",
+        "matchNote": "Die geschuldete Steuer entspricht der Bewegung auf dem MWST-Konto.",
+        "noCauses": "TILL ordnet die Differenz noch keiner Ursache zu, darum steht sie ganz unter ungeklärt. Häufig ist es eine MWST-Zahlung an die ESTV für eine frühere Periode oder eine Buchung direkt auf das MWST-Konto ohne MWST-Code.",
+        "investigate": "Buchungen auf den MWST-Konten prüfen"
+      },
+      "filedBanner": "Eingereicht: {period} ist gesperrt.",
+      "filedRecomputed": "Es können keine Buchungen mehr dazukommen. Die Zahlen unten werden neu berechnet und sind keine gespeicherte Kopie.",
+      "filedCorrection": "Korrekturen laufen über die Jahresabstimmung nach Art. 72 MWSTG, die TILL noch nicht erstellt.",
+      "confirmTitle": "Abrechnung {period} als eingereicht markieren?",
+      "confirmBody": "TILL hält fest, dass du diese Abrechnung eingereicht hast, und sperrt die Periode. Es wird nichts an die ESTV übermittelt: das Hochladen im ePortal machst du selbst.",
+      "confirmIrreversible": "Die Sperre lässt sich hier nicht rückgängig machen. Entsperren geht nur unter Perioden.",
+      "confirmPeriod": "Zeitraum",
+      "confirmAck": "Ich habe die ungeklärte Differenz von {amount} geprüft.",
+      "needsConfig": "MWST ist für diesen Arbeitsbereich noch nicht eingerichtet, darum gibt es keine Abrechnung zu berechnen.",
+      "needsConfigCta": "MWST einrichten",
+      "checkVatSettingsCta": "MWST-Einstellungen öffnen",
+      "saldoSplitRequired": "Für diesen Arbeitsbereich sind {count} Saldosteuersätze hinterlegt. Jeder Satz gehört zu einer Geschäftstätigkeit, und die Mehrwertsteuerverordnung verlangt, dass du den Ertrag pro Satz separat verbuchst (MWSTV Art. 84 Abs. 3). In TILL sagt bisher keine Buchung, zu welcher Tätigkeit sie gehört. TILL kann den Umsatz darum nicht aufteilen und die Abrechnung nicht berechnen.",
+      "saldoRateRow": "{position}. Satz: {rate} Prozent",
+      "saldoRateNotValid": "Der hinterlegte Saldosteuersatz {rate} Prozent stand für diesen Zeitraum nicht auf der ESTV-Liste. TILL speichert nur den heutigen Satz, nicht seine Geschichte, darum lässt sich der damals bewilligte Satz von hier aus nicht mehr feststellen.",
+      "istNotImplemented": "TILL rechnet Abrechnungen bisher nur nach vereinbarten Entgelten (Soll). Bei der Abrechnung nach vereinnahmten Entgelten (Ist) zählt eine Leistung in der Periode, in der sie bezahlt wurde; für einen so eingestellten Arbeitsbereich gibt dir TILL darum lieber keine Zahlen als falsche.",
+      "refusal": {
+        "deniedTitle": "Kein Zugriff auf die MWST-Abrechnung",
+        "denied": "Dir fehlt das Recht, die MWST-Abrechnung zu lesen. Die Person, der dieser Arbeitsbereich gehört, kann es dir geben.",
+        "title": {
+          "needsConfig": "MWST ist noch nicht eingerichtet",
+          "saldoSplit": "Umsatz pro Tätigkeit fehlt",
+          "saldoRateNotValidForPeriod": "Saldosteuersatz passt nicht zum Zeitraum",
+          "istTiming": "Ist-Abrechnung ist noch nicht gebaut"
+        }
+      },
+      "istNotImplementedCite": "MWSTG Art. 39 Abs. 2"
+    },
+    "settlement": {
+      "title": "MWST-Konten saldieren",
+      "intro": "Überträgt die Salden von {period} auf 2200, 1170 und 1171 per {date} auf 2201 (MWST-Abrechnungskonto), innerhalb der eingereichten Periode. Die eingereichte Abrechnung ändert sich nicht.",
+      "introSaldo": "Überträgt den Saldo von {period} auf 2200 per {date} auf 2201 (MWST-Abrechnungskonto) und bucht die Differenz zur Saldosteuer auf 3809, innerhalb der eingereichten Periode. Vorsteuer wird nie übertragen: Die Saldosteuersatzmethode zieht keine ab. Die eingereichte Abrechnung ändert sich nicht.",
+      "tableCaption": "MWST-Saldierung {period}: gebucht neben deklariert",
+      "col": {
+        "position": "Position",
+        "booked": "Gebucht",
+        "declared": "Deklariert",
+        "difference": "Differenz"
+      },
+      "row": {
+        "output": "Umsatzsteuer",
+        "input": "Vorsteuer",
+        "net": "Netto auf 2201"
+      },
+      "noDifference": "keine",
+      "linesSummary": "{count} Buchungszeilen per {date}",
+      "debit": "Soll",
+      "credit": "Haben",
+      "differenceNote": "Buchhaltung und eingereichte Abrechnung stimmen nicht überein. Die Saldierung überträgt, was gebucht ist; die Differenz bleibt hier sichtbar und gehört in die Jahresabstimmung.",
+      "post": "MWST-Konten saldieren",
+      "reverse": "Saldierung stornieren",
+      "pending": "Wird gebucht …",
+      "postedOn": "Saldiert am {date}",
+      "openEntry": "Buchung öffnen",
+      "actionsFor": "Aktionen zur Saldierung {period}",
+      "empty": "Nichts zu saldieren: Die MWST-Konten haben in dieser Periode keine Bewegung.",
+      "waitFiled": "Wartet auf die Einreichung: Markiere die Periode zuerst als eingereicht.",
+      "padlock": "Zum Buchen brauchst du das Recht post.",
+      "confirmTitle": "MWST-Konten von {period} saldieren?",
+      "confirmBody": "TILL bucht die Übertragung per {date}, innerhalb der eingereichten Periode. Die eingereichte Abrechnung ändert sich nicht; die einzige Korrektur danach ist eine Stornobuchung.",
+      "reverseTitle": "Saldierung von {period} stornieren?",
+      "reverseBody": "TILL bucht eine Stornobuchung per {date}. Die Saldierung bleibt als storniert erhalten; du kannst die Periode danach erneut saldieren.",
+      "openPeriods": "Perioden öffnen",
+      "openChart": "Kontenplan öffnen",
+      "openJournal": "Journal öffnen",
+      "error": {
+        "period_not_filed": "Die Periode ist noch nicht als eingereicht markiert. Die Saldierung wartet auf die Einreichung.",
+        "nothing_to_settle": "Nichts zu saldieren: Die MWST-Konten haben in dieser Periode keine Bewegung.",
+        "already_posted": "Diese Periode ist bereits saldiert.",
+        "already_reversed": "Diese Saldierung ist bereits storniert.",
+        "already_reversed_key": "Die Saldierung, die dieser Vorgang gebucht hatte, wurde storniert. Schliesse den Dialog und saldiere die Periode erneut.",
+        "saldo_input_vat_booked": "Unter der Saldosteuersatzmethode wird keine Vorsteuer abgezogen, aber 1170 und 1171 tragen einen Saldo von {balance}. Korrigiere diese Buchungen zuerst (Storno in der offenen Periode); die Saldierung überträgt nie Vorsteuer auf 2201.",
+        "period_locked": "Das Jahr ist abgeschlossen. Eine Saldierung bucht nie in ein abgeschlossenes Jahr.",
+        "missing_account": "Ein Saldierungskonto fehlt im Kontenplan.",
+        "needs_vat_config": "MWST ist für diesen Arbeitsbereich nicht eingerichtet.",
+        "permission_denied": "Dir fehlt das Recht zu buchen.",
+        "fallback": "Die Saldierung konnte nicht gelesen oder gebucht werden. Es wurde nichts verändert."
+      }
+    }
+  },
+  "help": {
+    "VatReturn": {
+      "title": "MWST-Abrechnung",
+      "body": "TILL berechnet die Abrechnung aus deinen verbuchten Belegen und zeigt jede Position mit ihrer Ziffer des ESTV-Formulars, damit du die Zahlen im ePortal direkt zuordnen kannst. Eingereicht wird ausserhalb von TILL; danach markierst du die Periode hier als eingereicht, und sie ist gesperrt. Korrekturen laufen über eine Korrekturabrechnung, nie über das Umschreiben einer gesperrten Periode.",
+      "concepts": [
+        "ziffer",
+        "steuerperiode",
+        "saldosteuersatz"
+      ],
+      "docsPath": "swiss/mwst"
+    }
+  }
+}

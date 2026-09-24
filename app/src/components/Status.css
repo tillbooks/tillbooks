@@ -1,0 +1,34 @@
+/* Status (K-22, D137). Only --t-* tokens. A 14px glyph, then the word. The glyph takes a status
+   colour only for success, warn and danger; the word stays in the text ink in every state, and an
+   inactive state dims both. Never the accent, never a chip ground. */
+
+.status-word {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.status-word-glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.status-word[data-kind='success'] .status-word-glyph {
+  color: var(--t-success);
+}
+
+.status-word[data-kind='warn'] .status-word-glyph {
+  color: var(--t-warn);
+}
+
+.status-word[data-kind='danger'] .status-word-glyph {
+  color: var(--t-danger);
+}
+
+/* Out of play: the whole mark steps back to the dim ink (6.7:1 and up, still AA text, never faint). */
+.status-word[data-kind='inactive'] {
+  color: var(--t-text-dim);
+}

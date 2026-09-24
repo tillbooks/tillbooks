@@ -1,0 +1,52 @@
+{
+  "ok": true,
+  "documents": [
+    {
+      "id": "doc_2",
+      "workspaceId": "ws_1",
+      "type": "invoice",
+      "number": null,
+      "status": "draft",
+      "contactId": "ct_1",
+      "currency": "CHF",
+      "sourceDocumentId": null,
+      "targetDocumentId": null,
+      "postedEntryId": null,
+      "subtotalMinor": 4000,
+      "taxMinor": 0,
+      "totalMinor": 4000,
+      "issueDate": null,
+      "dueDate": null,
+      "sentToEmail": null,
+      "notes": null,
+      "createdAt": "2026-07-16T00:00:00.000Z",
+      "creditedDocumentId": null,
+      "origin": "native"
+    },
+    {
+      "id": "doc_1",
+      "workspaceId": "ws_1",
+      "type": "quote",
+      "number": "O-2026-0001",
+      "status": "issued",
+      "contactId": "ct_1",
+      "currency": "CHF",
+      "sourceDocumentId": null,
+      "targetDocumentId": null,
+      "postedEntryId": null,
+      "subtotalMinor": 150000,
+      "taxMinor": 0,
+      "totalMinor": 150000,
+      "issueDate": "2026-07-16",
+      "dueDate": null,
+      "sentToEmail": null,
+      "notes": null,
+      "createdAt": "2026-07-16T00:00:00.000Z",
+      "creditedDocumentId": null,
+      "origin": "native"
+    }
+  ],
+  "truncated": false,
+  "total": 2,
+  "ceiling": 1000
+}

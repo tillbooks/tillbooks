@@ -1,0 +1,50 @@
+/* J05, Inventory -> Reason Codes / Korrekturgründe. One accent, glyph+label state badge.
+
+   D118 B2 / D46 UX pass: the catalog list is the shared DataTable, the page header the shared
+   SurfaceHeader, and the create/edit form the shared DetailDrawer. The per-surface CSS that
+   duplicated the list table (and its rows and borders), the header, the drawer chrome and the button
+   set has been deleted; what remains is genuinely ReasonCodes-specific: the state and category
+   the show-archived toggle and checkbox rows, the code cell and the drawer form fields.
+   No new colour token (design-canon): every value reuses a --t- token. */
+
+.rc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The show-archived toggle (rides the SurfaceHeader actions) and the drawer checkbox rows. */
+.rc-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+/* The reason code cell in the shared DataTable list. */
+.rc-code {
+  font-family: var(--t-font-mono, ui-monospace, monospace);
+  font-weight: 600;
+}
+
+/* An archived reason reads dimmed down the whole row, beside its Status word. Joined onto the shared
+   row class via DataTable's rowClassName hook. */
+.data-table-row.rc-row--archived td {
+  color: var(--t-text-dim);
+}
+
+/* Drawer form fields the DetailDrawer body hosts. */
+.rc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.rc-field label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+

@@ -1,0 +1,79 @@
+{
+  "nav": {
+    "inventoryMovements": "Movements"
+  },
+  "invMovements": {
+    "title": "Inventory movements",
+    "noWorkspace": "Pick a workspace to view the movement ledger.",
+    "listLabel": "Stockable items",
+    "detailLabel": "Movement history",
+    "selectHint": "Select an item to see its on-hand and movement history.",
+    "onHand": "On hand",
+    "record": "Record movement",
+    "transfer": "Transfer",
+    "allowNegative": "Allow negative stock",
+    "noMovements": "No movements yet for this item.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "error": { "transport": "Could not load the movement ledger. Please try again." },
+    "empty": {
+      "title": "No stockable items yet",
+      "hint": "Create a stockable item first, then record its movements here."
+    },
+    "col": {
+      "date": "Date",
+      "type": "Type",
+      "qty": "Qty",
+      "running": "Balance",
+      "unitCost": "Unit cost",
+      "location": "Location",
+      "actor": "By"
+    },
+    "actorTooltip": "Identifier: {id}",
+    "type": {
+      "opening": "Opening",
+      "receipt": "Receipt",
+      "issue": "Issue",
+      "transfer_out": "Transfer out",
+      "transfer_in": "Transfer in",
+      "adjustment": "Adjustment",
+      "return": "Return",
+      "scrap": "Scrap"
+    },
+    "form": {
+      "recordTitle": "Record a movement",
+      "transferTitle": "Transfer between locations",
+      "type": "Movement type",
+      "location": "Location",
+      "qty": "Quantity",
+      "qtyHint": "A positive number of units. Issue and scrap subtract; adjustment and return take the sign you type.",
+      "unitCost": "Unit cost (Rappen)",
+      "date": "Effective date",
+      "lot": "Lot",
+      "serial": "Serial",
+      "description": "Description",
+      "from": "From location",
+      "to": "To location",
+      "optional": "optional"
+    },
+    "errors": {
+      "insufficient_stock": "Not enough stock for this movement. Enable negative stock to allow it, or reduce the quantity.",
+      "invalid_qty": "Enter a non-zero quantity with the right sign for this movement type.",
+      "invalid_movement_type": "Pick a valid movement type.",
+      "lot_required": "This item is lot-tracked: choose a lot for the movement.",
+      "serial_required": "This item is serial-tracked: choose a serial for the movement.",
+      "item_not_stockable": "This item is not stockable, so it cannot carry movements.",
+      "lot_item_mismatch": "That lot belongs to a different item.",
+      "serial_item_mismatch": "That serial belongs to a different item.",
+      "serial_already_in_stock": "That serial is already in stock, and there is only one of it. To move it, book a transfer; to receive it again, issue, return or scrap it first."
+    }
+  },
+  "help": {
+    "InventoryMovements": {
+      "title": "Inventory movements",
+      "body": "Every stock movement in this workspace appears here as an entry in a running movement journal. On-hand is computed from the movements, never kept as a separate figure.\n\nPick an item on the left: the right pane shows its on-hand quantity, the negative-stock policy and the history with running balance, quantity, unit cost, location and lot or serial number.\n\nYou record new movements and transfers through the two forms. Existing entries are never rewritten.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

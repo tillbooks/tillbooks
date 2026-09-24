@@ -1,0 +1,515 @@
+/* A02 Journal surface. Tokens only, no hex. 8-pt grid, the written type scale (K-37). Depth is one
+   border plus one background step, never a shadow. The accent is spent on the one primary action and
+   the selected tab; the tinted `.btn--accent` is the composer's money commit ("Buchen", K-08). The
+   danger colour appears only in the error state, never as a filled row. */
+
+/* The page header is the shared SurfaceHeader, the two faces are the shared Tabs (K-11) and the LIVE
+   list is the shared DataTable, whose row is the opener (K-21) and whose reference cell is the row
+   header in the text ink at 500 (K-12), so the head block, the tab strip, the ref button and the
+   drawer chrome were deleted here. The `.journal-table`/`.journal-num` block below is RETAINED
+   because the Archiv tab (`ArchiveTab`, a hard G13 partition with its own row model) still
+   hand-rolls its table on it; it reads the same row tokens as DataTable (K-20). What else remains is
+   the filter bar, the Journal-specific cell content (base-currency second figure, the reversal
+   cross-links), and the EntryDrawer body that rides inside the shared DetailDrawer. */
+
+/* Filter bar. The controls are the shared `.field` and `Select` (K-15); the filters are live (K-16). */
+.journal-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  margin-bottom: var(--t-space-2);
+}
+
+.journal-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.journal-filter-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* The archive's hand-rolled table, on the same row tokens as DataTable (K-20): a text row is
+   `--t-row-h`, the head `--t-row-head-h` in 12px/500 dim (K-23), the cell sides `--t-cell-pad-x`. */
+.journal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.journal-table th,
+.journal-table td {
+  height: var(--t-row-h);
+  text-align: left;
+  padding: var(--t-row-pad-y) var(--t-cell-pad-x);
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: middle;
+}
+
+.journal-table thead th {
+  height: var(--t-row-head-h);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  background: var(--t-bg-soft);
+}
+
+.journal-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+}
+
+.journal-table th.journal-num {
+  text-align: right;
+}
+
+/* The base-currency total under the transaction figure on a foreign entry. A step smaller than the
+   figure it qualifies, in dim ink, never the brand accent (money never takes the accent), and
+   tabular like every other number in the column so the two lines align digit for digit. It never
+   wraps (K-18). --t-text-dim clears the 4.5:1 floor at this size, where --t-text-faint does not. */
+.journal-base-total {
+  display: block;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+}
+
+/* The archive row opener: the reference in the text ink at 500, underlined on hover as the text-link
+   cue (K-12), never the accent on every row. A transparent edge is the focus cue's landing place. */
+.journal-row-open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-height: var(--t-control-h);
+  margin: 0;
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  font: inherit;
+  font-weight: 500;
+  color: var(--t-text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.journal-row-open:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The status cell: the shared Status word, then the reversal cross-links. */
+.journal-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  white-space: nowrap;
+}
+
+/* The reversal cross-links. A Storno and the entry it corrects must never read as two ordinary
+   postings of the same amount, so each carries a glyph AND a word and jumps to the other half of the
+   pair. They are quiet text controls in dim ink (K-22: no chip, no status colour; a reversal is a
+   fact, not an alarm), underlined on hover like every text link. */
+.journal-xref {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  font: inherit;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 500;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+button.journal-xref {
+  cursor: pointer;
+  transition: color var(--t-motion-hover) var(--t-ease-out);
+}
+
+button.journal-xref:hover {
+  color: var(--t-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A faint tint so the pair is scannable at a glance; the cross-links carry the actual meaning. */
+.journal-row-reversal > :is(td, th) {
+  background: var(--t-bg-soft);
+}
+
+/* The EntryDrawer body content. The overlay, scrim, header and close control are the shared
+   DetailDrawer (`.drawer*`, the wide 720px width for the composer, K-30); only the body's own
+   field/line/balance styling lives here. */
+.journal-drawer-body-spacing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.journal-drawer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+.journal-drawer-meta .journal-field {
+  flex: 1 1 160px;
+}
+
+.journal-drawer-meta .journal-field--full {
+  flex-basis: 100%;
+}
+
+/* --- The composer grid (K-30, D137) -----------------------------------------------------------
+   One line is two rows on one grid: the account (at least 220px, the number and the name), Soll and
+   Haben at 120px each and the remove control on the first; the cost centre under the account and the
+   MWST code under the two amounts on the second. At the 720px drawer the account takes what is left
+   (measured about 360px), so a name reads whole instead of "Kont". Every control is on
+   `--t-control-h` through `.field` and the shared Select. */
+.journal-lines {
+  --journal-line-columns: minmax(220px, 1fr) 120px 120px var(--t-control-h);
+  display: flex;
+  flex-direction: column;
+}
+
+.journal-lines-head,
+.journal-line {
+  display: grid;
+  grid-template-columns: var(--journal-line-columns);
+  grid-template-areas:
+    'account debit credit remove'
+    'cost tax tax .';
+  column-gap: var(--t-space-1);
+  row-gap: var(--t-space-0-5);
+}
+
+/* The heads, for the eye only (every control names itself): 12px/500 dim, sentence case (K-23), and
+   right-aligned over the two money columns like the figures under them. */
+.journal-lines-head {
+  padding-bottom: var(--t-space-0-5);
+  border-bottom: 1px solid var(--t-border);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.journal-lines-head-account {
+  grid-area: account;
+}
+
+.journal-lines-head-debit,
+.journal-lines-head-credit {
+  text-align: right;
+}
+
+.journal-lines-head-debit {
+  grid-area: debit;
+}
+
+.journal-lines-head-credit {
+  grid-area: credit;
+}
+
+.journal-lines-head-cost {
+  grid-area: cost;
+}
+
+.journal-lines-head-tax {
+  grid-area: tax;
+}
+
+.journal-line {
+  padding: var(--t-space-1) 0;
+  border-bottom: 1px solid var(--t-border);
+  align-items: start;
+}
+
+.journal-line-account {
+  grid-area: account;
+  min-width: 0;
+}
+
+.journal-line-debit {
+  grid-area: debit;
+}
+
+.journal-line-credit {
+  grid-area: credit;
+}
+
+.journal-line-remove {
+  grid-area: remove;
+}
+
+.journal-line-cost {
+  grid-area: cost;
+  min-width: 0;
+}
+
+.journal-line-tax {
+  grid-area: tax;
+  min-width: 0;
+}
+
+.journal-line .field,
+.journal-line .select,
+.journal-line .select-trigger {
+  width: 100%;
+}
+
+/* A money field right-aligns in tabular figures, like the column it feeds. */
+.journal-line-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* The read-only line table of a posted entry, on the row tokens (K-20). */
+.journal-drawer-lines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.journal-drawer-lines th,
+.journal-drawer-lines td {
+  height: var(--t-row-h);
+  padding: var(--t-row-pad-y) var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.journal-drawer-lines th {
+  height: var(--t-row-head-h);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+}
+
+.journal-drawer-view-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+}
+
+/* Balance summary. */
+.journal-drawer-balance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+  margin: 0;
+  padding: var(--t-space-1) 0;
+}
+
+/* The §H-FX disclosure under a converted entry's lines: one dim sentence, no new column and no
+   badge. It carries figures, so it takes the same tabular numerals as every other amount. */
+.journal-drawer-fx {
+  margin: var(--t-space-2) 0 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.journal-drawer-balance dt {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.journal-drawer-balance dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+}
+
+.journal-drawer-unbalanced {
+  color: var(--t-danger);
+}
+
+/* The difference inside the unbalanced sentence is `.t-money` (nowrap, tabular) at the size of the
+   sentence around it, not the table size. */
+.journal-drawer-unbalanced .t-money {
+  font-size: inherit;
+}
+
+.journal-drawer-balanced {
+  color: var(--t-success);
+}
+
+/* Footer. It rides inside the shared DetailDrawer foot (`.drawer-foot`), which supplies the top
+   border, padding and right alignment. The action row lays its controls out full width (the
+   OverflowMenu at the left, a spacer, the buttons at the right edge), and the composer's C4
+   consequence line sits under it, so what "Buchen" does is read before it is pressed. */
+.journal-drawer-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  width: 100%;
+}
+
+.journal-drawer-foot .consequence-line {
+  margin: 0;
+  justify-content: flex-end;
+}
+
+.journal-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  width: 100%;
+}
+
+.journal-drawer-actions .journal-spacer {
+  flex: 1 1 auto;
+}
+
+/* The body sentence of a confirm (the shared Modal). */
+.journal-drawer-confirm-body {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.journal-drawer-hint {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  margin: 0;
+}
+
+.journal-drawer-requires {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-warn);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+/* F-10 J8.6: the period-lock refusal offers the way out (change the date) beside the /periods link,
+   so the exit and the reference sit on one row rather than the link standing alone. */
+.journal-drawer-locked-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-0-5);
+}
+
+/* --- G13, the Archiv tab (spec §6). Muted ink plus glyph, never colour alone; the provenance
+   band is a neutral elevated strip with no second accent. The muted ink is --t-text-dim, which the
+   design tokens hold at AA contrast in both themes (muted must not mean failing). --- */
+
+.journal-archive-band {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0 0 var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.journal-archive-table .journal-archive-row td {
+  color: var(--t-text-dim);
+}
+
+.journal-archive-flags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.journal-archive-detail {
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.journal-archive-periods {
+  margin-bottom: var(--t-space-2);
+  padding: var(--t-space-2);
+}
+
+.journal-archive-periods-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.journal-archive-subtitle {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.journal-archive-overflow {
+  position: relative;
+}
+
+/* The purge form opens from the overflow like a menu, so it sits on the menu tier (K-28). */
+.journal-archive-purge {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--t-space-0-5));
+  z-index: var(--t-z-menu);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  min-width: 260px;
+  border: 1px solid var(--t-border);
+  box-shadow: var(--t-shadow-overlay);
+}
+
+.journal-archive-purge-result {
+  margin: var(--t-space-1) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.journal-archive-pager {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-2);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}

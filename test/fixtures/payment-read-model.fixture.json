@@ -1,0 +1,247 @@
+{
+  "recordPayment": {
+    "paymentId": "pay_1",
+    "entryId": "entry_3",
+    "onAccountMinor": 1900,
+    "documents": [
+      {
+        "id": "doc_1",
+        "number": "R-2026-0001",
+        "status": "settled",
+        "grossMinor": 108100,
+        "paidMinor": 108100,
+        "openMinor": 0
+      }
+    ],
+    "vendorBills": [],
+    "dunningFees": [],
+    "ok": true
+  },
+  "previewPayment": {
+    "direction": "incoming",
+    "date": "2026-07-19",
+    "amountMinor": 108000,
+    "currency": "CHF",
+    "bankAccount": {
+      "id": "acc_2",
+      "number": "1020",
+      "label": "Bankkonto"
+    },
+    "counterparty": {
+      "kind": "customer",
+      "id": "contact_1",
+      "name": "Muster AG"
+    },
+    "reference": {
+      "kind": "none",
+      "value": null,
+      "valid": true,
+      "display": null,
+      "error": null
+    },
+    "allocatedMinor": 108000,
+    "onAccountMinor": 0,
+    "remainderMinor": 0,
+    "baseAmountMinor": 108000,
+    "rows": [
+      {
+        "targetKind": "document",
+        "targetId": "doc_1",
+        "number": "R-2026-0001",
+        "currency": "CHF",
+        "dueDate": null,
+        "grossMinor": 108100,
+        "paidMinor": 108100,
+        "openMinor": 0,
+        "allocatedMinor": 108000,
+        "paymentAmountMinor": 108000,
+        "skontoMinor": 0,
+        "skontoVatMinor": 0,
+        "writeOffMinor": 0,
+        "settlementMinor": 108000,
+        "settlementBaseMinor": 108000,
+        "resultingOpenMinor": -108000,
+        "resultingStatus": "settled",
+        "writeOffOfferedMinor": 0
+      }
+    ],
+    "legs": [
+      {
+        "accountId": "acc_2",
+        "accountNumber": "1020",
+        "accountLabel": "Bankkonto",
+        "debitMinor": 108000,
+        "creditMinor": 0
+      },
+      {
+        "accountId": "acc_4",
+        "accountNumber": "1100",
+        "accountLabel": "Forderungen aus Lieferungen und Leistungen",
+        "debitMinor": 0,
+        "creditMinor": 108000
+      }
+    ],
+    "istVat": null,
+    "fx": null,
+    "writeOffThresholdMinor": 100,
+    "balanced": true,
+    "error": {
+      "code": "document_already_settled",
+      "documentId": "doc_1",
+      "number": "R-2026-0001",
+      "status": "settled"
+    },
+    "ok": true
+  },
+  "suggestPaymentMatches": {
+    "reference": {
+      "kind": "none",
+      "value": null,
+      "valid": true,
+      "display": null,
+      "error": null,
+      "status": null
+    },
+    "openItemCount": 1,
+    "referenceMatchCount": 0,
+    "writeOffThresholdMinor": 100,
+    "candidates": [
+      {
+        "targetKind": "document",
+        "targetId": "doc_2",
+        "number": "R-2026-0002",
+        "contactId": "contact_1",
+        "contactName": "Muster AG",
+        "currency": "CHF",
+        "dueDate": null,
+        "daysOverdue": null,
+        "grossMinor": 50000,
+        "paidMinor": 0,
+        "openMinor": 50000,
+        "status": "issued",
+        "reference": {
+          "kind": "qrr",
+          "value": "000000000000000000202600029"
+        },
+        "kind": "exact_amount_customer",
+        "reason": "exact_amount_customer",
+        "deltaMinor": 0,
+        "prefillMinor": 50000,
+        "settled": false,
+        "disabledReason": null
+      }
+    ],
+    "ok": true
+  },
+  "getPayment": {
+    "payment": {
+      "id": "pay_1",
+      "direction": "incoming",
+      "date": "2026-07-19",
+      "amountMinor": 110000,
+      "currency": "CHF",
+      "baseAmountMinor": 110000,
+      "bankAccount": {
+        "id": "acc_2",
+        "number": "1020",
+        "label": "Bankkonto"
+      },
+      "counterparty": {
+        "kind": "customer",
+        "id": "contact_1",
+        "name": "Muster AG"
+      },
+      "reference": {
+        "kind": "qrr",
+        "value": "210000000003139471430009017",
+        "display": "21 00000 00003 13947 14300 09017"
+      },
+      "status": "posted",
+      "source": "manual",
+      "journalEntryId": "entry_3",
+      "reversalEntryId": null,
+      "reversedAt": null,
+      "allocatedMinor": 108100,
+      "onAccountMinor": 1900,
+      "allocations": [
+        {
+          "id": "palloc_1",
+          "targetKind": "document",
+          "targetId": "doc_1",
+          "targetNumber": "R-2026-0001",
+          "amountMinor": 108100,
+          "paymentAmountMinor": 108100,
+          "baseAmountMinor": 108100,
+          "skontoMinor": 0,
+          "skontoVatMinor": 0,
+          "writeoffMinor": 0,
+          "taxBaseMinor": null,
+          "taxAmountMinor": null,
+          "recognizedAt": null,
+          "journalEntryId": "entry_3"
+        }
+      ],
+      "createdBy": "user_1",
+      "createdAt": "2026-07-19T00:00:00.000Z"
+    },
+    "ok": true
+  },
+  "listPayments": {
+    "payments": [
+      {
+        "id": "pay_1",
+        "direction": "incoming",
+        "date": "2026-07-19",
+        "amountMinor": 110000,
+        "currency": "CHF",
+        "baseAmountMinor": 110000,
+        "bankAccount": {
+          "id": "acc_2",
+          "number": "1020",
+          "label": "Bankkonto"
+        },
+        "counterparty": {
+          "kind": "customer",
+          "id": "contact_1",
+          "name": "Muster AG"
+        },
+        "reference": {
+          "kind": "qrr",
+          "value": "210000000003139471430009017",
+          "display": "21 00000 00003 13947 14300 09017"
+        },
+        "status": "posted",
+        "source": "manual",
+        "journalEntryId": "entry_3",
+        "reversalEntryId": null,
+        "reversedAt": null,
+        "allocatedMinor": 108100,
+        "onAccountMinor": 1900,
+        "allocations": [
+          {
+            "id": "palloc_1",
+            "targetKind": "document",
+            "targetId": "doc_1",
+            "targetNumber": "R-2026-0001",
+            "amountMinor": 108100,
+            "paymentAmountMinor": 108100,
+            "baseAmountMinor": 108100,
+            "skontoMinor": 0,
+            "skontoVatMinor": 0,
+            "writeoffMinor": 0,
+            "taxBaseMinor": null,
+            "taxAmountMinor": null,
+            "recognizedAt": null,
+            "journalEntryId": "entry_3"
+          }
+        ],
+        "createdBy": "user_1",
+        "createdAt": "2026-07-19T00:00:00.000Z"
+      }
+    ],
+    "truncated": false,
+    "total": 1,
+    "ceiling": 1000,
+    "ok": true
+  }
+}

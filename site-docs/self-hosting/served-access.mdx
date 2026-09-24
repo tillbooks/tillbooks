@@ -1,0 +1,223 @@
+---
+title: "Served access behind a reverse proxy"
+description: "Run TILL for a team by putting an authenticating reverse proxy in front of it."
+---
+
+<Note>
+  TILL never becomes an identity provider. It stores no password, mints no token, and speaks no OIDC.
+  Authentication happens in a reverse proxy in front of TILL. TILL reads exactly one fact from that
+  proxy, the authenticated subject, and maps it onto the members you already invited.
+</Note>
+
+## The shipped image and recipe
+
+You do not have to assemble this by hand any more. `ops/docker/Dockerfile` builds one image with
+the engine, the built Studio, the REST twins, `/mcp` and the scheduler, started by `till up`.
+`ops/instance/compose.yml` puts Caddy, Pocket ID and a Litestream replica around it in one
+`docker compose up`. The walkthrough is [Run TILL for your team in under an hour](/self-hosting/under-an-hour);
+the trust story is [the threat model](/self-hosting/threat-model). The rest of this page is the
+contract those files implement, for anyone bringing their own proxy.
+
+## When you need this
+
+A single person on a single machine needs none of this: `till up` binds loopback and the file on disk
+is the boundary. You need served access the moment a second human shares one host: a Treuhänder team on
+one server, or a GmbH self-hosting behind a proxy. Then "who is calling" has to be answered before
+"what may they do" means anything.
+
+## The contract, in four steps
+
+Served mode is a contract between your proxy and TILL. Your proxy holds up its end; TILL holds up the
+rest.
+
+1. **The proxy authenticates the caller** by whatever it trusts: OIDC, SAML behind an OIDC bridge,
+   mTLS client certificates, or an access-style zero-trust gateway. TILL does not care which, and does
+   not change to accommodate any of them.
+2. **The proxy strips any inbound subject header and sets its own.** This is the load-bearing line. The
+   header carries exactly one value, the stable subject (an email, or your IdP's `sub`). A client that
+   tries to send its own copy must have it overwritten, not merged. Mind the order your proxy applies
+   header operations in: Caddy runs a block's deletes after its sets, so a delete and a set of the same
+   header in one `reverse_proxy` block deletes what was just set. Strip at the site level and set in
+   the proxy block, or rely on the set alone (a set replaces).
+3. **The proxy reaches TILL over a private link:** loopback, a unix socket on the same host, or an
+   mTLS-pinned private network. TILL's refusal to bind a public interface is unchanged. Served mode
+   does not open the bind, it changes what a request must carry.
+4. **TILL trusts the header only in served mode.** With served mode off (the default), the header is
+   never read. A subject header on a laptop grants nothing.
+5. **The proxy presents itself as `localhost` and drops `Origin`.** TILL keeps its DNS-rebinding
+   guard on in served mode: a `Host` that is not a loopback name is refused `403 forbidden_host`,
+   and a non-loopback `Origin` is refused `403 forbidden_origin`. Rewrite `Host` to `localhost`,
+   delete `Origin`, and refuse foreign origins in the proxy yourself so the CSRF fence survives.
+
+## Turn served mode on
+
+Two environment variables, read once at startup:
+
+```bash
+# Turn served identity on. The only supported value is "proxy".
+export TILL_SERVED_MODE=proxy
+
+# The header your proxy sets. Optional: this is the default.
+export TILL_SUBJECT_HEADER=till-authenticated-subject
+
+till serve            # /mcp alone
+till up --no-open     # the Studio, /api and the scheduler as well; the shipped image runs this
+```
+
+Configuration fails closed. An unrecognised `TILL_SERVED_MODE` (a typo like `Proxy`, or a hopeful
+`on`) refuses to start rather than dropping quietly to local mode, so a server can never believe it is
+authenticating when it is not. A blank or malformed `TILL_SUBJECT_HEADER` refuses to start too: a
+server that reads its subject from nowhere is worse than one that will not boot.
+
+The switch lives in the environment, never in a workspace. Trust configuration a tenant could write
+would let a compromised workspace widen its own door.
+
+## Provision locally first, then invite
+
+Membership is granted by invitation, never by showing up authenticated. A subject the proxy vouches
+for but that matches no member holds nothing, even on a workspace nobody has claimed yet. That is
+deliberate: a served deployment is claimed locally, where holding the file is the trust boundary, and
+opened to the team afterwards.
+
+The order that works:
+
+1. **Provision on the host, before the proxy.** Run `till up` locally and claim the workspace as owner.
+2. **Invite each teammate** by email, with a role, from the Members screen (or the `invite_member`
+   tool). TILL has no mail transport, so it hands you a token to deliver however you like.
+3. **The teammate accepts through the proxy.** Their first authenticated request carries their subject;
+   redeeming the token binds that subject to their member row. From then on, every request resolves to
+   that member and that member's role.
+
+The subject a teammate is invited as must match the subject the proxy attests. If you invite
+`bob@example.ch`, the proxy must present `bob@example.ch`. Redeeming the token compares the two
+without regard to case and stores the subject exactly as the proxy presented it; every request after
+that compares byte for byte, so a proxy or identity provider that later presents `Bob@example.ch`
+turns that member into a stranger. Keep the subject's spelling stable, or lowercase it in the proxy
+before setting the header. A mismatch at redemption is refused, so a token is never redeemable by
+whichever stranger happens to hold it.
+
+## Inviting an agent
+
+An agent that reaches TILL through the proxy is a member like any other, except for one field you set
+when you invite it: `invite_member { kind: 'agent' }`. The kind belongs to the identity, not to one
+workspace, and the session that redeems the token never declares it. From then on that member is
+governed wherever it enters. Its writes draft under the approval dial and wait for a human. Its calls
+land in the agent trace. It cannot grant itself the dial. That covers its own invites and role changes
+too: an agent that holds `manage_members` proposes them, and a human approves. Invite a Claude Desktop
+teammate without the kind and TILL takes it for a person: its writes run at once and leave no trace.
+A human member is unaffected either way.
+
+In local mode, without a proxy, there is one exception worth knowing. A client that declares the name
+`till-studio` over `/mcp` takes the Studio's own seat, which is not governed. That is the closed client
+map working as designed: an LLM agent cannot choose its client's name, and only a program already on
+the machine can. Served mode overrides it, because the seat there is whatever member the proxy attests.
+
+## What the refusals mean
+
+<AccordionGroup>
+  <Accordion title="missing_subject">
+    Served mode is on but the request carried no subject header. The proxy is misconfigured or was
+    bypassed. There is no anonymous fallback in served mode.
+  </Accordion>
+  <Accordion title="subject_changed">
+    A single connection carried two different subjects. TILL pins one subject per session, so a reused
+    session identifier under a different subject is refused. Start a new session.
+  </Accordion>
+  <Accordion title="invite_subject_mismatch">
+    The subject accepting an invitation does not match the invited email. The token stays valid for the
+    person it was meant for.
+  </Accordion>
+  <Accordion title="not_a_member">
+    The subject is authenticated but not a member of this workspace. Invite them, or, if they were
+    revoked, that is revocation taking effect on their next request.
+  </Accordion>
+</AccordionGroup>
+
+Revocation is immediate by construction. TILL keeps no session of its own to invalidate: every request
+resolves the subject to its membership afresh, so a revoked teammate fails on their very next call,
+whether or not your IdP has caught up.
+
+## Example: Caddy with Authelia
+
+Caddy authenticates each request against Authelia, then rewrites the subject header before it proxies
+to TILL. The strip is a `request_header` delete at the site level; the set is `header_up` in the
+proxy block. Do not put `header_up -Till-Authenticated-Subject` beside the set: Caddy applies a
+block's deletes after its sets, and that line would remove the subject just written (the shipped
+recipe had exactly this defect until its security review).
+
+```caddyfile
+books.example.ch {
+  # Strip anything the client sent about its identity, before anything reads the request.
+  request_header -Till-Authenticated-Subject
+  request_header -Remote-User
+  request_header -Remote-Email
+
+  forward_auth authelia:9091 {
+    uri /api/verify?rd=https://auth.example.ch
+    copy_headers Remote-User Remote-Email
+  }
+
+  reverse_proxy 127.0.0.1:8788 {
+    # Present yourself as localhost, or TILL's rebinding guard answers 403.
+    header_up Host localhost
+    header_up -Origin
+    # Set the trusted subject from Authelia's reply. A set replaces; no delete beside it.
+    header_up Till-Authenticated-Subject {http.request.header.Remote-Email}
+  }
+}
+```
+
+TILL runs alongside with `TILL_SERVED_MODE=proxy` and its default header name, bound to loopback so
+only Caddy on the same host can reach it.
+
+## Example: nginx with oauth2-proxy
+
+nginx authenticates each request through oauth2-proxy's `auth_request`, reads the verified email back,
+and sets it as the subject. `proxy_set_header` replaces any inbound value, which is the strip-and-reset
+the contract asks for.
+
+```nginx
+server {
+  server_name books.example.ch;
+
+  location / {
+    auth_request /oauth2/auth;
+    auth_request_set $subject $upstream_http_x_auth_request_email;
+
+    # proxy_set_header replaces any client-supplied header of the same name.
+    proxy_set_header Till-Authenticated-Subject $subject;
+    # Present yourself as localhost, or TILL's rebinding guard answers 403.
+    proxy_set_header Host localhost;
+    proxy_set_header Origin "";
+    proxy_pass http://127.0.0.1:8788;
+  }
+
+  location = /oauth2/auth {
+    internal;
+    proxy_pass http://oauth2-proxy:4180;
+    proxy_set_header Content-Length "";
+    proxy_pass_request_body off;
+  }
+}
+```
+
+## What stays out of scope
+
+Which IdP, how TLS terminates, rate limiting, and web-application-firewall rules are your proxy's job.
+TILL owns identity mapping and per-call permissions, and nothing else about the transport. Pick a
+subject format and keep it stable: a subject that changes reassigns a member's history to a stranger.
+
+## Where TLS terminates is a residency decision
+
+TLS termination is the proxy's job, but where it happens decides whose infrastructure sees the
+request in cleartext. When the terminating proxy runs on your own host (the shipped recipe B: Caddy
+with Pocket ID), the request is only ever decrypted on that host, and Swiss compute plus a Swiss
+bucket keep every byte in Switzerland. When you put a third-party edge in front (the recipe A
+variant: a Cloudflare Tunnel with Cloudflare Access), **that edge terminates TLS**, so every request
+is decrypted on the edge provider's network before it reaches your origin, ledger data in API
+responses included. The tunnel keeps the origin private and Access authenticates before the origin
+is reached, both real gains, but do not describe a deployment as Swiss-only data residency while a
+non-Swiss edge terminates TLS in the path. If Swiss-only transport is a requirement, terminate TLS on
+your own Swiss host. The two shipped recipes and this trade-off are laid out in
+`ops/instance/INFOMANIAK-DEPLOY-RUNBOOK.md` (recipe A) and `ops/instance/NOMADIK-RUNBOOK-TEMPLATE.md`
+(recipe B).

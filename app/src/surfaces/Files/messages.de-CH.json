@@ -1,0 +1,202 @@
+{
+  "nav": {
+    "files": "Dateien"
+  },
+  "files": {
+    "route": {
+      "title": "Dateien"
+    },
+    "loading": "Dateien werden geladen",
+    "empty": "Noch keine Dateien.",
+    "emptyHint": "Lade einen Vertrag, einen Beleg oder eine Korrespondenz hoch. Alles bleibt auf diesem Gerät.",
+    "list": {
+      "truncated": "{shown} von {total} Dateien werden angezeigt. Schränke die Suche ein oder wähle einen Ordner, um die übrigen zu sehen."
+    },
+    "table": {
+      "caption": "Gespeicherte Dateien mit Schlagwörtern, Version, Grösse und Aufbewahrungsfrist"
+    },
+    "action": {
+      "upload": "Datei hochladen",
+      "newVersion": "Neue Version",
+      "link": "Mit Datensatz verknüpfen",
+      "delete": "Löschen",
+      "download": "Herunterladen",
+      "downloadDenied": "Download gesperrt",
+      "linkDenied": "Verknüpfen gesperrt",
+      "downloading": "Wird geprüft",
+      "confirm": "Bestätigen",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "close": "Schliessen"
+    },
+    "search": {
+      "label": "Dateien durchsuchen",
+      "placeholder": "Titel, Dateiname oder Schlagwort",
+      "noResults": "Keine Treffer.",
+      "noResultsHint": "Passe die Suche an oder entferne einen Filter."
+    },
+    "filter": {
+      "query": "Suche: {q}",
+      "folder": "Ordner: {name}",
+      "remove": "Filter entfernen",
+      "group": "Filter"
+    },
+    "field": {
+      "title": "Titel",
+      "filename": "Dateiname",
+      "size": "Grösse",
+      "version": "Version",
+      "created": "Erstellt",
+      "checksum": "Prüfsumme (sha256)",
+      "linkedTo": "Verknüpft mit",
+      "tags": "Schlagwörter",
+      "tagsHint": "Mit Komma getrennt",
+      "retentionUntil": "Aufbewahrung bis"
+    },
+    "tags": {
+      "none": "Keine Schlagwörter."
+    },
+    "version": {
+      "label": "Version {n}"
+    },
+    "versions": {
+      "title": "Versionen"
+    },
+    "retention": {
+      "none": "Keine Frist gesetzt.",
+      "auto": "Gesetzlich (OR 958f, 10 Jahre)",
+      "manual": "Manuell gesetzt",
+      "editHint": "Verlängern ist immer möglich. Unter das gesetzliche Minimum geht es nicht.",
+      "readOnly": "Die Aufbewahrungsfrist darf nur mit den nötigen Rechten geändert werden."
+    },
+    "folder": {
+      "tree": "Ordner",
+      "all": "Alle Dateien",
+      "empty": "Ordner ist leer.",
+      "action": {
+        "new": "Neuer Ordner",
+        "newChild": "Neuer Unterordner",
+        "rename": "Umbenennen",
+        "delete": "Ordner löschen",
+        "deleteBlockedFiles": "Löschen geht erst, wenn der Ordner leer ist",
+        "deleteBlockedChildren": "Löschen geht erst ohne Unterordner"
+      },
+      "blocked": {
+        "files": "Ordner muss zuerst leer sein.",
+        "children": "Ordner enthält noch Unterordner."
+      },
+      "actions": "Aktionen für Ordner {name}"
+    },
+    "delete": {
+      "staged": "Löschung vorgemerkt. Bitte bestätigen.",
+      "pending": {
+        "badge": "Löschung ausstehend",
+        "body": "Ein Agent hat diese Datei zur Löschung vorgemerkt. Bestätige die endgültige Löschung oder brich ab, um die Datei zu behalten."
+      }
+    },
+    "linked": {
+      "title": "Dateien",
+      "empty": "Noch keine Dateien zu diesem Datensatz.",
+      "emptyHint": "Hänge den Beleg an, der diesen Datensatz belegt."
+    },
+    "entityKind": {
+      "contact": "Kontakt",
+      "item": "Artikel",
+      "bank_account": "Bankkonto",
+      "account": "Konto",
+      "cost_center": "Kostenstelle",
+      "document": "Beleg",
+      "payment": "Zahlung",
+      "journal_entry": "Buchung",
+      "automation_rule": "Automatisierung",
+      "vendor_bill": "Kreditorenrechnung"
+    },
+    "error": {
+      "transport": "Die Dateien konnten nicht geladen werden.",
+      "retention_locked": "Diese Datei unterliegt der gesetzlichen Aufbewahrungspflicht und kann nicht gelöscht werden.",
+      "retention_below_statutory": "Die Aufbewahrungsfrist darf das gesetzliche Minimum nicht unterschreiten (frühestens {floor}).",
+      "folder_not_empty": "Nur leere Ordner können gelöscht werden.",
+      "folder_name_taken": "In diesem Ordner gibt es bereits einen Ordner mit diesem Namen.",
+      "folder_cycle": "Ein Ordner kann nicht in seinen eigenen Unterordner verschoben werden.",
+      "not_head_version": "Es gibt bereits eine neuere Version dieser Datei.",
+      "unknown_entity_kind": "Unbekannter Datensatztyp.",
+      "entity_not_found": "Der Datensatz wurde nicht gefunden. Die Datei ist gespeichert und unter Dateien erreichbar.",
+      "file_too_large": "Die Datei überschreitet die Grössenbeschränkung.",
+      "file_unreadable": "Die Datei konnte nicht gelesen werden.",
+      "content_not_found": "Datei nicht gefunden.",
+      "integrity_mismatch": "Die gespeicherte Datei stimmt nicht mehr mit ihrer Prüfsumme überein. Download blockiert.",
+      "permissionDenied": {
+        "read": "Dir fehlt das Recht, die Dateien zu sehen.",
+        "write": "Dir fehlt das nötige Recht. Es wurde nichts geändert.",
+        "download": "Du siehst die Ablage, darfst den Inhalt aber nicht herunterladen.",
+        "link": "Dir fehlt ein Recht, um Dateien an diesen Datensatz anzuhängen."
+      }
+    }
+  },
+  "sign": {
+    "section": {
+      "title": "Signatur"
+    },
+    "loading": "Signaturanfragen werden geladen",
+    "empty": "Noch keine Signaturanfragen.",
+    "action": {
+      "request": "Signatur anfordern",
+      "send": "Senden",
+      "withdraw": "Zurückziehen",
+      "mark_signed": "Als signiert markieren (Upload)",
+      "mark_declined": "Als abgelehnt markieren",
+      "delete_draft": "Entwurf verwerfen"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "sent": "Gesendet",
+      "viewed": "Angesehen",
+      "signed": "Signiert",
+      "declined": "Abgelehnt",
+      "expired": "Abgelaufen",
+      "withdrawnHint": "zurückgezogen"
+    },
+    "level": {
+      "ses": "Einfache elektronische Signatur (EES)",
+      "qes": "Qualifizierte elektronische Signatur (QES)"
+    },
+    "hint": {
+      "qes": "Die QES ist der eigenhändigen Unterschrift gleichgestellt (OR Art. 14); nötig nur bei gesetzlicher Schriftform.",
+      "ses": "Die EES genügt gesetzlichen Schriftform-Erfordernissen nicht.",
+      "sendDenied": "Zum Senden brauchst du die Berechtigung sign.send."
+    },
+    "form": {
+      "signer": "Unterzeichnende Person",
+      "signerPlaceholder": "Kontakt wählen",
+      "noEmail": "keine E-Mail",
+      "level": "Signaturniveau",
+      "message": "Nachricht (optional)",
+      "expires": "Gültig bis (optional)",
+      "submit": "Anfrage erstellen"
+    },
+    "filter": {
+      "open": "Offene Signaturen",
+      "empty": "Keine offenen Signaturanfragen."
+    },
+    "error": {
+      "needs_provider": "Kein E-Signatur-Anbieter verbunden. Schliesse die Signatur manuell per Upload ab oder verbinde einen Anbieter (Cloud).",
+      "request_already_open": "Für diese Person besteht bereits eine offene Anfrage.",
+      "expiry_in_past": "Das Ablaufdatum liegt in der Vergangenheit.",
+      "document_hash_mismatch": "Die signierte Datei stimmt nicht mit dem angeforderten Dokument überein.",
+      "signer_email_missing": "Dieser Kontakt hat keine E-Mail-Adresse.",
+      "invalid_transition": "Diese Aktion ist im aktuellen Status der Anfrage nicht möglich."
+    },
+    "levelShort": {
+      "ses": "EES",
+      "qes": "QES"
+    }
+  },
+  "help": {
+    "Files": {
+      "title": "Dateien",
+      "body": "Dateien ist die Ablage dieses Arbeitsbereichs: ein Ordnerbaum, eine durchsuchbare Liste und eine Detailansicht. Eine Datei kann an jeden Datensatz angehängt werden, an einen Kontakt, eine Zahlung oder eine Buchung, und führt ihre Versionen mit, sodass ältere Stände einsehbar bleiben. Ordner, Suche und Auswahl stehen im Link; eine gefilterte Ansicht lässt sich darum direkt teilen.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

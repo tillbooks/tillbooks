@@ -1,0 +1,120 @@
+/* I00, Einkauf -> Anforderungen. One accent, glyph+label status.
+
+   D118 B2 (2026-08-23): the requisition list is the shared DataTable, the page header the shared
+   SurfaceHeader, and both overlays the shared DetailDrawer. The per-surface CSS that duplicated the
+   list table (and its rows and hover), the header, the drawer chrome and the button set has been
+   deleted; what remains is genuinely Requisitions-specific: the show-all toggle, the line grid, the
+   approval timeline, the convert panel and the small line-detail sub-table the drawer hosts.
+
+   Round 2 (D137): the states are Status words, so the bordered, accent and faint badges are gone
+   (K-22); the inputs are the shared `.field`, so the two per-surface field rules are gone (K-15); the
+   convert panel is the elevated step without a hairline (K-09); secondary text is dim, never faint
+   (K-36); sizes and gaps are tokens (K-37). */
+
+.req {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The show-all filter toggle, which rides the SurfaceHeader actions slot. */
+.req-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+/* A number/money cell in the drawer's line-detail sub-table: right-aligned, tabular figures. The
+   list's estimate column gets the same treatment from the shared DataTable numeric column (.t-num). */
+.req-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The requisition number cell in the shared DataTable list. */
+.req-code {
+  font-family: var(--t-font-mono);
+  font-weight: 600;
+}
+
+/* A terminal requisition (rejected, cancelled, closed) reads dimmed down the whole row; its Status
+   word still carries the state. Joined onto the shared row class via DataTable's rowClassName hook. */
+.data-table-row.req-row--terminal td,
+.data-table-row.req-row--terminal th {
+  color: var(--t-text-dim);
+}
+
+.req-muted {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* Section heading inside a drawer (Positionen, Freigabeverlauf, Bestellungen). */
+.req-lines-title {
+  margin: var(--t-space-1) 0 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+/* Drawer form fields the DetailDrawer body hosts: a label over its `.field`. */
+.req-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.req-field label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* The create form's per-line grid: item, description, qty, unit cost, supplier, remove. */
+.req-line-draft {
+  display: grid;
+  grid-template-columns: 1.4fr 1.4fr 0.7fr 0.9fr 1.2fr auto;
+  gap: var(--t-space-0-5);
+  align-items: center;
+}
+
+.req-line-draft .field {
+  min-width: 0;
+}
+
+/* The small line-detail sub-table in the detail drawer. A td defaults to left; .req-num flips the
+   numeric cells to the right, so no base text-align is set here (it would outspecify .req-num). */
+.req-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.req-detail-table td {
+  padding: var(--t-space-1) var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.req-timeline {
+  margin: 0;
+  padding-left: var(--t-space-2);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.req-convert {
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}

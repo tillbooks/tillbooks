@@ -1,0 +1,18 @@
+{
+  "paymentId": "pay_1",
+  "entryId": "entry_4",
+  "onAccountMinor": 1900,
+  "documents": [
+    {
+      "id": "doc_1",
+      "number": "R-2026-0001",
+      "status": "settled",
+      "grossMinor": 108100,
+      "paidMinor": 108100,
+      "openMinor": 0
+    }
+  ],
+  "vendorBills": [],
+  "dunningFees": [],
+  "ok": true
+}

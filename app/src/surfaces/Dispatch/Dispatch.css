@@ -1,0 +1,133 @@
+/* G05 section 10, Versand: the Textbausteine editor and the Protokoll. One elevated panel
+   treatment, one primary (Speichern), outcome as the Status word, never colour alone. The
+   DocumentTemplates conventions verbatim: this surface is its sibling.
+
+   Round 2 (D137): the kind and locale pickers are two Segmented controls, the bespoke `role="tab"`
+   strips are gone (K-11); the outcome is a Status word (K-22); the fields are the shared `.field`
+   (K-15); Speichern is the primary, the tint is for money commits only (K-08); the preview is the
+   elevated step without a hairline (K-09); sizes, gaps and radii are tokens (K-37). */
+
+.dispatch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.dispatch-lede,
+.dispatch-muted {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.dispatch-pickers {
+  display: flex;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.dispatch-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem);
+  gap: var(--t-space-3);
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .dispatch-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dispatch-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  min-width: 0;
+}
+
+.dispatch-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.dispatch-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.dispatch-chips {
+  display: flex;
+  gap: var(--t-space-0-5);
+  flex-wrap: wrap;
+}
+
+/* A variable token that inserts itself into the body: a quiet pill in the code face, 32px tall so it
+   meets the dense-band target. The transparent-to-hairline border is where the focus cue lands. */
+.dispatch-chip {
+  min-height: 32px;
+  border: 1px solid var(--t-border);
+  background: var(--t-bg-elev);
+  color: inherit;
+  border-radius: var(--t-radius-full);
+  padding: 0 var(--t-space-1);
+  cursor: pointer;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-family: var(--t-font-mono);
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.dispatch-chip:hover {
+  background: var(--t-bg-soft);
+}
+
+.dispatch-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+/* The preview: the elevated panel on the page, never a hairline box (K-09). */
+.dispatch-preview {
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-lg);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.dispatch-preview-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.dispatch-preview-subject {
+  margin: 0;
+  font-weight: 600;
+}
+
+.dispatch-preview-body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.dispatch-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}

@@ -1,0 +1,602 @@
+/**
+ * A10 Documents surface styling (S1 list, S2 editor, S3 detail, S4 dialog).
+ *
+ * Layout only: colour, elevation, buttons and fields come from the global tokens and the shared
+ * .panel/.btn/.field classes, the type tabs are the shared Tabs (K-11), the row opener is the
+ * DataTable's own `rowHref` link (K-21/K-12) and the lifecycle word is the shared Status (K-22). Type
+ * sits on the written scale (K-37): no rem sizes, no case transforms. Money is right-aligned tabular
+ * and never wraps (`.t-money`, K-18).
+ */
+
+.documents,
+.documents-editor,
+.documents-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The Tabs panel: the notices and the list keep the surface's own vertical rhythm under the tab row. */
+.documents-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding-top: var(--t-space-2);
+}
+
+/* The list header and the detail head are the shared SurfaceHeader now; only the editor keeps its
+   own head/title (its meta row and dirty indicator sit on the same line). */
+.documents-editor-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.documents-editor-title {
+  font-size: var(--t-font-xl);
+  line-height: var(--t-lh-xl);
+  font-weight: 600;
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+.documents-editor-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+}
+
+.documents-back {
+  color: var(--t-text-dim);
+  text-decoration: none;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  transition: color var(--t-motion-hover) var(--t-ease-out);
+}
+.documents-back:hover {
+  color: var(--t-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* --- List table (S1) -------------------------------------------------------------------------
+   The table frame, sticky header, density, the row opener and the five states are the shared
+   DataTable; only the surface-specific cell content keeps CSS here. Row state is a lightness cue,
+   never colour alone: a draft or void (cancelled/declined/expired/superseded) row is a step dimmer,
+   and the Status word in the cell continues to name the state (D19/U4). */
+.documents-row--draft td,
+.documents-row--void td {
+  color: var(--t-text-dim);
+}
+/* The base-currency total under a foreign row's transaction total. A step dimmer, because it is the
+   secondary reading of the same money, and never the brand accent: the accent belongs to actions.
+   --t-text-dim measures 6.41:1 light / 7.72:1 dark on the panel ground, clear of the 4.5:1 floor. */
+.documents-base-total {
+  display: block;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.documents-overdue {
+  display: block;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  /* A10-G8: the derived "überfällig" second word must clear the Tier-1 4.5:1 floor: --t-text-dim,
+     still a step dimmer than the status word above it. */
+  color: var(--t-text-dim);
+}
+
+/* --- Editor (S2) ---------------------------------------------------------------------------- */
+.documents-editor-meta,
+.documents-detail-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  align-items: flex-end;
+}
+/* A11-G15: the editor's meta row aligns to the TOP, not the bottom. The currency column grows (a
+   consequence line, a rate readout, a refusal), and bottom alignment pushed Typ, Kunde and Datum
+   down under the cursor the moment a currency was picked (measured 206 to 390px at 1440x900). */
+.documents-editor-meta {
+  align-items: flex-start;
+}
+.documents-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+.documents-field--wide {
+  flex-basis: 100%;
+}
+.documents-no-contacts {
+  color: var(--t-text-dim);
+}
+
+/* The currency control and everything a currency choice drags along (M11-M13). It is a column
+   inside the meta row rather than a field, because the consequence line and the rate readout belong
+   directly under the control that causes them. */
+.documents-currency {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  max-width: 26rem;
+}
+/* The typed code is upper-cased as it is typed (CurrencyPicker), so no case transform is needed. */
+.documents-currency-code {
+  max-width: 6rem;
+}
+.documents-currency-hint,
+.documents-currency-note {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+.documents-currency-readonly {
+  color: var(--t-text);
+}
+/* Two weights, because a currency choice produces two different KINDS of news (A11 §7):
+   `--warn` is a REFUSAL (no admissible rate, the invoice cannot be issued) and keeps `--t-danger`;
+   `--consequence` is a CONSEQUENCE (a USD invoice simply carries no Swiss payment part) and keeps the
+   bar but not the alarm colour, which DESIGN.md spends only on attention. */
+.documents-currency-warn,
+.documents-currency-consequence {
+  margin: 0;
+  padding: var(--t-space-1) var(--t-space-2);
+  border-left: 2px solid var(--t-danger);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+.documents-currency-consequence {
+  border-left-color: var(--t-border-strong);
+}
+.documents-currency-warn p,
+.documents-currency-consequence p {
+  margin: 0;
+}
+/* The resolved rate: a definition list so the label and the value stay associated for a screen
+   reader, laid out as rows because the figures are read, not scanned across. */
+.documents-currency-rate {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+.documents-currency-rate > div {
+  display: flex;
+  gap: var(--t-space-1);
+}
+.documents-currency-rate dt {
+  min-width: 6rem;
+}
+.documents-currency-rate dd {
+  margin: 0;
+  color: var(--t-text);
+}
+.documents-currency-willpost dd {
+  color: var(--t-text-dim);
+}
+
+.documents-editor-lines,
+.documents-detail-lines {
+  width: 100%;
+  border-collapse: collapse;
+}
+/* The bespoke line grids (editor S2, detail positions S3) stay hand-rolled: they are the invoice
+   line grid, not tabular LIST data, so they keep their own right-aligned amount column on the row
+   tokens (K-20). */
+.documents-amount {
+  text-align: right;
+}
+.documents-editor-lines th,
+.documents-editor-lines td,
+.documents-detail-lines th,
+.documents-detail-lines td {
+  text-align: left;
+  padding: var(--t-row-pad-y) var(--t-cell-pad-x);
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: top;
+}
+.documents-editor-lines th,
+.documents-detail-lines th {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+.documents-editor-lines .field {
+  width: 100%;
+}
+.documents-qty,
+.documents-price {
+  max-width: 6rem;
+}
+
+.documents-editor-totals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  align-self: flex-end;
+  min-width: 16rem;
+}
+.documents-editor-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-3);
+}
+.documents-editor-totals dt {
+  color: var(--t-text-dim);
+}
+.documents-editor-totals dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.documents-issue-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--t-space-0-5);
+}
+.documents-issue-reason {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  max-width: 14rem;
+  text-align: right;
+}
+.documents-denied {
+  color: var(--t-danger);
+}
+/* The unsaved-edit indicator (A10-G9): a word, not a colour, dim enough to stay subordinate to the
+   actions beside it while still clearing the 4.5:1 body floor via `--t-text-dim`. */
+.documents-dirty {
+  align-self: center;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* --- Detail (S3) ---------------------------------------------------------------------------- */
+.documents-section-title {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  margin: 0 0 var(--t-space-1);
+}
+.documents-detail-sub {
+  align-items: center;
+  color: var(--t-text-dim);
+}
+.documents-timeline,
+.documents-detail-fx,
+.documents-detail-positions {
+  padding: var(--t-space-2);
+}
+
+/* M11, the FX side by side on an issued document: two totals and the rate between them as one row
+   that wraps. Money carries no brand accent (brand/DESIGN.md), and every figure is tabular so the
+   two totals line up digit for digit. */
+.documents-detail-fx-facts {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1) var(--t-space-3);
+}
+.documents-detail-fx-facts dt {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+.documents-detail-fx-facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.documents-detail-fx-note {
+  margin: var(--t-space-1) 0 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+.documents-timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+.documents-timeline-item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  border-left: 2px solid var(--t-border-strong);
+  padding-left: var(--t-space-2);
+}
+.documents-timeline-status {
+  font-weight: 600;
+}
+.documents-timeline-meta {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+.documents-timeline-link {
+  display: inline-block;
+  margin-top: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+.documents-waiting {
+  color: var(--t-text-dim);
+}
+
+/* --- Issue / send / credit-note dialogs (S4/S5/S7) -------------------------------------------
+   The overlay, panel, title and foot are the shared Modal; only the dialogs' own body content keeps
+   CSS here. */
+.documents-confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  color: var(--t-text-dim);
+}
+.documents-confirm-body p {
+  margin: 0;
+}
+/* What the invoice will LOSE, stated inside the confirmation (A11-G11): the neutral consequence bar,
+   not the error colour, because the issue proceeds either way. */
+.documents-confirm-consequence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-1) var(--t-space-2);
+  border-left: 2px solid var(--t-border-strong);
+  color: var(--t-text);
+}
+.documents-confirm-consequence ul {
+  margin: 0;
+  padding-left: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+.documents-confirm-error {
+  color: var(--t-danger);
+  margin: 0;
+}
+
+/* --- D34 truncation notice: quiet, informative, never colour-alone --------------------------- */
+.documents-truncated {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* --- A11: invoice terms, QR panel, PDF overlay, send dialog ---------------------------------- */
+
+.invoice-terms,
+.invoice-qr {
+  padding: var(--t-space-2);
+}
+.invoice-terms-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--t-space-3);
+}
+.invoice-terms-hint {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+.invoice-terms-pending {
+  color: var(--t-text-dim);
+}
+.invoice-qr-ok {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+.invoice-qr-note {
+  margin: 0;
+  max-width: 14rem;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+.invoice-qr-gaps {
+  margin: 0 0 var(--t-space-1);
+  padding-left: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+/* The S3 payment part. A neutral elevated panel, one accent, no new colours (spec §6). */
+.invoice-qr-panel {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+.invoice-qr-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+}
+/* The payment code: a quiet frame that only has to keep the symbol's own white quiet zone clear. */
+.invoice-qr-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--t-space-2);
+  text-align: center;
+  min-width: 8rem;
+  min-height: 8rem;
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/*
+ * The SVG's user unit IS a millimetre and it carries its printed size (56 mm across, the 46 mm code
+ * plus its 5 mm border), which is larger than the panel wants. Capping the WIDTH scales the vector
+ * without touching the geometry: what the customer scans is the PDF, drawn from the same payload at
+ * the size IG 6.4 fixes.
+ */
+.invoice-qr-svg svg {
+  display: block;
+  width: 11rem;
+  height: auto;
+  max-width: 100%;
+}
+
+.invoice-qr-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--t-space-0-5) var(--t-space-2);
+  align-content: start;
+}
+.invoice-qr-facts dt {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text-dim);
+}
+.invoice-qr-facts dd {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.invoice-qr-payload {
+  margin: 0;
+  padding: var(--t-space-1);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+  font-size: var(--t-font-xs);
+  line-height: var(--t-lh-xs);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+}
+.invoice-qr-unavailable {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+/* S8, the PDF viewer. The overlay, panel and foot are the shared Modal; this is the modal body's own
+   column of content (meta line, preview frame). */
+.invoice-pdf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+.invoice-pdf-meta {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+.invoice-pdf-frame {
+  width: 100%;
+  height: 60vh;
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+/* S7, the send dialog: reuses the S4 confirm shell, so only its own rows are styled here. */
+.invoice-send-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+.invoice-send-field .field {
+  width: 100%;
+}
+.invoice-send-attachment {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+.invoice-send-ways-out {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+/* The engine's own diagnostic string behind an unnamed QR gap: quiet and last, a developer fact shown
+   only when TILL could not turn the reason into a sentence. */
+.invoice-send-detail {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  word-break: break-word;
+}
+
+/* D78: the amount arm's engine-derived gross readout, quiet beside the net input. */
+.documents-credit-gross {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* F-03 (J3.5): the send line inside the issue confirm, one act for issue and send. */
+.documents-confirm-send {
+  margin-top: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.documents-confirm-send-line {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+/* F-03 (J1.1 step 5): the customer created inline, beside the picker, without leaving the draft. */
+.documents-customer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.documents-new-customer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.documents-new-customer .field {
+  min-width: 14rem;
+}

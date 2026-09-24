@@ -1,0 +1,56 @@
+/* SurfaceHeader (D118 B2). One page-header treatment. Only --t-* tokens. Sticky at the top of the
+   scrolling main, density-aware, title left, actions right. Replaces the per-surface *-head blocks. */
+
+.surface-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  /* Sticky to the top of the scrolling <main>, so the title and primary action stay in view. It
+     carries the page ground so scrolled content does not show through, and the padding follows the
+     density row token so the header tightens with the global toggle. The header measures its own
+     rendered height and publishes it as --surface-header-height on the scroll region (see
+     SurfaceHeader.tsx), so the sticky DataTable thead can pin just below it (S1). */
+  position: sticky;
+  top: 0;
+  z-index: var(--t-z-sticky);
+  background: var(--t-bg);
+  padding-block: var(--t-row-pad-y) var(--t-space-2);
+  margin-bottom: var(--t-space-2);
+}
+
+.surface-header-titles {
+  min-width: 0;
+}
+
+/* The title: sentence case, one ink. The help affordance sits inline after it, baseline-aligned. */
+.surface-header-title {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: var(--t-font-xl);
+  line-height: var(--t-lh-xl);
+  font-weight: 700;
+  color: var(--t-text);
+}
+
+.surface-header-help {
+  display: inline-flex;
+  align-items: center;
+}
+
+.surface-header-subtitle {
+  margin: var(--t-space-0-5) 0 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* Actions pinned right: primary at the edge, secondary and overflow to its left. */
+.surface-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex: 0 0 auto;
+}

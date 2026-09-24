@@ -1,0 +1,351 @@
+/* Dateien surface styles (E00). Tokens only, no hex, no new colours, 8-pt grid.
+   Depth is a background step, never a shadow, matching the shell (global.css). The accent appears on
+   the ACTIVE FOLDER, the open row and the focus ring, and nowhere else: one accent.
+
+   Round 2 (D137): the search is a `.field` that filters as you type (K-16), the narrowings are one
+   `FilterChips` row (K-11), upload is the shared `FileDrop` (K-13), the row opens the drawer (K-21),
+   the folder verbs sit in an overflow, and a pending delete is a `Status` word (K-22). */
+
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 1100px;
+}
+
+/* The search field and the filter chips beside it. */
+.files-search {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.files-search-input {
+  flex: 0 1 280px;
+  min-width: 180px;
+}
+
+/* Two columns: the tree, then the list. Collapses to one on a narrow viewport, tree first, because
+   the tree is what tells you where you are. */
+.files-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .files-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The folder tree. */
+.files-tree {
+  padding: var(--t-space-1);
+}
+
+.files-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.files-tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* A folder is a 32px list row; the transparent 1px border is where the focus cue lands (K-10). */
+.files-tree-name {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 var(--t-space-1);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.files-tree-name > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-tree-name:hover {
+  background: var(--t-bg-soft);
+}
+
+.files-tree-name:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+}
+
+/* The current folder: the tinted pill with `aria-current`, the rail's own selected treatment. */
+.files-tree-name--active,
+.files-tree-name--active:hover {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+.files-tree-count {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-dim);
+}
+
+.files-tree-new {
+  margin-top: var(--t-space-1);
+  width: 100%;
+}
+
+/* The inline create/rename field is the shared `.field`; it only takes the row's slack here. */
+.files-tree-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The list. The table itself is the shared DataTable primitive (D118 B2), the row its own opener
+   (K-21); what stays here is the leading cell's content. */
+.files-list-wrap {
+  min-width: 0;
+}
+
+/* The leading cell: the kind glyph, the title and, beside it, the pending-delete Status word. */
+.files-title-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+/* Every number column is tabular so the columns line up down the page. */
+.files-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.files-muted {
+  color: var(--t-text-dim);
+}
+
+/* A locked right: glyph AND text, so it survives a screen reader and a colour-blind viewer alike. */
+.files-badge,
+.files-retention-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.files-badge {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+/* D34: the truncation notice above the table. Dim and quiet: it is a fact about the list, not a problem
+   with it, so it must not look like the error banner sitting a few pixels above. */
+.files-truncated {
+  margin: 0 0 var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* F7: the padlock that stands where the download control would be for a role without
+   `read_file_content`. Deliberately NOT styled as a disabled button: a greyed-out button invites a
+   click and reads as a temporary state, while this is a standing fact about the actor's rights. */
+.files-download-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* The drawer shell (scrim, panel, header/body/foot split, focus trap, Escape) is the shared
+   DetailDrawer primitive (D118 B2). What stays here is the E00 content laid out inside its body. */
+
+/* The scrolling body's own content column: the fields, sections and version chain, evenly spaced.
+   DetailDrawer's body owns the padding and the scroll; this owns only the rhythm between blocks. */
+.files-drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* Delete is pushed to the far edge of the DetailDrawer foot (which packs its actions to the end),
+   so the destructive control never sits directly beside the new-version action. */
+.files-delete {
+  margin-inline-end: auto;
+}
+
+.files-meta {
+  display: grid;
+  grid-template-columns: minmax(100px, auto) 1fr;
+  gap: var(--t-space-0-5) var(--t-space-2);
+  margin: 0;
+}
+
+.files-meta dt {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.files-meta dd {
+  margin: 0;
+  min-width: 0;
+}
+
+/* The whole checksum, wrapped rather than truncated: a cut hash cannot be compared with anything. */
+.files-hash {
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  overflow-wrap: anywhere;
+  color: var(--t-text-dim);
+}
+
+.files-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding-top: var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+}
+
+.files-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+.files-field {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.files-label {
+  flex: 1 1 100%;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.files-retention-state {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+}
+
+.files-provenance {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.files-versions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.files-version {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-0-5) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.files-version:last-child {
+  border-bottom: 0;
+}
+
+.files-version-date {
+  flex: 1 1 auto;
+  color: var(--t-text-dim);
+}
+
+/* The pending-deletion panel. A status and not an alert: nothing failed, a human is being asked. A
+   background step marks it off, never a box around it. */
+.files-pending {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-md);
+}
+
+.files-pending-text {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.files-pending-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* The shared linked-files panel, mounted on any entity detail view. */
+.files-linked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.files-linked-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.files-linked-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.files-linked-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-1) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.files-linked-row:last-child {
+  border-bottom: 0;
+}
+
+.files-linked-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,213 @@
+/* Setup / CompanyProfile surface styles.
+   Tokens only: no hex literals, no new colours. 8-pt grid throughout (4px optical nudge only).
+   Depth is a single border plus a background step, never a shadow or a gradient. */
+
+.setup-surface {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  max-width: 720px;
+}
+
+/* The surface title now comes from the shared `SurfaceHeader` primitive (D118 B2): the hand-rolled
+   `.setup-title` h1 and its styling are gone in favour of the one page header the Studio shares. */
+
+.setup-panel {
+  padding: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.setup-panel-title {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+/* The labelled form field, its actions row, and the control paint all come from the shared
+   `.form-stack` / `.form-row` / `.form-actions` primitives in global.css. Only the address legend
+   needs matching here, because it labels a fieldset rather than a row. */
+.setup-address-group legend {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+/* The structured creditor address groups its parts under one legend. */
+.setup-address-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  margin: 0;
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+/* The icon-only help control uses the shared `.help-trigger` treatment from global.css:
+   two names for the same affordance was one too many. */
+
+/* F-09: the two read-once disclosures on the first-hour panel (the QR-bill address, the further
+   details). A disclosure is a heading that is a button, so it is keyboard-reachable and announces
+   its open state; the fields render only while open. */
+.setup-disclosure {
+  border-top: 1px solid var(--t-border);
+  padding-top: var(--t-space-2);
+}
+
+.setup-disclosure-title {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 500;
+}
+
+.setup-disclosure-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: var(--t-space-0-5) 0;
+  background: none;
+  border: 0;
+  color: var(--t-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.setup-disclosure-chevron {
+  flex: none;
+  color: var(--t-text-dim);
+}
+
+.setup-inline-link {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-accent);
+}
+
+.setup-vat-timing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-1);
+}
+
+.setup-explainer {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* Read-only MWST facts: plain dim text in a row, never pills (K-22). */
+.setup-vat-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-0-5) var(--t-space-3);
+}
+
+.setup-badge {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.setup-custom-fields {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.setup-custom-field-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.setup-custom-field-row dt {
+  color: var(--t-text-dim);
+}
+
+.setup-custom-field-row dd {
+  margin: 0;
+  color: var(--t-text);
+}
+
+/* The fiscal-year-start pair (D15/C1): month and day sit side by side and share the row's
+   control column, so the two selects read as one field rather than two settings. */
+.setup-fy-start {
+  display: flex;
+  gap: var(--t-space-0-5);
+}
+
+/* The shared Select renders a div, never a native select, so the pair is laid out by position. */
+.setup-fy-start > :first-child {
+  flex: 1 1 auto;
+}
+
+.setup-fy-start > :last-child {
+  flex: 0 0 5.5rem;
+}
+
+/* The Arbeitsbereiche management panel (D24, variant B). The WHOLE row is the affordance: a
+   button navigating to /w/:workspaceId, name over a dim meta line (id, currency, created date).
+   The active row carries the shared Status ("Aktiv"), glyph plus word, never the accent (K-22). */
+.setup-ws-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.setup-ws-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--t-space-1);
+  background: transparent;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.setup-ws-row:hover {
+  background: var(--t-bg-soft);
+  border-color: var(--t-border-strong);
+}
+
+.setup-ws-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.setup-ws-name {
+  font-weight: 500;
+}
+
+.setup-ws-meta {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.setup-ws-footer {
+  display: flex;
+  justify-content: flex-start;
+}

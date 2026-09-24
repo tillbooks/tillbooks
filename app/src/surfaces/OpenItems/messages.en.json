@@ -1,0 +1,143 @@
+{
+  "nav": {
+    "openItems": "Open items"
+  },
+  "openItems": {
+    "title": "Open items",
+    "loading": "Loading open items",
+    "headerTotal": "{total} open",
+    "headerActions": "Open items actions",
+    "rowActions": "Actions",
+    "rowActionsFor": "Actions for {row}",
+    "tab": {
+      "byDocument": "By document",
+      "byCustomer": "By customer"
+    },
+    "asOf": "As of",
+    "showAll": "Show all",
+    "noDate": "no date",
+    "noDueDate": "no due date",
+    "noOverdue": "not overdue",
+    "noCustomer": "No customer",
+    "filter": {
+      "allCurrencies": "All currencies",
+      "allCustomers": "All customers",
+      "customerById": "Customer {id}"
+    },
+    "column": {
+      "document": "Document",
+      "customer": "Customer",
+      "issueDate": "Invoiced",
+      "dueDate": "Due",
+      "open": "Open",
+      "currency": "Currency",
+      "daysOverdue": "Overdue",
+      "itemCount": "Open items",
+      "oldestOverdue": "Longest overdue"
+    },
+    "kind": {
+      "onAccount": {
+        "credit": "Customer credit",
+        "refund": "Refund, unallocated"
+      }
+    },
+    "onAccountNote": {
+      "credit": "already deducted",
+      "refund": "already included"
+    },
+    "balance": {
+      "total": "Total open",
+      "itemsCaption": "This customer's open items"
+    },
+    "table": {
+      "caption": "Open items by document"
+    },
+    "days": "{n} days",
+    "dunningLevel": "Dunning level {level}",
+    "dunningFee": "incl. dunning fee {amount}",
+    "bucket": {
+      "upTo": "0 to {days} days",
+      "between": "{from} to {to} days",
+      "beyond": "Over {days} days",
+      "count": "{n} items"
+    },
+    "tiles": {
+      "label": "Split by age",
+      "heading": "By age",
+      "help": {
+        "label": "Help on the split by age",
+        "title": "What the split shows",
+        "body": "The split shows how long an amount has been outstanding. It is a view, not a deadline: it changes neither the total nor the match against 1100."
+      }
+    },
+    "editBoundaries": "Adjust the split by age",
+    "boundaries": {
+      "default": "These are the default boundaries.",
+      "chosen": "These are your own boundaries.",
+      "field": "Boundary {n}",
+      "days": "days",
+      "remove": "Remove boundary {n}",
+      "add": "Add a boundary",
+      "preview": "Gives: {buckets}",
+      "note": "This is a view, not a deadline. The total and the match against 1100 do not change.",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "assignCredit": "Assign",
+    "recordPayment": "Record payment",
+    "reconciled": {
+      "statement": "Matches 1100 trade receivables",
+      "glyph": "Matches",
+      "filteredTotal": "Workspace total {total}, matches 1100"
+    },
+    "asOfBanner": {
+      "text": "As of {date}. Payments after this date do not count.",
+      "action": "Back to today"
+    },
+    "mismatch": {
+      "title": "The open items and account 1100 differ by {difference}.",
+      "body": "The list shows {list}, the account shows {ledger}.",
+      "action": "Open the journal",
+      "disclosure": "What now?",
+      "cause": {
+        "direct": "An entry posted straight to 1100 that belongs to no invoice and no payment.",
+        "document": "An invoice on 1100 whose document changed after it was posted.",
+        "fxSkonto": "A foreign-currency invoice settled with a cash discount can differ by one Rappen."
+      }
+    },
+    "empty": {
+      "nothingOpen": {
+        "title": "Everything is settled, no open items.",
+        "hint": "An invoice appears here once it is issued and still unpaid.",
+        "action": "Create an invoice"
+      },
+      "filtered": {
+        "title": "No open items match this selection.",
+        "hint": "Reset the selection to see every open item again.",
+        "action": "Reset the filter"
+      }
+    },
+    "error": {
+      "transport": "Open items could not be loaded.",
+      "permissionDenied": {
+        "read": "You do not have permission to view open items.",
+        "write": "You do not have permission to change the split by age."
+      },
+      "boundaries": {
+        "empty": "You need at least one boundary.",
+        "positive": "The boundaries must be whole numbers above zero.",
+        "increasing": "Each boundary must be larger than the one before it.",
+        "max": "More than six periods get hard to read."
+      }
+    }
+  },
+  "help": {
+    "OpenItems": {
+      "title": "Open items",
+      "body": "The open-items list shows which invoices are unpaid or partly paid, with due dates and ageing. It derives from the invoices you issued and the payments you recorded; you never maintain it by hand. If you account on agreed consideration, the VAT on these items is already owed, even while the money is outstanding.",
+      "concepts": [
+        "vereinbarte-entgelte"
+      ]
+    }
+  }
+}

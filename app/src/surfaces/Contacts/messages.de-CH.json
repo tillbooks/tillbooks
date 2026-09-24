@@ -1,0 +1,300 @@
+{
+  "contact": {
+    "title": "Kontakte",
+    "new": "Neuer Kontakt",
+    "name": "Name",
+    "address": "Strasse",
+    "houseNo": "Haus-Nr.",
+    "zip": "PLZ",
+    "city": "Ort",
+    "country": "Land",
+    "addressGroup": "Adresse",
+    "vatNumber": "MWST-Nummer",
+    "vatNumberHint": "Format: CHE-123.456.789 MWST",
+    "email": "E-Mail",
+    "defaultCurrency": "Standardwährung",
+    "paymentTerms": "Zahlungsfrist",
+    "paymentTermsUnit": "Tage",
+    "description": "Notiz",
+    "partyRole": "Rolle",
+    "role": {
+      "customer": "Kunde",
+      "vendor": "Lieferant",
+      "both": "Kunde und Lieferant"
+    },
+    "roleFilter": {
+      "all": "Alle Rollen"
+    },
+    "archive": "Archivieren",
+    "archived": "Archiviert",
+    "qrReady": "QR-bereit",
+    "needsStructuredAddress": "Adresse nötig",
+    "invalidVatNumber": "Ungültige MWST-Nummer. Erwartet: CHE-123.456.789 MWST.",
+    "empty": "Noch keine Kontakte.",
+    "emptyHint": "Erfasse Kunden und Lieferanten für Rechnungen und QR-Einzahlungsscheine.",
+    "noMatch": "Kein Kontakt passt zur Suche.",
+    "savedView": "Gespeicherte Ansicht",
+    "search": "Kontakte suchen",
+    "showArchived": "Archivierte anzeigen",
+    "edit": "Bearbeiten",
+    "rowActions": "Weitere Aktionen für Kontakt {name}",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schliessen",
+    "editTitle": "Kontakt bearbeiten",
+    "noWorkspaceHint": "Kontakte gehören zu einem Arbeitsbereich. Lege zuerst einen an.",
+    "noMatchHint": "Passe den Suchbegriff an oder blende archivierte Kontakte ein.",
+    "clearSearch": "Suche zurücksetzen",
+    "col": {
+      "select": "Auswahl",
+      "type": "Typ",
+      "qr": "QR",
+      "actions": "Aktionen"
+    },
+    "kindLabel": "Art",
+    "kind": {
+      "company": "Firma",
+      "person": "Person"
+    },
+    "kindFilter": {
+      "all": "Firmen und Personen"
+    },
+    "people": "Personen",
+    "segmentsTitle": "Segmente",
+    "segments": {
+      "empty": "Noch keine Segmente.",
+      "filter": "Nach Segment filtern",
+      "add": "Segment hinzufügen",
+      "addAction": "Hinzufügen",
+      "addHint": "Gib zuerst ein Segment ein, dann kannst du es hinzufügen."
+    },
+    "consent": {
+      "title": "Entwürfe",
+      "toggle": "Entwürfe dürfen die Buchhaltung dieses Kunden verwenden",
+      "note": "Standardmässig aus. In beiden Fällen wird nichts irgendwohin gesendet."
+    },
+    "tabs": "Kontaktbereiche",
+    "tab": {
+      "master": "Stammdaten",
+      "timeline": "Verlauf",
+      "finance": "Finanzen",
+      "portal": "Portal-Zugang"
+    },
+    "action": {
+      "merge": "Zusammenführen",
+      "import": "Importieren",
+      "anonymise": "Anonymisieren"
+    },
+    "field": {
+      "employer": "Arbeitgeber",
+      "employerNone": "Kein Arbeitgeber"
+    },
+    "error": {
+      "employerMustBeCompany": "Der Arbeitgeber muss eine Firma sein.",
+      "nameRequired": "Name fehlt."
+    },
+    "finance": {
+      "hint": "Offene Posten und Zahlungen stehen auf den Finanzflächen: Debitoren, Zahlungen und Belege."
+    },
+    "timeline": {
+      "empty": "Noch keine Aktivität.",
+      "log": "Aktivität erfassen",
+      "logAction": "Erfassen",
+      "kind": "Art",
+      "body": "Text",
+      "bodyHint": "Schreib zuerst einen Text, dann kannst du die Aktivität erfassen."
+    },
+    "activity": {
+      "note": "Notiz",
+      "call": "Anruf",
+      "email": "E-Mail",
+      "meeting": "Termin",
+      "task": "Aufgabe"
+    },
+    "tasks": {
+      "title": "Aufgaben",
+      "loading": "Aufgaben werden geladen",
+      "empty": "Noch keine Aufgaben für diesen Kontakt.",
+      "loadFailed": "Die Aufgaben konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "permissionDenied": "Dir fehlt die Berechtigung, Aufgaben zu sehen.",
+      "action": {
+        "create": "Aufgabe anlegen",
+        "edit": "Bearbeiten",
+        "complete": "Erledigen",
+        "snooze": "Zurückstellen",
+        "cancel": "Aufgabe abbrechen",
+        "save": "Speichern",
+        "discard": "Verwerfen"
+      },
+      "status": {
+        "open": "Offen",
+        "doing": "In Arbeit",
+        "done": "Erledigt",
+        "cancelled": "Abgebrochen"
+      },
+      "recurring": {
+        "badge": "Wiederkehrend",
+        "seriesEnded": "Serie beendet."
+      },
+      "field": {
+        "title": "Titel",
+        "assignee": "Zuständig",
+        "due": "Fällig am",
+        "reminder": "Erinnerung",
+        "recurrence": "Wiederholung"
+      },
+      "recurrence": {
+        "preset": {
+          "none": "Keine",
+          "daily": "Täglich",
+          "weekly": "Wöchentlich",
+          "monthly": "Monatlich",
+          "yearly": "Jährlich",
+          "custom": "Erweitert"
+        },
+        "advancedLabel": "Erweiterte Regel (RRULE)",
+        "advancedHint": "z. B. FREQ=WEEKLY;INTERVAL=2;BYDAY=MO"
+      },
+      "snoozedUntil": "zurückgestellt bis {until}",
+      "snoozeUntil": "Zurückstellen bis",
+      "snoozeLabel": "Aufgabe {title} zurückstellen",
+      "createLabel": "Neue Aufgabe für {name}",
+      "editLabel": "Aufgabe {title} bearbeiten",
+      "titleHint": "Gib zuerst einen Titel ein, dann kannst du die Aufgabe anlegen.",
+      "warnReminderAfterDue": "Erinnerung liegt nach dem Fälligkeitsdatum.",
+      "fallbackError": "Die Aufgabe konnte nicht gespeichert werden.",
+      "error": {
+        "reminder_in_past": "Die Erinnerung liegt in der Vergangenheit.",
+        "reminder_after_due": "Die Erinnerung liegt nach dem Fälligkeitsdatum.",
+        "snooze_in_past": "Der Zurückstellzeitpunkt liegt in der Vergangenheit.",
+        "recurrence_invalid": "Diese Wiederholungsregel ist ungültig.",
+        "task_not_open": "Diese Aufgabe ist bereits abgeschlossen.",
+        "invalid_status_transition": "Dieser Statuswechsel ist nicht erlaubt."
+      },
+      "rowActions": "Weitere Aktionen für Aufgabe {title}"
+    },
+    "merge": {
+      "toolbar": "Kontakte zusammenführen",
+      "select": "{name} für das Zusammenführen auswählen",
+      "selected": "{n} ausgewählt",
+      "needTwo": "Wähle genau zwei Kontakte aus, dann kannst du sie zusammenführen.",
+      "clearSelection": "Auswahl aufheben",
+      "survivor": "Welcher Kontakt bleibt?",
+      "field": "Feld",
+      "keeps": "Bleibt",
+      "discards": "Wird verworfen",
+      "diffCaption": "Vergleich der beiden Kontakte",
+      "confirm": "{source} wird in {target} zusammengeführt. Das kann nicht rückgängig gemacht werden.",
+      "action": "Zusammenführen"
+    },
+    "anonymise": {
+      "warning": "Damit werden Name, E-Mail, Adresse und alle Aktivitätstexte gelöscht. Gebuchte Belege bleiben erhalten (OR 958f). Das kann nicht rückgängig gemacht werden.",
+      "confirmWord": "ANONYMISIEREN",
+      "typeLabel": "Tippe {word}, um zu bestätigen",
+      "typeHint": "Tippe {word} genau so, dann wird die Schaltfläche aktiv."
+    },
+    "import": {
+      "paste": "CSV-Inhalt einfügen",
+      "hint": "Erste Zeile sind die Spaltennamen: name, rolle, art, email, mwst, plz, ort.",
+      "parsed": "{n} Zeilen erkannt",
+      "action": "Importieren",
+      "emptyHint": "Füge zuerst CSV-Inhalt mit einer Kopfzeile ein.",
+      "created": "{n} Kontakte angelegt.",
+      "duplicates": "{n} mögliche Duplikate gefunden",
+      "duplicatesHint": "Diese Zeilen wurden nicht angelegt. Prüfe sie und führe sie bei Bedarf zusammen.",
+      "duplicateRow": "Zeile {row}",
+      "noDuplicates": "Keine Duplikate gefunden."
+    }
+  },
+  "portal": {
+    "panel": {
+      "title": "Portal-Zugang"
+    },
+    "action": {
+      "create": "Zugang freigeben",
+      "send": "Link senden",
+      "revoke": "Widerrufen",
+      "share_entity": "Im Portal freigeben"
+    },
+    "field": {
+      "expiresAt": "Gültig bis",
+      "expiresAtHint": "Wähle zuerst ein Ablaufdatum, dann kannst du den Zugang freigeben."
+    },
+    "status": {
+      "active": "Aktiv",
+      "draft": "Entwurf",
+      "revoked": "Widerrufen",
+      "expired": "Abgelaufen",
+      "local": "Nur lokal"
+    },
+    "scope": {
+      "all_invoices": "Alle Rechnungen freigeben",
+      "all_invoices_warning": "Gibt alle künftigen Rechnungen frei."
+    },
+    "link": {
+      "once": "Der Link wird nur einmal angezeigt.",
+      "copy": "Kopieren",
+      "copyLabel": "Link kopieren"
+    },
+    "empty": "Noch keine Portal-Freigaben.",
+    "empty_scopes": "Nichts zum Freigeben vorhanden.",
+    "error": {
+      "invalid_scope": "Die Freigabe muss sich auf Datensätze dieses Kontakts beziehen.",
+      "grant_denied": "Dieser Link ist nicht mehr gültig."
+    },
+    "not_hosted": "Lokal erstellt. Hosting nicht konfiguriert.",
+    "not_hosted_cta": "Hosting aktivieren"
+  },
+  "vendorPortal": {
+    "section": {
+      "title": "Lieferantenportal"
+    },
+    "action": {
+      "grant": "Portalzugang erstellen",
+      "revoke": "Zugang widerrufen",
+      "remittance": "Zahlungsavis erstellen"
+    },
+    "field": {
+      "expiresAt": "Gültig bis"
+    },
+    "status": {
+      "active": "Aktiv",
+      "draft": "Entwurf",
+      "revoked": "Widerrufen",
+      "expired": "Abgelaufen"
+    },
+    "poStatus": {
+      "sent": "Gesendet",
+      "received": "Erhalten"
+    },
+    "link": {
+      "copy": "Kopieren",
+      "copyLabel": "Link kopieren"
+    },
+    "notice": {
+      "token_once": "Dieser Link wird nur einmal angezeigt.",
+      "cloud_tier": "Hosting und Versand benötigen die Cloud-Stufe. Das Link-Artefakt bleibt auf diesem Gerät."
+    },
+    "preview": {
+      "title": "Sichtbar für Lieferant"
+    },
+    "empty": {
+      "grants": "Noch kein Portalzugang erstellt.",
+      "pos": "Keine offenen Bestellungen.",
+      "remittances": "Noch keine Zahlungsavise."
+    },
+    "error": {
+      "expiry_in_past": "Das Ablaufdatum liegt in der Vergangenheit.",
+      "grant_invalid": "Dieser Zugangslink ist nicht mehr gültig."
+    }
+  },
+  "help": {
+    "Contacts": {
+      "title": "Kontakte",
+      "body": "Alle Kunden und Lieferanten dieses Arbeitsbereichs: Firmen und Personen, mit Rollen, Segmenten und einer Detailansicht mit Stammdaten, Verlauf und Finanzen.\n\nDuplikate führst du über Zusammenführen zusammen. Grössere Bestände holst du über den Import mit Duplikatprüfung herein.\n\nGelöscht wird nie: Ein Kontakt, auf den Belege verweisen, wird archiviert, damit jeder ausgestellte Beleg seinen Empfänger behält.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "nav": {
+    "dunning": "Dunning"
+  },
+  "dunning": {
+    "title": "Dunning",
+    "subtitle": "Chase overdue invoices with escalating reminders.",
+    "toOpenItems": "Open items",
+    "toSetup": "Go to setup",
+    "propose": "Propose dunning run",
+    "proposeDenied": "Propose dunning run (no permission)",
+    "issue": "Issue",
+    "issueDenied": "Issue (no permission)",
+    "issueDeniedPost": "Issue (posting permission missing)",
+    "recoverFee": "Book skipped fee",
+    "feeStillLocked": "The period is still locked: the reminder fee could not be booked yet.",
+    "send": "Send",
+    "sendDenied": "Send (no permission)",
+    "currentRun": "Dunning run of {date}",
+    "reviewCaption": "Invoices in this dunning run",
+    "historyCaption": "History of dunning runs",
+    "history": "Dunning runs",
+    "savedView": "View",
+    "allRuns": "All runs",
+    "level1": "First reminder",
+    "level2": "Second reminder",
+    "level3": "Third reminder",
+    "daysOverdue": "Days overdue",
+    "minInterval": "Min. days since previous reminder",
+    "fee": "Reminder fee (CHF)",
+    "feeAccount": "Income account",
+    "interestNote": "Show default interest",
+    "interestRate": "Interest rate (%)",
+    "status": {
+      "proposed": "Proposed",
+      "issued": "Issued",
+      "sent": "Sent"
+    },
+    "column": {
+      "runDate": "Date",
+      "status": "Status",
+      "debtors": "Debtors",
+      "items": "Invoices",
+      "maxLevel": "Highest level",
+      "debtor": "Debtor",
+      "invoice": "Invoice",
+      "level": "Level",
+      "dueDate": "Due",
+      "daysOverdue": "Days overdue",
+      "open": "Open",
+      "fee": "Fee",
+      "interest": "Interest"
+    },
+    "downloadLetter": "Download reminder letter for {debtor}",
+    "letterSent": "sent",
+    "changed": {
+      "paid": "paid",
+      "partiallyPaid": "partially paid",
+      "cancelled": "cancelled",
+      "credited": "credited"
+    },
+    "changedBadge": "{reason} since issue",
+    "changedLetterHeld": "{reason} since issue: do not mail this letter as issued, the amount it demands is no longer correct. The residual rides the next reminder.",
+    "noEmail": "no email address, deliver the letter by hand",
+    "noOverdue": "No overdue invoices: there is nothing to chase.",
+    "alreadyProposed": "The dunning run for this date already exists: it is shown below.",
+    "nothingToIssue": "Every proposed invoice has been paid in the meantime: nothing to issue.",
+    "needsCreditorAddress": "The reminder letter is missing your sender address.",
+    "needsEmailTransport": "No email transport is set up: download the letters and send them by hand.",
+    "feeSkippedLockedPeriod": "The run was issued, but the reminder fee was not booked: the period is locked.",
+    "feeNotDemanded": "not demanded",
+    "alreadyIssuedUseRecovery": "This dunning run has already been issued. The reminder fee is still open: book it with \"Book skipped fee\".",
+    "feeSkippedShort": "(fee not booked)",
+    "empty": {
+      "title": "No dunning runs yet.",
+      "hint": "A dunning run reads the overdue invoices from the open items list and proposes the next reminder level per invoice."
+    },
+    "error": {
+      "transport": "The dunning runs could not be loaded.",
+      "action": "The action failed. Try again.",
+      "permissionDenied": {
+        "read": "You lack the permission to read the dunning area."
+      }
+    },
+    "config": {
+      "title": "Settings",
+      "hint": "The three reminder levels are a business convention, not a legal deadline. All three save together.",
+      "intervalHint": "The minimum interval keeps the reminders apart: a later level is reached only once that many days have passed since the previous reminder was issued, so an invoice that is already long overdue still escalates one letter at a time rather than all at once. The default is 10 days.",
+      "feeHint": "A reminder fee has no statutory basis: it is only chargeable when contractually agreed and reasonable. A charged fee always books, and its VAT automatically follows the chased invoice's own rates.",
+      "interestHint": "Default interest is 5% per year by law (Art. 104 OR); only a higher contractual rate is allowed. It is computed on the open invoice amount (actual days, 365-day year), shown on the letter, and never booked.",
+      "pickAccount": "Pick an account",
+      "save": "Save settings",
+      "saveDenied": "Save settings (no permission)",
+      "saved": "Saved.",
+      "error": {
+        "interestFloor": "The interest rate is below the statutory 5% (Art. 104 OR).",
+        "needsAccount": "A booked fee needs an income account.",
+        "invalid": "The settings are incomplete: check the levels."
+      }
+    },
+    "unknownDebtor": "Unknown debtor",
+    "unnumbered": "No number",
+    "rowOpen": "Open the dunning run of {date}"
+  },
+  "help": {
+    "Dunning": {
+      "title": "Dunning",
+      "body": "Dunning works in runs: propose collects the overdue open items, you review the run, then issue and send. Levels, deadlines, fees and default interest come from your dunning policy; every figure in the run is frozen and traceable. Issuing and sending are separate, deliberate steps.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

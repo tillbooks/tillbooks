@@ -1,0 +1,51 @@
+/**
+ * C3 provenance line: a quiet fact at the point of judgement. Neutral ink, a calm glyph from the icon
+ * set (K-37: never a text dingbat from a fallback font), the trace link the one interactive part.
+ * Never a coloured badge (the accent is not spent on a standing label), and an agent origin reads in
+ * words, not in colour.
+ */
+
+.provenance {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  margin: var(--t-space-2) 0 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* 16px on an 18px line: the 1px nudge centres the mark on the text. */
+.provenance-glyph {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--t-text-dim);
+}
+
+.provenance-text {
+  flex: 1 1 auto;
+}
+
+/* A text link, so the hover underline is its explicit opt-in. The transparent 1px border is the
+   focus cue's landing place (K-10); the negative inline margin keeps the text where it was. */
+.provenance-trace {
+  flex: 0 0 auto;
+  margin: 0 -1px;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text-dim);
+  text-decoration: none;
+  transition: color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.provenance-trace:hover {
+  color: var(--t-text);
+  text-decoration: underline;
+}
+
+.provenance-trace:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+}

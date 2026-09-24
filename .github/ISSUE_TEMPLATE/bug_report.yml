@@ -1,0 +1,85 @@
+name: Bug report
+description: Something is not working as expected.
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Before you paste anything, scrub
+        every token and secret from your logs and output, and never paste the
+        contents of a `.env` file. TILL runs locally and your books live in a
+        SQLite file on your own machine, so most of what you see is safe to share,
+        but credentials are not. Do not attach a ledger that holds real figures.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the bug in a sentence or two.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps so a maintainer can follow along. Say whether you drove it through the MCP verb, the REST twin, or the Studio.
+      placeholder: |
+        1. Start the server with ...
+        2. Call the verb ... (or open the ... screen in Studio)
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: TILL version
+      description: The `tillbooks` version, or the commit SHA if you run it from git.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface
+      options:
+        - MCP verb
+        - REST twin
+        - Studio (the GUI)
+        - CLI (till)
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Paste relevant logs or output. Remove any tokens or secrets first.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed all credentials and secrets from the logs above
+          required: true
+        - label: I did not attach a ledger that holds real financial data
+          required: true

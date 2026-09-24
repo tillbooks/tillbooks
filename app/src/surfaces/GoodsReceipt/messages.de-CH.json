@@ -1,0 +1,117 @@
+{
+  "nav": {
+    "goodsReceipts": "Wareneingänge"
+  },
+  "goodsReceipt": {
+    "title": "Wareneingänge",
+    "noWorkspace": "Wähle einen Mandanten, um die Wareneingänge zu sehen.",
+    "listLabel": "Wareneingänge",
+    "detailLabel": "Wareneingang im Detail",
+    "selectHint": "Wähle einen Wareneingang, um seine Positionen und seinen Verlauf zu sehen.",
+    "new": "Neuer Wareneingang",
+    "addLine": "Position hinzufügen",
+    "post": "Buchen",
+    "cancel": "Wareneingang verwerfen",
+    "reverse": "Stornieren",
+    "accept": "Zurückgestellte Positionen freigeben",
+    "reject": "Zurückgestellte Positionen ablehnen",
+    "close": "Schliessen",
+    "save": "Speichern",
+    "value": "Wert des Wareneingangs",
+    "noLines": "Noch keine Positionen. Nimm eine aus der offenen Bestellmenge dazu.",
+    "noMovement": "keine Lagerbewegung",
+    "reversed": "storniert",
+    "holdTitle": "Zurückgestellt zur Prüfung",
+    "trailTitle": "Verlauf",
+    "dateIsFixed": "Das Eingangsdatum steht beim Öffnen fest: jede Lagerbewegung trägt es, und eine gesperrte Periode verweigert die Buchung.",
+    "error": { "transport": "Die Wareneingänge liessen sich nicht laden. Bitte nochmals versuchen." },
+    "empty": {
+      "title": "Noch keine Wareneingänge",
+      "hint": "Sende zuerst eine Bestellung, dann erfasst du hier, was davon geliefert wird."
+    },
+    "overReceipt": {
+      "badge": "Mehrlieferung",
+      "line": "{qty} mehr als die Bestellung offen hatte"
+    },
+    "overReceiptHint": "Eine Mehrlieferung wird hier angenommen und festgehalten statt abgewiesen: die Ware liegt so oder so im Lager. Wenn du sie blockieren willst, setzt du in den Einstellungen eine harte Obergrenze.",
+    "field": { "receivedAt": "Eingegangen am" },
+    "col": {
+      "receipt": "Wareneingang",
+      "status": "Status",
+      "description": "Position",
+      "qty": "Menge",
+      "unitCost": "Stückkosten",
+      "inspection": "Prüfung",
+      "movement": "Lagerbewegung",
+      "note": "Hinweis"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "posted": "Gebucht",
+      "reversed": "Storniert",
+      "cancelled": "Verworfen"
+    },
+    "inspection": {
+      "none": "Nicht nötig",
+      "pending": "Zurückgestellt",
+      "accepted": "Freigegeben",
+      "rejected": "Abgelehnt"
+    },
+    "event": {
+      "created": "Eröffnet",
+      "line_changed": "Position geändert",
+      "posted": "Gebucht",
+      "accepted": "Freigegeben",
+      "rejected": "Abgelehnt",
+      "reversed": "Storniert",
+      "cancelled": "Verworfen",
+      "over_receipt": "Mehrlieferung angenommen"
+    },
+    "form": {
+      "createTitle": "Wareneingang eröffnen",
+      "lineTitle": "Position erfassen",
+      "po": "Bestellung",
+      "receivedAt": "Eingegangen am",
+      "note": "Hinweis",
+      "poLine": "Bestellposition",
+      "qty": "Gelieferte Menge",
+      "open": "offen",
+      "hold": "Zur Prüfung zurückstellen (kein Lagerzugang bis zur Freigabe)",
+      "lot": "Bestehende Charge",
+      "serial": "Bestehende Seriennummer",
+      "noneSelected": "Keine",
+      "newLot": "Neue Chargennummer",
+      "newLotHint": "Die Chargennummer ab Lieferschein. Eine gekaufte Charge entsteht meistens genau hier, bei ihrer ersten Lieferung.",
+      "newSerial": "Neue Seriennummer",
+      "serialHint": "Eine Seriennummer ist ein einzelnes Stück, eine solche Position nimmt darum 1 auf.",
+      "serialReturnHint": "Seriennummern, die aktuell an keinem Lagerort liegen: was schon im Regal steht, lassen wir weg, sonst zählst du ein Stück doppelt.",
+      "optional": "optional",
+      "reverseReason": "Grund für die Stornierung",
+      "rejectReason": "Grund für die Ablehnung"
+    },
+    "errors": {
+      "nothing_open": "Auf dieser Bestellung ist nichts mehr offen.",
+      "qty_exceeds_open": "Mehr, als die Bestellung noch offen hat. Reduziere die Menge oder erlaube Mehrlieferungen in den Einstellungen.",
+      "over_receipt": "Über der Toleranz, die dieser Mandant für Mehrlieferungen erlaubt. Reduziere die Menge oder erhöhe die Toleranz.",
+      "line_already_billed": "Gegen diese Position wurde bereits eine Kreditorenrechnung abgeglichen, sie lässt sich darum nicht stornieren.",
+      "location_required": "Wähle einen Lagerort für diese Position: die Ware muss irgendwo landen.",
+      "period_locked": "Die Periode, zu der dieser Wareneingang gehört, ist gesperrt. Entsperre sie zuerst unter Perioden.",
+      "insufficient_stock": "Die Ware hat das Lager bereits verlassen, der Wareneingang lässt sich darum nicht mehr stornieren. Erfasse stattdessen eine Lagerkorrektur.",
+      "invalid_transition": "Im aktuellen Zustand des Wareneingangs ist das nicht möglich.",
+      "invalid_qty": "Prüf die Menge: eine ganze Zahl grösser als null, und genau 1 auf einer Position mit Seriennummer.",
+      "lot_required": "Dieser Artikel ist chargengeführt: wähle eine Charge für die Position, oder erfasse die Chargennummer ab Lieferschein.",
+      "serial_required": "Dieser Artikel ist seriengeführt: wähle eine Seriennummer für die Position, oder erfasse sie ab Lieferschein.",
+      "tracking_not_applicable": "Dieser Artikel ist weder chargen- noch seriengeführt, er kann darum keine tragen.",
+      "lot_number_taken": "Diese Chargennummer gibt es für diesen Artikel schon. Nimm sie stattdessen aus der Liste.",
+      "serial_number_taken": "Diese Seriennummer gibt es für diesen Artikel schon."
+    }
+  },
+  "help": {
+    "GoodsReceipt": {
+      "title": "Wareneingänge",
+      "body": "Wareneingänge erfassen, was zu einer Bestellung tatsächlich angekommen ist: Positionen mit Menge, Kostenwert, Lagerort und Prüfstatus.\n\nEin Entwurf lässt sich bearbeiten und buchen. Ein gebuchter Wareneingang ist unveränderlich und wird bei Bedarf storniert.\n\nJede anerkannte Position erzeugt ihre eigene Lagerbewegung mit dem Datum des Belegs. Eine geschlossene Periode nimmt keine Buchung mehr an.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "asOf": "2026-07-19",
+  "boundariesDays": [
+    30,
+    60,
+    90
+  ],
+  "byBucket": {
+    "0-30": 143200,
+    "31-60": 108100,
+    "61-90": 108100,
+    "90+": 48100
+  },
+  "baseByBucket": {
+    "0-30": 143200,
+    "31-60": 108100,
+    "61-90": 108100,
+    "90+": 48100
+  },
+  "byCustomer": [
+    {
+      "customerId": "contact_2",
+      "customerName": "Beispiel GmbH",
+      "openItemCount": 2,
+      "totalOpenMinor": 216200,
+      "baseTotalOpenMinor": 216200,
+      "bucketTotals": {
+        "0-30": 0,
+        "31-60": 108100,
+        "61-90": 108100,
+        "90+": 0
+      },
+      "baseBucketTotals": {
+        "0-30": 0,
+        "31-60": 108100,
+        "61-90": 108100,
+        "90+": 0
+      },
+      "oldestOverdueDays": 90
+    },
+    {
+      "customerId": "contact_1",
+      "customerName": "Muster AG",
+      "openItemCount": 5,
+      "totalOpenMinor": 191300,
+      "baseTotalOpenMinor": 191300,
+      "bucketTotals": {
+        "0-30": 143200,
+        "31-60": 0,
+        "61-90": 0,
+        "90+": 48100
+      },
+      "baseBucketTotals": {
+        "0-30": 143200,
+        "31-60": 0,
+        "61-90": 0,
+        "90+": 48100
+      },
+      "oldestOverdueDays": 140
+    }
+  ],
+  "totalOpenMinor": 407500,
+  "baseTotalOpenMinor": 407500,
+  "baseCurrency": "CHF",
+  "receivablesBalanceMinor": 407500,
+  "reconciled": true,
+  "reconciliationDifferenceMinor": 0,
+  "ok": true
+}
