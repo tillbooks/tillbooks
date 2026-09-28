@@ -36,7 +36,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DetailDrawer } from '../../components/DetailDrawer';
@@ -345,9 +345,7 @@ export function SalesOrders() {
 
   const errorMessage = (error: Err): string => {
     const known = ['no_lines', 'over_delivery', 'insufficient_stock', 'has_deliveries', 'nothing_to_invoice', 'invalid_transition', 'not_issued', 'invalid_reference', 'unknown_item', 'invalid_qty'];
-    if (known.includes(error.error)) return t(`so.error.${error.error}`);
-    if (error.error === 'permission_denied') return t('so.error.permissionDenied.write');
-    return t('errors.fallback');
+    return refusalText(t, error, { own: 'so.error', known, keys: { permission_denied: 'so.error.permissionDenied.write' } });
   };
 
   if (workspaceId === null) return <NoWorkspaceState />;

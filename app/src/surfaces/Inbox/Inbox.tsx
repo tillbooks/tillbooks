@@ -28,7 +28,7 @@ import { useT, formatDate } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Status, type StatusKind } from '../../components/Status';
 import { Select } from '../../components/Select';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import './Inbox.css';
 
 /** A fresh key per write, so a retry after a transport failure is a retry and not a second write. */
@@ -275,8 +275,7 @@ export function Inbox() {
 
   const errorMessage = (error: Err): string => {
     const known = ['forbidden', 'notification_not_found', 'invalid_channel', 'inbox_is_always_instant', 'unknown_event'];
-    if (known.includes(error.error)) return t(`notifications.error.${error.error}`);
-    return t('errors.fallback');
+    return refusalText(t, error, { own: 'notifications.error', known });
   };
 
   if (workspaceId === null) return <NoWorkspaceState />;

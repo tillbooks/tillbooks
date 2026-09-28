@@ -75,13 +75,17 @@ export const PROVEN_POSTING_VERBS = [
   {
     verb: 'set_bank_opening_balance',
     why: 'posts the bank opening balance against 9100 as one balanced entry',
-    hops: [{ at: 'src/core/banking/bankAccounts.ts:521', fn: 'setBankOpeningBalance', calls: 'postEntry' }],
+    // Two hops since critic R2-4: the verb runs its body inside one `store.tx`.
+    hops: [
+      { at: 'src/core/banking/bankAccounts.ts:471', fn: 'setBankOpeningBalance', calls: 'setBankOpeningBalanceUnderLock' },
+      { at: 'src/core/banking/bankAccounts.ts:531', fn: 'setBankOpeningBalanceUnderLock', calls: 'postEntry' },
+    ],
   },
   {
     verb: 'mark_batch_paid',
     why: 'books one outgoing payment per item through A14 recordPayment',
     hops: [
-      { at: 'src/core/banking/pain001.ts:1074', fn: 'markBatchPaid', calls: 'recordPayment' },
+      { at: 'src/core/banking/pain001.ts:1062', fn: 'markBatchPaid', calls: 'recordPayment' },
       { at: 'src/core/payments/payment.ts:2000', fn: 'recordPayment', calls: 'postEntry' },
     ],
   },
@@ -404,7 +408,7 @@ test('the proof check bites: a moved line, a wrong function and a non-posting la
   assert.match(moved[0] ?? '', /buildInvoicePosting calls it at src\/core\/sales\/invoice\.ts:\d+/);
   const wrongFn = checkProof({ verb: 'x', why: '', hops: [{ at: 'src/core/sales/invoice.ts:263', fn: 'issueInvoice', calls: 'postEntry' }] }, read);
   assert.match(wrongFn.join('\n'), /sits in buildInvoicePosting, not issueInvoice/);
-  const notPosting = checkProof({ verb: 'x', why: '', hops: [{ at: 'src/core/banking/pain001.ts:1074', fn: 'markBatchPaid', calls: 'recordPayment' }] }, read);
+  const notPosting = checkProof({ verb: 'x', why: '', hops: [{ at: 'src/core/banking/pain001.ts:1062', fn: 'markBatchPaid', calls: 'recordPayment' }] }, read);
   assert.match(notPosting.join('\n'), /the last hop calls recordPayment, not postEntry or reverseEntry/);
 });
 

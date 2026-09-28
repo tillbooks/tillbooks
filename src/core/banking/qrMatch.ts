@@ -60,6 +60,9 @@ import {
 import type { DocRow } from '../payments/payment.js';
 import { listOpenItems } from '../debtors/openItems.js';
 import { applySavedView } from '../customization/views.js';
+// A15's ONE "is this booked fee LIVE" predicate, imported from the file directly (never the dunning
+// barrel), the edge `debtors/openItems.ts` already takes: `reads.ts` imports nothing from banking.
+import { liveDunningFeeItemsAsOf } from '../dunning/reads.js';
 
 // --- The closed enumerations (§H-ENUM, single point) ---------------------------------------------
 
@@ -218,6 +221,25 @@ function runGuarded(body: () => Result): Result {
   }
 }
 
+/**
+ * A39 L2: a credit an imported camt line carries is decided on the bank inbox only (`book_bank_line`,
+ * `ignore_bank_line`, `reopen_bank_line`), and its row here only FOLLOWS that line. Such a credit is known
+ * by the DECLARED `bank_txn.credit_id` (a G04 restore remaps it) or by a non-null
+ * `reconciliation_match.bank_txn_id`, never by resolving that id, which a restore leaves foreign (spec C6).
+ * A hand-typed credit (`record_incoming_credit`) keeps its verbs here.
+ */
+function camtCreditRefusal(ctx: WorkspaceContext, row: CreditRow): Result | null {
+  const line = ctx.store.db
+    .prepare('SELECT id FROM bank_txn WHERE workspace_id = ? AND credit_id = ?')
+    .get(ctx.workspaceId, row.id) as { id: string } | undefined;
+  if (line === undefined && row.bank_txn_id === null) return null;
+  return err('use_bank_inbox', {
+    creditId: row.id,
+    bankTxnId: line?.id ?? row.bank_txn_id,
+    reason: 'this credit came from an imported bank statement; decide its line on the bank inbox (book_bank_line)',
+  });
+}
+
 /** Optional reference: absent or null (no structured reference), or a string. */
 function optionalReference(value: unknown): ReturnType<typeof err> | null {
   if (value === undefined || value === null || typeof value === 'string') return null;
@@ -267,6 +289,135 @@ function openItemFigures(
   return map;
 }
 
+// --- A39: one settlement plan for an invoice, fee included (spec A39 §0.1 D-A39.2, walk B5.2) ------
+
+/** One booked, LIVE Mahngebühr still open on an invoice: A14's `dunning_fee` allocation target. */
+export interface OpenInvoiceFee {
+  dunningItemId: string;
+  level: number;
+  openMinor: number;
+}
+
+/** What an invoice still asks for, read from A14/A16/A15 exactly as the scorer reads it. */
+export interface InvoiceSettlementFigures {
+  documentId: string;
+  status: string;
+  contactId: string | null;
+  currency: string;
+  /** Total minus settled: the A14 allocation cap on the document itself. */
+  grossOpenMinor: number;
+  /** Linked open credit-note value (A13) the payer already holds. */
+  creditedMinor: number;
+  /** Gross open net of the credit notes: what a correct payer pays on the invoice itself. */
+  principalMinor: number;
+  /** Every live booked fee with something still open, lowest level first. */
+  fees: OpenInvoiceFee[];
+  feesOpenMinor: number;
+}
+
+/**
+ * The figures of one issued invoice as of `asOf`, or undefined when `documentId` names no invoice of
+ * this workspace. The FEES are read per `dunning_item` (A15's live predicate) with A14's own settled
+ * sum per fee, so a fee half paid by an earlier payment offers only its rest.
+ */
+export function invoiceSettlementFigures(
+  ctx: WorkspaceContext,
+  documentId: string,
+  asOf: string,
+): InvoiceSettlementFigures | undefined {
+  const doc = ctx.store.db
+    .prepare(
+      `SELECT id, status, contact_id, currency, total_minor FROM document
+        WHERE workspace_id = ? AND id = ? AND type = 'invoice'`,
+    )
+    .get(ctx.workspaceId, documentId) as
+    | { id: string; status: string; contact_id: string | null; currency: string; total_minor: number }
+    | undefined;
+  if (doc === undefined) return undefined;
+  const grossOpenMinor = Math.max(0, doc.total_minor - settledMinor(ctx, 'document', doc.id));
+  const creditedMinor = openItemFigures(ctx).get(doc.id)?.creditedMinor ?? 0;
+  const principalMinor = Math.max(0, grossOpenMinor - creditedMinor);
+  const fees = liveDunningFeeItemsAsOf(ctx, asOf)
+    .filter((f) => f.documentId === doc.id)
+    .sort((a, b) => a.level - b.level || a.id.localeCompare(b.id))
+    .map((f) => ({ dunningItemId: f.id, level: f.level, openMinor: Math.max(0, f.feeMinor - settledMinor(ctx, 'dunning_fee', f.id)) }))
+    .filter((f) => f.openMinor > 0);
+  return {
+    documentId: doc.id,
+    status: doc.status,
+    contactId: doc.contact_id,
+    currency: doc.currency,
+    grossOpenMinor,
+    creditedMinor,
+    principalMinor,
+    fees,
+    feesOpenMinor: fees.reduce((s, f) => s + f.openMinor, 0),
+  };
+}
+
+/** How one incoming amount settles an invoice: document first, then each open fee, then the surplus. */
+export interface InvoiceSettlementPlan {
+  allocations: { documentId?: string; dunningItemId?: string; amountMinor: number; writeOffMinor?: number }[];
+  documentAllocMinor: number;
+  feeAllocMinor: number;
+  writeOffMinor: number;
+  /** Cash left after every allocation: parked as a Guthaben by A14. */
+  surplusMinor: number;
+  /** What the customer still owes on this invoice after the payment (principal and fees). */
+  shortfallMinor: number;
+  documentOpenAfterMinor: number;
+  feeOpenAfterMinor: number;
+}
+
+/**
+ * The ONE allocation order for an incoming payment on an invoice (A39 D-A39.2, fixing walk B5.2): the
+ * document up to its A14 cap, then every live Mahngebühr through A14's `dunning_fee` target, and only
+ * then a surplus parks as a Guthaben. Before A39 the fee share always parked, so a payment CHF 0.50 short
+ * of invoice plus fee settled the invoice, parked CHF 19.50, and left CHF 20.00 of fee open that no
+ * picker could settle. `writeOff` forgives the PRINCIPAL shortfall only (A14's `writeOffMinor` on the
+ * document); an unpaid fee stays open and named.
+ */
+export function planInvoiceSettlement(
+  fig: InvoiceSettlementFigures,
+  amountMinor: number,
+  writeOff: boolean,
+): InvoiceSettlementPlan {
+  const settleable = SETTLEABLE_STATUSES.has(fig.status) && fig.grossOpenMinor > 0;
+  let rest = amountMinor;
+  const documentAllocMinor = settleable ? Math.min(rest, fig.grossOpenMinor) : 0;
+  rest -= documentAllocMinor;
+  const writeOffMinor =
+    writeOff && settleable && documentAllocMinor < fig.principalMinor ? fig.principalMinor - documentAllocMinor : 0;
+  const allocations: InvoiceSettlementPlan['allocations'] = [];
+  if (documentAllocMinor > 0) {
+    allocations.push({
+      documentId: fig.documentId,
+      amountMinor: documentAllocMinor,
+      ...(writeOffMinor > 0 ? { writeOffMinor } : {}),
+    });
+  }
+  let feeAllocMinor = 0;
+  for (const fee of fig.fees) {
+    if (rest <= 0) break;
+    const take = Math.min(rest, fee.openMinor);
+    allocations.push({ dunningItemId: fee.dunningItemId, amountMinor: take });
+    feeAllocMinor += take;
+    rest -= take;
+  }
+  const documentOpenAfterMinor = Math.max(0, fig.principalMinor - documentAllocMinor - writeOffMinor);
+  const feeOpenAfterMinor = fig.feesOpenMinor - feeAllocMinor;
+  return {
+    allocations,
+    documentAllocMinor,
+    feeAllocMinor,
+    writeOffMinor,
+    surplusMinor: rest,
+    shortfallMinor: documentOpenAfterMinor + feeOpenAfterMinor,
+    documentOpenAfterMinor,
+    feeOpenAfterMinor,
+  };
+}
+
 interface InvoiceHit {
   doc: DocRow & { contact_name: string | null };
   open: boolean;
@@ -304,14 +455,18 @@ function invoicesByReference(ctx: WorkspaceContext, value: string): InvoiceHit[]
     // amount the scorer must expect (A15's `principalOf`, one capability over). An invoice whose
     // credit notes cover it entirely has nothing left for a payment to settle.
     const principalMinor = Math.max(0, grossOpenMinor - creditedMinor);
-    const open = principalMinor > 0 && SETTLEABLE_STATUSES.has(doc.status);
+    const feeMinor = figures.get(doc.id)?.feeMinor ?? 0;
+    // A39 (walk B5.2): an invoice whose principal is paid but whose Mahngebühr is still open is still
+    // OPEN under its reference: the fee is settleable through A14's `dunning_fee` target, so a payer
+    // who sends the rest must find it, not an `already_paid` refusal.
+    const open = (principalMinor > 0 && SETTLEABLE_STATUSES.has(doc.status)) || feeMinor > 0;
     hits.push({
       doc,
       open,
       grossOpenMinor,
-      principalMinor,
+      principalMinor: SETTLEABLE_STATUSES.has(doc.status) ? principalMinor : 0,
       creditedMinor,
-      feeMinor: figures.get(doc.id)?.feeMinor ?? 0,
+      feeMinor,
     });
   }
   return hits;
@@ -737,6 +892,8 @@ export function applyQrMatch(ctx: WorkspaceContext, input: ApplyQrMatchInput): R
 
   const row = readCreditRow(ctx, input.creditId as string);
   if (row === undefined) return err('not_found', { creditId: input.creditId });
+  const camt = camtCreditRefusal(ctx, row);
+  if (camt !== null) return camt;
   if (row.status === 'dismissed') {
     return err('credit_dismissed', { creditId: row.id, reason: 'override the dismissal first' });
   }
@@ -821,10 +978,15 @@ export function applyQrMatch(ctx: WorkspaceContext, input: ApplyQrMatchInput): R
   // actually owes, and only the principal may ever feed a write-off. Without the netting, a payer
   // settling a credited invoice's net booked the Gutschrift's value to 3805 as a fictitious loss
   // while the credit note dangled: the reduction counted twice.
-  const grossOpenMinor = doc.total_minor - settledMinor(ctx, 'document', doc.id);
-  const creditedMinor = openItemFigures(ctx).get(doc.id)?.creditedMinor ?? 0;
-  const principalMinor = Math.max(0, grossOpenMinor - creditedMinor);
-  if (principalMinor <= 0 || !SETTLEABLE_STATUSES.has(doc.status)) {
+  // A39 (walk B5.2): the figures and the allocation order come from ONE plan, `planInvoiceSettlement`,
+  // which settles the document, then every live Mahngebühr through A14's `dunning_fee` target, and only
+  // then parks a surplus. An invoice whose principal is already paid but whose fee is still open stays
+  // settleable (the fee alone), where it used to refuse `already_paid` from the very picker offering it.
+  const settleDate = row.value_date;
+  const figures = invoiceSettlementFigures(ctx, doc.id, settleDate);
+  if (figures === undefined) return err('not_found', { invoiceId: input.invoiceId });
+  const principalMinor = SETTLEABLE_STATUSES.has(doc.status) ? figures.principalMinor : 0;
+  if (principalMinor <= 0 && figures.feesOpenMinor <= 0) {
     return err('already_paid', { invoiceId: doc.id, status: doc.status });
   }
 
@@ -839,13 +1001,13 @@ export function applyQrMatch(ctx: WorkspaceContext, input: ApplyQrMatchInput): R
     return err('needs_bank_account', { bankAccountId: row.bank_account_id });
   }
 
-  const allocateMinor = Math.min(row.amount_minor, grossOpenMinor);
   // The residual an accept-as-full would forgive, measured against the PRINCIPAL (F4), and bounded
   // by A14's own one-click threshold (F3): the same `writeOffThresholdOf` every A14 path consults,
   // never a second figure of A21's own. Above it, the verb refuses with the amount named: a larger
   // Ausbuchung is typed deliberately through record_payment's writeOffMinor, never derived from a
   // mode word (the A14 idiom: the threshold governs what a ONE-CLICK act may forgive).
-  const writeOffMinor = mode === 'full' && row.amount_minor < principalMinor ? principalMinor - row.amount_minor : 0;
+  const plan = planInvoiceSettlement(figures, row.amount_minor, mode === 'full');
+  const writeOffMinor = plan.writeOffMinor;
   if (writeOffMinor > 0) {
     const thresholdMinor = writeOffThresholdOf(ctx);
     if (writeOffMinor > thresholdMinor) {
@@ -868,19 +1030,13 @@ export function applyQrMatch(ctx: WorkspaceContext, input: ApplyQrMatchInput): R
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'apply_qr_match', () => {
       const paid = recordPayment(ctx, {
         direction: 'incoming',
-        date: row.value_date,
+        date: settleDate,
         amountMinor: row.amount_minor,
         currency: row.currency,
         bankAccountId: bankLink.ledger_account_id,
         ...(doc.contact_id !== null ? { counterpartyKind: 'customer', counterpartyId: doc.contact_id } : {}),
         ...(row.reference_value !== null ? { reference: row.reference_value } : {}),
-        allocations: [
-          {
-            documentId: doc.id,
-            amountMinor: allocateMinor,
-            ...(writeOffMinor > 0 ? { writeOffMinor } : {}),
-          },
-        ],
+        allocations: plan.allocations,
         source: 'qr',
         intent: PAYMENT_INTENTS.record,
         idempotencyKey: `qr-apply-${row.id}-g${generation}`,
@@ -977,24 +1133,32 @@ export function overrideQrMatch(ctx: WorkspaceContext, input: OverrideQrMatchInp
       paymentId: row.payment_id,
     });
   }
+  const camt = camtCreditRefusal(ctx, row);
+  if (camt !== null) return camt;
   if (row.status === 'dismissed' && hasAction && input.action === 'dismiss') {
     // Re-dismissing a dismissed row is the state it is already in: idempotent, not an error.
     return ok<OverrideQrMatchOk>({ credit: creditView(ctx, row), reversedPaymentId: null });
   }
-
   return runGuarded(() =>
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'override_qr_match', () => {
     let reversedPaymentId: string | null = null;
     let reversed = parseReversed(row);
 
     if (wasApplied) {
-      const undone = reversePayment(ctx, {
-        paymentId: row.payment_id as string,
-        intent: PAYMENT_INTENTS.reverse,
-        idempotencyKey: `qr-override-${row.id}-${row.payment_id}`,
-      });
-      // Abort, never memoise: a period lock on the reversal must stay retryable (see runGuarded).
-      if (!undone.ok) throw new QrAbort(undone);
+      // Critic A39-7: a payment already reversed elsewhere (reverse_payment by hand) is not reversed
+      // twice; the queue row simply follows the fact.
+      const current = ctx.store.db
+        .prepare('SELECT status FROM payment WHERE workspace_id = ? AND id = ?')
+        .get(ctx.workspaceId, row.payment_id) as { status: string } | undefined;
+      if (current?.status !== 'reversed') {
+        const undone = reversePayment(ctx, {
+          paymentId: row.payment_id as string,
+          intent: PAYMENT_INTENTS.reverse,
+          idempotencyKey: `qr-override-${row.id}-${row.payment_id}`,
+        });
+        // Abort, never memoise: a period lock on the reversal must stay retryable (see runGuarded).
+        if (!undone.ok) throw new QrAbort(undone);
+      }
       reversedPaymentId = row.payment_id;
       reversed = [...reversed, row.payment_id as string];
       const now = ctx.clock.now();

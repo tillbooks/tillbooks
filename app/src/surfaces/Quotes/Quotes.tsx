@@ -38,7 +38,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatMoney, formatDate } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DetailDrawer } from '../../components/DetailDrawer';
@@ -303,9 +303,7 @@ export function Quotes() {
       'illegal_transition',
       'invalid_reference',
     ];
-    if (known.includes(error.error)) return t(`quotes.error.${error.error}`);
-    if (error.error === 'permission_denied') return t('quotes.error.permissionDenied.write');
-    return t('errors.fallback');
+    return refusalText(t, error, { own: 'quotes.error', known, keys: { permission_denied: 'quotes.error.permissionDenied.write' } });
   };
 
   if (workspaceId === null) return <NoWorkspaceState />;

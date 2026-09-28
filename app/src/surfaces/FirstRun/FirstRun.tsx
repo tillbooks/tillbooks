@@ -47,7 +47,7 @@ import { NAV_ITEMS } from '../../app/nav';
 import { useT, formatDate } from '../../i18n';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
-import { ErrorBanner, Skeleton } from '../../components/states';
+import { ErrorBanner, Skeleton, refusalText } from '../../components/states';
 import { RuntimeLine } from './RuntimeLine';
 import './FirstRun.css';
 
@@ -168,9 +168,15 @@ export function FirstRun() {
         runtime: String(body.currentSchemaVersion ?? '?'),
       });
     }
-    return KNOWN_ERRORS.has(body.error)
-      ? t(`firstrun.error.${body.error}`)
-      : t('firstrun.error.generic', { code: body.error });
+    // A refusal after the action had written (a restore or a demo saved, then the book moved on to a
+    // newer TILL, critic R4-1) must not say "the file was not changed, try again": `refusalText` gives
+    // the shared sentence that says what was saved, and never invites a repeat that would do it twice.
+    return refusalText(t, body, {
+      own: 'firstrun.error',
+      known: KNOWN_ERRORS,
+      fallback: 'firstrun.error.generic',
+      fallbackParams: { code: body.error },
+    });
   };
 
   async function onCreate(e: React.FormEvent) {

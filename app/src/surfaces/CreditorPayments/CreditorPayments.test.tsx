@@ -208,6 +208,67 @@ describe('CreditorPayments, the five states', () => {
     expect(screen.getByRole('button', { name: 'Als bezahlt markieren' })).toBeTruthy();
   });
 
+  it('A36: for an account routed over EBICS the file is uploaded and released in eBanking, and nothing offers a transmit', async () => {
+    const user = userEvent.setup();
+    const calls: string[] = [];
+    const base = transportFor({
+      create_payment_batch: ok({ batchId: 'pbatch_1', batch: BATCH_DRAFT }),
+      generate_pain001: ok({
+        batchId: 'pbatch_1',
+        xmlBase64: Buffer.from('<Document/>').toString('base64'),
+        filename: 'pain001-pbatch_1.xml',
+        valid: true,
+        warnings: [],
+        ctrlSumMinor: 108100,
+        nbOfTxs: 1,
+        transmitted: false,
+        reason: 'upload_in_ebanking',
+        batch: BATCH_GENERATED,
+      }),
+    });
+    renderWith(async (action, input) => {
+      calls.push(action);
+      return base(action, input);
+    });
+    await screen.findByText('Lieferant GmbH');
+    const generate = screen.getByRole('button', { name: 'pain.001 generieren' });
+    await waitFor(() => expect(generate).not.toHaveProperty('disabled', true));
+    await user.click(generate);
+    expect(await screen.findByText('Datei ist gültig')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Datei herunterladen' })).toBeTruthy();
+    expect(screen.getByText(/Der EBICS-Kanal ruft nur Kontoauszüge ab\. Lade diese Datei im eBanking deiner Bank hoch und gib die Zahlung dort frei/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /An Bank übertragen/ })).toBeNull();
+    expect(calls).not.toContain('payment_batch_transmit');
+  });
+
+  it('A36: even an older engine that answers use_payment_batch_transmit gets no transmit control (the channel uploads nothing)', async () => {
+    const user = userEvent.setup();
+    renderWith(
+      transportFor({
+        create_payment_batch: ok({ batchId: 'pbatch_1', batch: BATCH_DRAFT }),
+        generate_pain001: ok({
+          batchId: 'pbatch_1',
+          xmlBase64: Buffer.from('<Document/>').toString('base64'),
+          filename: 'pain001-pbatch_1.xml',
+          valid: true,
+          warnings: [],
+          ctrlSumMinor: 108100,
+          nbOfTxs: 1,
+          transmitted: false,
+          reason: 'use_payment_batch_transmit',
+          batch: BATCH_GENERATED,
+        }),
+      }),
+    );
+    await screen.findByText('Lieferant GmbH');
+    const generate = screen.getByRole('button', { name: 'pain.001 generieren' });
+    await waitFor(() => expect(generate).not.toHaveProperty('disabled', true));
+    await user.click(generate);
+    expect(await screen.findByText('Datei ist gültig')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /An Bank übertragen/ })).toBeNull();
+    expect(screen.getByText(/lade sie selbst in dein E-Banking hoch/)).toBeTruthy();
+  });
+
   it('F-03 (J3.4): pre-selects the bills due by the execution date, in one currency, and debits the account in that currency', async () => {
     const user = userEvent.setup();
     const today = new Date().toISOString().slice(0, 10);

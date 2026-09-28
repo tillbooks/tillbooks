@@ -30,7 +30,7 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err, type RestResponse } from '../../lib/client';
 import { useWorkspace, useWorkspaceId } from '../../app/workspace';
 import { useT, useI18n, type I18n } from '../../i18n';
-import { Skeleton, EmptyState, ErrorBanner, PermissionDenied } from '../../components/states';
+import { Skeleton, EmptyState, ErrorBanner, PermissionDenied, refusalText } from '../../components/states';
 import { Select } from '../../components/Select';
 import { useCan, CAP } from '../../lib/capabilities';
 import { AlertGlyph, LockGlyph } from '../../components/states/glyphs';
@@ -136,7 +136,7 @@ const FIELD_ERR_KEY: Record<string, string> = {
 
 function fieldErrMessage(t: I18n['t'], err: Err): string {
   const key = FIELD_ERR_KEY[err.error];
-  return key !== undefined ? t(key) : t('errors.fallback');
+  return key !== undefined ? t(key) : refusalText(t, err);
 }
 
 /** A workspace id that arrives blank must never be threaded into a ctx verb; treat it as none. */
@@ -414,7 +414,7 @@ const IDENTITY_ERR_KEY: Record<string, string> = {
 function firstHourErrMessage(t: I18n['t'], e: FirstHourError): string {
   if (e.field === 'vat') return t('company.err.vatFailed');
   const key = FIELD_ERR_KEY[e.err.error] ?? IDENTITY_ERR_KEY[e.err.error];
-  return key !== undefined ? t(key) : t('errors.fallback');
+  return key !== undefined ? t(key) : refusalText(t, e.err);
 }
 
 /**

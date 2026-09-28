@@ -1,30 +1,32 @@
 /**
- * A36, the EBICS 3.0 HTTPS transport SEAM (`createEbicsHttpsTransport`): a host-wired implementation
- * of `EbicsTransportPort` speaking client-initiated HTTPS to the user's OWN bank over the user's OWN
- * EBICS contract (D29/OP4: OSS-core, user-owned keys, egress from the user's own device).
+ * A36, the EBICS 3.0 (H005) transport SEAM (`createEbicsHttpsTransport`): the host-wired implementation
+ * of `EbicsTransportPort` over the private live wire (contract version 2, download only). D29/OP4:
+ * OSS core, user-owned keys, egress from the user's own device.
  *
- * WHERE THE LINE IS (D108). The actual socket I/O, the LIVE bank wire, is RUNTIME, not OSS core: the
- * `till` CLI / Studio runtime completes `openWire` with a real `node:https` request over the
- * connection's `host_url`. This module ships everything UP TO that wire: the EBICS 3.0/BTF order-type
- * mapping (SMPG v1.3-cited), the ZIP-container unpack that hands A20 the bytes the bank wrote
- * BYTE-FOR-BYTE, the explicit `download` -> `acknowledge` split (A36 §4), and the outbound-only posture
- * (NO listener, NO webhook, NO callback surface exists here). Where the live wire would be invoked, the
- * OSS core returns the honest degradation `needs_bank_transport` rather than opening a socket, so this
- * module opens NO socket and the E07 offline proof holds even when it is wired. The runtime supplies
- * `wire` to make it live.
+ * WHERE THE LINE IS (D108). The socket, the envelopes, the signatures, the response verification and
+ * the order-data crypto are RUNTIME: the private `@tillbooks/ebics-wire` module the host loads through
+ * `TILL_EBICS_RUNTIME` (`src/api/host-runtime.ts`). This module ships everything up to that wire: the
+ * order-type mapping, the ONE statement BTF, the ZIP container reader that hands A20 the bytes the bank
+ * wrote, and the contract checks the core owes the wire (A36-7 W2). With no wire every network step
+ * answers `needs_bank_transport`, so this module opens NO socket and the E07 offline proof holds.
  *
- * THE PROTOCOL CONTRACT, mapped per SIX "Swiss Market Practice Guidelines EBICS", EBICS 3.0, v1.3:
- *  - BTF coding with BTU/BTD as the banking order types (SMPG v1.3 §4); scope code CH for Swiss
- *    payment traffic (§5.2).
- *  - `download({service:'statements'})` -> BTD for the camt.053/054 parameter sets (the Z53/Z54
- *    equivalents); `'status_report'` -> pain.002; `'customer_protocol'` -> HAC.
- *  - Statement containers ALWAYS arrive as a ZIP (SMPG v1.3 §5.5: statements "are always provided by
- *    the financial institutions as ZIP files"); `unpackContainer` decompresses the container (a
- *    container operation, NOT a transform of a bank-authored file) and returns the per-file bytes
- *    verbatim.
- *  - `upload` -> BTU (the XE2 equivalent) WITHOUT the SignatureFlag (A33 tripwire 5, v1 §3): the bank
- *    authorizes out of channel, so TILL never holds sole payment authority.
- *  - TLS 1.2 minimum with platform trust anchors (SMPG v1.3 §3.2); NEVER `rejectUnauthorized:false`.
+ * THE CONTRACT (wire `docs/design-decisions.md` A36-2, A36-7):
+ *  - HEV lists the host's EBICS versions: `ok` with H005, else `unsupported_ebics_version`.
+ *  - INI and HIA are SEPARATE legs, each confirmed only by 000000 at both levels; every other answer
+ *    comes back raw as `codes: {technical, business}` and the core decides (§4.2).
+ *  - BTD requests exactly EOP / CH / ZIP / camt.053 version 08 and returns the VERIFIED container and
+ *    the bank's TransactionID, the receipt handle. A success without a TransactionID of 32 hex digits
+ *    is `ebics_wire_contract_error` (W2): nothing is used and no receipt can follow.
+ *  - BTD-ACK takes that TransactionID and an explicit receipt code: 0 once the core's commit is
+ *    durable, 1 after a failed commit. Never a processing outcome.
+ *  - No upload of any kind and no SPR (D-A36.11, D-A36.12): the port has no method for either.
+ *
+ * THE CONTAINER (SMPG v1.3 §5.5: statements "are always provided ... as ZIP files"). `readZipContainer`
+ * reads the members from the CENTRAL DIRECTORY (so a member written with a data descriptor, general
+ * purpose bit 3, is read, where the old local-header walk stopped silently), checks the member count
+ * against the end record, refuses encryption, anything but STORE and DEFLATE, and an unclean member
+ * name, and checks every member's CRC-32 and size. The wire checks the same container before it
+ * returns it; this is the core's own line, and a failure here is `untrusted_response` (§4.3 step 2).
  */
 
 import { inflateRawSync } from 'node:zlib';
@@ -34,137 +36,244 @@ import type {
   EbicsConnectionRef,
   EbicsFetchedFile,
   EbicsKeyHashes,
-  EbicsDownloadService,
+  EbicsBtf,
+  EbicsReturnCodes,
 } from '../../context.js';
 
-/** The BTF service parameters for each download service (SMPG v1.3 §4/§5); captured per connection at
- *  connect time in real operation, defaulted here for the reader. `msgName` is the container message. */
-export const BTF_DOWNLOAD_SERVICES: Record<EbicsDownloadService, { serviceName: string; msgName: string }> = {
-  // camt.053 statement (the EBICS 2.5 Z53 equivalent), delivered as a ZIP container (SMPG v1.3 §5.5).
-  statements: { serviceName: 'EOP', msgName: 'camt.053' },
-  // pain.002 payment status report (the customer-status feed).
-  status_report: { serviceName: 'PSR', msgName: 'pain.002' },
-  // HAC customer protocol (the channel event feed).
-  customer_protocol: { serviceName: 'HAC', msgName: 'HAC' },
-};
-
-/** The BTU upload parameters for a Swiss credit-transfer batch (pain.001), SMPG v1.3 §5.2 scope CH. */
-export const BTF_UPLOAD_PAIN001 = { serviceName: 'MCT', msgName: 'pain.001', scope: 'CH' } as const;
+export type { EbicsBtf } from '../../context.js';
 
 /**
- * Unpack a ZIP container into its member files, bytes VERBATIM (SMPG v1.3 §5.5). Offline and pure: it
- * reads the local-file-header stream and inflates DEFLATE entries (method 8) or copies STORED entries
- * (method 0). This is decompression of a container, never a transform of the bank-authored XML inside,
- * so the per-file bytes handed to A20 are exactly the bytes the bank wrote (hash-asserted upstream).
- * A non-ZIP payload (some banks hand a single bare XML) is returned as one member unchanged.
+ * The ONE download service (D-A36.3): ZKB's `EOP_CH_camt.053_08_-_ZIP`. Fixed in code: there is no
+ * capture path and `ebics_connection.btf_params` stays unused. Frozen, so no caller can widen it.
  */
-export function unpackContainer(zip: Buffer): { name: string; bytes: Buffer }[] {
-  // Not a ZIP (no PK\x03\x04 local-file-header magic): treat the payload as a single bare file.
-  if (zip.length < 4 || zip[0] !== 0x50 || zip[1] !== 0x4b || zip[2] !== 0x03 || zip[3] !== 0x04) {
-    return [{ name: 'container', bytes: zip }];
+export const STATEMENT_BTF: Readonly<EbicsBtf> = Object.freeze({
+  serviceName: 'EOP',
+  msgName: 'camt.053',
+  scope: 'CH',
+  msgVersion: '08',
+  containerType: 'ZIP',
+});
+
+/** A receipt handle: the bank's TransactionID, 16 octets as 32 hex digits (EBICS hexBinary). */
+const TRANSACTION_ID = /^[0-9A-Fa-f]{32}$/;
+
+// --- the ZIP container -------------------------------------------------------------------------
+
+/** The most members a statement container may carry (a day per member; ZKB delivers far fewer). */
+export const MAX_CONTAINER_MEMBERS = 4096;
+/** The most bytes one member may inflate to (a camt.053 day-end statement is far smaller). */
+export const MAX_MEMBER_BYTES = 64 * 1024 * 1024;
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
   }
-  const out: { name: string; bytes: Buffer }[] = [];
-  let off = 0;
-  while (off + 30 <= zip.length && zip.readUInt32LE(off) === 0x04034b50) {
-    const method = zip.readUInt16LE(off + 8);
-    const compSize = zip.readUInt32LE(off + 18);
-    const nameLen = zip.readUInt16LE(off + 26);
-    const extraLen = zip.readUInt16LE(off + 28);
-    const nameStart = off + 30;
-    const dataStart = nameStart + nameLen + extraLen;
-    if (dataStart + compSize > zip.length) break; // truncated / data-descriptor form: stop honestly
-    const name = zip.subarray(nameStart, nameStart + nameLen).toString('utf8');
-    const comp = zip.subarray(dataStart, dataStart + compSize);
-    const bytes = method === 0 ? Buffer.from(comp) : inflateRawSync(comp);
-    out.push({ name, bytes });
-    off = dataStart + compSize;
-  }
-  return out;
+  return table;
+})();
+
+function crc32(buf: Uint8Array): number {
+  let c = 0xffffffff;
+  for (const byte of buf) c = (CRC_TABLE[(c ^ byte) & 0xff] as number) ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
 }
 
+/** A clean relative member name: no control character, backslash, absolute path, drive or dot segment. */
+function cleanMemberName(name: string): boolean {
+  if (name.length === 0 || name.length > 255) return false;
+  if (/[\u0000-\u001f\u007f\\]/.test(name)) return false;
+  if (name.startsWith('/') || /^[A-Za-z]:/.test(name)) return false;
+  return name.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..');
+}
+
+export type ZipReadResult = { ok: true; members: { name: string; bytes: Buffer }[] } | { ok: false; reason: string };
+
 /**
- * The LIVE bank wire: a single request/response over client-initiated HTTPS to `connection.hostUrl`.
- * D108: this is RUNTIME, not OSS core. The runtime passes a `wire` that performs the real `node:https`
- * request (TLS 1.2 min, platform trust anchors, NEVER `rejectUnauthorized:false`) and returns the raw
- * EBICS response body. Omitted here, so the transport degrades honestly and opens no socket.
+ * Read a ZIP container's members from its central directory, verbatim (a container operation, never a
+ * transform of the bank-authored XML inside). Pure and total: never throws, `{ok:false}` names why.
+ */
+export function readZipContainer(zip: Buffer): ZipReadResult {
+  // The end-of-central-directory record: 22 bytes plus a comment of at most 65535 bytes, at the end.
+  const minEnd = Math.max(0, zip.length - 22 - 0xffff);
+  let eocd = -1;
+  for (let i = zip.length - 22; i >= minEnd; i -= 1) {
+    if (zip.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) return { ok: false, reason: 'no_end_of_central_directory' };
+  if (zip.readUInt16LE(eocd + 4) !== 0 || zip.readUInt16LE(eocd + 6) !== 0) return { ok: false, reason: 'multi_disk_zip' };
+  const count = zip.readUInt16LE(eocd + 10);
+  if (zip.readUInt16LE(eocd + 8) !== count) return { ok: false, reason: 'member_count_mismatch' };
+  if (count === 0) return { ok: false, reason: 'empty_container' };
+  if (count > MAX_CONTAINER_MEMBERS) return { ok: false, reason: 'too_many_members' };
+  const cdSize = zip.readUInt32LE(eocd + 12);
+  const cdOffset = zip.readUInt32LE(eocd + 16);
+  if (cdOffset + cdSize > eocd) return { ok: false, reason: 'central_directory_out_of_range' };
+
+  const members: { name: string; bytes: Buffer }[] = [];
+  const seen = new Set<string>();
+  let p = cdOffset;
+  for (let n = 0; n < count; n += 1) {
+    if (p + 46 > eocd || zip.readUInt32LE(p) !== 0x02014b50) return { ok: false, reason: 'central_directory_truncated' };
+    const flags = zip.readUInt16LE(p + 8);
+    const method = zip.readUInt16LE(p + 10);
+    const crc = zip.readUInt32LE(p + 16);
+    const compSize = zip.readUInt32LE(p + 20);
+    const size = zip.readUInt32LE(p + 24);
+    const nameLen = zip.readUInt16LE(p + 28);
+    const extraLen = zip.readUInt16LE(p + 30);
+    const commentLen = zip.readUInt16LE(p + 32);
+    const localOffset = zip.readUInt32LE(p + 42);
+    const name = zip.subarray(p + 46, p + 46 + nameLen).toString('utf8');
+    p += 46 + nameLen + extraLen + commentLen;
+    if (p > eocd) return { ok: false, reason: 'central_directory_truncated' };
+
+    if ((flags & 0x0001) !== 0 || (flags & 0x0040) !== 0) return { ok: false, reason: 'encrypted_member' };
+    if (method !== 0 && method !== 8) return { ok: false, reason: 'unsupported_compression' };
+    // A folder entry carries no statement: skipped, never imported.
+    if (name.endsWith('/')) {
+      if (size !== 0 || !cleanMemberName(name.slice(0, -1))) return { ok: false, reason: 'unclean_member_name' };
+      continue;
+    }
+    if (!cleanMemberName(name)) return { ok: false, reason: 'unclean_member_name' };
+    const folded = name.toLowerCase();
+    if (seen.has(folded)) return { ok: false, reason: 'duplicate_member_name' };
+    seen.add(folded);
+    if (size > MAX_MEMBER_BYTES) return { ok: false, reason: 'member_too_large' };
+
+    if (localOffset + 30 > cdOffset || zip.readUInt32LE(localOffset) !== 0x04034b50) return { ok: false, reason: 'local_header_missing' };
+    const localFlags = zip.readUInt16LE(localOffset + 6);
+    if ((localFlags & 0x0001) !== 0) return { ok: false, reason: 'encrypted_member' };
+    const dataStart = localOffset + 30 + zip.readUInt16LE(localOffset + 26) + zip.readUInt16LE(localOffset + 28);
+    if (dataStart + compSize > cdOffset) return { ok: false, reason: 'member_out_of_range' };
+    const comp = zip.subarray(dataStart, dataStart + compSize);
+    let bytes: Buffer;
+    try {
+      bytes = method === 0 ? Buffer.from(comp) : inflateRawSync(comp, { maxOutputLength: MAX_MEMBER_BYTES });
+    } catch {
+      return { ok: false, reason: 'member_inflate_failed' };
+    }
+    if (bytes.length !== size) return { ok: false, reason: 'member_size_mismatch' };
+    if (crc32(bytes) !== crc) return { ok: false, reason: 'member_crc_mismatch' };
+    members.push({ name, bytes });
+  }
+  if (members.length === 0) return { ok: false, reason: 'empty_container' };
+  return { ok: true, members };
+}
+
+// --- the wire (contract version 2) -------------------------------------------------------------
+
+/**
+ * The LIVE bank wire, contract version 2 (the private module's `EbicsWire`): one EBICS order per call,
+ * synchronous. D108: RUNTIME, not OSS core. The host passes the module's wire; omitted here, every
+ * network step degrades honestly and no socket is opened.
  */
 export type EbicsWire = (req: {
   connection: EbicsConnectionRef;
   orderType: string;
-  btf?: { serviceName: string; msgName: string };
-  bodyBase64?: string;
-}) => { ok: true; responseBase64: string } | { ok: false; reason: string };
+  btf?: EbicsBtf;
+  transactionId?: string;
+  receiptCode?: 0 | 1;
+}) =>
+  | { ok: true; responseBase64: string; transactionId?: string; codes?: EbicsReturnCodes }
+  | { ok: false; reason: string; codes?: EbicsReturnCodes; phase?: string; detail?: string };
 
 export interface EbicsHttpsTransportOptions {
-  /** The runtime's live HTTPS wire. Absent -> every network step returns `needs_bank_transport`. */
+  /** The runtime's live wire. Absent -> every network step returns `needs_bank_transport`. */
   wire?: EbicsWire;
 }
 
 const DEGRADE = { ok: false as const, reason: 'needs_bank_transport' };
 
+/** Carry a wire failure through as the port's failure, fields and all (the core reads raw codes). */
+function failure(r: { reason: string; codes?: EbicsReturnCodes; phase?: string; detail?: string }): {
+  ok: false;
+  reason: string;
+  codes?: EbicsReturnCodes;
+  phase?: string;
+  detail?: string;
+} {
+  return {
+    ok: false,
+    reason: typeof r.reason === 'string' && r.reason.length > 0 ? r.reason : 'ebics_wire_contract_error',
+    ...(r.codes !== undefined ? { codes: r.codes } : {}),
+    ...(r.phase !== undefined ? { phase: r.phase } : {}),
+    ...(r.detail !== undefined ? { detail: r.detail } : {}),
+  };
+}
+
+/** The wire's answer, or a contract error when a drifted module returns anything but the result union. */
+function shaped<T>(r: T): T | { ok: false; reason: string } {
+  if (r === null || typeof r !== 'object' || typeof (r as { ok?: unknown }).ok !== 'boolean') {
+    return { ok: false, reason: 'ebics_wire_contract_error' };
+  }
+  return r;
+}
+
 /**
- * Build the EBICS 3.0 HTTPS transport. With no `wire` it is a structurally-complete SEAM that degrades
- * honestly (D108); the runtime supplies `wire` to make it live. It opens NO socket itself, so the E07
- * offline proof holds whether or not it is wired.
+ * Build the EBICS transport. With no `wire` it is a structurally complete SEAM that degrades honestly
+ * (D108); the runtime supplies `wire` to make it live. It opens NO socket itself.
  */
 export function createEbicsHttpsTransport(options: EbicsHttpsTransportOptions = {}): EbicsTransportPort {
   const wire = options.wire;
-  // The `ok` variant of a no-payload transport result. `EbicsTransportResult<Record<string, never>>`
-  // has an unsatisfiable structural intersection for the success case (the mock builds it untyped in
-  // JS), so an explicit typed empty-ok is the one place the cast lives.
+  // The `ok` variant of a no-payload result (the one place the structural cast lives).
   const OK = { ok: true } as EbicsTransportResult<Record<string, never>>;
 
   return {
-    sendKeys(req): EbicsTransportResult<Record<string, never>> {
-      // INI + HIA (SMPG v1.3 §6.1). The public-key hashes (req.hashes) are what INI carries; the wire signs.
+    hostVersions(req): EbicsTransportResult<Record<string, never>> {
       if (wire === undefined) return DEGRADE;
-      const r = wire({ connection: req.connection, orderType: 'INI' });
-      return r.ok ? OK : { ok: false, reason: r.reason };
+      const r = shaped(wire({ connection: req.connection, orderType: 'HEV' }));
+      return r.ok ? OK : failure(r);
+    },
+
+    sendKeyLeg(req): EbicsTransportResult<Record<string, never>> {
+      if (wire === undefined) return DEGRADE;
+      const r = shaped(wire({ connection: req.connection, orderType: req.leg }));
+      return r.ok ? OK : failure(r);
     },
 
     fetchBankKeys(req): EbicsTransportResult<{ bankKeyHashes: EbicsKeyHashes }> {
-      // HPB. Parsing the bank's returned public keys into fingerprints is part of the live wire's
-      // response handling (runtime), so with no wire this degrades rather than fabricating hashes.
+      // HPB. Parsing the bank's public keys into hashes is the runtime's (`createEbicsTransport` in the
+      // private module, composed in `host-runtime.ts`), so this seam never fabricates a hash.
       if (wire === undefined) return DEGRADE;
-      const r = wire({ connection: req.connection, orderType: 'HPB' });
-      if (!r.ok) return { ok: false, reason: r.reason };
-      return { ok: false, reason: 'needs_bank_transport' }; // HPB response parsing is runtime (D108)
+      const r = shaped(wire({ connection: req.connection, orderType: 'HPB' }));
+      if (!r.ok) return failure(r);
+      return { ok: false, reason: 'needs_bank_transport' };
     },
 
-    download(req): EbicsTransportResult<{ files: EbicsFetchedFile[]; ackToken: string }> {
-      const btf = BTF_DOWNLOAD_SERVICES[req.service];
+    download(req): EbicsTransportResult<{ transactionId: string; containerBase64: string; files: EbicsFetchedFile[] }> {
       if (wire === undefined) return DEGRADE;
-      const r = wire({ connection: req.connection, orderType: 'BTD', btf });
-      if (!r.ok) return { ok: false, reason: r.reason };
-      // Unpack the ZIP container (SMPG v1.3 §5.5) into per-file bytes, verbatim (A36 §4). The ackToken
-      // is the runtime's opaque handle on the still-open BTD transaction; the receipt is NOT sent here
-      // (the engine persists+imports first, then calls `acknowledge`).
-      const files = unpackContainer(Buffer.from(r.responseBase64, 'base64')).map((f) => ({
-        msgName: btf.msgName,
-        contentBase64: f.bytes.toString('base64'),
-      }));
-      return { ok: true, files, ackToken: `btd-${req.service}-${Date.now()}` };
+      const r = shaped(wire({ connection: req.connection, orderType: 'BTD', btf: { ...STATEMENT_BTF } }));
+      if (!r.ok) return failure(r);
+      // W2: a download success names the transaction it opened, or it cannot be receipted and must not
+      // be used. Refused before anything is persisted; no token is ever minted in its place.
+      if (typeof r.transactionId !== 'string' || !TRANSACTION_ID.test(r.transactionId)) {
+        return { ok: false, reason: 'ebics_wire_contract_error', detail: 'a BTD success without a TransactionID' };
+      }
+      if (typeof r.responseBase64 !== 'string' || r.responseBase64.length === 0) {
+        return { ok: false, reason: 'ebics_wire_contract_error', detail: 'a BTD success without a container' };
+      }
+      const containerBytes = Buffer.from(r.responseBase64, 'base64');
+      const read = readZipContainer(containerBytes);
+      if (!read.ok) return { ok: false, reason: 'untrusted_response', detail: `order_data_integrity: ${read.reason}`, phase: 'Initialisation' };
+      return {
+        ok: true,
+        transactionId: r.transactionId.toUpperCase(),
+        containerBase64: containerBytes.toString('base64'),
+        files: read.members.map((m) => ({ name: m.name, msgName: STATEMENT_BTF.msgName, contentBase64: m.bytes.toString('base64') })),
+      };
     },
 
     acknowledge(req): EbicsTransportResult<Record<string, never>> {
-      // Send the positive EBICS receipt for an open BTD transaction (A36 §4). Runtime wire.
       if (wire === undefined) return DEGRADE;
-      const r = wire({ connection: req.connection, orderType: 'BTD-ACK', bodyBase64: req.ackToken });
-      return r.ok ? OK : { ok: false, reason: r.reason };
-    },
-
-    upload(req): EbicsTransportResult<Record<string, never>> {
-      // BTU WITHOUT the SignatureFlag (A33 tripwire 5, v1 §3): the bank authorizes out of channel.
-      if (wire === undefined) return DEGRADE;
-      const r = wire({ connection: req.connection, orderType: 'BTU', btf: req.btf, bodyBase64: req.payloadBase64 });
-      return r.ok ? OK : { ok: false, reason: r.reason };
-    },
-
-    suspend(req): EbicsTransportResult<Record<string, never>> {
-      // SPR (SMPG v1.3 §6.2): the administrative order that blocks the EBICS user.
-      if (wire === undefined) return DEGRADE;
-      const r = wire({ connection: req.connection, orderType: 'SPR' });
-      return r.ok ? OK : { ok: false, reason: r.reason };
+      const r = shaped(
+        wire({ connection: req.connection, orderType: 'BTD-ACK', transactionId: req.transactionId, receiptCode: req.receiptCode }),
+      );
+      return r.ok ? OK : failure(r);
     },
   };
 }

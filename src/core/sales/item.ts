@@ -362,6 +362,14 @@ export function createItem(ctx: WorkspaceContext, input: CreateItemInput): Resul
 }
 
 export function updateItem(ctx: WorkspaceContext, input: { itemId: string; patch: ItemPatch }): Result {
+  // ONE IMMEDIATE TRANSACTION (critic R2-4). The patch writes `default_unit_price_minor` and
+  // `cost_price_minor`; as a bare autocommit UPDATE it could wait out a newer TILL's migration lock in
+  // the busy handler and then land in the migrated book, where no check saw it. Under `store.tx` the
+  // marker is read under the write lock first, and the checks and the write see one snapshot.
+  return ctx.store.tx(() => updateItemUnderLock(ctx, input));
+}
+
+function updateItemUnderLock(ctx: WorkspaceContext, input: { itemId: string; patch: ItemPatch }): Result {
   const existing = readItem(ctx, input.itemId);
   if (existing === undefined) return err('not_found', { itemId: input.itemId });
 

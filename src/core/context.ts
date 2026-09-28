@@ -76,7 +76,10 @@ export interface EbillTransmitterPort {
 }
 
 /**
- * A33's EBICS transport client (OP4), the seam that speaks EBICS to the bank over the wire.
+ * A33's EBICS transport client (OP4), the seam that speaks EBICS to the bank over the wire. Since A36
+ * (contract version 2, download only) it carries exactly what the Nomadik feed needs: HEV, the two key
+ * legs INI and HIA, HPB, the one statement download BTD and its receipt. There is no upload and no SPR
+ * (D-A36.11, D-A36.12): the port has no method that could send either.
  *
  * The LOCAL EBICS client is OSS-core (owner decision D29): user-owned keys, the user's own bank
  * contract, egress from the user's own device. But the engine stays offline-testable by never opening
@@ -84,12 +87,12 @@ export interface EbillTransmitterPort {
  * implementation is wired by the `till` CLI / Studio at the edge. When NO transport is wired the
  * channel verbs degrade honestly (`needs_bank_transport`, spec §4 P9): connect still does the local
  * work it can (generate keys, render the INI letter, create the connection row), but the network
- * steps wait, and the file-based A20/A18 path stays the visible floor. The core NEVER opens a socket.
+ * steps wait, and the file-based `import_camt` path stays the visible floor. The core NEVER opens a
+ * socket.
  *
- * Every method returns ok ONLY when the bank genuinely completed the step. An implementation that
- * cannot tell (a crash mid-upload) must THROW rather than return ok: a thrown outcome is UNKNOWN (the
- * order stays `intent`, `transmit_in_doubt` becomes visible, §4), while `{ ok:false, reason }` means
- * the bank refused and nothing is in doubt.
+ * Every answer the bank gave comes back RAW (`codes: {technical, business}`, A36 §4.2 and §4.3): the
+ * core, which knows the connection's state, decides what a code means. A method that THROWS reports an
+ * outcome it cannot know (the answer was lost); the channel treats that as "nothing confirmed".
  */
 export interface EbicsConnectionRef {
   hostUrl: string;
@@ -98,61 +101,105 @@ export interface EbicsConnectionRef {
   userIdEbics: string;
   protocolVersion: string;
   keyRef: string;
+  /**
+   * The bank key set the core PINNED after a human compared it against the bank's published values.
+   * Carried on EVERY call after activation, the receipt included (A36 §4.2): the wire verifies every
+   * authenticated response with the pinned X002 key only and refuses bank keys that do not hash to it
+   * (`bank_keys_unverified`). Null before activation.
+   */
+  bankKeyHashes?: EbicsKeyHashes | null | undefined;
 }
 
 export interface EbicsKeyHashes {
+  /** SHA-256 over the key's SPKI DER, lowercase hex: TILL's primary fingerprint since A33. */
   electronicSignature: string;
   authentication: string;
   encryption: string;
+  /**
+   * EBICS 3.0 (H005) certificate hashes: SHA-256 over each key's X.509 certificate DER, lowercase hex,
+   * per purpose. A subscriber keystore reports all three; an HPB result reports `authentication` (X002)
+   * and `encryption` (E002), the values ZKB prints on its "H005 mit Zertifikat" row.
+   */
+  certificateHashes?: Partial<Record<EbicsKeyPurpose, string>> | undefined;
+  /**
+   * The classic EBICS key hash (EBICS 2.5 section 4.4.1.2.3: SHA-256 over the ASCII string
+   * "<exponent hex> <modulus hex>", lowercase, no leading zeros), lowercase hex, per purpose.
+   */
+  keyHashes?: Partial<Record<EbicsKeyPurpose, string>> | undefined;
 }
 
+/** One member of a downloaded container, bytes verbatim (never transformed on the way to A20). */
 export interface EbicsFetchedFile {
-  /** The message name the bank reported (e.g. `camt.053`, `pain.002`, `HAC`). */
+  /** The member's name inside the ZIP container (ZKB names members by pickup date). */
+  name: string;
+  /** The message name of the service (`camt.053`). */
   msgName: string;
-  /** The unpacked file bytes, base64. Handed to A20 byte-for-byte; A33 never transforms it. */
+  /** The member bytes, base64. Handed to A20 byte-for-byte. */
   contentBase64: string;
 }
 
-export type EbicsDownloadService = 'statements' | 'status_report' | 'customer_protocol';
+/** The one download service since A36 (D-A36.3): the day-end camt.053 statements. */
+export type EbicsDownloadService = 'statements';
 
-export type EbicsTransportResult<T> = ({ ok: true } & T) | { ok: false; reason: string };
+/** The two INI/HIA legs: each is confirmed only by 000000 at both levels (A36 §4.2). */
+export type EbicsKeyLeg = 'INI' | 'HIA';
+
+/** The two EBICS return-code levels, raw: header/mutable (technical) and body (business). */
+export interface EbicsReturnCodes {
+  technical: string | null;
+  business: string | null;
+}
+
+/**
+ * One BTF service description (EBICS 3.0 BTF, SMPG v1.3 §4/§5). A36 requests exactly one:
+ * EOP / CH / ZIP / camt.053 version 08 (`transport-https.ts`, `STATEMENT_BTF`).
+ */
+export interface EbicsBtf {
+  serviceName: string;
+  msgName: string;
+  scope?: string | undefined;
+  msgVersion?: string | undefined;
+  containerType?: string | undefined;
+}
+
+/**
+ * A step that did not complete. `reason` is `bank_code` when the bank answered with a code that is not
+ * the step's success (read `codes`), `untrusted_response` when an authenticated answer failed its
+ * checks (`detail` says which), `needs_bank_transport` when no wire is wired, or a transport/protocol
+ * reason. Nothing from a failed step is ever used.
+ */
+export interface EbicsTransportFailure {
+  ok: false;
+  reason: string;
+  codes?: EbicsReturnCodes | undefined;
+  phase?: string | undefined;
+  detail?: string | undefined;
+}
+
+export type EbicsTransportResult<T> = ({ ok: true } & T) | EbicsTransportFailure;
 
 export interface EbicsTransportPort {
-  /** INI + HIA: send TILL's three public keys. `ok` on the bank's acceptance of the initialisation. */
-  sendKeys(req: { connection: EbicsConnectionRef; hashes: EbicsKeyHashes }): EbicsTransportResult<Record<string, never>>;
-  /** HPB: fetch the bank's public keys, returning their fingerprints for out-of-band comparison. */
+  /** HEV: `ok` only when the host offers H005; `unsupported_ebics_version` otherwise (D-A36.2). */
+  hostVersions(req: { connection: EbicsConnectionRef }): EbicsTransportResult<Record<string, never>>;
+  /** INI or HIA, one leg: `ok` only on 000000 at both levels, else `bank_code` with the raw codes. */
+  sendKeyLeg(req: { connection: EbicsConnectionRef; leg: EbicsKeyLeg }): EbicsTransportResult<Record<string, never>>;
+  /** HPB: the bank's X002 and E002 key hashes, for the human review and the pin. */
   fetchBankKeys(req: { connection: EbicsConnectionRef }): EbicsTransportResult<{ bankKeyHashes: EbicsKeyHashes }>;
   /**
-   * BTD transfer phase (A36): fetch pending files for a service and return them WITH an `ackToken`,
-   * the transport's opaque handle on the still-open download transaction, but WITHOUT sending the
-   * positive EBICS receipt. The engine persists every file as an OR 958f artifact and COMMITs, THEN
-   * calls `acknowledge(ackToken)` to close the transaction (spec A36 §4). Splitting the download this
-   * way makes A33 §4's "persist before acknowledging" ordering enforceable by the core rather than
-   * implicit inside the transport: a crash after the commit and before the acknowledge leaves the bank
-   * still offering the data, and the re-fetch is A20's dedupe no-op. SMPG §5.5 statements arrive as a
-   * ZIP; the transport unpacks the container and returns the per-file bytes byte-for-byte.
+   * BTD (A36 §4.3 step 2): the verified statement container and the bank's TransactionID, the receipt
+   * handle. NO receipt is sent here: the core persists and processes first, then calls `acknowledge`.
+   * `files` are the container's members, read from the ZIP central directory with count and CRC checks.
    */
   download(req: {
     connection: EbicsConnectionRef;
     service: EbicsDownloadService;
-    dateRange?: { from?: string; to?: string } | undefined;
-  }): EbicsTransportResult<{ files: EbicsFetchedFile[]; ackToken: string }>;
+  }): EbicsTransportResult<{ transactionId: string; containerBase64: string; files: EbicsFetchedFile[] }>;
   /**
-   * Close a download transaction opened by `download` (A36): send the positive EBICS receipt for the
-   * `ackToken`. Called ONLY after the fetched files are persisted and COMMITTED. Acknowledging a token
-   * the transport no longer holds (a re-run after the bank already received the receipt) is a safe
-   * no-op the implementation reports `ok`.
+   * BTD-ACK (A36 §4.3 step 5): the receipt for `transactionId`. `receiptCode` 0 is POSITIVE (sent only
+   * once the fetched bytes are durably committed and every new member has an outcome), 1 is NEGATIVE
+   * (the commit failed; the bank keeps offering the data). Never a processing outcome.
    */
-  acknowledge(req: { connection: EbicsConnectionRef; ackToken: string }): EbicsTransportResult<Record<string, never>>;
-  /** BTU: upload a payload (pain.001) WITHOUT the SignatureFlag (v1, §3). `ok` only when acknowledged. */
-  upload(req: {
-    connection: EbicsConnectionRef;
-    orderRef: string;
-    payloadBase64: string;
-    btf: { serviceName: string; msgName: string };
-  }): EbicsTransportResult<Record<string, never>>;
-  /** SPR: the administrative order that blocks the EBICS user (SMPG §6.2). */
-  suspend(req: { connection: EbicsConnectionRef }): EbicsTransportResult<Record<string, never>>;
+  acknowledge(req: { connection: EbicsConnectionRef; transactionId: string; receiptCode: 0 | 1 }): EbicsTransportResult<Record<string, never>>;
 }
 
 /**
@@ -267,8 +314,13 @@ export type EbicsKeystoreState = 'ready' | 'locked' | 'unavailable';
 export type EbicsKeyPurpose = 'electronicSignature' | 'authentication' | 'encryption';
 
 export interface EbicsKeystorePort {
-  /** Generate the three key pairs, store the private material, and return a locator plus public fingerprints. */
-  generate(input: { keyLength: number }): { keyRef: string; hashes: EbicsKeyHashes };
+  /**
+   * Generate the three key pairs with their self-signed X.509 certificates (A36 §4.2, CN =
+   * `subjectCommonName`, the EBICS user ID), store the X002 and E002 private keys, DROP the A005 private
+   * key before anything is written (OD-2), and return a locator plus the public hashes. A store that
+   * cannot write throws (`keystore_locked`, `keystore_unavailable`, `keystore_changed_elsewhere`).
+   */
+  generate(input: { keyLength: number; subjectCommonName?: string | undefined }): { keyRef: string; hashes: EbicsKeyHashes };
   /** The public-key fingerprints for a locator, or null when it is unknown (e.g. after destroy). */
   publicHashes(keyRef: string): EbicsKeyHashes | null;
   /** Destroy all key material for a locator (retire). Idempotent: destroying an unknown ref is a no-op. */
@@ -297,10 +349,11 @@ export interface EbicsKeystorePort {
    * returned. `sign`/`decrypt`/`publicKeyMaterial` return `null` (never throw) for an unknown
    * keyRef/purpose or a store that is not `ready`, and leak no key material on any path.
    *
-   * `sign`: RSASSA-PKCS1-v1_5 over `data` with the private key for `purpose` (electronicSignature ->
-   * A005, authentication -> X002). `hash` defaults to sha256. Returns the raw signature bytes.
+   * `sign`: RSASSA-PKCS1-v1_5 over `data` with the X002 authentication key. `hash` defaults to sha256.
+   * Returns the raw signature bytes. There is NO electronic-signature purpose (OD-2, A36 D-A36.9): the
+   * keystore holds no A005 private key, so no caller can ask for an order signature.
    */
-  sign?(req: { keyRef: string; purpose: 'authentication' | 'electronicSignature'; data: Buffer; hash?: 'sha256' }): Buffer | null;
+  sign?(req: { keyRef: string; purpose: 'authentication'; data: Buffer; hash?: 'sha256' }): Buffer | null;
   /**
    * `decrypt`: RSA-decrypt `ciphertext` (the wire's symmetric transaction key) with the E002 encryption
    * private key. `padding` selects PKCS#1 v1.5 (`'pkcs1'`, the default) or OAEP (`'oaep'`). Returns the
@@ -308,9 +361,10 @@ export interface EbicsKeystorePort {
    */
   decrypt?(req: { keyRef: string; purpose: 'encryption'; ciphertext: Buffer; padding?: 'pkcs1' | 'oaep' }): Buffer | null;
   /**
-   * `publicKeyMaterial`: the PUBLIC key for `purpose`, for the INI letter and the HIA/HPB exchange. The
+   * `publicKeyMaterial`: the PUBLIC key for `purpose`, for the INI letter and the INI/HIA exchange. The
    * SPKI DER (its sha256 is the fingerprint `publicHashes` reports) plus the RSA modulus and exponent
-   * bytes. `x509Der` is present only for a certificate-bearing store (omitted for the raw-key variant).
+   * bytes, and `x509Der`, the key's self-signed EBICS 3.0 certificate, issued once at `generate` and
+   * STABLE for the life of the keyRef (omitted only for a keystore written before certificates existed).
    * No private material is ever returned.
    */
   publicKeyMaterial?(req: { keyRef: string; purpose: EbicsKeyPurpose }): { spkiDer: Buffer; modulus: Buffer; exponent: Buffer; x509Der?: Buffer } | null;

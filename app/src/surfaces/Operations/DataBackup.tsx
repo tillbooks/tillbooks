@@ -28,7 +28,7 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate } from '../../i18n';
-import { ErrorBanner, PermissionDenied } from '../../components/states';
+import { ErrorBanner, PermissionDenied, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { HelpHint } from '../../components/HelpHint';
 import { Modal } from '../../components/Modal';
@@ -124,9 +124,28 @@ export function DataBackup() {
       ? t('dataBackup.verify.unbalanced', { entries })
       : t('dataBackup.verify.ok', { entries, generation });
   };
+  /**
+   * `schema_newer_than_runtime` (critic finding M3): a snapshot a newer TILL wrote, or a book a newer
+   * TILL migrated under this process. The first-run door already carries that refusal's sentence
+   * (update TILL, the file was not changed), so it is reused here rather than worded twice.
+   */
+  const NEWER = 'schema_newer_than_runtime';
   const verifyFailure = (error: Err): string => {
+    if (error.error === NEWER) return t('firstrun.error.schema_newer_than_runtime');
     const known = new Set(['backup_corrupt', 'incompatible_schema_version', 'unrestorable_format']);
-    return known.has(error.error) ? t(`data.error.${error.error}`) : t('dataBackup.verify.failed');
+    return known.has(error.error) ? refusalText(t, error, { own: 'data.error' }) : t('dataBackup.verify.failed');
+  };
+  /** The banner sentence for an action refusal the shared `errors.*` catalogue does not carry. */
+  const actionMessage = (error: Err): string | undefined => {
+    // A restore over a .tillexport is refused by the engine (restore_source_not_backup); the person
+    // reads the same honesty sentence the verify shows, not a generic failure.
+    if (error.error === 'restore_source_not_backup') return t('data.error.unrestorable_format');
+    // The first-run sentence ("try again, the file was not changed") only while it is true: a refusal
+    // that came after the action had written (`partial`, critic R4-1), a restore that was saved whole
+    // included, gets the banner's own sentence, which says what was saved and never invites a retry
+    // that would restore a second workspace.
+    if (error.error === NEWER && error.partial !== true) return t('firstrun.error.schema_newer_than_runtime');
+    return undefined;
   };
   /** A verify never rides the panel's error banner: its answer belongs beside the thing checked. */
   const verifySource = async (source: string): Promise<string> => {
@@ -228,12 +247,7 @@ export function DataBackup() {
       </header>
 
       {actionError !== null && (
-        <ErrorBanner
-          error={actionError}
-          // A restore over a .tillexport is refused by the engine (restore_source_not_backup); the
-          // person reads the same honesty sentence the verify shows, not a generic failure.
-          message={actionError.error === 'restore_source_not_backup' ? t('data.error.unrestorable_format') : undefined}
-        />
+        <ErrorBanner error={actionError} message={actionMessage(actionError)} />
       )}
 
       <div className="data-actions">

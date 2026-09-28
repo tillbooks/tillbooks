@@ -9,7 +9,7 @@
  * Placeholder until they land (each surface is wired here as a one-line entry when the orchestrator
  * cherry-picks it).
  */
-import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useLocation, type RouteObject } from 'react-router-dom';
 import type { ReactElement } from 'react';
 
 import { RouteCrash } from './ErrorBoundary';
@@ -41,7 +41,7 @@ import Bills from '../surfaces/Bills';
 import CaptureInbox from '../surfaces/Capture';
 import BankAccounts from '../surfaces/BankAccounts';
 import CreditorPayments from '../surfaces/CreditorPayments';
-import Reconciliation from '../surfaces/Reconciliation';
+import Bank from '../surfaces/Bank';
 import Reports from '../surfaces/Reports';
 import VatReturn from '../surfaces/VatReturn';
 import Fx from '../surfaces/Fx';
@@ -124,7 +124,7 @@ const SURFACES: Record<string, ReactElement> = {
   '/capture-inbox': <CaptureInbox />,
   '/bank-accounts': <BankAccounts />,
   '/creditor-payments': <CreditorPayments />,
-  '/reconciliation': <Reconciliation />,
+  '/bank': <Bank />,
   '/reports': <Reports />,
   '/report-builder': <ReportBuilder />,
   '/recurring': <Recurring />,
@@ -176,12 +176,37 @@ const SURFACES: Record<string, ReactElement> = {
 };
 
 /**
+ * Paths that moved, kept alive as redirects so a bookmark, a shared link and the engine's own deep
+ * links (G15's attention rows, G22's checklist items name `/reconciliation`) still land on the
+ * surface that took over. Each maps its old query parameters onto the new surface's.
+ */
+const REDIRECTS: Record<string, { to: string; params: Record<string, string> }> = {
+  // A2: the bank inbox replaced the Abgleich screen. An attention row's `creditId` selects the line
+  // that carries that A21 credit.
+  '/reconciliation': { to: '/bank', params: { creditId: 'credit' } },
+};
+
+function LegacyRedirect({ from }: { from: string }) {
+  const location = useLocation();
+  const rule = REDIRECTS[from];
+  if (rule === undefined) return <Navigate to="/" replace />;
+  const old = new URLSearchParams(location.search);
+  const next = new URLSearchParams();
+  for (const [oldName, newName] of Object.entries(rule.params)) {
+    const value = old.get(oldName);
+    if (value !== null) next.set(newName, value);
+  }
+  const search = next.toString();
+  return <Navigate to={search === '' ? rule.to : `${rule.to}?${search}`} replace />;
+}
+
+/**
  * The paths that resolve to a REAL built surface (not the Placeholder). Exported so G15's
  * `Attention.routes.test.tsx` can prove every attention provider's deep link opens a built surface,
  * which is the app-side half of the engine's registration guard (design story 2.3): a hub row can
- * never reach a Placeholder.
+ * never reach a Placeholder. A redirect counts: it lands on a built surface.
  */
-export const BUILT_SURFACE_PATHS: readonly string[] = Object.keys(SURFACES);
+export const BUILT_SURFACE_PATHS: readonly string[] = [...Object.keys(SURFACES), ...Object.keys(REDIRECTS)];
 
 const surfaceRoutes: RouteObject[] = ROUTE_REGISTRY.map((entry) => ({
   // The path is stored with a leading slash in the registry; the child route wants it relative.
@@ -214,6 +239,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Navigate to={NAV_ITEMS[0].path} replace /> },
       ...surfaceRoutes,
+      ...Object.keys(REDIRECTS).map((from) => ({ path: from.replace(/^\//, ''), element: <LegacyRedirect from={from} />, errorElement: <RouteCrash /> })),
       // K-10, US-G16.9: an address the router does not know is a detour in plain words, never the
       // crash screen. RouteCrash stays what it is, the panel for a route that THREW.
       { path: '*', element: <NotFound />, errorElement: <RouteCrash /> },

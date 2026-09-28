@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FIXTURE (SYNTHETIC): one day-end camt.053.001.08 statement of an invented Geschäftskonto, the day the
+  A39 walk test books line by line (test/banking/bank-inbox-day.test.mjs).
+
+  What it is: every party, IBAN, reference and amount is invented for this test. The account IBAN is the
+  published PostFinance sample (CH93 0076 2011 6238 5295 7); the other IBANs are invented numbers with a
+  correct check pair. It is hand-built to the SIX Swiss Payment Standards camt.053 shape (Stmt with
+  ElctrncSeqNb, OPBD and CLBD, BOOK entries, TxDtls with Refs, RltdPties and RmtInf).
+
+  Four values come from the books the test builds, so they are placeholders the test fills in before the
+  import: the QR reference of the invoice TILL issued (QRR_INVOICE), and the PmtInfId and the two
+  EndToEndIds TILL wrote into its own pain.001 run (PMTINF, E2E_1, E2E_2), each spelled between two
+  pairs of at-signs below.
+
+  The lines (all booked 2026-09-30, CHF):
+    +1081.00  a QR credit for the issued invoice (QRR reference)
+     +500.00  a credit without reference, already on the books from the migration
+      -12.00  the bank's account fee
+     -108.10  a card purchase with Vorsteuer
+    -1000.00  TILL's payment run, booked one detail per payment (600.00 and 400.00), both details
+              carrying the booking's own AcctSvcrRef (the shared-ref deviation L7 (a) keeps apart)
+    -5000.00  a transfer to the own savings account
+  Opening 20000.00, closing 15460.90: the closing balance is the opening plus every line.
+
+  (Elements are named in prose without angle brackets on purpose: the regex parser scans the whole
+  payload, so a tag token inside this comment would be read as a real element.)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+<BkToCstmrStmt>
+<GrpHdr><MsgId>DAY0930-MSG-0001</MsgId><CreDtTm>2026-09-30T23:10:00</CreDtTm></GrpHdr>
+<Stmt>
+<Id>DAY0930-STMT-0001</Id>
+<ElctrncSeqNb>188</ElctrncSeqNb>
+<FrToDt><FrDtTm>2026-09-30T00:00:00</FrDtTm><ToDtTm>2026-09-30T23:59:59</ToDtTm></FrToDt>
+<Acct><Id><IBAN>CH9300762011623852957</IBAN></Id><Ccy>CHF</Ccy></Acct>
+<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">20000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-09-30</Dt></Dt></Bal>
+<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">15460.90</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-09-30</Dt></Dt></Bal>
+<Ntry>
+<Amt Ccy="CHF">1081.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>DAY0930-A001</AcctSvcrRef>
+<BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>VCOM</SubFmlyCd></Fmly></Domn></BkTxCd>
+<NtryDtls><TxDtls>
+<Refs><AcctSvcrRef>DAY0930-A001</AcctSvcrRef><EndToEndId>NOTPROVIDED</EndToEndId></Refs>
+<Amt Ccy="CHF">1081.00</Amt><CdtDbtInd>CRDT</CdtDbtInd>
+<RltdPties><Dbtr><Pty><Nm>Holzbau Lindenegg GmbH</Nm></Pty></Dbtr><DbtrAcct><Id><IBAN>CH4431999123000889012</IBAN></Id></DbtrAcct></RltdPties>
+<RmtInf><Strd><CdtrRefInf><Tp><CdOrPrtry><Prtry>QRR</Prtry></CdOrPrtry></Tp><Ref>@@QRR_INVOICE@@</Ref></CdtrRefInf></Strd></RmtInf>
+</TxDtls></NtryDtls>
+</Ntry>
+<Ntry>
+<Amt Ccy="CHF">500.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>DAY0930-A002</AcctSvcrRef>
+<BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>AUTT</SubFmlyCd></Fmly></Domn></BkTxCd>
+<NtryDtls><TxDtls>
+<Refs><AcctSvcrRef>DAY0930-A002</AcctSvcrRef></Refs>
+<Amt Ccy="CHF">500.00</Amt><CdtDbtInd>CRDT</CdtDbtInd>
+<RltdPties><Dbtr><Pty><Nm>Gartenpflege Seerose</Nm></Pty></Dbtr></RltdPties>
+<RmtInf><Ustrd>Akonto Pflegevertrag</Ustrd></RmtInf>
+</TxDtls></NtryDtls>
+</Ntry>
+<Ntry>
+<Amt Ccy="CHF">12.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>DAY0930-A003</AcctSvcrRef>
+<BkTxCd><Domn><Cd>ACMT</Cd><Fmly><Cd>MDOP</Cd><SubFmlyCd>CHRG</SubFmlyCd></Fmly></Domn></BkTxCd>
+<AddtlNtryInf>Preis für die Kontoführung September</AddtlNtryInf>
+</Ntry>
+<Ntry>
+<Amt Ccy="CHF">108.10</Amt><CdtDbtInd>DBIT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>DAY0930-A004</AcctSvcrRef>
+<BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>CCRD</Cd><SubFmlyCd>POSD</SubFmlyCd></Fmly></Domn></BkTxCd>
+<NtryDtls><TxDtls>
+<Refs><AcctSvcrRef>DAY0930-A004</AcctSvcrRef></Refs>
+<Amt Ccy="CHF">108.10</Amt><CdtDbtInd>DBIT</CdtDbtInd>
+<RltdPties><Cdtr><Pty><Nm>Papeterie am Bach</Nm></Pty></Cdtr></RltdPties>
+<RmtInf><Ustrd>Kartenzahlung Büromaterial</Ustrd></RmtInf>
+</TxDtls></NtryDtls>
+</Ntry>
+<Ntry>
+<Amt Ccy="CHF">1000.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>DAY0930-A005</AcctSvcrRef>
+<BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+<NtryDtls>
+<Btch><PmtInfId>@@PMTINF@@</PmtInfId><NbOfTxs>2</NbOfTxs></Btch>
+<TxDtls>
+<Refs><AcctSvcrRef>DAY0930-A005</AcctSvcrRef><PmtInfId>@@PMTINF@@</PmtInfId><EndToEndId>@@E2E_1@@</EndToEndId></Refs>
+<Amt Ccy="CHF">600.00</Amt><CdtDbtInd>DBIT</CdtDbtInd>
+<RltdPties><Cdtr><Pty><Nm>Lieferant Tannenweg AG</Nm></Pty></Cdtr></RltdPties>
+</TxDtls>
+<TxDtls>
+<Refs><AcctSvcrRef>DAY0930-A005</AcctSvcrRef><PmtInfId>@@PMTINF@@</PmtInfId><EndToEndId>@@E2E_2@@</EndToEndId></Refs>
+<Amt Ccy="CHF">400.00</Amt><CdtDbtInd>DBIT</CdtDbtInd>
+<RltdPties><Cdtr><Pty><Nm>Lieferant Birkenhof GmbH</Nm></Pty></Cdtr></RltdPties>
+</TxDtls>
+</NtryDtls>
+</Ntry>
+<Ntry>
+<Amt Ccy="CHF">5000.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>DAY0930-A006</AcctSvcrRef>
+<BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>BOOK</SubFmlyCd></Fmly></Domn></BkTxCd>
+<NtryDtls><TxDtls>
+<Refs><AcctSvcrRef>DAY0930-A006</AcctSvcrRef></Refs>
+<Amt Ccy="CHF">5000.00</Amt><CdtDbtInd>DBIT</CdtDbtInd>
+<RltdPties><Cdtr><Pty><Nm>Eigenübertrag Sparkonto</Nm></Pty></Cdtr><CdtrAcct><Id><IBAN>CH5604835012345678009</IBAN></Id></CdtrAcct></RltdPties>
+<RmtInf><Ustrd>Übertrag auf Sparkonto</Ustrd></RmtInf>
+</TxDtls></NtryDtls>
+</Ntry>
+</Stmt>
+</BkToCstmrStmt>
+</Document>

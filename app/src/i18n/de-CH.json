@@ -271,7 +271,12 @@
     "permission_denied": "Dir fehlt das nötige Recht für diese Aktion. Es wurde nichts geändert.",
     "forbidden": "Deine Rolle darf diese Aktion nicht ausführen. Es wurde nichts geändert.",
     "unexpected_error": "In TILL selbst ist etwas schiefgelaufen. Es wurde nichts geändert. Versuche es erneut und melde es, wenn es wieder passiert.",
+    "unexpected_error_partial": "In TILL selbst ist etwas schiefgelaufen, nachdem ein Teil dieser Aktion schon gespeichert war. Den Rest hat TILL nicht gespeichert. Prüfe das Ergebnis und melde es, wenn es wieder passiert.",
     "store_busy": "Der Ledger war belegt und konnte das nicht annehmen. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+    "store_busy_partial": "Der Ledger war belegt, nachdem TILL einen Teil dieser Aktion schon gespeichert hatte. Den Rest hat TILL nicht gespeichert. Prüfe das Ergebnis, bevor du es erneut versuchst.",
+    "schema_newer_than_runtime": "Diese Datenbank wurde von einem neueren TILL geschrieben. Aktualisiere TILL und versuche es erneut. Die Datei wurde nicht verändert.",
+    "schema_newer_than_runtime_partial": "Ein neueres TILL hat diese Datenbank verändert, während die Aktion lief. Bis dahin hatte dieses TILL einen Teil der Aktion gespeichert, den Rest nicht. Aktualisiere TILL und prüfe dann das Ergebnis, bevor du es erneut versuchst.",
+    "schema_newer_than_runtime_saved": "Diese Aktion ist gespeichert. Gleich danach hat ein neueres TILL die Datenbank aktualisiert, darum stimmt die Anzeige hier vielleicht nicht mehr. Aktualisiere TILL, bevor du weiterarbeitest. Wiederhole die Aktion nicht, sonst entsteht sie doppelt.",
     "transport_error": "TILL konnte den Ledger-Dienst nicht erreichen. Es wurde nichts geändert. Prüfe, ob er läuft, und versuche es erneut.",
     "fallback": "Die Aktion konnte nicht abgeschlossen werden. Bitte versuche es erneut oder prüfe die Eingaben.",
     "open_documents": "Dieser Kontakt hat noch offene Belege. Schliesse oder storniere sie zuerst.",
@@ -381,6 +386,14 @@
     },
     "reverse_entry": {
       "label": "Buchung stornieren"
+    },
+    "import_camt": {
+      "label": "Kontoauszug importieren",
+      "aliases": "camt, Bankauszug, Kontoauszug einlesen"
+    },
+    "book_bank_line": {
+      "label": "Bankzeilen buchen",
+      "aliases": "Bank, Abgleich, Bankabgleich, Bankzeile"
     },
     "record_payment": {
       "label": "Zahlung erfassen",
@@ -531,7 +544,10 @@
       "reopen_month": "Monat wieder öffnen",
       "unlock_period": "Periode entsperren",
       "go_productive": "Arbeitsbereich produktiv schalten",
-      "import_open_items": "Offene Posten übernehmen"
+      "import_open_items": "Offene Posten übernehmen",
+      "book_bank_line": "Bankzeile buchen",
+      "ignore_bank_line": "Bankzeile ignorieren",
+      "reopen_bank_line": "Bankzeile stornieren und wieder öffnen"
     }
   },
   "fileDrop": {
@@ -549,5 +565,30 @@
     "local": "Diese Installation",
     "person": "Person {n}",
     "unknown": "Unbekannte Person"
+  },
+  "taxCode": {
+    "none": "Ohne MWST",
+    "noneMeta": "nicht steuerbar, ausgenommen oder ohne Beleg",
+    "search": "Code, Satz oder Name, zum Beispiel 8.1 oder Bezug",
+    "noMatch": "Kein MWST-Code passt.",
+    "group": {
+      "current": "Aktuell",
+      "in": "Passend für Eingänge",
+      "out": "Passend für Ausgänge",
+      "all": "MWST-Codes",
+      "other": "Weitere Codes"
+    },
+    "kind": {
+      "output": "Umsatzsteuer",
+      "input": "Vorsteuer",
+      "reverse_charge": "Bezugsteuer",
+      "import": "Einfuhrsteuer",
+      "zero": "Befreit",
+      "exempt": "Ausgenommen",
+      "none": "Ohne MWST"
+    }
+  },
+  "picker": {
+    "hint": "Pfeiltasten wählen · Enter übernimmt · Esc schliesst"
   }
 }

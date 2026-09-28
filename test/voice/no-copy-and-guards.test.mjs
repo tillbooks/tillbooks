@@ -194,7 +194,7 @@ test('E05 erasure-coverage drift guard: the exemplar purge is inside the anonymi
   assert.ok(purge.includes('voice_exemplar'), 'the purge no longer names voice_exemplar');
 
   const c00 = readFileSync(fileURLToPath(new URL('../../src/core/sales/contactMerge.ts', import.meta.url)), 'utf8');
-  const txBlock = /const tx = ctx\.store\.db\.transaction\(\(\) => \{[\s\S]*?\}\);\s*tx\(\);/.exec(
+  const txBlock = /const tx = (?:\(\) => ctx\.store\.tx|ctx\.store\.db\.transaction)\(\(\) => \{[\s\S]*?\}\);\s*tx\(\);/.exec(
     /export function anonymiseContact[\s\S]*$/.exec(c00)?.[0] ?? '',
   )?.[0];
   assert.ok(txBlock !== undefined, 'the anonymise transaction block was not found');

@@ -29,20 +29,42 @@
 
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
-import type { Result } from '../result.js';
+import type { Err, Result } from '../result.js';
 import { requireString, optionalId, optionalText, optionalDate } from '../ledger/inputGuards.js';
-import { postEntry } from '../ledger/postEntry.js';
-import type { LineInput } from '../ledger/postEntry.js';
 import { recordPayment, PAYMENT_INTENTS } from '../payments/payment.js';
 import { baseCurrencyOf } from '../fx/rates.js';
 import { normalizeIban } from '../setup/iban.js';
 import { applySavedView } from '../customization/views.js';
 import { recordIncomingCredit, matchIncomingByQrr } from './qrMatch.js';
-import type { QrMatchConfidence } from './qrMatch.js';
-import { compactReference } from './pain001.js';
-import { settledOnVendorBill } from '../purchase/reads.js';
 import { parseCamt, hashCamtStatement } from './camt.js';
+import { decideSuccessor, isEbicsFedAccount, readFeedBook } from './ebics/feed.js';
+import type { FeedPosition, FeedSkippedRange, FeedStatementRef } from './ebics/feed.js';
 import type { CamtClassification, CamtCreditDebit, ParsedCamtStatement, CamtSkipReason } from './camt.js';
+import { readCamtMatchConfig, rankDebitCandidates, needsReviewFor, CONFIDENCE_RANK } from './debitRanking.js';
+import type { CamtMatchConfig, CamtMatchProposal } from './debitRanking.js';
+import {
+  LINE_STATE_EXPR,
+  LINE_STATE_JOINS,
+  bankLegsOf,
+  lineGeneration,
+  lineStateOf,
+  lineBookingDate,
+  readBankTxn,
+  readBankTxnDetail,
+  writeLineLink,
+} from './bankLines.js';
+import type { BankLineState, BankTxnRow, BookBankLineTarget } from './bankLines.js';
+import { performBooking, BankAbort, runBankGuarded } from './bankBooking.js';
+import { liveBatchOfBill } from './pain001.js';
+import type { BookBankLineOk } from './bankBooking.js';
+import { proposalContext, proposeForLine } from './bankProposals.js';
+import type { BankProposalCertainty, ProposalContext } from './bankProposals.js';
+
+// A36's ranking moved to `debitRanking.ts` (A39, to break the cycle with the proposal engine); its
+// names stay importable from here, where every caller has always found them.
+export { readCamtMatchConfig };
+export type { CamtMatchConfig, CamtMatchProposal };
+export type { CamtMatchSignal } from './debitRanking.js';
 
 // --- Row shapes -----------------------------------------------------------------------------------
 
@@ -66,43 +88,15 @@ interface BankStatementRow {
   imported_at: string;
 }
 
-interface BankTxnRow {
-  id: string;
-  workspace_id: string;
-  bank_account_id: string;
-  statement_id: string;
-  entry_key: string;
-  entry_ref: string | null;
-  amount_minor: number;
-  currency: string;
-  credit_debit: CamtCreditDebit;
-  booking_date: string | null;
-  value_date: string | null;
-  reference_kind: string;
-  reference_value: string | null;
-  payer_name: string | null;
-  reversal_ind: number;
-  btc_domain: string | null;
-  btc_family: string | null;
-  btc_sub_family: string | null;
-  batch_pmt_inf_id: string | null;
-  classification: CamtClassification;
-  credit_id: string | null;
-  created_at: string;
-}
-
-interface BankTxnLinkRow {
-  id: string;
-  bank_txn_id: string;
-  // `payment_batch` (A36 F2): the funding debit of an A18 Sammelzahlung, linked when the batch is
-  // confirmed from the reconciliation board so the settled debit can no longer be double-booked.
-  kind: 'payment' | 'journal_entry' | 'payment_batch';
-  target_id: string;
-  created_at: string;
-}
-
 // --- View shapes, the one both faces read (Pattern P5) ---------------------------------------------
 
+/**
+ * A20's three-lane vocabulary, kept for the board it was built for. It is NOT the line's state: A39's
+ * `lineState` is (`open`, `booked`, `matched`, `ignored`, spec A39 §4.2). The mapping: `open` is
+ * `unmatched`; `booked`/`matched` are `matched`, or `partial` when the settlement left part of the
+ * open item open; an `ignored` line appears only in `ignored` (never in `unmatched`, owner answer 1),
+ * with the lane word `matched` because it is decided.
+ */
 export type CamtTxnStatus = 'matched' | 'unmatched' | 'partial';
 
 export interface CamtTxnView {
@@ -123,9 +117,13 @@ export interface CamtTxnView {
   status: CamtTxnStatus;
   /** Present only for `classification: 'incoming_credit'`: the A21 queue row deciding this txn. */
   creditId: string | null;
-  /** Present only once linked (a debit settlement, a batch settlement, or a manual entry). */
+  /** Present only once linked (a settlement, a batch settlement, or an entry). Null for an ignored line. */
   linkKind: 'payment' | 'journal_entry' | 'payment_batch' | null;
   linkTargetId: string | null;
+  /** A39: the line's one state (spec A39 §4.2). */
+  lineState?: BankLineState;
+  /** A39: why an ignored line was ignored. */
+  ignoreReason?: string | null;
 }
 
 function readStatementRow(ctx: WorkspaceContext, id: string): BankStatementRow | undefined {
@@ -135,50 +133,23 @@ function readStatementRow(ctx: WorkspaceContext, id: string): BankStatementRow |
 }
 
 function readTxnRow(ctx: WorkspaceContext, id: string): BankTxnRow | undefined {
-  return ctx.store.db
-    .prepare('SELECT * FROM bank_txn WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, id) as BankTxnRow | undefined;
-}
-
-function readLink(ctx: WorkspaceContext, bankTxnId: string): BankTxnLinkRow | undefined {
-  return ctx.store.db
-    .prepare('SELECT * FROM bank_txn_link WHERE workspace_id = ? AND bank_txn_id = ?')
-    .get(ctx.workspaceId, bankTxnId) as BankTxnLinkRow | undefined;
-}
-
-function creditRowStatus(
-  ctx: WorkspaceContext,
-  bankTxnId: string,
-): { status: CamtTxnStatus; creditId: string | null } {
-  const row = ctx.store.db
-    .prepare('SELECT id, status, applied_mode FROM reconciliation_match WHERE workspace_id = ? AND bank_txn_id = ?')
-    .get(ctx.workspaceId, bankTxnId) as { id: string; status: string; applied_mode: string | null } | undefined;
-  if (row === undefined) return { status: 'unmatched', creditId: null };
-  if (row.status === 'applied') {
-    return { status: row.applied_mode === 'partial' ? 'partial' : 'matched', creditId: row.id };
-  }
-  return { status: 'unmatched', creditId: row.id };
+  return readBankTxn(ctx, id);
 }
 
 function toTxnView(ctx: WorkspaceContext, row: BankTxnRow): CamtTxnView {
+  const line = lineStateOf(ctx, row);
+  const link = line.link;
   let status: CamtTxnStatus = 'unmatched';
-  let creditId: string | null = row.credit_id;
-  let linkKind: 'payment' | 'journal_entry' | 'payment_batch' | null = null;
-  let linkTargetId: string | null = null;
-
-  if (row.classification === 'incoming_credit') {
-    const scored = creditRowStatus(ctx, row.id);
-    status = scored.status;
-    creditId = scored.creditId;
-  } else {
-    const link = readLink(ctx, row.id);
-    if (link !== undefined) {
-      status = 'matched';
-      linkKind = link.kind;
-      linkTargetId = link.target_id;
-    }
+  if (line.state !== 'open') {
+    const partial =
+      line.state === 'booked' &&
+      ((link !== null && link.remainderMode === 'leave_open' && (link.remainderMinor ?? 0) > 0) ||
+        (link === null && line.creditStatus === 'applied' &&
+          (ctx.store.db
+            .prepare('SELECT applied_mode FROM reconciliation_match WHERE workspace_id = ? AND id = ?')
+            .get(ctx.workspaceId, row.credit_id) as { applied_mode: string | null } | undefined)?.applied_mode === 'partial'));
+    status = partial ? 'partial' : 'matched';
   }
-
   return {
     bankTxnId: row.id,
     bankAccountId: row.bank_account_id,
@@ -195,9 +166,12 @@ function toTxnView(ctx: WorkspaceContext, row: BankTxnRow): CamtTxnView {
     reversalInd: row.reversal_ind === 1,
     classification: row.classification,
     status,
-    creditId,
-    linkKind,
-    linkTargetId,
+    creditId: row.credit_id,
+    linkKind: link !== null && link.kind !== 'ignored' ? link.kind : null,
+    // The decision's own declared reference (a G04 restore remaps it; a link's `target_id` it does not).
+    linkTargetId: link !== null && link.kind !== 'ignored' ? link.targetId : null,
+    lineState: line.state,
+    ignoreReason: line.state === 'ignored' ? (link?.ignoreReason ?? 'other') : null,
   };
 }
 
@@ -225,6 +199,35 @@ export type ImportCamtOk = {
    *  than BOOK/PDNG, or an entry already present under the same identity (A20-C6). Always present,
    *  possibly empty. */
   skipped: ImportSkippedEntry[];
+  /**
+   * A39 L7 (c): stable codes a surface renders. `not_day_end_statement`: a camt.053 without
+   * `ElctrncSeqNb` or without a closing balance (CLBD), an ad-hoc export the EBICS feed (A36) cannot
+   * chain to; import that day's day-end statement too. Always present, possibly empty.
+   * A36 adds `statement_number_jump` on an EBICS-fed account: the statement chained by its balances but
+   * skipped numbers (named in `feed.jump`), which the owner imports by hand if they exist.
+   */
+  warnings: string[];
+  /**
+   * A36 §4.4: present only on an EBICS-fed account, where the successor rule decided the import:
+   * which rule admitted it (`feed_start`, `successor`, `hole_filler`, or `already_imported` for a copy
+   * of a statement already there), its position, and the skipped numbers of a jump.
+   */
+  feed?: {
+    rule: 'feed_start' | 'successor' | 'hole_filler' | 'already_imported';
+    position: FeedPosition;
+    jump?: { after: FeedStatementRef; skipped: FeedSkippedRange[] };
+  };
+}
+
+/**
+ * A36 §4.4: the successor rule's answer leaves `importCamt`'s write transaction by THROW, so a refusal
+ * (or an `already_imported` no-op) rolls the transaction back and is never memoised under the caller's
+ * idempotency key: a re-run of the same file under the same key decides afresh (spec §4.3 step 4).
+ */
+class FeedAnswer extends Error {
+  constructor(readonly result: Result<ImportCamtOk>) {
+    super('feed-answer');
+  }
 }
 
 /**
@@ -297,20 +300,105 @@ export function importCamt(ctx: WorkspaceContext, input: ImportCamtInput): Resul
   if (replayed !== undefined) return replayed;
 
   const account = ctx.store.db
-    .prepare('SELECT id, iban, currency FROM bank_account WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, input.bankAccountId) as { id: string; iban: string; currency: string } | undefined;
+    .prepare('SELECT id, iban, currency, archived, name FROM bank_account WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, input.bankAccountId) as { id: string; iban: string; currency: string; archived: number; name: string } | undefined;
   if (account === undefined) return err('needs_bank_account', { bankAccountId: input.bankAccountId });
+  // A39 D-A39.9 (frame §4 item 10 (d)): an archived Bankkonto takes no new statement, as A18 already
+  // refuses it a payment run. Unarchive it first; its history stays readable either way.
+  if (account.archived === 1) return err('bank_account_archived', { bankAccountId: account.id, name: account.name });
 
   const parsed = parseCamt(input.xml);
   if (!parsed.ok) return parsed;
   const stmt = parsed.statement;
+  // A39 L7 (c), D140: a camt.054 is a detail notification, not a statement. It is refused HERE, in the one
+  // door every channel uses (the Studio, MCP, the EBICS and managed channels, a G19 step), before any row
+  // is written; `parseCamt` still reads it. The per-detail mode is parked (spec §10).
+  if (stmt.messageType === 'camt054') {
+    return err('camt054_refused', {
+      bankAccountId: account.id,
+      statementId: stmt.statementId,
+      reason: 'a camt.054 is a detail notification, not a statement: import the day-end camt.053',
+    });
+  }
+  const warnings = stmt.messageType === 'camt053' && (stmt.electronicSeqNb === null || stmt.closingBalanceMinor === null) ? ['not_day_end_statement'] : [];
 
   if (stmt.iban !== null && normalizeIban(stmt.iban) !== normalizeIban(account.iban)) {
-    return err('iban_mismatch', { fileIban: stmt.iban, accountIban: account.iban });
+    // A39 D-A39.9 (walk B2.2): name BOTH IBANs, and the account the file really belongs to when it is
+    // registered; an IBAN registered nowhere is not a mismatch between two accounts but a missing one,
+    // so it answers `needs_bank_account` with the file's IBAN, the A19 action.
+    const owner = ctx.store.db
+      .prepare('SELECT id, name, archived FROM bank_account WHERE workspace_id = ? AND iban = ?')
+      .get(ctx.workspaceId, normalizeIban(stmt.iban)) as { id: string; name: string; archived: number } | undefined;
+    if (owner === undefined) {
+      return err('needs_bank_account', { fileIban: normalizeIban(stmt.iban), bankAccountId: account.id, accountIban: account.iban });
+    }
+    return err('iban_mismatch', {
+      fileIban: normalizeIban(stmt.iban),
+      accountIban: account.iban,
+      matchingBankAccountId: owner.id,
+      matchingBankAccountName: owner.name,
+    });
   }
 
   const contentHash = hashCamtStatement(stmt);
 
+  // A36 §4.4: on an EBICS-fed account the successor rule decides INSIDE the write transaction, before
+  // any row and before A20's own statement dedupe, whichever door the file came through. A refusal or
+  // an `already_imported` no-op THROWS out of it (`FeedAnswer`), so nothing is memoised under the key.
+  if (isEbicsFedAccount(ctx, account.id)) {
+    try {
+      return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'import_camt', () => {
+        const decision = decideSuccessor(stmt, readFeedBook(ctx, account.id));
+        if (decision.verdict === 'refused') {
+          throw new FeedAnswer(err(decision.code, { bankAccountId: account.id, statementId: stmt.statementId, ...decision.details }));
+        }
+        if (decision.verdict === 'already_imported') {
+          throw new FeedAnswer(
+            ok<ImportCamtOk>({
+              statementId: decision.statementRowId,
+              txnCount: decision.txnCount,
+              duplicate: true,
+              skipped: [],
+              warnings: [],
+              feed: { rule: 'already_imported', position: decision.position },
+            }),
+          );
+        }
+        const duplicate = existingStatementAnswer(ctx, account.id, stmt, contentHash);
+        if (duplicate !== null) throw new FeedAnswer(duplicate);
+        const feed: NonNullable<ImportCamtOk['feed']> = {
+          rule: decision.rule,
+          position: decision.position,
+          ...(decision.jump !== undefined ? { jump: decision.jump } : {}),
+        };
+        const feedWarnings = decision.jump !== undefined ? [...warnings, 'statement_number_jump'] : warnings;
+        const inserted = insertStatement(ctx, account, stmt, contentHash, allowDuplicateEntries, feedWarnings);
+        return ok<ImportCamtOk>({ ...inserted, feed });
+      });
+    } catch (e) {
+      if (e instanceof FeedAnswer) return e.result;
+      throw e;
+    }
+  }
+
+  const answered = existingStatementAnswer(ctx, account.id, stmt, contentHash);
+  if (answered !== null) return answered;
+
+  return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'import_camt', () =>
+    ok<ImportCamtOk>(insertStatement(ctx, account, stmt, contentHash, allowDuplicateEntries, warnings)),
+  );
+}
+
+/**
+ * A20's statement-level dedupe: the same identity key with the same content is `duplicate: true`
+ * (writes nothing), with other content `statement_amended` (A20-C2). Null when the identity is new.
+ */
+function existingStatementAnswer(
+  ctx: WorkspaceContext,
+  bankAccountId: string,
+  stmt: ParsedCamtStatement,
+  contentHash: string,
+): Result<ImportCamtOk> | null {
   // D81/A20-C9: pagination is part of the statement's identity. Two pages of ONE multi-page statement
   // share Stmt/Id and ElctrncSeqNb by design (SPS 2.3 p.54); without the page number in the key, page
   // 2 collides with page 1 and is thrown away as a duplicate.
@@ -320,12 +408,12 @@ export function importCamt(ctx: WorkspaceContext, input: ImportCamtInput): Resul
         WHERE workspace_id = ? AND bank_account_id = ? AND statement_id = ?
           AND COALESCE(electronic_seq_nb, '') = COALESCE(?, '') AND page_number = ?`,
     )
-    .get(ctx.workspaceId, account.id, stmt.statementId, stmt.electronicSeqNb, stmt.pageNumber) as
+    .get(ctx.workspaceId, bankAccountId, stmt.statementId, stmt.electronicSeqNb, stmt.pageNumber) as
     | BankStatementRow
     | undefined;
   if (existing !== undefined) {
     if (existing.content_hash === contentHash) {
-      return ok<ImportCamtOk>({ statementId: existing.id, txnCount: existing.txn_count, duplicate: true, skipped: [] });
+      return ok<ImportCamtOk>({ statementId: existing.id, txnCount: existing.txn_count, duplicate: true, skipped: [], warnings: [] });
     }
     // A20-C2: the bank re-issued this exact statement identity with different content. The stale
     // figure is left standing (a silent overwrite would be worse) and the operator is told what
@@ -333,171 +421,172 @@ export function importCamt(ctx: WorkspaceContext, input: ImportCamtInput): Resul
     return err('statement_amended', { statementId: existing.id, changes: diffAmendedStatement(ctx, existing, stmt) });
   }
 
-  return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'import_camt', () => {
-    const now = ctx.clock.now();
-    const statementRowId = ctx.ids.next('bstmt');
+  return null;
+}
 
-    // `bank_txn.statement_id` REFERENCES `bank_statement(id)` and foreign keys are enforced (ON), so
-    // the parent row is inserted FIRST, with a placeholder txn_count corrected once the actual
-    // inserted count (after entry-level dedupe skips) is known.
-    ctx.store.db
-      .prepare(
-        `INSERT INTO bank_statement
-           (id, workspace_id, bank_account_id, message_type, statement_id, electronic_seq_nb,
-            page_number, last_page_ind, content_hash, from_date, to_date, opening_balance_minor,
-            closing_balance_minor, balance_currency, txn_count, imported_by, imported_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        statementRowId,
-        ctx.workspaceId,
-        account.id,
-        stmt.messageType,
-        stmt.statementId,
-        stmt.electronicSeqNb,
-        stmt.pageNumber,
-        stmt.lastPage ? 1 : 0,
-        contentHash,
-        stmt.fromDate,
-        stmt.toDate,
-        stmt.openingBalanceMinor,
-        stmt.closingBalanceMinor,
-        stmt.balanceCurrency,
-        0,
-        ctx.actor,
-        now,
-      );
+/** Write one statement and its lines (the body `importCamt` memoises under its key). */
+function insertStatement(
+  ctx: WorkspaceContext,
+  account: { id: string },
+  stmt: ParsedCamtStatement,
+  contentHash: string,
+  allowDuplicateEntries: boolean,
+  warnings: string[],
+): { statementId: string; txnCount: number; duplicate: false; skipped: ImportSkippedEntry[]; warnings: string[] } {
+  const now = ctx.clock.now();
+  const statementRowId = ctx.ids.next('bstmt');
 
-    // D81/A20-C1: every entry's identity is unique per (workspace, bank account). Preload the keys
-    // already on the books for this account so an overlapping statement, a re-cut period, or the
-    // camt.054-then-camt.053 pair is caught here rather than by the UNIQUE index throwing mid-insert.
-    const existingKeys = new Set(
-      (
-        ctx.store.db
-          .prepare('SELECT entry_key FROM bank_txn WHERE workspace_id = ? AND bank_account_id = ?')
-          .all(ctx.workspaceId, account.id) as { entry_key: string }[]
-      ).map((r) => r.entry_key),
+  // `bank_txn.statement_id` REFERENCES `bank_statement(id)` and foreign keys are enforced (ON), so
+  // the parent row is inserted FIRST, with a placeholder txn_count corrected once the actual
+  // inserted count (after entry-level dedupe skips) is known.
+  ctx.store.db
+    .prepare(
+      `INSERT INTO bank_statement
+         (id, workspace_id, bank_account_id, message_type, statement_id, electronic_seq_nb,
+          page_number, last_page_ind, content_hash, from_date, to_date, opening_balance_minor,
+          closing_balance_minor, balance_currency, txn_count, imported_by, imported_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      statementRowId,
+      ctx.workspaceId,
+      account.id,
+      stmt.messageType,
+      stmt.statementId,
+      stmt.electronicSeqNb,
+      stmt.pageNumber,
+      stmt.lastPage ? 1 : 0,
+      contentHash,
+      stmt.fromDate,
+      stmt.toDate,
+      stmt.openingBalanceMinor,
+      stmt.closingBalanceMinor,
+      stmt.balanceCurrency,
+      0,
+      ctx.actor,
+      now,
     );
 
-    const skipped: ImportSkippedEntry[] = stmt.skipped.map((s) => ({
-      entryRef: s.entryRef,
-      reason: s.reason,
-      ...(s.status !== undefined ? { status: s.status } : {}),
-    }));
-    let insertedCount = 0;
-
-    for (const entry of stmt.entries) {
-      let storageKey = entry.entryKey;
-      if (existingKeys.has(storageKey)) {
-        if (!allowDuplicateEntries) {
-          skipped.push({ entryRef: entry.entryRef, reason: 'duplicate_entry' });
-          continue;
-        }
-        // The caller has explicitly told us this really is a second, genuine booking (D81): mint a
-        // distinct storage key rather than relaxing the index, so the identity ladder stays exact for
-        // every future import.
-        let n = 1;
-        while (existingKeys.has(`${entry.entryKey}~dup${n}`)) n += 1;
-        storageKey = `${entry.entryKey}~dup${n}`;
-      }
-      existingKeys.add(storageKey);
-
-      const txnId = ctx.ids.next('btxn');
-      const reversal = entry.reversalInd;
-      const classification: CamtClassification =
-        reversal ? 'unclassified' : entry.creditDebit === 'CRDT' ? 'incoming_credit' : 'outgoing_debit';
-
-      let creditId: string | null = null;
-      if (classification === 'incoming_credit') {
-        const recorded = recordIncomingCredit(ctx, {
-          bankAccountId: account.id,
-          amountMinor: entry.amountMinor,
-          valueDate: entry.valueDate ?? entry.bookingDate ?? (stmt.toDate ?? now.slice(0, 10)),
-          reference: entry.referenceValue,
-          currency: entry.currency,
-          ...(entry.payerName !== null ? { payerName: entry.payerName } : {}),
-          bankTxnId: txnId,
-          idempotencyKey: `camt-credit-${txnId}`,
-        });
-        // A rejection here is unreachable in ordinary operation (every field was already shaped to
-        // what recordIncomingCredit demands); if the world still refuses, the row is still imported
-        // as a booked fact with no queue entry, which is the honest degradation (P9): an unrouted
-        // credit surfaces as unmatched on the reconciliation board rather than vanishing the import.
-        if (recorded.ok) creditId = (recorded['credit'] as { creditId: string }).creditId;
-      }
-
+  // D81/A20-C1: every entry's identity is unique per (workspace, bank account). Preload the keys
+  // already on the books for this account so an overlapping statement, a re-cut period, or the
+  // camt.054-then-camt.053 pair is caught here rather than by the UNIQUE index throwing mid-insert.
+  const existingKeys = new Set(
+    (
       ctx.store.db
-        .prepare(
-          `INSERT INTO bank_txn
-             (id, workspace_id, bank_account_id, statement_id, entry_key, entry_ref, amount_minor,
-              currency, credit_debit, booking_date, value_date, reference_kind, reference_value,
-              payer_name, reversal_ind, btc_domain, btc_family, btc_sub_family, batch_pmt_inf_id,
-              classification, credit_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          txnId,
-          ctx.workspaceId,
-          account.id,
-          statementRowId,
-          storageKey,
-          entry.entryRef,
-          entry.amountMinor,
-          entry.currency,
-          entry.creditDebit,
-          entry.bookingDate,
-          entry.valueDate,
-          entry.referenceKind,
-          entry.referenceValue,
-          entry.payerName,
-          reversal ? 1 : 0,
-          entry.btcDomain,
-          entry.btcFamily,
-          entry.btcSubFamily,
-          entry.batchPmtInfId,
-          classification,
-          creditId,
-          now,
-        );
-      insertedCount += 1;
+        .prepare('SELECT entry_key FROM bank_txn WHERE workspace_id = ? AND bank_account_id = ?')
+        .all(ctx.workspaceId, account.id) as { entry_key: string }[]
+    ).map((r) => r.entry_key),
+  );
+
+  const skipped: ImportSkippedEntry[] = stmt.skipped.map((s) => ({
+    entryRef: s.entryRef,
+    reason: s.reason,
+    ...(s.status !== undefined ? { status: s.status } : {}),
+  }));
+  let insertedCount = 0;
+
+  for (const entry of stmt.entries) {
+    let storageKey = entry.entryKey;
+    if (existingKeys.has(storageKey)) {
+      if (!allowDuplicateEntries) {
+        skipped.push({ entryRef: entry.entryRef, reason: 'duplicate_entry' });
+        continue;
+      }
+      // The caller has explicitly told us this really is a second, genuine booking (D81): mint a
+      // distinct storage key rather than relaxing the index, so the identity ladder stays exact for
+      // every future import.
+      let n = 1;
+      while (existingKeys.has(`${entry.entryKey}~dup${n}`)) n += 1;
+      storageKey = `${entry.entryKey}~dup${n}`;
+    }
+    existingKeys.add(storageKey);
+
+    const txnId = ctx.ids.next('btxn');
+    const reversal = entry.reversalInd;
+    const classification: CamtClassification =
+      reversal ? 'unclassified' : entry.creditDebit === 'CRDT' ? 'incoming_credit' : 'outgoing_debit';
+
+    let creditId: string | null = null;
+    if (classification === 'incoming_credit') {
+      // A39 L2: the A21 row of a camt credit only FOLLOWS its line (`syncCreditRow`); the line itself is
+      // decided on the bank inbox, and `apply_qr_match` / `override_qr_match` refuse `use_bank_inbox`.
+      const recorded = recordIncomingCredit(ctx, {
+        bankAccountId: account.id,
+        amountMinor: entry.amountMinor,
+        valueDate: entry.valueDate ?? entry.bookingDate ?? (stmt.toDate ?? now.slice(0, 10)),
+        reference: entry.referenceValue,
+        currency: entry.currency,
+        ...(entry.payerName !== null ? { payerName: entry.payerName } : {}),
+        bankTxnId: txnId,
+        idempotencyKey: `camt-credit-${txnId}`,
+      });
+      // A rejection here is unreachable in ordinary operation (every field was already shaped to
+      // what recordIncomingCredit demands); if the world still refuses, the row is still imported
+      // as a booked fact with no queue entry, which is the honest degradation (P9): an unrouted
+      // credit surfaces as unmatched on the reconciliation board rather than vanishing the import.
+      if (recorded.ok) creditId = (recorded['credit'] as { creditId: string }).creditId;
     }
 
     ctx.store.db
-      .prepare('UPDATE bank_statement SET txn_count = ? WHERE workspace_id = ? AND id = ?')
-      .run(insertedCount, ctx.workspaceId, statementRowId);
+      .prepare(
+        `INSERT INTO bank_txn
+           (id, workspace_id, bank_account_id, statement_id, entry_key, entry_ref, amount_minor,
+            currency, credit_debit, booking_date, value_date, reference_kind, reference_value,
+            payer_name, reversal_ind, btc_domain, btc_family, btc_sub_family, batch_pmt_inf_id,
+            classification, credit_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        txnId,
+        ctx.workspaceId,
+        account.id,
+        statementRowId,
+        storageKey,
+        entry.entryRef,
+        entry.amountMinor,
+        entry.currency,
+        entry.creditDebit,
+        entry.bookingDate,
+        entry.valueDate,
+        entry.referenceKind,
+        entry.referenceValue,
+        entry.payerName,
+        reversal ? 1 : 0,
+        entry.btcDomain,
+        entry.btcFamily,
+        entry.btcSubFamily,
+        entry.batchPmtInfId ?? entry.txPmtInfId,
+        classification,
+        creditId,
+        now,
+      );
+    // A39: the counterparty facts the inbox and the proposals read, kept beside the line (never in its
+    // identity key or the statement hash, so a pre-A39 file still re-imports as a duplicate).
+    ctx.store.db
+      .prepare(
+        `INSERT INTO bank_txn_detail (bank_txn_id, workspace_id, counterparty_name, counterparty_iban, remittance_text, end_to_end_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(txnId, ctx.workspaceId, entry.counterpartyName, entry.counterpartyIban, entry.remittanceText, entry.endToEndId);
+    insertedCount += 1;
+  }
 
-    ctx.audit.record({
-      entityKind: 'bank_statement',
-      entityId: statementRowId,
-      action: 'import',
-      actor: ctx.actor,
-      at: now,
-    });
+  ctx.store.db
+    .prepare('UPDATE bank_statement SET txn_count = ? WHERE workspace_id = ? AND id = ?')
+    .run(insertedCount, ctx.workspaceId, statementRowId);
 
-    return ok<ImportCamtOk>({ statementId: statementRowId, txnCount: insertedCount, duplicate: false, skipped });
+  ctx.audit.record({
+    entityKind: 'bank_statement',
+    entityId: statementRowId,
+    action: 'import',
+    actor: ctx.actor,
+    at: now,
   });
+
+  return { statementId: statementRowId, txnCount: insertedCount, duplicate: false, skipped, warnings };
 }
 
 // --- suggestCamtMatches (US-A20.2), read-only (Pattern P5) ------------------------------------------
-
-/**
- * A36 adds the `payment_batch` kind (the batch-debit join) and a structured `signals` list beside the
- * single `reason` code. `signals` is the composed, translatable list of matched signals the GUI
- * renders verbatim (`camt.suggestion.reason.*`) and the agent reads structurally; `reason` stays the
- * single primary code for back-compat with the A21 credit path. `blocked` marks a proposal that is
- * shown for information but NOT one-click confirmable (a batch whose total does not equal the debit):
- * partial batch executions go to the manual split, honestly.
- */
-export type CamtMatchSignal = 'amount' | 'value_date' | 'counterparty' | 'reference' | 'batch' | 'batch_total_mismatch';
-
-export interface CamtMatchProposal {
-  kind: 'invoice' | 'vendor_bill' | 'payment_batch';
-  targetId: string;
-  confidence: QrMatchConfidence;
-  reason: string;
-  signals?: readonly CamtMatchSignal[];
-  blocked?: boolean;
-}
 
 export interface CamtTxnProposal {
   bankTxnId: string;
@@ -511,207 +600,6 @@ export interface SuggestCamtMatchesInput {
   statementId?: string;
 }
 
-/** A36: the workspace's debit-matching tuning, with the spec defaults when no row is set. */
-export interface CamtMatchConfig {
-  valueDateWindowDays: number;
-  reviewThreshold: 'any' | 'medium' | 'high';
-}
-
-export function readCamtMatchConfig(ctx: WorkspaceContext): CamtMatchConfig {
-  const row = ctx.store.db
-    .prepare('SELECT value_date_window_days AS w, review_threshold AS t FROM camt_match_config WHERE workspace_id = ?')
-    .get(ctx.workspaceId) as { w: number; t: string } | undefined;
-  const window = row !== undefined && Number.isInteger(row.w) && row.w >= 0 ? row.w : 5;
-  const threshold: CamtMatchConfig['reviewThreshold'] =
-    row?.t === 'medium' || row?.t === 'high' ? row.t : 'any';
-  return { valueDateWindowDays: window, reviewThreshold: threshold };
-}
-
-/** A confidence rank so a threshold can be compared: none < medium < high. */
-const CONFIDENCE_RANK: Record<QrMatchConfidence, number> = { none: 0, medium: 1, high: 2 };
-const THRESHOLD_RANK: Record<CamtMatchConfig['reviewThreshold'], number> = { any: 1, medium: 1, high: 2 };
-
-/**
- * A booked, non-reversal txn NEEDS REVIEW when it has no proposal at or above the workspace threshold.
- * Default `any`: needs review iff there is no proposal at all (every real proposal is at least
- * `medium`). A reversal-flagged (unclassified) txn is a returned movement a human always inspects, so
- * it never suppresses review on the strength of an automated score.
- */
-function needsReviewFor(
-  proposal: CamtMatchProposal | null,
-  threshold: CamtMatchConfig['reviewThreshold'],
-  reversal: boolean,
-): boolean {
-  // F3 remediation: honour the invariant this function's own doc states. A reversal-flagged
-  // (unclassified) txn is a returned movement a human always inspects, so it needs review even when a
-  // coincidental exact-amount candidate scores `high` (A20-C3 lets a reversal DBIT settle, but the
-  // settlement stays a human's deliberate call, never an automated suppression).
-  if (reversal) return true;
-  if (proposal === null || proposal.blocked === true) return true;
-  return CONFIDENCE_RANK[proposal.confidence] < THRESHOLD_RANK[threshold];
-}
-
-interface OpenBill {
-  id: string;
-  openMinor: number;
-  dueDate: string | null;
-  contactId: string;
-  vendorReference: string | null;
-}
-
-/**
- * Every open vendor bill in this currency, with the amount still owed and the fields the ranker
- * scores on (counterparty contact, the supplier's own invoice number). §H-TENANT on the read.
- * Deliberately over `vendor_bill` directly rather than through `listVendorBills`'s ceiling-and-view
- * machinery: this is an internal scoring input, not a page a caller lists.
- */
-function openVendorBills(ctx: WorkspaceContext, currency: string): OpenBill[] {
-  const rows = ctx.store.db
-    .prepare(
-      `SELECT id, due_date, payable_minor, contact_id, vendor_reference FROM vendor_bill
-        WHERE workspace_id = ? AND status = 'posted' AND currency = ?`,
-    )
-    .all(ctx.workspaceId, currency) as {
-    id: string;
-    due_date: string | null;
-    payable_minor: number;
-    contact_id: string;
-    vendor_reference: string | null;
-  }[];
-  return rows
-    .map((r) => ({
-      id: r.id,
-      dueDate: r.due_date,
-      openMinor: r.payable_minor - settledOnVendorBill(ctx, r.id),
-      contactId: r.contact_id,
-      vendorReference: r.vendor_reference,
-    }))
-    .filter((r) => r.openMinor > 0);
-}
-
-/** The contact's display name, for counterparty token overlap. */
-function contactName(ctx: WorkspaceContext, contactId: string): string | null {
-  const row = ctx.store.db
-    .prepare('SELECT name FROM contact WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, contactId) as { name: string | null } | undefined;
-  return row?.name ?? null;
-}
-
-const LEGAL_FORM_STOPWORDS = new Set(['ag', 'gmbh', 'sa', 'sarl', 'sagl', 'ltd', 'inc', 'the']);
-
-/** Lowercase, diacritic-fold, split on non-letters, drop legal-form stopwords and 1-char tokens. */
-function nameTokens(s: string | null): Set<string> {
-  if (s === null) return new Set();
-  const folded = s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const out = new Set<string>();
-  for (const tok of folded.split(/[^a-z0-9]+/)) {
-    if (tok.length >= 2 && !LEGAL_FORM_STOPWORDS.has(tok)) out.add(tok);
-  }
-  return out;
-}
-
-/** Absolute day distance between two ISO dates, or null when either is missing/unparseable. */
-function dayDistance(a: string | null, b: string | null): number | null {
-  if (a === null || b === null) return null;
-  const ta = Date.parse(a);
-  const tb = Date.parse(b);
-  if (Number.isNaN(ta) || Number.isNaN(tb)) return null;
-  return Math.abs(Math.round((ta - tb) / 86_400_000));
-}
-
-/**
- * A36 the batch-debit join (spec §4): a debit whose `batch_pmt_inf_id` equals the PmtInfId TILL wrote
- * for an A18 `generated` batch (`compactReference('P', batch.id)`) proposes the BATCH. Amount equal to
- * the batch control sum: top confidence, one-click confirm routes through A18's settlement (never a
- * bespoke split). Amount NOT equal: shown for information, `blocked` so the one-click is disabled
- * (a partial execution goes to the manual split). Integer Rappen equality only, no rounding (P2).
- */
-function batchJoin(ctx: WorkspaceContext, row: BankTxnRow): CamtMatchProposal | null {
-  if (row.batch_pmt_inf_id === null || row.batch_pmt_inf_id.length === 0) return null;
-  const batches = ctx.store.db
-    .prepare("SELECT id, ctrl_sum_minor FROM payment_batch WHERE workspace_id = ? AND status = 'generated'")
-    .all(ctx.workspaceId) as { id: string; ctrl_sum_minor: number | null }[];
-  for (const b of batches) {
-    if (compactReference('P', b.id) !== row.batch_pmt_inf_id) continue;
-    const totalMatches = b.ctrl_sum_minor === row.amount_minor;
-    return {
-      kind: 'payment_batch',
-      targetId: b.id,
-      confidence: totalMatches ? 'high' : 'medium',
-      reason: 'batch',
-      signals: totalMatches ? ['batch'] : ['batch', 'batch_total_mismatch'],
-      ...(totalMatches ? {} : { blocked: true }),
-    };
-  }
-  return null;
-}
-
-/**
- * The ranked debit lane (spec §4, implementing what A20 §4 already promised). The exact amount +
- * currency gate stays MANDATORY: a candidate never appears on an amount mismatch, and that gate is
- * never widened (fuzzy amounts on the money path invite wrong bookings, §6b Fixed). Over the gated
- * set, ranking adds value-date proximity (window default +/- 5 days, workspace-configurable),
- * normalized counterparty-name token overlap, and reference hits (vendor_reference in the remittance
- * text, or EndToEndId equality). The reason is a composed list of matched SIGNALS the GUI renders and
- * the agent reads. Pure read; suggestion only, never a booking.
- */
-function rankDebitCandidates(ctx: WorkspaceContext, row: BankTxnRow, config: CamtMatchConfig): CamtMatchProposal | null {
-  // The batch join wins when it fires: it is the strongest possible signal (TILL wrote that PmtInfId).
-  const batch = batchJoin(ctx, row);
-  if (batch !== null) return batch;
-
-  // THE MANDATORY GATE: exact amount + currency. openVendorBills already filtered to `row.currency`.
-  const gated = openVendorBills(ctx, row.currency).filter((b) => b.openMinor === row.amount_minor);
-  if (gated.length === 0) return null;
-
-  const payerTokens = nameTokens(row.payer_name);
-  const ref = (row.reference_value ?? '').toLowerCase();
-  const entryRef = (row.entry_ref ?? '').toLowerCase();
-
-  const scored = gated.map((bill) => {
-    const signals: CamtMatchSignal[] = ['amount'];
-    let score = 0;
-    // Value date within the window (closest wins the tie-break below).
-    const dist = dayDistance(row.value_date, bill.dueDate);
-    const withinWindow = dist !== null && dist <= config.valueDateWindowDays;
-    if (withinWindow) {
-      signals.push('value_date');
-      score += 3;
-    }
-    // Counterparty token overlap.
-    const billTokens = nameTokens(contactName(ctx, bill.contactId));
-    let overlap = 0;
-    for (const tok of payerTokens) if (billTokens.has(tok)) overlap += 1;
-    if (overlap > 0) {
-      signals.push('counterparty');
-      score += 2 + overlap;
-    }
-    // Reference: the supplier's invoice number quoted in the remittance / EndToEndId.
-    const vref = (bill.vendorReference ?? '').toLowerCase();
-    if (vref.length >= 3 && (ref.includes(vref) || entryRef.includes(vref))) {
-      signals.push('reference');
-      score += 4;
-    }
-    return { bill, signals, score, dist: dist ?? Number.MAX_SAFE_INTEGER };
-  });
-
-  // Deterministic order: highest score, then closest value date, then bill id (equal scores tie
-  // visibly and never auto-pick, spec US-A36.5).
-  scored.sort((a, b) => b.score - a.score || a.dist - b.dist || a.bill.id.localeCompare(b.bill.id));
-  const best = scored[0]!;
-
-  // A uniquely top-scoring gated candidate is `high` (the single-exact-amount case, or one bill that
-  // the value date / counterparty / reference singles out); an ambiguous set where the top score ties
-  // is `medium`, so a human picks and the tie is visible (spec US-A36.5, never auto-picked).
-  const uniquelyBest = scored.length === 1 || best.score > (scored[1]?.score ?? -1);
-  const confidence: QrMatchConfidence = uniquelyBest ? 'high' : 'medium';
-  const primary = best.signals.includes('reference')
-    ? 'reference_match'
-    : best.signals.includes('counterparty')
-      ? 'counterparty_match'
-      : 'exact_open';
-  return { kind: 'vendor_bill', targetId: best.bill.id, confidence, reason: primary, signals: best.signals };
-}
 
 export function suggestCamtMatches(
   ctx: WorkspaceContext,
@@ -782,14 +670,43 @@ export type ReviewBankTxnOk = {
   needsReviewTxnId: string | null;
 };
 
+/** The A36 confidence rank of an A39 certainty, so the workspace review threshold still applies. */
+const CERTAINTY_AS_CONFIDENCE: Record<BankProposalCertainty, 'high' | 'medium' | 'none'> = {
+  sure: 'high',
+  learned: 'medium',
+  check: 'medium',
+  open: 'none',
+};
+
 /**
- * A36 US-A36.5: signal that ONE booked debit needs a human's review because the ranked suggestion
- * found no candidate at or above the workspace threshold. WRITES NO LEDGER ROW and books nothing (the
- * only thing it persists is its own idempotency memo): it is a pure signal whose success emits
- * `bank_txn.needs_review` for a G01 rule to react to ("when a bank txn needs review, create an E03
- * task"). Idempotent per (bankTxnId, idempotencyKey). A CREDIT-classified txn refuses with
- * `use_qr_queue`: the credit review moment is A21's own `qr_match.needs_review`, not this. §H-TENANT
- * via `readTxnRow` (a foreign-workspace id is `not_found` before any work).
+ * Whether one OPEN line needs a human's review (A36 US-A36.5, generalised by A39 to credits and debits
+ * alike): its A39 proposal's certainty, read as an A36 confidence, falls below the workspace review
+ * threshold, or the line is a reversal (always a human's call). A decided line never needs review.
+ * Exported for the per-line import signal (`import_camt` fires `bank_txn.needs_review` over it).
+ */
+export function lineNeedsReview(
+  ctx: WorkspaceContext,
+  row: BankTxnRow,
+  config: CamtMatchConfig = readCamtMatchConfig(ctx),
+  pc: ProposalContext = proposalContext(ctx),
+): boolean {
+  if (lineStateOf(ctx, row).state !== 'open') return false;
+  if (row.reversal_ind === 1) return true;
+  const proposal = proposeForLine(ctx, pc, row, readBankTxnDetail(ctx, row.id));
+  const confidence = CERTAINTY_AS_CONFIDENCE[proposal.certainty];
+  if (confidence === 'none') return true;
+  const floor = config.reviewThreshold === 'high' ? 2 : 1;
+  return CONFIDENCE_RANK[confidence] < floor;
+}
+
+/**
+ * A36 US-A36.5: signal that ONE bank line needs a human's review because its proposal is below the
+ * workspace threshold. WRITES NO LEDGER ROW and books nothing (the only thing it persists is its own
+ * idempotency memo): it is a pure signal whose success emits `bank_txn.needs_review` for a G01 rule to
+ * react to ("when a bank line needs review, create an E03 task"). Idempotent per (bankTxnId,
+ * idempotencyKey). A39: a CREDIT is reviewed the same way as a debit (one line model; the A21 queue's
+ * score is one of the proposal's sources), so the `use_qr_queue` refusal is gone. §H-TENANT via
+ * `readTxnRow` (a foreign-workspace id is `not_found` before any work).
  */
 export function reviewBankTxn(ctx: WorkspaceContext, input: ReviewBankTxnInput): Result<ReviewBankTxnOk> {
   const capable = ctx.capabilities.assert('pay');
@@ -803,17 +720,8 @@ export function reviewBankTxn(ctx: WorkspaceContext, input: ReviewBankTxnInput):
 
   const row = readTxnRow(ctx, input.bankTxnId as string);
   if (row === undefined) return err('not_found', { bankTxnId: input.bankTxnId });
-  if (row.classification === 'incoming_credit') {
-    return err('use_qr_queue', {
-      bankTxnId: row.id,
-      creditId: row.credit_id,
-      reason: 'the review moment for a credit is A21\'s qr_match.needs_review, not bank_txn.needs_review',
-    });
-  }
 
-  const config = readCamtMatchConfig(ctx);
-  const proposal = rankDebitCandidates(ctx, row, config);
-  const needs = needsReviewFor(proposal, config.reviewThreshold, row.reversal_ind === 1);
+  const needs = lineNeedsReview(ctx, row);
   return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'review_bank_txn', () =>
     ok<ReviewBankTxnOk>({ bankTxnId: row.id, needsReview: needs, needsReviewTxnId: needs ? row.id : null }),
   );
@@ -894,11 +802,20 @@ export type ConfirmCamtMatchOk = {
 }
 
 /**
- * `confirmCamtMatch` covers exactly what A21 does not (spec §0 note 2): an outgoing DEBIT settling
- * one or more vendor bills through A14 `recordPayment` (`vendorBillId`, or `allocations[]` for
- * US-A20.5's multi-bill split), or an annotation LINK to an existing journal entry that already books
- * the movement (`entryId`). A CREDIT-classified txn refuses with `use_qr_queue`, naming the A21 row
- * that decides it.
+ * `confirm_match`, A20's decision verb, kept as a WRAPPER over the A39 core (spec A39 §5), memoised under
+ * its own verb name so no caller's key changes meaning:
+ *
+ *  - `vendorBillId`: an `open_item` booking of the debit (A39 §4.3: the bill settles through A14, a
+ *    surplus parks as the supplier's Guthaben instead of refusing, walk B8.3);
+ *  - `entryId`: an `existing_entry` MATCH under the A39 guard (walk B9.3: the entry must book this
+ *    account with this signed amount, and its leg must not back another line); open to a credit too,
+ *    since a credit is handled like a debit now;
+ *  - `allocations[]`: the multi-bill split of US-A20.5, one A14 payment over several bills, as before,
+ *    now recorded through the one link writer.
+ *
+ * A line that is no longer open refuses `line_not_open` (walk B14.3: the old answer replayed someone
+ * else's link as `ok`, so an approved stale Vorschlag reported executed while nothing ran). A same-key
+ * retry is answered from the memo first.
  */
 export function confirmCamtMatch(ctx: WorkspaceContext, input: ConfirmCamtMatchInput): Result<ConfirmCamtMatchOk> {
   const capable = ctx.capabilities.assert('pay');
@@ -924,6 +841,9 @@ export function confirmCamtMatch(ctx: WorkspaceContext, input: ConfirmCamtMatchI
   if (input.vendorBillId !== undefined && input.allocations !== undefined) {
     return err('invalid_input', { field: 'allocations', reason: 'name vendorBillId or allocations, not both' });
   }
+  if (input.allocations !== undefined && (!Array.isArray(input.allocations) || input.allocations.length === 0)) {
+    return err('invalid_input', { field: 'allocations' });
+  }
 
   const scopedKey = JSON.stringify(['confirm_match', input.bankTxnId, input.idempotencyKey]);
   const replayed = ctx.store.recallIdempotent<Result<ConfirmCamtMatchOk>>(ctx.workspaceId, scopedKey, 'confirm_match');
@@ -931,19 +851,8 @@ export function confirmCamtMatch(ctx: WorkspaceContext, input: ConfirmCamtMatchI
 
   const row = readTxnRow(ctx, input.bankTxnId as string);
   if (row === undefined) return err('not_found', { bankTxnId: input.bankTxnId });
-  if (row.classification === 'incoming_credit') {
-    return err('use_qr_queue', {
-      bankTxnId: row.id,
-      creditId: row.credit_id,
-      reason: 'this credit is decided in the A21 Abgleich queue (apply_qr_match / override_qr_match), not here',
-    });
-  }
-  // A20-C3: a reversal-flagged entry is `unclassified` regardless of direction, so a returned
-  // outgoing payment (RvslInd=true, CdtDbtInd=CRDT: money arriving) reaches this far. A settlement
-  // (vendorBillId/allocations) always books an OUTGOING payment (below); a CRDT bank fact settled
-  // that way would move the ledger the OPPOSITE way from what the bank actually did. The manual
-  // `entryId` LINK stays open to both directions: it only annotates an entry a human already posted,
-  // it never decides a direction of its own.
+  // A20-C3: a settlement always books an OUTGOING payment, so a CRDT bank fact (a reversal-flagged
+  // returned payment, or any credit) cannot be settled that way; the entryId match stays open to both.
   if (wantsSettlement && row.credit_debit !== 'DBIT') {
     return err('wrong_direction', {
       bankTxnId: row.id,
@@ -952,61 +861,76 @@ export function confirmCamtMatch(ctx: WorkspaceContext, input: ConfirmCamtMatchI
         'a CRDT bank fact (money arriving) is not settled as an outgoing payment; correct a returned payment via reverse_payment, or use entryId to annotate an existing entry',
     });
   }
-  const existingLink = readLink(ctx, row.id);
-  if (existingLink !== undefined) {
-    return ok<ConfirmCamtMatchOk>({ bankTxnId: row.id, kind: existingLink.kind, targetId: existingLink.target_id });
+  const state = lineStateOf(ctx, row);
+  if (state.state !== 'open') {
+    return err('line_not_open', {
+      bankTxnId: row.id,
+      state: state.state,
+      linkId: state.link?.linkId ?? null,
+      staleProposal: true,
+      reason: 'this line is already decided; reopen_bank_line undoes the decision first',
+    });
   }
 
-  const bankAccount = ctx.store.db
-    .prepare('SELECT ledger_account_id FROM bank_account WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, row.bank_account_id) as { ledger_account_id: string } | undefined;
-  if (bankAccount === undefined) return err('needs_bank_account', { bankAccountId: row.bank_account_id });
-
-  return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'confirm_match', () => {
-    const now = ctx.clock.now();
-    let kind: 'payment' | 'journal_entry';
-    let targetId: string;
-
-    if (wantsSettlement) {
-      const allocations: ConfirmCamtMatchAllocation[] =
-        input.allocations ?? [{ vendorBillId: input.vendorBillId as string, amountMinor: row.amount_minor }];
+  return runBankGuarded(() =>
+    ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'confirm_match', () => {
+      if (input.allocations === undefined) {
+        const target: BookBankLineTarget =
+          input.vendorBillId !== undefined
+            ? { kind: 'open_item', documentId: input.vendorBillId }
+            : { kind: 'existing_entry', entryId: input.entryId as string };
+        const booked = performBooking(ctx, row, target, {});
+        if (!booked.ok) throw new BankAbort(booked);
+        const done = booked as unknown as BookBankLineOk;
+        return ok<ConfirmCamtMatchOk>({
+          bankTxnId: row.id,
+          kind: done.targetKind === 'existing_entry' ? 'journal_entry' : 'payment',
+          targetId: done.targetKind === 'existing_entry' ? (done.entryId as string) : (done.paymentId as string),
+        });
+      }
+      // The multi-bill split (US-A20.5): one A14 payment over several bills, exactly as A20 built it.
+      // Spec §4.3 (C8, critic M1 lean): a bill in a live A18 run is paid by that run, here as on the
+      // `open_item` path; settling it here would leave the run's `markBatchPaid` refusing for good.
+      for (const a of input.allocations) {
+        const billId = a.vendorBillId ?? a.targetId;
+        const liveRun = typeof billId === 'string' ? liveBatchOfBill(ctx, billId) : null;
+        if (liveRun !== null) throw new BankAbort(err('already_batched', { vendorBillId: billId, batchId: liveRun }));
+      }
+      const bankAccount = ctx.store.db
+        .prepare('SELECT ledger_account_id FROM bank_account WHERE workspace_id = ? AND id = ?')
+        .get(ctx.workspaceId, row.bank_account_id) as { ledger_account_id: string } | undefined;
+      if (bankAccount === undefined) throw new BankAbort(err('needs_bank_account', { bankAccountId: row.bank_account_id }));
       const paid = recordPayment(ctx, {
         direction: 'outgoing',
-        date: row.value_date ?? row.booking_date ?? now.slice(0, 10),
+        date: lineBookingDate(row),
         amountMinor: row.amount_minor,
         currency: row.currency,
         bankAccountId: bankAccount.ledger_account_id,
-        allocations: allocations.map((a) => ({
+        allocations: input.allocations.map((a) => ({
           ...(a.vendorBillId !== undefined ? { vendorBillId: a.vendorBillId } : {}),
           ...(a.targetId !== undefined ? { targetId: a.targetId } : {}),
           amountMinor: (a.amountMinor ?? row.amount_minor) as number,
         })),
         source: 'camt',
         intent: PAYMENT_INTENTS.record,
-        idempotencyKey: `camt-confirm-${row.id}`,
+        idempotencyKey: `camt-confirm-${row.id}-g${lineGeneration(ctx, row.id)}`,
       });
-      if (!paid.ok) return paid;
-      kind = 'payment';
-      targetId = paid['paymentId'] as string;
-    } else {
-      const entry = ctx.store.db
-        .prepare('SELECT id FROM journal_entry WHERE workspace_id = ? AND id = ? AND status = ?')
-        .get(ctx.workspaceId, input.entryId, 'posted') as { id: string } | undefined;
-      if (entry === undefined) return err('not_found', { entryId: input.entryId });
-      kind = 'journal_entry';
-      targetId = entry.id;
-    }
-
-    ctx.store.db
-      .prepare(
-        `INSERT INTO bank_txn_link (id, workspace_id, bank_txn_id, kind, target_id, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(ctx.ids.next('btlk'), ctx.workspaceId, row.id, kind, targetId, ctx.actor, now);
-    ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'confirm', actor: ctx.actor, at: now });
-
-    return ok<ConfirmCamtMatchOk>({ bankTxnId: row.id, kind, targetId });
-  });
+      if (!paid.ok) throw new BankAbort(paid as Err);
+      const paymentId = paid['paymentId'] as string;
+      writeLineLink(ctx, {
+        bankTxnId: row.id,
+        kind: 'payment',
+        targetId: paymentId,
+        state: 'booked',
+        targetKind: 'open_item',
+        paymentId,
+        entryId: typeof paid['entryId'] === 'string' ? (paid['entryId'] as string) : null,
+        claims: bankLegsOf(ctx, bankAccount.ledger_account_id, [paid['entryId'] as string | undefined]).map((l) => l.lineId),
+      });
+      ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'confirm', actor: ctx.actor, at: ctx.clock.now() });
+      return ok<ConfirmCamtMatchOk>({ bankTxnId: row.id, kind: 'payment', targetId: paymentId });
+    }),
+  );
 }
 
 // --- createEntryForTxn (US-A20.4) --------------------------------------------------------------------
@@ -1025,11 +949,12 @@ export type CreateEntryForTxnOk = {
 }
 
 /**
- * Book an unmatched txn (a bank fee, interest, a standing transfer) as a balanced two-leg entry via
- * A02, and link it. `taxCode` is declared in the input shape (spec §5) but refused rather than
- * guessed at (P9): modelling VAT on an arbitrary manual bank-fact entry (which of A06's directions it
- * takes, which account role it corrects) is not built yet, and a wrong filed figure is worse than an
- * honest refusal naming the reason.
+ * `create_entry_for_txn`, A20's booking verb, kept as a WRAPPER: a one-leg A39 `accounts` booking
+ * (the bank leg plus the chosen contra account) memoised under its own verb name. What changed with
+ * A39, each a walk fix: `taxCode` is HONOURED through A06's `buildVatLines` exactly as a manual journal
+ * line is (B6.2, where it used to refuse `vat_on_manual_bank_entries_not_modelled` and the Studio booked
+ * gross); a CREDIT is bookable (B6.5: interest, a refund, an own transfer had no verb at all); a
+ * foreign-currency line books in its own currency at the stored rate (B6.3), VAT excepted.
  */
 export function createEntryForTxn(ctx: WorkspaceContext, input: CreateEntryForTxnInput): Result<CreateEntryForTxnOk> {
   const capable = ctx.capabilities.assert('post');
@@ -1042,94 +967,44 @@ export function createEntryForTxn(ctx: WorkspaceContext, input: CreateEntryForTx
     optionalId(input.taxCode, 'taxCode');
   if (guard) return guard;
 
-  if (input.taxCode !== undefined) {
-    return err('unsupported', {
-      field: 'taxCode',
-      reason: 'vat_on_manual_bank_entries_not_modelled',
-      hint: 'book the net amount and add the VAT as a separate manual entry (post_entry), or via A17 if this is really a vendor bill',
-    });
-  }
-
   const scopedKey = JSON.stringify(['create_entry_for_txn', input.bankTxnId, input.idempotencyKey]);
-  const replayed = ctx.store.recallIdempotent<Result<CreateEntryForTxnOk>>(
-    ctx.workspaceId,
-    scopedKey,
-    'create_entry_for_txn',
-  );
+  const replayed = ctx.store.recallIdempotent<Result<CreateEntryForTxnOk>>(ctx.workspaceId, scopedKey, 'create_entry_for_txn');
   if (replayed !== undefined) return replayed;
 
   const row = readTxnRow(ctx, input.bankTxnId as string);
   if (row === undefined) return err('not_found', { bankTxnId: input.bankTxnId });
-  if (row.classification === 'incoming_credit') {
-    return err('use_qr_queue', {
+  const state = lineStateOf(ctx, row);
+  if (state.state !== 'open') {
+    return err('line_not_open', {
       bankTxnId: row.id,
-      creditId: row.credit_id,
-      reason: 'this credit is decided in the A21 Abgleich queue, not here',
-    });
-  }
-  const existingLink = readLink(ctx, row.id);
-  if (existingLink !== undefined) {
-    if (existingLink.kind === 'journal_entry') {
-      return ok<CreateEntryForTxnOk>({ bankTxnId: row.id, entryId: existingLink.target_id });
-    }
-    return err('already_matched', { bankTxnId: row.id, kind: existingLink.kind, targetId: existingLink.target_id });
-  }
-
-  const base = baseCurrencyOf(ctx);
-  if (row.currency !== base) {
-    return err('currency_mismatch', {
-      bankTxnId: row.id,
-      txnCurrency: row.currency,
-      baseCurrency: base,
-      reason: 'a cross-currency bank fact is booked through post_entry or record_payment, stating the conversion',
+      state: state.state,
+      linkId: state.link?.linkId ?? null,
+      staleProposal: true,
+      reason: 'this line is already decided; reopen_bank_line undoes the decision first',
     });
   }
 
-  const bankAccount = ctx.store.db
-    .prepare('SELECT ledger_account_id FROM bank_account WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, row.bank_account_id) as { ledger_account_id: string } | undefined;
-  if (bankAccount === undefined) return err('needs_bank_account', { bankAccountId: row.bank_account_id });
-
-  return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'create_entry_for_txn', () => {
-    const now = ctx.clock.now();
-    const lines: LineInput[] =
-      row.credit_debit === 'CRDT'
-        ? [
-            { account: bankAccount.ledger_account_id, debit: row.amount_minor },
-            { account: input.contraAccountId as string, credit: row.amount_minor },
-          ]
-        : [
-            { account: input.contraAccountId as string, debit: row.amount_minor },
-            { account: bankAccount.ledger_account_id, credit: row.amount_minor },
-          ];
-
-    // MINTED, never derived from the txn id alone: the same A11/A17 rule against a squattable key.
-    const postingKey = `camt-entry-${row.id}-${ctx.ids.next('cek')}`;
-    const posted = postEntry(ctx, {
-      date: row.booking_date ?? row.value_date ?? now.slice(0, 10),
-      source: 'camt',
-      description: input.description ?? `Bankbuchung ${row.entry_ref ?? row.id}`,
-      idempotencyKey: postingKey,
-      lines,
-    });
-    if (!posted.ok) return posted;
-
-    ctx.store.db
-      .prepare(
-        `INSERT INTO bank_txn_link (id, workspace_id, bank_txn_id, kind, target_id, created_by, created_at)
-         VALUES (?, ?, ?, 'journal_entry', ?, ?, ?)`,
-      )
-      .run(ctx.ids.next('btlk'), ctx.workspaceId, row.id, posted.entryId, ctx.actor, now);
-    ctx.audit.record({
-      entityKind: 'bank_txn',
-      entityId: row.id,
-      action: 'book',
-      actor: ctx.actor,
-      at: now,
-    });
-
-    return ok<CreateEntryForTxnOk>({ bankTxnId: row.id, entryId: posted.entryId });
-  });
+  return runBankGuarded(() =>
+    ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'create_entry_for_txn', () => {
+      const booked = performBooking(
+        ctx,
+        row,
+        {
+          kind: 'accounts',
+          legs: [
+            {
+              accountId: input.contraAccountId as string,
+              amountMinor: row.amount_minor,
+              ...(input.taxCode !== undefined ? { taxCode: input.taxCode } : {}),
+            },
+          ],
+        },
+        { text: input.description ?? `Bankbuchung ${row.entry_ref ?? row.id}` },
+      );
+      if (!booked.ok) throw new BankAbort(booked);
+      return ok<CreateEntryForTxnOk>({ bankTxnId: row.id, entryId: (booked as unknown as BookBankLineOk).entryId as string });
+    }),
+  );
 }
 
 // --- listReconciliation (US-A20.5), the board's read model (Pattern P5) ------------------------------
@@ -1194,6 +1069,8 @@ export type ListReconciliationOk = {
   matched: CamtTxnView[];
   unmatched: CamtTxnView[];
   partial: CamtTxnView[];
+  /** A39: ignored lines are decided and leave the three lanes (owner answer 1); listed here instead. */
+  ignored?: CamtTxnView[];
   reconciled?: boolean;
 }
 
@@ -1215,7 +1092,11 @@ export interface BankStatementSummary {
   closingBalanceMinor: number | null;
   balanceCurrency: string | null;
   txnCount: number;
-  /** Lines not yet matched (unmatched + partial), the number a person still has to decide. */
+  /**
+   * A39: the lines of this statement whose ONE state is `open` (spec A39 §4.2), the number a person
+   * still has to decide. The same predicate as the inbox, the board and G22's check: an ignored line is
+   * decided, and a line booked with a remainder is decided too (its rest is open on the invoice or bill).
+   */
   openCount: number;
   /** The D64 as-of indicator, exactly as `list_reconciliation` reports it; null when it cannot be judged. */
   reconciled: boolean | null;
@@ -1249,12 +1130,12 @@ export function listBankStatements(
         ORDER BY COALESCE(to_date, '') DESC, imported_at DESC, rowid DESC`,
     )
     .all(...params) as BankStatementRow[];
-  const txnRows = ctx.store.db.prepare(
-    'SELECT * FROM bank_txn WHERE workspace_id = ? AND statement_id = ? ORDER BY value_date, rowid',
+  const openRows = ctx.store.db.prepare(
+    `SELECT COUNT(*) AS n FROM bank_txn t ${LINE_STATE_JOINS('t')}
+      WHERE t.workspace_id = ? AND t.statement_id = ? AND ${LINE_STATE_EXPR('t')} = 'open'`,
   );
   const statements = stmts.map((s): BankStatementSummary => {
-    const rows = txnRows.all(ctx.workspaceId, s.id) as BankTxnRow[];
-    const openCount = rows.filter((r) => toTxnView(ctx, r).status !== 'matched').length;
+    const openCount = (openRows.get(ctx.workspaceId, s.id) as { n: number }).n;
     return {
       statementId: s.id,
       bankAccountId: s.bank_account_id,
@@ -1322,10 +1203,12 @@ export function listReconciliation(
   }
 
   const items = rows.map((r) => toTxnView(ctx, r));
+  const decided = items.filter((i) => i.lineState !== 'ignored');
   const result: ListReconciliationOk = {
-    matched: items.filter((i) => i.status === 'matched'),
-    unmatched: items.filter((i) => i.status === 'unmatched'),
-    partial: items.filter((i) => i.status === 'partial'),
+    matched: decided.filter((i) => i.status === 'matched'),
+    unmatched: decided.filter((i) => i.status === 'unmatched'),
+    partial: decided.filter((i) => i.status === 'partial'),
+    ignored: items.filter((i) => i.lineState === 'ignored'),
   };
   if (statement !== undefined) {
     const reconciled = statementReconciled(ctx, statement);

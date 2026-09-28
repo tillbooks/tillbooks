@@ -35,7 +35,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { Status, type StatusKind } from '../../components/Status';
@@ -281,9 +281,7 @@ export function Tasks() {
 
   const errorMessage = (error: Err): string => {
     const known = ['reminder_in_past', 'reminder_after_due', 'snooze_in_past', 'recurrence_invalid', 'task_not_open', 'invalid_status_transition'];
-    if (known.includes(error.error)) return t(`tasks.error.${error.error}`);
-    if (error.error === 'permission_denied') return t('tasks.error.permissionDenied.write');
-    return t('errors.fallback');
+    return refusalText(t, error, { own: 'tasks.error', known, keys: { permission_denied: 'tasks.error.permissionDenied.write' } });
   };
 
   if (workspaceId === null) return <NoWorkspaceState />;

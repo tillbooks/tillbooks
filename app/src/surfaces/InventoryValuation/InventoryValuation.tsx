@@ -30,7 +30,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatMoney } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, useSkeletonHold } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, useSkeletonHold, refusalText } from '../../components/states';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
@@ -219,7 +219,7 @@ export function InventoryValuation() {
   const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
 
   const localError = useCallback(
-    (e: Err | null): string | undefined => (e !== null && J03_ERROR_CODES.has(e.error) ? t(`invValuation.errors.${e.error}`) : undefined),
+    (e: Err | null): string | undefined => (e !== null && J03_ERROR_CODES.has(e.error) ? refusalText(t, e, { own: 'invValuation.errors' }) : undefined),
     [t],
   );
 

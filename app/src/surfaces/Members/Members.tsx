@@ -54,7 +54,7 @@ import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useCapabilities, CAP } from '../../lib/capabilities';
 import { useT, useTStrict, formatDate } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { Modal } from '../../components/Modal';
 import { CopyButton } from '../../components/CopyButton';
@@ -247,7 +247,7 @@ export function Members() {
       const capability = typeof error.capability === 'string' ? error.capability : '';
       return t('members.error.unknown_capability', { capability });
     }
-    return t(`members.error.${error.error}`);
+    return refusalText(t, error, { own: 'members.error' });
   }
 
   if (workspaceId === null) {

@@ -146,14 +146,16 @@
       "reference_unknown": "This reference belongs to no open item in this workspace.",
       "currency_mismatch": "A payment in {payCur} cannot settle a document in {docCur}.",
       "intent_required": "The payment was sent without an explicit intent, so nothing was posted.",
-      "unexpected": "The payment could not be posted."
+      "unexpected": "The payment could not be posted.",
+      "ownedByBankLine": "This payment belongs to a bank line. Take the line back under Bank: a payment booked there is reversed with it; one only matched there you reverse here afterwards."
     },
     "errorCta": {
       "needs_bank_account": "Go to setup",
       "period_locked": "Open periods",
       "needs_fx_rate": "Add the rate",
       "document_already_settled": "Reload the suggestions",
-      "currency_mismatch": "Record a journal entry"
+      "currency_mismatch": "Record a journal entry",
+      "ownedByBankLine": "Show the bank line"
     },
     "errorExplain": {
       "needs_fx_rate": "Without a rate nothing is converted and nothing is posted. Add the rate and TILL converts the payment."
@@ -181,7 +183,8 @@
       },
       "journalEntry": "View the entry",
       "documentMissing": "Document not found"
-    }
+    },
+    "showBankLine": "Show the bank line"
   },
   "help": {
     "Payments": {

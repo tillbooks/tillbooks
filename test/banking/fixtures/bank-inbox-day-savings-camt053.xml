@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FIXTURE (SYNTHETIC): the same day-end camt.053.001.08 of an invented Sparkonto, carrying the other side
+  of the transfer in bank-inbox-day-camt053.xml. Every value is invented for the A39 walk test; the IBAN
+  is an invented number with a correct check pair, and the counterparty is the published PostFinance
+  sample IBAN the main statement uses. Opening 30000.00, one credit of 5000.00, closing 35000.00.
+
+  (Elements are named in prose without angle brackets on purpose: the regex parser scans the whole
+  payload, so a tag token inside this comment would be read as a real element.)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+<BkToCstmrStmt>
+<GrpHdr><MsgId>DAY0930-MSG-0002</MsgId><CreDtTm>2026-09-30T23:10:00</CreDtTm></GrpHdr>
+<Stmt>
+<Id>DAY0930-STMT-0002</Id>
+<ElctrncSeqNb>57</ElctrncSeqNb>
+<FrToDt><FrDtTm>2026-09-30T00:00:00</FrDtTm><ToDtTm>2026-09-30T23:59:59</ToDtTm></FrToDt>
+<Acct><Id><IBAN>CH5604835012345678009</IBAN></Id><Ccy>CHF</Ccy></Acct>
+<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">30000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-09-30</Dt></Dt></Bal>
+<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">35000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-09-30</Dt></Dt></Bal>
+<Ntry>
+<Amt Ccy="CHF">5000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>DAY0930-S001</AcctSvcrRef>
+<BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>BOOK</SubFmlyCd></Fmly></Domn></BkTxCd>
+<NtryDtls><TxDtls>
+<Refs><AcctSvcrRef>DAY0930-S001</AcctSvcrRef></Refs>
+<Amt Ccy="CHF">5000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd>
+<RltdPties><Dbtr><Pty><Nm>Eigenübertrag Geschäftskonto</Nm></Pty></Dbtr><DbtrAcct><Id><IBAN>CH9300762011623852957</IBAN></Id></DbtrAcct></RltdPties>
+<RmtInf><Ustrd>Übertrag auf Sparkonto</Ustrd></RmtInf>
+</TxDtls></NtryDtls>
+</Ntry>
+</Stmt>
+</BkToCstmrStmt>
+</Document>

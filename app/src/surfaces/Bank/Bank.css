@@ -1,0 +1,1417 @@
+/* A2, the bank inbox (`/bank`). Only --t-* tokens, both themes through them.
+   The shapes: the page ground, one elevated panel per block (the trust lines, the list, the line
+   panel), hairlines only where a boundary helps (the table rules, the inputs). One accent, spent on
+   the selected row and focus; the one solid primary lives in the surface header. */
+
+.bank {
+  /* The side panel's width, and the room the floating agent toggle takes at the bottom right
+     (44px tall, one step above the viewport edge): the sticky panel and the page end above it. */
+  --bank-panel-w: 376px;
+  --bank-dock-clear: calc(44px + var(--t-space-6) + var(--t-space-1));
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  min-width: 0;
+  padding-bottom: var(--bank-dock-clear);
+}
+
+/* The section's own gap spaces the blocks; the header's margin would double it. */
+.bank > .surface-header {
+  margin-bottom: 0;
+}
+
+/* A36: "Zuletzt abgerufen" beside the fetch button: a quiet fact, never a control. */
+.bank-last-fetched {
+  align-self: center;
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The header's overflow is a standalone control beside 44px actions: 44px square too (D116). */
+.bank .surface-header-actions .overflow-menu-trigger,
+.bank-trust__actions .overflow-menu-trigger {
+  width: 44px;
+  height: 44px;
+}
+
+.bank-account-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.bank-account-filter__select {
+  min-width: 200px;
+}
+
+/* D116: a standalone or primary control is at least 44px. The header actions, the panel's commits,
+   the dialog commits and the recovery buttons all carry this; controls inside a dense row stay in
+   the 32px band. */
+.bank-touch {
+  height: 44px;
+  min-height: 44px;
+}
+
+/* --- the trust lines -------------------------------------------------------------------------- */
+
+.bank-trusts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.bank-trust {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-3);
+  padding: var(--t-space-2) var(--t-space-3);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.bank-trust__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bank-trust__headline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  margin: 0;
+  color: var(--t-text);
+  font-weight: 600;
+  line-height: var(--t-lh-body);
+}
+
+.bank-trust__glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.bank-trust__glyph--ok {
+  color: var(--t-success);
+}
+
+.bank-trust__glyph--warn {
+  color: var(--t-warn);
+}
+
+.bank-trust__account {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  color: var(--t-text);
+}
+
+.bank-trust__account::after {
+  content: '';
+  width: 1px;
+  height: 14px;
+  margin-left: var(--t-space-0-5);
+  align-self: center;
+  background: var(--t-border-strong);
+}
+
+.bank-trust__iban {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 500;
+}
+
+.bank-trust__figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--t-space-1);
+  row-gap: 0;
+  margin: 0;
+  line-height: var(--t-lh-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-trust__term {
+  color: var(--t-text-dim);
+}
+
+.bank-trust__amount {
+  color: var(--t-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bank-trust__op {
+  color: var(--t-text-dim);
+  padding: 0 var(--t-space-0-5);
+}
+
+.bank-trust__op--warn,
+.bank-trust__term--warn,
+.bank-trust__amount--warn {
+  color: var(--t-warn);
+}
+
+.bank-trust__breakdown,
+.bank-trust__hint {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* A figure you can open (DESIGN.md "a figure you cannot open is a defect"): quiet at rest, the
+   underline arrives on hover (the owner's "Ohne Unterstrich, Hover-Cue"). */
+.bank-trust__open {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--t-text-dim);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color var(--t-motion-hover) var(--t-ease-out), color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.bank-trust__open:hover {
+  color: var(--t-text);
+  border-bottom-color: var(--t-border-strong);
+}
+
+.bank-trust__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex: 0 0 auto;
+}
+
+/* --- the toolbar -------------------------------------------------------------------------------- */
+
+.bank-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.bank-toolbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+}
+
+/* The search: a field box with the glyph and a VISIBLE label inside it, the input borderless within.
+   The box takes the focus cue while the input holds focus. */
+.bank-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  height: var(--t-control-h);
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+  color: var(--t-text-dim);
+  cursor: text;
+  transition: border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.bank-search--main {
+  width: 340px;
+  max-width: 100%;
+}
+
+.bank-search:focus-within {
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+}
+
+.bank-search__glyph {
+  flex: 0 0 auto;
+}
+
+.bank-search__label {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 500;
+}
+
+.bank-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--t-text);
+  font: inherit;
+  font-size: var(--t-font-body);
+  outline: none;
+}
+
+.bank-search__input:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.bank-search__input::placeholder {
+  color: var(--t-text-faint);
+}
+
+/* --- the body: the list and the panel ----------------------------------------------------------- */
+
+.bank-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  min-width: 0;
+}
+
+.bank-list {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+}
+
+.bank-list > .state-panel,
+.bank-list > .error-banner,
+.bank-list > [role='status'] {
+  margin: 0;
+}
+
+.bank-first {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding-bottom: var(--t-space-3);
+}
+
+.bank-first .file-drop--zone {
+  margin: 0 var(--t-space-3);
+}
+
+/* --- the table: one row per line, one baseline, the density's row height ------------------------ */
+
+.bank-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.bank-col--pick {
+  width: 44px;
+}
+
+.bank-col--date {
+  width: 80px;
+}
+
+.bank-col--target {
+  width: 212px;
+}
+
+.bank-col--vat {
+  width: 148px;
+}
+
+.bank-col--amount {
+  width: 116px;
+}
+
+.bank-col--actions {
+  width: 136px;
+}
+
+.bank-table th {
+  height: var(--t-row-head-h);
+  padding: 0 var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  background: var(--t-bg-elev);
+}
+
+.bank-table th:first-child {
+  padding-left: var(--t-space-2);
+  border-top-left-radius: var(--t-radius-md);
+}
+
+.bank-table th:last-child {
+  border-top-right-radius: var(--t-radius-md);
+}
+
+.bank-col-head--num {
+  text-align: right;
+}
+
+.bank-table th.bank-col-head--num {
+  text-align: right;
+}
+
+.bank-table th.bank-col-head--center {
+  text-align: center;
+}
+
+.bank-cell {
+  height: var(--t-row-h);
+  padding: 0 var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: middle;
+  line-height: var(--t-lh-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+/* The pick column: the house check-cell (a 32px target in the dense band, the native box inside),
+   centred; the date after it keeps the ordinary cell padding. */
+.bank-table th.bank-col-head--pick,
+.bank-cell--pick {
+  padding: 0 0 0 var(--t-space-1);
+  text-align: center;
+  overflow: visible;
+}
+
+.bank-cell--pick + .bank-cell--date {
+  padding-left: var(--t-space-1);
+}
+
+.bank-cell--date {
+  padding-left: var(--t-space-2);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-row {
+  cursor: pointer;
+}
+
+.bank-row:hover .bank-cell {
+  background: var(--t-bg-soft);
+}
+
+/* The selected row: the accent-soft ground (a selected item is one of the accent's three jobs). */
+.bank-row[data-selected='true'] .bank-cell {
+  background: var(--t-accent-soft);
+}
+
+.bank-row:last-child .bank-cell {
+  border-bottom-color: transparent;
+}
+
+/* A line that just arrived with an import: the Commit moment's tint, once (D122 D-I). */
+.bank-row[data-fresh='true'] .bank-cell--date::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--t-space-0-5);
+  vertical-align: middle;
+  border-radius: var(--t-radius-full);
+  background: var(--t-accent);
+}
+
+.bank-party {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-detail {
+  margin-left: var(--t-space-1);
+  color: var(--t-text-dim);
+}
+
+.bank-cell--target,
+.bank-cell--vat {
+  overflow: visible;
+}
+
+.bank-picker.picker-trigger {
+  height: 32px;
+}
+
+.bank-picker--target .bank-cert {
+  flex: 0 0 auto;
+}
+
+.picker-trigger__code {
+  flex: 0 0 auto;
+  color: var(--t-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.picker-trigger__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--t-text);
+}
+
+.picker-trigger__placeholder {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--t-text-dim);
+}
+
+.bank-vat-info {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* The certainty mark: a glyph plus (in the panel) its word; colour only on sure (the go-signal) and
+   check (look before booking), never alone. */
+.bank-cert {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text-dim);
+}
+
+.bank-cert[data-certainty='sure'] {
+  color: var(--t-success);
+}
+
+.bank-cert[data-certainty='check'] {
+  color: var(--t-warn);
+}
+
+.bank-cert__word {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-cell--amount {
+  text-align: right;
+}
+
+.bank-amount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.bank-amount__sign {
+  color: var(--t-danger);
+}
+
+.bank-amount__currency {
+  margin-right: var(--t-space-0-5);
+  color: var(--t-text-dim);
+  font-weight: 400;
+}
+
+.bank-cell--actions {
+  padding-right: var(--t-space-1);
+  overflow: visible;
+}
+
+.bank-row__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--t-space-0-5);
+}
+
+.bank-row__book {
+  min-width: 84px;
+  padding-inline: var(--t-space-1);
+}
+
+/* The row's overflow keeps its 32px square in the dense band. */
+.bank-row .overflow-menu-trigger {
+  width: 32px;
+  height: 32px;
+}
+
+.bank-cell--summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bank-state {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.bank-state__word {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-state__summary {
+  color: var(--t-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The narrow layout: the panel under its row, a full-width row of its own, two columns inside it
+   (what the line becomes on the left, the refusal and the commit on the right). The row above
+   already names the line, so the panel's own head keeps only the facts the row does not show. */
+.bank-inline-panel > td {
+  padding: 0;
+  border-bottom: 1px solid var(--t-border);
+  background: var(--t-bg-soft);
+}
+
+.bank-panel.bank-panel--inline {
+  width: auto;
+  padding: var(--t-space-2) var(--t-space-3) var(--t-space-3);
+  background: transparent;
+}
+
+.bank-panel--inline .bank-panel__date,
+.bank-panel--inline .bank-panel__party,
+.bank-panel--inline .bank-panel__text,
+.bank-panel--inline .bank-panel__amount {
+  display: none;
+}
+
+.bank-panel--inline .bank-panel__facts {
+  margin: 0;
+}
+
+.bank-panel--inline .bank-panel__body {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--t-space-3);
+  align-items: start;
+}
+
+.bank-panel--inline .bank-mode {
+  max-width: 560px;
+}
+
+.bank-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.bank-panel__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  min-width: 0;
+}
+
+/* --- the panel -------------------------------------------------------------------------------- */
+
+.bank-panel {
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--t-space-3) var(--t-space-3) var(--t-space-3);
+}
+
+.bank-body--wide > .bank-panel {
+  flex: 0 0 var(--bank-panel-w);
+  width: var(--bank-panel-w);
+  position: sticky;
+  top: calc(var(--surface-header-height, 0px) + var(--t-space-1));
+  max-height: calc(100vh - var(--surface-header-height, 0px) - var(--t-space-1) - var(--bank-dock-clear));
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.bank-panel--block {
+  width: auto;
+  max-width: 640px;
+}
+
+.bank-panel__empty {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.bank-panel__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.bank-panel__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bank-panel__date {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-panel__party {
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bank-panel__text {
+  margin: 0;
+  color: var(--t-text-dim);
+  overflow-wrap: anywhere;
+}
+
+.bank-panel__amount {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: var(--t-font-2xl);
+  line-height: var(--t-lh-2xl);
+  font-weight: 600;
+}
+
+.bank-panel__amount .bank-amount {
+  font-weight: 600;
+}
+
+.bank-panel__facts {
+  display: grid;
+  gap: 2px;
+  margin: var(--t-space-0-5) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-panel__facts > div {
+  display: flex;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.bank-panel__facts dt {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.bank-panel__facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--t-text);
+}
+
+.bank-panel__back {
+  align-self: flex-start;
+  margin: calc(var(--t-space-0-5) * -1) 0;
+  padding-left: 0;
+  color: var(--t-text-dim);
+}
+
+.bank-panel__status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.bank-panel__chip,
+.bank-panel__reason,
+.bank-panel__next,
+.bank-panel__provenance,
+.bank-panel__consequence {
+  margin: 0;
+}
+
+.bank-panel__reason {
+  color: var(--t-text);
+}
+
+.bank-panel__next,
+.bank-panel__provenance {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-panel__consequence {
+  color: var(--t-text);
+}
+
+.bank-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.bank-section-title {
+  margin: 0;
+  padding: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+}
+
+.bank-panel__commit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding-top: var(--t-space-1);
+}
+
+.bank-panel__alt {
+  align-self: flex-start;
+  color: var(--t-text-dim);
+}
+
+/* The commit: the secondary edge in the text ink at 600, full width in the panel (the one
+   solid primary is the header's, so this stays secondary and still reads as THE action). */
+.bank-commit {
+  flex: 1 1 auto;
+  border-color: var(--t-text-dim);
+}
+
+/* --- the Soll/Haben lines --------------------------------------------------------------------- */
+
+.bank-legs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.bank-legs__subtitle,
+.bank-legs__note {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-legs__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-legs__table th {
+  padding: 0 0 var(--t-space-0-5);
+  border-bottom: 1px solid var(--t-border);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  text-align: left;
+}
+
+.bank-legs__table td {
+  padding: var(--t-space-0-5) 0;
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: top;
+}
+
+.bank-legs__table th:first-child,
+.bank-legs__table td:first-child {
+  width: auto;
+}
+
+.bank-legs__num {
+  width: 84px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-legs__table th.bank-legs__num {
+  text-align: right;
+}
+
+/* One line per leg: the number and the name, the name cut with an ellipsis (the full label is the
+   cell's title), so the Soll and Haben figures stay on the leg's own baseline. */
+.bank-legs__account {
+  padding-right: var(--t-space-1);
+  color: var(--t-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- the comparison, the batch, the refusal ----------------------------------------------------- */
+
+.bank-compare {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-compare th,
+.bank-compare td {
+  padding: var(--t-space-0-5) var(--t-space-0-5) var(--t-space-0-5) 0;
+  border-bottom: 1px solid var(--t-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.bank-compare thead th {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+}
+
+.bank-compare tbody th {
+  width: 88px;
+  color: var(--t-text-dim);
+  font-weight: 400;
+}
+
+.bank-compare thead td:first-child {
+  width: 88px;
+}
+
+/* A figure (the amount, the date) never breaks inside itself; the text row may wrap. */
+.bank-compare tr[data-kind='figure'] td {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.bank-compare__verdict {
+  display: block;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.bank-compare__verdict[data-tone='ok'] {
+  color: var(--t-success);
+}
+
+.bank-compare__verdict[data-tone='warn'] {
+  color: var(--t-warn);
+}
+
+.bank-batch {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-batch__item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+  padding: var(--t-space-0-5) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.bank-refusal {
+  display: flex;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  background: var(--t-danger-soft);
+}
+
+.bank-refusal__glyph {
+  flex: 0 0 auto;
+  color: var(--t-danger);
+}
+
+.bank-refusal__content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.bank-refusal__title {
+  margin: 0;
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-refusal__body {
+  margin: 0;
+  color: var(--t-text);
+}
+
+.bank-refusal__action {
+  margin-top: var(--t-space-1);
+  height: 44px;
+}
+
+/* --- the modes (split, match, ignore, reopen) --------------------------------------------------- */
+
+.bank-mode {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.bank-mode__title {
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+.bank-mode__lead,
+.bank-mode__note {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.bank-mode__warn {
+  margin: 0;
+  color: var(--t-warn);
+}
+
+.bank-mode__consequence {
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-mode__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.bank-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.bank-field--grow {
+  flex: 1 1 auto;
+}
+
+.bank-field--amount {
+  flex: 0 0 116px;
+}
+
+.bank-field__label {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+}
+
+/* Form controls in the panel are standalone controls: 44px (D116). */
+.bank-mode .field,
+.bank-mode .picker-trigger,
+.bank-import .select-trigger {
+  height: 44px;
+  min-height: 44px;
+}
+
+.bank-mode textarea.field,
+.bank-textarea {
+  height: auto;
+  min-height: 64px;
+  resize: vertical;
+}
+
+.bank-money-input {
+  text-align: right;
+}
+
+.bank-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.bank-fieldset > legend {
+  margin-bottom: var(--t-space-0-5);
+  padding: 0;
+}
+
+.bank-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A choice is a whole 44px row: the native radio stays the control, the label is its target. */
+.bank-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 44px;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.bank-choice:hover {
+  background: var(--t-bg-soft);
+}
+
+.bank-choice[data-checked='true'] {
+  background: var(--t-accent-soft);
+}
+
+.bank-choice[data-taken='true'] {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.bank-choice > input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.bank-choice__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bank-choice__title {
+  color: var(--t-text);
+  overflow-wrap: anywhere;
+}
+
+.bank-choice__meta {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-choice__amount {
+  flex: 0 0 auto;
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bank-inline-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-0-5) var(--t-space-1);
+}
+
+.bank-choice--inline {
+  padding-right: var(--t-space-2);
+}
+
+.bank-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  min-height: 44px;
+  padding: var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+}
+
+.bank-check:hover {
+  background: var(--t-bg-soft);
+}
+
+.bank-check > input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+}
+
+.bank-check__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bank-check__title {
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+.bank-check__hint {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-split__meta {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.bank-split__bank {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-split__bank-amount {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-split__legs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bank-split__leg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) var(--t-space-1) var(--t-space-2);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.bank-split__leg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bank-split__leg-title {
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+}
+
+.bank-split__leg-row {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: flex-end;
+}
+
+.bank-split__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+}
+
+.bank-split__rest {
+  margin: 0;
+  color: var(--t-warn);
+  font-weight: 600;
+  text-align: right;
+}
+
+.bank-split__rest[data-complete='true'] {
+  color: var(--t-success);
+}
+
+.bank-link__lists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.bank-link .bank-search {
+  height: 44px;
+}
+
+.bank-ignore__private {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.bank-ignore__private p {
+  margin: 0;
+}
+
+/* --- the agent's Vorschlag on the line ---------------------------------------------------------- */
+
+.bank-vorschlag {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+}
+
+.bank-vorschlag__kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+}
+
+.bank-vorschlag__date {
+  color: var(--t-text-dim);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.bank-vorschlag__sentence {
+  margin: 0;
+  color: var(--t-text);
+}
+
+.bank-vorschlag__reject {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+/* --- the import dialog ------------------------------------------------------------------------ */
+
+.bank-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  min-width: 0;
+}
+
+.bank-import__account {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  min-height: 44px;
+  align-items: center;
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-import__iban {
+  color: var(--t-text-dim);
+  font-weight: 400;
+}
+
+.bank-import__match {
+  margin: 0;
+  color: var(--t-text);
+}
+
+.bank-ack {
+  margin: 0;
+}
+
+/* The notice's follow-up ("Nur neue zeigen", "Rückgängig") is a button of its own size,
+   under the message, never a bar across the notice. */
+.bank-ack .action-feedback__body > .btn {
+  align-self: flex-start;
+  margin-top: var(--t-space-1);
+}
+
+/* An ignored line's reason follows its state word after a quiet dot ("Ignoriert · Privat"). */
+.bank-state[data-state='ignored'] .bank-state__summary::before {
+  content: '·';
+  margin-right: var(--t-space-0-5);
+}
+
+/* --- the bulk bar ------------------------------------------------------------------------------- */
+
+/* What happens to the picked lines: a band above the table, the count first, the actions at the
+   standalone size (they are not row controls), the note on what stays behind last. */
+.bank-pickbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+  background: var(--t-bg-soft);
+  border-top-left-radius: var(--t-radius-md);
+  border-top-right-radius: var(--t-radius-md);
+}
+
+.bank-pickbar__count {
+  margin: 0;
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-pickbar__note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-pickbar__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.bank-pickbar__field .bank-field__label {
+  margin: 0;
+}
+
+/* A deep link to a line this book does not hold says so, in place of a selection (critic M4). */
+.bank-link-missing {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}

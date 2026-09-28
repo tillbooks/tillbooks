@@ -1,8 +1,9 @@
 /**
- * A33, the EBICS channel panel (spec §6/§8 component test): it renders the channel states, gates the
- * write controls behind `pay`, and drives connect / sync / disconnect through the client. THE LAW and
- * the money-path invariants live in the engine suite; here we prove the surface reaches the verbs and
- * shows the honest states (never colour alone: a glyph + label pair for every state).
+ * A33 + A36, the EBICS channel panel (spec A36 §5 component test): it renders the channel states, gates
+ * the write controls behind `pay`, drives connect / fetch / the two-step bank-key review / disconnect
+ * through the client, shows per account the newest statement and every waiting statement in words, and
+ * words every refusal through the one path. The money-path invariants live in the engine suites; here we
+ * prove the surface reaches the verbs and shows the honest states (a glyph + label pair for every state).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -22,31 +23,45 @@ const ACCOUNTS: BankAccount[] = [
   { id: 'ba_1', name: 'Kontokorrent', iban: 'CH93 0076 2011 6238 5295 7' } as BankAccount,
 ];
 
-/** A36's two status facets, the honest defaults every fixture below overrides only what it needs. */
+/** The keystore facet, the honest default every fixture below overrides only where it needs to. */
 const READY_KEYSTORE = { kind: 'file', state: 'ready', persistent: true };
-const OFF_SCHEDULE = {
-  ruleId: null as string | null,
-  enabled: false,
-  cadence: null as string | null,
-  lastFiredAt: null as string | null,
-  driverSeen: false,
-  inactive: false,
-};
 
+/** An active EBICS channel as `bank_channel_status` returns it since A36 (download only). */
 const ACTIVE_CHANNEL = {
   connectionId: 'ebconn_1',
+  channelKind: 'ebics',
   host: { hostId: 'HOST', partnerId: 'PARTNER', userId: 'USER' },
+  protocolVersion: 'H005',
   state: 'active',
-  accounts: [{ bankAccountId: 'ba_1', iban: 'CH9300762011623852957' }],
+  activatedAt: '2026-07-19T00:00:00.000Z',
+  ceremony: { ini: 'confirmed', hia: 'confirmed', refusal: null as string | null },
+  accounts: [
+    {
+      bankAccountId: 'ba_1',
+      iban: 'CH9300762011623852957',
+      newestStatement: { number: 214, year: 2026, fromDate: '2026-07-19', toDate: '2026-07-19', openingBalanceMinor: 964235, closingBalanceMinor: 976082, currency: 'CHF' },
+    },
+  ],
   lastSyncAt: '2026-07-20T00:00:00.000Z',
   pendingIniLetter: null,
-  pendingRelease: [],
-  inDoubt: [],
-  rejected: [],
-  unmatchedFiles: [],
+  iniLetterDocumentId: 'file_1',
+  pendingStatements: [] as Record<string, unknown>[],
   recentOrders: [{ id: 'o1', orderRef: 'r1', orderType: 'BTD', status: 'ok', bankReason: null, occurredAt: '2026-07-20T00:00:00.000Z' }],
   keystore: READY_KEYSTORE,
-  schedule: OFF_SCHEDULE,
+};
+
+/** The bank's hashes as the engine returns them from HPB, and the lines ZKB's sheet prints. */
+const BANK_HASHES = {
+  electronicSignature: '',
+  authentication: 'a'.repeat(64),
+  encryption: 'b'.repeat(64),
+  certificateHashes: { authentication: 'c'.repeat(64), encryption: 'd'.repeat(64) },
+  keyHashes: { authentication: 'e'.repeat(64), encryption: 'f'.repeat(64) },
+};
+const lines = (ch: string) => Array.from({ length: 4 }, () => Array.from({ length: 8 }, () => ch.toUpperCase().repeat(2)).join(' '));
+const BANK_KEY_LINES = {
+  authentication: { certificate: lines('c'), key: lines('e'), spki: lines('a') },
+  encryption: { certificate: lines('d'), key: lines('f'), spki: lines('b') },
 };
 
 const UBS_ENTRY = {
@@ -97,7 +112,7 @@ describe('EbicsChannelPanel', () => {
   it('EMPTY: with no channel, names the file path as the standing floor and offers connect', async () => {
     const transport: Transport = async (action) => (action === 'bank_channel_status' ? ok({ channels: [] }) : { status: 404, body: { ok: false, error: 'x' } });
     renderPanel(transport);
-    await waitFor(() => expect(screen.getByText(/file-based statement import/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/importing statements by hand/i)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /connect a channel/i })).toBeInTheDocument();
   });
 
@@ -129,7 +144,7 @@ describe('EbicsChannelPanel', () => {
       return { status: 404, body: { ok: false, error: 'x' } };
     };
     renderPanel(transport);
-    await waitFor(() => expect(screen.getByText(/file-based statement import/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/importing statements by hand/i)).toBeInTheDocument());
     // The EBICS connect form's account select is reachable by its visible label, not "bankAccountId".
     await userEvent.click(screen.getByRole('button', { name: /connect a channel/i }));
     expect(screen.getByLabelText('Account to route')).toBeInTheDocument();
@@ -143,18 +158,47 @@ describe('EbicsChannelPanel', () => {
     expect(screen.getAllByLabelText('Account to route').length).toBe(2);
   });
 
-  it('ACTIVE: renders the active state and Sync now drives bank_sync', async () => {
-    const calls: string[] = [];
-    const transport: Transport = async (action) => {
-      calls.push(action);
+  it('ACTIVE: renders the active state, the newest statement, the eBanking note; Fetch statements drives bank_sync with a fresh key', async () => {
+    const calls: { action: string; input: Record<string, unknown> }[] = [];
+    const transport: Transport = async (action, input) => {
+      calls.push({ action, input: input as Record<string, unknown> });
       if (action === 'bank_channel_status') return ok({ channels: [ACTIVE_CHANNEL] });
-      if (action === 'bank_sync') return ok({ connectionId: 'ebconn_1', files: [] });
+      if (action === 'bank_sync') return ok({ connectionId: 'ebconn_1', download: { outcome: 'downloaded' }, statements: [{ outcome: 'imported', final: true }, { outcome: 'gap_refused', final: false }] });
       return { status: 404, body: { ok: false, error: 'x' } };
     };
     renderPanel(transport);
     await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
-    await userEvent.click(screen.getByRole('button', { name: /sync now/i }));
-    await waitFor(() => expect(calls).toContain('bank_sync'));
+    expect(screen.getByText(/Newest statement in the books: no\. 214\/2026 of 19\.07\.2026, closing balance/)).toBeInTheDocument();
+    expect(screen.getByText(/All data not yet retrieved/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /fetch statements/i }));
+    await waitFor(() => expect(calls.some((c) => c.action === 'bank_sync')).toBe(true));
+    const sync = calls.find((c) => c.action === 'bank_sync');
+    expect(sync?.input).toMatchObject({ connectionId: 'ebconn_1' });
+    expect(String(sync?.input.idempotencyKey)).toMatch(/^a36-sync-ebconn_1-\d+$/);
+    expect(sync?.input.dateRange).toBeUndefined();
+    await waitFor(() => expect(screen.getByText(/1 statements imported, 1 waiting/)).toBeInTheDocument());
+  });
+
+  it('A36C-1: a number jump is said in the fetch feedback AND on the account line from the status, naming the skipped numbers', async () => {
+    const jump = { after: { number: 214, year: 2026 }, statement: { number: 216, year: 2026 }, skipped: [{ year: 2026, from: 215, to: 215 }] };
+    let synced = false;
+    const transport: Transport = async (action) => {
+      if (action === 'bank_channel_status') {
+        const account = { ...ACTIVE_CHANNEL.accounts[0], lastNumberJump: synced ? jump : null };
+        return ok({ channels: [{ ...ACTIVE_CHANNEL, accounts: [account] }] });
+      }
+      if (action === 'bank_sync') {
+        synced = true;
+        return ok({ connectionId: 'ebconn_1', download: { outcome: 'downloaded' }, statements: [{ outcome: 'imported', final: true, notice: 'statement_number_jump', jump }] });
+      }
+      return { status: 404, body: { ok: false, error: 'x' } };
+    };
+    renderPanel(transport);
+    await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
+    expect(screen.queryByText(/Missing numbers/)).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /fetch statements/i }));
+    // Once in the fetch feedback, once on the account line the status keeps after the feedback is gone.
+    await waitFor(() => expect(screen.getAllByText(/Statement 216 came after statement 214\. Missing numbers: 215\/2026\./).length).toBe(2));
   });
 
   it('DISCONNECT: a single Block click ARMS a confirm and does NOT tear down; confirming drives bank_channel_disconnect', async () => {
@@ -173,9 +217,9 @@ describe('EbicsChannelPanel', () => {
     await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
 
     // First click only ARMS the confirm: the teardown verb must NOT have fired yet.
-    await userEvent.click(screen.getByRole('button', { name: /block \(SPR\)/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^block$/i }));
     expect(calls).not.toContain('bank_channel_disconnect');
-    expect(screen.getByText(/really block this connection/i)).toBeInTheDocument();
+    expect(screen.getByText(/really block this channel\? TILL then fetches nothing more\. To block it at ZKB: by phone/i)).toBeInTheDocument();
 
     // Confirming drives the verb once, with the armed mode and the untouched confirm:true wire arg.
     await userEvent.click(screen.getByRole('button', { name: /^confirm$/i }));
@@ -208,9 +252,9 @@ describe('EbicsChannelPanel', () => {
       action === 'bank_channel_status' ? ok({ channels: [ACTIVE_CHANNEL] }) : { status: 404, body: { ok: false, error: 'x' } };
     renderPanel(transport);
     await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
-    // Last sync is a formatted date, never the raw ISO instant, with the instant kept as the tooltip.
-    const lastSync = screen.getByText(/Last sync:/);
-    expect(lastSync).toHaveTextContent('Last sync: 20.07.2026');
+    // Last fetched is a formatted date, never the raw ISO instant, with the instant kept as the tooltip.
+    const lastSync = screen.getByText(/Last fetched:/);
+    expect(lastSync).toHaveTextContent('Last fetched: 20.07.2026');
     expect(lastSync.textContent).not.toContain('2026-07-20T00:00:00.000Z');
     expect(lastSync).toHaveAttribute('title', '2026-07-20T00:00:00.000Z');
     // The order log humanises the BTF order type and the status enum, keeps the raw trail as title.
@@ -224,9 +268,7 @@ describe('EbicsChannelPanel', () => {
     const transport: Transport = async (action) => (action === 'bank_channel_status' ? ok({ channels: [ACTIVE_CHANNEL] }) : { status: 404, body: { ok: false, error: 'x' } });
     renderPanel(transport, []);
     await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /sync now/i })).not.toBeInTheDocument();
-    // A36 adds a second, per-control instance of the same honest reason (the schedule toggle's own
-    // padlock note), so this is now `getAllByText`: the write wall AND the toggle both name it.
+    expect(screen.queryByRole('button', { name: /fetch statements/i })).not.toBeInTheDocument();
     expect(screen.getAllByText(/needs the payment capability/i).length).toBeGreaterThan(0);
   });
 });
@@ -241,7 +283,7 @@ describe('EbicsChannelPanel: A36 bank picker', () => {
       return { status: 404, body: { ok: false, error: 'x' } };
     };
     renderPanel(transport);
-    await waitFor(() => expect(screen.getByText(/file-based statement import/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/importing statements by hand/i)).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: /connect a channel/i }));
     const input = await screen.findByLabelText('Bank');
     await userEvent.type(input, 'UBS');
@@ -261,7 +303,7 @@ describe('EbicsChannelPanel: A36 bank picker', () => {
       return { status: 404, body: { ok: false, error: 'x' } };
     };
     renderPanel(transport);
-    await waitFor(() => expect(screen.getByText(/file-based statement import/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/importing statements by hand/i)).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: /connect a channel/i }));
     const input = await screen.findByLabelText('Bank');
     await userEvent.type(input, 'Nonexistent Bank');
@@ -341,65 +383,120 @@ describe('EbicsChannelPanel: A36 keystore card', () => {
   });
 });
 
-describe('EbicsChannelPanel: A36 Automatischer Abruf (the cadence toggle)', () => {
-  it('OFF -> ON: states the scheduled egress up front, creates the G01 rule, then links it', async () => {
+describe('EbicsChannelPanel: A36 the feed and the bank-key review', () => {
+  it('WAITING: each waiting statement says why it waits and what to do, in words (never a code)', async () => {
+    const channel = {
+      ...ACTIVE_CHANNEL,
+      pendingStatements: [
+        { documentId: 'f1', payloadSha256: 's1', since: '2026-07-20T00:00:00.000Z', code: 'gap_refused', bankAccountId: 'ba_1', statement: { number: 216, year: 2026, fromDate: '2026-07-21', toDate: '2026-07-21', iban: 'CH9300762011623852957' }, details: { against: { number: 214, year: 2026 } } },
+        { documentId: 'f2', payloadSha256: 's2', since: '2026-07-20T00:00:00.000Z', code: 'unmatched_account', bankAccountId: null, statement: { number: 1, year: 2026, fromDate: '2026-07-21', toDate: '2026-07-21', iban: 'CH5604835012345678009' } },
+        { documentId: 'f3', payloadSha256: 's3', since: '2026-07-20T00:00:00.000Z', code: 'gap_refused', bankAccountId: 'ba_1', readyToImport: true, statement: { number: 215, year: 2026, fromDate: '2026-07-20', toDate: '2026-07-20', iban: 'CH9300762011623852957' } },
+      ],
+    };
+    const transport: Transport = async (action) => (action === 'bank_channel_status' ? ok({ channels: [channel] }) : { status: 404, body: { ok: false, error: 'x' } });
+    renderPanel(transport);
+    await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
+    expect(screen.getByText('Waiting statements')).toBeInTheDocument();
+    expect(screen.getByText('Statement 216 does not follow statement 214. Import the missing day-end statement from e-banking, then fetch again.')).toBeInTheDocument();
+    expect(screen.getByText(/Statement for IBAN CH5604835012345678009, which belongs to no routed account/)).toBeInTheDocument();
+    expect(screen.getByText('Statement 215 fits now: the next fetch imports it.')).toBeInTheDocument();
+    expect(screen.queryByText(/gap_refused|unmatched_account/)).not.toBeInTheDocument();
+  });
+
+  it('KEY REVIEW: fetch shows the hashes 8 pairs per line; confirm waits for the checkbox and pins exactly the reviewed set', async () => {
     const calls: { action: string; input: Record<string, unknown> }[] = [];
-    let channel = { ...ACTIVE_CHANNEL };
+    let channel: Record<string, unknown> = { ...ACTIVE_CHANNEL, state: 'pending_bank_activation', accounts: [{ bankAccountId: 'ba_1', iban: 'CH9300762011623852957', newestStatement: null }] };
     const transport: Transport = async (action, input) => {
-      calls.push({ action, input: input as Record<string, unknown> });
+      const i = input as Record<string, unknown>;
+      calls.push({ action, input: i });
       if (action === 'bank_channel_status') return ok({ channels: [channel] });
-      if (action === 'create_automation_rule') return ok({ rule: { id: 'arule_1' } });
-      if (action === 'set_bank_sync_schedule') {
-        channel = {
-          ...channel,
-          schedule: { ruleId: 'arule_1', enabled: true, cadence: 'schedule.daily', lastFiredAt: null, driverSeen: true, inactive: false },
-        };
-        return ok({ connectionId: channel.connectionId, syncRuleId: 'arule_1' });
+      if (action === 'bank_channel_connect' && i.confirmBankKeys !== true) {
+        return ok({ connectionId: 'ebconn_1', state: 'pending_bank_activation', bankKeyHashes: BANK_HASHES, bankKeyLines: BANK_KEY_LINES, awaitingConfirmation: true });
+      }
+      if (action === 'bank_channel_connect') {
+        channel = { ...channel, state: 'active' };
+        return ok({ connectionId: 'ebconn_1', state: 'active' });
       }
       return { status: 404, body: { ok: false, error: 'x' } };
     };
-    renderPanel(transport, [CAP.pay, CAP.manageAutomations]);
-    await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
-    expect(screen.getByText(/scheduled network egress/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('checkbox', { name: /automatic fetch/i }));
-    await waitFor(() =>
-      expect(calls.some((c) => c.action === 'create_automation_rule' && c.input['trigger'] && (c.input['trigger'] as { event: string }).event === 'schedule.daily')).toBe(
-        true,
-      ),
-    );
-    await waitFor(() =>
-      expect(calls.some((c) => c.action === 'set_bank_sync_schedule' && c.input['ruleId'] === 'arule_1')).toBe(true),
-    );
+    renderPanel(transport);
+    await waitFor(() => expect(screen.getByText('Waiting on the bank')).toBeInTheDocument());
+    expect(screen.getByText(/Sign the INI letter/)).toBeInTheDocument();
+    expect(screen.getByText(/No day-end statement in the books yet/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /fetch and compare the bank keys/i }));
+    const review = await screen.findByRole('region', { name: /compare and confirm the bank keys/i });
+    expect(within(review).getByText(/H005 mit Zertifikat/)).toBeInTheDocument();
+    const certBlock = within(review).getByLabelText('Authentication (X002), Certificate, SHA-256');
+    expect(certBlock.textContent?.split('\n')).toEqual(lines('c'));
+    expect(certBlock.textContent?.split('\n')[0]?.split(' ')).toHaveLength(8);
+    const confirm = within(review).getByRole('button', { name: 'Confirm the bank keys' });
+    expect(confirm).toBeDisabled();
+    await userEvent.click(within(review).getByRole('checkbox'));
+    await userEvent.click(confirm);
+    await waitFor(() => expect(calls.some((c) => c.action === 'bank_channel_connect' && c.input.confirmBankKeys === true)).toBe(true));
+    const pinned = calls.find((c) => c.action === 'bank_channel_connect' && c.input.confirmBankKeys === true);
+    expect(pinned?.input.expectedBankKeyHashes).toEqual(BANK_HASHES);
+    await waitFor(() => expect(screen.getByText('Bank keys confirmed. The channel is active.')).toBeInTheDocument());
   });
 
-  it('INACTIVE: an enabled schedule with no driver names the M00 scheduler daemon and Sync now', async () => {
-    const channel = {
-      ...ACTIVE_CHANNEL,
-      schedule: { ruleId: 'arule_2', enabled: true, cadence: 'schedule.daily', lastFiredAt: null, driverSeen: false, inactive: true },
+  it('KEY REVIEW: a set that changed since the review is a hard stop that pins nothing', async () => {
+    const channel = { ...ACTIVE_CHANNEL, state: 'bank_keys_changed' };
+    const transport: Transport = async (action, input) => {
+      const i = input as Record<string, unknown>;
+      if (action === 'bank_channel_status') return ok({ channels: [channel] });
+      if (action === 'bank_channel_connect' && i.confirmBankKeys !== true) return ok({ connectionId: 'ebconn_1', state: 'bank_keys_changed', bankKeyHashes: BANK_HASHES, bankKeyLines: BANK_KEY_LINES });
+      if (action === 'bank_channel_connect') return { status: 422, body: { ok: false, error: 'bank_keys_mismatch', reason: 'changed_since_review' } };
+      return { status: 404, body: { ok: false, error: 'x' } };
     };
-    const transport: Transport = async (action) =>
-      action === 'bank_channel_status' ? ok({ channels: [channel] }) : { status: 404, body: { ok: false, error: 'x' } };
-    renderPanel(transport, [CAP.pay, CAP.manageAutomations]);
-    await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
-    expect(screen.getByText(/M00/)).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /automatic fetch/i })).toBeChecked();
+    renderPanel(transport);
+    await waitFor(() => expect(screen.getByText(/ZKB's keys have changed/)).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: /fetch and compare the bank keys/i }));
+    const review = await screen.findByRole('region', { name: /compare and confirm the bank keys/i });
+    await userEvent.click(within(review).getByRole('checkbox'));
+    await userEvent.click(within(review).getByRole('button', { name: 'Confirm the bank keys' }));
+    await waitFor(() => expect(screen.getByText(/ZKB now sends other keys than the ones you checked/)).toBeInTheDocument());
   });
 
-  it('PERMISSION: without manage_automations, the toggle is pre-disabled and announces why via aria-describedby', async () => {
-    const transport: Transport = async (action) =>
-      action === 'bank_channel_status' ? ok({ channels: [ACTIVE_CHANNEL] }) : { status: 404, body: { ok: false, error: 'x' } };
-    renderPanel(transport, [CAP.pay]);
+  it('INIT REFUSED: 091002 on both legs is said plainly (only ZKB can tell the cases apart); Send again resends', async () => {
+    const calls: string[] = [];
+    const channel = { ...ACTIVE_CHANNEL, state: 'ini_sent', ceremony: { ini: '091002', hia: '091002', refusal: 'init_refused' } };
+    const transport: Transport = async (action) => {
+      calls.push(action);
+      if (action === 'bank_channel_status') return ok({ channels: [channel] });
+      if (action === 'bank_channel_connect') return { status: 422, body: { ok: false, error: 'init_refused', code: '091002' } };
+      return { status: 404, body: { ok: false, error: 'x' } };
+    };
+    renderPanel(transport);
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/ZKB refused INI and HIA with 091002/));
+    expect(screen.getByRole('alert')).toHaveTextContent(/partner ID or user ID is wrong/);
+    await userEvent.click(screen.getByRole('button', { name: /send again/i }));
+    await waitFor(() => expect(calls).toContain('bank_channel_connect'));
+  });
+
+  it('REFUSAL: a download refusal is worded through the one path, naming the class and the raw code', async () => {
+    const transport: Transport = async (action) => {
+      if (action === 'bank_channel_status') return ok({ channels: [ACTIVE_CHANNEL] });
+      if (action === 'bank_sync') return { status: 422, body: { ok: false, error: 'download_refused', kind: 'busy', code: '091119' } };
+      return { status: 404, body: { ok: false, error: 'x' } };
+    };
+    renderPanel(transport);
     await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
-    const toggle = screen.getByRole('checkbox', { name: /automatic fetch/i });
-    expect(toggle).toBeDisabled();
-    const describedBy = toggle.getAttribute('aria-describedby');
-    expect(describedBy).not.toBeNull();
-    expect(document.getElementById(describedBy as string)).toHaveTextContent(/payment capability/i);
+    await userEvent.click(screen.getByRole('button', { name: /fetch statements/i }));
+    await waitFor(() => expect(screen.getByText('ZKB is busy right now (code 091119). Fetch the statements again later.')).toBeInTheDocument());
+  });
+
+  it('BLOCKED: the block is local (TILL sends nothing; ZKB by phone), and the reviewed confirm is the way back', async () => {
+    const channel = { ...ACTIVE_CHANNEL, state: 'blocked' };
+    const transport: Transport = async (action) => (action === 'bank_channel_status' ? ok({ channels: [channel] }) : { status: 404, body: { ok: false, error: 'x' } });
+    renderPanel(transport);
+    await waitFor(() => expect(screen.getByText('Blocked')).toBeInTheDocument());
+    expect(screen.getByText(/TILL sends nothing more\. To block it at ZKB: by phone\./)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^block$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /fetch and compare the bank keys/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /fetch statements/i })).not.toBeInTheDocument();
   });
 });
 
-// A37: the managed (bLink) rail on the SAME panel (spec §6). The card is kind-labelled, shows consent
-// state, and reaches the five verbs by channelKind; the honest OP4 card renders on the tier-off notice.
 const MANAGED_ACTIVE = {
   connectionId: 'mconn_1',
   channelKind: 'managed_blink',
@@ -430,7 +527,7 @@ describe('EbicsChannelPanel: A37 managed (bLink) rail', () => {
     await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
     // The rail label ("bLink") appears as text, never colour alone (the kind chip on the state row).
     expect(screen.getAllByText(/bLink/).length).toBeGreaterThan(0);
-    await userEvent.click(screen.getByRole('button', { name: /sync now/i }));
+    await userEvent.click(screen.getByRole('button', { name: /fetch statements/i }));
     await waitFor(() => expect(calls).toContain('bank_sync'));
   });
 

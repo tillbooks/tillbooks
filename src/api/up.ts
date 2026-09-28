@@ -238,7 +238,17 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   const studioServed = studioDir !== null;
 
   // D108: attach the private live bank wire when configured; otherwise EBICS steps degrade honestly.
-  const { deps, store } = makeApiDeps(opts.dbPath, await resolveEbicsRuntime());
+  // An open the store refuses (a book a newer TILL wrote, `schema_newer_than_runtime`) releases the
+  // single-instance lock taken above: nothing is serving, and a lock naming this still-live pid would
+  // turn a retry in the same process into a redirect to a server that never started.
+  let opened: ReturnType<typeof makeApiDeps>;
+  try {
+    opened = makeApiDeps(opts.dbPath, await resolveEbicsRuntime());
+  } catch (e) {
+    releaseLock(supportDir, process.pid);
+    throw e;
+  }
+  const { deps, store } = opened;
   // The REST face's actor is `studio` (D25), the shipped form of the dev bridge's posture: the REST
   // twins are the Studio's own bridge and the Studio is the human. The MCP face NEVER inherits it: it
   // seats every session by the rule in `session.ts` (a `till-studio` client lands `studio`, `till-cli`

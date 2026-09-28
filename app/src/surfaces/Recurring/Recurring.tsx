@@ -28,7 +28,16 @@ import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useCapabilities, CAP } from '../../lib/capabilities';
 import { useT, formatDate, formatMoney } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton } from '../../components/states';
+import {
+  EmptyState,
+  ErrorBanner,
+  NoWorkspaceState,
+  Skeleton,
+  ownsWording,
+  refusalSuffix,
+  refusalText,
+  sharedRefusalKey,
+} from '../../components/states';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
@@ -149,22 +158,19 @@ export function Recurring() {
   const canIssue = caps.can(CAP.issue);
 
   /**
-   * An engine rejection in the operator's words: A12's own catalogue first, then the SHARED
-   * `errors.*` catalogue that carries the cross-cutting codes (`permission_denied`, `store_busy`),
-   * and only then the bare code, which is at least the string a person can search for and quote.
+   * An engine rejection in the operator's words, through the one refusal path (`refusalText`): the
+   * shared sentence first when only it is true (a refusal raised after the call had already saved, a
+   * tick that issued one invoice and then met a newer TILL, or the newer-book refusal itself), then
+   * A12's own catalogue, then the SHARED `errors.*` catalogue that carries the cross-cutting codes
+   * (`permission_denied`, `store_busy`), and only then the bare code, which is at least the string a
+   * person can search for and quote. `reason` takes a stored code (a run's, a schedule's last error).
    */
-  const reason = useCallback(
-    (code: string): string => {
-      const ownKey = `recurring.error.${code}`;
-      const own = t(ownKey);
-      if (own !== ownKey) return own;
-      const sharedKey = `errors.${code}`;
-      const shared = t(sharedKey);
-      if (shared !== sharedKey) return shared;
-      return code;
-    },
+  const refusal = useCallback(
+    (error: Err | string): string =>
+      refusalText(t, error, { own: 'recurring.error', fallbackText: typeof error === 'string' ? error : error.error }),
     [t],
   );
+  const reason = refusal;
 
   const load = useCallback(async () => {
     if (workspaceId === null) return;
@@ -204,13 +210,13 @@ export function Recurring() {
     async (scheduleId: string) => {
       const response = await client.call('get_recurring_schedule', { workspaceId, scheduleId });
       if (isErr(response.body)) {
-        setFeedback({ tone: 'error', text: reason(response.body.error) });
+        setFeedback({ tone: 'error', text: refusal(response.body) });
         return;
       }
       const runs = (response.body as unknown as { runs: readonly RunDto[] }).runs;
       setDetail({ scheduleId, runs });
     },
-    [client, workspaceId, reason],
+    [client, workspaceId, refusal],
   );
 
   async function saveEditor(value: EditorValue) {
@@ -265,7 +271,15 @@ export function Recurring() {
           });
     setBusy(false);
     if (isErr(response.body)) {
-      setEditorError(response.body.error);
+      // The editor words only its own catalogue's codes inline (`recurring.error.*`); every other
+      // refusal, a newer book's, one raised after the save had written, `store_busy` or a transport
+      // failure, is the page's sentence through the one refusal path, never a raw key (critic R5-1).
+      // A save that landed WHOLE before the book moved on closes the editor: its sentence says not to
+      // repeat it, and an open form with Save beside it would invite exactly that.
+      if (sharedRefusalKey(response.body) !== undefined || !ownsWording('recurring.error', response.body.error)) {
+        setFeedback({ tone: 'error', text: refusal(response.body) });
+        if (refusalSuffix(response.body) === '_saved') setEditing(null);
+      } else setEditorError(response.body.error);
       return;
     }
     setEditing(null);
@@ -282,7 +296,7 @@ export function Recurring() {
     const response = await client.call(action, { workspaceId, scheduleId });
     setBusy(false);
     if (isErr(response.body)) {
-      setFeedback({ tone: 'error', text: reason(response.body.error) });
+      setFeedback({ tone: 'error', text: refusal(response.body) });
       return;
     }
     setFeedback({
@@ -305,7 +319,7 @@ export function Recurring() {
     const response = await client.call('run_due_recurring', { workspaceId });
     setBusy(false);
     if (isErr(response.body)) {
-      setFeedback({ tone: 'error', text: reason(response.body.error) });
+      setFeedback({ tone: 'error', text: refusal(response.body) });
       return;
     }
     // "Erstellt wurden 1 Rechnungen" is what a `{n}`-into-a-plural-sentence template produces on the

@@ -28,7 +28,7 @@ import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold, refusalText } from '../../components/states';
 import { Status } from '../../components/Status';
 import { CloseGlyph } from '../../components/icons';
 import { Select } from '../../components/Select';
@@ -141,7 +141,7 @@ export function Inventory() {
     if (workspaceId === null || asOf === '') return;
     const resp = await client.call('stock_valuation_report', { workspaceId, method, asOf });
     if (isErr(resp.body)) {
-      setToast(t(`stock.error.${resp.body.error}`));
+      setToast(refusalText(t, resp.body, { own: 'stock.error' }));
       return;
     }
     setValuation({
@@ -156,7 +156,7 @@ export function Inventory() {
     if (workspaceId === null || asOf === '') return;
     const resp = await client.call('stock_run_valuation', { workspaceId, method, asOf, idempotencyKey: idemKey('val') });
     if (isErr(resp.body)) {
-      setToast(t(`stock.error.${resp.body.error}`));
+      setToast(refusalText(t, resp.body, { own: 'stock.error' }));
       return;
     }
     setToast(t('stock.valuation.posted'));
@@ -313,7 +313,7 @@ export function Inventory() {
             setToast(t('stock.movement.saved'));
             await load();
           }}
-          onError={(e) => setToast(t(`stock.error.${e}`))}
+          onError={(e) => setToast(refusalText(t, e, { own: 'stock.error' }))}
         />
       )}
     </div>
@@ -331,7 +331,8 @@ function MovementDialog({
   locations: LocationOpt[];
   onClose: () => void;
   onSaved: () => Promise<void>;
-  onError: (error: string) => void;
+  /** A refusal (the whole `Err`, so its flags reach the toast's sentence) or a local check's code. */
+  onError: (error: Err | string) => void;
 }) {
   const t = useT();
   const client = useClient();
@@ -356,7 +357,7 @@ function MovementDialog({
     const resp = await client.call('stock_move', input);
     setSaving(false);
     if (isErr(resp.body)) {
-      onError(resp.body.error as string);
+      onError(resp.body);
       return;
     }
     await onSaved();
@@ -462,7 +463,7 @@ function InventurPanel({ baseCurrency, onChanged, setToast }: { baseCurrency: st
     if (workspaceId === null || frozenAt === '') return;
     const resp = await client.call('stock_stocktake_open', { workspaceId, frozenAt, idempotencyKey: idemKey('st') });
     if (isErr(resp.body)) {
-      setToast(t(`stock.error.${resp.body.error}`));
+      setToast(refusalText(t, resp.body, { own: 'stock.error' }));
       return;
     }
     const id = (resp.body.session as { id: string }).id;
@@ -483,7 +484,7 @@ function InventurPanel({ baseCurrency, onChanged, setToast }: { baseCurrency: st
     setConfirmCommit(false);
     const resp = await client.call('stock_stocktake_commit', { workspaceId, sessionId, idempotencyKey: idemKey('stc') });
     if (isErr(resp.body)) {
-      setToast(t(`stock.error.${resp.body.error}`));
+      setToast(refusalText(t, resp.body, { own: 'stock.error' }));
       return;
     }
     setToast(t('stock.stocktake.committed'));

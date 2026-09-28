@@ -35,7 +35,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
@@ -315,7 +315,7 @@ export function LandedCosts(): React.ReactElement {
   }, [detail, pendingWrite, run, t]);
 
   const errorText = useMemo(
-    () => (e: Err | null): string | undefined => (e === null ? undefined : t(`landedCosts.errors.${e.error}`)),
+    () => (e: Err | null): string | undefined => (e === null ? undefined : refusalText(t, e, { own: 'landedCosts.errors' })),
     [t],
   );
 

@@ -25,13 +25,22 @@
  * the passphrase and a per-file random salt; AES-256-GCM encrypts the plaintext under a per-write
  * random 12-byte nonce and authenticates it with the 16-byte tag, so tampering or a wrong key is
  * detected on decrypt rather than yielding garbage.
+ *
+ * A36 (§4.2, D-A36.9). Every key carries its self-signed X.509 certificate (`certificates.ts`), and the
+ * electronic-signature (A005) private key is DROPPED at generation, before the first write (OD-2): the
+ * file holds the A005 public key and certificate, and the X002 and E002 private keys, never an order
+ * signing key. The write is durable: the temp file is fsynced before the atomic rename and the folder
+ * after it, so a power loss leaves the old file or the new one, never neither. A write to a file that
+ * changed since this process last read or wrote it (a second process, a restore under our feet) is
+ * REFUSED (`keystore_changed_elsewhere`): writing our in-memory map over it would destroy keys this
+ * process never saw. A file written BEFORE A36 may still hold an A005 private key: the first unlock drops
+ * it with the same atomic rewrite (the public hashes do not change, so the bank and the letter are
+ * unaffected), and if that rewrite cannot happen then, the next write of the store does it.
  */
 
 import {
   createHash,
   createPrivateKey,
-  createPublicKey,
-  generateKeyPairSync,
   privateDecrypt,
   randomUUID,
   randomBytes,
@@ -41,23 +50,24 @@ import {
   sign as rsaSign,
   constants,
 } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, renameSync, unlinkSync, openSync, writeSync, fsyncSync, closeSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { EbicsSigningKeystore, EbicsKeyHashes, EbicsKeystoreState, EbicsKeyPurpose } from '../../context.js';
+import {
+  dropElectronicSignaturePrivateKeys,
+  generateConnectionKeys,
+  hashesOfStored,
+  publicMaterialOfStored,
+  type StoredConnectionKeys,
+} from './stored-pair.js';
 
 /** A host callback that supplies the user's passphrase (Studio dialog / CLI prompt), or null on cancel. */
 export type PassphraseProvider = () => string | null;
 
-interface StoredKeyPair {
-  privatePem: string;
-  publicHashHex: string;
-}
-interface StoredConnectionKeys {
-  electronicSignature: StoredKeyPair;
-  authentication: StoredKeyPair;
-  encryption: StoredKeyPair;
-}
 type KeyMap = Record<string, StoredConnectionKeys>;
+
+/** The refusal a write meets when the file changed since this process last read or wrote it. */
+export const KEYSTORE_CHANGED_ELSEWHERE = 'keystore_changed_elsewhere';
 
 interface Envelope {
   v: 1;
@@ -72,47 +82,28 @@ interface Envelope {
 // default because scrypt needs ~128*N*r bytes (~33.5MB here); 64MB gives headroom.
 const SCRYPT = { N: 1 << 15, r: 8, p: 1, keyLen: 32, maxmem: 64 * 1024 * 1024 } as const;
 
-function generatePair(modulusLength: number): StoredKeyPair {
-  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength });
-  const privatePem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
-  const publicDer = publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
-  const publicHashHex = createHash('sha256').update(publicDer).digest('hex');
-  return { privatePem, publicHashHex };
-}
-
-function hashesOf(keys: StoredConnectionKeys): EbicsKeyHashes {
-  return {
-    electronicSignature: keys.electronicSignature.publicHashHex,
-    authentication: keys.authentication.publicHashHex,
-    encryption: keys.encryption.publicHashHex,
-  };
-}
-
 /** The RSA padding constant for the two `decrypt` modes (PKCS#1 v1.5 default, OAEP on request). */
 function paddingConstant(padding: 'pkcs1' | 'oaep' | undefined): number {
   return padding === 'oaep' ? constants.RSA_PKCS1_OAEP_PADDING : constants.RSA_PKCS1_PADDING;
 }
 
-/** Sign `data` (RSASSA-PKCS1-v1_5, sha256) with a stored pair's private PEM. Never returns key material. */
-function signWithPair(pair: StoredKeyPair, data: Buffer): Buffer {
-  return rsaSign('sha256', data, createPrivateKey(pair.privatePem));
+/** The fingerprint of the file's bytes as they are on disk now (null: no file). */
+function fileFingerprint(path: string): string | null {
+  if (!existsSync(path)) return null;
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
-/** RSA-decrypt `ciphertext` with a stored pair's private PEM under the chosen padding. Returns the plaintext. */
-function decryptWithPair(pair: StoredKeyPair, ciphertext: Buffer, padding: 'pkcs1' | 'oaep' | undefined): Buffer {
-  return privateDecrypt({ key: createPrivateKey(pair.privatePem), padding: paddingConstant(padding) }, ciphertext);
-}
-
-/** Derive the PUBLIC material (SPKI DER + RSA modulus/exponent) for a stored pair from its private PEM. PUBLIC only. */
-function publicMaterialOf(pair: StoredKeyPair): { spkiDer: Buffer; modulus: Buffer; exponent: Buffer } {
-  const publicKey = createPublicKey(pair.privatePem);
-  const spkiDer = publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
-  const jwk = publicKey.export({ format: 'jwk' }) as { n?: string; e?: string };
-  return {
-    spkiDer,
-    modulus: Buffer.from(jwk.n ?? '', 'base64url'),
-    exponent: Buffer.from(jwk.e ?? '', 'base64url'),
-  };
+/** fsync a folder so a rename inside it is durable (a no-op where the platform refuses it). */
+function fsyncDir(dir: string): void {
+  let fd: number | undefined;
+  try {
+    fd = openSync(dir, 'r');
+    fsyncSync(fd);
+  } catch {
+    // Some platforms refuse fsync on a directory handle; the rename itself stays atomic there.
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
 }
 
 function deriveKey(passphrase: string, saltHex: string): Buffer {
@@ -190,6 +181,8 @@ export function fileEbicsKeystore(path: string, passphraseProvider?: PassphraseP
   let map: KeyMap | null = null; // the decrypted, in-session map; null while locked/unopened
   let sessionPassphrase: string | null = null;
   let corrupt = false;
+  // The fingerprint of the file as this process last opened or wrote it (null: there was no file).
+  let lastSeen: string | null = null;
 
   function readEnvelope(): Envelope | null | 'corrupt' {
     if (!existsSync(path)) return null;
@@ -204,6 +197,7 @@ export function fileEbicsKeystore(path: string, passphraseProvider?: PassphraseP
 
   /** Try to open the store with `passphrase`. Returns the resulting state; sets `map`/`sessionPassphrase` on success. */
   function tryUnlock(passphrase: string): EbicsKeystoreState {
+    const seen = fileFingerprint(path);
     const env = readEnvelope();
     if (env === 'corrupt') {
       corrupt = true;
@@ -213,12 +207,26 @@ export function fileEbicsKeystore(path: string, passphraseProvider?: PassphraseP
       // No file yet: a fresh store. This passphrase becomes the file's on the first generate/persist.
       map = {};
       sessionPassphrase = passphrase;
+      lastSeen = null;
       return 'ready';
     }
     const opened = open(env, passphrase);
     if (opened === null) return 'locked';
     map = opened;
     sessionPassphrase = passphrase;
+    lastSeen = seen;
+    // OD-2 for a file written before A36: drop any A005 private key it still holds, in memory at once
+    // and on disk with the same fsync'd atomic rewrite every write uses. The public hashes do not
+    // change, so the bank and the INI letter are unaffected. If the rewrite cannot happen now (the file
+    // changed elsewhere, a read-only disk), the key is already gone from this process and the next
+    // write of the store carries the dropped form.
+    if (dropElectronicSignaturePrivateKeys(map) > 0) {
+      try {
+        persist();
+      } catch {
+        // deliberately deferred to the next write (see above)
+      }
+    }
     return 'ready';
   }
 
@@ -237,15 +245,33 @@ export function fileEbicsKeystore(path: string, passphraseProvider?: PassphraseP
     return tryUnlock(supplied);
   }
 
+  /** Refuse a write when the file is no longer the one this process last read or wrote (A36 §4.2). */
+  function assertUnchangedOnDisk(): void {
+    if (fileFingerprint(path) !== lastSeen) throw new Error(KEYSTORE_CHANGED_ELSEWHERE);
+  }
+
   function persist(): void {
     if (map === null || sessionPassphrase === null) throw new Error('keystore_locked');
+    assertUnchangedOnDisk();
     const env = seal(map, sessionPassphrase);
-    mkdirSync(dirname(path), { recursive: true });
-    // Atomic write: a full temp file swapped in by rename, so a crash mid-write never truncates the
-    // live keystore (a half-written keystore would strand the bank contract).
+    const dir = dirname(path);
+    mkdirSync(dir, { recursive: true });
+    // Atomic AND durable: a full temp file, fsynced, swapped in by rename, then the folder fsynced, so a
+    // crash or power loss mid-write never truncates the live keystore (a half-written keystore would
+    // strand the bank contract) and never loses a rename the caller was told succeeded.
     const tmp = `${path}.tmp-${randomUUID()}`;
-    writeFileSync(tmp, JSON.stringify(env), { encoding: 'utf8', mode: 0o600 });
+    const bytes = Buffer.from(JSON.stringify(env), 'utf8');
+    const fd = openSync(tmp, 'w', 0o600);
+    try {
+      writeSync(fd, bytes);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    fsyncDir(dir);
     renameSync(tmp, path);
+    fsyncDir(dir);
+    lastSeen = createHash('sha256').update(bytes).digest('hex');
   }
 
   return {
@@ -261,74 +287,88 @@ export function fileEbicsKeystore(path: string, passphraseProvider?: PassphraseP
       return s === 'ready';
     },
 
-    generate(input: { keyLength: number }): { keyRef: string; hashes: EbicsKeyHashes } {
+    generate(input: { keyLength: number; subjectCommonName?: string | undefined }): { keyRef: string; hashes: EbicsKeyHashes } {
       const s = ensureOpen();
       if (s !== 'ready' || map === null) {
         // The channel verbs pre-check `state()` (keystoreBlock), so this is unreachable in normal
         // operation; the throw is the last line of "refuse, don't guess" for a direct caller.
         throw new Error(s === 'unavailable' ? 'keystore_unavailable' : 'keystore_locked');
       }
-      const keyLength = Number.isInteger(input.keyLength) && input.keyLength >= 2048 ? input.keyLength : 2048;
-      const keys: StoredConnectionKeys = {
-        electronicSignature: generatePair(keyLength),
-        authentication: generatePair(keyLength),
-        encryption: generatePair(keyLength),
-      };
+      // Refused BEFORE any key is generated, so a changed file costs nothing and keeps nothing.
+      assertUnchangedOnDisk();
+      // OD-2: the A005 private key signs its own certificate inside `generateConnectionKeys` and never
+      // reaches this map, so it can never reach the file either.
+      const keys = generateConnectionKeys(input);
       const keyRef = `ebicskey-${randomUUID()}`;
       map[keyRef] = keys;
-      persist();
-      return { keyRef, hashes: hashesOf(keys) };
+      try {
+        persist();
+      } catch (e) {
+        delete map[keyRef];
+        throw e;
+      }
+      return { keyRef, hashes: hashesOfStored(keys) };
     },
 
     publicHashes(keyRef: string): EbicsKeyHashes | null {
       const s = ensureOpen();
       if (s !== 'ready' || map === null) return null;
       const keys = map[keyRef];
-      return keys === undefined ? null : hashesOf(keys);
+      return keys === undefined ? null : hashesOfStored(keys);
     },
 
     destroy(keyRef: string): void {
       const s = ensureOpen();
       if (s !== 'ready' || map === null) return; // a locked/unavailable store destroys nothing (idempotent no-op)
-      if (map[keyRef] === undefined) return;
+      const keys = map[keyRef];
+      if (keys === undefined) return;
+      assertUnchangedOnDisk();
       delete map[keyRef];
       if (Object.keys(map).length === 0 && existsSync(path)) {
         // The last connection retired: remove the file rather than leave an empty encrypted envelope.
         try {
           unlinkSync(path);
+          fsyncDir(dirname(path));
+          lastSeen = null;
         } catch {
           persist();
         }
         return;
       }
-      persist();
+      try {
+        persist();
+      } catch (e) {
+        map[keyRef] = keys;
+        throw e;
+      }
     },
 
-    sign(req: { keyRef: string; purpose: 'authentication' | 'electronicSignature'; data: Buffer; hash?: 'sha256' }): Buffer | null {
+    sign(req: { keyRef: string; purpose: 'authentication'; data: Buffer; hash?: 'sha256' }): Buffer | null {
       const s = ensureOpen();
       if (s !== 'ready' || map === null) return null;
-      if (req.purpose !== 'authentication' && req.purpose !== 'electronicSignature') return null;
-      const keys = map[req.keyRef];
-      if (keys === undefined) return null;
-      return signWithPair(keys[req.purpose], req.data);
+      // OD-2: only the X002 key signs. There is no A005 private key to sign an order with.
+      if (req.purpose !== 'authentication') return null;
+      const pem = map[req.keyRef]?.authentication.privatePem;
+      if (pem === undefined) return null;
+      return rsaSign('sha256', req.data, createPrivateKey(pem));
     },
 
     decrypt(req: { keyRef: string; purpose: 'encryption'; ciphertext: Buffer; padding?: 'pkcs1' | 'oaep' }): Buffer | null {
       const s = ensureOpen();
       if (s !== 'ready' || map === null) return null;
       if (req.purpose !== 'encryption') return null;
-      const keys = map[req.keyRef];
-      if (keys === undefined) return null;
-      return decryptWithPair(keys.encryption, req.ciphertext, req.padding);
+      const pem = map[req.keyRef]?.encryption.privatePem;
+      if (pem === undefined) return null;
+      return privateDecrypt({ key: createPrivateKey(pem), padding: paddingConstant(req.padding) }, req.ciphertext);
     },
 
-    publicKeyMaterial(req: { keyRef: string; purpose: EbicsKeyPurpose }): { spkiDer: Buffer; modulus: Buffer; exponent: Buffer } | null {
+    publicKeyMaterial(req: { keyRef: string; purpose: EbicsKeyPurpose }): { spkiDer: Buffer; modulus: Buffer; exponent: Buffer; x509Der?: Buffer } | null {
       const s = ensureOpen();
       if (s !== 'ready' || map === null) return null;
       if (req.purpose !== 'electronicSignature' && req.purpose !== 'authentication' && req.purpose !== 'encryption') return null;
       const keys = map[req.keyRef];
       if (keys === undefined) return null;
-      return publicMaterialOf(keys[req.purpose]);
+      return publicMaterialOfStored(keys[req.purpose]);
     },
   };
 }

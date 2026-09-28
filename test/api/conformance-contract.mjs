@@ -19,7 +19,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -37,6 +37,27 @@ const BAZG_DAILY_PAYLOAD = readFileSync(
 );
 
 /**
+ * Every temp directory this module creates lives under ONE parent per test process, removed when
+ * the process exits. `fixture()` runs once per scenario (thousands per gate run) and used to leave
+ * two `till-conformance-*` / `till-conf-backup-*` directories each in the system temp folder: 788k of
+ * them had piled up by 25.09.2026 and filled the disk until the gate itself failed with ENOSPC. A
+ * crashed process now leaves one directory, not thousands.
+ */
+const RUN_TMP = mkdtempSync(join(tmpdir(), 'till-conf-run-'));
+process.on('exit', () => {
+  try {
+    rmSync(RUN_TMP, { recursive: true, force: true });
+  } catch {
+    // best effort: the exit hook must never mask the test result
+  }
+});
+
+/** A fresh temp directory for one scenario, inside this process's `RUN_TMP`. */
+export function scenarioTmp(prefix) {
+  return mkdtempSync(join(RUN_TMP, prefix));
+}
+
+/**
  * A fresh, deterministic world for ONE scenario: its own in-memory store, its own workspace, and a
  * `call` helper that dispatches through the registry with `workspaceId` already bound. Every
  * scenario gets its own, so no scenario can be influenced by another's writes.
@@ -45,9 +66,9 @@ export function fixture() {
   const deps = freshDeps();
   // G08 writes files, not rows. Point it at a temp directory so the gate never touches the
   // developer's real ~/.till, which is the whole reason the support dir is injectable.
-  deps.supportDir = mkdtempSync(join(tmpdir(), 'till-conformance-'));
+  deps.supportDir = scenarioTmp('support-');
   // G04 writes artifact bundles to disk, not rows. Point it at a temp directory for the same reason.
-  deps.backupDir = mkdtempSync(join(tmpdir(), 'till-conf-backup-'));
+  deps.backupDir = scenarioTmp('backup-');
   const { workspaceId, accId } = mintWorkspace(deps);
   const call = (name, input) => getAction(name).run(deps, { workspaceId, ...input });
   return { deps, workspaceId, accId, call };
@@ -182,7 +203,7 @@ function seedEmployee(fx, prefix, withContact = true) {
  * built fresh per scenario in a temp directory. The fixture helpers are the mail suites' own.
  */
 function seedMailStore(prefix) {
-  const root = mkdtempSync(join(tmpdir(), `till-conf-${prefix}-`));
+  const root = scenarioTmp(`${prefix}-`);
   makeMaildirStore(root, [
     {
       id: `${prefix}-1@example.org`,
@@ -204,7 +225,7 @@ function seedMailStore(prefix) {
  * own, over E04's fixture shapes.
  */
 function seedVoiceMailStore(prefix) {
-  const root = mkdtempSync(join(tmpdir(), `till-conf-${prefix}-`));
+  const root = scenarioTmp(`${prefix}-`);
   makeMaildirStore(root, outboundCorpus(21));
   return root;
 }
@@ -2407,6 +2428,52 @@ export const SCENARIOS = {
     reviewThreshold: 'high',
     idempotencyKey: 'scm-1',
   }),
+
+  // --- A39, the bank inbox ------------------------------------------------------------------------
+  // Every decision verb runs on a line a real camt import brought in. `book_bank_line` books a fee
+  // debit to TWO accounts, one leg carrying Vorsteuer through A06 exactly as a manual journal line,
+  // so its replay must post ZERO further entries or lines. `reopen_bank_line` reverses a real booking
+  // and its replay must reverse nothing twice. `ignore_bank_line` writes one link and its decision.
+  // None of them may move another tenant's rows.
+  book_bank_line: (fx) => {
+    fx.call('vat_seed_defaults', {});
+    fx.call('set_vat_method', { vatMethod: 'effektiv', vatAccounting: 'soll' });
+    const line = importedLine(fx, 'bbl', 5000, 'DBIT');
+    return {
+      workspaceId: fx.workspaceId,
+      bankTxnId: line.bankTxnId,
+      target: {
+        kind: 'accounts',
+        legs: [
+          { accountId: fx.accId('6500'), amountMinor: 4000, taxCode: 'VST-M' },
+          { accountId: fx.accId('6800'), amountMinor: 1000 },
+        ],
+      },
+      text: 'Kartenzahlung Büromaterial',
+      idempotencyKey: 'bbl-1',
+    };
+  },
+
+  ignore_bank_line: (fx) => {
+    const line = importedLine(fx, 'ibl', 7000, 'DBIT');
+    return {
+      workspaceId: fx.workspaceId,
+      bankTxnId: line.bankTxnId,
+      reason: 'booked_elsewhere',
+      note: 'über das Verrechnungskonto gebucht',
+      idempotencyKey: 'ibl-1',
+    };
+  },
+
+  reopen_bank_line: (fx) => {
+    const line = importedLine(fx, 'rbl', 2500, 'DBIT');
+    fx.call('book_bank_line', {
+      bankTxnId: line.bankTxnId,
+      target: { kind: 'accounts', legs: [{ accountId: fx.accId('6500'), amountMinor: 2500 }] },
+      idempotencyKey: 'rbl-book',
+    });
+    return { workspaceId: fx.workspaceId, bankTxnId: line.bankTxnId, reason: 'auf das falsche Konto gebucht', idempotencyKey: 'rbl-1' };
+  },
 
   set_bank_sync_schedule: (fx) => {
     const bankAccountId = bankAccount(fx, 'sbss');
@@ -5509,6 +5576,25 @@ function camtFixtureXml({ statementId, seqNb = '1', iban, entryRef, amountMinor,
 </Ntry></Stmt></BkToCstmrStmt></Document>`;
 }
 
+/**
+ * A39: one bank line brought in by a REAL camt import on a fresh Bankkonto (the published SIX sample
+ * IBAN the register takes), so every inbox scenario decides a line that exists exactly as a statement
+ * would leave it. Returns the ids the decision verbs need.
+ */
+function importedLine(fx, seed, amountMinor, creditDebit) {
+  const bankAccountId = bankAccount(fx, seed);
+  const iban = fx.call('get_bank_account', { bankAccountId }).bankAccount.iban;
+  const imported = fx.call('import_camt', {
+    bankAccountId,
+    xml: camtFixtureXml({ statementId: `${seed.toUpperCase()}-STMT`, iban, entryRef: `${seed.toUpperCase()}-NTRY`, amountMinor, creditDebit }),
+    idempotencyKey: `${seed}-import`,
+  });
+  const bankTxnId = fx.deps.store.db
+    .prepare('SELECT id FROM bank_txn WHERE workspace_id = ? AND statement_id = ?')
+    .get(fx.workspaceId, imported.statementId).id;
+  return { bankAccountId, bankTxnId, statementId: imported.statementId };
+}
+
 /** A vendor bill drafted AND posted (`vendorBillInput`'s gross 1'081.00), for A20's debit scenarios. */
 function postedVendorBill(fx, seed) {
   const created = fx.call('create_vendor_bill', vendorBillInput(fx, seed));
@@ -5689,6 +5775,25 @@ export const READ_SCENARIOS = {
       idempotencyKey: 'lbs-import',
     });
     return { workspaceId: fx.workspaceId, bankAccountId };
+  },
+  // --- A39, the bank inbox --------------------------------------------------------------------------
+  // Over a real import with one booked and one open line, so the read answers with a proposal, a
+  // decision and the per-account balance line rather than the empty path; the whole-database snapshot
+  // proves it writes nothing, twice.
+  list_bank_inbox: (fx) => {
+    const booked = importedLine(fx, 'lbi', 4000, 'DBIT');
+    fx.call('book_bank_line', {
+      bankTxnId: booked.bankTxnId,
+      target: { kind: 'accounts', legs: [{ accountId: fx.accId('6500'), amountMinor: 4000 }] },
+      idempotencyKey: 'lbi-book',
+    });
+    const iban = fx.call('get_bank_account', { bankAccountId: booked.bankAccountId }).bankAccount.iban;
+    fx.call('import_camt', {
+      bankAccountId: booked.bankAccountId,
+      xml: camtFixtureXml({ statementId: 'LBI-OPEN-STMT', iban, entryRef: 'LBI-OPEN-NTRY', amountMinor: 1200, creditDebit: 'DBIT' }),
+      idempotencyKey: 'lbi-open-import',
+    });
+    return { workspaceId: fx.workspaceId, status: 'all', limit: 10 };
   },
   // --- A36, live bank feed: the static bank directory is a pure read over in-package data ---------
   bank_channel_directory: (fx) => ({ workspaceId: fx.workspaceId, query: 'UBS' }),
@@ -6063,7 +6168,7 @@ export const READ_SCENARIOS = {
   voice_profiles_list: (fx) => ({ workspaceId: fx.workspaceId }),
   voice_profile_get: (fx) => {
     registerRuntime(stubAdapter(), stubManifest());
-    const root = mkdtempSync(join(tmpdir(), 'till-conf-vpg-'));
+    const root = scenarioTmp('vpg-');
     makeMaildirStore(root, outboundCorpus(21));
     const account = fx.call('mail_connect', { adapter: 'thunderbird', storePath: root, address: 'praxis@example.ch', idempotencyKey: 'vpg-c' });
     fx.call('mail_reindex', { accountId: account.accountId, idempotencyKey: 'vpg-r' });
@@ -6073,7 +6178,7 @@ export const READ_SCENARIOS = {
   },
   voice_retrieve: (fx) => {
     registerRuntime(stubAdapter(), stubManifest());
-    const root = mkdtempSync(join(tmpdir(), 'till-conf-vrt-'));
+    const root = scenarioTmp('vrt-');
     makeMaildirStore(root, outboundCorpus(21));
     const account = fx.call('mail_connect', { adapter: 'thunderbird', storePath: root, address: 'praxis@example.ch', idempotencyKey: 'vrt-c' });
     fx.call('mail_reindex', { accountId: account.accountId, idempotencyKey: 'vrt-r' });
@@ -6868,8 +6973,10 @@ function seedForecastWorld(fx, prefix) {
  * A38 (D129 leg 2) makes it ONE HUNDRED AND FIFTEEN (+3): `vat_settlement_preview`, `vat_settlement_list`
  * and `vat_annual_reconciliation` over a filed, tagged 2026-Q2 (one of them over a really-posted
  * settlement), each a derivation from the ledger and A07's return, writing nothing.
+ * A39 (the lean bank inbox) makes it ONE HUNDRED AND TWENTY-ONE (+1): `list_bank_inbox` over a booked
+ * and an open line, a pure SELECT; the whole-database snapshot proves it writes nothing.
  */
-export const READ_SCENARIO_FLOOR = 120;
+export const READ_SCENARIO_FLOOR = 121;
 
 /**
  * THE ONE BLESSED READ-VERB WRITER (D96), and nothing else.

@@ -852,6 +852,23 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   review_bank_txn: 'pay',
   set_camt_matching: 'manage_settings',
 
+  // --- A39, the bank inbox (spec A39 §0.1 D-A39.4, frame §4 item 10 (e)) ---------------------------
+  // ONE gate for booking a line, `post`, and settling an open item or a payment run on `pay`: keyed on
+  // the INPUT, because the same verb books a bank fee to 6940 (a posting a Treuhänder holding `post`
+  // may make) and settles an invoice (a settlement act). The engine asserts `post` on every path that
+  // posts and `pay` additionally on a settlement, exactly this split, so the declaration and the verb
+  // cannot disagree about who may do what.
+  book_bank_line: (input) => {
+    const target = input.target;
+    const kind = typeof target === 'object' && target !== null ? (target as { kind?: unknown }).kind : undefined;
+    return kind === 'open_item' || kind === 'payment_batch' ? 'pay' : 'post';
+  },
+  // Deciding that a line counts elsewhere is bookkeeping on the line: `post`.
+  ignore_bank_line: 'post',
+  // Undoing a decision mints a reversal (`post`); undoing a SETTLEMENT reverses a payment, which the
+  // engine additionally asserts `pay` for, state-dependently (the input cannot say which it is).
+  reopen_bank_line: 'post',
+
   // --- A19, bank accounts ----------------------------------------------------------------------
   create_bank_account: 'manage_master_data',
   update_bank_account: 'manage_master_data',
@@ -1939,6 +1956,8 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   suggest_matches: 'read_sales',
   list_reconciliation: 'read_sales',
   list_bank_statements: 'read_sales',
+  // A39: the inbox reads what the A20 board reads.
+  list_bank_inbox: 'read_sales',
 
   // --- read_master_data: the registers, and the workspace's own party record -------------------
   get_company_profile: 'read_master_data',

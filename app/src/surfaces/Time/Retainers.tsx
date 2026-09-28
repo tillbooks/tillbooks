@@ -17,7 +17,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, formatMoney } from '../../i18n';
-import { EmptyState, ErrorBanner, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { Status, type StatusKind } from '../../components/Status';
@@ -226,9 +226,12 @@ export function Retainers() {
       'retainer_has_draws',
       'retainer_ended',
     ];
-    if (known.includes(error.error)) return t(`retainer.error.${error.error}`);
-    if (error.error === 'permission_denied') return t('retainer.error.permissionDenied');
-    return t('retainer.error.transport');
+    return refusalText(t, error, {
+      own: 'retainer.error',
+      known,
+      keys: { permission_denied: 'retainer.error.permissionDenied' },
+      fallback: 'retainer.error.transport',
+    });
   };
 
   // The retainer list is the shared DataTable now (D118 B2). The fee is numeric (right-aligned,

@@ -16,6 +16,7 @@ import { Link } from 'react-router-dom';
 
 import type { Err } from '../../lib/client';
 import { useT, formatMoney, formatDate, type TParams } from '../../i18n';
+import { refusalSuffix, refusalText } from '../../components/states';
 import { currencyPair } from './amount';
 
 /** Where each recoverable code sends the user. A code absent here simply renders no link. */
@@ -26,6 +27,19 @@ const RECOVERY: Record<string, string> = {
   needs_fx_rate: '/setup',
   currency_mismatch: '/journal',
 };
+
+/** Where a bank line is shown: the decided lines of `/bank`, that line selected (A39). */
+export function bankLineHref(bankTxnId: string): string {
+  return `/bank?tab=booked&line=${encodeURIComponent(bankTxnId)}`;
+}
+
+/**
+ * A39 L3 (critic M3 lean): a payment a bank line holds refuses `owned_by` naming `reopen_bank_line` and
+ * the line. Its sentence names the line and where it is undone, never "could not be posted".
+ */
+function heldByBankLine(error: Err): string | null {
+  return error.error === 'owned_by' && error.verb === 'reopen_bank_line' && typeof error.bankTxnId === 'string' ? error.bankTxnId : null;
+}
 
 /** The codes whose copy this surface owns. Anything else falls to the honest generic line. */
 const KNOWN = new Set([
@@ -118,8 +132,15 @@ export function paymentErrorMessage(
   error: Err,
   currency: string,
 ): string {
-  const code = error.error;
-  return KNOWN.has(code) ? t(`payment.error.${code}`, paramsFor(error, currency)) : t('payment.error.unexpected');
+  // Through the one refusal path (critic R5-1): a payment saved whole or in part before a newer TILL
+  // moved the book on reads the shared sentence, never "Die Zahlung konnte nicht gebucht werden."
+  return refusalText(t, error, {
+    own: 'payment.error',
+    known: KNOWN,
+    ...(heldByBankLine(error) !== null ? { keys: { owned_by: 'payment.error.ownedByBankLine' } } : {}),
+    params: paramsFor(error, currency),
+    fallback: 'payment.error.unexpected',
+  });
 }
 
 /**
@@ -146,10 +167,14 @@ export function PaymentError({ error, currency = 'CHF', onRetry, retryLabel }: P
   const t = useT();
   const code = error.error;
   const message = paymentErrorMessage(t, error, currency);
-  const to = RECOVERY[code];
-  const ctaKey = `payment.errorCta.${code}`;
+  const line = heldByBankLine(error);
+  const to = line !== null ? bankLineHref(line) : RECOVERY[code];
+  const ctaKey = line !== null ? 'payment.errorCta.ownedByBankLine' : `payment.errorCta.${code}`;
   const cta = to === undefined ? null : t(ctaKey);
   const explain = code === 'needs_fx_rate' ? t('payment.errorExplain.needs_fx_rate') : null;
+  // A payment saved WHOLE before the book moved on says not to repeat it, so no retry sits beside it
+  // (the drawer's retry posts again). Every other refusal keeps the offer, as in `ErrorBanner`.
+  const retry = refusalSuffix(error) === '_saved' ? undefined : onRetry;
 
   return (
     <div className="pay-error" role="alert" data-code={code}>
@@ -161,8 +186,8 @@ export function PaymentError({ error, currency = 'CHF', onRetry, retryLabel }: P
             {cta}
           </Link>
         )}
-        {onRetry !== undefined && (
-          <button type="button" className="btn btn--ghost" onClick={onRetry}>
+        {retry !== undefined && (
+          <button type="button" className="btn btn--ghost" onClick={retry}>
             {retryLabel ?? t('payment.retry')}
           </button>
         )}

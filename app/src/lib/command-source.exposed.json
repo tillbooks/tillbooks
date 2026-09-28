@@ -15,6 +15,8 @@
     { "name": "quotes_create", "kind": "handoff", "labelKey": "command.quotes_create.label", "aliasKey": "command.quotes_create.aliases", "targetRoute": "/quotes", "directRunSafe": false },
     { "name": "sales_order_create", "kind": "handoff", "labelKey": "command.sales_order_create.label", "aliasKey": "command.sales_order_create.aliases", "targetRoute": "/sales-orders", "directRunSafe": false },
     { "name": "requisition_upsert", "kind": "handoff", "labelKey": "command.requisition_upsert.label", "aliasKey": "command.requisition_upsert.aliases", "targetRoute": "/requisitions", "directRunSafe": false },
-    { "name": "export_journal", "kind": "handoff", "labelKey": "command.export_journal.label", "targetRoute": "/reports", "directRunSafe": false }
+    { "name": "export_journal", "kind": "handoff", "labelKey": "command.export_journal.label", "targetRoute": "/reports", "directRunSafe": false },
+    { "name": "import_camt", "kind": "handoff", "labelKey": "command.import_camt.label", "aliasKey": "command.import_camt.aliases", "targetRoute": "/bank", "directRunSafe": false },
+    { "name": "book_bank_line", "kind": "handoff", "labelKey": "command.book_bank_line.label", "aliasKey": "command.book_bank_line.aliases", "targetRoute": "/bank", "directRunSafe": false }
   ]
 }

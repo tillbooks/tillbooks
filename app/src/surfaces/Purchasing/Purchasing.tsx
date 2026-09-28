@@ -32,7 +32,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatMoney, formatDate } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
@@ -284,9 +284,7 @@ export function Purchasing() {
 
   const errorMessage = (error: Err): string => {
     const known = ['no_lines', 'over_receipt', 'variance_exceeded', 'has_receipts', 'nothing_received', 'qty_below_received', 'already_matched', 'invalid_transition', 'invalid_reference', 'invalid_qty'];
-    if (known.includes(error.error)) return t(`po.error.${error.error}`);
-    if (error.error === 'permission_denied') return t('po.error.permissionDenied.write');
-    return t('errors.fallback');
+    return refusalText(t, error, { own: 'po.error', known, keys: { permission_denied: 'po.error.permissionDenied.write' } });
   };
 
   if (workspaceId === null) return <NoWorkspaceState />;

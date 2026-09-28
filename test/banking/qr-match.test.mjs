@@ -173,7 +173,7 @@ test('F7: a decided row keeps its words but carries LIVE figures, so a partial s
 
 // --- the Mahngebühr figure (spec §0 note 4, D73) -------------------------------------------------
 
-test('open + unpaid Mahngebühr is the SECOND exact figure, and applying it parks the fee as Guthaben', () => {
+test('open + unpaid Mahngebühr is the SECOND exact figure, and applying it SETTLES the fee (A39, walk B5.2)', () => {
   const t = world();
   const feeAccount = t.store.db
     .prepare(`SELECT id FROM account WHERE workspace_id = ? AND type = 'income' ORDER BY number LIMIT 1`)
@@ -213,15 +213,69 @@ test('open + unpaid Mahngebühr is the SECOND exact figure, and applying it park
     confirmed: true,
     idempotencyKey: 'fee-apply',
   }), 'applyQrMatch');
-  // The A15 §4 / D59 known limit, honoured rather than worked around: the invoice settles and the
-  // fee share parks as a Guthaben on the payment; the OP-Liste pair nets to zero.
+  // A39 (walk B5.2): A14's `dunning_fee` target closed the A15 §4 / D59 limit, so the apply now
+  // allocates the invoice AND the fee in one payment; nothing parks as a Guthaben and nothing stays open.
   const payment = ok(getPayment(t.ctx, { paymentId: applied.paymentId }));
-  assert.equal(payment.payment.onAccountMinor, 2000);
+  assert.equal(payment.payment.onAccountMinor, 0, 'no fee share parks any more');
+  const open = ok(listOpenItems(t.ctx, {}));
+  assert.equal(open.items.find((i) => i.documentId === doc.id), undefined, 'the invoice and its fee are both settled');
+  assert.equal(open.items.find((i) => i.kind === 'on_account'), undefined, 'no Guthaben was parked');
+});
+
+test('A39 (walk B5.2): a payment SHORT of invoice plus fee settles the invoice, pays down the fee, and names the rest open', () => {
+  const t = world();
+  const feeAccount = t.store.db
+    .prepare(`SELECT id FROM account WHERE workspace_id = ? AND type = 'income' ORDER BY number LIMIT 1`)
+    .get(t.workspaceId);
+  ok(setCreditorProfile(t.ctx, {
+    creditorName: 'Muster Grafik GmbH',
+    address: { street: 'Bahnhofstrasse', buildingNo: '1', zip: '8000', town: 'Zürich', country: 'CH' },
+    iban: PLAIN_IBAN,
+  }), 'setCreditorProfile');
+  const base = { bookFee: true, feeIncomeAccountId: feeAccount.id };
+  ok(setDunningConfig(t.ctx, {
+    levels: [
+      { level: 1, daysOverdue: 10, feeMinor: 2000, ...base },
+      { level: 2, daysOverdue: 20, feeMinor: 0 },
+      { level: 3, daysOverdue: 30, feeMinor: 0 },
+    ],
+    idempotencyKey: 'fee-config-s',
+  }), 'setDunningConfig');
+  const { doc, reference } = invoiceWithRef(t, 'fee-short', { dueDate: '2026-06-01' });
+  const proposed = ok(proposeDunningRun(t.ctx, { idempotencyKey: 'fee-propose-s' }), 'propose');
+  ok(issueDunningRun(t.ctx, { runId: proposed.runId, confirmed: true, idempotencyKey: 'fee-issue-s' }), 'issue');
+
+  // CHF 0.50 short of invoice + fee: the walk's exact case (it used to read "Verbucht" and leave CHF
+  // 20.00 of fee open that the picker then refused with already_paid).
+  const credit = record(t, reference, GROSS_MINOR + 2000 - 50, 'fee-short-credit');
+  const applied = ok(applyQrMatch(t.ctx, {
+    creditId: credit.credit.creditId,
+    invoiceId: doc.id,
+    mode: 'partial',
+    confirmed: true,
+    idempotencyKey: 'fee-short-apply',
+  }), 'applyQrMatch');
+  const payment = ok(getPayment(t.ctx, { paymentId: applied.paymentId }));
+  assert.equal(payment.payment.onAccountMinor, 0, 'nothing parks: the fee took its share');
   const open = ok(listOpenItems(t.ctx, {}));
   const invoiceRow = open.items.find((i) => i.documentId === doc.id);
-  const parked = open.items.find((i) => i.kind === 'on_account');
-  assert.ok(invoiceRow !== undefined && parked !== undefined, 'expected the fee row and the parked credit');
-  assert.equal(invoiceRow.openMinor + parked.openMinor, 0, 'the residual fee and the Guthaben must net to zero');
+  assert.ok(invoiceRow !== undefined, 'the invoice row stays on the OP-Liste for the unpaid part of the fee');
+  assert.equal(invoiceRow.openMinor, 50, 'exactly the CHF 0.50 the payer still owes is open');
+
+  // And the rest is settleable: a second credit of CHF 0.50 under the same reference finds the invoice
+  // (open for its fee alone) and applies, where it used to refuse already_paid.
+  const rest = ok(matchIncomingByQrr(t.ctx, { reference, amountMinor: 50 }));
+  assert.equal(rest.match.invoiceId, doc.id, 'the invoice is still found under its reference for the fee rest');
+  const restCredit = record(t, reference, 50, 'fee-rest-credit');
+  ok(applyQrMatch(t.ctx, {
+    creditId: restCredit.credit.creditId,
+    invoiceId: doc.id,
+    mode: 'partial',
+    confirmed: true,
+    idempotencyKey: 'fee-rest-apply',
+  }), 'the fee rest applies');
+  const after = ok(listOpenItems(t.ctx, {}));
+  assert.equal(after.items.find((i) => i.documentId === doc.id), undefined, 'the invoice and its whole fee are now settled');
 });
 
 // --- apply (spec §8 a/d) -------------------------------------------------------------------------

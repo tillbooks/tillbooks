@@ -25,7 +25,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Status } from '../../components/Status';
@@ -260,10 +260,11 @@ export function WritingStyle() {
       return t('runtime.error.insufficient_ram', { need: String(error.needGb ?? '?'), have: String(error.haveGb ?? '?') });
     }
     const known = ['needs_local_runtime', 'needs_model_selection', 'unknown_model_ref'];
-    if (known.includes(error.error)) return t(`runtime.error.${error.error}`);
-    if (error.error === 'unknown_document') return t('voice.error.unknown_document');
-    if (error.error === 'permission_denied') return t('voice.error.permissionDenied.write');
-    return t('errors.fallback');
+    return refusalText(t, error, {
+      own: 'runtime.error',
+      known,
+      keys: { unknown_document: 'voice.error.unknown_document', permission_denied: 'voice.error.permissionDenied.write' },
+    });
   };
 
   if (workspaceId === null) return <NoWorkspaceState />;

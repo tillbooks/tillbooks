@@ -48,6 +48,7 @@ import { createWorkspace } from '../setup/workspace.js';
 import type { IdentitySource } from '../access/index.js';
 import { auditCanonicalRow, auditHashRow, AUDIT_GENESIS_PREV } from '../ledger/auditLog.js';
 import { TILL_VERSION } from './catalog.js';
+import { SCHEMA_NEWER_THAN_RUNTIME, bookGenerationOf, newerGenerationRefusal } from '../store/generation.js';
 
 /**
  * What a portability verb is handed. It carries the store and the same `clock`/`ids`/`actor` a
@@ -359,10 +360,38 @@ export function exportWorkspace(
   );
 }
 
-/** Run `compute` once per `(workspaceId, key)`; a key is required on both write verbs, so it is always set. */
+/**
+ * Run `compute` once per `(workspaceId, key)`; a key is required on both write verbs, so it is always set.
+ *
+ * IN A DEFERRED TRANSACTION (`snapshotTx`, critic R2-1). Every other verb's transaction takes the
+ * write lock in its BEGIN; these two read the whole workspace first (seconds on a large book), and
+ * holding the lock for that long would make the D12 second writer's posts wait out the backup. The
+ * marker is still the first read, so the snapshot is one this build knows. What that costs is stated
+ * on `snapshotTx`: a commit by the other process during the read makes the final write fail at once as
+ * the retryable `store_busy`.
+ *
+ * NO BUNDLE WITHOUT ITS ROW (critic R1 F2). `produceArtifact` publishes the bundle (the rename) inside
+ * the transaction that records its `backups` row. When that transaction does not commit after
+ * `compute` returned (a failed COMMIT), the published bundle is removed here, so the directory
+ * `list_restorable_backups` scans never offers a bundle no row describes. A failure INSIDE `compute`
+ * after the rename (the row's INSERT meeting SQLITE_BUSY_SNAPSHOT) is cleaned by `produceArtifact`.
+ */
 function withKey(deps: PortDeps, workspaceId: string, key: string | undefined, verb: string, compute: () => Result): Result {
   if (typeof key !== 'string' || key.length === 0) return err('invalid_input', { field: 'idempotencyKey' });
-  return deps.store.rememberIdempotent(workspaceId, key, verb, compute);
+  let published: string | undefined;
+  try {
+    // `rememberIdempotent`'s own `tx` runs as a savepoint inside the deferred snapshot.
+    return deps.store.snapshotTx(() =>
+      deps.store.rememberIdempotent(workspaceId, key, verb, () => {
+        const produced = compute();
+        if (produced.ok && typeof produced.artifactRef === 'string') published = produced.artifactRef;
+        return produced;
+      }),
+    );
+  } catch (e) {
+    if (published !== undefined) rmSync(published, { recursive: true, force: true });
+    throw e;
+  }
 }
 
 /**
@@ -487,9 +516,13 @@ function produceArtifact(deps: PortDeps, workspaceId: string, kind: 'backup' | '
       ...(planLink === undefined ? {} : { planLink }),
     });
   } catch (e) {
-    // Clean up the temp bundle; the row was never written, so nothing partial persists.
+    // Clean up the temp bundle; the row was never written, so nothing partial persists. A failure
+    // AFTER the rename (the row's INSERT refused, e.g. SQLITE_BUSY_SNAPSHOT because a newer TILL
+    // committed meanwhile, critic R1 F2) must not leave the published bundle either: `finalDir`
+    // carries this call's freshly minted id, so nothing else can own that name.
     try {
       rmSync(tmpDir, { recursive: true, force: true });
+      rmSync(finalDir, { recursive: true, force: true });
     } catch {
       // best effort
     }
@@ -654,6 +687,20 @@ export function verifyBackup(_deps: PortDeps, input: { source: string }): Result
     const sqlitePath = join(source, 'data.sqlite');
     const snap = new Database(sqlitePath, { readonly: true });
     try {
+      // The snapshot FILE's own generation, not only the manifest's claim about it, is held to the
+      // same EXACT match (spec §0a.6, critic R1 F6) before a single row is read or restored: a
+      // snapshot a newer TILL wrote is the named refusal (`../store/generation.ts`); an older one
+      // under a manifest that claims the current generation would load unmigrated rows.
+      const snapshotGeneration = bookGenerationOf(snap);
+      const newer = newerGenerationRefusal(snapshotGeneration, sqlitePath);
+      if (newer !== null) return err(SCHEMA_NEWER_THAN_RUNTIME, { ...newer });
+      if (snapshotGeneration !== SCHEMA_GENERATION) {
+        return err('incompatible_schema_version', {
+          artifactSchemaVersion: snapshotGeneration,
+          currentSchemaVersion: SCHEMA_GENERATION,
+          reason: 'snapshot_generation_mismatch',
+        });
+      }
       const check = footPostedEntries(snap);
       entryCount = check.entryCount;
       balanceOk = check.balanceOk;
@@ -701,7 +748,8 @@ export function restoreBackup(
 
   // Pre-flight, all read-only and OUTSIDE any transaction, so a rejection here writes nothing.
   const verified = verifyBackup(deps, { source });
-  if (!verified.ok) return verified; // backup_corrupt / incompatible_schema_version pass straight through.
+  // backup_corrupt / incompatible_schema_version / schema_newer_than_runtime pass straight through.
+  if (!verified.ok) return verified;
   if ((verified as { format?: string }).format !== 'sqlite_snapshot') {
     // A .tillexport optimises for external readability, not reconstruction (spec §0a.5 / §6b Fixed).
     return err('restore_source_not_backup', { format: (verified as { format?: string }).format });
@@ -893,8 +941,36 @@ function loadTable(
   const stmt = db.prepare(
     `INSERT INTO "${table}" (${names.map((n) => `"${n}"`).join(', ')}) VALUES (${names.map(() => '?').join(', ')})`,
   );
-  for (const row of rows) stmt.run(...names.map((n) => remapValue(n, row[n])));
+  const transform = RESTORE_ROW_TRANSFORMS[table];
+  for (const row of rows) {
+    const values: Row = {};
+    for (const n of names) values[n] = remapValue(n, row[n]);
+    const out = transform === undefined ? values : transform(db, values);
+    stmt.run(...names.map((n) => out[n] ?? null));
+  }
 }
+
+/**
+ * Per-table adjustments a restored row needs before it lands (the row's ids are already remapped).
+ *
+ * `ebics_connection` (A36 §4.2): a restored book is older than the bank's view of it, so an `active`
+ * connection lands `bank_keys_changed` with its keys and pin KEPT: the reviewed bank-key confirm resumes
+ * it, and whatever ZKB delivered after the snapshot comes back as gaps the owner fills from eBanking.
+ * When the database already holds a live connection for the same subscriber (a restore beside the
+ * original, the one-live-per-subscriber index of §4.5), the restored one lands `retired` with its key
+ * locator cleared, so it can never feed or destroy the live connection's keys.
+ */
+const RESTORE_ROW_TRANSFORMS: Readonly<Record<string, (db: Database.Database, row: Row) => Row>> = {
+  ebics_connection: (db, row) => {
+    if (row['state'] === 'retired') return row;
+    const live = db
+      .prepare("SELECT 1 AS live FROM ebics_connection WHERE host_id = ? AND partner_id = ? AND user_id_ebics = ? AND state != 'retired' LIMIT 1")
+      .get(row['host_id'], row['partner_id'], row['user_id_ebics']) as { live: number } | undefined;
+    if (live !== undefined) return { ...row, state: 'retired', key_ref: null, sync_rule_id: null };
+    if (row['state'] === 'active') return { ...row, state: 'bank_keys_changed' };
+    return row;
+  },
+};
 
 /**
  * Re-chain the audit log under the new workspace id. `workspace_id` is a hash input (`auditCanonicalRow`),
@@ -956,7 +1032,12 @@ export function deleteBackup(
   deps: PortDeps,
   input: { workspaceId: string; backupId: string; idempotencyKey?: string },
 ): Result {
-  return withKey(deps, input.workspaceId, input.idempotencyKey, 'delete_backup', () => {
+  const key = input.idempotencyKey;
+  if (typeof key !== 'string' || key.length === 0) return err('invalid_input', { field: 'idempotencyKey' });
+  // `rememberIdempotent`, so `store.tx`: IMMEDIATE, like every write but the two long reads (critic
+  // R3-3). Through `withKey` this ran in the DEFERRED `snapshotTx`, which read first and so could not
+  // wait for the D12 second writer's lock: a delete met a held lock with `store_busy` at once.
+  return deps.store.rememberIdempotent(input.workspaceId, key, 'delete_backup', () => {
     const row = deps.store.db
       .prepare('SELECT storage_ref FROM backups WHERE id = ? AND workspace_id = ?')
       .get(input.backupId, input.workspaceId) as { storage_ref: string } | undefined;

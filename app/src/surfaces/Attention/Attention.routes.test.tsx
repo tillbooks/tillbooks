@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { BUILT_SURFACE_PATHS } from '../../app/router';
 
 /** The owning-surface routes the five providers deep-link to (engine `ROUTED_SURFACES`, F-01 / F-07, G22). */
-const PROVIDER_ROUTES = ['/reconciliation', '/dunning', '/agent', '/journal', '/checklisten'];
+const PROVIDER_ROUTES = ['/bank', '/dunning', '/agent', '/journal', '/checklisten'];
 
 describe('G15 provider deep links resolve to built surfaces', () => {
   it('every attention provider route is a real built surface, never a Placeholder', () => {

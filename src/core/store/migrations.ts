@@ -517,6 +517,120 @@ function seedA38Accounts(db: Database): void {
   }
 }
 
+/**
+ * Generation 8 (A39, the bank inbox, spec L1): adopt every pre-A39 bank-line decision ONCE into A39's
+ * decision and claim rows, then disable the stored rules naming a verb A39 newly denies.
+ *
+ * Before A39 a bank line was decided in three partial models: an A20 `bank_txn_link` row (a settlement, a
+ * batch, a link to an entry) that could never be undone, an A21 queue row (`applied` or `dismissed`) with
+ * no link at all, and nothing for a debit. A39 reads ONE model: a line is `open` without a live
+ * `bank_line_decision`, else that decision's state, and a booked or matched decision holds its bank legs
+ * in `bank_line_claim`. This generation turns every legacy fact into that model, once, in four idempotent
+ * statements (each touches only rows not yet adopted):
+ *
+ *   1. An A21 credit decided before A39 (applied with a payment, or dismissed) whose line has no link at
+ *      all gets its link. The line is found through `bank_txn.credit_id`, a DECLARED reference, never
+ *      through `reconciliation_match.bank_txn_id`.
+ *   2. Every link without a decision gets its decision, from what it names, resolved INSIDE its own
+ *      workspace (§H-TENANT). A target that does not resolve there (`legacy_target_unresolved`) or that
+ *      is already reversed (`legacy_target_reversed`: a Storno of the entry, a reversed payment, a reversed
+ *      item payment of the run) is adopted SUPERSEDED: its line reads open and is decided again, never
+ *      trusted on money that is gone.
+ *   3. Every adopted live booked or matched decision claims its bank legs, oldest first; a leg another
+ *      live decision already holds is skipped (pre-A39 data could link one entry to two lines).
+ *   4. An adopted decision that could claim no leg is superseded (`legacy_no_claimable_leg`).
+ *
+ * The same generation re-runs `disableDeniedAutomationRules`, because A39 added the three inbox verbs and
+ * the payment verbs (`record_payment`, `allocate_payment`, `reverse_payment`, ...) to `NOT_AUTOMATABLE`: a
+ * stored rule naming one is disabled with an audit line instead of failing at every fire.
+ *
+ * Nothing of this runs at store open or before a write any more (the lean spec's L1): the store runs it
+ * with the version bump in one transaction, and the generation guard keeps an older build off the book.
+ */
+function adoptPreA39BankDecisions(db: Database): void {
+  // A20's "one link per line, ever" index would refuse the supersession history A39 keeps. It is dropped
+  // here, in the generation's transaction, and never at store open: the banking DDL an up-to-date book
+  // runs at every open must write nothing (the open takes no write lock, the generation guard's F3).
+  db.exec('DROP INDEX IF EXISTS bank_txn_link_one_per_txn');
+  const now = new Date().toISOString();
+  const resolved = "(l.kind = 'ignored' OR je.id IS NOT NULL OR pe.id IS NOT NULL OR b.id IS NOT NULL)";
+  const reversedEntry = (e: string): string =>
+    `EXISTS (SELECT 1 FROM journal_entry rv WHERE rv.workspace_id = l.workspace_id AND rv.reverses_entry_id = ${e} AND rv.status = 'posted')`;
+  const reversed = `(
+      (l.kind = 'journal_entry' AND je.id IS NOT NULL AND ${reversedEntry('je.id')})
+   OR (l.kind = 'payment' AND pe.id IS NOT NULL AND (p.status = 'reversed' OR ${reversedEntry('pe.id')}))
+   OR (l.kind = 'payment_batch' AND b.id IS NOT NULL AND EXISTS (
+         SELECT 1 FROM payment_batch_item bi JOIN payment bp ON bp.workspace_id = bi.workspace_id AND bp.id = bi.posted_payment_id
+          WHERE bi.workspace_id = l.workspace_id AND bi.batch_id = b.id AND bp.status = 'reversed')))`;
+  const live = `(${resolved} AND NOT ${reversed})`;
+  db.prepare(
+    `INSERT OR IGNORE INTO bank_txn_link (id, workspace_id, bank_txn_id, kind, target_id, created_by, created_at)
+     SELECT 'btlk-a39-' || m.id, t.workspace_id, t.id,
+            CASE m.status WHEN 'applied' THEN 'payment' ELSE 'ignored' END,
+            CASE m.status WHEN 'applied' THEN m.payment_id ELSE 'other' END,
+            COALESCE(m.decided_by, m.created_by), COALESCE(m.decided_at, m.created_at)
+       FROM reconciliation_match m
+       JOIN bank_txn t ON t.workspace_id = m.workspace_id AND t.credit_id = m.id
+      WHERE (m.status = 'dismissed' OR (m.status = 'applied' AND m.payment_id IS NOT NULL))
+        AND NOT EXISTS (SELECT 1 FROM bank_txn_link x WHERE x.workspace_id = t.workspace_id AND x.bank_txn_id = t.id)`,
+  ).run();
+  db.prepare(
+    `INSERT OR IGNORE INTO bank_line_decision
+       (link_id, workspace_id, bank_txn_id, state, target_kind, entry_id, payment_id, journal_line_id,
+        ignore_reason, note, remainder_mode, remainder_minor, accept_difference, difference_minor,
+        created_by, created_at, superseded_at, superseded_by, supersede_reason)
+     SELECT l.id, l.workspace_id, l.bank_txn_id,
+            CASE l.kind WHEN 'ignored' THEN 'ignored'
+                        WHEN 'journal_entry' THEN (CASE WHEN je.source = 'camt' THEN 'booked' ELSE 'matched' END)
+                        ELSE 'booked' END,
+            'legacy',
+            CASE l.kind WHEN 'journal_entry' THEN je.id WHEN 'payment' THEN pe.id ELSE NULL END,
+            p.id,
+            NULL,
+            CASE WHEN l.kind = 'ignored' THEN 'other' ELSE NULL END,
+            CASE WHEN l.kind = 'ignored' AND l.id LIKE 'btlk-a39-%' THEN 'qr_dismissed' ELSE NULL END,
+            NULL, NULL, 0, NULL, l.created_by, l.created_at,
+            CASE WHEN ${live} THEN NULL ELSE @now END,
+            CASE WHEN ${live} THEN NULL ELSE 'system' END,
+            CASE WHEN NOT ${resolved} THEN 'legacy_target_unresolved' WHEN ${reversed} THEN 'legacy_target_reversed' ELSE NULL END
+       FROM bank_txn_link l
+       JOIN bank_txn t ON t.workspace_id = l.workspace_id AND t.id = l.bank_txn_id
+       LEFT JOIN journal_entry je ON l.kind = 'journal_entry' AND je.workspace_id = l.workspace_id AND je.id = l.target_id AND je.status = 'posted'
+       LEFT JOIN payment p ON l.kind = 'payment' AND p.workspace_id = l.workspace_id AND p.id = l.target_id
+       LEFT JOIN journal_entry pe ON pe.workspace_id = l.workspace_id AND pe.id = p.journal_entry_id AND pe.status = 'posted'
+       LEFT JOIN payment_batch b ON l.kind = 'payment_batch' AND b.workspace_id = l.workspace_id AND b.id = l.target_id
+      WHERE NOT EXISTS (SELECT 1 FROM bank_line_decision d WHERE d.link_id = l.id)
+      ORDER BY l.created_at, l.rowid`,
+  ).run({ now });
+  db.prepare(
+    `INSERT OR IGNORE INTO bank_line_claim (link_id, workspace_id, bank_txn_id, journal_line_id, entry_id, amount_minor, released_at)
+     SELECT d.link_id, d.workspace_id, d.bank_txn_id, jl.id, jl.entry_id, jl.debit_minor - jl.credit_minor, NULL
+       FROM bank_line_decision d
+       JOIN bank_txn t ON t.workspace_id = d.workspace_id AND t.id = d.bank_txn_id
+       JOIN bank_account ba ON ba.workspace_id = t.workspace_id AND ba.id = t.bank_account_id
+       JOIN (SELECT d2.link_id AS link_id, d2.entry_id AS entry_id FROM bank_line_decision d2
+              WHERE d2.target_kind = 'legacy' AND d2.entry_id IS NOT NULL
+             UNION ALL
+             SELECT d3.link_id, p3.journal_entry_id FROM bank_line_decision d3
+               JOIN bank_txn_link l3 ON l3.id = d3.link_id AND l3.kind = 'payment_batch'
+               JOIN payment_batch_item i3 ON i3.workspace_id = d3.workspace_id AND i3.batch_id = l3.target_id
+               JOIN payment p3 ON p3.workspace_id = d3.workspace_id AND p3.id = i3.posted_payment_id
+              WHERE d3.target_kind = 'legacy' AND p3.journal_entry_id IS NOT NULL) src ON src.link_id = d.link_id
+       JOIN journal_entry e ON e.workspace_id = d.workspace_id AND e.id = src.entry_id AND e.status = 'posted'
+       JOIN journal_line jl ON jl.entry_id = e.id AND jl.account_id = ba.ledger_account_id
+      WHERE d.target_kind = 'legacy' AND d.superseded_at IS NULL AND d.state IN ('booked', 'matched')
+        AND NOT EXISTS (SELECT 1 FROM bank_line_claim c WHERE c.link_id = d.link_id)
+      ORDER BY d.created_at, d.link_id, jl.rowid`,
+  ).run();
+  db.prepare(
+    `UPDATE bank_line_decision
+        SET superseded_at = @now, superseded_by = 'system', supersede_reason = 'legacy_no_claimable_leg'
+      WHERE target_kind = 'legacy' AND superseded_at IS NULL AND state IN ('booked', 'matched')
+        AND NOT EXISTS (SELECT 1 FROM bank_line_claim c WHERE c.link_id = bank_line_decision.link_id)`,
+  ).run({ now });
+  disableDeniedAutomationRules(db);
+}
+
 export const DATA_MIGRATIONS: readonly DataMigration[] = [
   {
     generation: 1,
@@ -552,5 +666,10 @@ export const DATA_MIGRATIONS: readonly DataMigration[] = [
     generation: 7,
     name: 'a38-seed-accounts: add 2330, 3809 and 8900 to every workspace born before A38 seeded them',
     apply: seedA38Accounts,
+  },
+  {
+    generation: 8,
+    name: 'a39-bank-inbox: adopt pre-A39 bank-line decisions once and disable rules on newly denied verbs',
+    apply: adoptPreA39BankDecisions,
   },
 ];

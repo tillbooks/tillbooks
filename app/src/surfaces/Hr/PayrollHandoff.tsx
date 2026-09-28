@@ -17,7 +17,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { formatCalendar } from '../../lib/format';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
-import { EmptyState, ErrorBanner } from '../../components/states';
+import { EmptyState, ErrorBanner, refusalText } from '../../components/states';
 import { FileDrop } from '../../components/FileDrop';
 import { Status } from '../../components/Status';
 
@@ -203,7 +203,7 @@ export function PayrollHandoff() {
   return (
     <div className="hr-panel payroll">
       <p className="hr-hint payroll-oss">{t('payroll.oss.note')}</p>
-      {error !== null && <ErrorBanner error={error} message={t(`payroll.err.${error.error}`)} />}
+      {error !== null && <ErrorBanner error={error} message={refusalText(t, error, { own: 'payroll.err' })} />}
       {/* Three steps, three panels on the elevated ground, separated by the step and the gap (K-09). */}
 
       <section className="payroll-card" aria-labelledby="payroll-export-h">

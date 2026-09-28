@@ -467,6 +467,36 @@ describe('Automations, the Verlauf', () => {
   });
 });
 
+describe('Automations, a book a newer TILL moved on (critic round 4 follow-up)', () => {
+  const NEWER = { bookGeneration: 8, buildGeneration: 7, path: '/x/book.db' };
+
+  it('a tick refused after it claimed a run says part was saved, never a raw key', async () => {
+    const user = userEvent.setup();
+    withCapabilities({
+      ...baseCanned(),
+      run_due_automations: reject('schema_newer_than_runtime', { ...NEWER, partial: true, completed: false }),
+    });
+    await findMahnungRow();
+    await user.click(screen.getByRole('button', { name: de.automation.tick.now }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Bis dahin hatte dieses TILL einen Teil der Aktion gespeichert, den Rest nicht.');
+    expect(alert).not.toHaveTextContent(/automation\.error|schema_newer_than_runtime|nicht verändert/);
+  });
+
+  it('a rule action refused on a newer book gets the update sentence, never a raw key', async () => {
+    const user = userEvent.setup();
+    withCapabilities({
+      ...baseCanned(),
+      disable_automation_rule: reject('schema_newer_than_runtime', { ...NEWER, partial: false, completed: false }),
+    });
+    await findMahnungRow();
+    await user.click(await openRowMenu(de.automation.action.disable, user));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Diese Datenbank wurde von einem neueren TILL geschrieben.');
+    expect(alert).not.toHaveTextContent(/automation\.error|schema_newer_than_runtime/);
+  });
+});
+
 describe('Automations, accessibility', () => {
   it('has no axe violations on the rule list', async () => {
     const { container } = withCapabilities(baseCanned());

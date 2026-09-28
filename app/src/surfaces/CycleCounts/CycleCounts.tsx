@@ -44,7 +44,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Modal } from '../../components/Modal';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold, refusalText } from '../../components/states';
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { Status, type StatusKind } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
@@ -188,7 +188,7 @@ export function CycleCounts() {
 
   const localError = useCallback(
     (e: Err | null): string | undefined =>
-      e !== null && J04_ERROR_CODES.has(e.error) ? t(`cycleCounts.errors.${e.error}`) : undefined,
+      e !== null && J04_ERROR_CODES.has(e.error) ? refusalText(t, e, { own: 'cycleCounts.errors' }) : undefined,
     [t],
   );
 

@@ -230,6 +230,23 @@ export interface ReindexInput {
 }
 
 /**
+ * What a reindex's walk is compared against (critic R5-2): the account's last index time and the
+ * EXACT set of message ids in its index (a digest of the sorted list, so a fixed clock or a reused
+ * rowid cannot hide a change). Read before the lock-free walk and again under the lock: the index can
+ * only have moved in between if another connection committed to it.
+ */
+function indexStamp(ctx: WorkspaceContext, accountId: string): string {
+  const account = ctx.store.db
+    .prepare('SELECT last_indexed_at FROM mail_account WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, accountId) as { last_indexed_at: string | null } | undefined;
+  const ids = ctx.store.db
+    .prepare('SELECT message_id FROM mail_message WHERE workspace_id = ? AND account_id = ? ORDER BY message_id')
+    .pluck()
+    .all(ctx.workspaceId, accountId) as string[];
+  return `${account?.last_indexed_at ?? ''}|${ids.length}|${bodySha256(ids.join('\n'))}`;
+}
+
+/**
  * Walk the store and derive the index: upsert `mail_message` (keyed `message_id` per account) and
  * `mail_thread`, storing a LOCATOR and a HASH only, never a body (OP6 "index, never copy").
  * A message the adapter cannot parse is skipped and counted, never fatal (one malformed `.emlx`
@@ -241,9 +258,25 @@ export function reindexMailStore(ctx: WorkspaceContext, input: ReindexInput): Re
   if (account === undefined) return err('not_found', { accountId: input.accountId });
   if (!existsSync(account.store_path)) return err('needs_mailstore', { storePath: account.store_path });
   const adapter = adapterOf(account);
+  const key = typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0 ? input.idempotencyKey : undefined;
+  // A replay answers the stored result without reading the mail store (as `rememberIdempotent` would).
+  if (key !== undefined) {
+    const prior = ctx.store.recallIdempotent<Result>(ctx.workspaceId, key, 'mail_reindex');
+    if (prior !== undefined) return prior;
+  }
+  // The walk reads the mail client's files only, never the book, so it runs BEFORE the transaction
+  // (critic R4-3). Inside it, the IMMEDIATE begin held the write lock through the whole file read
+  // (160 to 630 ms at 3000 messages), and D12's second writer waited that long for nothing. The
+  // index it will be compared against is stamped first (critic R5-2, see `indexStamp`).
+  const stampBeforeWalk = indexStamp(ctx, account.id);
+  const walkedBeforeLock: WalkedMessage[] = adapter.walk(account.store_path);
 
   const run = (): Result => {
-    const walked: WalkedMessage[] = adapter.walk(account.store_path);
+    // Under the write lock now. When the index moved since the stamp (another process reindexed this
+    // account while the walk ran), the walk is stale: the self-healing below would delete what the
+    // other process just indexed, and the drafts and field values on its threads with it. So the rare
+    // path walks again, here, under the lock; the common path keeps the walk taken outside it.
+    const walked = indexStamp(ctx, account.id) === stampBeforeWalk ? walkedBeforeLock : adapter.walk(account.store_path);
     const now = ctx.clock.now();
     let indexed = 0;
     let skipped = 0;
@@ -384,9 +417,7 @@ export function reindexMailStore(ctx: WorkspaceContext, input: ReindexInput): Re
     return ok({ accountId: account.id, indexed, skipped, removed, skippedReasons });
   };
 
-  if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {
-    return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, 'mail_reindex', run);
-  }
+  if (key !== undefined) return ctx.store.rememberIdempotent(ctx.workspaceId, key, 'mail_reindex', run);
   return ctx.store.tx(run);
 }
 

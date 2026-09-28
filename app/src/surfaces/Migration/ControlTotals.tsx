@@ -18,9 +18,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
-import { isErr } from '../../lib/client';
+import { isErr, type Err } from '../../lib/client';
 import { useT } from '../../i18n';
 import { Select } from '../../components/Select';
+import { refusalText } from '../../components/states';
 
 function newIdempotencyKey(): string {
   return crypto.randomUUID();
@@ -85,7 +86,8 @@ export function ControlTotals(props: { workspaceId: string; planId: string }): R
   const [amount, setAmount] = useState('');
   const [amountHint, setAmountHint] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // The whole refusal, so its `partial`/`completed` flags reach the sentence (critic R5-1).
+  const [error, setError] = useState<Err | null>(null);
   const [declared, setDeclared] = useState<Declared[]>([]);
   // f8: the figures the operator declared PERSIST in the engine and gate the Eröffnungsprüfung, but
   // the list was session-local, so it read as empty after a reload. Fetch the already-declared totals
@@ -155,7 +157,7 @@ export function ControlTotals(props: { workspaceId: string; planId: string }): R
         })
       ).body;
       if (isErr(res)) {
-        setError(res.error === 'unknown_control_kind' ? 'unknownKind' : 'generic');
+        setError(res);
         return;
       }
       // Overlay onto the session list keyed by (kind, scope), so a re-declare replaces its row.
@@ -224,7 +226,7 @@ export function ControlTotals(props: { workspaceId: string; planId: string }): R
         <span id="ct-amount-hint" className="control-totals-hint">{t('migration.controlTotals.amountHint')}</span>
         {amountHint && <p className="control-totals-error" role="alert">{t('migration.controlTotals.amountInvalid')}</p>}
 
-        {error !== null && <p className="control-totals-error" role="alert">{t(`migration.controlTotals.err.${error}`)}</p>}
+        {error !== null && <p className="control-totals-error" role="alert">{refusalText(t, error, { keys: { unknown_control_kind: 'migration.controlTotals.err.unknownKind' }, fallback: 'migration.controlTotals.err.generic' })}</p>}
 
         <button type="submit" className="btn btn--secondary" disabled={busy || amount.trim() === ''}>
           {t('migration.controlTotals.declare')}

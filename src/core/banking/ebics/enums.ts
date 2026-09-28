@@ -12,10 +12,10 @@
  */
 
 /**
- * The channel lifecycle (spec §4 state machine): `draft -> keys_generated -> ini_sent ->
+ * The channel lifecycle (A36 §4.2, no new value): `draft -> keys_generated -> ini_sent ->
  * pending_bank_activation -> active`, with three departures from `active` each with a way back:
- * `bank_keys_changed` (re-confirm returns to `active`), `blocked` (SPR / bank-side; re-initialization
- * is the exit), `retired` (terminal). Every non-terminal state has an exit; no orphans.
+ * `bank_keys_changed` (the reviewed confirm returns to `active`), `blocked` (LOCAL only since A36; the
+ * reviewed confirm is the exit), `retired` (terminal). Every non-terminal state has an exit.
  */
 export const EBICS_CONNECTION_STATE = [
   'draft',
@@ -34,22 +34,21 @@ export const EBICS_ORDER_DIRECTION = ['upload', 'download'] as const;
 export type EbicsOrderDirection = (typeof EBICS_ORDER_DIRECTION)[number];
 
 /**
- * The EBICS 3.0 / SMPG order types A33 uses (spec §3/§4), mirrored from the specification, never
- * invented: the ceremony types (INI/HIA/HPB), the banking order types (BTU upload / BTD download),
- * and the protocol/admin types (HAC customer protocol, SPR standby/block). H3K is deliberately absent
+ * The EBICS 3.0 / SMPG order types the channel uses since A36 (§4.5, download only), mirrored from the
+ * specification, never invented: the version probe (HEV), the ceremony types (INI, HIA, HPB) and the
+ * one banking order type, the download BTD (its receipt is recorded as a BTD row). BTU, HAC and SPR
+ * left with the upload and the bank-side block (D-A36.11, D-A36.12). H3K is deliberately absent
  * ("order type H3K is not supported in Switzerland", SMPG §6.1).
  */
-export const EBICS_ORDER_TYPE = ['INI', 'HIA', 'HPB', 'BTU', 'BTD', 'HAC', 'SPR'] as const;
+export const EBICS_ORDER_TYPE = ['INI', 'HIA', 'HPB', 'HEV', 'BTD'] as const;
 export type EbicsOrderType = (typeof EBICS_ORDER_TYPE)[number];
 
 /**
- * The order-log row status (spec §4). `intent` is the durable pre-upload trace whose missing
- * successor IS `transmit_in_doubt` (a DERIVED read-model state, never stored). `ok` covers a
- * completed non-payment order (a download, a ceremony step, an SPR); `pending_release` is a
- * transmitted payment file awaiting the bank's out-of-channel release; `bank_rejected` carries the
- * bank's business reason; `failed` reopens the transmit path.
+ * The order-log row status (§4.5). `ok`: a step the bank completed, or a member outcome that is FINAL
+ * (`imported`, `already_imported`, `overlap_refused`); `failed`: a refused step, or a member outcome that
+ * is re-run at the next sync (`bank_reason` names the code). The upload statuses left with BTU.
  */
-export const EBICS_ORDER_STATUS = ['intent', 'ok', 'pending_release', 'bank_rejected', 'failed'] as const;
+export const EBICS_ORDER_STATUS = ['ok', 'failed'] as const;
 export type EbicsOrderStatus = (typeof EBICS_ORDER_STATUS)[number];
 
 export function isEbicsConnectionState(v: unknown): v is EbicsConnectionState {
@@ -76,5 +75,5 @@ export const EBICS_DEFAULT_KEY_PARAMS = Object.freeze({
 /** SMPG §6.1: TILL's own X.509 certificates carry unlimited validity so client-side expiry never strands a channel. */
 export const EBICS_UNLIMITED_VALIDITY = '9999-12-31';
 
-/** The camt message names A33 hands to A20 verbatim (spec §3/§4); routing reads the bytes, never edits them. */
-export const CAMT_STATEMENT_MSG_NAMES = ['camt.053', 'camt.054', 'camt.052'] as const;
+/** The camt message the channel hands to A20 verbatim (A36 D-A36.3: camt.053 only, D140). */
+export const CAMT_STATEMENT_MSG_NAMES = ['camt.053'] as const;

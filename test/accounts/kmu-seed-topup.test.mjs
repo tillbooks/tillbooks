@@ -13,12 +13,15 @@ import { join } from 'node:path';
 
 import { SqliteStore } from '../../dist/core/store/sqlite-store.js';
 import { SCHEMA_GENERATION } from '../../dist/core/store/schema.js';
+import { DATA_MIGRATIONS } from '../../dist/core/store/migrations.js';
 import { fixedClock } from '../../dist/core/clock.js';
 import { sequenceIdGen } from '../../dist/core/ids.js';
 import { getAction } from '../../dist/api/registry.js';
 
 const AT = '2026-09-09T00:00:00.000Z';
 const A38 = ['2330', '3809', '8900'];
+/** The generation just before A38's seed top-up, found by the migration's own name (6 today). */
+const PRE_A38_GENERATION = DATA_MIGRATIONS.find((m) => m.name.startsWith('a38-seed-accounts')).generation - 1;
 const call = (deps, name, input) => getAction(name).run(deps, input);
 
 function chart(store, workspaceId) {
@@ -49,11 +52,13 @@ test('generation 7: a pre-A38 workspace gains exactly 2330, 3809 and 8900 on reo
     const preview = call(deps, 'tax_provision_preview', { workspaceId, periodEnd: '2026-12-31' });
     assert.deepEqual(preview.missingAccounts.sort(), ['2330', '8900'], 'the helper names what the old book lacks');
 
-    // Rewind the marker to the pre-A38 generation, exactly what an upgraded file carries.
-    store.db.pragma(`user_version = ${SCHEMA_GENERATION - 1}`);
+    // Rewind the marker to the pre-A38 generation, exactly what an upgraded file carries. NAMED, never
+    // `SCHEMA_GENERATION - 1`: that meant 6 only while A38 was the newest generation, and once A39 added
+    // generation 8 it rewound to 7, so the top-up under test never ran again.
+    store.db.pragma(`user_version = ${PRE_A38_GENERATION}`);
     store.close();
 
-    // The upgrade: reopening applies generation 7.
+    // The upgrade: reopening applies generation 7 (and every later one, up to the current).
     store = new SqliteStore({ clock, location });
     const reopened = { store, clock, ids: sequenceIdGen(), actor: 'studio' };
     assert.equal(store.db.pragma('user_version', { simple: true }), SCHEMA_GENERATION);

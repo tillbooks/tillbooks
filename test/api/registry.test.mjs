@@ -439,6 +439,12 @@ const EXPECTED_NAMES = [
   'list_reconciliation',
   // F-03 (the booking paths): the statement list the /reconciliation door opens through.
   'list_bank_statements',
+  // A39, the bank inbox (bank-inbox-actions.ts, spread right after camt-actions): three writes and one
+  // read. Every write that decides a bank line is on the G01 denylist (critic A39-3).
+  'list_bank_inbox',
+  'book_bank_line',
+  'ignore_bank_line',
+  'reopen_bank_line',
   // A18, creditor payments (pain001-actions.ts, spread after A21's QR matching). Five writes and
   // three reads. `set_creditor_bank_profile` and `mark_batch_paid` sit on the G01 denylist (D65 leg
   // (f) and the D77 judgment-confirmation leg, respectively); `discard_payment_batch` is the F4

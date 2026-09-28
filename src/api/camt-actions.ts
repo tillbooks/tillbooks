@@ -54,7 +54,7 @@ export function camtActions(h: CamtActionHelpers): ActionDef[] {
     ctxAction(
       'import_camt',
       'write',
-      "Import a camt.053 (statement) or camt.054 (debit/credit notification) file onto a registered Bankkonto (A19): parses the XML, checks the file's IBAN against the account, and persists every booked entry, each keyed on its own bank-assigned identity (AcctSvcrRef, falling back to NtryRef, falling back to a content hash) so an overlapping statement or the camt.054-then-camt.053 pair cannot re-import the same booking twice. A byte-identical re-import of the same statement (Stmt/Id + ElctrncSeqNb + page number) is a safe no-op (duplicate:true); a same-identity statement whose content has genuinely changed refuses with statement_amended, naming what changed. A genuine same-day twin the identity key would otherwise treat as a repeat is admitted only via allowDuplicateEntries:true. A batch entry (several TxDtls in one booking) fans out into one txn per TxDtls. A booked, non-reversal CREDIT is routed into A21's QR-Abgleich queue automatically; everything else waits for suggest_matches / confirm_match / create_entry_for_txn. Any entry this parser could not read, or an entry it skipped as a duplicate, is named in the skipped[] list, never silently dropped.",
+      "Import a day-end camt.053 statement onto a registered Bankkonto (A19): parses the XML, checks the file's IBAN against the account, and persists every booked entry, each keyed on its own bank-assigned identity (AcctSvcrRef, falling back to NtryRef, falling back to a content hash) so an overlapping statement cannot re-import the same booking twice. A byte-identical re-import of the same statement (Stmt/Id + ElctrncSeqNb + page number) is a safe no-op (duplicate:true); a same-identity statement whose content has genuinely changed refuses with statement_amended, naming what changed. A genuine same-day twin the identity key would otherwise treat as a repeat is admitted only via allowDuplicateEntries:true. A batch entry (several TxDtls in one booking) fans out into one line per TxDtls; a repeated AcctSvcrRef inside one booking is kept apart (asr:<ref>#<n>), and a batch whose details are in another currency or do not sum to the booking is ONE line of the booking amount. A camt.054 refuses camt054_refused (a detail notification, not a statement). A camt.053 without ElctrncSeqNb or closing balance imports with the warning not_day_end_statement in warnings[]: import that day's day-end statement too. On an account fed over EBICS (A36) the successor rule decides first, at this door as at bank_sync: a statement imports only as the successor of the newest statement in the books (feed.rule, and with the warning statement_number_jump plus feed.jump naming the skipped numbers when its number skips some but its balances chain) or as the filler of a hole; a copy of one already there is a no-op (duplicate:true); otherwise it refuses gap_refused, overlap_refused, before_feed_start, unsupported_multipage_statement, or not_day_end_statement (refused there, not a warning), each naming the statements it compared, and a retry never helps: import the missing statement first. A booked, non-reversal CREDIT is also registered in A21's QR queue, whose row follows the line. Every new line then waits in the bank inbox (list_bank_inbox / book_bank_line); nothing is booked by the import. An archived Bankkonto refuses bank_account_archived; a file whose IBAN belongs to another registered account refuses iban_mismatch naming both IBANs and that account; an IBAN registered nowhere answers needs_bank_account with the file IBAN. Any entry this parser could not read, or an entry it skipped as a duplicate, is named in the skipped[] list, never silently dropped.",
       ctxSchema(
         { bankAccountId: STR, xml: STR, allowDuplicateEntries: BOOL, idempotencyKey: STR },
         ['bankAccountId', 'xml', 'idempotencyKey'],
@@ -71,7 +71,7 @@ export function camtActions(h: CamtActionHelpers): ActionDef[] {
     ctxAction(
       'review_bank_txn',
       'write',
-      "Signal that ONE booked bank debit needs a human's review because the ranked suggestion found no candidate at or above the workspace threshold (A36). Writes no ledger row and books nothing: it is a pure signal whose success emits bank_txn.needs_review for a G01 rule to react to (e.g. create an E03 task). Idempotent per (bankTxnId, idempotencyKey). A credit-classified txn refuses with use_qr_queue (the credit review moment is A21's qr_match.needs_review). A caller runs the suggestion pass and calls this once per booked debit, so N unmatched txns fire N occurrences.",
+      "Signal that ONE open bank line (credit or debit) needs a human's review because its A39 proposal is below the workspace threshold (A36). Writes no ledger row and books nothing: it is a pure signal whose success emits bank_txn.needs_review for a G01 rule to react to (e.g. create an E03 task). Idempotent per (bankTxnId, idempotencyKey). import_camt already fires the same event once per new line; call this to re-signal a line later.",
       ctxSchema({ bankTxnId: STR, idempotencyKey: STR }, ['bankTxnId', 'idempotencyKey']),
       (ctx, input) => reviewBankTxn(ctx, as(input)),
     ),
@@ -85,7 +85,7 @@ export function camtActions(h: CamtActionHelpers): ActionDef[] {
     ctxAction(
       'confirm_match',
       'write',
-      "Settle an outgoing DEBIT against one or more vendor bills (vendorBillId, or allocations[] for a multi-bill split) through A14's record_payment, or annotate a LINK to an existing journal entry that already books the movement (entryId). A CREDIT-classified txn refuses with use_qr_queue: decide it in the A21 Abgleich queue (apply_qr_match / override_qr_match) instead. A settlement (vendorBillId/allocations) against a bank fact that is not a DBIT (e.g. a reversal-flagged returned payment, money arriving) refuses with wrong_direction; correct a returned payment via reverse_payment, or use entryId, which stays open to either direction. Idempotent per txn.",
+      "A20's decision verb, now a wrapper over book_bank_line: settle an outgoing DEBIT against a vendor bill (vendorBillId, an open_item booking; a surplus parks as the supplier's Guthaben) or several bills (allocations[] for a multi-bill split) through A14's record_payment, or MATCH an existing journal entry that already books the movement (entryId, credit or debit: the entry must book this line's bank account with the same signed amount and its leg must not back another line). A settlement against a bank fact that is not a DBIT refuses wrong_direction. A line that is no longer open refuses line_not_open. Idempotent per key.",
       ctxSchema(
         {
           bankTxnId: STR,
@@ -101,7 +101,7 @@ export function camtActions(h: CamtActionHelpers): ActionDef[] {
     ctxAction(
       'create_entry_for_txn',
       'write',
-      'Book an unmatched txn (a bank fee, interest, a standing transfer) as a balanced two-leg journal entry via A02 (the bank leg plus the chosen contra account) and link it. Refuses currency_mismatch for a txn whose currency differs from the workspace base, and refuses taxCode (declared for a future increment, not modelled yet): book the net and add VAT as a separate manual entry.',
+      'A20\'s booking verb, now a wrapper over book_bank_line with one accounts leg: book an open line (a bank fee, interest, a refund, a transfer; credit or debit) to the chosen contra account via A02 and link it. taxCode is computed exactly as a manual journal line under the workspace VAT method (Vorsteuer, Umsatzsteuer, Bezugsteuer). A foreign-currency line books in its own currency at the stored rate (VAT on it refuses unsupported). A line that is no longer open refuses line_not_open.',
       ctxSchema(
         { bankTxnId: STR, contraAccountId: STR, description: STR, taxCode: STR, idempotencyKey: STR },
         ['bankTxnId', 'contraAccountId', 'idempotencyKey'],
@@ -124,3 +124,4 @@ export function camtActions(h: CamtActionHelpers): ActionDef[] {
     ),
   ];
 }
+

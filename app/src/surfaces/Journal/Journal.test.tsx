@@ -535,6 +535,42 @@ describe('EntryDrawer, reverse and drafts', () => {
     expect(typeof reversed[0].idempotencyKey).toBe('string');
   });
 
+  it.each([
+    ['reopen_bank_line', { bankTxnId: 'bt_9' }, 'This entry belongs to a bank line: take the line back under Bank.', 'Show the bank line', '/bank?tab=booked&line=bt_9'],
+    ['reverse_payment', {}, 'This entry belongs to a payment: reverse the payment under Payments.', 'Go to payments', '/payments'],
+  ])('A39 C11: an entry %s owns is refused with that owner named and where to undo it', async (verb, facts, sentence, linkName, href) => {
+    const handlers = reverseHandlers([]);
+    handlers.reverse_entry = { status: 422, body: { ok: false, error: 'owned_by', verb, entryId: 'je_1', ...facts } };
+    renderJournal(handlers);
+    const table = await screen.findByRole('table');
+    await userEvent.click(within(table).getByRole('row', { name: /Open entry B-100/ }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reverse' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Post reversal' }));
+    expect(await within(dialog).findByText(sentence)).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: linkName })).toHaveAttribute('href', href);
+  });
+
+  it.each([
+    ['reopen_bank_line', {}, 'This entry came from a bank line and is already reversed. Decide the line under Bank.', 'Go to Bank', '/bank'],
+    ['vat_settlement_reverse', {}, 'This entry belongs to a VAT settlement: reverse the settlement under VAT.', 'Go to VAT', '/mwst'],
+    ['accrual_reverse', {}, 'This entry belongs to an accrual: reverse the accrual under Periods.', 'Go to periods', '/periods'],
+    ['provision_reverse', {}, 'This entry belongs to a provision: reverse the provision under Periods.', 'Go to periods', '/periods'],
+    ['provision_release_reverse', {}, 'This entry releases a provision: take the release back under Periods.', 'Go to periods', '/periods'],
+    ['fx_revaluation_reverse', {}, 'This entry belongs to a currency revaluation: reverse the revaluation under Foreign currency.', 'Go to foreign currency', '/fx'],
+  ])('A39 lean critic L4: an entry %s owns is refused with that owner named and where to undo it', async (verb, facts, sentence, linkName, href) => {
+    const handlers = reverseHandlers([]);
+    handlers.reverse_entry = { status: 422, body: { ok: false, error: 'owned_by', verb, entryId: 'je_1', ...facts } };
+    renderJournal(handlers);
+    const table = await screen.findByRole('table');
+    await userEvent.click(within(table).getByRole('row', { name: /Open entry B-100/ }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reverse' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Post reversal' }));
+    expect(await within(dialog).findByText(sentence)).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: linkName })).toHaveAttribute('href', href);
+  });
+
   it('never posts a reversal on the bare click: the confirm gate stands between', async () => {
     const reversed: Record<string, unknown>[] = [];
     renderJournal(reverseHandlers(reversed));

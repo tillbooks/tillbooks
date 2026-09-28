@@ -16,7 +16,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { resolveEbicsRuntime } from '../../dist/api/host-runtime.js';
+import { resolveEbicsRuntime, untrustedDirFor } from '../../dist/api/host-runtime.js';
 import { makeApiDeps } from '../../dist/api/mcp.js';
 import { fileEbicsKeystore } from '../../dist/core/banking/ebics/keystore-file.js';
 
@@ -45,7 +45,7 @@ async function withEnv(overrides, fn) {
   }
 }
 
-const TRANSPORT_METHODS = ['sendKeys', 'fetchBankKeys', 'download', 'acknowledge', 'upload', 'suspend'];
+const TRANSPORT_METHODS = ['hostVersions', 'sendKeyLeg', 'fetchBankKeys', 'download', 'acknowledge'];
 
 test('with TILL_EBICS_RUNTIME UNSET, no live wire is attached (the OSS default, honest degrade)', async () => {
   const ports = await withEnv({}, () => resolveEbicsRuntime());
@@ -63,9 +63,12 @@ test('with the runtime set, it builds the keystore, loads the module, and compos
   for (const m of TRANSPORT_METHODS) {
     assert.equal(typeof ports.ebicsTransport[m], 'function', `the composed transport exposes ${m}()`);
   }
+  // A36 D-A36.11, D-A36.12: download only. The composed transport has no upload and no SPR.
+  assert.equal('upload' in ports.ebicsTransport, false);
+  assert.equal('suspend' in ports.ebicsTransport, false);
 });
 
-test('the composed fetchBankKeys maps the wire hashes into the core three-field EbicsKeyHashes shape', async () => {
+test('the composed fetchBankKeys keeps EVERY hash the wire returns: SPKI, certificate and classic key hashes (W2)', async () => {
   const ports = await withEnv(
     { TILL_EBICS_RUNTIME: FAKE_WIRE, TILL_EBICS_KEYSTORE_PATH: KEYSTORE_PATH },
     () => resolveEbicsRuntime(),
@@ -73,11 +76,15 @@ test('the composed fetchBankKeys maps the wire hashes into the core three-field 
   const conn = { hostUrl: 'https://x/', hostId: 'H', partnerId: 'P', userIdEbics: 'U', protocolVersion: 'H005', keyRef: 'k' };
   const res = ports.ebicsTransport.fetchBankKeys({ connection: conn });
   assert.equal(res.ok, true);
-  // Banks publish X002 + E002 on HPB, never an ES key: electronicSignature is carried as ''.
+  // Banks publish X002 + E002 on HPB, never an ES key: electronicSignature is carried as ''. The
+  // certificate hashes are what the owner compares against ZKB's "H005 mit Zertifikat" row; the wire's
+  // pin gate compares every hash the pin holds, so dropping them would pin less than the owner reviewed.
   assert.deepEqual(res.bankKeyHashes, {
     electronicSignature: '',
     authentication: 'auth-fingerprint',
     encryption: 'enc-fingerprint',
+    keyHashes: { authentication: 'auth-key-hash', encryption: 'enc-key-hash' },
+    certificateHashes: { authentication: 'auth-cert-hash', encryption: 'enc-cert-hash' },
   });
 });
 
@@ -90,6 +97,38 @@ test('the wire receives the core keystore (custody stays in the core, never the 
   );
   assert.equal(fixture.calls.wire.length, 1, 'createEbicsWire was called exactly once');
   assert.equal(fixture.calls.wire[0].keystore, ports.ebicsKeystore, 'the SAME core keystore is handed to the wire');
+  // W2: the untrusted-bytes folder sits beside the keystore file, never inside E00, SQLite or a backup.
+  assert.equal(fixture.calls.wire[0].untrustedDir, `${KEYSTORE_PATH}.untrusted`);
+  assert.equal(untrustedDirFor(KEYSTORE_PATH), `${KEYSTORE_PATH}.untrusted`);
+});
+
+/** A stub wire module as a data: URL, exporting `WIRE_CONTRACT_VERSION` as `versionSource` (or not at all). */
+function stubModule(versionSource) {
+  const body =
+    (versionSource === undefined ? '' : `export const WIRE_CONTRACT_VERSION = ${versionSource};`) +
+    'export function createEbicsWire() { return () => ({ ok: true, responseBase64: "" }); }' +
+    'export function createEbicsTransport(o) { return { wire: o.wire, fetchBankKeys() { return { ok: false, reason: "stub" }; } }; }';
+  return `data:text/javascript,${encodeURIComponent(body)}`;
+}
+
+test('W2: the host refuses the wire module unless WIRE_CONTRACT_VERSION === 2 (missing, 1, 3 and the string "2" all throw)', async () => {
+  for (const [label, source] of [['missing', undefined], ['1', '1'], ['3', '3'], ["'2'", "'2'"]]) {
+    await withEnv({ TILL_EBICS_RUNTIME: stubModule(source), TILL_EBICS_KEYSTORE_PATH: KEYSTORE_PATH }, async () => {
+      await assert.rejects(() => resolveEbicsRuntime(), /wire contract/, `a module declaring ${label} is refused at boot`);
+    });
+  }
+  const ports = await withEnv({ TILL_EBICS_RUNTIME: stubModule('2'), TILL_EBICS_KEYSTORE_PATH: KEYSTORE_PATH }, () => resolveEbicsRuntime());
+  assert.ok(ports.ebicsTransport && ports.ebicsKeystore, 'exactly 2 loads');
+});
+
+test('the keystore passphrase is deleted from the environment once the keystore is unlocked', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'till-ebics-env-'));
+  const path = join(dir, 'ks.json');
+  await withEnv({ TILL_EBICS_RUNTIME: FAKE_WIRE, TILL_EBICS_KEYSTORE_PATH: path, TILL_EBICS_KEYSTORE_PASSPHRASE: 'launcher-secret' }, async () => {
+    const ports = await resolveEbicsRuntime();
+    assert.equal(ports.ebicsKeystore.state(), 'ready', 'unlocked with it');
+    assert.equal(process.env.TILL_EBICS_KEYSTORE_PASSPHRASE, undefined, 'and gone from process.env for later child processes');
+  });
 });
 
 test('a requested live wire with NO keystore path is a LOUD failure, not a silent offline fallback', async () => {

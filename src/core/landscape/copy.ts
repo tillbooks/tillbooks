@@ -243,6 +243,25 @@ function resetPublishDial(db: Database.Database, ids: { next(prefix: string): st
   return { workspacesReset: off.changes, epochsReminted: streams.length };
 }
 
+/**
+ * A36 §4.2: every EBICS connection a copy carries lands `retired`, whatever the sanitization level and
+ * whatever the (owner-only) `retainSecrets` override: a copied environment never fetches from the bank,
+ * because a second feed for one ZKB subscriber would split its statements. `SECRET_COLUMNS` already
+ * nulls `key_ref` and the pin (unless the owner kept them for a full-fidelity debug); this closes the
+ * state too, which no verb reopens, so even a copy that kept its locator never fetches. Returns the
+ * number of connections retired.
+ */
+function retireCopiedEbicsConnections(db: Database.Database, wsIds: readonly string[]): number {
+  const has = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ebics_connection'").get();
+  if (has === undefined) return 0;
+  const idList = wsIds.length > 0 ? wsIds.map(() => '?').join(', ') : null;
+  const scope = idList !== null ? ` AND workspace_id IN (${idList})` : '';
+  const info = db
+    .prepare(`UPDATE ebics_connection SET state = 'retired' WHERE state != 'retired'${scope}`)
+    .run(...(idList !== null ? [...wsIds] : []));
+  return info.changes;
+}
+
 /** Delete a workspace and all of its scoped rows from a building db (for the mandate replace-on-refresh). */
 function deleteWorkspace(db: Database.Database, wsId: string): void {
   const tables = (
@@ -301,6 +320,8 @@ interface CopyRunResult {
   readonly provenance: Readonly<Record<string, string>>;
   /** The publish-dial reset (finding #2): how many copied workspaces had publishing forced off + epoch reminted. */
   readonly publishReset: PublishResetSummary;
+  /** A36: how many copied EBICS connections were retired (a copy never fetches from the bank). */
+  readonly ebicsConnectionsRetired: number;
 }
 
 /**
@@ -434,6 +455,7 @@ function runCopy(deps: LandscapeDeps, srcEnv: Environment, tgtEnv: Environment, 
     // sanitization level and regardless of the (owner-only) retainSecrets override, because publishing is
     // an EGRESS capability, not a stored secret: a full-fidelity debug clone must still not egress.
     const publishReset = resetPublishDial(db, ids, scopeIds);
+    const ebicsConnectionsRetired = retireCopiedEbicsConnections(db, scopeIds);
 
     // PHASE 4 verify: the built payload must be at THIS build`s schema generation (finding #6: a source
     // newer than the target is refused earlier; here we assert the rebuilt target is current), then the
@@ -468,6 +490,7 @@ function runCopy(deps: LandscapeDeps, srcEnv: Environment, tgtEnv: Environment, 
       targetSizeBytes,
       provenance,
       publishReset,
+      ebicsConnectionsRetired,
     };
     return ok({ run: runResult });
   } catch (e) {

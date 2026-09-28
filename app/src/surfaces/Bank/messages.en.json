@@ -1,0 +1,887 @@
+{
+  "nav": {
+    "bankInbox": "Bank lines"
+  },
+  "bankInbox": {
+    "title": "Bank",
+    "subtitleMany": "{count} bank accounts",
+    "loading": "Loading the bank lines.",
+    "denied": {
+      "title": "No access to the bank lines.",
+      "body": "Your role lacks the right to read sales and bank lines. An admin can grant it under Members."
+    },
+    "header": {
+      "more": "More bank actions",
+      "bankAccounts": "Manage bank accounts",
+      "fetchStatements": "Fetch statements",
+      "fetching": "Fetching…",
+      "lastFetched": "Last fetched: {date}",
+      "fetched": "Fetched: {imported} statements imported, {waiting} waiting.",
+      "fetchedNothing": "ZKB has no new statements."
+    },
+    "bulk": {
+      "bookSure": "Book all sure ones ({count})"
+    },
+    "pick": {
+      "label": "Selected lines",
+      "row": "Select {party}, {amount}",
+      "all": "Select every visible line",
+      "count": {
+        "one": "{count} line selected",
+        "other": "{count} lines selected"
+      },
+      "book": {
+        "one": "Book sure ({count})",
+        "other": "Book sure ({count})"
+      },
+      "notReady": {
+        "one": "{count} line is not proven by a reference, was changed or waits on the agent, and stays.",
+        "other": "{count} lines are not proven by a reference, were changed or wait on the agent, and stay."
+      },
+      "ignore": "Ignore …",
+      "ignoreReason": "Reason",
+      "ignoreConfirm": {
+        "one": "Ignore {count} line",
+        "other": "Ignore {count} lines"
+      },
+      "clear": "Clear selection"
+    },
+    "first": {
+      "noAccountTitle": "No bank account yet.",
+      "noAccountHint": "Add your bank account, then import its statements here.",
+      "createAccount": "Add bank account",
+      "noStatementTitle": "No bank statement imported yet.",
+      "noStatementHint": "After the import every line appears here, with a proposal to book it."
+    },
+    "empty": {
+      "openTitle": "Everything is booked.",
+      "openHint": "New lines appear here when you import the next statement.",
+      "bookedTitle": "Nothing booked yet.",
+      "bookedHint": "Booked and matched lines appear here, with a reversal.",
+      "ignoredTitle": "No ignored lines.",
+      "ignoredHint": "Ignored lines appear here and can be brought back.",
+      "filteredTitle": "No line matches the search and filter.",
+      "filteredHint": "Reset the search and filter to see every line.",
+      "showBooked": "Show booked lines",
+      "showOpen": "Show lines to book"
+    },
+    "tab": {
+      "label": "Bank lines by state",
+      "open": "To book",
+      "openCount": "To book {count}",
+      "booked": "Booked",
+      "bookedCount": "Booked {count}",
+      "ignored": "Ignored",
+      "ignoredCount": "Ignored {count}"
+    },
+    "caption": {
+      "open": "Bank lines still to book",
+      "booked": "Booked and matched bank lines",
+      "ignored": "Ignored bank lines"
+    },
+    "search": {
+      "label": "Search",
+      "placeholder": "Name, text, reference or amount"
+    },
+    "facet": {
+      "label": "Filter lines",
+      "all": "All",
+      "needs": "Need you",
+      "sure": "Sure",
+      "in": "Money in",
+      "out": "Money out"
+    },
+    "accounts": {
+      "label": "Bank account",
+      "all": "All accounts"
+    },
+    "fresh": {
+      "showAll": "Show all lines"
+    },
+    "col": {
+      "date": "Date",
+      "party": "Counterparty",
+      "target": "Book to",
+      "decision": "Decision",
+      "vat": "VAT",
+      "amount": "Amount",
+      "actions": "Actions"
+    },
+    "row": {
+      "unnamed": "Bank line without a name",
+      "book": "Book",
+      "match": "Match",
+      "review": "Review",
+      "busy": "Booking …",
+      "targetLabel": "Book to, {party}",
+      "targetPlaceholder": "Book to what?",
+      "vatLabel": "VAT, {party}",
+      "more": "More actions for {party}, {amount}",
+      "needsPost": "You lack the right to post.",
+      "needsPay": "Settling an invoice or a payment run needs the right to book payments."
+    },
+    "menu": {
+      "split": "Split or book manually",
+      "link": "Match an existing entry",
+      "agent": "Ask the agent",
+      "ignore": "Ignore"
+    },
+    "certainty": {
+      "sure": "Sure",
+      "learned": "Learned",
+      "check": "Please check",
+      "open": "No proposal",
+      "edited": "Changed by you",
+      "agent": "The agent's proposal"
+    },
+    "state": {
+      "open": "Open",
+      "booked": "Booked",
+      "matched": "Matched",
+      "ignored": "Ignored"
+    },
+    "picker": {
+      "search": "Search an account, invoice or amount",
+      "searchAccount": "Account number or name",
+      "noMatch": "Nothing found.",
+      "groupCurrent": "Current",
+      "groupSuggested": "Suggestions",
+      "groupInvoices": "Open invoices",
+      "groupBills": "Open supplier bills",
+      "groupAccounts": "Accounts",
+      "groupMore": "More",
+      "currentMeta": "as it stands",
+      "proposalMeta": "TILL's proposal",
+      "agentMeta": "The agent's proposal",
+      "moreLink": "Match an existing entry …",
+      "moreLinkMeta": "already booked, for example by hand",
+      "moreLinkKeywords": "match existing entry journal",
+      "moreSplit": "Split or book manually …",
+      "moreSplitMeta": "several accounts or own text",
+      "moreSplitKeywords": "split several manual"
+    },
+    "vat": {
+      "none": "without VAT",
+      "phrase": "{label} ({code})",
+      "perPosition": "per position",
+      "fromEntry": "from the entry",
+      "fromBills": "from the bills",
+      "fromInvoice": "from the invoice",
+      "fromBill": "from the bill"
+    },
+    "target": {
+      "split": "Split across {count} accounts",
+      "unknownAccount": "Account not found",
+      "invoice": "Invoice",
+      "otherAccount": "the other bank account",
+      "invoiceName": "open invoice",
+      "bill": "Supplier bill",
+      "billName": "open supplier bill",
+      "batchCode": "Payment run",
+      "batch": "several supplier bills",
+      "entry": "existing entry"
+    },
+    "reason": {
+      "existing_entry_reference": "The books already hold an entry of {date} with the same reference: {description}. Matching links both; no new entry is made.",
+      "existing_entry_amount_date": {
+        "one": "The books hold an entry of {date} for the same amount, without a bank line yet ({days} day apart). No reference proves it; it could be a second payment.",
+        "other": "The books hold an entry of {date} for the same amount, without a bank line yet ({days} days apart). No reference proves it; it could be a second payment."
+      },
+      "existing_entry_same_day": "The books hold an entry of the same day ({date}) for the same amount, without a bank line yet. No reference proves it; it could be a second payment.",
+      "candidates": "{count} entries could fit.",
+      "qr_reference_exact": "The QR reference belongs to the open invoice {number} of {contact}, and the amount matches to the cent.",
+      "qr_reference_amount_differs": "The QR reference belongs to invoice {number} of {contact}, but the amount differs by {delta}.",
+      "payment_batch_reference": "TILL created this payment run. The bank reports the same reference and the same amount, {total}.",
+      "payment_batch_total_differs": "The bank reports the reference of a payment run, but the amount differs: run {batch}, bank {line}. The line cannot be matched to the run this way. Discard the run under Creditor payments, record the executed payments by hand under Payments, and ignore this line as \"Booked elsewhere\".",
+      "vendor_bill_reference": "The reference belongs to the open supplier bill {number} of {vendor}.",
+      "vendor_bill_amount": "An open supplier bill has the same amount: {number} of {vendor}. No reference proves it.",
+      "own_account_transfer": "The counterparty is your own account \"{name}\". This is a transfer, not an expense.",
+      "own_account_transfer_booked": {
+        "one": "The transfer from \"{name}\" is already on the books, booked on {date} ({days} day apart). Match it instead of booking it twice.",
+        "other": "The transfer from \"{name}\" is already on the books, booked on {date} ({days} days apart). Match it instead of booking it twice."
+      },
+      "own_account_transfer_booked_same_day": "The transfer from \"{name}\" is already on the books, booked the same day ({date}). Match it instead of booking it twice.",
+      "history": "On {date} you last booked this counterparty to {account}, {vat} ({count} times like this).",
+      "withVat": "with {vat}",
+      "withoutVat": "without VAT",
+      "no_proposal": "No reference or earlier booking fits. Choose an account or an invoice, or ask the agent.",
+      "payment_batch_item": "The bank reports one payment of a payment run, named by its reference: {amount}.",
+      "payment_batch_item_amount_differs": "The reference names one payment of a payment run, but the amount differs: payment {item}, bank {line}. The line cannot be matched to the run this way. Discard the run under Creditor payments, record the executed payments by hand under Payments, and ignore this line as \"Booked elsewhere\".",
+      "payment_batch_total_differs_paid": "The bank reports the reference of a payment run, but the amount differs: run {batch}, bank {line}. The run is already marked paid and can no longer be discarded: ignore this line as \"Booked elsewhere\" and reverse under Payments every payment of the run the bank did not carry out.",
+      "payment_batch_item_amount_differs_paid": "The reference names one payment of a payment run, but the amount differs: payment {item}, bank {line}. The run is already marked paid and can no longer be discarded: ignore this line as \"Booked elsewhere\" and reverse under Payments every payment of the run the bank did not carry out.",
+      "own_account_transfer_booked_other_month": "The transfer from \"{name}\" is booked there on {date}, in another month than this line. It cannot be matched that way: take the other side back and book each side on its own day through a transit account you add to the chart."
+    },
+    "next": {
+      "agent": "Next step: you approve or reject the agent's proposal.",
+      "pick": "Next step: you choose what to book to.",
+      "match": "Next step: you match; no new entry is made.",
+      "book": "Next step: you confirm with Book."
+    },
+    "panel": {
+      "label": "Bank line {party}",
+      "emptyLabel": "Bank line",
+      "empty": "Choose a line to see its booking.",
+      "statusLabel": "Proposal and reason",
+      "agentReason": "The agent prepared this line. You review its proposal and approve or reject it.",
+      "editedReason": "You changed the proposal.",
+      "iban": "IBAN",
+      "reference": "Reference",
+      "split": "Split or manual",
+      "notSame": "Not the same payment? Book it new",
+      "backToProposal": "Back to the proposal",
+      "backToLine": "Back to the line",
+      "cancel": "Cancel",
+      "close": "Close",
+      "linkMissing": "This bank line is not in this book."
+    },
+    "legs": {
+      "title": "This is what posts",
+      "account": "Account",
+      "debit": "Debit",
+      "credit": "Credit",
+      "pickFirst": "Choose what to book to first.",
+      "computing": "Computing the entry.",
+      "vatFailed": "The VAT could not be computed for this preview. Check the VAT code.",
+      "unknownAccount": "Account not found"
+    },
+    "item": {
+      "titleInvoice": "Invoice",
+      "titleBill": "Supplier bill",
+      "paidInFull": "{item} is paid in full with this.",
+      "shortOpen": "Part payment: {item} stays open with {rest}.",
+      "shortWriteOff": "Part payment: the rest of {rest} is written off, {item} is then settled.",
+      "surplusCredit": "Overpayment: {rest} stays as the customer's credit, {item} is paid in full.",
+      "surplusDebit": "Paid more than owed: {rest} stays as a credit with the supplier, {item} is paid in full.",
+      "unknownOpen": "The open amount of {item} could not be read. TILL works it out when booking.",
+      "remainderLegend": "What happens to the rest of {rest}?",
+      "leaveOpen": "Leave open",
+      "writeOff": "Write off",
+      "fees": "Includes dunning fees of {fees}."
+    },
+    "batch": {
+      "title": "Payment run",
+      "loading": "Loading the payment run.",
+      "markPaid": {
+        "one": "The bank carried out the payment run of {date}. Booking marks it paid: one supplier bill then counts as paid.",
+        "other": "The bank carried out the payment run of {date}. Booking marks it paid: {count} supplier bills then count as paid."
+      },
+      "alreadyPaid": {
+        "one": "This payment run of {date} is already marked paid. The line is linked to its payment without a new entry.",
+        "other": "This payment run of {date} is already marked paid. The line is linked to its {count} payments without a new entry."
+      },
+      "totalDiffers": "The payment run is for {batch}, the bank for {line}."
+    },
+    "compare": {
+      "title": "Bank and books",
+      "differenceReason": "Why does the amount differ by {amount}?",
+      "differenceReasonHint": "for example bank fees deducted",
+      "matchWithDifference": "Match with the difference",
+      "bank": "Bank",
+      "books": "Books",
+      "amount": "Amount",
+      "date": "Date",
+      "text": "Text",
+      "same": "same",
+      "differs": "differs",
+      "days": {
+        "one": "{days} day",
+        "other": "{days} days"
+      },
+      "none": "none",
+      "loading": "Loading the entry.",
+      "readFailed": "The entry could not be read.",
+      "entryTitle": "Existing entry",
+      "entryUnchanged": "of {date}, stays unchanged"
+    },
+    "split": {
+      "title": "Split or book manually",
+      "text": "Description",
+      "textPlaceholder": "Bank: {party}",
+      "bankLine": "{account}, {side}",
+      "position": "Position {n}",
+      "remove": "Remove position {n}",
+      "account": "Account",
+      "accountOf": "Account of position {n}",
+      "accountPlaceholder": "Choose an account",
+      "vat": "VAT",
+      "vatOf": "VAT of position {n}",
+      "amount": "Amount",
+      "add": "Add position",
+      "restOpen": "Still to distribute: {amount}",
+      "restOver": "Distributed too much: {amount}",
+      "accountMissing": "Amount distributed, an account is missing",
+      "complete": "Fully distributed"
+    },
+    "link": {
+      "title": "Match an existing entry",
+      "lead": "Already booked, for example by hand or as the payment of an invoice? Choose the entry this line belongs to. No new entry is made.",
+      "searchPlaceholder": "Text, date or amount",
+      "loading": "Loading the entries.",
+      "readFailed": "The entries on the bank account could not be read.",
+      "none": "No entry on the bank account fits within 30 days of the line. Book the line new.",
+      "sameAmount": "Same amount",
+      "otherAmount": "Other amount",
+      "sameDay": "same day",
+      "daysApart": {
+        "one": "{days} day apart",
+        "other": "{days} days apart"
+      },
+      "taken": "already belongs to a bank line",
+      "difference": "The amounts differ by {amount}. TILL records the difference with the match.",
+      "consequence": "Matching links the line to this entry. The entry stays unchanged and counts once.",
+      "matchWithDifference": "Match with difference"
+    },
+    "ignore": {
+      "title": "Ignore the line",
+      "private": "Paid privately? Then do not ignore it; book it to {account}.",
+      "bookPrivate": "Book it that way",
+      "reasonLegend": "Why?",
+      "note": "A note for you or the accountant",
+      "noteRequired": "The reason in your own words",
+      "consequence": "The line leaves the list but stays in the bank balance. If its money reaches the books nowhere, the check above shows it as a difference.",
+      "commit": "Ignore",
+      "reason": {
+        "booked_elsewhere": {
+          "label": "Booked elsewhere",
+          "hint": "for example by the accountant or through another account"
+        },
+        "clearing_account": {
+          "label": "Runs through a clearing account",
+          "hint": "for example card turnover booked in total"
+        },
+        "before_start": {
+          "label": "Before the start in TILL",
+          "hint": "lies before the first posting date of these books"
+        },
+        "duplicate": {
+          "label": "Delivered twice",
+          "hint": "the same movement already stands as another line"
+        },
+        "other": {
+          "label": "Other reason",
+          "hint": "with a note in your own words"
+        }
+      }
+    },
+    "reopen": {
+      "title": "Reverse",
+      "titleMatched": "Unmatch",
+      "why": "Why?",
+      "reason": {
+        "wrongAccount": "Wrong account",
+        "wrongVat": "Wrong VAT",
+        "wrongItem": "Wrong invoice",
+        "double": "Booked twice",
+        "other": "Other reason",
+        "ignoredByMistake": "Ignored by mistake"
+      },
+      "note": "Note (optional)",
+      "noteRequired": "The reason in your own words",
+      "consequenceBooked": "Reversing posts a counter-entry; the original entry stays in the journal. The line is then to book again.",
+      "consequenceSettlement": "Reversing reverses the payment and reopens the invoice. The line is then to book again.",
+      "consequenceMatched": "The existing entry stays unchanged; only the link to the line is undone. The line is then to book again.",
+      "commit": "Reverse",
+      "commitMatched": "Unmatch",
+      "titleIgnored": "Back to booking",
+      "consequenceIgnored": "The line returns to the list and nothing is posted. The earlier decision stays on record with your reason.",
+      "consequenceBatch": "The payment run's payments stay booked; only the link to the line is undone. The line is then to book again.",
+      "commitIgnored": "Back to booking"
+    },
+    "decided": {
+      "booked": "to accounts",
+      "bookedTo": "to {account}",
+      "bookedSplit": {
+        "one": "to {count} account",
+        "other": "split across {count} accounts"
+      },
+      "matched": "with an entry already on the books",
+      "settled": "as the invoice payment",
+      "batch": "in a payment run",
+      "ignored": "Reason: {reason}",
+      "note": "Note: {note}",
+      "difference": "Difference recorded with the match: {amount}",
+      "by": "Decided by {who} on {date}",
+      "postedTitle": "Posted",
+      "noEntry": "This line has no entry of its own.",
+      "reopen": "Reverse",
+      "unmatch": "Unmatch",
+      "unignore": "Back to booking"
+    },
+    "warning": {
+      "control_account_leg_before": "You book straight to {account}, with no invoice behind it. Settle an open invoice by picking it as the target.",
+      "control_account_leg": "Booked to a control account (receivables or payables), with no invoice behind it.",
+      "accepted_difference": "The difference is recorded with your reason and shows in the balance.",
+      "reversal_line": "The line is a reversal by the bank.",
+      "batch_payments_kept": "The payment run's payments stay booked. Reverse one of them under Payments.",
+      "not_day_end_statement": "This is not a day-end statement: it has no sequence number or no closing balance. Import the day-end camt.053 for this day as well.",
+      "statement_number_jump": "The statement number jumps: numbers are missing between the last statement in the books and this one. Import those statements by hand if they exist."
+    },
+    "vorschlag": {
+      "kicker": "The agent's proposal",
+      "when": "drafted on {date}",
+      "book": "Book to {target}.",
+      "bookVat": "Book to {target}, {vat}.",
+      "bookUnknown": "Book this line.",
+      "ignore": "Ignore: {reason}.",
+      "reopen": "Reverse and reopen: {reason}",
+      "approve": "Approve",
+      "reject": "Reject",
+      "rejectReason": "Why? (optional, the agent reads it)",
+      "rejectConfirm": "Reject proposal",
+      "own": "You made this proposal yourself. A second person approves it.",
+      "noRight": "You lack the right to manage the agent, which approving needs."
+    },
+    "trust": {
+      "label": "Reconciliation {name}",
+      "ok": "Bank and books agree.",
+      "pending": "Agrees, apart from the lines still to book.",
+      "difference": "Bank and books differ by {amount}.",
+      "unknown": {
+        "no_statement": "Cannot be judged: no statement yet.",
+        "no_balance": "Cannot be judged: the statement has no closing balance.",
+        "currency_differs": "Cannot be judged: the statement is in another currency than the account.",
+        "inconsistent": "Cannot be judged: the figures do not add up."
+      },
+      "bank": "Bank",
+      "books": "Books",
+      "sentence": "Bank {bank} equals books {books} plus open lines {open}.",
+      "openLines": {
+        "one": "{count} line open, {amount}",
+        "other": "{count} lines open, {amount}"
+      },
+      "asOf": "As of the statement of {date}",
+      "menu": {
+        "label": "Actions for {name}",
+        "import": "Import bank statement"
+      },
+      "openTerm": "open lines",
+      "differenceTerm": "difference",
+      "sentenceDifference": "Bank {bank} equals books {books} plus open lines {open} plus a difference of {difference}.",
+      "differenceHint": "A difference arises when an ignored line is not in the books, an entry on the bank account has no bank line, a difference was accepted at a match, or a line is matched to an entry dated after the statement (until the next statement)."
+    },
+    "import": {
+      "open": "Import bank statement",
+      "title": "Import bank statement",
+      "lead": "Load the camt.053 file from your e-banking. TILL reads the account from the file.",
+      "file": "File",
+      "choose": "Choose file",
+      "drop": "Drop the camt file here",
+      "hint": "camt.053, as XML",
+      "account": "Bank account",
+      "accountPick": "Choose a bank account",
+      "fileMatches": "The file belongs to \"{name}\" ({iban}).",
+      "notXml": "That is not an XML file. Download the statement from your e-banking as camt.053.",
+      "commit": "Import",
+      "busy": "Importing …"
+    },
+    "ack": {
+      "dismiss": "Dismiss",
+      "booked": "Booked: {party} to {target}.",
+      "matched": "Matched: {party} with the entry of {date}, no new entry.",
+      "matchedAny": "Matched: {party} with the entry already on the books, no new entry.",
+      "remainder": {
+        "open": "{amount} stays open.",
+        "written_off": "{amount} written off.",
+        "on_account": "{amount} stays as a credit."
+      },
+      "undo": "Undo",
+      "bulk": {
+        "one": "{count} sure line booked.",
+        "other": "{count} sure lines booked."
+      },
+      "pickedBooked": {
+        "one": "{count} line booked.",
+        "other": "{count} lines booked."
+      },
+      "pickedIgnored": {
+        "one": "{count} line ignored: {reason}.",
+        "other": "{count} lines ignored: {reason}."
+      },
+      "pickedRefused": {
+        "one": "One line stayed; the reason is on the line.",
+        "other": "{count} lines stayed; the reason is on the line."
+      },
+      "bulkRefused": {
+        "one": "One line could not be booked; the reason is on the line.",
+        "other": "{count} lines could not be booked; the reason is on the line."
+      },
+      "ignored": "{party} ignored. The line stays in the bank balance.",
+      "unignored": "{party} is back to booking.",
+      "reopened": "Reversed: {party} is back to booking. The original entry stays in the journal.",
+      "unmatched": "Unmatched: {party} is back to booking; the entry stays unchanged.",
+      "approved": "Proposal approved: {party} is booked.",
+      "rejected": "Proposal rejected. {party} waits for you.",
+      "imported": {
+        "one": "Statement imported: one new line on \"{name}\".",
+        "other": "Statement imported: {count} new lines on \"{name}\"."
+      },
+      "importedNothing": "Statement read: no new lines on \"{name}\".",
+      "importDuplicate": "This statement is already imported. Nothing was recorded twice.",
+      "importSkipped": {
+        "one": "One booking not taken over because it was already there or not booked yet.",
+        "other": "{count} bookings not taken over because they were already there or not booked yet."
+      },
+      "showNew": "Show only new ones"
+    },
+    "agent": {
+      "question": "How do I book this bank line: {date}, {party}, {amount}?"
+    },
+    "month": {
+      "1": "January",
+      "2": "February",
+      "3": "March",
+      "4": "April",
+      "5": "May",
+      "6": "June",
+      "7": "July",
+      "8": "August",
+      "9": "September",
+      "10": "October",
+      "11": "November",
+      "12": "December"
+    },
+    "billStatus": {
+      "draft": "a draft",
+      "void": "voided",
+      "voided": "voided",
+      "paid": "paid",
+      "posted": "posted"
+    },
+    "error": {
+      "fallbackTitle": "That could not be carried out.",
+      "noFigure": "no figure",
+      "periodMonth": "{month} {year}",
+      "periodQuarter": "quarter {quarter}/{year}",
+      "periodYear": "fiscal year {year}",
+      "toPeriods": "Go to periods",
+      "toAccounts": "Go to the chart of accounts",
+      "toVat": "Go to the VAT settings",
+      "toBankAccounts": "Go to bank accounts",
+      "toCreditorPayments": "Go to creditor payments",
+      "toPayments": "Go to payments",
+      "createBankAccount": "Add bank account",
+      "amendedOpening": "opening balance from {from} to {to}",
+      "amendedClosing": "closing balance from {from} to {to}",
+      "amendedChanged": {
+        "one": "{count} booking changed",
+        "other": "{count} bookings changed"
+      },
+      "amendedAdded": {
+        "one": "{count} added",
+        "other": "{count} added"
+      },
+      "amendedRemoved": {
+        "one": "{count} removed",
+        "other": "{count} removed"
+      },
+      "action": {
+        "acceptDifference": "Match anyway and record the difference",
+        "leaveOpen": "Leave the rest open and book",
+        "showLine": "Show that line",
+        "importFor": "Import for \"{name}\"",
+        "reload": "Reload",
+        "ignore": "Ignore the line",
+        "matchEntry": "Match this entry"
+      },
+      "unsupported": {
+        "title": "TILL cannot book that here."
+      },
+      "periodLocked": {
+        "title": "The period {period} is locked.",
+        "body": "Nothing is booked there, not even on another date. Reopen the month under Periods, then try again."
+      },
+      "periodSealed": {
+        "title": "The period {period} is sealed (VAT filed or year closed).",
+        "body": "Nothing more is booked there. Ignore the line as \"Booked elsewhere\"; if the money is not in the books yet, book the movement by hand in the open period. A wrong booking is corrected by a reclassification entry in the open period."
+      },
+      "lineNotOpen": {
+        "title": "This line is already decided.",
+        "body": "Someone decided it in the meantime: {state}. Reload the list to see where it stands."
+      },
+      "batchAmountMismatch": {
+        "title": "The amount does not fit the payment run.",
+        "body": "The bank reports {line}, the payment run is for {batch}, and no single payment of the run is named by its reference. Discard the run under Creditor payments, record the executed payments by hand under Payments, and ignore this line as \"Booked elsewhere\"."
+      },
+      "entryAmountMismatch": {
+        "title": "The entry has a different amount.",
+        "body": "Bank {line}, entry {entry}. If it still belongs to this line, write under the comparison why the amount differs and match it: TILL records the difference and the reason."
+      },
+      "directionMismatch": {
+        "title": "The entry runs the other way.",
+        "body": "The line is {line}; the entry moves the bank account by {entry}. Pick another entry or book the line anew."
+      },
+      "writeOffAboveThreshold": {
+        "title": "The remainder of {rest} is too large to write off.",
+        "body": "One click writes off up to {threshold}. Leave the rest open and dun or book it later."
+      },
+      "differenceReasonMissing": {
+        "title": "Say why the amount differs.",
+        "body": "Matching with a difference records your reason. Write it in the field under the comparison."
+      },
+      "entryAlreadyLinked": {
+        "title": "This entry already belongs to another bank line.",
+        "body": "An entry counts for one bank line only. Choose another entry or book the line new."
+      },
+      "batchAlreadyLinked": {
+        "title": "This payment run already belongs to another bank line.",
+        "body": "A payment run counts for one bank line only. Check the other line."
+      },
+      "entryNotOnBank": {
+        "title": "The entry does not touch this bank account.",
+        "body": "Choose an entry that posts to this bank's account."
+      },
+      "entryIsReversal": {
+        "title": "That is a reversing entry.",
+        "body": "A reversing entry cannot be matched to a bank line. Choose the entry itself."
+      },
+      "entryReversed": {
+        "title": "This entry is reversed.",
+        "body": "Choose a valid entry or book the line new."
+      },
+      "legsDoNotSum": {
+        "title": "The positions do not add up to the line.",
+        "body": "The line is for {expected}, the positions for {sum}. Distribute the whole amount."
+      },
+      "vatSplitMismatch": {
+        "title": "The VAT split does not add up.",
+        "body": "Check the VAT codes of the positions and book the rest without VAT."
+      },
+      "currencyMismatch": {
+        "title": "The currencies do not fit.",
+        "body": "The line is in {line}, the invoice or account in {other}. Choose an invoice in {line}."
+      },
+      "wrongDirectionIn": {
+        "title": "Money is coming in.",
+        "body": "Incoming money settles a customer invoice, not a supplier bill. Choose an open invoice or an account."
+      },
+      "wrongDirectionOut": {
+        "title": "Money is going out.",
+        "body": "Outgoing money settles a supplier bill, not a customer invoice. Choose a supplier bill or an account."
+      },
+      "alreadyPaid": {
+        "title": "The invoice is already paid.",
+        "body": "Choose another invoice or book the line to an account. Reload the list to see the open invoices."
+      },
+      "notSettleable": {
+        "title": "This supplier bill is not posted yet.",
+        "body": "It is {status}. Post it under supplier bills first."
+      },
+      "wrongBankAccount": {
+        "title": "The payment run belongs to another bank account.",
+        "body": "Match it with the line on its own account."
+      },
+      "needsGeneration": {
+        "title": "The payment run is still a draft.",
+        "body": "Generate the payment file first; then it can be matched with the bank."
+      },
+      "batchDiscarded": {
+        "title": "The payment run is discarded.",
+        "body": "Book the line to the individual supplier bills."
+      },
+      "batchPaymentsNotPosted": {
+        "title": "A payment of the run is missing.",
+        "body": "A payment was reversed or never posted. Book the rest by hand under Payments."
+      },
+      "accountArchived": {
+        "title": "The account is archived.",
+        "body": "Choose an active account, or restore the account in the chart."
+      },
+      "taxCodeInactive": {
+        "title": "The VAT code {code} is no longer active.",
+        "body": "Choose an active code, or reactivate it in the VAT settings."
+      },
+      "rateEraUnknown": {
+        "title": "TILL knows no VAT rate for this date.",
+        "body": "Book the line without VAT, or record the entry in the journal and then match the line."
+      },
+      "vatLinesRefused": {
+        "title": "The VAT entry could not be built.",
+        "body": "Check that the VAT accounts 1170 and 2200 are in the chart, and try again."
+      },
+      "vatForeignCurrency": {
+        "title": "TILL does not book VAT on a foreign-currency line here.",
+        "body": "Book the line without VAT, or enter the booking in the journal and match it."
+      },
+      "writeOffOnlyInvoices": {
+        "title": "Writing off works on customer invoices only.",
+        "body": "On a supplier bill the rest stays open."
+      },
+      "writeOffAccount": {
+        "title": "Write-offs always go to the bad-debt account.",
+        "body": "Leave the account empty; TILL chooses it."
+      },
+      "ibanUnregistered": {
+        "title": "The account {iban} is not registered yet.",
+        "body": "The file belongs to a bank account TILL does not know yet. Add it with the IBAN {iban}, then import the file again."
+      },
+      "noBankAccount": {
+        "title": "The bank account is missing.",
+        "body": "Add the bank account first, then import its statements."
+      },
+      "ibanMismatch": {
+        "title": "The file belongs to \"{name}\".",
+        "body": "Its IBAN is {fileIban}; the chosen account \"{chosen}\" has {accountIban}. Import it to the right account."
+      },
+      "bankAccountArchived": {
+        "title": "The bank account \"{name}\" is archived.",
+        "body": "An archived account takes no statements. Restore it under Bank accounts."
+      },
+      "camt": {
+        "camt052": {
+          "title": "That is an intraday report (camt.052).",
+          "body": "TILL reads the day-end statement camt.053. Download it from your e-banking."
+        },
+        "notXml": {
+          "title": "The file is empty or not XML.",
+          "body": "Download the statement again from your e-banking as camt.053."
+        },
+        "multipleAccounts": {
+          "title": "The file holds several accounts.",
+          "body": "Download one statement per account from your e-banking."
+        },
+        "batchSum": {
+          "title": "A batch booking in the file does not add up.",
+          "body": "The single amounts do not add up to the batch total. Ask your bank for a corrected file."
+        },
+        "batchAmount": {
+          "title": "A batch booking in the file has no readable amount.",
+          "body": "Ask your bank for a corrected file."
+        },
+        "noStatementId": {
+          "title": "The statement lacks its identifier.",
+          "body": "Without it a double import cannot be recognised. Download the file again."
+        },
+        "notStatement": {
+          "title": "The file is not a bank statement.",
+          "body": "TILL reads the statement camt.053. Download it from your e-banking in that format."
+        },
+        "unreadable": {
+          "title": "The file could not be read.",
+          "body": "Download the statement again from your e-banking as camt.053."
+        }
+      },
+      "statementAmended": {
+        "title": "The bank delivered this statement changed.",
+        "body": "Changed: {changes}. TILL did not overwrite the existing statement. Check the lines and, if in doubt, ask your bank."
+      },
+      "permissionDenied": {
+        "title": "You lack the right for that.",
+        "body": "An admin can grant it under Members."
+      },
+      "cannotSelfApprove": {
+        "title": "A second person approves your own proposal.",
+        "body": "Ask another person with the right to manage the agent."
+      },
+      "notFound": {
+        "title": "That no longer exists.",
+        "body": "Someone changed it in the meantime. Reload the list."
+      },
+      "invalidInput": {
+        "title": "An entry is missing or does not fit.",
+        "body": "Check the fields and try again. What you entered is still there."
+      },
+      "transport": {
+        "title": "TILL could not be reached just now.",
+        "body": "Nothing is booked twice. Try again; what you entered is still there."
+      },
+      "toJournal": "Go to the journal",
+      "batchItemMismatch": {
+        "title": "The amount does not fit the payment in the run.",
+        "body": "The bank reports {line}, the payment in the run is for {item}. Discard the run under Creditor payments, record the executed payments by hand under Payments, and ignore this line as \"Booked elsewhere\"."
+      },
+      "batchCurrency": {
+        "title": "The payment run is in another currency.",
+        "body": "The line is in {line}, the run in {batch}. Mark the run paid under Creditor payments, ignore this line as \"Booked elsewhere\" and book the exchange difference by hand."
+      },
+      "alreadyBatched": {
+        "title": "The supplier bill is in a payment run.",
+        "body": "The run pays it. Match the line to the payment run, or discard the run first under Creditor payments."
+      },
+      "transferAlreadyBooked": {
+        "title": "The other side of this transfer is already booked.",
+        "body": "The other bank account already booked the transfer. Match this line to that entry instead of booking it twice."
+      },
+      "ownedByLine": {
+        "title": "This entry belongs to another bank line.",
+        "body": "Take that line back first, then this one. For a transfer between two of your own accounts, that means the other side first."
+      },
+      "ownedByPayment": {
+        "title": "This entry belongs to a payment.",
+        "body": "Reverse the payment under Payments."
+      },
+      "useBankInbox": {
+        "title": "You decide this credit under Bank.",
+        "body": "It comes from a bank statement and is booked on its bank line."
+      },
+      "camt054": {
+        "title": "That is a credit notification (camt.054), not a statement.",
+        "body": "TILL reads only the day-end statement camt.053. Download it from your e-banking and import it."
+      },
+      "transferCrossesPeriod": {
+        "title": "The other side of this transfer is booked in another month.",
+        "body": "The other bank booked it on {entryDate}, this line is from {lineDate}. Take the other side back and book each side on its own day through a transit account, or that month's bank reconciliation can never close."
+      },
+      "currencyMismatchAccount": {
+        "title": "The line is in another currency than the bank account.",
+        "body": "The line is in {line}, the bank account in {other}. TILL does not know the rate the bank applied: record the entry in the journal, then match the line."
+      },
+      "toFx": "Go to foreign currency",
+      "needsFxRate": {
+        "title": "The {currency} rate of {date} is missing.",
+        "body": "Without a rate TILL converts and books nothing. Record the rate under Foreign currency, then book the line."
+      },
+      "needsAccount": {
+        "title": "An account this booking needs is missing from the chart.",
+        "body": "Add the account to the chart of accounts, then book the line."
+      },
+      "counterpartyMerged": {
+        "title": "The counterparty was merged in the meantime.",
+        "body": "It now belongs to another contact. Reload the list and decide the line again."
+      },
+      "vorschlagRejected": {
+        "title": "This proposal is already rejected.",
+        "body": "Someone rejected it in the meantime. Reload the list."
+      },
+      "vorschlagExecuted": {
+        "title": "This proposal has already been carried out.",
+        "body": "Someone approved it in the meantime. Reload the list to see where things stand."
+      },
+      "batchAmountMismatchPaid": {
+        "title": "The amount does not fit the payment run.",
+        "body": "The bank reports {line}, the payment run is for {batch}. The run is already marked paid and can no longer be discarded: ignore this line as \"Booked elsewhere\" and reverse under Payments every payment of the run the bank did not carry out."
+      },
+      "batchItemMismatchPaid": {
+        "title": "The amount does not fit the payment in the run.",
+        "body": "The bank reports {line}, the payment in the run is for {item}. The run is already marked paid and can no longer be discarded: ignore this line as \"Booked elsewhere\" and reverse under Payments every payment of the run the bank did not carry out."
+      },
+      "feedRule": {
+        "body": "This account runs over EBICS: TILL imports a statement only when it follows the statements in the books without a gap. Bank accounts shows which statement in the books is the newest."
+      }
+    }
+  },
+  "qrmatch": {
+    "applyFull": "Apply",
+    "applyPartial": "Book as partial payment",
+    "overrideDismiss": "Not a customer payment",
+    "reason": {
+      "exact_open": "Reference and amount match exactly",
+      "exact_open_plus_fee": "Amount equals invoice plus reminder fee",
+      "amount_short": "Amount is below the open amount",
+      "amount_over": "Amount is above the open amount",
+      "currency_differs": "Currency differs from the invoice",
+      "no_invoice": "No open invoice for this reference",
+      "already_paid": "The invoice is already settled",
+      "ambiguous_reference": "Several open invoices claim this reference",
+      "reference_invalid": "The reference has an invalid check digit",
+      "no_reference": "No structured reference"
+    }
+  },
+  "help": {
+    "Bank": {
+      "title": "Bank",
+      "body": "Every line of your bank statements is here, whatever the account. You decide each one on its own row: book it to an account with VAT, settle an open invoice, match an existing entry, or ignore it with a reason. Above the list, each account reads: bank equals books plus open lines. Whatever does not add up is a difference; a line matched to an entry dated after the latest statement also counts as a difference until the next statement.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

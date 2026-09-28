@@ -1,24 +1,39 @@
 /**
- * A33, EBICS bank channel (spec `docs/specs/specs/A33-ebics-bank-channel.md`): the local, user-owned
- * EBICS client. It turns the weekly file ritual (download camt from e-banking, upload the pain.001)
- * into one verb each way, over the user's OWN bank contract, with the user's OWN keys, egress from
- * the user's OWN device (owner decision D29: this is OSS-core, the A11/A15 local-SMTP precedent).
+ * A33 + A36, the EBICS bank channel: the local, user-owned EBICS 3.0 (H005) client, DOWNLOAD ONLY
+ * (spec `docs/specs/specs/A36-live-bank-feed.md`, owner decisions D139, D140). It fetches the day-end
+ * camt.053 statements over the owner's own Datalink contract into the one statement door, A20's
+ * `importCamt`, and does nothing else: no upload of any kind (D-A36.11), no bank-side block (D-A36.12),
+ * no unattended run (D-A36.10). Payments stay manual: TILL writes pain.001, the owner uploads and
+ * releases it in eBanking.
  *
- * THE LAW, enforced in code below, not merely documented (spec §1/§3/§4): **EBICS submits; the bank
- * authorizes; TILL never holds sole payment authority.** `transmitPaymentBatch` uploads WITHOUT the
- * authorizing SignatureFlag (v1, §3), so the ONLY release path the submission can produce is the
- * bank's own out-of-channel release (SMPG §4.2.3). A transmitted batch is an instruction delivered,
- * never money moved and never a book entry: `paid` comes from camt (A18's rule), reached only through
- * A20. `assertNoSoleAuthority` below pins the posture, and tripwire 5 asserts it can never silently flip.
+ * WHAT THIS MODULE OWNS, and the rule each part keeps:
+ *  - THE CEREMONY (§4.2): HEV before any key exists (H005 or `unsupported_ebics_version`, never an
+ *    H004 fallback); three RSA 2048 pairs with self-signed X.509 certificates, the A005 private key
+ *    dropped before the first keystore write (OD-2); INI and HIA as SEPARATE legs, each confirmed only
+ *    by 000000; 091002 read against the OTHER leg (`pending_bank_activation` when it was confirmed,
+ *    `init_refused` when neither was); 091201 to 091219 `certificate_refused`; the bank keys pinned
+ *    only from a set a human reviewed that equals a fresh HPB; a changed bank key halts the feed.
+ *  - ONE SYNC (§4.3): persist, then process, then receipt. The container and every new member are
+ *    committed as E00 files with an order-log row each BEFORE anything is imported; every member
+ *    without a FINAL outcome is re-run from its persisted bytes at each sync, in position order; the
+ *    positive receipt goes out only after that, and a failed commit gets a negative one. Only
+ *    `imported`, `already_imported` and `overlap_refused` are final (D-A36.5).
+ *  - THE PORT DUTIES (wire A36-7, W2 and W11): the reviewed pin on every call after activation, the
+ *    receipt included; a download whose TransactionID the order log already holds is
+ *    `untrusted_response`, nothing persisted and no receipt; the receipt carries the TransactionID and
+ *    an explicit code (0 after a durable commit, 1 after a failed one), never a processing outcome.
  *
- * A33 POSTS NOTHING (P3 by delegation, spec §4). Nothing here calls `postEntry`/`recordPayment`, and
- * statements enter the books ONLY through A20's `importCamt`, handed the fetched bytes byte-for-byte.
- * The three tables are channel metadata and an append-only order log, never a ledger table.
+ * A36 POSTS NOTHING (P3 by delegation). Statements enter the books ONLY through `importCamt`, handed the
+ * persisted bytes byte-for-byte; the successor rule (`feed.ts`) runs inside it, at every door. The
+ * channel tables are metadata and an append-only order log, never a ledger table.
  *
  * OFFLINE BY CONSTRUCTION. The core NEVER opens a socket: every network step goes through the
- * `EbicsTransportPort` seam (context.ts), which a test wires as an in-process mock host and a host
- * (the `till` CLI / Studio) wires as a real HTTPS client. With no transport wired the verbs degrade
- * honestly (`needs_bank_transport`, §4 P9) and the file-based A20/A18 path stays the visible floor.
+ * `EbicsTransportPort` seam (context.ts). With no transport wired the verbs degrade honestly
+ * (`needs_bank_transport`) and the hand import stays the visible floor.
+ *
+ * STATE WRITES NAME THEIR SOURCE STATES (§4.2): every `UPDATE ... SET state` carries the states it may
+ * leave, so `bank_keys_changed` never overwrites `blocked` or `retired`, and a local `blocked` returns
+ * to `active` only through the reviewed confirm. A transport or protocol failure changes no state.
  *
  * THE tx-COMMIT-ON-ERR TRAP (house rule): returning `{ok:false}` INSIDE `ctx.store.tx` COMMITS the
  * partial writes. Every refusal is pre-checked as a pure read BEFORE any write; a mid-tx failure rolls
@@ -31,23 +46,41 @@ import type {
   EbicsKeystorePort,
   EbicsConnectionRef,
   EbicsKeyHashes,
+  EbicsKeyPurpose,
+  EbicsKeyLeg,
+  EbicsReturnCodes,
+  EbicsTransportFailure,
   EbicsFetchedFile,
 } from '../../context.js';
 import { createHash } from 'node:crypto';
 import { ok, err } from '../../result.js';
 import type { Result } from '../../result.js';
 import { importCamt } from '../camtReconcile.js';
+import { parseCamt } from '../camt.js';
+import type { ParsedCamtStatement } from '../camt.js';
 import { getBankAccount } from '../bankAccounts.js';
-import { uploadFile, linkFile, setFileRetention } from '../../files/index.js';
+import { uploadFile, linkFile, setFileRetention, getFileContent } from '../../files/index.js';
 import { statutoryRetentionUntil } from '../../files/retention.js';
 import { getCompanyProfile } from '../../setup/companyProfile.js';
 import { applySavedView } from '../../customization/views.js';
 import { defaultEbicsKeystore } from './keystore.js';
 import { EBICS_DEFAULT_KEY_PARAMS, EBICS_UNLIMITED_VALIDITY } from './enums.js';
-import { generatePain001 } from '../pain001.js';
-// A37 dispatch: the managed (bLink) rail sits behind these same five verbs (spec A37 §5). This module
+import { formatBankHashLines } from './hash-format.js';
+import { EBICS_KEY_PURPOSES } from './key-hashes.js';
+import { STATEMENT_BTF } from './transport-https.js';
+import {
+  FEED_FINAL_OUTCOMES,
+  dayEndPosition,
+  comparePositions,
+  decideSuccessor,
+  lastNumberJump,
+  newestFeedStatement,
+  readFeedBook,
+} from './feed.js';
+import type { FeedNumberJump, FeedPosition } from './feed.js';
+// A37 dispatch: the managed (bLink) rail sits behind these same verbs (spec A37 §5). This module
 // imports the managed engine one-directionally (managed never imports back), so the channel-kind
-// dispatch is the whole seam and the EBICS logic below stays byte-identical for the default rail.
+// dispatch is the whole seam and the managed rail is untouched by A36.
 import {
   connectManagedChannel,
   syncManagedChannel,
@@ -106,6 +139,28 @@ interface OrderRow {
   occurred_at: string;
 }
 
+// --- order-log vocabulary (A36 §4.3, §4.5) ------------------------------------------------------
+//
+// No new table: the append-only `ebics_order_log` carries every order and every member outcome.
+// `order_ref` groups the rows of one thing WITHOUT the connection id (which a G04 restore re-mints;
+// the `connection_id` column is the scope and is remapped with it):
+//  - `INI` / `HIA` / `HPB` / `HEV`: one row per attempt, `ok` or `failed` with the raw code;
+//  - `btd-<TransactionID>`: the persisted container (`ebics_container`) and its receipt
+//    (`ebics_receipt`). The TransactionID is stored uppercase (hexBinary is case-insensitive) and is
+//    the durable replay record (W11);
+//  - `member-<sha256>`: the persisted member (`ebics_member`, `related_id` its E00 file) and each
+//    CHANGE of its outcome (`member_outcome`, `bank_reason` the code, `status` `ok` when final, else
+//    `failed`). The payload hash is the dedupe: ZKB names members by pickup date, so a re-offer
+//    differs only in the container bytes.
+
+const RK_CONTAINER = 'ebics_container';
+const RK_RECEIPT = 'ebics_receipt';
+const RK_MEMBER = 'ebics_member';
+const RK_OUTCOME = 'member_outcome';
+
+const txRef = (transactionId: string): string => `btd-${transactionId.toUpperCase()}`;
+const memberRef = (sha: string): string => `member-${sha}`;
+
 // --- seams -------------------------------------------------------------------------------------
 
 /** The key custody seam: the host's keystore when wired, else the core's in-process default (§3.1). */
@@ -119,13 +174,10 @@ function transport(ctx: WorkspaceContext): EbicsTransportPort | undefined {
 }
 
 /**
- * A36: the keystore's unlock state, for a channel verb to pre-check BEFORE it asks the store to
- * generate or read key material. A passphrase-encrypted file store not yet unlocked this session is
- * `keystore_locked` (retry the host prompt, NEVER regenerate: a wrong passphrase minting fresh keys
- * would strand the live bank contract, US-A36.2); a missing or corrupt backing file is
- * `keystore_unavailable` (re-initialisation is the one recovery, the bank contract is unaffected). The
- * in-memory default and any store without `state()` read as always-ready, so the honest degradation is
- * unchanged for an embed that manages its own custody.
+ * The keystore's unlock state, pre-checked BEFORE a verb asks the store to generate or use key
+ * material. `keystore_locked`: a passphrase-encrypted store not yet unlocked this session (never
+ * regenerate: a wrong passphrase minting fresh keys would strand the live bank contract);
+ * `keystore_unavailable`: the file is missing or corrupt.
  */
 function keystoreBlock(ctx: WorkspaceContext, extra?: Record<string, unknown>): Result | null {
   const state = keystore(ctx).state?.();
@@ -139,11 +191,15 @@ function keystoreBlock(ctx: WorkspaceContext, extra?: Record<string, unknown>): 
   return null;
 }
 
+/** A keystore write that threw: the stable code it names, or null for an unexpected failure. */
+function keystoreRefusal(e: unknown): string | null {
+  const message = e instanceof Error ? e.message : String(e);
+  return ['keystore_locked', 'keystore_unavailable', 'keystore_changed_elsewhere'].includes(message) ? message : null;
+}
+
 /**
- * P8: a connect/sync-adjacent/transmit/disconnect step is a deliberate act. It proceeds only when the
- * A26 approval dial is on OR a human passed `confirm:true`. An agent without the dial is stopped at
- * `needs_confirmation`, never silently advanced (spec §5, tripwire 4 keeps these out of automation).
- * The SAME workspace dial `send_invoice` / eBill transmit read, so one dial governs every outbound act.
+ * P8: connect, disconnect and the key confirm are deliberate acts. They proceed only when the A26
+ * approval dial is on OR a human passed `confirm:true`.
  */
 function dialEnabled(ctx: WorkspaceContext): boolean {
   const row = ctx.store.db
@@ -152,42 +208,18 @@ function dialEnabled(ctx: WorkspaceContext): boolean {
   return row?.v === 1;
 }
 
-/**
- * THE LAW, asserted in code (spec §3/§4): v1 uploads WITHOUT the authorizing SignatureFlag, so TILL
- * never holds sole payment authority. This is the single point where the posture is decided; tripwire
- * 5 pins its return so the boundary cannot silently flip. `requestEDS` is never set either, so a VEU
- * wait-queue entry is unreachable in v1 (§3): the bank's out-of-channel release is the only release.
- */
-export function assertNoSoleAuthority(): { signatureFlag: false; requestEDS: false } {
-  return { signatureFlag: false, requestEDS: false };
+/** The effective EBICS return code of an answer: the technical level unless it was 000000. */
+function effectiveCode(codes: EbicsReturnCodes | undefined): string | null {
+  if (codes === undefined) return null;
+  if (codes.technical !== null && codes.technical !== '000000') return codes.technical;
+  return codes.business;
 }
 
-/** Thrown when a sole-payment-authority flag reaches the transmit boundary. NEVER caught: the law is absolute. */
-export class SoleAuthorityViolation extends Error {
-  constructor(readonly flag: string) {
-    super(`A33 THE LAW violated: a sole-payment-authority flag (${flag}) reached the EBICS upload boundary`);
-  }
-}
-
-/**
- * THE LAW as a RUNTIME GUARD on the one outbound BTU request, not a documentary constant (D98
- * hardening): it re-asserts the v1 posture AND refuses to hand the port any request that carries a
- * signature/authorization flag, THROWING before a single byte leaves. The upload request the port
- * receives is exactly the one this returns, so no code path (nor a future edit, nor a plugin channel)
- * can smuggle a `signatureFlag`/`requestEDS`/`SignatureFlag` past it. Defense-in-depth behind the
- * structural guarantee that the port shape carries no such field: if one were ever added, this bites.
- */
-export function guardNoSoleAuthority<T extends Record<string, unknown>>(request: T): T {
-  const posture = assertNoSoleAuthority();
-  if (posture.signatureFlag !== false || posture.requestEDS !== false) {
-    throw new SoleAuthorityViolation('posture');
-  }
-  for (const banned of ['signatureFlag', 'SignatureFlag', 'requestEDS', 'requesteds']) {
-    if (banned in request && (request as Record<string, unknown>)[banned]) {
-      throw new SoleAuthorityViolation(banned);
-    }
-  }
-  return request;
+/** 091201 to 091219: the bank refused a key or a certificate; the subscriber is unchanged (§4.2). */
+function isCertificateCode(code: string | null): boolean {
+  if (code === null || !/^0912\d\d$/.test(code)) return false;
+  const n = Number.parseInt(code.slice(4), 10);
+  return n >= 1 && n <= 19;
 }
 
 // --- reads / views -----------------------------------------------------------------------------
@@ -199,7 +231,7 @@ function readConnection(ctx: WorkspaceContext, id: unknown): ConnectionRow | und
     .get(ctx.workspaceId, id) as ConnectionRow | undefined;
 }
 
-/** The one LIVE (non-retired) connection for a bank contract, if any (the one-ceremony rule, §4). */
+/** The one LIVE (non-retired) connection for a bank contract in THIS workspace, if any. */
 function readLiveConnectionForContract(
   ctx: WorkspaceContext,
   host: { hostId: string; partnerId: string; userId: string },
@@ -211,7 +243,22 @@ function readLiveConnectionForContract(
     .get(ctx.workspaceId, host.hostId, host.partnerId, host.userId) as ConnectionRow | undefined;
 }
 
-/** The connection a bank account is routed over (transmit/sync resolution), if any. */
+/**
+ * Does ANOTHER workspace of this database hold a live connection for this subscriber (§4.5)? Two feeds
+ * would split the statements, so the database admits one live connection per ZKB subscriber (the
+ * unique index `ebics_connection_one_live_per_subscriber`). This is the one cross-workspace fact the
+ * channel reads, and it answers existence only: no row of the other workspace is returned.
+ */
+function liveConnectionElsewhere(ctx: WorkspaceContext, host: { hostId: string; partnerId: string; userId: string }): boolean {
+  const row = ctx.store.db
+    .prepare(
+      "SELECT 1 AS live FROM ebics_connection WHERE host_id = ? AND partner_id = ? AND user_id_ebics = ? AND state != 'retired' AND workspace_id != ? LIMIT 1",
+    )
+    .get(host.hostId, host.partnerId, host.userId, ctx.workspaceId) as { live: number } | undefined;
+  return row !== undefined;
+}
+
+/** The live connection a bank account is routed over, if any. */
 function readConnectionForAccount(ctx: WorkspaceContext, bankAccountId: string): ConnectionRow | undefined {
   return ctx.store.db
     .prepare(
@@ -244,6 +291,7 @@ function parseJson<T>(raw: string | null): T | null {
   }
 }
 
+/** The ref every wire call carries: the reviewed pin travels with it, BTD-ACK included (W2). */
 function connectionRef(row: ConnectionRow): EbicsConnectionRef {
   return {
     hostUrl: row.host_url,
@@ -252,6 +300,7 @@ function connectionRef(row: ConnectionRow): EbicsConnectionRef {
     userIdEbics: row.user_id_ebics,
     protocolVersion: row.protocol_version,
     keyRef: row.key_ref ?? '',
+    bankKeyHashes: parseJson<EbicsKeyHashes>(row.bank_key_hashes),
   };
 }
 
@@ -259,6 +308,20 @@ function accountIban(ctx: WorkspaceContext, bankAccountId: string): string | nul
   const view = getBankAccount(ctx, { bankAccountId });
   if (!view.ok) return null;
   return ((view as unknown as { bankAccount: { iban: string } }).bankAccount).iban ?? null;
+}
+
+function normaliseIban(iban: string): string {
+  return iban.replace(/\s+/g, '').toUpperCase();
+}
+
+/** The bank hashes printed the way ZKB's sheet prints them: uppercase pairs, 8 per line (§3 step 6). */
+function bankKeyLines(h: EbicsKeyHashes): Record<'authentication' | 'encryption', { certificate: string[] | null; key: string[] | null; spki: string[] }> {
+  const lines = (purpose: 'authentication' | 'encryption') => ({
+    certificate: typeof h.certificateHashes?.[purpose] === 'string' ? formatBankHashLines(h.certificateHashes[purpose] as string) : null,
+    key: typeof h.keyHashes?.[purpose] === 'string' ? formatBankHashLines(h.keyHashes[purpose] as string) : null,
+    spki: formatBankHashLines(h[purpose]),
+  });
+  return { authentication: lines('authentication'), encryption: lines('encryption') };
 }
 
 function connectionView(ctx: WorkspaceContext, row: ConnectionRow): Record<string, unknown> {
@@ -269,7 +332,6 @@ function connectionView(ctx: WorkspaceContext, row: ConnectionRow): Record<strin
     protocolVersion: row.protocol_version,
     state: row.state,
     keyParams: parseJson(row.key_params),
-    btfParams: parseJson(row.btf_params),
     bankKeyHashes: parseJson<EbicsKeyHashes>(row.bank_key_hashes),
     iniLetterDocumentId: row.ini_letter_document_id,
     routedAccounts: accounts,
@@ -301,17 +363,17 @@ interface OrderAppend {
   connectionId: string;
   orderRef: string;
   direction: 'upload' | 'download';
-  orderType: string;
+  orderType: 'INI' | 'HIA' | 'HPB' | 'HEV' | 'BTD';
   btfServiceName?: string | null;
   btfMsgName?: string | null;
   payloadSha256?: string | null;
   relatedKind?: string | null;
   relatedId?: string | null;
-  status: string;
+  status: 'ok' | 'failed';
   bankReason?: string | null;
 }
 
-/** Append one order-log row. NEVER updates an existing row: a progression appends a new row (§4). */
+/** Append one order-log row. NEVER updates an existing row: a progression appends a new row. */
 function appendOrder(ctx: WorkspaceContext, a: OrderAppend): void {
   ctx.store.db
     .prepare(
@@ -338,16 +400,50 @@ function appendOrder(ctx: WorkspaceContext, a: OrderAppend): void {
     );
 }
 
+function appendOrderTx(ctx: WorkspaceContext, a: OrderAppend): void {
+  ctx.store.tx(() => {
+    appendOrder(ctx, a);
+    return ok({});
+  });
+}
+
+// --- state writes, each naming the states it may leave (§4.2) ---------------------------------
+
+const PRE_ACTIVE: readonly string[] = ['draft', 'keys_generated', 'ini_sent', 'pending_bank_activation'];
+
+/** Move a connection to `to` only from one of `from`. Returns whether the row moved. */
+function moveState(ctx: WorkspaceContext, id: string, to: string, from: readonly string[], set: Record<string, unknown> = {}): boolean {
+  const cols = Object.keys(set);
+  const assignments = ['state = ?', 'updated_at = ?', ...cols.map((c) => `${c} = ?`)].join(', ');
+  let moved = false;
+  ctx.store.tx(() => {
+    const info = ctx.store.db
+      .prepare(`UPDATE ebics_connection SET ${assignments} WHERE workspace_id = ? AND id = ? AND state IN (${from.map(() => '?').join(', ')})`)
+      .run(to, ctx.clock.now(), ...cols.map((c) => set[c]), ctx.workspaceId, id, ...from);
+    moved = info.changes === 1;
+    return ok({});
+  });
+  return moved;
+}
+
 // --- INI letter (an E00 artifact) --------------------------------------------------------------
 
 /**
- * Render the INI letter the customer signs and posts to the bank (SMPG §6.1): the bank-contract
- * identifiers plus TILL's three PUBLIC-key hash values (never the keys). Stored as an E00 file so it
- * is a real, downloadable, retained artifact. Text, not PDF: it carries only identifiers and hashes,
- * and a monospace hash block is what the bank compares (a PDF pipeline would add nothing verifiable).
+ * The INI letter the owner signs and posts to ZKB (§3 step 4): host ID, partner ID, user ID, H005, the
+ * date, and per key the SHA-256 CERTIFICATE hash (what the bank compares for an H005 certificate
+ * subscriber), printed as uppercase byte pairs, 8 per line as on ZKB's sheet. The classic key hash is
+ * printed beside it, labelled. Text, not PDF: it carries identifiers and hashes only.
  */
-function renderIniLetterText(row: ConnectionRow, hashes: EbicsKeyHashes, companyName: string): string {
-  return [
+function renderIniLetterText(row: ConnectionRow, hashes: EbicsKeyHashes, companyName: string, date: string): string {
+  const params = { ...EBICS_DEFAULT_KEY_PARAMS, ...(parseJson<Record<string, unknown>>(row.key_params) ?? {}) };
+  const version = (p: EbicsKeyPurpose): string => (typeof params[p] === 'string' ? (params[p] as string) : EBICS_DEFAULT_KEY_PARAMS[p]);
+  const labels: Record<EbicsKeyPurpose, string> = {
+    electronicSignature: 'Elektronische Unterschrift / electronic signature',
+    authentication: 'Authentifikation / authentication',
+    encryption: 'Verschlüsselung / encryption',
+  };
+  const block = (hex: string): string[] => formatBankHashLines(hex).map((line) => `    ${line}`);
+  const lines = [
     'EBICS INI-Brief / EBICS initialisation letter',
     '',
     `Kunde / Customer: ${companyName}`,
@@ -355,34 +451,82 @@ function renderIniLetterText(row: ConnectionRow, hashes: EbicsKeyHashes, company
     `Partner-ID (Kunden-ID): ${row.partner_id}`,
     `Teilnehmer-ID (User-ID): ${row.user_id_ebics}`,
     `EBICS-Version: ${row.protocol_version}`,
+    `Datum / Date: ${date}`,
+    'Schlüsselformat / key format: X.509-Zertifikate, selbst signiert / self-signed X.509 certificates',
     `Gültigkeit / Validity: unlimited (${EBICS_UNLIMITED_VALIDITY}, SMPG 6.1)`,
     '',
-    'Hashwerte der öffentlichen Schlüssel (SHA-256) / public-key hash values:',
-    `  Elektronische Unterschrift (A005): ${hashes.electronicSignature}`,
-    `  Authentifikation (X002):           ${hashes.authentication}`,
-    `  Verschlüsselung (E002):            ${hashes.encryption}`,
-    '',
-    'Unterschrift / Signature: ______________________   Datum / Date: __________',
-  ].join('\n');
+    'Hashwerte (SHA-256) / hash values (SHA-256):',
+  ];
+  for (const purpose of EBICS_KEY_PURPOSES) {
+    lines.push('', `${labels[purpose]} (${version(purpose)})`);
+    const cert = hashes.certificateHashes?.[purpose];
+    if (typeof cert === 'string' && cert !== '') lines.push('  Zertifikat / certificate:', ...block(cert));
+    const keyHash = hashes.keyHashes?.[purpose];
+    if (typeof keyHash === 'string' && keyHash !== '') lines.push('  Öffentlicher Schlüssel / public key:', ...block(keyHash));
+    if ((typeof cert !== 'string' || cert === '') && (typeof keyHash !== 'string' || keyHash === '')) {
+      lines.push('  Öffentlicher Schlüssel / public key (SPKI):', ...block(hashes[purpose]));
+    }
+  }
+  lines.push('', 'Unterschrift / Signature: ______________________   Datum / Date: __________');
+  return lines.join('\n');
 }
 
 function fileById(uploaded: Result): string {
   return ((uploaded as unknown as { file: { id: string } }).file).id;
 }
 
+// --- routing guards (§4.6) ----------------------------------------------------------------------
+
+/** Does the workspace refuse a live bank channel: a sandbox (Testmandant) or demo workspace? */
+function trialWorkspace(ctx: WorkspaceContext): string | null {
+  const row = ctx.store.db.prepare('SELECT kind FROM workspace WHERE id = ?').get(ctx.workspaceId) as { kind: string | null } | undefined;
+  const kind = row?.kind ?? 'live';
+  return kind === 'sandbox' || kind === 'demo' ? kind : null;
+}
+
+/**
+ * Pre-check the accounts a connect would route, BEFORE any key exists and before any row (§4.6): each
+ * must exist in this workspace, and none may already hold camt.054-imported lines (the camt.053 lines
+ * the feed brings would double them; `camt054_lines_refused`).
+ */
+function routingGuard(ctx: WorkspaceContext, routeIds: string[]): Result | null {
+  for (const bankAccountId of routeIds) {
+    const acct = getBankAccount(ctx, { bankAccountId });
+    if (!acct.ok) return err('bank_account_not_found', { bankAccountId });
+    const camt054 = ctx.store.db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM bank_txn t JOIN bank_statement s ON s.id = t.statement_id AND s.workspace_id = t.workspace_id
+          WHERE t.workspace_id = ? AND t.bank_account_id = ? AND s.message_type = 'camt054'`,
+      )
+      .get(ctx.workspaceId, bankAccountId) as { n: number };
+    if (camt054.n > 0) return err('camt054_lines_refused', { bankAccountId, camt054Lines: camt054.n });
+  }
+  return null;
+}
+
+/** Route N A19 accounts under a connection (the unique index dedupes a re-route). Guarded beforehand. */
+function routeAccounts(ctx: WorkspaceContext, connectionId: string, routeIds: string[]): void {
+  for (const bankAccountId of routeIds) {
+    ctx.store.db
+      .prepare(
+        `INSERT INTO ebics_connection_account (id, workspace_id, connection_id, bank_account_id, created_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(connection_id, bank_account_id) DO NOTHING`,
+      )
+      .run(ctx.ids.next('ebca'), ctx.workspaceId, connectionId, bankAccountId, ctx.clock.now());
+  }
+}
+
 // --- verb 1: connectBankChannel ----------------------------------------------------------------
 
 /**
- * US-A33.1: the whole SMPG §6.1 key ceremony behind one composed, state-machine-advancing verb, keyed
- * to the bank CONTRACT (host/partner/user), never an account (§4). From nothing: generate the three
- * RSA key pairs LOCALLY (per the connection's captured key length, default 2048, §3), create the
- * connection row, route the given A19 accounts, and render the INI letter as an E00 artifact. If a
- * transport is wired it then sends INI + HIA and lands `pending_bank_activation`; with none wired it
- * stays `keys_generated` and answers honestly (`needs_bank_transport`), the useful local work done.
- * From `pending_bank_activation`/`bank_keys_changed`: run HPB, surface the bank's key hashes for
- * out-of-band comparison, and flip to `active` ONLY when `confirmBankKeys:true` and the hashes match;
- * a mismatch is `bank_keys_mismatch`, a hard stop that never advances. A second ceremony on a live
- * contract is refused: the account is routed under the existing connection instead (one ceremony, ever).
+ * The key ceremony (§3 steps 3 to 6, §4.2) behind one verb, keyed to the bank CONTRACT (host, partner,
+ * user), never an account. A new ceremony: the routing guards, HEV, three certified pairs (the A005
+ * private key dropped, OD-2), the connection row, the routed accounts and the INI letter (E00), then
+ * INI and HIA. Advancing an existing connection (`connectionId`): resend its unconfirmed legs when it is
+ * not yet activated, then HPB; without `confirmBankKeys` the bank hashes come back for the human
+ * review, with it the reviewed set (`expectedBankKeyHashes`) is pinned only when it equals the fresh
+ * HPB. Human only (P8, the G01 denylist).
  */
 export function connectBankChannel(
   ctx: WorkspaceContext,
@@ -395,14 +539,18 @@ export function connectBankChannel(
     routeBankAccountIds?: unknown;
     confirm?: unknown;
     confirmBankKeys?: unknown;
+    /**
+     * With `confirmBankKeys`: the bank hashes the human compared against ZKB's sheet (the
+     * `bankKeyHashes` a previous non-confirming call returned). REQUIRED for any move INTO `active`;
+     * the pin is written only if a fresh HPB equals it exactly (case and whitespace normalised).
+     */
+    expectedBankKeyHashes?: unknown;
     keyLength?: unknown;
     idempotencyKey?: unknown;
   },
 ): Result {
-  // A37 dispatch (spec §5): `channelKind:'managed_blink'` routes to the managed rail; the default and
-  // an explicit `'ebics'` stay the EBICS path below, byte-identical. Advancing an EXISTING connection
-  // whose id names a managed connection also routes to the managed rail (the kind is resolved from the
-  // row, not restated by the caller).
+  // A37 dispatch (spec §5): `channelKind:'managed_blink'` routes to the managed rail, as does advancing
+  // an existing connection whose id names a managed row. The EBICS path below is the default.
   if (input.channelKind === 'managed_blink' || (typeof input.connectionId === 'string' && isManagedConnectionId(ctx, input.connectionId))) {
     return connectManagedChannel(ctx, input);
   }
@@ -412,18 +560,27 @@ export function connectBankChannel(
     return err('needs_confirmation', { reason: 'connect_requires_confirmation' });
   }
 
+  // §4.6: a sandbox or demo workspace never talks to a real bank.
+  const trial = trialWorkspace(ctx);
+  if (trial !== null) return err('trial_workspace_refused', { workspaceKind: trial });
+
   const routeIds = Array.isArray(input.routeBankAccountIds)
     ? input.routeBankAccountIds.filter((v): v is string => typeof v === 'string' && v.length > 0)
     : [];
+  const guarded = routingGuard(ctx, routeIds);
+  if (guarded !== null) return guarded;
 
-  // Advancing an EXISTING connection (activation, or re-initialisation of a blocked one).
   if (typeof input.connectionId === 'string' && input.connectionId.length > 0) {
     const row = readConnection(ctx, input.connectionId);
     if (row === undefined) return err('not_found', { connectionId: input.connectionId });
-    return advanceConnection(ctx, row, { confirmBankKeys: input.confirmBankKeys === true, routeIds });
+    const expected = asKeyHashes(input.expectedBankKeyHashes);
+    // A supplied-but-unreadable expectation must not silently degrade to "no check".
+    if (input.expectedBankKeyHashes !== undefined && input.expectedBankKeyHashes !== null && expected === null) {
+      return err('invalid_input', { field: 'expectedBankKeyHashes' });
+    }
+    return advanceConnection(ctx, row, { confirmBankKeys: input.confirmBankKeys === true, routeIds, expected });
   }
 
-  // A new ceremony needs the host contract data.
   const host = input.host;
   const hostUrl = typeof host?.url === 'string' ? host.url : '';
   const hostId = typeof host?.hostId === 'string' ? host.hostId : '';
@@ -433,8 +590,6 @@ export function connectBankChannel(
     return err('invalid_input', { reason: 'host {url, hostId, partnerId, userId} is required to open a channel' });
   }
 
-  // Idempotency by KEY (spec §5, the conformance replay compares results row by row): the FULL
-  // outcome is memoized under the key, so a replay returns the identical result and writes nothing.
   if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
     return err('invalid_input', { field: 'idempotencyKey' });
   }
@@ -442,39 +597,53 @@ export function connectBankChannel(
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'bank_channel_connect');
   if (replayed !== undefined) return replayed;
 
-  // One ceremony per contract: a live connection already exists -> route the accounts under it and
-  // return it (the CHF+EUR second-account path, §4). Memoized under the key.
+  // One ceremony per contract: a live connection already exists here -> route the accounts under it.
   const existing = readLiveConnectionForContract(ctx, { hostId, partnerId, userId });
   if (existing !== undefined) {
-    try {
-      return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'bank_channel_connect', () => {
-        const routed = routeAccounts(ctx, existing, routeIds);
-        if (!routed.ok) throw new EbicsAbort(routed);
-        return ok({
-          connectionId: existing.id,
-          state: existing.state,
-          routed: true,
-          reused: true,
-          routedAccounts: readRoutedAccountIds(ctx, existing.id),
-          iniLetterDocumentId: existing.ini_letter_document_id,
-          connection: connectionView(ctx, existing),
-        });
+    return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'bank_channel_connect', () => {
+      routeAccounts(ctx, existing.id, routeIds);
+      return ok({
+        connectionId: existing.id,
+        state: existing.state,
+        routed: true,
+        reused: true,
+        routedAccounts: readRoutedAccountIds(ctx, existing.id),
+        iniLetterDocumentId: existing.ini_letter_document_id,
+        connection: connectionView(ctx, existing),
       });
-    } catch (e) {
-      if (e instanceof EbicsAbort) return e.result;
-      throw e;
+    });
+  }
+  // §4.5: one live connection per ZKB subscriber in the database.
+  if (liveConnectionElsewhere(ctx, { hostId, partnerId, userId })) {
+    return err('live_connection_exists', { hostId, partnerId, userId, reason: 'this subscriber already feeds another workspace of this database' });
+  }
+
+  const ksBlock = keystoreBlock(ctx);
+  if (ksBlock !== null) return ksBlock;
+
+  const t = transport(ctx);
+  const provisional: EbicsConnectionRef = { hostUrl, hostId, partnerId, userIdEbics: userId, protocolVersion: 'H005', keyRef: '', bankKeyHashes: null };
+  // D-A36.2: HEV BEFORE any key exists. A host that does not list H005 is refused; H004 is never used.
+  if (t !== undefined) {
+    const hev = callPort(() => t.hostVersions({ connection: provisional }));
+    if (!hev.ok) {
+      if (hev.reason === 'unsupported_ebics_version') {
+        return err('unsupported_ebics_version', { hostId, offered: hev.detail ?? null, reason: 'the host does not offer EBICS 3.0 (H005)' });
+      }
+      return err('channel_unreachable', { reason: hev.reason, ...(hev.codes !== undefined ? { codes: hev.codes } : {}), ...(hev.detail !== undefined ? { detail: hev.detail } : {}) });
     }
   }
 
-  // Validate the accounts to route BEFORE any write (a bad id must not leave a half-built ceremony).
-  for (const id of routeIds) {
-    const acct = getBankAccount(ctx, { bankAccountId: id });
-    if (!acct.ok) return err('bank_account_not_found', { bankAccountId: id });
-  }
-
   const keyLength = Number.isInteger(input.keyLength) ? (input.keyLength as number) : EBICS_DEFAULT_KEY_PARAMS.keyLength;
-  // Key generation is LOCAL crypto, no network: this is real OSS-core work even with no transport.
-  const generated = keystore(ctx).generate({ keyLength });
+  // Local crypto, no network. The EBICS user ID is the certificates' CN (§4.2). OD-2 happens inside.
+  let generated: { keyRef: string; hashes: EbicsKeyHashes };
+  try {
+    generated = keystore(ctx).generate({ keyLength, subjectCommonName: userId });
+  } catch (e) {
+    const code = keystoreRefusal(e);
+    if (code !== null) return err(code, {});
+    throw e;
+  }
   const keyParams = { ...EBICS_DEFAULT_KEY_PARAMS, keyLength };
 
   const profile = getCompanyProfile(ctx);
@@ -484,12 +653,10 @@ export function connectBankChannel(
 
   const id = ctx.ids.next('ebconn');
   const at = ctx.clock.now();
-  const t = transport(ctx);
 
-  // CREATE the connection locally, memoized under the key. With NO transport wired the memoized result
+  // CREATE the connection locally, memoised under the key. With NO transport wired the memoised result
   // IS the final answer (keys_generated + needs_bank_transport), so a replay is byte-identical; with a
-  // transport wired the network advance runs AFTER (not memoized, retryable). A write failure THROWS,
-  // so remember's tx rolls back and nothing is memoized (the error is retryable).
+  // transport the legs run AFTER (not memoised, retryable). A write failure THROWS, so the tx rolls back.
   let creationResult: Result;
   try {
     creationResult = ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'bank_channel_connect', () => {
@@ -501,13 +668,10 @@ export function connectBankChannel(
            VALUES (?, ?, ?, ?, ?, ?, 'H005', 'keys_generated', ?, ?, ?, ?, ?)`,
         )
         .run(id, ctx.workspaceId, hostUrl, hostId, partnerId, userId, JSON.stringify(keyParams), generated.keyRef, ctx.actor, at, at);
+      routeAccounts(ctx, id, routeIds);
 
-      const routed = routeAccounts(ctx, { id, workspace_id: ctx.workspaceId } as ConnectionRow, routeIds);
-      if (!routed.ok) throw new EbicsAbort(routed);
-
-      // Render + file the INI letter (E00, OR 958f retention). The paper the customer signs.
       const row = readConnection(ctx, id) as ConnectionRow;
-      const letter = renderIniLetterText(row, generated.hashes, companyName);
+      const letter = renderIniLetterText(row, generated.hashes, companyName, at.slice(0, 10));
       const uploaded = uploadFile(ctx, {
         title: `EBICS INI-Brief ${hostId}/${partnerId}/${userId}`,
         filename: `ebics-ini-letter-${id}.txt`,
@@ -534,86 +698,143 @@ export function connectBankChannel(
         bankKeyHashes: null,
         connection: connectionView(ctx, created),
       };
-      // No transport: the local work is done and we say so honestly. This IS the memoized final result.
       if (t === undefined) return ok({ ...base, transmitted: false, reason: 'needs_bank_transport' });
       return ok(base);
     });
   } catch (e) {
+    // The row never landed: forget the keys generated for it (nothing references them).
+    try {
+      keystore(ctx).destroy(generated.keyRef);
+    } catch {
+      // best effort: an unreferenced key in the store is inert
+    }
     if (e instanceof EbicsAbort) return e.result;
     throw e;
   }
 
   if (!creationResult.ok) return creationResult;
-  if (t === undefined) return creationResult; // keys_generated + needs_bank_transport, replay-identical
+  if (t === undefined) return creationResult;
 
   const created = readConnection(ctx, id) as ConnectionRow;
-  const sent = t.sendKeys({ connection: connectionRef(created), hashes: generated.hashes });
-  if (!sent.ok) {
-    // The bank offers no EBICS (its use is optional for Swiss institutions, SMPG §1): an honest
-    // terminal P9 answer naming the file-based A20/A18 path as the standing alternative, never a dead
-    // end. Only the wired transport knows this, so the code is emitted solely on its explicit signal.
-    if (sent.reason === 'no_ebics_offer') {
-      return err('no_ebics_offer', { connectionId: id, alternative: 'the file-based A20/A18 upload path remains the floor' });
-    }
-    return err('channel_unreachable', { connectionId: id, reason: sent.reason, connection: connectionView(ctx, created) });
-  }
-  const now = ctx.clock.now();
-  ctx.store.tx(() => {
-    appendOrder(ctx, { connectionId: id, orderRef: `${id}-ini`, direction: 'upload', orderType: 'INI', status: 'ok' });
-    appendOrder(ctx, { connectionId: id, orderRef: `${id}-hia`, direction: 'upload', orderType: 'HIA', status: 'ok' });
-    ctx.store.db
-      .prepare("UPDATE ebics_connection SET state = 'pending_bank_activation', updated_at = ? WHERE workspace_id = ? AND id = ?")
-      .run(now, ctx.workspaceId, id);
-    return ok({});
-  });
-  const advanced = readConnection(ctx, id) as ConnectionRow;
-  return ok({
+  const legs = runLegs(ctx, t, created);
+  const after = readConnection(ctx, id) as ConnectionRow;
+  const shaped: Record<string, unknown> = {
     connectionId: id,
-    state: advanced.state, // pending_bank_activation
+    state: after.state,
     routedAccounts: readRoutedAccountIds(ctx, id),
-    iniLetterDocumentId: advanced.ini_letter_document_id,
+    iniLetterDocumentId: after.ini_letter_document_id,
     bankKeyHashes: null,
-    connection: connectionView(ctx, advanced),
-  });
+    connection: connectionView(ctx, after),
+  };
+  if (legs.refusal !== null) return err(legs.refusal.code, { connectionId: id, state: after.state, ...legs.refusal.details });
+  return ok(shaped);
 }
 
-/** Route N A19 accounts under a connection (unique index dedupes a re-route). Validates each id. */
-function routeAccounts(ctx: WorkspaceContext, connection: { id: string; workspace_id: string }, routeIds: string[]): Result {
-  for (const bankAccountId of routeIds) {
-    const acct = getBankAccount(ctx, { bankAccountId });
-    if (!acct.ok) return err('bank_account_not_found', { bankAccountId });
-    ctx.store.db
-      .prepare(
-        `INSERT INTO ebics_connection_account (id, workspace_id, connection_id, bank_account_id, created_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(connection_id, bank_account_id) DO NOTHING`,
-      )
-      .run(ctx.ids.next('ebca'), ctx.workspaceId, connection.id, bankAccountId, ctx.clock.now());
+/** Call a port method; a THROW is an outcome nobody knows (a lost answer), reported, never success. */
+function callPort<T extends { ok: boolean }>(fn: () => T): T | EbicsTransportFailure {
+  try {
+    const r = fn();
+    if (r === null || typeof r !== 'object' || typeof r.ok !== 'boolean') return { ok: false, reason: 'ebics_wire_contract_error' };
+    return r;
+  } catch (e) {
+    return { ok: false, reason: 'answer_lost', detail: e instanceof Error ? e.message : String(e) };
   }
-  return ok({});
+}
+
+/** Which of the two legs the bank has confirmed with 000000 (from the append-only order log). */
+function confirmedLegs(ctx: WorkspaceContext, connectionId: string): Record<EbicsKeyLeg, boolean> {
+  const rows = ctx.store.db
+    .prepare("SELECT order_type FROM ebics_order_log WHERE workspace_id = ? AND connection_id = ? AND order_type IN ('INI', 'HIA') AND status = 'ok'")
+    .all(ctx.workspaceId, connectionId) as { order_type: string }[];
+  return { INI: rows.some((r) => r.order_type === 'INI'), HIA: rows.some((r) => r.order_type === 'HIA') };
+}
+
+interface LegRefusal {
+  code: 'init_refused' | 'certificate_refused' | 'key_exchange_refused' | 'channel_unreachable';
+  details: Record<string, unknown>;
 }
 
 /**
- * Advance an existing connection: run HPB and (on `confirmBankKeys` + a hash match) activate. Also
- * routes any newly named accounts, and re-initialises a `blocked` connection (SMPG §6.2: the way back
- * is running the ceremony again on the same row). No transport -> honest `needs_bank_transport`.
+ * Send every UNCONFIRMED leg (INI, then HIA) with the same keys, and move the state (§4.2). A leg is
+ * confirmed only by 000000. 091002 means "wrong subscriber or wrong state" and EBICS does not say which
+ * (EBICS 3.0 §4.4.1.2): with the OTHER leg confirmed, both landed (`pending_bank_activation`); with
+ * neither, `init_refused`. 091201 to 091219 is `certificate_refused`. Any other code is shown raw. A lost
+ * answer is `ini_sent`: the owner's retry resends only what is unconfirmed.
+ */
+function runLegs(ctx: WorkspaceContext, t: EbicsTransportPort, row: ConnectionRow): { refusal: LegRefusal | null } {
+  const confirmed = confirmedLegs(ctx, row.id);
+  const answers: Partial<Record<EbicsKeyLeg, EbicsTransportFailure>> = {};
+  for (const leg of ['INI', 'HIA'] as const) {
+    if (confirmed[leg]) continue;
+    const r = callPort(() => t.sendKeyLeg({ connection: connectionRef(row), leg }));
+    if (r.ok) {
+      appendOrderTx(ctx, { connectionId: row.id, orderRef: leg, direction: 'upload', orderType: leg, status: 'ok' });
+      confirmed[leg] = true;
+    } else {
+      answers[leg] = r;
+      appendOrderTx(ctx, {
+        connectionId: row.id,
+        orderRef: leg,
+        direction: 'upload',
+        orderType: leg,
+        status: 'failed',
+        bankReason: effectiveCode(r.codes) ?? r.reason,
+      });
+    }
+  }
+  const code = (leg: EbicsKeyLeg): string | null => effectiveCode(answers[leg]?.codes);
+  const landed = (leg: EbicsKeyLeg): boolean => confirmed[leg] || (code(leg) === '091002' && confirmed[leg === 'INI' ? 'HIA' : 'INI']);
+  if (landed('INI') && landed('HIA')) {
+    moveState(ctx, row.id, 'pending_bank_activation', ['keys_generated', 'ini_sent']);
+    return { refusal: null };
+  }
+  moveState(ctx, row.id, 'ini_sent', ['keys_generated']);
+  const legs = { ini: confirmed.INI ? 'confirmed' : (code('INI') ?? answers.INI?.reason ?? null), hia: confirmed.HIA ? 'confirmed' : (code('HIA') ?? answers.HIA?.reason ?? null) };
+  for (const leg of ['INI', 'HIA'] as const) {
+    if (isCertificateCode(code(leg))) return { refusal: { code: 'certificate_refused', details: { leg, code: code(leg), legs } } };
+  }
+  if (!confirmed.INI && !confirmed.HIA && code('INI') === '091002' && code('HIA') === '091002') {
+    return { refusal: { code: 'init_refused', details: { code: '091002', legs } } };
+  }
+  for (const leg of ['INI', 'HIA'] as const) {
+    const a = answers[leg];
+    if (a !== undefined && a.reason === 'bank_code' && code(leg) !== '091002') {
+      return { refusal: { code: 'key_exchange_refused', details: { leg, codes: a.codes ?? null, legs } } };
+    }
+  }
+  const lost = (['INI', 'HIA'] as const).find((leg) => answers[leg] !== undefined && answers[leg]?.reason !== 'bank_code');
+  if (lost !== undefined) {
+    const a = answers[lost] as EbicsTransportFailure;
+    return { refusal: { code: 'channel_unreachable', details: { leg: lost, reason: a.reason, ...(a.detail !== undefined ? { detail: a.detail } : {}), legs } } };
+  }
+  // A single 091002 with the other leg still unconfirmed and no other answer: wait for the retry.
+  return { refusal: { code: 'init_refused', details: { code: '091002', legs } } };
+}
+
+/**
+ * Advance an existing connection (§3 steps 5 and 6): route any newly named accounts, resend the
+ * unconfirmed legs of a connection the bank has not activated yet, then run HPB. A reviewed HPB 000000
+ * supersedes an earlier `init_refused` and moves `ini_sent` on (the letter still works after a lost
+ * first answer). No transport: honest `needs_bank_transport`.
  */
 function advanceConnection(
   ctx: WorkspaceContext,
   row: ConnectionRow,
-  opts: { confirmBankKeys: boolean; routeIds: string[] },
+  opts: { confirmBankKeys: boolean; routeIds: string[]; expected: EbicsKeyHashes | null },
 ): Result {
-  const routed = routeAccounts(ctx, row, opts.routeIds);
-  if (!routed.ok) return routed;
-
-  // An active channel with no re-confirm is idempotent; an EXPLICIT confirmBankKeys re-runs HPB so a
-  // bank-key rotation is caught (the compare-and-confirm flow serves both the first ceremony and every
-  // later key change, spec §4). A retired channel is terminal.
-  if (row.state === 'active' && !opts.confirmBankKeys) {
-    return ok({ connectionId: row.id, state: 'active', connection: connectionView(ctx, readConnection(ctx, row.id) as ConnectionRow) });
-  }
   if (row.state === 'retired') {
     return err('invalid_state', { connectionId: row.id, state: 'retired', reason: 'a retired channel cannot be advanced' });
+  }
+  if (opts.routeIds.length > 0) {
+    ctx.store.tx(() => {
+      routeAccounts(ctx, row.id, opts.routeIds);
+      return ok({});
+    });
+  }
+
+  // An active channel with no re-confirm is idempotent (nothing is sent).
+  if (row.state === 'active' && !opts.confirmBankKeys) {
+    return ok({ connectionId: row.id, state: 'active', connection: connectionView(ctx, readConnection(ctx, row.id) as ConnectionRow) });
   }
 
   const t = transport(ctx);
@@ -626,93 +847,546 @@ function advanceConnection(
       connection: connectionView(ctx, readConnection(ctx, row.id) as ConnectionRow),
     });
   }
+  const ksBlock = keystoreBlock(ctx, { connectionId: row.id });
+  if (ksBlock !== null) return ksBlock;
 
-  // HPB: fetch the bank's public keys for out-of-band comparison against the bank's own letter.
-  const hpb = t.fetchBankKeys({ connection: connectionRef(row) });
-  if (!hpb.ok) {
-    return err('channel_unreachable', { connectionId: row.id, reason: hpb.reason });
+  let legRefusal: LegRefusal | null = null;
+  if (row.state === 'keys_generated' || row.state === 'ini_sent' || row.state === 'draft') {
+    legRefusal = runLegs(ctx, t, row).refusal;
   }
-  const bankHashes = hpb.bankKeyHashes;
-  appendOrderTx(ctx, { connectionId: row.id, orderRef: `${row.id}-hpb`, direction: 'download', orderType: 'HPB', status: 'ok' });
+  const current = readConnection(ctx, row.id) as ConnectionRow;
+
+  const hpb = callPort(() => t.fetchBankKeys({ connection: connectionRef(current) }));
+  if (!hpb.ok) {
+    appendOrderTx(ctx, { connectionId: row.id, orderRef: 'HPB', direction: 'download', orderType: 'HPB', status: 'failed', bankReason: effectiveCode(hpb.codes) ?? hpb.reason });
+    if (legRefusal !== null) return err(legRefusal.code, { connectionId: row.id, state: current.state, ...legRefusal.details });
+    if (PRE_ACTIVE.includes(current.state) && hpb.reason === 'bank_code') {
+      // The bank has not activated the subscriber yet (ZKB answers HPB only once it has): wait.
+      return err('pending_bank_activation', { connectionId: row.id, state: current.state, codes: hpb.codes ?? null });
+    }
+    return err('channel_unreachable', {
+      connectionId: row.id,
+      reason: hpb.reason,
+      ...(hpb.codes !== undefined ? { codes: hpb.codes } : {}),
+      ...(hpb.detail !== undefined ? { detail: hpb.detail } : {}),
+    });
+  }
+  appendOrderTx(ctx, { connectionId: row.id, orderRef: 'HPB', direction: 'download', orderType: 'HPB', status: 'ok' });
+  const bankHashes = normaliseKeyHashes(hpb.bankKeyHashes);
+  // An HPB 000000 proves the bank holds both keys: the legs landed, whatever their answers said.
+  moveState(ctx, row.id, 'pending_bank_activation', ['keys_generated', 'ini_sent', 'draft']);
+  const fresh = readConnection(ctx, row.id) as ConnectionRow;
 
   if (!opts.confirmBankKeys) {
-    // Surface the hashes for the human compare-and-confirm step; do NOT activate.
+    // Surface the hashes for the human compare step (ZKB's sheet, 8 pairs per line); activate nothing.
     return ok({
       connectionId: row.id,
-      state: row.state,
+      state: fresh.state,
       bankKeyHashes: bankHashes,
+      bankKeyLines: bankKeyLines(bankHashes),
       awaitingConfirmation: true,
-      connection: connectionView(ctx, readConnection(ctx, row.id) as ConnectionRow),
+      connection: connectionView(ctx, fresh),
     });
   }
+  return decideBankKeys(ctx, fresh, bankHashes, opts.expected);
+}
 
-  // A stored expectation (from a prior HPB) that no longer matches is a hard stop (man-in-the-middle
-  // defence): never auto-accepted. On the FIRST activation there is no stored expectation yet, so the
-  // freshly fetched hashes become the pinned set the customer confirmed against the paper letter.
+/**
+ * The trust decision (§4.2, SMPG §6.1 steps 7 and 8). The ORDER is load-bearing:
+ *  1. The PIN first. A fresh HPB that contradicts the pin is a rotation or an attacker: an active
+ *     channel halts (`bank_keys_changed`) and nothing new is pinned, unless the channel is ALREADY
+ *     halted or locally blocked and a human reviewed exactly this fresh set (a reviewed rotation).
+ *  2. The review. The pin holds, but the set the human reviewed is not what the bank serves now.
+ *  3. Every move INTO `active` needs the reviewed set; re-confirming an unchanged pin on an active
+ *     channel is a verification and writes nothing.
+ */
+function decideBankKeys(ctx: WorkspaceContext, row: ConnectionRow, bankHashes: EbicsKeyHashes, expected: EbicsKeyHashes | null): Result {
   const stored = parseJson<EbicsKeyHashes>(row.bank_key_hashes);
-  if (stored !== null && !sameHashes(stored, bankHashes)) {
-    ctx.store.tx(() => {
-      ctx.store.db
-        .prepare("UPDATE ebics_connection SET state = 'bank_keys_changed', updated_at = ? WHERE workspace_id = ? AND id = ?")
-        .run(ctx.clock.now(), ctx.workspaceId, row.id);
-      return ok({});
-    });
-    return err('bank_keys_mismatch', { connectionId: row.id, stored, fetched: bankHashes });
-  }
+  const pinHolds = stored === null || sameHashes(stored, bankHashes);
+  const reviewHolds = expected === null || exactSameHashes(expected, bankHashes);
 
+  if (!pinHolds) {
+    if ((row.state === 'bank_keys_changed' || row.state === 'blocked') && expected !== null && reviewHolds) {
+      return pinAndActivate(ctx, row, bankHashes);
+    }
+    flagBankKeysChanged(ctx, row.id);
+    return err('bank_keys_mismatch', {
+      connectionId: row.id,
+      stored,
+      fetched: bankHashes,
+      ...(expected !== null ? { expected } : {}),
+      reason: 'pin_mismatch',
+    });
+  }
+  if (!reviewHolds) {
+    flagBankKeysChanged(ctx, row.id);
+    return err('bank_keys_mismatch', { connectionId: row.id, expected, fetched: bankHashes, reason: 'changed_since_review' });
+  }
+  const pinUnchanged = stored !== null && exactSameHashes(stored, bankHashes);
+  if (expected === null) {
+    if (row.state === 'active' && pinUnchanged) {
+      return ok({ connectionId: row.id, state: 'active', bankKeyHashes: bankHashes, connection: connectionView(ctx, row) });
+    }
+    return err('invalid_input', {
+      connectionId: row.id,
+      field: 'expectedBankKeyHashes',
+      reason: 'expected_bank_key_hashes_required',
+      hint: 'Fetch first (call without confirmBankKeys), compare the returned bankKeyHashes with the bank sheet, then confirm with expectedBankKeyHashes set to exactly that set.',
+    });
+  }
+  return pinAndActivate(ctx, row, bankHashes);
+}
+
+/** Halt an ACTIVE channel whose bank keys no longer match (no new pin). Never over `blocked`/`retired`. */
+function flagBankKeysChanged(ctx: WorkspaceContext, connectionId: string): boolean {
+  return moveState(ctx, connectionId, 'bank_keys_changed', ['active']);
+}
+
+/**
+ * Pin the reviewed set and flip to `active`. `activated_at` keeps the FIRST activation (the account is
+ * EBICS-fed from then on, §4.4). `activatedConnectionId` is the OP8 emit path for
+ * `bank_channel.activated`, present only on a flip INTO active.
+ */
+function pinAndActivate(ctx: WorkspaceContext, row: ConnectionRow, bankHashes: EbicsKeyHashes): Result {
   const now = ctx.clock.now();
+  const becameActive = row.state !== 'active';
+  let moved = false;
   ctx.store.tx(() => {
-    ctx.store.db
-      .prepare("UPDATE ebics_connection SET state = 'active', bank_key_hashes = ?, activated_at = ?, updated_at = ? WHERE workspace_id = ? AND id = ?")
+    const info = ctx.store.db
+      .prepare(
+        `UPDATE ebics_connection SET state = 'active', bank_key_hashes = ?, activated_at = COALESCE(activated_at, ?), updated_at = ?
+          WHERE workspace_id = ? AND id = ? AND state IN ('draft', 'keys_generated', 'ini_sent', 'pending_bank_activation', 'bank_keys_changed', 'blocked', 'active')`,
+      )
       .run(JSON.stringify(bankHashes), now, now, ctx.workspaceId, row.id);
+    moved = info.changes === 1;
     return ok({});
   });
+  if (!moved) return err('invalid_state', { connectionId: row.id, reason: 'the channel changed state while its keys were confirmed' });
   const active = readConnection(ctx, row.id) as ConnectionRow;
-  // `activatedConnectionId` is the OP8 emit path for `bank_channel.activated`: present ONLY on the
-  // active flip, so every other connect outcome null-collapses the occurrence (the deals `wonDef` shape).
   return ok({
     connectionId: row.id,
     state: 'active',
-    activatedConnectionId: row.id,
+    ...(becameActive ? { activatedConnectionId: row.id } : {}),
     bankKeyHashes: bankHashes,
     connection: connectionView(ctx, active),
   });
 }
 
-function appendOrderTx(ctx: WorkspaceContext, a: OrderAppend): void {
-  ctx.store.tx(() => {
-    appendOrder(ctx, a);
-    return ok({});
-  });
+/** One hash value in comparable form: lowercase, whitespace and colons removed. */
+function normHash(v: string | undefined | null): string {
+  return typeof v === 'string' ? v.replace(/[\s:]/g, '').toLowerCase() : '';
 }
 
-function sameHashes(a: EbicsKeyHashes, b: EbicsKeyHashes): boolean {
-  return (
-    a.electronicSignature === b.electronicSignature &&
-    a.authentication === b.authentication &&
-    a.encryption === b.encryption
-  );
+/** A fetched hash set in comparable form (every value normalised; empty maps dropped). */
+function normaliseKeyHashes(h: EbicsKeyHashes): EbicsKeyHashes {
+  const out: EbicsKeyHashes = {
+    electronicSignature: normHash(h.electronicSignature),
+    authentication: normHash(h.authentication),
+    encryption: normHash(h.encryption),
+  };
+  for (const field of ['certificateHashes', 'keyHashes'] as const) {
+    const src = h[field];
+    if (src === undefined || src === null) continue;
+    const map: Partial<Record<EbicsKeyPurpose, string>> = {};
+    for (const p of EBICS_KEY_PURPOSES) {
+      const v = src[p];
+      if (typeof v === 'string' && v !== '') map[p] = normHash(v);
+    }
+    if (Object.keys(map).length > 0) out[field] = map;
+  }
+  return out;
+}
+
+/**
+ * Read a caller-supplied `EbicsKeyHashes` STRICTLY: the three primary values must be strings (empty
+ * allowed: HPB carries no bank A005 key); `certificateHashes` and `keyHashes`, when present, must be
+ * plain objects keyed by known purposes with string values. Anything else is null (`invalid_input`).
+ */
+function asKeyHashes(v: unknown): EbicsKeyHashes | null {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const primaries: string[] = [];
+  for (const p of EBICS_KEY_PURPOSES) {
+    const value = o[p];
+    if (typeof value !== 'string') return null;
+    primaries.push(normHash(value));
+  }
+  const out: EbicsKeyHashes = {
+    electronicSignature: primaries[0] as string,
+    authentication: primaries[1] as string,
+    encryption: primaries[2] as string,
+  };
+  for (const field of ['certificateHashes', 'keyHashes'] as const) {
+    const raw = o[field];
+    if (raw === undefined || raw === null) continue;
+    if (typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const map: Partial<Record<EbicsKeyPurpose, string>> = {};
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (!(EBICS_KEY_PURPOSES as readonly string[]).includes(key)) return null;
+      if (value === undefined) continue;
+      if (typeof value !== 'string') return null;
+      map[key as EbicsKeyPurpose] = normHash(value);
+    }
+    out[field] = map;
+  }
+  return out;
+}
+
+/** EXACT, two-directional equality of two hash sets (the reviewed set against a fresh HPB). */
+export function exactSameHashes(a: EbicsKeyHashes, b: EbicsKeyHashes): boolean {
+  for (const p of EBICS_KEY_PURPOSES) {
+    if (normHash(a[p]) !== normHash(b[p])) return false;
+  }
+  for (const field of ['certificateHashes', 'keyHashes'] as const) {
+    for (const p of EBICS_KEY_PURPOSES) {
+      if (normHash(a[field]?.[p]) !== normHash(b[field]?.[p])) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Does a fresh HPB result match the PINNED set? Every primary fingerprint, and every certificate and
+ * classic key hash the pin holds; a pinned value the fetch no longer carries is a mismatch.
+ */
+export function sameHashes(stored: EbicsKeyHashes, fetched: EbicsKeyHashes): boolean {
+  for (const p of EBICS_KEY_PURPOSES) {
+    if (normHash(stored[p]) !== normHash(fetched[p])) return false;
+  }
+  for (const field of ['certificateHashes', 'keyHashes'] as const) {
+    const pinned = stored[field];
+    if (pinned === undefined || pinned === null) continue;
+    for (const purpose of EBICS_KEY_PURPOSES) {
+      const value = pinned[purpose];
+      if (value === undefined || normHash(value) === '') continue;
+      if (normHash(fetched[field]?.[purpose]) !== normHash(value)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * The HPB compare of §4.2, run after a 091008 or an `untrusted_response`: keys unequal to the pin halt
+ * the channel in `bank_keys_changed`. A failed HPB changes nothing (`unknown`).
+ */
+function compareBankKeys(ctx: WorkspaceContext, t: EbicsTransportPort, conn: ConnectionRow): 'unchanged' | 'changed' | 'unknown' {
+  const hpb = callPort(() => t.fetchBankKeys({ connection: connectionRef(conn) }));
+  if (!hpb.ok) {
+    appendOrderTx(ctx, { connectionId: conn.id, orderRef: 'HPB', direction: 'download', orderType: 'HPB', status: 'failed', bankReason: effectiveCode(hpb.codes) ?? hpb.reason });
+    return 'unknown';
+  }
+  appendOrderTx(ctx, { connectionId: conn.id, orderRef: 'HPB', direction: 'download', orderType: 'HPB', status: 'ok' });
+  const stored = parseJson<EbicsKeyHashes>(conn.bank_key_hashes);
+  if (stored !== null && sameHashes(stored, normaliseKeyHashes(hpb.bankKeyHashes))) return 'unchanged';
+  flagBankKeysChanged(ctx, conn.id);
+  return 'changed';
+}
+
+/** The specific answer for a channel halted on its bank keys, naming the one way forward. */
+function bankKeysChangedErr(conn: ConnectionRow, extra: Record<string, unknown>): Result {
+  return err('bank_keys_changed', {
+    connectionId: conn.id,
+    state: 'bank_keys_changed',
+    ...extra,
+    hint: 'The bank keys changed. Fetch them (bank_channel_connect without confirmBankKeys), compare them with the current ZKB sheet, then confirm with expectedBankKeyHashes set to exactly that set.',
+  });
 }
 
 // --- verb 2: syncBankChannel -------------------------------------------------------------------
 
+/** How the BTD answered (§4.3 table). `kind` names the `download_refused` class. */
+type DownloadOutcome =
+  | { outcome: 'downloaded'; transactionId: string; members: number; newMembers: number }
+  | { outcome: 'no_data' }
+  | { outcome: 'download_refused'; kind: 'not_granted' | 'busy' | 'too_large' | 'other'; code: string | null; codes: EbicsReturnCodes | null }
+  | { outcome: 'untrusted_response'; detail: string | null }
+  | { outcome: 'channel_unreachable'; reason: string; detail: string | null }
+  | { outcome: 'commit_failed'; detail: string };
+
+function classifyDownloadFailure(f: EbicsTransportFailure): DownloadOutcome {
+  if (f.reason === 'untrusted_response') return { outcome: 'untrusted_response', detail: f.detail ?? null };
+  if (f.reason === 'bank_code') {
+    const code = effectiveCode(f.codes);
+    const codes = f.codes ?? null;
+    if (code === '090005') return { outcome: 'no_data' };
+    if (code === '090003' || code === '091005' || code === '091006') return { outcome: 'download_refused', kind: 'not_granted', code, codes };
+    if (code === '091119') return { outcome: 'download_refused', kind: 'busy', code, codes };
+    if (code === '091117') return { outcome: 'download_refused', kind: 'too_large', code, codes };
+    return { outcome: 'download_refused', kind: 'other', code, codes };
+  }
+  return { outcome: 'channel_unreachable', reason: f.reason, detail: f.detail ?? null };
+}
+
+/** Has this connection's order log already recorded the TransactionID (W11)? */
+function transactionSeen(ctx: WorkspaceContext, connectionId: string, transactionId: string): boolean {
+  const row = ctx.store.db
+    .prepare('SELECT 1 AS seen FROM ebics_order_log WHERE workspace_id = ? AND connection_id = ? AND order_ref = ? LIMIT 1')
+    .get(ctx.workspaceId, connectionId, txRef(transactionId)) as { seen: number } | undefined;
+  return row !== undefined;
+}
+
+/** Is a member (by payload hash) already persisted for this connection? */
+function memberPersisted(ctx: WorkspaceContext, connectionId: string, sha: string): boolean {
+  const row = ctx.store.db
+    .prepare('SELECT 1 AS seen FROM ebics_order_log WHERE workspace_id = ? AND connection_id = ? AND order_ref = ? AND related_kind = ? LIMIT 1')
+    .get(ctx.workspaceId, connectionId, memberRef(sha), RK_MEMBER) as { seen: number } | undefined;
+  return row !== undefined;
+}
+
+/** File one fetched artifact under the connection (E00, OR 958f retention). Inside the caller's tx. */
+function fileArtifact(ctx: WorkspaceContext, conn: ConnectionRow, title: string, filename: string, mime: string, bytes: Buffer): string {
+  const uploaded = uploadFile(ctx, { title, filename, mime, contentBase64: bytes.toString('base64') });
+  if (!uploaded.ok) throw new EbicsAbort(uploaded);
+  const fileId = fileById(uploaded);
+  const linked = linkFile(ctx, { fileId, entityId: conn.id, entityKind: 'ebics_connection' });
+  if (!linked.ok) throw new EbicsAbort(linked);
+  const retention = setFileRetention(ctx, { fileId, retentionUntil: statutoryRetentionUntil(ctx, ctx.clock.now().slice(0, 10)) });
+  if (!retention.ok) throw new EbicsAbort(retention);
+  return fileId;
+}
+
+const sha256Hex = (buf: Buffer): string => createHash('sha256').update(buf).digest('hex');
+
 /**
- * US-A33.2: pull the pending camt.053/054 (plus the pain.002 status report and the HAC protocol) and
- * hand each statement to A20's `importCamt` BYTE-FOR-BYTE. The crash-durability ordering is normative
- * (§4): persist each fetched artifact as an E00 document, COMMIT, and only then import from the
- * persisted copy, so a crash loses nothing and re-import is A20's dedupe no-op. A file whose IBAN
- * matches no routed account is surfaced as `unmatched_account`, never dropped. No transport wired ->
- * honest `needs_bank_transport`; the last-synced timestamp and the file path stay the floor.
+ * §4.3 step 3, PERSIST: the container and every member not yet logged by its payload hash, as E00
+ * files, with the TransactionID row and one row per new member, in ONE transaction under the store's
+ * durability pragmas (`synchronous = EXTRA`, `fullfsync` on macOS). A failure throws and leaves nothing.
+ */
+function persistDownload(
+  ctx: WorkspaceContext,
+  conn: ConnectionRow,
+  dl: { transactionId: string; containerBase64: string; files: EbicsFetchedFile[] },
+): { members: number; newMembers: number } {
+  const container = Buffer.from(dl.containerBase64, 'base64');
+  const stamp = ctx.clock.now().slice(0, 10);
+  let newMembers = 0;
+  ctx.store.tx(() => {
+    const containerId = fileArtifact(ctx, conn, `EBICS BTD ${STATEMENT_BTF.msgName} ${conn.host_id} ${stamp}`, `ebics-btd-${dl.transactionId}.zip`, 'application/zip', container);
+    appendOrder(ctx, {
+      connectionId: conn.id,
+      orderRef: txRef(dl.transactionId),
+      direction: 'download',
+      orderType: 'BTD',
+      btfServiceName: STATEMENT_BTF.serviceName,
+      btfMsgName: STATEMENT_BTF.msgName,
+      payloadSha256: sha256Hex(container),
+      relatedKind: RK_CONTAINER,
+      relatedId: containerId,
+      status: 'ok',
+    });
+    const seenInThis = new Set<string>();
+    for (const file of dl.files) {
+      const bytes = Buffer.from(file.contentBase64, 'base64');
+      const sha = sha256Hex(bytes);
+      if (seenInThis.has(sha) || memberPersisted(ctx, conn.id, sha)) continue;
+      seenInThis.add(sha);
+      const fileId = fileArtifact(ctx, conn, `EBICS ${STATEMENT_BTF.msgName} ${file.name}`, file.name.split('/').pop() ?? file.name, 'application/xml', bytes);
+      appendOrder(ctx, {
+        connectionId: conn.id,
+        orderRef: memberRef(sha),
+        direction: 'download',
+        orderType: 'BTD',
+        btfServiceName: STATEMENT_BTF.serviceName,
+        btfMsgName: STATEMENT_BTF.msgName,
+        payloadSha256: sha,
+        relatedKind: RK_MEMBER,
+        relatedId: fileId,
+        status: 'ok',
+      });
+      newMembers += 1;
+    }
+    return ok({});
+  });
+  return { members: dl.files.length, newMembers };
+}
+
+interface MemberRecord {
+  sha: string;
+  fileId: string | null;
+  persistedAt: string;
+  latestOutcome: { code: string; final: boolean; at: string; relatedId: string | null } | null;
+}
+
+/** Every persisted member of a connection with its latest outcome (append-only log, newest wins). */
+function readMembers(ctx: WorkspaceContext, connectionId: string): MemberRecord[] {
+  const rows = ctx.store.db
+    .prepare(
+      `SELECT order_ref, payload_sha256, related_kind, related_id, status, bank_reason, occurred_at FROM ebics_order_log
+        WHERE workspace_id = ? AND connection_id = ? AND related_kind IN (?, ?)
+        ORDER BY occurred_at ASC, rowid ASC`,
+    )
+    .all(ctx.workspaceId, connectionId, RK_MEMBER, RK_OUTCOME) as {
+    order_ref: string;
+    payload_sha256: string | null;
+    related_kind: string;
+    related_id: string | null;
+    status: string;
+    bank_reason: string | null;
+    occurred_at: string;
+  }[];
+  const byRef = new Map<string, MemberRecord>();
+  for (const r of rows) {
+    if (r.related_kind === RK_MEMBER) {
+      if (!byRef.has(r.order_ref) && r.payload_sha256 !== null) {
+        byRef.set(r.order_ref, { sha: r.payload_sha256, fileId: r.related_id, persistedAt: r.occurred_at, latestOutcome: null });
+      }
+      continue;
+    }
+    const m = byRef.get(r.order_ref);
+    if (m === undefined) continue;
+    m.latestOutcome = { code: r.bank_reason ?? 'unknown', final: r.status === 'ok', at: r.occurred_at, relatedId: r.related_id };
+  }
+  return [...byRef.values()];
+}
+
+/**
+ * A member's bytes, read back from E00 by its payload hash (restore-proof: a G04 restore re-mints
+ * file ids but keeps the content hash). Null when no copy is readable.
+ */
+function memberBytes(ctx: WorkspaceContext, member: MemberRecord): Buffer | null {
+  const candidates = ctx.store.db
+    .prepare('SELECT id FROM stored_file WHERE workspace_id = ? AND sha256 = ? ORDER BY created_at ASC')
+    .all(ctx.workspaceId, member.sha) as { id: string }[];
+  const ids = [...(member.fileId !== null ? [member.fileId] : []), ...candidates.map((c) => c.id)];
+  for (const fileId of ids) {
+    const content = getFileContent(ctx, { fileId });
+    if (!content.ok) continue;
+    const bytes = Buffer.from((content as unknown as { contentBase64: string }).contentBase64, 'base64');
+    if (sha256Hex(bytes) === member.sha) return bytes;
+  }
+  return null;
+}
+
+interface PendingMember {
+  member: MemberRecord;
+  xml: string | null;
+  parsed: ParsedCamtStatement | null;
+  position: FeedPosition | null;
+}
+
+/** The members still without a final outcome, parsed, in position order (unpositioned last). */
+function pendingMembers(ctx: WorkspaceContext, connectionId: string): PendingMember[] {
+  const out: PendingMember[] = [];
+  for (const member of readMembers(ctx, connectionId)) {
+    if (member.latestOutcome !== null && member.latestOutcome.final) continue;
+    const bytes = memberBytes(ctx, member);
+    const xml = bytes === null ? null : bytes.toString('utf8');
+    const parsed = xml === null ? null : parseCamt(xml);
+    const stmt = parsed !== null && parsed.ok ? parsed.statement : null;
+    out.push({ member, xml, parsed: stmt, position: stmt === null ? null : dayEndPosition(stmt) });
+  }
+  return out.sort((a, b) => {
+    if (a.position !== null && b.position !== null) return comparePositions(a.position, b.position) || a.member.persistedAt.localeCompare(b.member.persistedAt);
+    if (a.position !== null) return -1;
+    if (b.position !== null) return 1;
+    return a.member.persistedAt.localeCompare(b.member.persistedAt);
+  });
+}
+
+/**
+ * §4.3 step 4, PROCESS: every persisted member without a final outcome, in position order, from its
+ * bytes: routed by the parsed `Stmt/Acct/Id/IBAN` (unrouted is `unmatched_account`), imported through
+ * `importCamt` under the member's FIXED key (no refusal is memoised, so a re-run decides afresh), and an
+ * outcome row appended only when the outcome CHANGES.
+ */
+function processPending(ctx: WorkspaceContext, conn: ConnectionRow): Record<string, unknown>[] {
+  const routedIbans = new Map<string, string>(); // iban -> bankAccountId
+  for (const id of readRoutedAccountIds(ctx, conn.id)) {
+    const iban = accountIban(ctx, id);
+    if (iban !== null) routedIbans.set(normaliseIban(iban), id);
+  }
+  const results: Record<string, unknown>[] = [];
+  for (const p of pendingMembers(ctx, conn.id)) {
+    let code: string;
+    let statementRowId: string | null = null;
+    let bankAccountId: string | null = null;
+    // Critic A36C-1: a jump the rule imported (§4.4 rule 2) travels with the statement's result.
+    let jump: FeedNumberJump | null = null;
+    const iban = p.parsed?.iban ?? null;
+    if (p.xml === null) {
+      code = 'member_unreadable';
+    } else if (p.parsed === null) {
+      code = 'schema_invalid';
+    } else {
+      bankAccountId = iban === null ? null : (routedIbans.get(normaliseIban(iban)) ?? null);
+      if (bankAccountId === null) {
+        code = 'unmatched_account';
+      } else {
+        const imported = importCamt(ctx, { bankAccountId, xml: p.xml, idempotencyKey: `a36-${conn.id}-${p.member.sha}` });
+        if (imported.ok) {
+          code = imported.duplicate ? 'already_imported' : 'imported';
+          statementRowId = imported.statementId;
+          const j = imported.feed?.jump;
+          if (j !== undefined && p.position !== null) {
+            jump = { after: { number: j.after.number, year: j.after.year }, statement: { number: p.position.number, year: p.position.year }, skipped: j.skipped };
+          }
+        } else {
+          code = imported.error;
+        }
+      }
+    }
+    const final = FEED_FINAL_OUTCOMES.includes(code);
+    if (p.member.latestOutcome === null || p.member.latestOutcome.code !== code) {
+      appendOrderTx(ctx, {
+        connectionId: conn.id,
+        orderRef: memberRef(p.member.sha),
+        direction: 'download',
+        orderType: 'BTD',
+        btfServiceName: STATEMENT_BTF.serviceName,
+        btfMsgName: STATEMENT_BTF.msgName,
+        payloadSha256: p.member.sha,
+        relatedKind: RK_OUTCOME,
+        relatedId: statementRowId ?? p.member.fileId,
+        status: final ? 'ok' : 'failed',
+        bankReason: code,
+      });
+    }
+    results.push({
+      documentId: p.member.fileId,
+      payloadSha256: p.member.sha,
+      iban,
+      bankAccountId,
+      position: p.position,
+      outcome: code,
+      final,
+      ...(statementRowId !== null ? { statementId: statementRowId } : {}),
+      ...(jump !== null ? { notice: 'statement_number_jump', jump } : {}),
+    });
+  }
+  return results;
+}
+
+/** §4.3 step 5, the receipt: recorded on the order log, never fatal (the data is durable either way). */
+function sendReceipt(ctx: WorkspaceContext, t: EbicsTransportPort, conn: ConnectionRow, transactionId: string, receiptCode: 0 | 1): { sent: boolean; reason: string | null } {
+  const r = callPort(() => t.acknowledge({ connection: connectionRef(conn), transactionId, receiptCode }));
+  appendOrderTx(ctx, {
+    connectionId: conn.id,
+    orderRef: txRef(transactionId),
+    direction: 'download',
+    orderType: 'BTD',
+    btfServiceName: STATEMENT_BTF.serviceName,
+    btfMsgName: STATEMENT_BTF.msgName,
+    relatedKind: RK_RECEIPT,
+    status: r.ok ? 'ok' : 'failed',
+    bankReason: r.ok ? (receiptCode === 0 ? 'positive' : 'negative') : (effectiveCode(r.codes) ?? r.reason),
+  });
+  return { sent: r.ok, reason: r.ok ? null : r.reason };
+}
+
+/**
+ * ONE SYNC (§4.3), on demand only (D-A36.10: the Studio button or `bank_sync` when asked; on the G01
+ * denylist). Pre-check, download, persist, process, receipt, stamp. A download refusal still processes
+ * the members waiting from earlier syncs, so a gap statement imports at the first press after the owner
+ * filled the gap by hand, even on 090005.
  */
 export function syncBankChannel(
   ctx: WorkspaceContext,
-  input: { connectionId?: unknown; bankAccountId?: unknown; dateRange?: { from?: unknown; to?: unknown } | undefined; idempotencyKey?: unknown },
+  input: { connectionId?: unknown; bankAccountId?: unknown; dateRange?: unknown; idempotencyKey?: unknown },
 ): Result {
-  // A37 dispatch (spec §4/§5): resolve the rail from the selector. A connectionId naming a managed
-  // connection, or a bankAccountId routed over managed (and NOT over EBICS), syncs the managed rail.
-  // The EBICS rail keeps priority when an account is routed over both, so existing behavior is unchanged.
+  // A37 dispatch (spec §4/§5): a connectionId naming a managed connection, or a bankAccountId routed
+  // over managed (and NOT over EBICS), syncs the managed rail.
   if (typeof input.connectionId === 'string' && isManagedConnectionId(ctx, input.connectionId)) {
-    return syncManagedChannel(ctx, input);
+    return syncManagedChannel(ctx, input as Parameters<typeof syncManagedChannel>[1]);
   }
   if (
     (input.connectionId === undefined || input.connectionId === null || input.connectionId === '') &&
@@ -721,16 +1395,21 @@ export function syncBankChannel(
     readConnectionForAccount(ctx, input.bankAccountId) === undefined &&
     readManagedConnectionForAccount(ctx, input.bankAccountId) !== undefined
   ) {
-    return syncManagedChannel(ctx, input);
+    return syncManagedChannel(ctx, input as Parameters<typeof syncManagedChannel>[1]);
   }
 
   if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
     return err('invalid_input', { field: 'idempotencyKey' });
   }
+  // §4.6: a DateRange is not requested (parked: gap fill by DateRange).
+  if (input.dateRange !== undefined && input.dateRange !== null) {
+    return err('unsupported_date_range', { reason: 'a sync fetches what the bank offers as new; a missing day is imported by hand from eBanking' });
+  }
   const scopedKey = JSON.stringify(['bank_sync', input.idempotencyKey]);
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'bank_sync');
   if (replayed !== undefined) return replayed;
 
+  // 1. PRE-CHECK: nothing is sent unless every precondition holds.
   let connection: ConnectionRow | undefined;
   if (typeof input.connectionId === 'string' && input.connectionId.length > 0) {
     connection = readConnection(ctx, input.connectionId);
@@ -738,321 +1417,110 @@ export function syncBankChannel(
     connection = readConnectionForAccount(ctx, input.bankAccountId);
   }
   if (connection === undefined) return err('needs_bank_channel', { reason: 'no connection for the given selector' });
-  // A block is a security state, reported even with no transport wired (the file path stays open).
+  if (connection.state === 'retired') return err('channel_retired', { connectionId: connection.id });
   if (connection.state === 'blocked') return err('channel_blocked', { connectionId: connection.id });
 
   const conn = connection;
   const t = transport(ctx);
   if (t === undefined) {
-    // No transport is the DOMINANT fact: nothing can be fetched regardless of activation state, so the
-    // verb degrades honestly (ok:true, the file path stands) rather than reporting a downstream state.
+    // No transport is the DOMINANT fact: nothing can be fetched, the hand import stands.
     return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'bank_sync', () =>
       ok({ connectionId: conn.id, files: [], reason: 'needs_bank_transport', lastSyncAt: conn.last_sync_at }),
     );
   }
-  // A transport IS wired: the keystore must be usable to run the EBICS dialogue (a passphrase-encrypted
-  // store not yet unlocked is `keystore_locked`, a missing/corrupt file is `keystore_unavailable`).
-  // A36 US-A36.2: refuse, never regenerate, and never silently double-apply on a locked store.
   const ksBlock = keystoreBlock(ctx, { connectionId: conn.id });
   if (ksBlock !== null) return ksBlock;
+  if (conn.state === 'bank_keys_changed') return bankKeysChangedErr(conn, { reason: 'bank_keys_unconfirmed' });
+  if (conn.state !== 'active') return err('pending_bank_activation', { connectionId: conn.id, state: conn.state });
+  if (readRoutedAccountIds(ctx, conn.id).length === 0) return err('no_routed_account', { connectionId: conn.id });
 
-  // A transport IS wired: now the activation state governs whether a fetch is even possible.
-  if (conn.state !== 'active') {
-    return err('pending_bank_activation', { connectionId: conn.id, state: conn.state });
-  }
-
-  const dateRange: { from?: string; to?: string } | undefined =
-    input.dateRange === undefined
-      ? undefined
-      : {
-          ...(typeof input.dateRange.from === 'string' ? { from: input.dateRange.from } : {}),
-          ...(typeof input.dateRange.to === 'string' ? { to: input.dateRange.to } : {}),
-        };
-
-  const statements = t.download({ connection: connectionRef(conn), service: 'statements', dateRange });
-  if (!statements.ok) {
-    return err('channel_unreachable', { connectionId: conn.id, reason: statements.reason, lastSyncAt: conn.last_sync_at });
-  }
-  const statusReport = t.download({ connection: connectionRef(conn), service: 'status_report', dateRange });
-  const protocol = t.download({ connection: connectionRef(conn), service: 'customer_protocol', dateRange });
-
-  const routedIbans = new Map<string, string>(); // iban -> bankAccountId
-  for (const id of readRoutedAccountIds(ctx, conn.id)) {
-    const iban = accountIban(ctx, id);
-    if (iban !== null) routedIbans.set(normaliseIban(iban), id);
-  }
-
-  const results: Record<string, unknown>[] = [];
-  // F1 remediation: the STATEMENTS acknowledge is CONDITIONAL on every matched statement actually
-  // applying. Any `importCamt` ok:false (A20-C2 `statement_amended`, or a rejected camt variant) flips
-  // this false, so the statements token stays open and the bank re-offers the unapplied statement on
-  // the next sync (A20's row dedupe makes the re-pull of the already-applied ones a no-op: idempotency
-  // ON ROWS holds). Acknowledging unconditionally is what silently dropped a bank correction.
-  let statementsFullyApplied = true;
-
-  // THE CRASH-DURABILITY ORDERING (A36 §4, tripwire 1). For every fetched file: PERSIST it as an E00
-  // artifact and COMMIT (persistFetchedArtifact opens its own tx), THEN import from those bytes, and
-  // ONLY once every service's files are durably persisted AND imported do we `acknowledge` the bank
-  // (below). ACKNOWLEDGE IS THE LAST STEP, deliberately stricter than the spec's literal "ack then
-  // import": with acknowledge last there is no window in which the bank has been told "delivered" for a
-  // statement TILL has not yet imported, so nothing can be acked-but-unapplied. The only cost is that a
-  // crash before the acknowledge lets the bank re-offer the same statement on the next sync, where
-  // A20's two-level row dedupe (§H-IDEMPOTENT) makes the re-import a no-op: a re-pull after a crash
-  // mid-acknowledge lands exactly one row. The persist-before-acknowledge order (tripwire 1) holds
-  // because every persist COMMITs before any acknowledge is sent.
-  for (const file of statements.files) {
-    // 1) PERSIST the fetched artifact as an E00 document and COMMIT, BEFORE importing (crash-durable).
-    const persistedId = persistFetchedArtifact(ctx, conn, file, 'BTD statement');
-    const xml = Buffer.from(file.contentBase64, 'base64').toString('utf8');
-    const iban = readStatementIban(xml);
-    const matchedAccountId = iban === null ? undefined : routedIbans.get(normaliseIban(iban));
-    if (matchedAccountId === undefined) {
-      // 2) Unmatched: recorded and surfaced, NEVER dropped. It stays until an A19 account is routed and
-      //    the next sync imports it. Marked `unmatched_statement` (the IBAN carried in bank_reason) so
-      //    the status card can list it without re-reading the persisted bytes.
-      appendOrderTx(ctx, {
-        connectionId: conn.id,
-        orderRef: `${conn.id}-btd-${persistedId}`,
-        direction: 'download',
-        orderType: 'BTD',
-        btfMsgName: file.msgName,
-        relatedKind: 'unmatched_statement',
-        relatedId: persistedId,
-        status: 'ok',
-        bankReason: iban,
-      });
-      results.push({ msgName: file.msgName, documentId: persistedId, iban, routing: 'unmatched_account' });
-      continue;
+  // 2. DOWNLOAD (D-A36.3, D-A36.4). The wire authenticates; the core refuses a replayed TransactionID.
+  let download: DownloadOutcome;
+  let receiptFor: string | null = null;
+  let keysCheck = false;
+  const dl = callPort(() => t.download({ connection: connectionRef(conn), service: 'statements' }));
+  if (dl.ok && (typeof dl.transactionId !== 'string' || !/^[0-9A-Fa-f]{32}$/.test(dl.transactionId) || !Array.isArray(dl.files))) {
+    // W2: a success that names no TransactionID (or carries no member list) cannot be receipted and is
+    // not used: nothing is persisted, no receipt follows.
+    download = { outcome: 'channel_unreachable', reason: 'ebics_wire_contract_error', detail: 'a BTD success without a TransactionID or members' };
+  } else if (dl.ok) {
+    const transactionId = dl.transactionId.toUpperCase();
+    if (transactionSeen(ctx, conn.id, transactionId)) {
+      // W11: the wire's replay record lives for one process; the order log is the durable one. A
+      // genuine initialisation served again is refused: nothing persisted, no receipt, no log row. It
+      // was signed with the pinned key, so it says nothing about the bank keys: no HPB compare.
+      download = { outcome: 'untrusted_response', detail: 'replayed_transaction' };
+    } else {
+      // 3. PERSIST, one transaction. A failed commit gets a NEGATIVE receipt: ZKB offers the data again.
+      try {
+        const persisted = persistDownload(ctx, conn, { ...dl, transactionId });
+        download = { outcome: 'downloaded', transactionId, members: persisted.members, newMembers: persisted.newMembers };
+        receiptFor = transactionId;
+      } catch (e) {
+        if (!(e instanceof EbicsAbort) && !(e instanceof Error)) throw e;
+        download = { outcome: 'commit_failed', detail: e instanceof EbicsAbort ? JSON.stringify(e.result) : e.message };
+        sendReceipt(ctx, t, conn, transactionId, 1);
+      }
     }
-    // 3) Import the PERSISTED bytes byte-for-byte via A20 (its ElctrncSeqNb/message-id dedupe is the
-    //    idempotency; A33 never adds a second one and never transforms the file).
-    const imported = importCamt(ctx, { bankAccountId: matchedAccountId, xml, idempotencyKey: `a33-${conn.id}-${persistedId}` });
-    // F1 remediation: a file that PERSISTED but did NOT apply (importCamt ok:false) must not let its
-    // service be acknowledged, and must be recorded HONESTLY on the order log (status 'failed' + the
-    // A20 reason), never a silent status 'ok'. The raw bytes are already durable (E00), so the
-    // correction is preserved and re-fetched, not dropped.
-    const importReason = imported.ok ? null : ((imported as { error?: string }).error ?? 'import_failed');
-    if (!imported.ok) statementsFullyApplied = false;
-    appendOrderTx(ctx, {
-      connectionId: conn.id,
-      orderRef: `${conn.id}-btd-${persistedId}`,
-      direction: 'download',
-      orderType: 'BTD',
-      btfMsgName: file.msgName,
-      relatedKind: 'bank_statement',
-      relatedId: persistedId,
-      status: imported.ok ? 'ok' : 'failed',
-      bankReason: importReason,
-    });
-    results.push({
-      msgName: file.msgName,
-      documentId: persistedId,
-      bankAccountId: matchedAccountId,
-      iban,
-      routing: 'matched',
-      importOk: imported.ok,
-      ...(imported.ok ? {} : { importReason }),
-    });
+  } else {
+    download = classifyDownloadFailure(dl);
+    if (dl.reason === 'untrusted_response' || dl.reason === 'bank_keys_unverified' || effectiveCode(dl.codes) === '091008') keysCheck = true;
   }
 
-  // Fold the pain.002 status report and HAC protocol into the order log (the business-rejection and
-  // channel-event feeds, §3). Persisted the same way; rejections land bank_rejected on the batch order.
-  const rejectedBatchIds = statusReport.ok ? foldStatusReport(ctx, conn, statusReport.files) : [];
-  if (protocol.ok) foldCustomerProtocol(ctx, conn, protocol.files);
+  // The HPB compare of §4.2: keys unequal to the pin halt the channel (never over blocked/retired).
+  const bankKeys = keysCheck ? compareBankKeys(ctx, t, conn) : null;
 
-  // ACKNOWLEDGE every open download transaction, now that every fetched file is persisted AND imported
-  // (all committed). A36 §4: this closes the EBICS receipt so the bank stops offering the data. A
-  // failed or thrown acknowledge is SAFE and non-fatal: the data is already durable and imported, and
-  // the bank re-offering on the next sync is a dedupe no-op. We attempt each and never let an ack
-  // failure fail a sync whose statements already landed.
-  // F1 remediation: acknowledge the STATEMENTS token ONLY when every matched statement applied. If any
-  // import returned ok:false the token stays OPEN so the bank re-offers the unapplied statement next
-  // sync (nothing is dropped; A20's row dedupe no-ops the re-import of the applied ones). The status
-  // report and protocol fold into the order log and carry no unapplied-ledger risk, so they ack as
-  // before.
-  if (statementsFullyApplied) acknowledgeDownload(t, conn, statements.ackToken);
-  if (statusReport.ok) acknowledgeDownload(t, conn, statusReport.ackToken);
-  if (protocol.ok) acknowledgeDownload(t, conn, protocol.ackToken);
+  // 4. PROCESS, whatever step 2 answered.
+  const statements = processPending(ctx, conn);
 
+  // 5. RECEIPT: positive once the commit above held and every new member has an outcome row.
+  let receipt: { sent: boolean; reason: string | null } | null = null;
+  if (receiptFor !== null) receipt = sendReceipt(ctx, t, conn, receiptFor, 0);
+
+  // 6. STAMP when the bank answered the download (a completed exchange, data or none).
+  const answered = download.outcome === 'downloaded' || download.outcome === 'no_data';
   const now = ctx.clock.now();
-  ctx.store.tx(() => {
-    ctx.store.db
-      .prepare('UPDATE ebics_connection SET last_sync_at = ?, updated_at = ? WHERE workspace_id = ? AND id = ?')
-      .run(now, now, ctx.workspaceId, conn.id);
-    return ok({});
-  });
-
-  // `rejectedBatchId` is the OP8 emit path for `payment_batch.bank_rejected`: present ONLY when this
-  // sync folded a pain.002 rejection, so a clean sync null-collapses the occurrence.
-  // F1 remediation: report the unapplied statements HONESTLY at the top level so a caller (and an
-  // unattended scheduled sync) sees the drop rather than a silent ok:true. The transport dialogue did
-  // succeed and nothing was lost (the unapplied statements stay un-acked and will be re-offered), so
-  // ok:true is truthful, but the count makes the gap visible on the status card.
-  const unappliedStatements = results.filter((r) => r.routing === 'matched' && r.importOk === false).length;
-  const result: Record<string, unknown> = { connectionId: conn.id, files: results, lastSyncAt: now };
-  if (unappliedStatements > 0) result.unappliedStatements = unappliedStatements;
-  if (rejectedBatchIds.length > 0) result.rejectedBatchId = rejectedBatchIds[0];
-  return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'bank_sync', () => ok(result));
-}
-
-/**
- * A36: close one open EBICS download transaction (send the positive receipt). Called ONLY after the
- * service's files are persisted AND imported (all committed), so persist-before-acknowledge (tripwire
- * 1) holds. A refusal or a throw is swallowed: the fetched data is already durable and imported, and a
- * bank that re-offers un-acknowledged data on the next sync is answered by A20's dedupe (a re-pull
- * after a crash mid-acknowledge lands exactly one row). An empty `ackToken` (a mock or a transport
- * that folds acknowledgement into download) is a no-op.
- */
-function acknowledgeDownload(t: EbicsTransportPort, conn: ConnectionRow, ackToken: string): void {
-  if (typeof ackToken !== 'string' || ackToken.length === 0) return;
-  try {
-    t.acknowledge({ connection: connectionRef(conn), ackToken });
-  } catch {
-    // Deliberately swallowed (see the doc comment): the sync's statements already landed.
-  }
-}
-
-/** Persist one fetched file as an E00 artifact (OR 958f retention), COMMITTED before any import. */
-function persistFetchedArtifact(ctx: WorkspaceContext, conn: ConnectionRow, file: EbicsFetchedFile, label: string): string {
-  let fileId = '';
-  ctx.store.tx(() => {
-    const uploaded = uploadFile(ctx, {
-      title: `${label} ${file.msgName} ${conn.host_id}`,
-      filename: `ebics-${conn.id}-${file.msgName}-${ctx.ids.next('f')}.xml`,
-      mime: 'application/xml',
-      contentBase64: file.contentBase64,
-    });
-    if (!uploaded.ok) throw new EbicsAbort(uploaded);
-    fileId = fileById(uploaded);
-    const linked = linkFile(ctx, { fileId, entityId: conn.id, entityKind: 'ebics_connection' });
-    if (!linked.ok) throw new EbicsAbort(linked);
-    const retention = setFileRetention(ctx, { fileId, retentionUntil: statutoryRetentionUntil(ctx, ctx.clock.now().slice(0, 10)) });
-    if (!retention.ok) throw new EbicsAbort(retention);
-    return ok({});
-  });
-  return fileId;
-}
-
-/** Read the statement account IBAN from camt (`Acct/Id/IBAN`), a READ never a rewrite. */
-function readStatementIban(xml: string): string | null {
-  const m = /<IBAN>\s*([A-Z0-9]+)\s*<\/IBAN>/i.exec(xml);
-  return m ? (m[1] ?? null) : null;
-}
-
-function normaliseIban(iban: string): string {
-  return iban.replace(/\s+/g, '').toUpperCase();
-}
-
-/**
- * Fold the pain.002 status report into the order log: a per-transaction or file-level reject lands
- * `bank_rejected` with the bank's reason on the related payment_batch order (§3). The report carries
- * the OriginalMessageId (the pain.001 MsgId) that ties it back to the transmitted batch's order.
- */
-function foldStatusReport(ctx: WorkspaceContext, conn: ConnectionRow, files: EbicsFetchedFile[]): string[] {
-  const rejectedBatchIds: string[] = [];
-  for (const file of files) {
-    const documentId = persistFetchedArtifact(ctx, conn, file, 'pain.002 status report');
-    const xml = Buffer.from(file.contentBase64, 'base64').toString('utf8');
-    const origMsgId = /<OrgnlMsgId>\s*([^<]+?)\s*<\/OrgnlMsgId>/i.exec(xml)?.[1] ?? null;
-    const groupStatus = /<GrpSts>\s*([^<]+?)\s*<\/GrpSts>/i.exec(xml)?.[1] ?? /<TxSts>\s*([^<]+?)\s*<\/TxSts>/i.exec(xml)?.[1] ?? null;
-    const reason = /<AddtlInf>\s*([^<]+?)\s*<\/AddtlInf>/i.exec(xml)?.[1] ?? /<Prtry>\s*([^<]+?)\s*<\/Prtry>/i.exec(xml)?.[1] ?? null;
-    const rejected = groupStatus === 'RJCT';
-    // Find the transmitted batch order by its MsgId (stored as the order's payload identity).
-    const batchOrder = origMsgId === null ? undefined : findOrderByMsgId(ctx, conn.id, origMsgId);
-    if (rejected && batchOrder?.related_kind === 'payment_batch' && batchOrder.related_id !== null) {
-      rejectedBatchIds.push(batchOrder.related_id);
-    }
+  if (answered) {
     ctx.store.tx(() => {
-      appendOrder(ctx, {
-        connectionId: conn.id,
-        orderRef: batchOrder?.order_ref ?? `${conn.id}-pain002-${documentId}`,
-        direction: 'download',
-        orderType: 'BTD',
-        btfMsgName: 'pain.002',
-        relatedKind: batchOrder?.related_kind ?? 'bank_statement',
-        relatedId: batchOrder?.related_id ?? documentId,
-        status: rejected ? 'bank_rejected' : 'ok',
-        bankReason: rejected ? (reason ?? 'RJCT') : null,
-      });
+      ctx.store.db
+        .prepare('UPDATE ebics_connection SET last_sync_at = ?, updated_at = ? WHERE workspace_id = ? AND id = ?')
+        .run(now, now, ctx.workspaceId, conn.id);
       return ok({});
     });
   }
-  return rejectedBatchIds;
-}
+  const lastSyncAt = answered ? now : conn.last_sync_at;
+  const pending = statements.filter((s) => s.final !== true).length;
+  const body: Record<string, unknown> = {
+    connectionId: conn.id,
+    download,
+    statements,
+    pendingStatements: pending,
+    lastSyncAt,
+    ...(receipt !== null ? { receipt: receipt.sent ? 'positive' : 'not_sent', ...(receipt.reason !== null ? { receiptReason: receipt.reason } : {}) } : {}),
+  };
 
-/**
- * Fold the HAC customer protocol into the order log (channel-level send/fetch/sign events, §3) AND
- * resolve any in-doubt uploads from it (§4): an `intent` BTU order with no successor is an upload whose
- * outcome was unknown. The HAC is the evidence. If it names the order identity, the upload arrived:
- * append `pending_release` and the order stands. If the HAC covers the window WITHOUT it, the upload
- * never arrived: append `failed`, which alone reopens the transmit path. This is evidence-based, never
- * a blind retry: the resolution runs only against a real fetched HAC, and a HAC file IS the window.
- */
-function foldCustomerProtocol(ctx: WorkspaceContext, conn: ConnectionRow, files: EbicsFetchedFile[]): void {
-  const inDoubt = intentsAwaitingResolution(ctx, conn.id);
-  for (const file of files) {
-    const documentId = persistFetchedArtifact(ctx, conn, file, 'HAC customer protocol');
-    const hac = Buffer.from(file.contentBase64, 'base64').toString('utf8');
-    appendOrderTx(ctx, {
-      connectionId: conn.id,
-      orderRef: `${conn.id}-hac-${documentId}`,
-      direction: 'download',
-      orderType: 'HAC',
-      btfMsgName: 'HAC',
-      relatedKind: 'bank_statement',
-      relatedId: documentId,
-      status: 'ok',
-    });
-    for (const intent of inDoubt) {
-      const arrived = hac.includes(intent.order_ref) || (intent.btf_msg_name !== null && hac.includes(intent.btf_msg_name));
-      appendOrderTx(ctx, {
-        connectionId: conn.id,
-        orderRef: intent.order_ref,
-        direction: 'upload',
-        orderType: 'BTU',
-        btfMsgName: intent.btf_msg_name,
-        payloadSha256: intent.payload_sha256,
-        relatedKind: intent.related_kind,
-        relatedId: intent.related_id,
-        status: arrived ? 'pending_release' : 'failed',
-        bankReason: arrived ? null : 'not_in_hac_window',
-      });
-    }
+  if (bankKeys === 'changed') return bankKeysChangedErr(conn, { ...body });
+  switch (download.outcome) {
+    case 'download_refused':
+      return err('download_refused', { ...body, kind: download.kind, code: download.code, btf: { ...STATEMENT_BTF } });
+    case 'untrusted_response':
+      return err('untrusted_response', { ...body, detail: download.detail });
+    case 'channel_unreachable':
+      return err('channel_unreachable', { ...body, reason: download.reason, lastSyncAt: conn.last_sync_at });
+    case 'commit_failed':
+      return err('commit_failed', { ...body });
+    default:
+      return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'bank_sync', () => ok(body));
   }
-}
-
-/** BTU orders whose LATEST status is `intent` (an upload whose outcome the HAC has not yet resolved). */
-function intentsAwaitingResolution(ctx: WorkspaceContext, connectionId: string): OrderRow[] {
-  const orders = ctx.store.db
-    .prepare("SELECT * FROM ebics_order_log WHERE workspace_id = ? AND connection_id = ? AND order_type = 'BTU' ORDER BY occurred_at DESC, rowid DESC")
-    .all(ctx.workspaceId, connectionId) as OrderRow[];
-  const latestByRef = new Map<string, OrderRow>();
-  for (const o of orders) if (!latestByRef.has(o.order_ref)) latestByRef.set(o.order_ref, o);
-  return [...latestByRef.values()].filter((o) => o.status === 'intent');
-}
-
-/** The most recent order carrying a given pain.001 MsgId as its payload identity (its order_ref suffix). */
-function findOrderByMsgId(ctx: WorkspaceContext, connectionId: string, msgId: string): OrderRow | undefined {
-  return ctx.store.db
-    .prepare(
-      "SELECT * FROM ebics_order_log WHERE workspace_id = ? AND connection_id = ? AND order_type = 'BTU' AND btf_msg_name = ? ORDER BY occurred_at DESC, rowid DESC",
-    )
-    .get(ctx.workspaceId, connectionId, msgId) as OrderRow | undefined;
 }
 
 // --- verb 3: transmitPaymentBatch --------------------------------------------------------------
 
 /**
- * US-A33.3: upload an A18 `generated` pain.001 batch over BTU (P8-gated, §5). THE LAW: submits WITHOUT
- * the SignatureFlag, so the bank's own out-of-channel release authorizes it and TILL never holds sole
- * payment authority (`assertNoSoleAuthority`). NEVER marks anything paid (paid comes from camt via
- * A20/A18). The intent-before-upload protocol is the §H-IDEMPOTENT mechanism and is normative (§4):
- *   1. regenerate the byte-identical pain.001 (A18) and compute payload_sha256 + the order identity;
- *   2. append an `intent` order row and COMMIT it BEFORE any network I/O; an unresolved intent blocks
- *      a new upload (transmit_in_doubt);
- *   3. BTU-upload without the SignatureFlag; only on acknowledgement does step 4 run;
- *   4. append `pending_release`.
- * At most one non-`failed` order per batch: a re-call returns the existing order and delivers nothing.
+ * D-A36.11: no upload of any kind. A generated A18 batch whose debtor account is routed over EBICS is
+ * refused `upload_disabled` before any port call (the owner uploads and releases the pain.001 in
+ * eBanking; ZKB rejects uploads without SignatureFlag and OD-2 leaves TILL no key to set it with). The
+ * `needs_bank_channel` degrade and A37's managed rail are untouched. Posts nothing, marks nothing paid.
  */
 export function transmitPaymentBatch(
   ctx: WorkspaceContext,
@@ -1062,177 +1530,80 @@ export function transmitPaymentBatch(
     return err('invalid_input', { field: 'batchId' });
   }
   const batchId = input.batchId;
-
   const batch = ctx.store.db
-    .prepare('SELECT id, status, bank_account_id, msg_id FROM payment_batch WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, batchId) as { id: string; status: string; bank_account_id: string; msg_id: string | null } | undefined;
+    .prepare('SELECT id, status, bank_account_id FROM payment_batch WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, batchId) as { id: string; status: string; bank_account_id: string } | undefined;
   if (batch === undefined) return err('not_found', { batchId });
   if (batch.status !== 'generated') {
     return err('needs_batch_generated', { batchId, status: batch.status });
   }
 
-  // The connection is selected via the batch's debtor account. No route -> honest degrade (§4).
   const connection = readConnectionForAccount(ctx, batch.bank_account_id);
-
-  // A37 dispatch (spec §4/§5): when the account has no live EBICS channel but IS routed over a managed
-  // (bLink) connection, the batch submits over PSS. When it has neither, the honest degrade stands.
-  if (connection === undefined || connection.state === 'retired') {
-    const managedConn = readManagedConnectionForAccount(ctx, batch.bank_account_id);
-    if (managedConn !== undefined) {
-      return transmitManagedBatch(ctx, input, managedConn);
-    }
-    return ok({ transmitted: false, reason: 'needs_bank_channel', batchId });
-  }
-
-  // Cross-rail idempotency (A37 tripwire 3, the reverse guard): a non-failed MANAGED order for this
-  // batch blocks an EBICS transmit, so a batch in flight over bLink cannot also go over EBICS.
-  const managedOrder = ctx.store.db
-    .prepare("SELECT status FROM managed_order_log WHERE workspace_id = ? AND related_kind = 'payment_batch' AND related_id = ? AND status != 'failed' ORDER BY occurred_at DESC, rowid DESC LIMIT 1")
-    .get(ctx.workspaceId, batchId) as { status: string } | undefined;
-  if (managedOrder !== undefined) {
-    return err('already_transmitted', { batchId, rail: 'managed_blink', reason: 'this batch is already in flight over the managed rail' });
-  }
-  if (connection.state === 'blocked') return err('channel_blocked', { batchId, connectionId: connection.id });
-  if (connection.state !== 'active') return err('pending_bank_activation', { batchId, connectionId: connection.id });
-  const conn = connection;
-
-  // Idempotent at the ORDER level: an existing non-failed order for this batch answers, delivers nothing.
-  const existing = latestOrderForBatch(ctx, conn.id, batchId);
-  if (existing !== undefined && existing.status !== 'failed') {
-    if (existing.status === 'intent') {
-      // An intent with no successor: the upload's outcome is unknown. Retransmission stays blocked.
-      return err('transmit_in_doubt', { batchId, orderRef: existing.order_ref, connectionId: conn.id });
-    }
-    return ok({ transmitted: true, orderId: existing.id, orderRef: existing.order_ref, status: existing.status, batchId, transmittedBatchId: batchId });
-  }
-
-  // P8 (spec §5): moving real-world money is a deliberate act. Pre-checked BEFORE any write.
-  if (!dialEnabled(ctx) && input.confirm !== true) {
-    return err('needs_confirmation', { batchId, reason: 'transmit_requires_confirmation' });
-  }
-
-  // 1) Regenerate the byte-identical pain.001 (A18) and compute the payload identity. Pure read.
-  const regen = generatePain001(ctx, { batchId, idempotencyKey: `a33-transmit-${batchId}` });
-  if (!regen.ok) return regen;
-  const payloadBase64 = (regen as unknown as { xmlBase64: string }).xmlBase64;
-  const payloadSha256 = sha256Hex(Buffer.from(payloadBase64, 'base64'));
-  const msgId = (regen as unknown as { batch?: { msgId?: string } }).batch?.msgId ?? batch.msg_id ?? `${batchId}-msg`;
-  const orderRef = `${conn.id}-btu-${batchId}`;
-
-  // 2) INTENT BEFORE UPLOAD: append the intent row and COMMIT, before any network I/O. A crash after
-  //    this leaves an intent with no successor -> transmit_in_doubt, retransmission blocked (§4).
-  ctx.store.tx(() => {
-    appendOrder(ctx, {
-      connectionId: conn.id,
-      orderRef,
-      direction: 'upload',
-      orderType: 'BTU',
-      btfServiceName: 'MCT',
-      btfMsgName: msgId,
-      payloadSha256,
-      relatedKind: 'payment_batch',
-      relatedId: batchId,
-      status: 'intent',
+  if (connection !== undefined) {
+    return err('upload_disabled', {
+      batchId,
+      connectionId: connection.id,
+      reason: 'the EBICS channel downloads statements only: upload the pain.001 in eBanking and release it there',
     });
-    return ok({});
-  });
-
-  const t = transport(ctx);
-  if (t === undefined) {
-    // No transport: the intent is the durable trace, but nothing left the building. Resolve it to
-    // failed so the path reopens (a transport-less transmit never half-commits an upload).
-    ctx.store.tx(() => {
-      appendOrder(ctx, {
-        connectionId: conn.id,
-        orderRef,
-        direction: 'upload',
-        orderType: 'BTU',
-        payloadSha256,
-        relatedKind: 'payment_batch',
-        relatedId: batchId,
-        status: 'failed',
-        bankReason: 'needs_bank_transport',
-      });
-      return ok({});
-    });
-    return ok({ transmitted: false, reason: 'needs_bank_transport', batchId, orderRef });
   }
-
-  // 3) BTU upload WITHOUT the SignatureFlag (v1, THE LAW). This is a real runtime guard, not a
-  //    comment: `assertNoSoleAuthority` THROWS if a sole-authority flag were ever present, and the
-  //    request it stamps is the one handed to the port, so no code path can smuggle a SignatureFlag or
-  //    requestEDS past it (defense-in-depth behind the structural port-shape guarantee). A THROW is
-  //    UNKNOWN: the intent stands and the batch surfaces as transmit_in_doubt (the port contract, §4).
-  const uploaded = t.upload(guardNoSoleAuthority({ connection: connectionRef(conn), orderRef, payloadBase64, btf: { serviceName: 'MCT', msgName: msgId } }));
-  if (!uploaded.ok) {
-    ctx.store.tx(() => {
-      appendOrder(ctx, {
-        connectionId: conn.id,
-        orderRef,
-        direction: 'upload',
-        orderType: 'BTU',
-        payloadSha256,
-        relatedKind: 'payment_batch',
-        relatedId: batchId,
-        status: 'failed',
-        bankReason: uploaded.reason,
-      });
-      return ok({});
-    });
-    return err('bank_rejected', { batchId, orderRef, reason: uploaded.reason });
-  }
-
-  // 4) Acknowledged: append pending_release (the bank's out-of-channel release completes it). NEVER paid.
-  const now = ctx.clock.now();
-  let orderId = '';
-  ctx.store.tx(() => {
-    appendOrder(ctx, {
-      connectionId: conn.id,
-      orderRef,
-      direction: 'upload',
-      orderType: 'BTU',
-      btfServiceName: 'MCT',
-      btfMsgName: msgId,
-      payloadSha256,
-      relatedKind: 'payment_batch',
-      relatedId: batchId,
-      status: 'pending_release',
-    });
-    const row = ctx.store.db
-      .prepare("SELECT id FROM ebics_order_log WHERE workspace_id = ? AND order_ref = ? AND status = 'pending_release' ORDER BY occurred_at DESC, rowid DESC")
-      .get(ctx.workspaceId, orderRef) as { id: string } | undefined;
-    orderId = row?.id ?? '';
-    return ok({});
-  });
-  void now;
-  // `transmittedBatchId` is the OP8 emit path for `payment_batch.transmitted`: present ONLY on a real
-  // upload, so a degrade (needs_bank_channel / needs_bank_transport) null-collapses the occurrence.
-  return ok({ transmitted: true, orderId, orderRef, status: 'pending_release', batchId, transmittedBatchId: batchId });
-}
-
-/** The most recent order-log row for a payment batch over a connection (order-level idempotency). */
-function latestOrderForBatch(ctx: WorkspaceContext, connectionId: string, batchId: string): OrderRow | undefined {
-  return ctx.store.db
-    .prepare(
-      "SELECT * FROM ebics_order_log WHERE workspace_id = ? AND connection_id = ? AND related_kind = 'payment_batch' AND related_id = ? ORDER BY occurred_at DESC, rowid DESC",
-    )
-    .get(ctx.workspaceId, connectionId, batchId) as OrderRow | undefined;
+  const managedConn = readManagedConnectionForAccount(ctx, batch.bank_account_id);
+  if (managedConn !== undefined) return transmitManagedBatch(ctx, input, managedConn);
+  return ok({ transmitted: false, reason: 'needs_bank_channel', batchId });
 }
 
 // --- verb 4: getBankChannelStatus --------------------------------------------------------------
 
+/** The legs of the ceremony as the order log records them: confirmed, the last refusal code, or unsent. */
+function ceremonyFacet(orders: OrderRow[]): { ini: string; hia: string; refusal: string | null } {
+  const legState = (leg: 'INI' | 'HIA'): string => {
+    const rows = orders.filter((o) => o.order_type === leg);
+    if (rows.some((o) => o.status === 'ok')) return 'confirmed';
+    const latest = rows[0];
+    return latest === undefined ? 'unsent' : (latest.bank_reason ?? 'failed');
+  };
+  const ini = legState('INI');
+  const hia = legState('HIA');
+  let refusal: string | null = null;
+  if (isCertificateCode(ini === 'confirmed' ? null : ini) || isCertificateCode(hia === 'confirmed' ? null : hia)) refusal = 'certificate_refused';
+  else if (ini === '091002' && hia === '091002') refusal = 'init_refused';
+  return { ini, hia, refusal };
+}
+
 /**
- * US-A33.4: the P5 read model over the three tables joined to A18 batches. Per channel: state, last
- * sync, the pending INI letter, uploads awaiting bank release, unmatched fetched files, in-doubt
- * uploads, and recent orders. No write twin.
+ * The message a pending member shows (§5 status row): the refusal the successor rule gives it NOW, with
+ * the facts it names, re-derived from the persisted bytes and the books (pure; nothing is written).
+ */
+function pendingView(ctx: WorkspaceContext, p: PendingMember, routed: Map<string, string>): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    documentId: p.member.fileId,
+    payloadSha256: p.member.sha,
+    since: p.member.persistedAt,
+    code: p.member.latestOutcome?.code ?? 'not_processed',
+    statement:
+      p.parsed === null
+        ? null
+        : { number: p.position?.number ?? null, year: p.position?.year ?? null, fromDate: p.parsed.fromDate, toDate: p.parsed.toDate, iban: p.parsed.iban },
+  };
+  if (p.parsed === null) return base;
+  const bankAccountId = p.parsed.iban === null ? null : (routed.get(normaliseIban(p.parsed.iban)) ?? null);
+  base.bankAccountId = bankAccountId;
+  if (bankAccountId === null) return { ...base, code: 'unmatched_account' };
+  const decision = decideSuccessor(p.parsed, readFeedBook(ctx, bankAccountId));
+  if (decision.verdict === 'refused') return { ...base, code: decision.code, details: decision.details };
+  // The rule would admit it now (the owner filled the gap): the next press imports it.
+  return { ...base, readyToImport: true };
+}
+
+/**
+ * The status read (§5): per channel the state, the ceremony legs, the keystore, per routed account the
+ * newest statement (position, date, CLBD), every pending member with its message, and the last sync.
+ * Upload and protocol fields are gone with BTU, PSR and HAC. Read-only.
  */
 export function getBankChannelStatus(
   ctx: WorkspaceContext,
   input: { bankAccountId?: unknown; status?: unknown; savedViewId?: unknown },
 ): Result {
-  // The G00 saved-view seam (OP10) over the ebics_order log: ONE unconditional call, returning the
-  // caller's filter untouched when no view is named and merging a view's stored `status` beneath an
-  // explicit one otherwise (§6b: "Awaiting bank release", "Rejected this quarter").
+  // The G00 saved-view seam (OP10) over the order log: it narrows `recentOrders`, never the health facts.
   const listFilter: { status?: string; savedViewId?: string } = {};
   if (typeof input.status === 'string' && input.status.length > 0) listFilter.status = input.status;
   if (typeof input.savedViewId === 'string' && input.savedViewId.length > 0) listFilter.savedViewId = input.savedViewId;
@@ -1246,61 +1617,52 @@ export function getBankChannelStatus(
     rows = c === undefined ? [] : [c];
   } else {
     rows = ctx.store.db
-      .prepare("SELECT * FROM ebics_connection WHERE workspace_id = ? ORDER BY created_at DESC")
+      .prepare('SELECT * FROM ebics_connection WHERE workspace_id = ? ORDER BY created_at DESC')
       .all(ctx.workspaceId) as ConnectionRow[];
   }
 
   const channels = rows.map((row) => {
     const allOrders = readOrders(ctx, row.id);
-    // The status-card derivations are always over the FULL log (a view over the order log narrows the
-    // browsable recentOrders, never the health facts the card must always show). Newest-first.
-    const byRef = new Map<string, OrderRow>();
-    for (const o of allOrders) {
-      if (!byRef.has(o.order_ref)) byRef.set(o.order_ref, o);
-    }
     const recent = orderStatusFilter === null ? allOrders : allOrders.filter((o) => o.status === orderStatusFilter);
-    const latest = [...byRef.values()];
-    const pendingRelease = latest
-      .filter((o) => o.status === 'pending_release')
-      .map((o) => ({ batchId: o.related_id, orderId: o.id, orderRef: o.order_ref, since: o.occurred_at }));
-    const inDoubt = latest
-      .filter((o) => o.status === 'intent')
-      .map((o) => ({ batchId: o.related_id, orderRef: o.order_ref, since: o.occurred_at }));
-    const rejected = latest
-      .filter((o) => o.status === 'bank_rejected')
-      .map((o) => ({ batchId: o.related_id, orderRef: o.order_ref, reason: o.bank_reason, since: o.occurred_at }));
-    const unmatchedFiles = latest
-      .filter((o) => o.related_kind === 'unmatched_statement')
-      .map((o) => ({ documentId: o.related_id, msgName: o.btf_msg_name, iban: o.bank_reason, orderRef: o.order_ref }));
+    const routedIds = readRoutedAccountIds(ctx, row.id);
+    const routed = new Map<string, string>();
+    // The statements this channel imported (the order log's `imported` outcomes), for the last jump.
+    const feedStatementIds = new Set(
+      readMembers(ctx, row.id)
+        .filter((m) => m.latestOutcome?.code === 'imported' && m.latestOutcome.relatedId !== null)
+        .map((m) => m.latestOutcome?.relatedId as string),
+    );
+    const accounts = routedIds.map((id) => {
+      const iban = accountIban(ctx, id);
+      if (iban !== null) routed.set(normaliseIban(iban), id);
+      const book = readFeedBook(ctx, id);
+      return { bankAccountId: id, iban, newestStatement: newestFeedStatement(book), lastNumberJump: lastNumberJump(book, feedStatementIds) };
+    });
+    const pendingStatements = pendingMembers(ctx, row.id).map((p) => pendingView(ctx, p, routed));
     return {
       connectionId: row.id,
       channelKind: 'ebics',
       host: { hostId: row.host_id, partnerId: row.partner_id, userId: row.user_id_ebics },
+      protocolVersion: row.protocol_version,
       state: row.state,
-      accounts: readRoutedAccountIds(ctx, row.id).map((id) => ({ bankAccountId: id, iban: accountIban(ctx, id) })),
+      activatedAt: row.activated_at,
+      ceremony: ceremonyFacet(allOrders),
+      accounts,
       lastSyncAt: row.last_sync_at,
-      pendingIniLetter: row.state === 'keys_generated' || row.state === 'ini_sent' || row.state === 'pending_bank_activation'
-        ? row.ini_letter_document_id
-        : null,
-      pendingRelease,
-      inDoubt,
-      rejected,
-      unmatchedFiles,
+      pendingIniLetter: PRE_ACTIVE.includes(row.state) ? row.ini_letter_document_id : null,
+      iniLetterDocumentId: row.ini_letter_document_id,
+      pendingStatements,
       recentOrders: recent.slice(0, 20).map(orderView),
       keystore: keystoreFacet(ctx),
-      schedule: scheduleFacet(ctx, row),
     };
   });
 
-  // A37 (spec §4/§6): the managed (bLink) channels ride the SAME read model, kind-labelled, so a
-  // Treuhänder sees every rail in one list. With the tier off there are no managed rows, so nothing is
-  // added (no lie). The saved-view/status filter applies to each rail's own order log inside the list.
+  // A37: the managed (bLink) channels ride the SAME read model, kind-labelled.
   const managed = managedChannelStatusList(ctx, input).channels;
-
   return ok({ channels: [...channels, ...managed] });
 }
 
-/** A36: the keystore health for the status card (`keystore:{kind,state}`, spec §5). */
+/** The keystore health for the status card (`keystore:{kind,state,persistent}`). */
 function keystoreFacet(ctx: WorkspaceContext): { kind: string; state: string; persistent: boolean } {
   const ks = keystore(ctx);
   return {
@@ -1310,60 +1672,18 @@ function keystoreFacet(ctx: WorkspaceContext): { kind: string; state: string; pe
   };
 }
 
-/**
- * A36: the scheduled-sync health (`schedule:{ruleId, cadence?, lastFiredAt?, driverSeen}`, spec §5).
- * `ruleId` is the connection's linked G01 rule (US-A36.3); `cadence` is the rule's schedule trigger
- * (`schedule.daily`/`.weekly`/`.monthly`); `driverSeen` is whether SOMETHING drove the G01 tick in
- * the last 25h (the M00 daemon, or a manual tick), and `inactive` is the honest `schedule_inactive`
- * flag: a rule is enabled but nothing is driving it, so the panel names the M00 daemon and Sync now.
- */
-function scheduleFacet(
-  ctx: WorkspaceContext,
-  row: ConnectionRow,
-): { ruleId: string | null; enabled: boolean; cadence: string | null; lastFiredAt: string | null; driverSeen: boolean; inactive: boolean } {
-  if (row.sync_rule_id === null) {
-    return { ruleId: null, enabled: false, cadence: null, lastFiredAt: null, driverSeen: false, inactive: false };
-  }
-  const rule = ctx.store.db
-    .prepare('SELECT trigger_event, enabled, archived, last_fired_at FROM automation_rule WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, row.sync_rule_id) as
-    | { trigger_event: string; enabled: number; archived: number; last_fired_at: string | null }
-    | undefined;
-  if (rule === undefined || rule.archived === 1) {
-    // The linked rule was deleted/archived out from under the pointer: report honestly, not a crash.
-    return { ruleId: row.sync_rule_id, enabled: false, cadence: null, lastFiredAt: null, driverSeen: false, inactive: false };
-  }
-  const enabled = rule.enabled === 1;
-  // driverSeen: any automation run in this workspace within the last 25h means a tick driver is live.
-  const cutoff = new Date(Date.parse(ctx.clock.now()) - 25 * 3600 * 1000).toISOString();
-  const recent = ctx.store.db
-    .prepare('SELECT 1 FROM automation_run WHERE workspace_id = ? AND started_at >= ? LIMIT 1')
-    .get(ctx.workspaceId, cutoff) as { 1: number } | undefined;
-  const driverSeen = recent !== undefined;
-  return {
-    ruleId: row.sync_rule_id,
-    enabled,
-    cadence: rule.trigger_event,
-    lastFiredAt: rule.last_fired_at,
-    driverSeen,
-    inactive: enabled && !driverSeen,
-  };
-}
-
 // --- verb 5: disconnectBankChannel -------------------------------------------------------------
 
 /**
- * US-A33.1 (teardown): retire or block a channel (P8-gated). `retire` is the local, terminal close: the
- * connection flips to `retired`, its order history stays readable forever, and its keys are DESTROYED
- * in the keystore. `block` is the emergency stop: issue the SPR administrative order (SMPG §6.2), flip
- * to `blocked`, keep the keys until the operator chooses retire or re-initialisation. Both idempotent.
+ * Retire or block a channel (P8-gated). `retire` is the local, terminal close: the connection flips to
+ * `retired`, its order history stays readable, and its keys are destroyed in the keystore. `block` is
+ * LOCAL ONLY (D-A36.12): TILL stops at once and sends nothing (SPR needs the ES key, OD-2); a block at
+ * ZKB is the owner's phone call. The way back from `blocked` is the reviewed HPB confirm.
  */
 export function disconnectBankChannel(
   ctx: WorkspaceContext,
   input: { connectionId?: unknown; mode?: unknown; confirm?: unknown; idempotencyKey?: unknown },
 ): Result {
-  // A37 dispatch (spec §5): a connectionId naming a managed connection retires the managed rail
-  // (there is no `block` mode there; consent is always revoked at the bank).
   const managedRow = readManagedConnection(ctx, input.connectionId);
   if (managedRow !== undefined) {
     return disconnectManagedChannel(ctx, input, managedRow);
@@ -1374,47 +1694,36 @@ export function disconnectBankChannel(
   const mode = input.mode === 'block' ? 'block' : input.mode === 'retire' ? 'retire' : null;
   if (mode === null) return err('invalid_input', { field: 'mode', expected: ['retire', 'block'] });
 
-  // Idempotent: already in the target terminal/blocked state -> return it, no re-issue.
   if (mode === 'retire' && row.state === 'retired') return ok({ connectionId: row.id, state: 'retired' });
-  if (mode === 'block' && row.state === 'blocked') return ok({ connectionId: row.id, state: 'blocked' });
+  if (mode === 'block' && row.state === 'blocked') return ok({ connectionId: row.id, state: 'blocked', bankBlock: 'not_sent' });
+  if (mode === 'block' && row.state === 'retired') {
+    return err('invalid_state', { connectionId: row.id, state: 'retired', reason: 'a retired channel cannot be blocked' });
+  }
 
-  // P8 (spec §5): an SPR block stops real payment traffic; a retire destroys keys. Deliberate act.
   if (!dialEnabled(ctx) && input.confirm !== true) {
     return err('needs_confirmation', { connectionId: row.id, reason: 'disconnect_requires_confirmation' });
   }
 
   if (mode === 'block') {
-    // Issue the SPR administrative order if a transport is wired; the local block stands regardless so
-    // the emergency stop is never dependent on reaching the bank.
-    const t = transport(ctx);
-    if (t !== undefined) {
-      const spr = t.suspend({ connection: connectionRef(row) });
-      appendOrderTx(ctx, {
-        connectionId: row.id,
-        orderRef: `${row.id}-spr`,
-        direction: 'upload',
-        orderType: 'SPR',
-        status: spr.ok ? 'ok' : 'failed',
-        bankReason: spr.ok ? null : spr.reason,
-      });
-    }
-    ctx.store.tx(() => {
-      ctx.store.db
-        .prepare("UPDATE ebics_connection SET state = 'blocked', updated_at = ? WHERE workspace_id = ? AND id = ?")
-        .run(ctx.clock.now(), ctx.workspaceId, row.id);
-      return ok({});
-    });
-    return ok({ connectionId: row.id, state: 'blocked' });
+    moveState(ctx, row.id, 'blocked', ['draft', 'keys_generated', 'ini_sent', 'pending_bank_activation', 'active', 'bank_keys_changed']);
+    return ok({ connectionId: row.id, state: 'blocked', bankBlock: 'not_sent', reason: 'block_local_only' });
   }
 
-  // retire: destroy keys, flip terminal, clear the schedule pointer (A36). Order history stays
-  // readable. The linked G01 rule (if any) is left for the caller to archive: a fire against a
-  // retired connection degrades honestly to needs_bank_channel and books nothing.
+  // retire: destroy the keys first (a keystore that changed elsewhere refuses, and nothing moves), then
+  // flip terminal and clear the key locator and the schedule pointer. Order history stays readable.
+  if (row.key_ref !== null) {
+    try {
+      keystore(ctx).destroy(row.key_ref);
+    } catch (e) {
+      const code = keystoreRefusal(e);
+      if (code !== null) return err(code, { connectionId: row.id });
+      throw e;
+    }
+  }
   ctx.store.tx(() => {
-    if (row.key_ref !== null) keystore(ctx).destroy(row.key_ref);
     ctx.store.db
       .prepare(
-        "UPDATE ebics_connection SET state = 'retired', key_ref = NULL, sync_rule_id = NULL, updated_at = ? WHERE workspace_id = ? AND id = ?",
+        "UPDATE ebics_connection SET state = 'retired', key_ref = NULL, sync_rule_id = NULL, updated_at = ? WHERE workspace_id = ? AND id = ? AND state != 'retired'",
       )
       .run(ctx.clock.now(), ctx.workspaceId, row.id);
     return ok({});
@@ -1422,16 +1731,12 @@ export function disconnectBankChannel(
   return ok({ connectionId: row.id, state: 'retired' });
 }
 
-// --- verb 6 (A36): setBankSyncSchedule ---------------------------------------------------------
+// --- verb 6: setBankSyncSchedule ---------------------------------------------------------------
 
 /**
- * A36 US-A36.3: link (or unlink) the G01 automation rule that drives this connection's scheduled
- * sync. The panel toggle creates a `schedule` rule whose action is `bank_sync` with this
- * `connectionId` (the one A33 verb automation accepts, deliberately off the denylist) through G01's
- * existing rule verbs, then calls this to store the linkage on `ebics_connection.sync_rule_id` so the
- * status card renders the cadence and a retire clears it. Pass `ruleId: null`/absent to unlink (the
- * toggle-off path). Banking-write (`pay`, the same capability as the verb it schedules); idempotent;
- * §H-TENANT via `readConnection`. It does NOT create, enable, or fire any rule: that is G01's surface.
+ * D-A36.10: there is no cadence. A `ruleId` is refused `sync_schedule_parked` (an unattended scheduled
+ * sync is parked: it would hold the process while the synchronous wire waits). The unlink call (no
+ * `ruleId`) stays valid and clears a pointer an older build stored. Idempotent; §H-TENANT.
  */
 export function setBankSyncSchedule(
   ctx: WorkspaceContext,
@@ -1445,42 +1750,22 @@ export function setBankSyncSchedule(
   if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
     return err('invalid_input', { field: 'idempotencyKey' });
   }
-  const ruleId = typeof input.ruleId === 'string' && input.ruleId.length > 0 ? input.ruleId : null;
+  if (typeof input.ruleId === 'string' && input.ruleId.length > 0) {
+    return err('sync_schedule_parked', { connectionId: input.connectionId, reason: 'the statements are fetched on demand only (Kontoauszüge abrufen)' });
+  }
 
   const row = readConnection(ctx, input.connectionId);
   if (row === undefined) return err('not_found', { connectionId: input.connectionId });
   if (row.state === 'retired') return err('channel_retired', { connectionId: row.id });
-
-  // If a rule is named, it must exist, be a bank_sync schedule rule for THIS connection, and not be
-  // archived: refuse-don't-guess rather than store a dangling or mismatched pointer.
-  if (ruleId !== null) {
-    const rule = ctx.store.db
-      .prepare('SELECT action_tool, action_input, archived FROM automation_rule WHERE workspace_id = ? AND id = ?')
-      .get(ctx.workspaceId, ruleId) as { action_tool: string; action_input: string; archived: number } | undefined;
-    if (rule === undefined) return err('not_found', { ruleId });
-    if (rule.archived === 1) return err('rule_archived', { ruleId });
-    if (rule.action_tool !== 'bank_sync') {
-      return err('invalid_input', { field: 'ruleId', reason: 'the linked rule must have action bank_sync' });
-    }
-  }
 
   const scopedKey = JSON.stringify(['set_bank_sync_schedule', input.connectionId, input.idempotencyKey]);
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'set_bank_sync_schedule');
   if (replayed !== undefined) return replayed;
 
   return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'set_bank_sync_schedule', () => {
-    ctx.store.tx(() => {
-      ctx.store.db
-        .prepare('UPDATE ebics_connection SET sync_rule_id = ?, updated_at = ? WHERE workspace_id = ? AND id = ?')
-        .run(ruleId, ctx.clock.now(), ctx.workspaceId, row.id);
-      return ok({});
-    });
-    return ok({ connectionId: row.id, syncRuleId: ruleId });
+    ctx.store.db
+      .prepare('UPDATE ebics_connection SET sync_rule_id = NULL, updated_at = ? WHERE workspace_id = ? AND id = ?')
+      .run(ctx.clock.now(), ctx.workspaceId, row.id);
+    return ok({ connectionId: row.id, syncRuleId: null });
   });
-}
-
-// --- hashing -----------------------------------------------------------------------------------
-
-function sha256Hex(buf: Buffer): string {
-  return createHash('sha256').update(buf).digest('hex');
 }

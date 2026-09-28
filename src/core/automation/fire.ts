@@ -204,7 +204,9 @@ function claimRun(
 ): string | undefined {
   const runId = ctx.ids.next('arun');
   try {
-    ctx.store.db
+    // Each run-log write is its own `store.tx` (M3, critic R1 F6): still one commit per step, so the
+    // claim is durable before the invocation, and the generation guard reads the marker around it.
+    ctx.store.tx(() => ctx.store.db
       .prepare(
         `INSERT INTO automation_run
            (id, workspace_id, rule_id, trigger_event, event_ref, status, action_tool, action_input, actor, started_at)
@@ -220,7 +222,7 @@ function claimRun(
         JSON.stringify(actionInput),
         rule.created_by,
         ctx.clock.now(),
-      );
+      ));
     return runId;
   } catch (e) {
     // ONLY a unique-constraint violation is a no-op. Swallowing every error here would turn a real
@@ -249,13 +251,13 @@ function claimRun(
  * told about it.
  */
 function noteRedelivery(ctx: WorkspaceContext, rule: RuleRow, eventRef: string): void {
-  ctx.store.db
+  ctx.store.tx(() => ctx.store.db
     .prepare(
       `UPDATE automation_run
           SET redeliveries = redeliveries + 1
         WHERE workspace_id = ? AND rule_id = ? AND event_ref = ?`,
     )
-    .run(ctx.workspaceId, rule.id, eventRef);
+    .run(ctx.workspaceId, rule.id, eventRef));
 }
 
 /** `automation_run_once` refused the claim: this occurrence already has a row. */
@@ -271,13 +273,13 @@ function settleRun(
   status: string,
   errorCode: string | undefined,
 ): void {
-  ctx.store.db
+  ctx.store.tx(() => ctx.store.db
     .prepare(
       `UPDATE automation_run
           SET status = ?, error_code = ?, finished_at = ?
         WHERE id = ? AND status = 'running'`,
     )
-    .run(status, errorCode ?? null, ctx.clock.now(), runId);
+    .run(status, errorCode ?? null, ctx.clock.now(), runId));
 }
 
 /**

@@ -136,6 +136,16 @@ function crossedReorder(reorder: number | null, before: number, after: number): 
 }
 
 export function recordStockMove(ctx: WorkspaceContext, input: StockMoveInput): Result {
+  // ONE IMMEDIATE TRANSACTION (critic R2-4). A movement writes `qty` and `unit_cost_minor`, a
+  // transfer writes two movements, and the default location may be provisioned first. As bare
+  // autocommit statements each could wait out a newer TILL's migration lock in the busy handler and
+  // then land in the migrated book, where no check saw it, and a transfer could stop after its first
+  // leg. Under `store.tx` the marker is read under the write lock first and everything commits
+  // together.
+  return ctx.store.tx(() => recordStockMoveUnderLock(ctx, input));
+}
+
+function recordStockMoveUnderLock(ctx: WorkspaceContext, input: StockMoveInput): Result {
   const capable = ctx.capabilities.assert('manage_master_data');
   if (!capable.ok) return capable;
 

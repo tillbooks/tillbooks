@@ -37,7 +37,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { formatMoney, useT } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { ActorLabel } from '../../lib/useMemberNames';
 import { formatCalendar } from '../../lib/format';
@@ -215,7 +215,7 @@ export function InventoryMovements() {
 
   const localError = useCallback(
     (e: Err | null): string | undefined =>
-      e !== null && J02_ERROR_CODES.has(e.error) ? t(`invMovements.errors.${e.error}`) : undefined,
+      e !== null && J02_ERROR_CODES.has(e.error) ? refusalText(t, e, { own: 'invMovements.errors' }) : undefined,
     [t],
   );
 

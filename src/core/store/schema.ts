@@ -639,7 +639,12 @@ export const ADDITIVE_INDEXES: readonly { name: string; ddl: string }[] = [
 // Generation 7 (A38, 2026-09-09): no DDL. Row-level only: every workspace born before A38 added
 // 2330, 3809 and 8900 to the KMU seed receives the three it lacks, by number, nothing it has is
 // touched. See `seedA38Accounts` in `./migrations.ts`.
-export const SCHEMA_GENERATION = 7;
+// Generation 8 (A39, the bank inbox, spec L1): the new A39 tables ride the banking DDL; the generation
+// is row-level: every pre-A39 bank-line decision (an A20 link, an applied or dismissed A21 credit) is
+// adopted ONCE into A39's decision and claim rows, and the stored rules naming a verb A39 newly denies
+// are disabled. See `adoptPreA39BankDecisions` in `./migrations.ts`. A pre-A39 backup is then refused
+// by G04's `incompatible_schema_version`, and an older build cannot open an A39 book.
+export const SCHEMA_GENERATION = 8;
 
 const CORE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS workspace (

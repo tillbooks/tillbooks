@@ -172,7 +172,9 @@ export const SURFACE_CATALOG: readonly Surface[] = [
   // Bank.
   { path: '/payments', labelKey: 'nav.payments', icon: 'payments', navId: 'payments' },
   { path: '/creditor-payments', labelKey: 'nav.creditorPayments', icon: 'payments', navId: 'creditor-payments' },
-  { path: '/reconciliation', labelKey: 'nav.reconciliation', icon: 'reconciliation', navId: 'reconciliation' },
+  // A2: the bank inbox replaced the Abgleich screen; `/reconciliation` stays as a redirect in the
+  // router (REDIRECTS), so old links and the engine's deep links land here.
+  { path: '/bank', labelKey: 'nav.bankInbox', icon: 'reconciliation', navId: 'bank-inbox' },
   { path: '/bank-accounts', labelKey: 'nav.bankAccounts', icon: 'bankAccounts', navId: 'bank-accounts' },
 
   // Accounting. `/mwst` and `/vat` nest under the MWST parent in the tree; the label a child shows
@@ -375,11 +377,11 @@ export const NAV_TREE: readonly NavTreeGroup[] = [
     ],
   },
   {
-    // Bank: the daily verbs first (payments, creditor payments), then the recurring reconciliation
-    // chore, then the rarely-touched Bankkonten register.
+    // Bank: the bank inbox first (A2: every bank line lands there, and a click on the group header
+    // opens it, D135), then the daily payment verbs, then the rarely-touched Bankkonten register.
     navId: 'bank',
     labelKey: 'nav.group.bank',
-    items: [leaf('payments'), leaf('creditor-payments'), leaf('reconciliation'), leaf('bank-accounts')],
+    items: [leaf('bank-inbox'), leaf('payments'), leaf('creditor-payments'), leaf('bank-accounts')],
   },
   {
     // Accounting, in frequency order: the daily journal, the periodic close (periods, fx), and the

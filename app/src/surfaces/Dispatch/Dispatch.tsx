@@ -31,7 +31,7 @@ import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Tabs, type TabItem } from '../../components/Tabs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { Segmented } from '../../components/Segmented';
 import { Status, type StatusKind } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
@@ -296,7 +296,7 @@ export function Dispatch() {
       });
     }
     if (error.error === 'permission_denied') return t('dispatch.needsPermission');
-    return t('errors.fallback');
+    return refusalText(t, error);
   };
 
   /**

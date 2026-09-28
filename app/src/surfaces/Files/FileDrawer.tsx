@@ -29,10 +29,11 @@ import { useEffect, useState } from 'react';
 import { useT, formatDate } from '../../i18n';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { FileDrop } from '../../components/FileDrop';
-import { ErrorBanner } from '../../components/states';
+import { ErrorBanner, refusalText } from '../../components/states';
 import { LockGlyph, PendingGlyph, VersionsGlyph } from './glyphs';
 import { SignSection, type SignSectionProps } from './SignSection';
 import { formatBytes, type StoredFile } from './model';
+import type { Err } from '../../lib/client';
 
 export interface FileDrawerProps {
   file: StoredFile;
@@ -51,7 +52,7 @@ export interface FileDrawerProps {
    */
   canDownload: boolean;
   /** The engine's own words for whatever was last attempted here, or null. */
-  error: { error: string; statutoryFloor?: unknown } | null;
+  error: Err | null;
   busy: boolean;
   /** E01's Signatur section, one component hosted here (spec §6: no new route). */
   sign: SignSectionProps;
@@ -169,7 +170,7 @@ export function FileDrawer({
                         ? t('files.error.not_head_version')
                         : error.error === 'permission_denied'
                           ? t('files.error.permissionDenied.write')
-                          : t('errors.fallback')
+                          : refusalText(t, error)
             }
           />
         )}

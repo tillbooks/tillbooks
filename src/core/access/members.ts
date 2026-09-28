@@ -531,8 +531,21 @@ export interface AcceptInviteDeps {
  * The invite itself is untouched by the refusal. It stays pending and stays redeemable by an actor
  * that is not seated, which is the `treuhand:mueller`-shaped subject `src/api/session.ts` describes
  * and the shape a cloud tier will bring.
+ *
+ * ONE IMMEDIATE TRANSACTION. The accept is three writes: the user's binding, the membership's
+ * `accepted_at` and the invite's `accepted_at`. As bare autocommit statements, a lock wait that timed
+ * out on the last one left the membership active and the invite pending, and the retry the banner
+ * asks for was refused (`actor_already_member`), so the invite was never marked accepted (critic R2,
+ * probe q7). Under `store.tx` the three commit together or not at all, the checks above them run on
+ * the same snapshot under the write lock, and a lock wait can only time out at the BEGIN, before
+ * anything is written.
  */
 export function acceptInvite(deps: AcceptInviteDeps, input: { token?: unknown }): Result {
+  return deps.store.tx(() => acceptInviteUnderLock(deps, input));
+}
+
+/** The body of `acceptInvite`, run inside its one transaction. */
+function acceptInviteUnderLock(deps: AcceptInviteDeps, input: { token?: unknown }): Result {
   const guard = requireString(input.token, 'token');
   if (guard) return guard;
   const token = input.token as string;

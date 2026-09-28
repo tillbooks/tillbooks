@@ -35,7 +35,7 @@ import type { ActorKind, AttentionDecisionOption, AttentionItem, QueueProvider }
  * `deepLinkRoute` is not in this set fails registration, which is how the design's row 2.3 dead end
  * (a hub row that opens a Placeholder) is designed out rather than handled.
  */
-export const ROUTED_SURFACES: ReadonlySet<string> = new Set(['/reconciliation', '/dunning', '/agent', '/journal', '/checklisten']);
+export const ROUTED_SURFACES: ReadonlySet<string> = new Set(['/bank', '/dunning', '/agent', '/journal', '/checklisten']);
 
 /**
  * The OP3 entity kinds the providers reference, hoisted to consts rather than written inline.
@@ -105,18 +105,23 @@ function openOption(labelKey: string, deepLink: AttentionItem['deepLink']): Atte
 }
 
 /**
- * A21, the Abgleich queue: every registered incoming credit still `open` (unmatched). A21 already
- * returns a real per-lane count, so this is the cheapest genuine provider. The credit is the pending
+ * A21, the Abgleich queue: every HAND-TYPED incoming credit still `open` (unmatched). A credit an imported
+ * camt line carries is decided on the bank inbox only (A39 L2, spec C2): its row is left out here, so
+ * this queue offers no verb that would refuse `use_bank_inbox`. Such a credit is known by the declared
+ * `bank_txn.credit_id` or a non-null `reconciliation_match.bank_txn_id`. The credit is the pending
  * decision ("which invoice, if any, does this payment settle?").
  *
- * The exits are A21's own, as `/reconciliation` offers them: `apply_qr_match` against the LIVE score's
- * invoice (`full` for a `high` score and for a surplus, `partial` only when the amount is short, so a
- * short credit is never written off from the hub while an over-payment settles the invoice and parks
- * its surplus as Guthaben, the same posting either mode would make), `override_qr_match` with
- * `action: 'dismiss'` ("Keine Kundenzahlung"), and the link into the Abgleich for the hand-picked case
- * (a `none` score, a currency question, an already-settled invoice). The reason code is the score's
- * own (`QR_MATCH_REASONS`), keyed into the Reconciliation catalogue the J8.12 sentences live in.
+ * The exits are A21's own: `apply_qr_match` against the LIVE score's invoice (`full` for a `high` score
+ * and for a surplus, `partial` only when the amount is short, so a short credit is never written off
+ * from the hub while an over-payment settles the invoice and parks its surplus as Guthaben, the same
+ * posting either mode would make) and `override_qr_match` with `action: 'dismiss'` ("Keine
+ * Kundenzahlung"). The hand-picked case (a `none` score, a currency question) is the agent's, over MCP.
+ * The reason code is the score's own (`QR_MATCH_REASONS`).
  */
+const HAND_TYPED_OPEN_CREDITS = `SELECT m.id AS id FROM reconciliation_match m
+  WHERE m.workspace_id = ? AND m.status = 'open' AND m.bank_txn_id IS NULL
+    AND NOT EXISTS (SELECT 1 FROM bank_txn t WHERE t.workspace_id = m.workspace_id AND t.credit_id = m.id)`;
+
 const qrMatchProvider: QueueProvider = {
   queueId: 'qr_match',
   labelKey: 'attention.queue.qrMatch',
@@ -125,16 +130,19 @@ const qrMatchProvider: QueueProvider = {
   rank: 10,
   freshness: 'live',
   dismissal: 'module_dismiss',
-  deepLinkRoute: '/reconciliation',
+  deepLinkRoute: '/bank',
   count(ctx: WorkspaceContext): number {
     const row = ctx.store.db
-      .prepare(`SELECT COUNT(*) AS n FROM reconciliation_match WHERE workspace_id = ? AND status = 'open'`)
+      .prepare(`SELECT COUNT(*) AS n FROM (${HAND_TYPED_OPEN_CREDITS})`)
       .get(ctx.workspaceId) as { n: number };
     return row.n;
   },
   list(ctx: WorkspaceContext, opts: { limit: number }): AttentionItem[] {
     const res = okOrThrow(listUnmatchedIncoming(ctx, { status: 'open' }) as never, 'qr_match');
-    const items = Array.isArray(res.items) ? (res.items as Record<string, unknown>[]) : [];
+    const handTyped = new Set(
+      (ctx.store.db.prepare(HAND_TYPED_OPEN_CREDITS).all(ctx.workspaceId) as { id: string }[]).map((r) => r.id),
+    );
+    const items = (Array.isArray(res.items) ? (res.items as Record<string, unknown>[]) : []).filter((c) => handTyped.has(String(c.creditId)));
     return items.slice(0, opts.limit).map((c) => {
       const payer = typeof c.payerName === 'string' && c.payerName.length > 0 ? c.payerName : '';
       const bank = typeof c.bankAccountName === 'string' ? c.bankAccountName : '';
@@ -147,7 +155,9 @@ const qrMatchProvider: QueueProvider = {
       // The decision generation: a row re-opened by an unmatch carries a new `decidedAt`, so the
       // same hub decision on it is a NEW question under a new key rather than a replay of the old.
       const generation = typeof c.decidedAt === 'string' && c.decidedAt !== '' ? c.decidedAt : 'new';
-      const deepLink = { route: '/reconciliation', params: { creditId } };
+      // No per-item link: `/reconciliation` is a redirect to the bank inbox, which lists bank lines and
+      // never a hand-typed credit (spec §4.6).
+      const deepLink = { route: '/bank', params: {} };
 
       const options: AttentionDecisionOption[] = [];
       // A currency question and an already-settled invoice are hand-picked cases: the score names an
@@ -158,7 +168,7 @@ const qrMatchProvider: QueueProvider = {
       if (applicable) {
         // The mode names the write honestly (critic F6): `partial` is a SHORTFALL the person accepts
         // as a part payment; a surplus covers the invoice, so it applies in `full` under the label
-        // "Übernehmen", exactly as the high-score path on `/reconciliation` does. The engine books
+        // "Übernehmen", exactly as the high-score path of the old Abgleich did. The engine books
         // the same rows for a surplus in either mode (the write-off is zero and the excess parks
         // unallocated), so this changes the word the call carries, never the posting.
         const mode = confidence === 'high' || reason === 'amount_over' ? 'full' : 'partial';
@@ -190,7 +200,6 @@ const qrMatchProvider: QueueProvider = {
         humanConfirm: true,
         capability: 'pay',
       });
-      options.push(openOption('attention.act.openReconciliation', deepLink));
 
       const item: AttentionItem = {
         queueId: 'qr_match',

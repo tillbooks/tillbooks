@@ -147,6 +147,14 @@ export interface StocktakeCountInput {
 }
 
 export function stocktakeCount(ctx: WorkspaceContext, input: StocktakeCountInput): Result {
+  // ONE IMMEDIATE TRANSACTION (critic R2-4). The count writes `counted_qty`, which the commit turns
+  // into stock adjustments; as a bare autocommit UPDATE it could wait out a newer TILL's migration lock
+  // in the busy handler and then land in the migrated book, where no check saw it. Under `store.tx`
+  // the marker is read under the write lock first, and the checks and the write see one snapshot.
+  return ctx.store.tx(() => stocktakeCountUnderLock(ctx, input));
+}
+
+function stocktakeCountUnderLock(ctx: WorkspaceContext, input: StocktakeCountInput): Result {
   const capable = ctx.capabilities.assert('manage_master_data');
   if (!capable.ok) return capable;
   const session = findSession(ctx, input.sessionId);

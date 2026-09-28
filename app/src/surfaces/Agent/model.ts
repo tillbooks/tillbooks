@@ -5,15 +5,24 @@
  */
 
 import en from './messages.en.json';
+import sharedEn from '../../i18n/en.json';
 
 export type DialLevel = 'ask' | 'auto';
 
+type VerbCatalogue = { agent: { verb: Record<string, string> } };
+
 /**
- * The verbs this surface carries a human label for (its own catalogue slice; both locales hold the
- * same keys, held by the locale-completeness test). An unlabelled verb renders its name with the
- * underscores replaced and the raw key as the row's title: not a translation, and honestly not one.
+ * The verbs this surface carries a human label for: its own catalogue slice AND the shared
+ * `agent.verb.*` labels (every dial-governed verb, held by `test/attention/verb-labels.test.mjs`), since
+ * the fragment deep-merges onto the shared catalogue and `t` resolves both. Reading only the slice left
+ * every shared-only verb (the A39 bank-line verbs among them) rendered as its raw name here while the
+ * Pendenzen surface labelled it. An unlabelled verb renders its name with the underscores replaced and
+ * the raw key as the row's title: not a translation, and honestly not one.
  */
-export const LABELLED_VERBS: ReadonlySet<string> = new Set(Object.keys((en as { agent: { verb: Record<string, string> } }).agent.verb));
+export const LABELLED_VERBS: ReadonlySet<string> = new Set([
+  ...Object.keys((en as VerbCatalogue).agent.verb),
+  ...Object.keys((sharedEn as VerbCatalogue).agent.verb),
+]);
 
 /**
  * The verbs whose consequence sentence is their OWN (`agent.consequenceVerb.*`) rather than their dial

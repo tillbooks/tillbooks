@@ -25,6 +25,7 @@ import { isErr } from '../../lib/client';
 import { useT, formatMoney } from '../../i18n';
 import { Modal } from '../../components/Modal';
 import { Select } from '../../components/Select';
+import { ErrorBanner } from '../../components/states';
 import type { Err } from '../../lib/client';
 import { idemKey, parseAmountToMinor } from './model';
 import type { ContactOption, Project } from './model';
@@ -260,11 +261,9 @@ export function ProjectEditor({
             {fieldError}
           </p>
         )}
-        {error !== null && (
-          <p className="field-error" role="alert">
-            {t(`errors.${error.error}`)}
-          </p>
-        )}
+        {/* The shared banner, as every other write in the Studio: it honours `partial` and `completed`
+            (a save that landed before the book moved on is never "not changed") and never shows a raw key. */}
+        {error !== null && <ErrorBanner error={error} />}
       </form>
     </Modal>
   );

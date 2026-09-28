@@ -53,10 +53,11 @@
  * which itself delegates every ledger effect to A14 (P3, no second posting path).
  *
  * NO TRANSMIT PATH IN A18 (§7 tripwire, D29). Nothing in this file opens a socket, calls `fetch`, or
- * reaches any transport. `generatePain001` always answers `transmitted:false`; the one transmit path
- * anywhere in this repo is A33's P8-gated `payment_batch_transmit`. Now that A33 has landed, `reason`
- * is `'use_payment_batch_transmit'` when an EBICS channel routes the batch's debtor account and
- * `'no_channel'` otherwise (`hasA33Channel` below is the real detection).
+ * reaches any transport. `generatePain001` always answers `transmitted:false`. Since A36 (D-A36.11) the
+ * EBICS channel downloads statements only, so `reason` is `'upload_in_ebanking'` when an EBICS channel
+ * routes the batch's debtor account (the owner uploads the file in the bank's eBanking and releases it
+ * there; the statement brings the debit) and `'no_channel'` otherwise (`hasEbicsChannel` below). A37's
+ * managed rail keeps its own `payment_batch_transmit` path and is not named here.
  */
 
 import type { WorkspaceContext } from '../context.js';
@@ -292,6 +293,14 @@ function maskIban(iban: string): string {
 export interface ListPayableOpenItemsInput {
   dueBy?: string;
   vendorId?: string;
+}
+
+/**
+ * The live (draft or generated) run a bill is an item of, or null. Exported for A39's `open_item` guard:
+ * a bill a live run pays is settled by that run, never a second time from a bank line (spec §4.3).
+ */
+export function liveBatchOfBill(ctx: WorkspaceContext, vendorBillId: string): string | null {
+  return liveBatchFor(ctx, vendorBillId);
 }
 
 /** Is this vendor bill already sitting in a LIVE batch (draft or generated, not yet paid)? */
@@ -645,13 +654,12 @@ export function createPaymentBatch(ctx: WorkspaceContext, input: CreatePaymentBa
 // --- generatePain001 -------------------------------------------------------------------------------
 
 /**
- * A33 (EBICS bank channel) now exists. A batch has a transmit channel when a NON-retired
- * `ebics_connection` routes the batch's debtor bank account (the `ebics_connection_account` join A33's
- * `transmitPaymentBatch` resolves on). When one does, `generatePain001` answers the truthful reason
- * `use_payment_batch_transmit`; otherwise `no_channel` and the file-download path stays the floor.
- * A18 STILL never transmits: the one transmit verb anywhere is A33's P8-gated `payment_batch_transmit`.
+ * Is the batch's debtor account routed over a NON-retired EBICS connection (the `ebics_connection_account`
+ * join the channel resolves on)? Since A36 that channel is download only (D-A36.11): for such an account
+ * `generatePain001` answers `upload_in_ebanking`, because the file goes to the bank through the owner's
+ * own eBanking upload and release, never through TILL. A18 still never transmits anything.
  */
-function hasA33Channel(ctx: WorkspaceContext, bankAccountId: string): boolean {
+function hasEbicsChannel(ctx: WorkspaceContext, bankAccountId: string): boolean {
   const row = ctx.store.db
     .prepare(
       `SELECT 1 FROM ebics_connection_account a
@@ -914,7 +922,7 @@ export function generatePain001(ctx: WorkspaceContext, input: GeneratePain001Inp
   if (!validated.ok) return validated;
 
   const transmitted = false;
-  const reason = hasA33Channel(ctx, batch.bank_account_id) ? 'use_payment_batch_transmit' : 'no_channel';
+  const reason: 'upload_in_ebanking' | 'no_channel' = hasEbicsChannel(ctx, batch.bank_account_id) ? 'upload_in_ebanking' : 'no_channel';
 
   return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'generate_pain001', () => {
     if (batch.status === 'draft') {
@@ -987,10 +995,10 @@ export interface MarkBatchPaidInput {
   confirmation: boolean;
   valueDate: string;
   idempotencyKey: string;
-  /** A36 F2: the funding bank DEBIT, passed only when the batch is confirmed from the reconciliation
-   *  board. When present the debit is LINKED to this settlement (`bank_txn_link` kind `payment_batch`),
-   *  so the same debit can no longer be double-booked (a 2nd payment via confirm_match, or a 2nd
-   *  journal via create_entry_for_txn). Absent on the plain A18 Payments-surface path, unchanged. */
+  /**
+   * Refused when present (A39 L2, `use_bank_inbox`): an imported bank line is decided only on the bank
+   * inbox (`book_bank_line` with target `payment_batch`), which marks a generated run paid itself.
+   */
   bankTxnId?: string;
 }
 
@@ -1009,6 +1017,15 @@ export function markBatchPaid(ctx: WorkspaceContext, input: MarkBatchPaidInput):
     requireString(input.idempotencyKey, 'idempotencyKey') ??
     optionalId(input.bankTxnId, 'bankTxnId');
   if (guard) return guard;
+  // A39 L2: one door per imported line. A run paid by a camt line is booked on the bank inbox, which
+  // calls this verb WITHOUT a line and records the decision itself; marking it paid by hand stays open.
+  if (input.bankTxnId !== undefined) {
+    return err('use_bank_inbox', {
+      bankTxnId: input.bankTxnId,
+      batchId: input.batchId,
+      reason: 'a bank line is booked on the bank inbox: book_bank_line with target payment_batch marks the run paid',
+    });
+  }
   if (input.confirmation !== true) {
     return err('confirmation_required', {
       field: 'confirmation',
@@ -1038,35 +1055,6 @@ export function markBatchPaid(ctx: WorkspaceContext, input: MarkBatchPaidInput):
 
   const items = readBatchItems(ctx, batch.id);
 
-  // A36 F2: validate and guard the funding bank debit BEFORE any settlement. A debit already linked to
-  // a DIFFERENT settlement refuses here (one debit maps to at most one batch, spec §2 US-A36.5): this
-  // is the double-settle tripwire, refusing before the batch posts rather than after.
-  let fundingTxn: { id: string; credit_debit: string } | undefined;
-  if (input.bankTxnId !== undefined) {
-    fundingTxn = ctx.store.db
-      .prepare('SELECT id, credit_debit FROM bank_txn WHERE workspace_id = ? AND id = ?')
-      .get(ctx.workspaceId, input.bankTxnId) as { id: string; credit_debit: string } | undefined;
-    if (fundingTxn === undefined) return err('not_found', { bankTxnId: input.bankTxnId });
-    if (fundingTxn.credit_debit !== 'DBIT') {
-      return err('wrong_direction', {
-        bankTxnId: input.bankTxnId,
-        creditDebit: fundingTxn.credit_debit,
-        reason: 'a payment batch is funded by an outgoing bank debit, not a credit',
-      });
-    }
-    const existingLink = ctx.store.db
-      .prepare('SELECT kind, target_id FROM bank_txn_link WHERE workspace_id = ? AND bank_txn_id = ?')
-      .get(ctx.workspaceId, input.bankTxnId) as { kind: string; target_id: string } | undefined;
-    if (existingLink !== undefined && existingLink.target_id !== batch.id) {
-      return err('already_matched', {
-        bankTxnId: input.bankTxnId,
-        kind: existingLink.kind,
-        targetId: existingLink.target_id,
-        reason: 'this bank debit is already settled; one debit maps to at most one batch',
-      });
-    }
-  }
-
   return runGuarded(() =>
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'mark_batch_paid', () => {
       const paymentIds: string[] = [];
@@ -1095,18 +1083,6 @@ export function markBatchPaid(ctx: WorkspaceContext, input: MarkBatchPaidInput):
       ctx.store.db
         .prepare("UPDATE payment_batch SET status = 'paid' WHERE workspace_id = ? AND id = ?")
         .run(ctx.workspaceId, batch.id);
-      // A36 F2: record the funding-debit link INSIDE the settlement transaction, so the debit is
-      // marked matched atomically with the batch being paid. `bank_txn_link_one_per_txn` (UNIQUE)
-      // enforces at most one link per debit at the storage layer; the pre-check above already refused a
-      // link to a different settlement, so this insert is fresh.
-      if (fundingTxn !== undefined) {
-        ctx.store.db
-          .prepare(
-            `INSERT INTO bank_txn_link (id, workspace_id, bank_txn_id, kind, target_id, created_by, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .run(ctx.ids.next('btlk'), ctx.workspaceId, fundingTxn.id, 'payment_batch', batch.id, ctx.actor, ctx.clock.now());
-      }
       ctx.audit.record({ entityKind: 'payment_batch', entityId: batch.id, action: 'update', actor: ctx.actor, at: ctx.clock.now() });
       return ok({ batchId: batch.id, paymentIds, batch: batchEcho(ctx, batch.id) });
     }),

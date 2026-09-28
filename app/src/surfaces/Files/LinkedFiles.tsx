@@ -20,7 +20,7 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { CAP, editCapabilityForKind, useCapabilities, type EntityKind } from '../../lib/capabilities';
 import { useT, formatDate } from '../../i18n';
-import { EmptyState, ErrorBanner, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, Skeleton, refusalText } from '../../components/states';
 import { FileDrop } from '../../components/FileDrop';
 import { LockGlyph, MimeGlyph } from './glyphs';
 import { downloadContent, formatBytes, mimeKind, parseFiles, readFileAsUpload, type StoredFile } from './model';
@@ -184,7 +184,7 @@ export function LinkedFiles({ workspaceId, entityKind, entityId }: LinkedFilesPr
                     ? t('files.error.integrity_mismatch')
                     : error.error === 'permission_denied'
                       ? t('files.error.permissionDenied.write')
-                      : t('errors.fallback')
+                      : refusalText(t, error)
           }
         />
       )}

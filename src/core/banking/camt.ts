@@ -85,9 +85,27 @@ export interface ParsedCamtEntry {
   btcFamily: string | null;
   btcSubFamily: string | null;
   batchPmtInfId: string | null;
+  /**
+   * A39 L6: `TxDtls/Refs/PmtInfId`, where a bank reports the run's PmtInfId per transaction rather than in
+   * `Btch`. Kept OUT of `hashCamtStatement` (like the counterparty facts), so a statement imported before
+   * it was read still answers `duplicate: true`; `importCamt` stores it where `Btch` is absent.
+   */
+  txPmtInfId: string | null;
   referenceKind: CamtReferenceKind;
   referenceValue: string | null;
   payerName: string | null;
+  /**
+   * A39: the OTHER party of the movement, read for the inbox and the proposals: the debtor of a credit
+   * (`RltdPties/Dbtr`, `DbtrAcct`), the creditor of a debit (`RltdPties/Cdtr`, `CdtrAcct`). These four
+   * are deliberately NOT part of `entryKey` nor of `hashCamtStatement`: a statement imported before
+   * A39 read none of them, and its re-import must still answer `duplicate: true`.
+   */
+  counterpartyName: string | null;
+  counterpartyIban: string | null;
+  /** The unstructured remittance (`RmtInf/Ustrd`, else `AddtlTxInf`, else the entry's `AddtlNtryInf`). */
+  remittanceText: string | null;
+  /** `TxDtls/Refs/EndToEndId`, the payer's own reference (SPS 2.3 p.76); `NOTPROVIDED` reads as null. */
+  endToEndId: string | null;
 }
 
 export type CamtSkipReason = 'pending' | 'unreadable_amount' | 'unsupported_status' | 'duplicate_entry';
@@ -109,6 +127,13 @@ export interface ParsedCamtStatement {
   /** `StmtPgntn/LastPgInd`; true when the message carries no pagination element (an ordinary
    *  single-message statement is trivially its own last page). */
   lastPage: boolean;
+  /**
+   * A36 §4.4 rule 0: true when this message is ONE PAGE of a statement the bank split over several
+   * messages. Read from either pagination element (`GrpHdr/MsgPgntn`, where ZKB and SPS put it, or
+   * `Stmt/StmtPgntn`, which ZKB fills for CBPR+ only) with a page number above 1 or `LastPgInd`
+   * false, or from an `INTM` balance. The successor rule refuses such a page until TILL reads pages.
+   */
+  splitPage: boolean;
   iban: string | null;
   fromDate: string | null;
   toDate: string | null;
@@ -226,11 +251,48 @@ function parsePayerName(txDtls: string): string | null {
   return tagText(pty, 'Nm');
 }
 
+/**
+ * A39: the counterparty of a movement, `RltdPties/Dbtr` + `DbtrAcct` for money arriving and
+ * `RltdPties/Cdtr` + `CdtrAcct` for money leaving (SPS 2.3 p.84-86). Name and IBAN, either may be absent.
+ */
+function parseCounterparty(txDtls: string | null, creditDebit: string): { name: string | null; iban: string | null } {
+  if (txDtls === null) return { name: null, iban: null };
+  const rltdPties = firstTagBody(txDtls, 'RltdPties');
+  const partyTag = creditDebit === 'CRDT' ? 'Dbtr' : 'Cdtr';
+  const party = firstTagBody(rltdPties, partyTag);
+  const pty = firstTagBody(party, 'Pty') ?? party;
+  const acct = firstTagBody(rltdPties, `${partyTag}Acct`);
+  const iban = tagText(firstTagBody(acct, 'Id'), 'IBAN');
+  return { name: tagText(pty, 'Nm'), iban: iban === null ? null : iban.replace(/\s+/g, '').toUpperCase() };
+}
+
+/** A39: the unstructured remittance text of a transaction, else its additional info, else the entry's. */
+function parseRemittanceText(txDtls: string | null, ntry: string): string | null {
+  const ustrd = txDtls === null ? [] : allTagBodies(firstTagBody(txDtls, 'RmtInf'), 'Ustrd').map((u) => u.trim()).filter((u) => u.length > 0);
+  if (ustrd.length > 0) return ustrd.join(' ');
+  const addtlTx = txDtls === null ? null : tagText(txDtls, 'AddtlTxInf');
+  if (addtlTx !== null) return addtlTx;
+  return tagText(ntry, 'AddtlNtryInf');
+}
+
+/** A39: `TxDtls/Refs/EndToEndId`; the SPS placeholder `NOTPROVIDED` is no reference at all. */
+function parseEndToEndId(txDtls: string | null): string | null {
+  if (txDtls === null) return null;
+  const e2e = tagText(firstTagBody(txDtls, 'Refs'), 'EndToEndId');
+  return e2e === null || e2e.toUpperCase() === 'NOTPROVIDED' ? null : e2e;
+}
+
 /** `TxDtls/Refs/AcctSvcrRef` (p.76): the transaction's own idempotency token, distinct from the
  *  booking-level one above. */
 function txDtlsAcctSvcrRef(txDtls: string): string | null {
   const refs = firstTagBody(txDtls, 'Refs');
   return tagText(refs, 'AcctSvcrRef');
+}
+
+/** A39 L6: `TxDtls/Refs/PmtInfId`, the run's PmtInfId where a bank reports it per transaction, not in `Btch`. */
+function txDtlsPmtInfId(txDtls: string | null): string | null {
+  if (txDtls === null) return null;
+  return tagText(firstTagBody(txDtls, 'Refs'), 'PmtInfId');
 }
 
 // --- D81's identity ladder --------------------------------------------------------------------------
@@ -340,8 +402,13 @@ function parseEntry(ntry: string): EntryParseResult {
 
   const txDtlsList = allTagBodies(ntry, 'TxDtls');
 
-  if (txDtlsList.length <= 1) {
-    const txDtls = txDtlsList[0] ?? null;
+  /**
+   * One row for the whole entry: an entry with at most one `TxDtls`, and (A39 L7 (b)) a batch whose
+   * `TxDtls` are not all in the entry's currency (EUR details under a CHF booking) or do not sum to it.
+   * The bank's entry amount is the booked fact; such a batch is ONE line of it, keyed like a single-line
+   * entry (so it keeps `asr:<Ntry AcctSvcrRef>`), with the run's PmtInfId kept.
+   */
+  const singleLine = (txDtls: string | null): EntryParseResult => {
     const reference = txDtls === null ? { kind: 'none' as const, value: null } : parseStructuredReference(txDtls);
     const payerName = txDtls === null ? null : parsePayerName(txDtls);
     const key = entryIdentityKey({
@@ -355,6 +422,7 @@ function parseEntry(ntry: string): EntryParseResult {
       referenceValue: reference.value,
       payerName,
     });
+    const counterparty = parseCounterparty(txDtls, shared.creditDebit);
     return {
       kind: 'ok',
       entries: [
@@ -365,32 +433,58 @@ function parseEntry(ntry: string): EntryParseResult {
           referenceKind: reference.kind,
           referenceValue: reference.value,
           payerName,
+          counterpartyName: counterparty.name,
+          counterpartyIban: counterparty.iban,
+          remittanceText: parseRemittanceText(txDtls, ntry),
+          endToEndId: parseEndToEndId(txDtls),
           ...shared,
+          txPmtInfId: txDtlsPmtInfId(txDtls),
         },
       ],
     };
-  }
+  };
+
+  if (txDtlsList.length <= 1) return singleLine(txDtlsList[0] ?? null);
 
   // A batch entry (SPS 2.3 p.61: "One booking can combine several transactions"). D81: fan out one
-  // parsed row per `TxDtls`, each with its own reference, payer and `TxDtls/Amt`; the fan-out MUST
-  // sum exactly to the entry amount or the whole message is refused (a batch this parser cannot
-  // account for to the Rappen is not a batch it can safely present as several separate credits).
-  const lines: ParsedCamtEntry[] = [];
-  let sum = 0;
+  // parsed row per `TxDtls`, each with its own reference, payer and `TxDtls/Amt`. The fan-out must sum
+  // exactly to the entry amount in the entry's currency; a batch that does not (A39 L7 (b): EUR details
+  // under a CHF booking) is ONE line of the entry amount, never a refused file.
+  const amounts: { minor: number; currency: string }[] = [];
   for (let i = 0; i < txDtlsList.length; i++) {
-    const txDtls = txDtlsList[i] as string;
-    const txAmt = extractAmount(txDtls, 'Amt');
+    const txAmt = extractAmount(txDtlsList[i] as string, 'Amt');
     if (txAmt === null) {
       return {
         kind: 'error',
         reason: `a batch entry's TxDtls[${i}] has no readable Amt (NtryRef ${entryRef ?? 'none'})`,
       };
     }
-    sum += txAmt.minor;
+    amounts.push(txAmt);
+  }
+  const sum = amounts.reduce((total, a) => total + a.minor, 0);
+  if (sum !== amt.minor || amounts.some((a) => a.currency !== amt.currency)) return singleLine(null);
+
+  // A39 L7 (a): a bank may give every payment of one collective booking the SAME `TxDtls/Refs/AcctSvcrRef`
+  // (SPS 2025 wants it unique; this only tolerates the deviation). Inside ONE `Ntry`, a ref that repeats an
+  // earlier one keys `asr:<ref>#<n>`, n counting its earlier repeats there (R, S, R key asr:R, asr:S,
+  // asr:R#1); the first keeps `asr:<ref>`, so an unrepeated statement keeps its keys and its content hash,
+  // and a ref stored from another `Ntry` or file still answers `duplicate_entry`.
+  const seenRefs = new Map<string, number>();
+  const lines: ParsedCamtEntry[] = [];
+  for (let i = 0; i < txDtlsList.length; i++) {
+    const txDtls = txDtlsList[i] as string;
+    const txAmt = amounts[i] as { minor: number; currency: string };
     const reference = parseStructuredReference(txDtls);
     const payerName = parsePayerName(txDtls);
+    const ref = txDtlsAcctSvcrRef(txDtls);
+    let acctSvcrRef = ref;
+    if (ref !== null) {
+      const repeats = seenRefs.get(ref) ?? 0;
+      seenRefs.set(ref, repeats + 1);
+      if (repeats > 0) acctSvcrRef = `${ref}#${repeats}`;
+    }
     const key = entryIdentityKey({
-      acctSvcrRef: txDtlsAcctSvcrRef(txDtls),
+      acctSvcrRef,
       entryRef,
       date: identityDate,
       amountMinor: txAmt.minor,
@@ -401,6 +495,7 @@ function parseEntry(ntry: string): EntryParseResult {
       payerName,
       ordinal: i,
     });
+    const counterparty = parseCounterparty(txDtls, shared.creditDebit);
     lines.push({
       entryKey: key,
       amountMinor: txAmt.minor,
@@ -408,14 +503,13 @@ function parseEntry(ntry: string): EntryParseResult {
       referenceKind: reference.kind,
       referenceValue: reference.value,
       payerName,
+      counterpartyName: counterparty.name,
+      counterpartyIban: counterparty.iban,
+      remittanceText: parseRemittanceText(txDtls, ntry),
+      endToEndId: parseEndToEndId(txDtls),
       ...shared,
+      txPmtInfId: txDtlsPmtInfId(txDtls),
     });
-  }
-  if (sum !== amt.minor) {
-    return {
-      kind: 'error',
-      reason: `a batch entry's ${txDtlsList.length} TxDtls sum to ${sum} but the entry Amt is ${amt.minor} (NtryRef ${entryRef ?? 'none'})`,
-    };
   }
   return { kind: 'ok', entries: lines };
 }
@@ -431,7 +525,9 @@ function parseBalances(stmt: string): {
   openingBalanceMinor: number | null;
   closingBalanceMinor: number | null;
   balanceCurrency: string | null;
+  intermediate: boolean;
 } {
+  let intermediate = false;
   let opening: number | null = null;
   let closing: number | null = null;
   let currency: string | null = null;
@@ -439,10 +535,15 @@ function parseBalances(stmt: string): {
     const tp = firstTagBody(bal, 'Tp');
     const cdOrPrtry = firstTagBody(tp, 'CdOrPrtry');
     const code = tagText(cdOrPrtry, 'Cd');
+    // `Bal/Tp/SubTp/Cd` (ISO 20022 BalanceSubType1Choice holds `Cd` directly, SPS 2.3 p.54). The
+    // first `<Cd>` anywhere under SubTp also reads the older `SubTp/CdOrPrtry/Cd` form this parser
+    // used to expect, so both shapes are recognised (A36 §4.4 rule 0).
     const subTp = firstTagBody(tp, 'SubTp');
-    const subCdOrPrtry = firstTagBody(subTp, 'CdOrPrtry');
-    const subCode = tagText(subCdOrPrtry, 'Cd');
-    if (subCode !== null && subCode.toUpperCase() === 'INTM') continue;
+    const subCode = tagText(subTp, 'Cd');
+    if (subCode !== null && subCode.toUpperCase() === 'INTM') {
+      intermediate = true;
+      continue;
+    }
     const amt = extractAmount(bal, 'Amt');
     const cdtDbtInd = tagText(bal, 'CdtDbtInd');
     if (amt === null || code === null) continue;
@@ -458,18 +559,30 @@ function parseBalances(stmt: string): {
       currency = amt.currency;
     }
   }
-  return { openingBalanceMinor: opening, closingBalanceMinor: closing, balanceCurrency: currency };
+  return { openingBalanceMinor: opening, closingBalanceMinor: closing, balanceCurrency: currency, intermediate };
 }
 
-/** `Stmt/StmtPgntn` (p.44): absent on an ordinary single-message statement, which is trivially its
- *  own last page. */
-function parsePagination(stmt: string): { pageNumber: number; lastPage: boolean } {
-  const pgntn = firstTagBody(stmt, 'StmtPgntn');
-  if (pgntn === null) return { pageNumber: 1, lastPage: true };
+/** One pagination element (`StmtPgntn` or `MsgPgntn`, the same Pagination1 shape), or null. */
+function readPagination(pgntn: string | null): { pageNumber: number; lastPage: boolean } | null {
+  if (pgntn === null) return null;
   const pgNb = tagText(pgntn, 'PgNb');
   const pageNumber = pgNb === null ? 1 : (Number.parseInt(pgNb, 10) || 1);
   const lastPage = tagText(pgntn, 'LastPgInd') === 'true';
   return { pageNumber, lastPage };
+}
+
+/**
+ * The page of this message. `Stmt/StmtPgntn` (p.44) when present, else `GrpHdr/MsgPgntn` (A36 §4.4
+ * rule 0: ZKB and SPS put the page there, and ZKB fills `StmtPgntn` for CBPR+ only), else an ordinary
+ * single-message statement, trivially its own last page. The page number is part of the statement's
+ * identity (D81), so a page 2 flagged only in `MsgPgntn` no longer collides with its page 1.
+ */
+function parsePagination(stmt: string, grpHdr: string | null): { pageNumber: number; lastPage: boolean; split: boolean } {
+  const onStatement = readPagination(firstTagBody(stmt, 'StmtPgntn'));
+  const onMessage = readPagination(firstTagBody(grpHdr, 'MsgPgntn'));
+  const page = onStatement ?? onMessage ?? { pageNumber: 1, lastPage: true };
+  const split = [onStatement, onMessage].some((p) => p !== null && (p.pageNumber > 1 || !p.lastPage));
+  return { ...page, split };
 }
 
 export type ParseCamtResult = Result<{ statement: ParsedCamtStatement }>;
@@ -535,8 +648,8 @@ export function parseCamt(xml: unknown): ParseCamtResult {
   const fromDate = tagText(frToDt, 'FrDtTm')?.slice(0, 10) ?? null;
   const toDate = tagText(frToDt, 'ToDtTm')?.slice(0, 10) ?? null;
 
-  const balances = parseBalances(stmt);
-  const pagination = parsePagination(stmt);
+  const { intermediate, ...balances } = parseBalances(stmt);
+  const pagination = parsePagination(stmt, firstTagBody(normalized, 'GrpHdr'));
 
   const entries: ParsedCamtEntry[] = [];
   const skipped: SkippedCamtEntry[] = [];
@@ -559,6 +672,7 @@ export function parseCamt(xml: unknown): ParseCamtResult {
       electronicSeqNb: tagText(stmt, 'ElctrncSeqNb'),
       pageNumber: pagination.pageNumber,
       lastPage: pagination.lastPage,
+      splitPage: pagination.split || intermediate,
       iban,
       fromDate,
       toDate,

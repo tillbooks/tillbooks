@@ -21,7 +21,7 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Tabs, type TabItem } from '../../components/Tabs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { Status, type StatusKind } from '../../components/Status';
 import { PayrollHandoff } from './PayrollHandoff';
 import { LinkedFiles } from '../Files/LinkedFiles';
@@ -321,7 +321,7 @@ export function Hr() {
         }
       />
 
-      {writeError !== null && <ErrorBanner error={writeError} message={t(`hr.error.${writeError.error}`)} />}
+      {writeError !== null && <ErrorBanner error={writeError} message={refusalText(t, writeError, { own: 'hr.error' })} />}
 
       <Tabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as Tab)} label={t('hr.route.title')} />
     </section>

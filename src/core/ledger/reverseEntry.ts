@@ -62,8 +62,32 @@ interface OriginalRow {
  * returned ok while the row still read `storno_entry_id null`, after which `fx_revaluation_reverse`
  * answered ok too and the open period carried 6949 = +8'000 and 1000 = 952'000 instead of 0 and
  * 960'000. So `fx` belongs to `fx_revaluation_reverse`, and the run mints B and D under that owner.
+ *
+ * A39 L3 (the lean bank inbox, lean critic C1) added the two money-path sources, each by ROW, and a
+ * resolver may now answer `null` (no owner: anyone may reverse it):
+ *   - `camt` (an entry booked from a bank line) belongs to `reopen_bank_line` while a live bank-line
+ *     decision names it, or once it has a posted reversal (so its Storno cannot be reversed raw); a
+ *     legacy camt entry no live decision names and nothing reversed stays reversible (C16a).
+ *   - `payment` belongs to `reverse_payment` when a `payment` row names the entry: the raw journal
+ *     "Stornieren" of a payment used to leave the payment `posted` and its invoice `settled` beside a
+ *     Storno (C1). A `post_entry` with source `payment` and no payment row stays reversible.
+ * And for EVERY caller, the owners included, an entry a LIVE bank-line claim holds refuses `owned_by
+ * reopen_bank_line` naming the line (`claimHolderOf` below): `reopen_bank_line` supersedes its decision
+ * (releasing the claims) before it reverses, so a transfer whose other leg the other account's line
+ * still holds refuses there too, naming that line (C5).
  */
-export type OwnerResolver = (ctx: WorkspaceContext, entryId: string) => string;
+export type OwnerResolver = (ctx: WorkspaceContext, entryId: string) => string | null;
+
+/**
+ * The bank line whose LIVE claim holds a leg of `entryId`, or null (A39 L3). Exported for the reads that
+ * must say so BEFORE a raw Storno is offered (`list_payments`, critic M3 lean).
+ */
+export function claimHolderOf(ctx: WorkspaceContext, entryId: string): string | null {
+  const row = ctx.store.db
+    .prepare('SELECT bank_txn_id AS t FROM bank_line_claim WHERE workspace_id = ? AND entry_id = ? AND released_at IS NULL ORDER BY rowid LIMIT 1')
+    .get(ctx.workspaceId, entryId) as { t: string } | undefined;
+  return row?.t ?? null;
+}
 
 export const OWNED_REVERSAL_SOURCES: Readonly<Record<string, string | OwnerResolver>> = {
   [VAT_SETTLEMENT_SOURCE]: 'vat_settlement_reverse',
@@ -74,6 +98,22 @@ export const OWNED_REVERSAL_SOURCES: Readonly<Record<string, string | OwnerResol
       .prepare('SELECT id FROM provision_release WHERE workspace_id = ? AND entry_id = ?')
       .get(ctx.workspaceId, entryId) as { id: string } | undefined;
     return release === undefined ? 'provision_reverse' : 'provision_release_reverse';
+  },
+  camt: (ctx, entryId) => {
+    const live = ctx.store.db
+      .prepare('SELECT 1 AS p FROM bank_line_decision WHERE workspace_id = ? AND entry_id = ? AND superseded_at IS NULL LIMIT 1')
+      .get(ctx.workspaceId, entryId);
+    if (live !== undefined) return 'reopen_bank_line';
+    const reversed = ctx.store.db
+      .prepare("SELECT 1 AS p FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ? AND status = 'posted' LIMIT 1")
+      .get(ctx.workspaceId, entryId);
+    return reversed !== undefined ? 'reopen_bank_line' : null;
+  },
+  payment: (ctx, entryId) => {
+    const payment = ctx.store.db
+      .prepare('SELECT 1 AS p FROM payment WHERE workspace_id = ? AND journal_entry_id = ? LIMIT 1')
+      .get(ctx.workspaceId, entryId);
+    return payment !== undefined ? 'reverse_payment' : null;
   },
 };
 
@@ -95,7 +135,8 @@ function ownerOf(ctx: WorkspaceContext, original: OriginalRow): { verb: string; 
   }
   const rule = OWNED_REVERSAL_SOURCES[row.source];
   if (rule === undefined) return null;
-  return { verb: typeof rule === 'string' ? rule : rule(ctx, row.id), ownedEntryId: row.id, source: row.source };
+  const verb = typeof rule === 'string' ? rule : rule(ctx, row.id);
+  return verb === null ? null : { verb, ownedEntryId: row.id, source: row.source };
 }
 
 interface ReversalRow {
@@ -163,6 +204,20 @@ function reverse(ctx: WorkspaceContext, input: ReverseEntryInput, owner: string 
   }
   if (original.status !== 'posted') {
     return err('not_posted', { entryId: input.entryId });
+  }
+  // A39 L3: a leg a live bank-line decision holds is released only by that line's own undo, for EVERY
+  // caller (the owning verbs too): the Storno would otherwise leave the line reading booked or matched
+  // on money that is gone.
+  const holder = claimHolderOf(ctx, input.entryId);
+  if (holder !== null) {
+    return err('owned_by', {
+      verb: 'reopen_bank_line',
+      bankTxnId: holder,
+      entryId: input.entryId,
+      source: original.source,
+      ownedEntryId: input.entryId,
+      ownedSource: original.source,
+    });
   }
   const owned = ownerOf(ctx, original);
   if (owned !== null && owner !== owned.verb) {

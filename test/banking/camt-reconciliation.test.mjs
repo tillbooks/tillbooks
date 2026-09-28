@@ -26,6 +26,7 @@ import {
   createBankAccount,
   applyQrMatch,
   importCamt,
+  bookBankLine,
   suggestCamtMatches,
   confirmCamtMatch,
   createEntryForTxn,
@@ -34,6 +35,7 @@ import {
   setBankOpeningBalance,
 } from '../../dist/core/banking/index.js';
 import { buildQrrReference } from '../../dist/core/payments/reference.js';
+import { postEntry } from '../../dist/core/ledger/postEntry.js';
 import { createVendorBill, postVendorBill } from '../../dist/core/purchase/index.js';
 import { createContact } from '../../dist/core/sales/index.js';
 import { setup, issueInvoice, counts, accountBalance, GROSS_MINOR } from '../payments/support.mjs';
@@ -226,12 +228,30 @@ test('a mismatched IBAN and an unregistered account are P9 rejections, and nothi
   const t = world();
   const wrongIban = camtXml({ statementId: 'MIS-1', entryRef: 'X', amountMinor: 100, creditDebit: 'DBIT', iban: 'CH4431999123000889012' });
   const before = counts(t.store, t.workspaceId);
-  fails(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: wrongIban, idempotencyKey: 'mis-1' }), 'iban_mismatch');
+  // A39 D-A39.9 (walk B2.2): an IBAN registered NOWHERE is a missing account, named with the file IBAN.
+  const unregistered = fails(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: wrongIban, idempotencyKey: 'mis-1' }), 'needs_bank_account');
+  assert.equal(unregistered.fileIban, 'CH4431999123000889012', 'the refusal names the file IBAN');
   fails(
     importCamt(t.ctx, { bankAccountId: 'nonexistent', xml: wrongIban, idempotencyKey: 'mis-2' }),
     'needs_bank_account',
   );
   assert.deepEqual(counts(t.store, t.workspaceId), before, 'a rejected import still wrote a row');
+  // An IBAN registered on ANOTHER Bankkonto of this workspace is a real mismatch: both IBANs and the
+  // account the file belongs to are named, so the person can pick it.
+  const other = ok(
+    createBankAccount(t.ctx, {
+      name: 'Zweitkonto',
+      iban: 'CH44 3199 9123 0008 8901 2',
+      currency: 'CHF',
+      ledgerAccountId: t.bankId,
+      idempotencyKey: 'mis-other',
+    }),
+  );
+  const mismatch = fails(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: wrongIban, idempotencyKey: 'mis-3' }), 'iban_mismatch');
+  assert.equal(mismatch.fileIban, 'CH4431999123000889012');
+  assert.equal(mismatch.accountIban, 'CH9300762011623852957');
+  assert.equal(mismatch.matchingBankAccountId, other.bankAccountId, 'the refusal names the account the file belongs to');
+  assert.equal(mismatch.matchingBankAccountName, 'Zweitkonto');
 });
 
 // --- the A21 composition (spec §0 note 2): a CREDIT routes into A21's queue, never a second matcher -
@@ -265,10 +285,17 @@ test('a booked, non-reversal CREDIT routes into the A21 queue and settles the in
   assert.equal(proposal.proposal.targetId, invoice.id);
   assert.equal(proposal.proposal.confidence, 'high');
 
-  ok(applyQrMatch(t.ctx, { creditId: row.creditId, invoiceId: invoice.id, mode: 'full', confirmed: true, idempotencyKey: 'qr-apply' }));
+  // A39 L2: the A21 verbs refuse a credit an imported line carries; the line is booked on the bank inbox,
+  // and the queue row follows it.
+  const refused = applyQrMatch(t.ctx, { creditId: row.creditId, invoiceId: invoice.id, mode: 'full', confirmed: true, idempotencyKey: 'qr-apply' });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.error, 'use_bank_inbox');
+  assert.equal(refused.bankTxnId, row.bankTxnId);
+  ok(bookBankLine(t.ctx, { bankTxnId: row.bankTxnId, target: { kind: 'open_item', documentId: invoice.id }, idempotencyKey: 'qr-book' }));
   const after = ok(listReconciliation(t.ctx, { statementId: imported.statementId }));
   const decided = [...after.matched].find((r) => r.entryRef === 'CREDIT-1');
   assert.equal(decided.status, 'matched');
+  assert.equal(t.store.db.prepare('SELECT status FROM reconciliation_match WHERE id = ?').get(row.creditId).status, 'applied', 'the queue row follows its line');
 });
 
 test('a reversal-flagged entry is imported as a fact but is unclassified, never routed to A21', () => {
@@ -327,8 +354,12 @@ test('confirmCamtMatch settles a debit against a vendor bill, and a replay write
   assert.equal(paymentsAfterFirst, 1);
   assert.equal(entriesAfterFirst, before.entries + 1);
 
-  const replay = ok(confirmCamtMatch(t.ctx, { bankTxnId: row.bankTxnId, vendorBillId: billId, idempotencyKey: 'cm-replay' }));
-  assert.equal(replay.targetId, confirmed.targetId, 'confirming an already-linked txn under a new key must replay the same link');
+  // The SAME key replays the stored answer; a NEW key on the now-booked line is a second decision and
+  // A39 refuses it, naming the decision that holds the line (walk B14.3), instead of echoing it as ok.
+  const sameKey = ok(confirmCamtMatch(t.ctx, { bankTxnId: row.bankTxnId, vendorBillId: billId, idempotencyKey: 'cm-confirm' }));
+  assert.equal(sameKey.targetId, confirmed.targetId, 'a same-key replay answers the stored decision');
+  const replay = fails(confirmCamtMatch(t.ctx, { bankTxnId: row.bankTxnId, vendorBillId: billId, idempotencyKey: 'cm-replay' }), 'line_not_open');
+  assert.equal(replay.state, 'booked');
   const paymentsAfterReplay = t.store.db.prepare('SELECT COUNT(*) AS n FROM payment WHERE workspace_id = ?').get(t.workspaceId).n;
   const entriesAfterReplay = t.store.db.prepare('SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?').get(t.workspaceId).n;
   assert.equal(paymentsAfterReplay, 1, 'a replay against an already-linked txn moved the ledger a second time');
@@ -390,12 +421,32 @@ test('confirmCamtMatch links to an existing journal entry with NO second posting
   const listed2 = ok(listReconciliation(t.ctx, { statementId: imported2.statementId }));
   const row2 = listed2.unmatched.find((r) => r.entryRef === 'LNK-2');
   const before = counts(t.store, t.workspaceId);
-  ok(confirmCamtMatch(t.ctx, { bankTxnId: row2.bankTxnId, entryId: manual.entryId, idempotencyKey: 'link-annotate' }));
+  // A39 (walk B9.3): the entry already backs the FIRST line (that line's booking created it), so a
+  // second line may not claim it too; the refusal names the line that holds it. Before A39 this linked,
+  // the second line read "Zugeordnet" and the ledger missed a movement.
+  const refused = fails(confirmCamtMatch(t.ctx, { bankTxnId: row2.bankTxnId, entryId: manual.entryId, idempotencyKey: 'link-annotate' }), 'entry_already_linked');
+  assert.equal(refused.bankTxnId, row.bankTxnId, 'the refusal names the line the entry already backs');
+  assert.equal(counts(t.store, t.workspaceId).entries, before.entries, 'a refused link posted nothing');
+
+  // A hand-posted entry that books THIS movement on 1020 links with NO second posting.
+  const posted = postEntry(t.ctx, {
+    date: '2026-03-01',
+    source: 'manual',
+    description: 'von Hand erfasst',
+    idempotencyKey: 'link-manual',
+    lines: [
+      { account: t.acc('6500'), debit: 2000 },
+      { account: t.acc('1020'), credit: 2000 },
+    ],
+  });
+  assert.equal(posted.ok, true);
+  const mid = counts(t.store, t.workspaceId);
+  ok(confirmCamtMatch(t.ctx, { bankTxnId: row2.bankTxnId, entryId: posted.entryId, idempotencyKey: 'link-annotate-2' }));
   const after = counts(t.store, t.workspaceId);
-  assert.equal(after.entries, before.entries, 'annotating a link posted a SECOND journal entry');
+  assert.equal(after.entries, mid.entries, 'annotating a link posted a SECOND journal entry');
 });
 
-test('confirmCamtMatch refuses a credit-classified txn with use_qr_queue, naming the A21 row', () => {
+test('A39: a credit is handled like a debit: confirmCamtMatch matches an entry on it and refuses a bill settlement', () => {
   const t = world();
   const invoice = issueInvoice(t.ctx, { contactId: t.customerId, key: 'qr2' });
   const reference = buildQrrReference(invoice.number);
@@ -411,11 +462,10 @@ test('confirmCamtMatch refuses a credit-classified txn with use_qr_queue, naming
   const imported = ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml, idempotencyKey: 'qr2-import' }));
   const listed = ok(listReconciliation(t.ctx, { statementId: imported.statementId }));
   const row = listed.unmatched.find((r) => r.entryRef === 'CREDIT-2');
-  const rejection = fails(
-    confirmCamtMatch(t.ctx, { bankTxnId: row.bankTxnId, entryId: 'whatever', idempotencyKey: 'qr2-confirm' }),
-    'use_qr_queue',
-  );
-  assert.equal(rejection.creditId, row.creditId);
+  // An unknown entry is simply not found (the credit is no longer sent to the queue as the only door).
+  fails(confirmCamtMatch(t.ctx, { bankTxnId: row.bankTxnId, entryId: 'whatever', idempotencyKey: 'qr2-confirm' }), 'not_found');
+  // A vendor-bill settlement is an outgoing payment, which money arriving never is (A20-C3 stands).
+  fails(confirmCamtMatch(t.ctx, { bankTxnId: row.bankTxnId, vendorBillId: 'any', idempotencyKey: 'qr2-bill' }), 'wrong_direction');
 });
 
 // --- createEntryForTxn (US-A20.4) --------------------------------------------------------------------
@@ -433,21 +483,24 @@ test("a fee debit's createEntryForTxn posts a balanced A02 entry, and a replay w
   assert.equal(accountBalance(t.store, t.workspaceId, '1020'), -4500);
 
   const entriesAfterFirst = t.store.db.prepare('SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?').get(t.workspaceId).n;
-  const replay = ok(createEntryForTxn(t.ctx, { bankTxnId: row.bankTxnId, contraAccountId: t.acc('6500'), idempotencyKey: 'fee-book-2' }));
-  assert.equal(replay.entryId, booked.entryId);
+  const sameKey = ok(createEntryForTxn(t.ctx, { bankTxnId: row.bankTxnId, contraAccountId: t.acc('6500'), idempotencyKey: 'fee-book' }));
+  assert.equal(sameKey.entryId, booked.entryId, 'a same-key replay answers the stored booking');
+  // A39 (walk B14.3): a NEW key on the booked line is a second decision, refused and named.
+  fails(createEntryForTxn(t.ctx, { bankTxnId: row.bankTxnId, contraAccountId: t.acc('6500'), idempotencyKey: 'fee-book-2' }), 'line_not_open');
   const entriesAfterReplay = t.store.db.prepare('SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?').get(t.workspaceId).n;
   assert.equal(entriesAfterReplay, entriesAfterFirst, 'booking an already-linked txn a second time posted a second entry');
 });
 
-test('createEntryForTxn refuses taxCode (not modelled) and a cross-currency txn, both as P9', () => {
+test('A39 (walk B6.2): createEntryForTxn HONOURS taxCode, booking the Vorsteuer exactly as a manual journal line', () => {
   const t = world();
   const xml = camtXml({ statementId: 'FEE-2', entryRef: 'FEE-B', amountMinor: 1000, creditDebit: 'DBIT', iban: 'CH9300762011623852957' });
   const imported = ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml, idempotencyKey: 'fee2-import' }));
   const row = ok(listReconciliation(t.ctx, { statementId: imported.statementId })).unmatched.find((r) => r.entryRef === 'FEE-B');
-  fails(
-    createEntryForTxn(t.ctx, { bankTxnId: row.bankTxnId, contraAccountId: t.acc('6500'), taxCode: 'VST-M', idempotencyKey: 'fee2-tax' }),
-    'unsupported',
-  );
+  ok(createEntryForTxn(t.ctx, { bankTxnId: row.bankTxnId, contraAccountId: t.acc('6500'), taxCode: 'VST-M', idempotencyKey: 'fee2-tax' }));
+  // CHF 10.00 gross at 8.1 %: tax round(1000 * 810 / 10810) = 75, net 925.
+  assert.equal(accountBalance(t.store, t.workspaceId, '6500'), 925);
+  assert.equal(accountBalance(t.store, t.workspaceId, '1170'), 75);
+  assert.equal(accountBalance(t.store, t.workspaceId, '1020'), -1000);
 });
 
 // --- listReconciliation (US-A20.5): the D64 as-of reconciled flag ------------------------------------
@@ -486,7 +539,7 @@ test('a statement fully matched reconciles the ledger bank account to the CLBD b
   const listed = ok(listReconciliation(t.ctx, { statementId: imported.statementId }));
   const creditRow = listed.unmatched.find((r) => r.entryRef === 'CREDIT');
   const feeRow = listed.unmatched.find((r) => r.entryRef === 'FEE');
-  ok(applyQrMatch(t.ctx, { creditId: creditRow.creditId, invoiceId: invoice.id, mode: 'full', confirmed: true, idempotencyKey: 'recon-apply' }));
+  ok(bookBankLine(t.ctx, { bankTxnId: creditRow.bankTxnId, target: { kind: 'open_item', documentId: invoice.id }, idempotencyKey: 'recon-apply' }));
   ok(createEntryForTxn(t.ctx, { bankTxnId: feeRow.bankTxnId, contraAccountId: t.acc('6500'), idempotencyKey: 'recon-fee' }));
 
   const afterSettlement = ok(listReconciliation(t.ctx, { statementId: imported.statementId }));

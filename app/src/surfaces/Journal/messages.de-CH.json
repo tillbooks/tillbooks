@@ -117,7 +117,25 @@
     "discardConfirmBody": "Was du in dieser Buchung erfasst hast, ist noch nicht gespeichert und geht verloren.",
     "discardConfirmKeep": "Weiter bearbeiten",
     "discardConfirmAction": "Verwerfen",
-    "vatUnreconciled": "Die MWST stimmt nicht überein: Die markierten Zeilen ergeben {expected}, auf den MWST-Konten sind {booked} gebucht."
+    "vatUnreconciled": "Die MWST stimmt nicht überein: Die markierten Zeilen ergeben {expected}, auf den MWST-Konten sind {booked} gebucht.",
+    "ownedBy": {
+      "reopen_bank_line": "Diese Buchung gehört zu einer Bankzeile: hole die Zeile unter Bank zurück.",
+      "reverse_payment": "Diese Buchung gehört zu einer Zahlung: storniere die Zahlung unter Zahlungen.",
+      "reopen_bank_line_done": "Diese Buchung stammt aus einer Bankzeile und ist schon storniert. Die Zeile entscheidest du unter Bank.",
+      "vat_settlement_reverse": "Diese Buchung gehört zu einer MWST-Saldierung: storniere die Saldierung unter MWST.",
+      "accrual_reverse": "Diese Buchung gehört zu einer Abgrenzung: storniere die Abgrenzung unter Perioden.",
+      "provision_reverse": "Diese Buchung gehört zu einer Rückstellung: storniere die Rückstellung unter Perioden.",
+      "provision_release_reverse": "Diese Buchung löst eine Rückstellung auf: nimm die Auflösung unter Perioden zurück.",
+      "fx_revaluation_reverse": "Diese Buchung gehört zu einer Fremdwährungsbewertung: storniere die Bewertung unter Fremdwährung."
+    },
+    "ownedByShowLine": "Bankzeile zeigen",
+    "ownedByGoTo": {
+      "bank": "Zur Bank",
+      "payments": "Zu den Zahlungen",
+      "mwst": "Zur MWST",
+      "periods": "Zu den Perioden",
+      "fx": "Zur Fremdwährung"
+    }
   },
   "errors": {
     "unbalanced": "Die Buchung ist nicht ausgeglichen. Soll muss gleich Haben sein.",

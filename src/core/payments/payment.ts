@@ -50,7 +50,7 @@ import type { Result } from '../result.js';
 import { requireString, requireDate, optionalId, optionalDate } from '../ledger/inputGuards.js';
 import { postEntry } from '../ledger/postEntry.js';
 import type { LineInput } from '../ledger/postEntry.js';
-import { reverseEntry } from '../ledger/reverseEntry.js';
+import { reverseOwnedEntry, claimHolderOf } from '../ledger/reverseEntry.js';
 import { computeLineTax } from '../vat/applyVat.js';
 import { resolveFxRate, baseCurrencyOf as fxBaseCurrencyOf } from '../fx/rates.js';
 import { convertMinor, RATE_ONE } from '../fx/rateMath.js';
@@ -2466,11 +2466,17 @@ export function reversePayment(ctx: WorkspaceContext, input: ReversePaymentInput
 
   return runGuarded(() =>
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'reverse_payment', () => {
-      const reversed = reverseEntry(ctx, {
-        entryId: payment.journal_entry_id as string,
-        date,
-        idempotencyKey: JSON.stringify(['payment_reversal', payment.id]),
-      });
+      // A39 L3 (lean critic C1): a payment's entry belongs to THIS verb (`OWNED_REVERSAL_SOURCES`), so the
+      // raw journal Storno refuses `owned_by reverse_payment` and the payment row always moves with it.
+      const reversed = reverseOwnedEntry(
+        ctx,
+        {
+          entryId: payment.journal_entry_id as string,
+          date,
+          idempotencyKey: JSON.stringify(['payment_reversal', payment.id]),
+        },
+        'reverse_payment',
+      );
       if (!reversed.ok) throw new PaymentAbort(reversed);
       const reversalId = reversed.reversalId as string;
 
@@ -2595,6 +2601,10 @@ function mapPayment(ctx: WorkspaceContext, row: PaymentRow) {
     journalEntryId: row.journal_entry_id,
     reversalEntryId: row.reversal_entry_id,
     reversedAt: row.reversed_at,
+    // A39 L3 (critic M3 lean): the bank line whose live decision holds this payment's entry. Such a
+    // payment is undone on that line (`reopen_bank_line`), never by `reverse_payment`, which refuses
+    // `owned_by`; the Studio offers the line instead of a Storno that could only fail.
+    bankLineId: row.status === 'reversed' || row.journal_entry_id === null ? null : claimHolderOf(ctx, row.journal_entry_id),
     allocatedMinor,
     onAccountMinor: row.amount_minor - allocatedMinor,
     allocations: allocations.map((a) => mapAllocation(ctx, a)),

@@ -112,6 +112,14 @@ export const DIAL_CAPABILITY_FOR_ACTION: Readonly<Record<string, string>> = {
   set_role: 'customize',
   revoke_member: 'customize',
   define_role: 'customize',
+
+  // A39, the bank inbox (spec A39 D-A39.4): the two single-capability writes (their `agent.verb.*`
+  // labels live in the Studio, which `test/attention/verb-labels.test.mjs` requires of every name-mapped
+  // verb). `book_bank_line` stays input-keyed below: its consequence depends on its target (post for
+  // accounts and matches, pay for settlements). `reopen_bank_line` keeps the stricter `pay` (it can
+  // reverse a settlement).
+  ignore_bank_line: 'post',
+  reopen_bank_line: 'pay',
 };
 
 /**
@@ -155,6 +163,31 @@ export const INPUT_KEYED_DIAL_RULES: ReadonlyArray<InputKeyedDialRule> = [
       return kind === 'statements_signoff' || kind === 'gv_attestation';
     },
     why: 'The statements sign-off and the GV attestation put a person behind the year\'s figures (G22 §10.1, the close templates); an agent drafts them at the post tier for the owner, never records them alone.',
+  },
+
+  // --- A39, the bank inbox (spec A39 §0.1 D-A39.4), one appended block -----------------------------
+  // `book_bank_line`'s consequence depends on its TARGET, so it is keyed on the input: booking a line to
+  // accounts or matching an existing entry is `post`, settling an open item or a payment run is `pay`.
+  // The two single-capability A39 writes sit in the name map above.
+  {
+    action: 'book_bank_line',
+    capability: 'post',
+    when: (input) => {
+      const t = input.target;
+      const kind = typeof t === 'object' && t !== null ? (t as { kind?: unknown }).kind : undefined;
+      return typeof input.bankTxnId === 'string' && (kind === 'accounts' || kind === 'existing_entry');
+    },
+    why: 'Booking a bank line to accounts or matching it to an existing entry puts a posting behind a bank fact; an agent drafts it at the post tier.',
+  },
+  {
+    action: 'book_bank_line',
+    capability: 'pay',
+    when: (input) => {
+      const t = input.target;
+      const kind = typeof t === 'object' && t !== null ? (t as { kind?: unknown }).kind : undefined;
+      return typeof input.bankTxnId === 'string' && (kind === 'open_item' || kind === 'payment_batch');
+    },
+    why: 'Settling an invoice, a vendor bill or a payment run from a bank line moves money between parties; an agent drafts it at the pay tier.',
   },
 ];
 
@@ -247,4 +280,8 @@ export const CONSEQUENCE_FOR_ACTION: Readonly<Record<string, string>> = {
   checklist_item_skip: 'Marks the item as not applicable with your reason; it stays visible in the run and in the audit log.',
   checklist_item_reopen: 'Reopens the item and voids its live sign-off; the earlier sign-off stays on record as voided.',
   checklist_abandon: 'Abandons the run with your reason; it stays listed and stops feeding the attention hub.',
+  // A39, the bank inbox: one appended block.
+  book_bank_line: 'Books the bank line: posts its entry or settles the invoice, bill or payment run it paid; the only correction afterwards is reopening the line, which reverses what was booked.',
+  ignore_bank_line: 'Takes the bank line out of the inbox with your reason; its money must reach the books elsewhere, which the balance line shows.',
+  reopen_bank_line: 'Reverses the entry or payment the bank line created, or brings an ignored line back, and reopens the line; a reversal is a new posting and the old decision stays on record.',
 };

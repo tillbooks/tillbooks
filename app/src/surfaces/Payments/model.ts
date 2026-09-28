@@ -80,6 +80,11 @@ export interface Payment {
   journalEntryId: string;
   reversalEntryId: string | null;
   reversedAt: string | null;
+  /**
+   * A39 L3: the bank line whose live decision holds this payment. Such a payment is undone on that line
+   * (`reopen_bank_line`), so the surface offers the line and never a Storno that could only refuse.
+   */
+  bankLineId: string | null;
   allocatedMinor: number;
   onAccountMinor: number;
   allocations: PaymentAllocation[];

@@ -118,7 +118,7 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, formatMoney } from '../../i18n';
-import { ErrorBanner } from '../../components/states';
+import { ErrorBanner, refusalText } from '../../components/states';
 import {
   OPENING_BALANCE_ACCOUNT_NAME,
   OPENING_BALANCE_ACCOUNT_NUMBER,
@@ -699,7 +699,7 @@ function RateNotStored({ error }: { error: Err }) {
       ? t('bank.fxRate.notStored.conflict', { stored })
       : error.error === 'permission_denied'
         ? t('bank.fxRate.notStored.denied')
-        : t('errors.fallback');
+        : refusalText(t, error);
 
   return (
     <div className="bank-blocked" role="alert">
@@ -774,7 +774,7 @@ function OpeningError({ error }: { error: Err }) {
 
   return (
     <p className="field-error" role="alert">
-      {t('errors.fallback')}
+      {refusalText(t, error)}
     </p>
   );
 }

@@ -44,7 +44,7 @@ import { FilterBar } from '../../components/FilterBar';
 import { Select } from '../../components/Select';
 import { Status, type StatusKind } from '../../components/Status';
 import { CloseGlyph } from '../../components/icons';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import './Deals.css';
 
 /** A fresh key per write, so a retry after a transport failure is a retry and not a second write. */
@@ -340,9 +340,7 @@ export function Deals() {
       'needs_quotes_module',
       'pipeline_has_no_open_stage',
     ];
-    if (known.includes(error.error)) return t(`deals.error.${error.error}`);
-    if (error.error === 'permission_denied') return t('deals.error.permissionDenied.write');
-    return t('errors.fallback');
+    return refusalText(t, error, { own: 'deals.error', known, keys: { permission_denied: 'deals.error.permissionDenied.write' } });
   };
 
   if (workspaceId === null) return <NoWorkspaceState />;

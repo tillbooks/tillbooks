@@ -1217,6 +1217,30 @@ describe('A38: the MWST-Saldierung panel on a filed period', () => {
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
   });
 
+  it('R5-1: a settlement SAVED whole before a newer TILL moved the book on says so, never "Es wurde nichts verändert"', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(
+      transportFor(
+        routes({
+          vat_periods: at(periodsFiledFixture),
+          vat_settlement_post: at(
+            { ok: false, error: 'schema_newer_than_runtime', action: 'vat_settlement_post', bookGeneration: 8, buildGeneration: 7, path: '/x/book.db', partial: true, completed: true },
+            422,
+          ),
+        }),
+      ),
+    );
+    await settled();
+    const panel = await settlementPanel();
+    await userEvent.click(within(panel).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    const dialog = screen.getByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'MWST-Konten saldieren' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent('Diese Aktion ist gespeichert.');
+    expect(alert).toHaveTextContent('Wiederhole die Aktion nicht, sonst entsteht sie doppelt.');
+    expect(alert).not.toHaveTextContent(/nichts verändert|konnte nicht gelesen oder gebucht werden/);
+  });
+
   it('offers the reverse in the overflow of a posted settlement, behind its own confirm, and sends the settlement id', async () => {
     vi.setSystemTime(TODAY);
     const seen: unknown[] = [];

@@ -20,5 +20,8 @@ export { NoWorkspaceState } from './NoWorkspaceState';
 export type { NoWorkspaceStateProps } from './NoWorkspaceState';
 export { ErrorBanner } from './ErrorBanner';
 export type { ErrorBannerProps, ErrorContext } from './ErrorBanner';
+export { refusalSuffix, sharedRefusalKey } from './refusalSuffix';
+export { refusalText, hasMessage, ownsWording } from './refusalText';
+export type { RefusalWording } from './refusalText';
 export { PermissionDenied, Padlock } from './PermissionDenied';
 export type { PermissionDeniedProps } from './PermissionDenied';

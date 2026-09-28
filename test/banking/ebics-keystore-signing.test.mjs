@@ -1,8 +1,10 @@
 // A36 signing facet: the OPTIONAL private-key operations the private EBICS wire needs
-// (sign / decrypt / publicKeyMaterial) on both keystores. Proves the facet is real (signatures
-// verify, decryption round-trips), that the exported public material is the SAME key the core
-// already fingerprints (INI-letter parity), and that an unknown keyRef/purpose returns null rather
-// than throwing or leaking. The private RSA material never leaves the keystore on any path.
+// (sign / decrypt / publicKeyMaterial) on both keystores. Proves the facet is real (the X002
+// signature verifies, decryption round-trips), that the exported public material is the SAME key the
+// core already fingerprints (INI-letter parity) and carries its certificate, that an unknown
+// keyRef/purpose returns null rather than throwing or leaking, and OD-2: there is NO electronic-
+// signature private key, so an order signature is impossible (`sign` for that purpose is null). The
+// private RSA material never leaves the keystore on any path.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -26,8 +28,10 @@ function publicKeyFromMaterial(material) {
 
 // The full contract, run against a store that has already generated one connection's keys.
 function assertSigningFacet(store, keyRef, hashes) {
-  // 1. sign -> verifies with the corresponding PUBLIC key, and NOT for a tampered message.
-  for (const purpose of ['electronicSignature', 'authentication']) {
+  // 0. OD-2: the A005 key cannot sign anything, whatever a caller asks.
+  assert.equal(store.sign({ keyRef, purpose: 'electronicSignature', data: Buffer.from('an order') }), null, 'OD-2: no ES signature');
+  // 1. sign (X002 only) -> verifies with the corresponding PUBLIC key, and NOT for a tampered message.
+  for (const purpose of ['authentication']) {
     const data = Buffer.from(`the INI letter body for ${purpose}`, 'utf8');
     const sig = store.sign({ keyRef, purpose, data });
     assert.ok(Buffer.isBuffer(sig) && sig.length > 0, `${purpose}: sign returns bytes`);
@@ -64,6 +68,7 @@ function assertSigningFacet(store, keyRef, hashes) {
     // modulus/exponent are real, non-empty public bytes; exponent is the usual 65537 (0x010001).
     assert.ok(Buffer.isBuffer(material.modulus) && material.modulus.length >= 256, `${purpose}: modulus present`);
     assert.ok(Buffer.isBuffer(material.exponent) && material.exponent.length > 0, `${purpose}: exponent present`);
+    assert.ok(Buffer.isBuffer(material.x509Der) && material.x509Der.length > 0, `${purpose}: the certificate travels with the public key`);
   }
 
   // 4. Unknown keyRef / wrong purpose returns null, never throws, never leaks.

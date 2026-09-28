@@ -25,7 +25,7 @@ import { useState } from 'react';
 import type { SVGProps } from 'react';
 
 import { useT, formatDate } from '../../i18n';
-import { ErrorBanner } from '../../components/states';
+import { ErrorBanner, refusalText } from '../../components/states';
 import { FileDrop } from '../../components/FileDrop';
 import { Select } from '../../components/Select';
 import { Status, type StatusKind } from '../../components/Status';
@@ -147,7 +147,7 @@ export function SignSection({
                     ? t('sign.error.invalid_transition')
                     : error.error === 'permission_denied'
                       ? t('files.error.permissionDenied.write')
-                      : t('errors.fallback');
+                      : refusalText(t, error);
 
   return (
     <section className="files-section" aria-labelledby="files-sign-heading">

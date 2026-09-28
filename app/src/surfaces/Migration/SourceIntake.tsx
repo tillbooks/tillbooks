@@ -21,11 +21,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
-import { isErr } from '../../lib/client';
+import { isErr, type Err } from '../../lib/client';
 import { useT } from '../../i18n';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { Select } from '../../components/Select';
 import { FileDrop } from '../../components/FileDrop';
+import { refusalText } from '../../components/states';
 
 function newIdempotencyKey(): string {
   return crypto.randomUUID();
@@ -183,7 +184,8 @@ export function SourceIntake(props: { workspaceId: string; onCreated: () => void
   const [adapters, setAdapters] = useState<AdapterDto[]>([]);
   const [sourceSystem, setSourceSystem] = useState('csv');
   const [cutoverDate, setCutoverDate] = useState('');
-  const [planError, setPlanError] = useState<string | null>(null);
+  // The whole refusal, so its `partial`/`completed` flags reach the sentence (critic R5-1).
+  const [planError, setPlanError] = useState<Err | null>(null);
 
   const [planId, setPlanId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -436,7 +438,7 @@ export function SourceIntake(props: { workspaceId: string; onCreated: () => void
         })
       ).body;
       if (isErr(res)) {
-        setPlanError(res.error === 'invalid_input' ? 'invalidDate' : 'generic');
+        setPlanError(res);
         return;
       }
       const id = res.planId as string;
@@ -697,7 +699,7 @@ export function SourceIntake(props: { workspaceId: string; onCreated: () => void
           <span id="intake-cutover-hint" className="intake-hint">{t('migration.intake.plan.cutoverHint')}</span>
 
           {planError !== null && (
-            <ActionFeedback tone="error" message={t(`migration.intake.plan.err.${planError}`)} />
+            <ActionFeedback tone="error" message={refusalText(t, planError, { keys: { invalid_input: 'migration.intake.plan.err.invalidDate' }, fallback: 'migration.intake.plan.err.generic' })} />
           )}
 
           <div className="intake-actions">

@@ -27,6 +27,7 @@ import { listOpenItems } from '../debtors/index.js';
 import { VAT_FREE_ENTRY_SOURCES } from '../ledger/postEntry.js';
 import { appendReviewEvent, parseReviewPeriod } from './shared.js';
 import { reviewStatus } from './status.js';
+import { LINE_STATE_EXPR, LINE_STATE_JOINS } from '../banking/bankLines.js';
 
 export interface PreparePeriodInput {
   period: string;
@@ -150,32 +151,28 @@ export function preparePeriod(ctx: WorkspaceContext, input: PreparePeriodInput):
         .get(ctx.workspaceId, period.start, period.end) as { n: number }
     ).n;
 
-    // A21's queue: registered incoming credits still awaiting a decision as of the period end.
+    // A21's queue: HAND-TYPED incoming credits still awaiting a decision as of the period end. A credit an
+    // imported line carries is decided on that line (A39 L2) and counts below, once.
     const unmatchedIncoming = (
       ctx.store.db
         .prepare(
-          `SELECT COUNT(*) AS n FROM reconciliation_match
-            WHERE workspace_id = ? AND status = 'open' AND value_date <= ?`,
+          `SELECT COUNT(*) AS n FROM reconciliation_match m
+            WHERE m.workspace_id = ? AND m.status = 'open' AND m.value_date <= ? AND m.bank_txn_id IS NULL
+              AND NOT EXISTS (SELECT 1 FROM bank_txn t WHERE t.workspace_id = m.workspace_id AND t.credit_id = m.id)`,
         )
         .get(ctx.workspaceId, period.end) as { n: number }
     ).n;
 
-    // A20's board: imported txns in the period with no settled link. A routed credit settles
-    // through its A21 queue row, so it counts as unmatched only while that row is still open.
+    // A39: imported bank lines booked in the period whose ONE state is still `open`, through the same
+    // predicate as the inbox and G22 (`LINE_STATE_EXPR`), so a superseded decision never reads reconciled.
     const unmatchedBankTxns = (
       ctx.store.db
         .prepare(
-          `SELECT COUNT(*) AS n FROM bank_txn t
+          `SELECT COUNT(*) AS n FROM bank_txn t ${LINE_STATE_JOINS('t')}
             WHERE t.workspace_id = ?
-              AND COALESCE(t.value_date, t.booking_date) >= ?
-              AND COALESCE(t.value_date, t.booking_date) <= ?
-              AND NOT EXISTS (
-                    SELECT 1 FROM bank_txn_link l
-                     WHERE l.workspace_id = t.workspace_id AND l.bank_txn_id = t.id)
-              AND (t.credit_id IS NULL OR EXISTS (
-                    SELECT 1 FROM reconciliation_match m
-                     WHERE m.workspace_id = t.workspace_id AND m.id = t.credit_id
-                       AND m.status = 'open'))`,
+              AND COALESCE(t.booking_date, t.value_date) >= ?
+              AND COALESCE(t.booking_date, t.value_date) <= ?
+              AND ${LINE_STATE_EXPR('t')} = 'open'`,
         )
         .get(ctx.workspaceId, period.start, period.end) as { n: number }
     ).n;

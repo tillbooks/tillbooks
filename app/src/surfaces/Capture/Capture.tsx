@@ -65,7 +65,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useCan, CAP } from '../../lib/capabilities';
 import { useT, formatMoney, formatDate } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
-import { EmptyState, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { EmptyState, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DetailDrawer } from '../../components/DetailDrawer';
@@ -426,7 +426,7 @@ export function Capture() {
           idempotencyKey: newKey(),
         });
         if (isErr(response.body)) {
-          setNotice(t(`capture.error.${response.body.error}`));
+          setNotice(refusalText(t, response.body, { own: 'capture.error' }));
           return;
         }
         const body = response.body as unknown as { captureId: string; duplicate: boolean };
@@ -467,7 +467,7 @@ export function Capture() {
         idempotencyKey: `capture-commit:${captureId}`,
       });
       if (isErr(response.body)) {
-        setNotice(t(`capture.error.${response.body.error}`));
+        setNotice(refusalText(t, response.body, { own: 'capture.error' }));
         return;
       }
       const body = response.body as unknown as { targetKind: string; targetId: string };

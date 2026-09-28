@@ -31,7 +31,7 @@ import { useT, formatDate } from '../../i18n';
 import { formatCalendar } from '../../lib/format';
 import { useCan, useCapabilities, CAP } from '../../lib/capabilities';
 import { DetailDrawer } from '../../components/DetailDrawer';
-import { ErrorBanner, PermissionDenied, Skeleton } from '../../components/states';
+import { ErrorBanner, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { Select } from '../../components/Select';
@@ -454,8 +454,7 @@ function taskErrorMessage(t: (key: string, params?: Record<string, string | numb
     'task_not_open',
     'invalid_status_transition',
   ];
-  if (known.includes(error.error)) return t(`contact.tasks.error.${error.error}`);
-  return t('contact.tasks.fallbackError');
+  return refusalText(t, error, { own: 'contact.tasks.error', known, fallback: 'contact.tasks.fallbackError' });
 }
 
 /**

@@ -22,12 +22,12 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
-import { isErr } from '../../lib/client';
+import { isErr, type Err } from '../../lib/client';
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { Modal } from '../../components/Modal';
 import { OverflowMenu } from '../../components/OverflowMenu';
-import { Skeleton } from '../../components/states';
+import { Skeleton, refusalText } from '../../components/states';
 import { CheckGlyph, LockGlyph } from './glyphs';
 import { periodTitle } from './model';
 
@@ -160,7 +160,10 @@ export function Settlement({ workspaceId, period, filed, currency, canPost, onOp
   const [state, setState] = useState<PanelState>({ kind: 'loading' });
   const [confirming, setConfirming] = useState<'post' | 'reverse' | null>(null);
   const [pending, setPending] = useState(false);
-  const [writeError, setWriteError] = useState<{ code: string; reason: string | null } | null>(null);
+  // The whole refusal is kept, not only its code: its `partial` and `completed` flags decide the
+  // sentence (critic R5-1), so a settlement saved before a newer TILL moved the book on is never
+  // answered with "Es wurde nichts verändert".
+  const [writeError, setWriteError] = useState<{ error: Err; reason: string | null } | null>(null);
   // The post's idempotency key is minted when its confirm OPENS, and held for the life of that dialog:
   // a re-click after a lost response is one write under one key, while a later confirm (the same
   // period settled again after a reversal) is a fresh act under a fresh key. It cannot be derived from
@@ -214,7 +217,7 @@ export function Settlement({ workspaceId, period, filed, currency, canPost, onOp
       setPending(false);
       if (isErr(body)) {
         const extra = body as unknown as { reason?: unknown };
-        setWriteError({ code: body.error, reason: typeof extra.reason === 'string' ? extra.reason : null });
+        setWriteError({ error: body, reason: typeof extra.reason === 'string' ? extra.reason : null });
         return;
       }
       setConfirming(null);
@@ -248,9 +251,7 @@ export function Settlement({ workspaceId, period, filed, currency, canPost, onOp
         <p className="vr-settle-note" role="note">
           {state.code === 'saldo_input_vat_booked'
             ? t('vat.settlement.error.saldo_input_vat_booked', { balance: formatMoney(state.totalMinor ?? 0, currency) })
-            : NAMED_CODES.has(state.code)
-              ? t(`vat.settlement.error.${state.code}`)
-              : t('vat.settlement.error.fallback')}
+            : refusalText(t, state.code, { own: 'vat.settlement.error', known: NAMED_CODES, fallback: 'vat.settlement.error.fallback' })}
           {state.code === 'missing_account' && (
             <>
               {' '}
@@ -429,10 +430,8 @@ export function Settlement({ workspaceId, period, filed, currency, canPost, onOp
           </dl>
           {writeError !== null && (
             <p className="vr-dialog-error" role="alert">
-              {NAMED_CODES.has(writeError.code)
-                ? t(`vat.settlement.error.${writeError.code}`)
-                : t('vat.settlement.error.fallback')}
-              {writeError.code === 'period_locked' && writeError.reason === 'year_close' && (
+              {refusalText(t, writeError.error, { own: 'vat.settlement.error', known: NAMED_CODES, fallback: 'vat.settlement.error.fallback' })}
+              {writeError.error.error === 'period_locked' && writeError.reason === 'year_close' && (
                 <>
                   {' '}
                   <Link className="link-inline" to="/periods">{t('vat.settlement.openPeriods')}</Link>

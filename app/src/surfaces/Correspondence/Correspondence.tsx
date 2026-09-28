@@ -27,7 +27,7 @@ import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
@@ -336,9 +336,7 @@ export function Correspondence() {
 
   const errorMessage = (error: Err): string => {
     const known = ['needs_mailstore', 'unknown_mail_adapter', 'drafts_not_writable', 'message_moved'];
-    if (known.includes(error.error)) return t(`mail.error.${error.error}`);
-    if (error.error === 'permission_denied') return t('mail.error.permissionDenied.write');
-    return t('errors.fallback');
+    return refusalText(t, error, { own: 'mail.error', known, keys: { permission_denied: 'mail.error.permissionDenied.write' } });
   };
 
   if (workspaceId === null) return <NoWorkspaceState />;
@@ -685,9 +683,7 @@ function DraftPane({ workspaceId, thread }: { workspaceId: string; thread: Threa
       'draft_gone',
       'generation_failed',
     ];
-    if (known.includes(err.error)) return t(`draft.error.${err.error}`);
-    if (err.error === 'permission_denied') return t('draft.error.forbidden');
-    return t('errors.fallback');
+    return refusalText(t, err, { own: 'draft.error', known, keys: { permission_denied: 'draft.error.forbidden' } });
   };
 
   const generate = useCallback(async () => {

@@ -1,14 +1,15 @@
 /**
- * A33, the EBICS bank-channel panel on Bankkonten (spec §6). One panel below the account register that
- * carries the whole local channel lifecycle: connect (the SMPG 6.1 key ceremony, INI letter, the
- * bank-key compare-and-confirm step), Sync now (pull statements into A20), the order log, and the
- * retire/block disconnect. It BUILDS nothing on the money path: every write goes through an A24 `pay`
- * gate in the engine, and the transmit of a payment batch lives on CreditorPayments, not here.
+ * A33 + A36, the EBICS bank-channel panel on Bankkonten (spec A36 §5). One panel below the account
+ * register that carries the whole local channel lifecycle, DOWNLOAD ONLY: connect (the key ceremony,
+ * the INI letter, the legs and their refusals in words), the two-step bank-key review (the bank's
+ * hashes printed 8 pairs per line as on ZKB's sheet, then the confirm that pins exactly that set), the
+ * statement fetch, per account the newest statement in the books and every statement still waiting
+ * with its message, the eBanking pickup note, the order log, and retire / the LOCAL block. There is no
+ * cadence and no upload control (D-A36.10, D-A36.11). Every write goes through an A24 `pay` gate in
+ * the engine; every refusal is worded through `refusalText` or `ErrorBanner`.
  *
- * States as glyph+text, never colour alone (DESIGN.md): active is the one teal confirmed signal; the
- * waiting states (pending_bank_activation, keys_generated) are neutral. With no EBICS transport wired
- * the connect verb answers `needs_bank_transport` honestly and the file-based import/upload path stays
- * the visible floor, which the empty copy states.
+ * States as glyph+text, never colour alone (DESIGN.md). With no EBICS transport wired the connect verb
+ * answers `needs_bank_transport` honestly and the import by hand stays the visible floor.
  */
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 
@@ -16,11 +17,12 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useCan, CAP } from '../../lib/capabilities';
-import { useT, formatDate } from '../../i18n';
-import { Skeleton, ErrorBanner } from '../../components/states';
+import { useT, formatDate, formatMoney } from '../../i18n';
+import { Skeleton, ErrorBanner, refusalText } from '../../components/states';
 import { Select } from '../../components/Select';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import type { BankAccount } from './model';
+import { channelRefusal, jumpsOfSync, numberJumpText, type NumberJump } from './channelWording';
 
 interface OrderDto {
   id: string;
@@ -42,14 +44,60 @@ interface KeystoreDto {
   persistent: boolean;
 }
 
-/** A36 §5: the scheduled-sync health facet, one per connection (its own linked G01 rule, if any). */
-interface ScheduleDto {
-  ruleId: string | null;
-  enabled: boolean;
-  cadence: string | null;
-  lastFiredAt: string | null;
-  driverSeen: boolean;
-  inactive: boolean;
+/** A36 §5: the newest day-end statement of a routed account (the feed position). */
+interface NewestStatementDto {
+  number: number;
+  year: number;
+  fromDate: string | null;
+  toDate: string | null;
+  openingBalanceMinor: number | null;
+  closingBalanceMinor: number | null;
+  currency: string | null;
+}
+
+/** A36 §5: a downloaded statement that waits, with the reason the successor rule gives it now. */
+interface PendingStatementDto {
+  documentId: string | null;
+  payloadSha256: string;
+  since: string;
+  code: string;
+  bankAccountId?: string | null;
+  readyToImport?: boolean;
+  statement: { number: number | null; year: number | null; fromDate: string | null; toDate: string | null; iban: string | null } | null;
+  details?: Record<string, unknown>;
+}
+
+/** The bank's key hashes as HPB returned them (`EbicsKeyHashes`), and the lines ZKB's sheet prints. */
+interface BankKeyHashesDto {
+  electronicSignature: string;
+  authentication: string;
+  encryption: string;
+  certificateHashes?: Partial<Record<string, string>>;
+  keyHashes?: Partial<Record<string, string>>;
+}
+type HashLines = { certificate: string[] | null; key: string[] | null; spki: string[] };
+type BankKeyLinesDto = Record<'authentication' | 'encryption', HashLines>;
+
+/**
+ * The two-step bank-key confirm (§3 step 6): fetch (HPB without confirmBankKeys), show the hashes,
+ * and only then confirm, pinning exactly the set the human compared. One review at a time.
+ */
+type KeyReview =
+  | { connectionId: string; phase: 'loading' }
+  | { connectionId: string; phase: 'ready'; hashes: BankKeyHashesDto; lines: BankKeyLinesDto; confirming: boolean; error: Err | null }
+  | { connectionId: string; phase: 'mismatch' }
+  | { connectionId: string; phase: 'error'; error: Err };
+
+function isBankKeyHashes(v: unknown): v is BankKeyHashesDto {
+  if (typeof v !== 'object' || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.authentication === 'string' && typeof o.encryption === 'string' && typeof o.electronicSignature === 'string';
+}
+
+function isBankKeyLines(v: unknown): v is BankKeyLinesDto {
+  if (typeof v !== 'object' || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.authentication === 'object' && o.authentication !== null && typeof o.encryption === 'object' && o.encryption !== null;
 }
 
 interface ChannelDto {
@@ -64,17 +112,21 @@ interface ChannelDto {
   scopes?: string[];
   bankConsentExpiresAt?: string | null;
   state: string;
-  accounts: { bankAccountId: string; iban: string | null }[];
+  accounts: { bankAccountId: string; iban: string | null; newestStatement?: NewestStatementDto | null; lastNumberJump?: NumberJump | null }[];
   lastSyncAt: string | null;
   pendingIniLetter?: string | null;
-  pendingRelease: { batchId: string | null; orderRef: string; since: string }[];
-  inDoubt: { batchId: string | null; orderRef: string; since: string }[];
-  rejected: { batchId: string | null; orderRef: string; reason: string | null; since: string }[];
-  unmatchedFiles: { documentId: string | null; msgName: string | null; iban: string | null }[];
+  /** EBICS only (A36): the INI and HIA legs as the order log records them, and a ceremony refusal. */
+  ceremony?: { ini: string; hia: string; refusal: string | null };
+  /** EBICS only (A36): the downloaded statements still waiting, each with its message. */
+  pendingStatements?: PendingStatementDto[];
+  /** A37 managed only: the upload and protocol facts of the managed rail. */
+  pendingRelease?: { batchId: string | null; orderRef: string; since: string }[];
+  inDoubt?: { batchId: string | null; orderRef: string; since: string }[];
+  rejected?: { batchId: string | null; orderRef: string; reason: string | null; since: string }[];
+  unmatchedFiles?: { documentId: string | null; msgName: string | null; iban: string | null }[];
   recentOrders: OrderDto[];
   /** EBICS only. Absent on a managed channel (the managed rail holds no local key material). */
   keystore?: KeystoreDto;
-  schedule?: ScheduleDto;
 }
 
 /** A36 §4: the static bank-directory entry the connect wizard's bank picker offers (US-A36.4). */
@@ -136,11 +188,6 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
   const client = useClient();
   const workspaceId = useWorkspaceId();
   const canPay = useCan(CAP.pay);
-  // The cadence toggle writes through TWO gates: `set_bank_sync_schedule` needs `pay` (the same
-  // capability as the verb it schedules) and `create_automation_rule` needs `manage_automations`
-  // (`src/core/access/actionCapabilities.ts`). Both are required to turn it on; only `pay` to turn
-  // it off (unlinking never creates anything).
-  const canManageAutomations = useCan(CAP.manageAutomations);
 
   const [channels, setChannels] = useState<ChannelDto[] | null>(null);
   // A failed `bank_channel_status` read is a DISTINCT state from a genuinely empty result. Collapsing
@@ -148,7 +195,13 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
   // error must show the error banner (with a retry), and `channel.empty` is reserved for a true empty.
   const [loadError, setLoadError] = useState<Err | null>(null);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Err | null>(null);
+  // The bank-key review (§3 step 6). `keysMatch` is the explicit "matches ZKB's sheet" checkbox;
+  // confirm stays disabled until it is ticked, and every fresh fetch clears it.
+  const [keyReview, setKeyReview] = useState<KeyReview | null>(null);
+  const [keysMatch, setKeysMatch] = useState(false);
+  const [keysConfirmed, setKeysConfirmed] = useState(false);
+  const [fetched, setFetched] = useState<{ connectionId: string; imported: number; waiting: number; jumps: NumberJump[] } | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [form, setForm] = useState({ url: '', hostId: '', partnerId: '', userId: '', bankAccountId: '' });
   // A36-U4: a stable id base so each EBICS host field carries a visible <label for>, matching the
@@ -167,11 +220,6 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
   // returns there on close (WCAG 2.2, the FeedbackDialog contract).
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [unlockOpener, setUnlockOpener] = useState<HTMLElement | null>(null);
-  // A36 §5: the Automatischer Abruf toggle, per connection. Default OFF; the cadence picker only
-  // matters while the toggle is being turned ON (an already-linked schedule shows its stored cadence
-  // from `schedule.cadence` instead).
-  const [scheduleBusy, setScheduleBusy] = useState<string | null>(null);
-  const [scheduleCadence, setScheduleCadence] = useState<Record<string, string>>({});
   // A37: the managed (bLink) connect form. Distinct from the EBICS ceremony form: a managed connect
   // needs only a bank reference, a scope choice (PSS optional), and the account to route.
   const [managedOpen, setManagedOpen] = useState(false);
@@ -215,7 +263,8 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
     });
     setBusy(false);
     if (isErr(body)) {
-      setNotice(body.error);
+      setNotice(body);
+      void load();
       return;
     }
     setConnectOpen(false);
@@ -242,7 +291,7 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
     });
     setBusy(false);
     if (isErr(body)) {
-      setNotice(body.error);
+      setNotice(body);
       return;
     }
     const consentUrl = (body as Record<string, unknown>).consentUrl;
@@ -270,7 +319,7 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
       const { body } = await client.call('bank_channel_connect', input);
       setBusy(false);
       if (isErr(body)) {
-        setNotice(body.error);
+        setNotice(body);
         return;
       }
       const consentUrl = (body as Record<string, unknown>).consentUrl;
@@ -282,35 +331,102 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
     [client, workspaceId, load],
   );
 
-  const confirmKeys = useCallback(
+  // Step 1: advance the connection WITHOUT confirmBankKeys. For a connection the bank has not
+  // activated yet this resends the unconfirmed INI/HIA legs first; then HPB. The engine returns the
+  // bank's hashes (and the lines ZKB's sheet prints) and pins nothing.
+  const fetchBankKeys = useCallback(
     async (connectionId: string) => {
       if (workspaceId === null) return;
-      setBusy(true);
+      setKeyReview({ connectionId, phase: 'loading' });
+      setKeysMatch(false);
+      setKeysConfirmed(false);
+      setNotice(null);
       const { body } = await client.call('bank_channel_connect', {
         workspaceId,
         connectionId,
-        confirmBankKeys: true,
         confirm: true,
-        idempotencyKey: `a33-confirm-${connectionId}`,
+        idempotencyKey: `a36-hpb-${connectionId}-${Date.now()}`,
       });
-      setBusy(false);
-      if (isErr(body)) setNotice(body.error);
+      if (isErr(body)) {
+        setKeyReview({ connectionId, phase: 'error', error: body });
+        void load();
+        return;
+      }
+      const record = body as Record<string, unknown>;
+      if (!isBankKeyHashes(record.bankKeyHashes) || !isBankKeyLines(record.bankKeyLines)) {
+        // No hashes came back (no transport wired): say why, never show an empty compare block.
+        const reason = typeof record.reason === 'string' ? record.reason : 'unexpected_error';
+        setKeyReview({ connectionId, phase: 'error', error: { ok: false, error: reason } });
+        void load();
+        return;
+      }
+      setKeyReview({ connectionId, phase: 'ready', hashes: record.bankKeyHashes, lines: record.bankKeyLines, confirming: false, error: null });
       void load();
     },
     [client, workspaceId, load],
   );
 
+  // Step 2: confirm, pinning ONLY the set the human reviewed (`expectedBankKeyHashes`): if the bank
+  // serves anything else by now, the engine refuses with bank_keys_mismatch and pins nothing.
+  const confirmReviewedKeys = useCallback(
+    async (review: Extract<KeyReview, { phase: 'ready' }>) => {
+      if (workspaceId === null) return;
+      setKeyReview({ ...review, confirming: true, error: null });
+      const { body } = await client.call('bank_channel_connect', {
+        workspaceId,
+        connectionId: review.connectionId,
+        confirmBankKeys: true,
+        expectedBankKeyHashes: review.hashes,
+        confirm: true,
+        idempotencyKey: `a36-confirm-${review.connectionId}-${Date.now()}`,
+      });
+      if (isErr(body)) {
+        setKeysMatch(false);
+        setKeyReview(
+          body.error === 'bank_keys_mismatch'
+            ? { connectionId: review.connectionId, phase: 'mismatch' }
+            : { ...review, confirming: false, error: body },
+        );
+        void load();
+        return;
+      }
+      setKeyReview(null);
+      setKeysMatch(false);
+      setKeysConfirmed(true);
+      void load();
+    },
+    [client, workspaceId, load],
+  );
+
+  const closeKeyReview = useCallback(() => {
+    setKeyReview(null);
+    setKeysMatch(false);
+  }, []);
+
+  // "Kontoauszüge abrufen": one on-demand sync with a fresh idempotency key per press (D-A36.10).
   const sync = useCallback(
     async (connectionId: string) => {
       if (workspaceId === null) return;
       setBusy(true);
+      setNotice(null);
+      setFetched(null);
       const { body } = await client.call('bank_sync', {
         workspaceId,
         connectionId,
-        idempotencyKey: `a33-sync-${connectionId}-${Date.now()}`,
+        idempotencyKey: `a36-sync-${connectionId}-${Date.now()}`,
       });
       setBusy(false);
-      if (isErr(body)) setNotice(body.error);
+      if (isErr(body)) {
+        setNotice(body);
+      } else {
+        const statements = ((body as Record<string, unknown>).statements as { final?: boolean; outcome?: string; notice?: unknown; jump?: unknown }[] | undefined) ?? [];
+        setFetched({
+          connectionId,
+          imported: statements.filter((x) => x.outcome === 'imported').length,
+          waiting: statements.filter((x) => x.final !== true).length,
+          jumps: jumpsOfSync(statements),
+        });
+      }
       void load();
     },
     [client, workspaceId, load],
@@ -328,7 +444,7 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
         idempotencyKey: `a33-${mode}-${connectionId}`,
       });
       setBusy(false);
-      if (isErr(body)) setNotice(body.error);
+      if (isErr(body)) setNotice(body);
       void load();
     },
     [client, workspaceId, load],
@@ -372,63 +488,6 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
     unlockOpener?.focus();
   }, [unlockOpener]);
 
-  // A36 §6b: the toggle creates a G01 schedule rule whose action is `bank_sync` for this connection
-  // (`create_automation_rule`, gated `manage_automations`), then links it via `set_bank_sync_schedule`
-  // (gated `pay`, the same capability as the verb it schedules). Turning OFF disables the rule first
-  // (so no egress keeps happening invisibly once the card stops showing it) and then unlinks.
-  const toggleSchedule = useCallback(
-    async (channel: ChannelDto) => {
-      if (workspaceId === null) return;
-      setScheduleBusy(channel.connectionId);
-      setNotice(null);
-      if (channel.schedule?.enabled) {
-        if (channel.schedule.ruleId !== null) {
-          await client.call('disable_automation_rule', { workspaceId, ruleId: channel.schedule.ruleId });
-        }
-        const { body } = await client.call('set_bank_sync_schedule', {
-          workspaceId,
-          connectionId: channel.connectionId,
-          idempotencyKey: `a36-unschedule-${channel.connectionId}-${Date.now()}`,
-        });
-        setScheduleBusy(null);
-        if (isErr(body)) setNotice(body.error);
-        void load();
-        return;
-      }
-      const cadence = scheduleCadence[channel.connectionId] ?? 'daily';
-      const created = await client.call('create_automation_rule', {
-        workspaceId,
-        name: `EBICS Abruf ${channel.host?.hostId ?? ''}`,
-        trigger: { event: `schedule.${cadence}` },
-        action: { tool: 'bank_sync', inputTemplate: { connectionId: channel.connectionId } },
-        enabled: true,
-        idempotencyKey: `a36-schedule-rule-${channel.connectionId}-${cadence}`,
-      });
-      if (isErr(created.body)) {
-        setScheduleBusy(null);
-        setNotice(created.body.error);
-        return;
-      }
-      const rule = (created.body as Record<string, unknown>).rule as { id?: unknown } | undefined;
-      const ruleId = typeof rule?.id === 'string' ? rule.id : null;
-      if (ruleId === null) {
-        setScheduleBusy(null);
-        setNotice('unexpected_error');
-        return;
-      }
-      const { body } = await client.call('set_bank_sync_schedule', {
-        workspaceId,
-        connectionId: channel.connectionId,
-        ruleId,
-        idempotencyKey: `a36-schedule-${channel.connectionId}-${ruleId}`,
-      });
-      setScheduleBusy(null);
-      if (isErr(body)) setNotice(body.error);
-      void load();
-    },
-    [client, workspaceId, scheduleCadence, load],
-  );
-
   if (channels === null) {
     return (
       <section className="bank-channel panel" aria-label={t('channel.title')}>
@@ -442,20 +501,23 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
     <section className="bank-channel panel" aria-label={t('channel.title')}>
       <h2 className="bank-channel-title">{t('channel.title')}</h2>
 
-      {loadError !== null && (
-        <ErrorBanner error={loadError} message={noticeMessage(t, loadError.error)} onRetry={() => void load()} />
-      )}
+      {loadError !== null && <ErrorBanner context="read" error={loadError} message={channelRefusal(t, loadError)} onRetry={() => void load()} />}
       {loadError === null && channels.length === 0 && (
         <p className="bank-channel-empty">{t('channel.empty')}</p>
       )}
       <p className="bank-channel-file-note">{t('channel.filePathNote')}</p>
 
       {notice !== null && (
+        <ActionFeedback tone="info" role="alert" className="bank-channel-notice" message={channelRefusal(t, notice)} />
+      )}
+      {keysConfirmed && (
         <ActionFeedback
-          tone="info"
-          role="alert"
+          tone="success"
+          landed
           className="bank-channel-notice"
-          message={noticeMessage(t, notice)}
+          message={t('channel.keyReview.confirmed')}
+          onDismiss={() => setKeysConfirmed(false)}
+          dismissLabel={t('channel.keyReview.close')}
         />
       )}
 
@@ -478,6 +540,8 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
               />
             );
           }
+          const reviewHere = keyReview?.connectionId === c.connectionId ? keyReview : null;
+          const refusal = c.ceremony?.refusal ?? null;
           return (
           <li key={c.connectionId} className="bank-channel-item">
             <div className="bank-channel-state">
@@ -486,9 +550,22 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
               <span className="bank-channel-kind"> · {t('channel.kind.ebics')}</span>
               <span className="bank-channel-host"> {c.host?.hostId} / {c.host?.partnerId} / {c.host?.userId}</span>
             </div>
-            <p className="bank-channel-accounts">
-              {t('channel.sharedWith')}: {c.accounts.map((a) => a.iban ?? a.bankAccountId).join(', ')}
-            </p>
+            <ul className="bank-channel-accounts">
+              {c.accounts.map((a) => (
+                <li key={a.bankAccountId}>
+                  <span className="bank-channel-account-iban">{a.iban ?? a.bankAccountId}</span>
+                  {' · '}
+                  {a.newestStatement !== undefined && a.newestStatement !== null ? (
+                    <span className="bank-channel-newest">{newestLine(t, a.newestStatement)}</span>
+                  ) : (
+                    <span className="bank-channel-newest">{t('channel.noStatement')}</span>
+                  )}
+                  {a.lastNumberJump !== undefined && a.lastNumberJump !== null && (
+                    <p className="bank-channel-note bank-channel-jump">{numberJumpText(t, a.lastNumberJump)}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
             {c.lastSyncAt !== null && (
               <p className="bank-channel-lastsync" title={c.lastSyncAt}>
                 {t('channel.lastSync')}: {formatDate(c.lastSyncAt)}
@@ -505,42 +582,80 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
               />
             )}
 
-            {c.state === 'active' && (
-              <ScheduleControl
-                channel={c}
-                canManage={canPay && canManageAutomations}
-                busy={scheduleBusy === c.connectionId}
-                cadence={scheduleCadence[c.connectionId] ?? 'daily'}
-                onCadenceChange={(cadence) => setScheduleCadence((prev) => ({ ...prev, [c.connectionId]: cadence }))}
-                onToggle={() => void toggleSchedule(c)}
-              />
+            {refusal === 'init_refused' && (
+              <p className="bank-channel-warn" role="alert">{t('channel.initRefused')}</p>
+            )}
+            {refusal === 'certificate_refused' && (
+              <p className="bank-channel-warn" role="alert">
+                {t('channel.certificateRefused', { code: certificateCode(c) })}
+              </p>
+            )}
+            {(c.state === 'keys_generated' || c.state === 'ini_sent') && refusal === null && (
+              <p className="bank-channel-note">{t('channel.iniSent')}</p>
+            )}
+            {c.state === 'pending_bank_activation' && <p className="bank-channel-note">{t('channel.letterWaiting')}</p>}
+            {c.state === 'bank_keys_changed' && <p className="bank-channel-warn">{t('channel.bankKeysChanged')}</p>}
+            {c.state === 'blocked' && (
+              <p className="bank-channel-warn">
+                {t('channel.blockLocal')} {t('channel.blockExit')}
+              </p>
             )}
 
-            {c.state === 'pending_bank_activation' && canPay && (
-              <button type="button" className="btn btn--secondary btn--sm" disabled={busy} onClick={() => void confirmKeys(c.connectionId)}>
-                {t('channel.wizard.confirmKeys')}
-              </button>
+            {/* One fetch, compare, confirm flow serves the first activation, a reviewed rotation out of
+                bank_keys_changed, and the way back from a local block (the engine pins only an exactly
+                matching set). For a connection the bank has not activated yet the same press resends the
+                unconfirmed legs first. */}
+            {PRE_KEY_STATES.has(c.state) && canPay && (
+              reviewHere !== null ? (
+                <BankKeyReview
+                  review={reviewHere}
+                  matches={keysMatch}
+                  onMatchesChange={setKeysMatch}
+                  onConfirm={(ready) => void confirmReviewedKeys(ready)}
+                  onRetry={() => void fetchBankKeys(c.connectionId)}
+                  onClose={closeKeyReview}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  disabled={busy || keyReview?.phase === 'loading'}
+                  onClick={() => void fetchBankKeys(c.connectionId)}
+                >
+                  {c.state === 'keys_generated' || c.state === 'ini_sent' ? t('channel.resend') : t('channel.keyReview.fetch')}
+                </button>
+              )
             )}
-            {c.state === 'bank_keys_changed' && (
-              <p className="bank-channel-warn">{t('channel.bankKeysChanged')}</p>
-            )}
+
             {c.state === 'active' && canPay && (
               <button type="button" className="btn btn--secondary btn--sm" disabled={busy} onClick={() => void sync(c.connectionId)}>
-                {t('channel.sync')}
+                {busy ? t('bankInbox.header.fetching') : t('channel.sync')}
               </button>
             )}
-
-            {c.unmatchedFiles.length > 0 && (
-              <p className="bank-channel-unmatched" role="status">
-                {t('channel.unmatchedAccount')}: {c.unmatchedFiles.map((u) => u.iban).join(', ')}
-              </p>
+            {fetched !== null && fetched.connectionId === c.connectionId && (
+              <ActionFeedback
+                tone={fetched.jumps.length > 0 ? 'warn' : 'success'}
+                landed
+                className="bank-channel-notice"
+                message={fetched.imported === 0 && fetched.waiting === 0 ? t('bankInbox.header.fetchedNothing') : t('bankInbox.header.fetched', { imported: fetched.imported, waiting: fetched.waiting })}
+                {...(fetched.jumps.length > 0 ? { detail: fetched.jumps.map((j) => numberJumpText(t, j)).join(' ') } : {})}
+                onDismiss={() => setFetched(null)}
+                dismissLabel={t('channel.keyReview.close')}
+              />
             )}
-            {c.inDoubt.length > 0 && <p className="bank-channel-indoubt">{t('channel.transmitInDoubt')}</p>}
-            {c.pendingRelease.length > 0 && <p className="bank-channel-release">{t('channel.pendingRelease')}: {c.pendingRelease.length}</p>}
-            {c.rejected.length > 0 && (
-              <p className="bank-channel-rejected" role="alert">
-                {t('channel.rejectedReason')}: {c.rejected.map((r) => r.reason).join('; ')}
-              </p>
+            {c.state === 'active' && <p className="bank-channel-note">{t('channel.ebankingPickup')}</p>}
+
+            {(c.pendingStatements ?? []).length > 0 && (
+              <div className="bank-channel-pending">
+                <p className="bank-channel-pending-title">{t('channel.pendingTitle')}</p>
+                <ul>
+                  {(c.pendingStatements ?? []).map((p) => (
+                    <li key={p.payloadSha256} title={p.code}>
+                      {feedMessage(t, p)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             {c.recentOrders.length > 0 && (
@@ -581,9 +696,11 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
                 </div>
               ) : (
                 <div className="bank-channel-disconnect">
-                  <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setDisconnectConfirm({ connectionId: c.connectionId, mode: 'block' })}>
-                    {t('channel.disconnectBlock')}
-                  </button>
+                  {c.state !== 'blocked' && (
+                    <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setDisconnectConfirm({ connectionId: c.connectionId, mode: 'block' })}>
+                      {t('channel.disconnectBlock')}
+                    </button>
+                  )}
                   <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setDisconnectConfirm({ connectionId: c.connectionId, mode: 'retire' })}>
                     {t('channel.disconnectRetire')}
                   </button>
@@ -758,7 +875,7 @@ function humaniseBankRef(ref: string): string {
 // "humanize machine labels, no raw snake_case/enum on screen") while keeping the raw code as the
 // tooltip so nothing is lost. A host-provided code outside the known set degrades to a spaced,
 // capitalised form rather than a raw enum, and is never rendered as a missing i18n key.
-const KNOWN_ORDER_TYPES = new Set(['ini', 'hia', 'hpb', 'btd', 'btu', 'hac', 'spr']);
+const KNOWN_ORDER_TYPES = new Set(['ini', 'hia', 'hpb', 'hev', 'btd', 'btu', 'hac', 'spr']);
 const KNOWN_ORDER_KINDS = new Set(['consent', 'status_report', 'statements', 'transmit']);
 const KNOWN_ORDER_STATUS = new Set(['ok', 'failed', 'bank_rejected', 'pending_release', 'intent']);
 
@@ -789,24 +906,53 @@ function orderRawTitle(o: OrderDto): string {
   return [o.kind ?? o.orderType, o.status, o.occurredAt].filter((x) => x !== undefined && x !== null).join(' · ');
 }
 
-/** A P9 code from the engine to a human message: the named ones get copy, the rest a generic line. */
-function noticeMessage(t: (k: string) => string, code: string): string {
-  const known = new Set([
-    'no_ebics_offer',
-    'needs_bank_transport',
-    'channel_unreachable',
-    'bank_keys_mismatch',
-    'needs_confirmation',
-    'permission_denied',
-    // A37 managed-rail codes (spec §6).
-    'cloud_tier',
-    'consent_revoked',
-    'consent_scope_missing',
-    'format_unsupported',
-    'cloud_tier_suspended',
-    'already_transmitted',
-  ]);
-  return known.has(code) ? t(`channel.notice.${camel(code)}`) : t('channel.error.generic');
+/** The states in which the bank keys are fetched and reviewed (the ceremony, a rotation, a local block). */
+const PRE_KEY_STATES: ReadonlySet<string> = new Set(['keys_generated', 'ini_sent', 'pending_bank_activation', 'bank_keys_changed', 'blocked']);
+
+/** The raw code of the refused certificate leg, for the certificate_refused sentence. */
+function certificateCode(c: ChannelDto): string {
+  const legs = [c.ceremony?.ini, c.ceremony?.hia].filter((v): v is string => typeof v === 'string' && /^0912\d\d$/.test(v));
+  return legs[0] ?? '';
+}
+
+/** "Neuester Auszug im Buch: Nr. 214/2026 vom 04.11.2026, Schlusssaldo 9'760.82". */
+function newestLine(t: (k: string, p?: Record<string, string | number>) => string, n: NewestStatementDto): string {
+  return t('channel.newest', {
+    n: n.number,
+    year: n.year,
+    date: n.fromDate !== null ? formatDate(n.fromDate) : '',
+    amount: n.closingBalanceMinor !== null ? formatMoney(n.closingBalanceMinor, n.currency ?? 'CHF') : '',
+  });
+}
+
+/** The successor rule's message per code (§4.4), with the facts the engine named. */
+const FEED_KEYS: Readonly<Record<string, string>> = {
+  overlap_refused: 'channel.feed.overlapRefused',
+  before_feed_start: 'channel.feed.beforeFeedStart',
+  gap_refused: 'channel.feed.gapRefused',
+  not_day_end_statement: 'channel.feed.notDayEnd',
+  unsupported_multipage_statement: 'channel.feed.multipage',
+  camt054_lines_refused: 'channel.feed.camt054Lines',
+  unmatched_account: 'channel.feed.unmatchedAccount',
+};
+
+/** A waiting statement in words: what it is, why it waits, and what the owner does about it. */
+function feedMessage(t: (k: string, p?: Record<string, string | number>) => string, p: PendingStatementDto): string {
+  const details = p.details ?? {};
+  const against = (details.against ?? null) as { number?: number; year?: number } | null;
+  const n = p.statement?.number ?? '';
+  if (p.readyToImport === true) return t('channel.feed.readyToImport', { n });
+  return refusalText(t, p.code, {
+    keys: FEED_KEYS,
+    params: {
+      n,
+      year: p.statement?.year ?? '',
+      date: p.statement?.fromDate !== null && p.statement?.fromDate !== undefined ? formatDate(p.statement.fromDate) : '',
+      m: against?.number ?? '',
+      iban: p.statement?.iban ?? '',
+    },
+    fallback: 'channel.error.generic',
+  });
 }
 
 /**
@@ -875,20 +1021,20 @@ function ManagedChannelCard({
         </p>
       )}
 
-      {c.unmatchedFiles.length > 0 && (
+      {(c.unmatchedFiles ?? []).length > 0 && (
         <p className="bank-channel-unmatched" role="status">
-          {t('channel.unmatchedAccount')}: {c.unmatchedFiles.map((u) => u.iban).join(', ')}
+          {t('channel.unmatchedAccount')}: {(c.unmatchedFiles ?? []).map((u) => u.iban).join(', ')}
         </p>
       )}
-      {c.inDoubt.length > 0 && <p className="bank-channel-indoubt">{t('channel.transmitInDoubt')}</p>}
-      {c.pendingRelease.length > 0 && (
+      {(c.inDoubt ?? []).length > 0 && <p className="bank-channel-indoubt">{t('channel.transmitInDoubt')}</p>}
+      {(c.pendingRelease ?? []).length > 0 && (
         <p className="bank-channel-release">
-          {t('channel.pendingRelease')}: {c.pendingRelease.length} · {t('channel.releaseNoteBlink')}
+          {t('channel.pendingRelease')}: {(c.pendingRelease ?? []).length} · {t('channel.releaseNoteBlink')}
         </p>
       )}
-      {c.rejected.length > 0 && (
+      {(c.rejected ?? []).length > 0 && (
         <p className="bank-channel-rejected" role="alert">
-          {t('channel.rejectedReason')}: {c.rejected.map((r) => r.reason).join('; ')}
+          {t('channel.rejectedReason')}: {(c.rejected ?? []).map((r) => r.reason).join('; ')}
         </p>
       )}
 
@@ -1058,86 +1204,130 @@ function KeystoreUnlockDialog({ onClose, onUnlock }: { onClose: () => void; onUn
   );
 }
 
+/** The bank keys HPB returns, in the order ZKB's sheet lists them (X002, then E002). */
+const BANK_KEY_PURPOSES = ['authentication', 'encryption'] as const;
+
 /**
- * A36 §5, the Automatischer Abruf toggle: OFF by default. Turning it on states, in words, that it is
- * SCHEDULED NETWORK EGRESS from a stored rule (the egress-honesty copy the spec requires verbatim in
- * spirit); `schedule.inactive` (enabled but no tick driver seen in the last 25h) names the M00 local
- * scheduler daemon and Sync now as the two ways a schedule actually fires.
+ * §3 step 6, the bank-key review: the bank's hashes as HPB returned them, each printed exactly like
+ * ZKB's sheet (uppercase byte pairs, 8 per line, formatted by the engine) in a monospace, selectable
+ * block. Per key it shows the certificate hash (the "H005 mit Zertifikat" row) and the classic key hash
+ * when the transport reported them; only when it reported neither does the SPKI fingerprint stand in,
+ * labelled as such. Confirm is enabled only after the explicit "matches ZKB's sheet" checkbox.
  */
-function ScheduleControl({
-  channel,
-  canManage,
-  busy,
-  cadence,
-  onCadenceChange,
-  onToggle,
+function BankKeyReview({
+  review,
+  matches,
+  onMatchesChange,
+  onConfirm,
+  onRetry,
+  onClose,
 }: {
-  channel: ChannelDto;
-  canManage: boolean;
-  busy: boolean;
-  cadence: string;
-  onCadenceChange: (cadence: string) => void;
-  onToggle: () => void;
+  review: KeyReview;
+  matches: boolean;
+  onMatchesChange: (matches: boolean) => void;
+  onConfirm: (ready: Extract<KeyReview, { phase: 'ready' }>) => void;
+  onRetry: () => void;
+  onClose: () => void;
 }) {
   const t = useT();
-  const { schedule } = channel;
-  // ScheduleControl is rendered only for an active EBICS channel, which always carries a schedule
-  // facet; the guard narrows the optional type (a managed channel never reaches here).
-  if (schedule === undefined) return null;
-  return (
-    <div className="bank-channel-schedule">
-      <label className="bank-channel-schedule-toggle">
-        <input
-          type="checkbox"
-          checked={schedule.enabled}
-          disabled={!canManage || busy}
-          title={canManage ? undefined : t('channel.locked')}
-          aria-describedby={canManage ? undefined : `schedule-denied-${channel.connectionId}`}
-          onChange={onToggle}
-        />
-        {t('channel.schedule.title')}
-      </label>
-      {!canManage && (
-        <p id={`schedule-denied-${channel.connectionId}`} className="bank-channel-locked">
-          {t('channel.locked')}
-        </p>
-      )}
-      {!schedule.enabled && (
-        <Select
-          ariaLabel={t('channel.schedule.cadence')}
-          value={cadence}
-          disabled={!canManage || busy}
-          onChange={onCadenceChange}
-          options={[
-            { value: 'daily', label: t('channel.schedule.cadenceOption.daily') },
-            { value: 'weekly', label: t('channel.schedule.cadenceOption.weekly') },
-            { value: 'monthly', label: t('channel.schedule.cadenceOption.monthly') },
-          ]}
-        />
-      )}
-      <p className="bank-channel-schedule-note">{t('channel.schedule.egressNote')}</p>
-      {schedule.enabled && schedule.cadence !== null && (
-        <p className="bank-channel-schedule-cadence">
-          {t('channel.schedule.cadence')}: {t(`channel.schedule.cadenceOption.${cadenceKey(schedule.cadence)}`)}
-        </p>
-      )}
-      {schedule.lastFiredAt !== null && (
-        <p className="bank-channel-schedule-lastfired" title={schedule.lastFiredAt}>
-          {t('channel.schedule.lastFired')}: {formatDate(schedule.lastFiredAt)}
-        </p>
-      )}
-      {schedule.inactive && (
-        <p className="bank-channel-schedule-inactive" role="alert">
-          {t('channel.schedule.inactive')}
-        </p>
-      )}
-    </div>
-  );
-}
+  const titleId = useId();
+  const checkId = useId();
 
-/** `schedule.daily` (the G01 trigger event) -> `daily` (the cadence option key). */
-function cadenceKey(triggerEvent: string): string {
-  return triggerEvent.startsWith('schedule.') ? triggerEvent.slice('schedule.'.length) : triggerEvent;
+  if (review.phase === 'loading') {
+    return (
+      <p className="bank-channel-keyreview-loading" role="status">
+        {t('channel.keyReview.fetching')}
+      </p>
+    );
+  }
+  if (review.phase === 'error') {
+    return (
+      <div className="bank-channel-keyreview">
+        <ActionFeedback
+          tone="info"
+          role="alert"
+          className="bank-channel-notice"
+          message={review.error.error === 'needs_bank_transport' ? t('channel.keyReview.needsTransport') : channelRefusal(t, review.error)}
+        />
+        <div className="bank-channel-disconnect">
+          <button type="button" className="btn btn--secondary btn--sm" onClick={onRetry}>
+            {t('channel.keyReview.retry')}
+          </button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>
+            {t('channel.keyReview.close')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (review.phase === 'mismatch') {
+    return (
+      <div className="bank-channel-keyreview">
+        <ActionFeedback tone="error" role="alert" className="bank-channel-notice" message={t('channel.keyReview.mismatch')} />
+        <div className="bank-channel-disconnect">
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>
+            {t('channel.keyReview.close')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const { lines } = review;
+  return (
+    <section className="bank-channel-keyreview" aria-labelledby={titleId}>
+      <h3 id={titleId} className="bank-channel-keyreview-title">
+        {t('channel.wizard.confirmKeys')}
+      </h3>
+      <p className="bank-channel-keyreview-intro">{t('channel.keyReview.intro')}</p>
+      {BANK_KEY_PURPOSES.map((purpose) => {
+        const set = lines[purpose];
+        const rows: { label: string; lines: string[] }[] = [];
+        if (set.certificate !== null) rows.push({ label: t('channel.keyReview.certificateHash'), lines: set.certificate });
+        if (set.key !== null) rows.push({ label: t('channel.keyReview.keyHash'), lines: set.key });
+        if (rows.length === 0) rows.push({ label: t('channel.keyReview.fingerprint'), lines: set.spki });
+        return (
+          <div key={purpose} className="bank-channel-keyreview-key">
+            <p className="bank-channel-keyreview-purpose">{t(`channel.keyReview.purpose.${purpose}`)}</p>
+            {rows.map((row) => (
+              <div key={row.label} className="bank-channel-keyreview-hash">
+                <p className="bank-channel-keyreview-label">{row.label}</p>
+                <pre className="bank-channel-keyhash" aria-label={`${t(`channel.keyReview.purpose.${purpose}`)}, ${row.label}`}>
+                  {row.lines.join('\n')}
+                </pre>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+      <label htmlFor={checkId} className="bank-channel-scope">
+        <input
+          id={checkId}
+          type="checkbox"
+          checked={matches}
+          disabled={review.confirming}
+          onChange={(e) => onMatchesChange(e.target.checked)}
+        />
+        {t('channel.keyReview.matches')}
+      </label>
+      {review.error !== null && (
+        <ActionFeedback tone="info" role="alert" className="bank-channel-notice" message={channelRefusal(t, review.error)} />
+      )}
+      <div className="bank-channel-disconnect">
+        <button
+          type="button"
+          className="btn btn--primary btn--sm"
+          disabled={!matches || review.confirming}
+          onClick={() => onConfirm(review)}
+        >
+          {review.confirming ? t('channel.keyReview.confirming') : t('channel.keyReview.confirm')}
+        </button>
+        <button type="button" className="btn btn--ghost btn--sm" disabled={review.confirming} onClick={onClose}>
+          {t('channel.keyReview.cancel')}
+        </button>
+      </div>
+    </section>
+  );
 }
 
 /**

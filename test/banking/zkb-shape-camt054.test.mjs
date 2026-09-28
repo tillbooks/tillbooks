@@ -96,19 +96,17 @@ test('ZKB camt.054: the two QRR references (27 digits) and the one SCOR (RF) ref
   assert.match(scor[0].referenceValue, /^RF\d\d/, 'an ISO 11649 creditor reference starts RF + two check digits');
 });
 
-test('ZKB camt.054: a collective entry whose TxDtls do NOT sum to the entry Amt is refused, not truncated', () => {
+test('ZKB camt.054: a collective entry whose TxDtls do NOT sum to the entry Amt is ONE line of the entry amount (A39 L7 (b))', () => {
   const raw = read(FILE);
   // Move the collective entry Amt off by one Rappen; the three TxDtls now under-account for it. The
   // Ccy-qualified entry-level Amt is unique (Btch uses <TtlAmt>, the summary uses a bare <Amt>), so
   // this rewrites only the figure the fan-out is checked against.
   const broken = raw.replace('<Amt Ccy="CHF">5250.45</Amt>', '<Amt Ccy="CHF">5250.44</Amt>');
   assert.notEqual(broken, raw, 'the mutation must actually change the entry Amt');
-  const res = parseCamt(broken);
-  assert.equal(res.ok, false, 'a batch this parser cannot reconcile to the Rappen must be refused');
-  assert.equal(res.error, 'schema_invalid');
-  // Pin the refusal to the SUM-CHECK specifically, not just any schema_invalid: without this a broken
-  // camt.054 detection (a different schema_invalid) would satisfy the test for the wrong reason.
-  assert.match(res.reason, /TxDtls sum to 525045 but the entry Amt is 525044/, 'refused for the sum mismatch');
+  const res = ok(parseCamt(broken), 'parse the broken batch');
+  // The bank's entry amount is the booked fact: never a truncated fan-out, never a refused file.
+  assert.equal(res.statement.entries.length, 1, 'one line for the whole booking');
+  assert.equal(res.statement.entries[0].amountMinor, 525044, 'of the entry amount');
 });
 
 test('REGRESSION: the notification element is the real ISO Ntfctn, and the malformed Ntfcn is NOT camt.054', () => {
@@ -144,34 +142,20 @@ function zkbAccount() {
   return { ...t, bankAccountId: bank.bankAccountId };
 }
 
-test('importing the ZKB Sammelbuchung books one bank_txn per TxDtls, and a re-import is a no-op', () => {
+test('A39 L7 (c), D140: importing the ZKB camt.054 Sammelbuchung is refused at the door and writes nothing', () => {
   const t = zkbAccount();
-  const countTxns = () =>
-    t.ctx.store.db.prepare('SELECT COUNT(*) AS n FROM bank_txn WHERE workspace_id = ?').get(t.workspaceId).n;
-  const countStatements = () =>
-    t.ctx.store.db.prepare('SELECT COUNT(*) AS n FROM bank_statement WHERE workspace_id = ?').get(t.workspaceId).n;
-
-  const res = ok(
-    importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: read(FILE), idempotencyKey: 'zkb-054' }),
-    `import ${FILE}`,
-  );
-  assert.equal(res.txnCount, DETAILS.length, 'one booked bank_txn per underlying payment');
-  assert.equal(res.duplicate, false, 'first import must not be a duplicate');
-  assert.equal(countTxns(), DETAILS.length, 'three bank_txn rows, one per TxDtls');
-  assert.equal(countStatements(), 1, 'one bank_statement for the notification');
-
-  // Re-import under a FRESH idempotency key: dedupe is on the statement CONTENT (Stmt/Id + page), not
-  // the key, so the collective booking is not fanned out a second time.
-  const replay = ok(
-    importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: read(FILE), idempotencyKey: 'zkb-054-replay' }),
-    `re-import ${FILE}`,
-  );
-  assert.equal(replay.duplicate, true, 're-importing the same content is recognised as a duplicate');
-  assert.equal(countTxns(), DETAILS.length, 're-importing the Sammelbuchung doubled the bank_txn rows');
-  assert.equal(countStatements(), 1, 're-importing minted a second bank_statement');
+  const count = (table) => t.ctx.store.db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE workspace_id = ?`).get(t.workspaceId).n;
+  for (const key of ['zkb-054', 'zkb-054-replay']) {
+    const res = importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: read(FILE), idempotencyKey: key });
+    assert.equal(res.ok, false, 'a camt.054 is a detail notification, not a statement');
+    assert.equal(res.error, 'camt054_refused');
+    assert.equal(count('bank_txn'), 0, 'no bank line');
+    assert.equal(count('bank_statement'), 0, 'no statement row');
+    assert.equal(count('reconciliation_match'), 0, 'no queue row');
+  }
 });
 
-test('a ZKB camt.054 imported into the WRONG account IBAN is refused, and nothing is booked', () => {
+test('a ZKB camt.054 dropped on another account is refused as a camt.054 too, and nothing is booked', () => {
   const t = setup();
   const other = ok(
     createBankAccount(t.ctx, {
@@ -187,8 +171,8 @@ test('a ZKB camt.054 imported into the WRONG account IBAN is refused, and nothin
     xml: read(FILE),
     idempotencyKey: 'zkb-054-mismatch',
   });
-  assert.equal(res.ok, false, 'an IBAN mismatch must be refused');
-  assert.equal(res.error, 'iban_mismatch');
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'camt054_refused', 'the message type is refused before the IBAN is compared');
   const n = t.ctx.store.db.prepare('SELECT COUNT(*) AS n FROM bank_txn WHERE workspace_id = ?').get(t.workspaceId).n;
   assert.equal(n, 0, 'a refused import must book nothing');
 });

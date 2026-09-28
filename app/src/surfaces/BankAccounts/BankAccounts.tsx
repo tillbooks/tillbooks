@@ -66,7 +66,7 @@ import { useT, formatMoney, formatDate } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { Status } from '../../components/Status';
 import { useCan, CAP } from '../../lib/capabilities';
@@ -470,7 +470,7 @@ export function BankAccounts() {
               ? t('bank.error.notFound.text')
               : rowError.error === 'permission_denied'
                 ? t('bank.error.permissionDenied.write')
-                : t('errors.fallback')
+                : refusalText(t, rowError)
           }
         />
       )}

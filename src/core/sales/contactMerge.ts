@@ -149,7 +149,9 @@ export function mergeContacts(
 
     const promoteRole = current.party_role !== target.party_role;
     const repointed: Record<string, number> = {};
-    const tx = ctx.store.db.transaction(() => {
+    // Through `store.tx`, not a raw `db.transaction` (M3, critic R1 F6): the generation guard reads
+    // the marker under the write lock first, so a merge never lands in a book a newer TILL migrated.
+    const tx = () => ctx.store.tx(() => {
       for (const fk of MERGE_REPOINT_FKS) {
         const res = ctx.store.db
           .prepare(`UPDATE ${fk.table} SET ${fk.column} = ? WHERE workspace_id = ? AND ${fk.column} = ?`)
@@ -323,7 +325,9 @@ export function anonymiseContact(
     let voicePurged = { exemplars: 0 };
     let draftRunsPurged = { draftRuns: 0 };
     let tracePurged = { redacted: 0 };
-    const tx = ctx.store.db.transaction(() => {
+    // Through `store.tx`, not a raw `db.transaction` (M3, critic R1 F6): the generation guard reads
+    // the marker under the write lock first, so a merge never lands in a book a newer TILL migrated.
+    const tx = () => ctx.store.tx(() => {
       ctx.store.db
         .prepare(
           `UPDATE contact SET

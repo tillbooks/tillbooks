@@ -30,6 +30,7 @@ import { TaxCodePicker } from '../Vat/TaxCodePicker';
 import type { VatCode } from '../Vat/types';
 import { Modal } from '../../components/Modal';
 import { Select } from '../../components/Select';
+import { refusalText } from '../../components/states';
 
 /**
  * The auto-issue confirm is a consequential dialog, so it is the shared `Modal` as an alertdialog
@@ -422,7 +423,7 @@ export function RecurringEditor({
 
       {otherError ? (
         <p className="recurring__fieldError" role="alert">
-          {t(`recurring.error.${errorCode}`)}
+          {refusalText(t, errorCode ?? '', { own: 'recurring.error' })}
         </p>
       ) : null}
 

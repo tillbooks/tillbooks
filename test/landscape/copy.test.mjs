@@ -160,6 +160,16 @@ function scanForValue(dbPath, needle) {
   }
 }
 
+/** The state of every EBICS connection in a db (A36: a copy lands them all `retired`). */
+function ebicsStates(dbPath) {
+  const store = new SqliteStore({ location: dbPath });
+  try {
+    return store.db.prepare('SELECT state FROM ebics_connection ORDER BY id').all().map((r) => r.state);
+  } finally {
+    store.close();
+  }
+}
+
 /** Create a source env (rich) and a bare target env, return their names + the deps + dir. */
 function scenario({ sourceRank = 250, targetRank = 40, targetSeed } = {}) {
   const dir = tmp();
@@ -261,6 +271,8 @@ test('copy/raw: a raw copy keeps the books verbatim but still neutralizes every 
       assert.deepEqual(scanForValue(dstPath, secret), [], `${secret} must be neutralized even at raw`);
     }
     assert.equal(res.secrets, 'neutralized');
+    // A36 §4.2: the copied EBICS connection lands retired, so a copy never fetches from the bank.
+    assert.deepEqual(ebicsStates(dstPath), ['retired']);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -282,6 +294,8 @@ test('copy/retain: the owner-only retainSecrets override keeps secrets, and A24 
     // With the floor lifted, the raw clone retains the secrets (the full-fidelity debug case).
     assert.ok(scanForValue(dstPath, M.keyRef).length > 0, 'retainSecrets keeps the EBICS key_ref');
     assert.ok(scanForValue(dstPath, M.consentRef).length > 0, 'retainSecrets keeps the managed consent_ref');
+    // A36 §4.2: even a full-fidelity copy never feeds: its EBICS connection lands retired.
+    assert.deepEqual(ebicsStates(dstPath), ['retired']);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

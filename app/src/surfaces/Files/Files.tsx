@@ -36,7 +36,7 @@ import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { FileDrop } from '../../components/FileDrop';
 import { FilterChips } from '../../components/FilterChips';
@@ -477,7 +477,7 @@ export function Files() {
                       ? t('files.error.file_unreadable')
                       : listError.error === 'permission_denied'
                         ? t('files.error.permissionDenied.write')
-                        : t('errors.fallback')
+                        : refusalText(t, listError)
           }
         />
       )}

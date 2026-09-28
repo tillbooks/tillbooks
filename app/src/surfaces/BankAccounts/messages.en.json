@@ -145,8 +145,8 @@
   },
   "channel": {
     "title": "Bank channel",
-    "empty": "No EBICS channel yet. Connect one to stop importing statements and uploading payment files by hand: your bank must offer EBICS, and the file-based path keeps working either way.",
-    "filePathNote": "The file-based statement import and payment upload always remain available, with or without a channel.",
+    "empty": "No EBICS channel yet. Connect one so TILL fetches the bank's day-end statements itself: your bank must offer EBICS, and the import by hand stays available either way.",
+    "filePathNote": "Importing statements by hand is always available, with or without a channel. You upload payment files in e-banking and release them there.",
     "connect": "Connect a channel",
     "locked": "Managing a bank channel needs the payment capability.",
     "kind": {
@@ -176,19 +176,19 @@
     },
     "releaseNoteBlink": "Submitted over bLink. Release the payment in your own e-banking.",
     "sharedWith": "Routed accounts",
-    "lastSync": "Last sync",
-    "sync": "Sync now",
+    "lastSync": "Last fetched",
+    "sync": "Fetch statements",
     "orderLog": "Order log",
     "unmatchedAccount": "Statement for an unrouted account (route it, then sync again)",
     "transmitInDoubt": "An upload's outcome is unknown: retransmission is blocked until the bank's protocol answers.",
     "pendingRelease": "Awaiting bank release",
     "rejectedReason": "Bank rejected",
-    "bankKeysChanged": "The bank's keys changed. All traffic is halted until you re-confirm them out of band.",
+    "bankKeysChanged": "ZKB's keys have changed. Fetching is on hold until you have compared the new keys with ZKB's \"EBICS Verbindungsparameter\" sheet and confirmed them.",
     "routeAccount": "Route an account...",
     "routeAccountLabel": "Account to route",
     "disconnectRetire": "Retire",
-    "disconnectBlock": "Block (SPR)",
-    "disconnectBlockConfirm": "Really block this connection? All of its orders are halted.",
+    "disconnectBlock": "Block",
+    "disconnectBlockConfirm": "Really block this channel? TILL then fetches nothing more. To block it at ZKB: by phone.",
     "disconnectRetireConfirm": "Really retire this connection? The bank feed is closed for good.",
     "disconnectConfirm": "Confirm",
     "disconnectCancel": "Cancel",
@@ -207,7 +207,8 @@
       "btd": "Download",
       "btu": "Upload",
       "hac": "Order status fetched",
-      "spr": "Access suspended"
+      "spr": "Access suspended",
+      "hev": "Version check"
     },
     "orderKind": {
       "consent": "Consent",
@@ -237,7 +238,25 @@
       "consentScopeMissing": "This connection has no payment consent. Reconnect with PSS to submit payments.",
       "formatUnsupported": "This bank delivers only JSON over bLink. The file-based rails remain the floor.",
       "cloudTierSuspended": "The managed connectivity vendor account has lapsed. Your EBICS and file rails are unaffected.",
-      "alreadyTransmitted": "This batch is already in flight over another rail."
+      "alreadyTransmitted": "This batch is already in flight over another rail.",
+      "unsupportedEbicsVersion": "This bank host does not offer EBICS 3.0 (H005). TILL uses H005 only, so nothing was created.",
+      "liveConnectionExists": "This EBICS subscriber already fetches in another workspace of this database. Two feeds would split the statements.",
+      "camt054LinesRefused": "This account holds bookings from camt.054. It cannot run over EBICS, because the camt.053 lines would double them.",
+      "trialWorkspaceRefused": "A sandbox or demo workspace never connects to a real bank.",
+      "untrustedResponse": "An answer from ZKB could not be verified. Nothing was taken over and nothing was receipted. Import the day from e-banking and call ZKB if it happens again.",
+      "commitFailed": "The fetched data could not be saved. ZKB offers it again at the next fetch.",
+      "keystoreChangedElsewhere": "The key file was changed outside this session. TILL does not overwrite it: restart TILL.",
+      "keystoreLocked": "The key store is locked: the passphrase was not entered in this session.",
+      "keystoreUnavailable": "The key file is missing or damaged.",
+      "pendingBankActivation": "ZKB has not enabled access yet. Try again after their confirmation.",
+      "channelBlocked": "This channel is blocked. TILL fetches nothing.",
+      "noRoutedAccount": "No account is routed over this channel.",
+      "bankKeysChanged": "ZKB uses new keys, so fetching is on hold. Fetch the new bank keys below, compare them with ZKB's sheet and confirm them.",
+      "channelRetired": "This channel is retired.",
+      "unsupportedDateRange": "A date range is not fetched: a missing day comes by hand from e-banking.",
+      "initRefused": "ZKB refused INI and HIA with 091002. That means: the partner ID or user ID is wrong, EBICS 3.0 (H005) is not enabled for your agreement, or the subscriber is already initialised. Only ZKB can tell these apart and reset them: call them.",
+      "certificateRefused": "ZKB refused a certificate (code {code}). Retire the channel and connect again: TILL creates new keys and a new INI letter.",
+      "keyExchangeRefused": "ZKB refused the key exchange. Nothing was confirmed."
     },
     "state": {
       "draft": "Draft",
@@ -269,17 +288,55 @@
       "unavailable": "The key file is missing or corrupt. Re-initialise the connection (the bank contract is unaffected), or restore the file from backup.",
       "notPersistent": "This key storage does not survive a restart. The keys must be generated again if the app restarts before you connect a persistent store."
     },
-    "schedule": {
-      "title": "Automatic fetch",
-      "cadence": "Cadence",
-      "cadenceOption": {
-        "daily": "Daily",
-        "weekly": "Weekly",
-        "monthly": "Monthly"
+    "blockLocal": "TILL sends nothing more. To block it at ZKB: by phone.",
+    "blockExit": "To unblock, fetch the bank keys, compare them with ZKB's sheet and confirm them.",
+    "ebankingPickup": "While TILL fetches the statements, do not download them in e-banking with \"All data not yet retrieved\", or they will be missing here.",
+    "iniSent": "INI and HIA are on their way, but ZKB has not confirmed both yet. Send again: TILL sends only what is still missing, with the same keys.",
+    "resend": "Send again",
+    "letterWaiting": "Waiting for ZKB. Sign the INI letter (filed under Documents) and post it to ZKB. Once ZKB has enabled access, fetch the bank keys here.",
+    "initRefused": "ZKB refused INI and HIA with 091002. That means: the partner ID or user ID is wrong, EBICS 3.0 (H005) is not enabled for your agreement, or the subscriber is already initialised. Only ZKB can tell these apart and reset them: call them.",
+    "certificateRefused": "ZKB refused a certificate (code {code}). Retire the channel and connect again: TILL creates new keys and a new INI letter.",
+    "keyExchangeRefused": "ZKB answered the key exchange with code {code}. Nothing was confirmed.",
+    "pendingTitle": "Waiting statements",
+    "newest": "Newest statement in the books: no. {n}/{year} of {date}, closing balance {amount}",
+    "noStatement": "No day-end statement in the books yet. The first fetched statement starts the feed.",
+    "downloadRefused": {
+      "notGranted": "ZKB does not allow fetching the statements (camt.053 version 08) for your agreement (code {code}). Ask ZKB to enable it.",
+      "busy": "ZKB is busy right now (code {code}). Fetch the statements again later.",
+      "tooLarge": "The statements are too large to fetch (code {code}). Download this day in e-banking and import it by hand.",
+      "other": "ZKB refused the fetch with code {code}. Nothing was changed."
+    },
+    "feed": {
+      "overlapRefused": "Statement {n}/{year} of {date} overlaps statement {m}/{year} in the books. Nothing was imported.",
+      "beforeFeedStart": "Statement {n}/{year} is older than the first statement in the books.",
+      "gapRefused": "Statement {n} does not follow statement {m}. Import the missing day-end statement from e-banking, then fetch again.",
+      "numberJump": "Statement {n} came after statement {m}. Missing numbers: {skipped}. Import those statements by hand if they exist.",
+      "notDayEnd": "This is not a day-end statement (the number or the closing balance is missing). Import that day's day-end statement from e-banking.",
+      "multipage": "Statement {n} is split over several files. TILL does not read those yet: import it from e-banking.",
+      "camt054Lines": "This account holds bookings from camt.054. It cannot run over EBICS, because the camt.053 lines would double them.",
+      "unmatchedAccount": "Statement for IBAN {iban}, which belongs to no routed account. Route the account, then fetch again.",
+      "readyToImport": "Statement {n} fits now: the next fetch imports it."
+    },
+    "keyReview": {
+      "fetch": "Fetch and compare the bank keys",
+      "fetching": "Fetching the bank keys…",
+      "intro": "Compare every byte pair with the \"H005 mit Zertifikat\" row of the current edition of ZKB's \"EBICS Verbindungsparameter\" sheet (8 pairs per line, as there). Confirm only when all of them match.",
+      "purpose": {
+        "authentication": "Authentication (X002)",
+        "encryption": "Encryption (E002)"
       },
-      "egressNote": "Turning this on creates a stored rule that contacts your bank on a schedule: scheduled network egress, unattended.",
-      "inactive": "This schedule is on but nothing is driving it: the local M00 scheduler is not running. Sync now still works, or start the scheduler.",
-      "lastFired": "Last fired"
+      "certificateHash": "Certificate, SHA-256",
+      "keyHash": "Public key, SHA-256",
+      "fingerprint": "Key fingerprint (SPKI), SHA-256. ZKB's sheet may print another value: confirm only if this one is on it.",
+      "matches": "These values match ZKB's \"EBICS Verbindungsparameter\" sheet",
+      "confirm": "Confirm the bank keys",
+      "confirming": "Confirming…",
+      "cancel": "Cancel",
+      "retry": "Try again",
+      "close": "Close",
+      "confirmed": "Bank keys confirmed. The channel is active.",
+      "mismatch": "ZKB now sends other keys than the ones you checked, so nothing was confirmed. Compare with the current edition of the sheet and call ZKB before you try again.",
+      "needsTransport": "Fetching the bank keys needs a configured EBICS transport."
     }
   },
   "help": {

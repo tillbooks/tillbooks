@@ -68,7 +68,7 @@ import { isErr, type Err } from '../../lib/client';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
-import { Skeleton } from '../../components/states';
+import { Skeleton, refusalText } from '../../components/states';
 import { bucketLabel, boundaryErrorKey, parseBucketConfig, MAX_BOUNDARIES } from './model';
 
 export interface BucketBoundariesProps {
@@ -327,7 +327,7 @@ export function BucketBoundaries({ onClose, onSaved }: BucketBoundariesProps) {
                 ? t(boundaryErrorKey(writeError.expected))
                 : writeError.error === 'permission_denied'
                   ? t('openItems.error.permissionDenied.write')
-                  : t('errors.fallback')}
+                  : refusalText(t, writeError)}
             </p>
           )}
 

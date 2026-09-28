@@ -32,7 +32,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold, refusalText } from '../../components/states';
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { Status } from '../../components/Status';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
@@ -202,7 +202,7 @@ export function Warehouses() {
   // Resolve a J00 rejection to its surface-scoped message, or undefined to let ErrorBanner map it.
   const localError = useCallback(
     (e: Err | null): string | undefined =>
-      e !== null && J00_ERROR_CODES.has(e.error) ? t(`warehouses.errors.${e.error}`) : undefined,
+      e !== null && J00_ERROR_CODES.has(e.error) ? refusalText(t, e, { own: 'warehouses.errors' }) : undefined,
     [t],
   );
   const selected = useMemo(() => warehouses.find((w) => w.id === selectedId) ?? null, [warehouses, selectedId]);

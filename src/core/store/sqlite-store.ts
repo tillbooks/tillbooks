@@ -21,6 +21,14 @@ import type { Clock } from '../clock.js';
 import { systemClock } from '../clock.js';
 import { SCHEMA_SQL, ADDITIVE_COLUMNS, ADDITIVE_INDEXES, SCHEMA_GENERATION } from './schema.js';
 import { DATA_MIGRATIONS } from './migrations.js';
+import {
+  SchemaNewerThanRuntimeError,
+  assertGenerationNotNewer,
+  bookGenerationOf,
+  newerGenerationRefusal,
+} from './generation.js';
+// Aliased on its own line so it never collides with a `node:fs` import list the top of this file grows.
+import { existsSync as pathExists } from 'node:fs';
 
 /**
  * How long a write waits for another connection's lock before giving up.
@@ -297,12 +305,22 @@ export function applyAdditiveSchema(db: Database.Database): void {
  * the version bump commit TOGETHER, so a crash mid-run leaves the old generation and the old rows and
  * the next open simply retries. There is no half-migrated state to reason about. On a fresh (empty)
  * database every migration is a no-op over empty tables and only the version bump takes effect.
+ *
+ * A generation ABOVE this build's is never passed over in silence (critic finding M3): it means a
+ * newer TILL wrote the file, and carrying on would write rows whose meaning this build does not know.
+ * The marker is read INSIDE the migration transaction and the migrations run from THAT value (critic
+ * R1 F3): read outside it, a newer TILL could commit generation 8 between the read and the
+ * transaction, and the bump below would then LOWER the marker to 7 over gen-8 rows. Inside it, the
+ * read and the writes share one snapshot, and a newer commit after that snapshot makes the first
+ * write fail with SQLITE_BUSY_SNAPSHOT instead. The bump only ever raises the marker: it runs only
+ * when the value read is below this build's generation. On a store open this runs nested inside the
+ * open's own schema transaction (see the constructor), whose first statement already read the marker.
  */
 function applyDataMigrations(db: Database.Database): void {
-  const version = db.pragma('user_version', { simple: true }) as number;
-  if (version >= SCHEMA_GENERATION) return;
-
   db.transaction(() => {
+    const version = bookGenerationOf(db);
+    assertGenerationNotNewer(version, db.name);
+    if (version >= SCHEMA_GENERATION) return;
     for (const migration of DATA_MIGRATIONS) {
       if (migration.generation > version) migration.apply(db);
     }
@@ -352,6 +370,284 @@ function freshMemoryTemplate(): Buffer {
   return memoryTemplate;
 }
 
+/**
+ * Run `step` again while it fails with SQLITE_BUSY (any extended code, SQLITE_BUSY_SNAPSHOT included),
+ * backing off on SQLite's own schedule until `timeoutMs` has passed; any other error, or a busy one
+ * past the deadline, is thrown. For a re-open's schema transaction (see the constructor): it begins
+ * DEFERRED and reads first, so a write it needs cannot wait on the busy handler (a reader is never
+ * made to wait for a writer, which could deadlock) and fails at once instead. Retrying the WHOLE
+ * transaction, with no lock held between attempts, waits no longer than the busy timeout would have.
+ */
+function retryWhileBusy<T>(step: () => T, timeoutMs: number): T {
+  const deadline = Date.now() + timeoutMs;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return step();
+    } catch (e) {
+      const left = deadline - Date.now();
+      if (!isBusyError(e) || left <= 0) throw e;
+      Atomics.wait(SLEEP_CELL, 0, 0, Math.min(WAL_SWITCH_BACKOFF_MS[attempt] ?? 100, left));
+    }
+  }
+}
+
+/**
+ * THE READ-ONLY FIRST LOOK (critic R1 F4): refuse a newer book before any WRITABLE connection to it
+ * exists.
+ *
+ * Read on a writable connection, the refusal was not free: closing the LAST connection to a WAL book
+ * checkpoints the WAL into the main file and deletes it. When a newer TILL crashed with its commits
+ * still in the -wal (the marker bump among them), the refused open rewrote the main file (its header
+ * went from 7 to 8) and deleted the -wal, so "the book was not changed" was false. A read-only
+ * connection reads through the WAL (the marker it sees is the committed one, crash residue included)
+ * but can never checkpoint, so it leaves the main file and the -wal exactly as they were.
+ *
+ * On a QUIET book (no -wal on disk) the read-only look creates an empty -wal and a -shm, and a refused
+ * open LEAVES them. They hold no data: the -wal is empty and the -shm is the WAL's index, which any
+ * later opener rebuilds. Removing them would take a writable connection closing as the last one, and
+ * that close checkpoints whatever the -wal holds at that moment. Round 1 did exactly that when no -wal
+ * existed before the look, and a newer TILL that created the -wal, committed its generation and
+ * crashed between that check and the look had its commit folded into the main file and its -wal
+ * deleted (critic R2-5, probe q6 d). Every tidy decided by a check made earlier has that window, so
+ * the refusal opens nothing writable at all: the main file and any -wal stay byte-for-byte as they
+ * were, with the one exception below.
+ *
+ * WHEN THE LOOK CANNOT BE TAKEN (critic R3-4). A read-only connection cannot read a book whose
+ * reading needs a write first. The case that happens: a book in rollback-journal mode (a pre-WAL file,
+ * or one an outside tool switched back) whose writer died mid-transaction leaves a HOT journal, and
+ * SQLite must roll it back before anyone may read; only a writable connection may, so the look fails
+ * with SQLITE_READONLY_ROLLBACK. Refusing to open would strand a book develop opens fine, so on any
+ * SQLITE_READONLY_* failure (ROLLBACK, RECOVERY, CANTINIT, CANTLOCK, DIRECTORY: each means "a
+ * read-only connection may not do what reading needs") the look steps aside and the writable open
+ * goes ahead. Its FIRST statement reads the marker (see the constructor); that read rolls the journal
+ * back, restoring the last committed content as every opener, a newer TILL included, has to, and then
+ * refuses a newer book before the WAL switch, any DDL or any write. So in that one case a refused
+ * open does change the main file: it returns it to its last committed state, and nothing more.
+ */
+function refuseNewerBookBeforeOpening(location: string): void {
+  // A brand-new book (the store is about to create it) has nothing to read and nothing to refuse.
+  if (!pathExists(location)) return;
+  let generation: number;
+  try {
+    const probe = new Database(location, { readonly: true, fileMustExist: true });
+    try {
+      generation = bookGenerationOf(probe);
+    } finally {
+      probe.close();
+    }
+  } catch (e) {
+    if (cannotLookReadOnly(e)) return;
+    throw e;
+  }
+  const refusal = newerGenerationRefusal(generation, location);
+  if (refusal !== null) throw new SchemaNewerThanRuntimeError(refusal);
+}
+
+/** A read-only connection may not do what reading this book needs first (see above). */
+function cannotLookReadOnly(e: unknown): boolean {
+  if (typeof e !== 'object' || e === null) return false;
+  const code = (e as { code?: unknown }).code;
+  return typeof code === 'string' && code.startsWith('SQLITE_READONLY');
+}
+
+/**
+ * A statement that starts, ends or marks a transaction. `BEGIN IMMEDIATE` reports as writing (it takes
+ * the write lock), and run inside a transaction it would fail, so `exec` passes these through as they
+ * are; the writes that follow them are guarded one by one (see `GuardedDatabase`).
+ */
+const TRANSACTION_CONTROL = /^\s*(BEGIN|COMMIT|END|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
+
+/**
+ * The two pragmas SQLite reports as writing that are file housekeeping, not content: `wal_checkpoint`
+ * copies committed pages from the WAL into the main file, and `journal_mode` reads or switches the
+ * journal (the open sets WAL). Neither changes a row, and neither works inside a transaction (a
+ * checkpoint there fails with SQLITE_LOCKED, a switch into or out of WAL is refused), so the
+ * chokepoint passes them through as they are, from `pragma` and from `exec` alike.
+ */
+const HOUSEKEEPING_PRAGMA = /^\s*(wal_checkpoint|journal_mode)\b/i;
+
+/** What the chokepoint needs from its store, and nothing more. */
+interface WriteGuard {
+  /** Run `write` as the store's own transaction: IMMEDIATE, the marker read first (`SqliteStore.tx`). */
+  tx<T>(write: () => T): T;
+  /**
+   * Called after a write inside a transaction that is already open. A no-op in a transaction the
+   * store opened itself (its marker read covers the write); in any other, reads the marker and, on a
+   * newer book, rolls the transaction back and throws.
+   */
+  afterWriteInOpenTransaction(): void;
+}
+
+type AnyStatement = Database.Statement<unknown[], unknown>;
+type StatementMethod = 'run' | 'get' | 'all' | 'iterate';
+
+/**
+ * The driver's own method, looked up on the statement prototype at CALL time rather than captured
+ * once at load, so the chokepoint always delegates to exactly what the driver (or an instrumenting
+ * probe that wraps the prototype) provides.
+ */
+function driverMethod(statement: AnyStatement, name: StatementMethod): (...params: unknown[]) => unknown {
+  return (Object.getPrototypeOf(statement) as Record<StatementMethod, (...params: unknown[]) => unknown>)[name];
+}
+
+function connectionOf(statement: AnyStatement): GuardedDatabase {
+  return statement.database as unknown as GuardedDatabase;
+}
+
+function guardedRun(this: AnyStatement, ...params: unknown[]): unknown {
+  return connectionOf(this).guardedWrite(() => driverMethod(this, 'run').apply(this, params));
+}
+
+function guardedGet(this: AnyStatement, ...params: unknown[]): unknown {
+  return connectionOf(this).guardedWrite(() => driverMethod(this, 'get').apply(this, params));
+}
+
+function guardedAll(this: AnyStatement, ...params: unknown[]): unknown {
+  return connectionOf(this).guardedWrite(() => driverMethod(this, 'all').apply(this, params));
+}
+
+/** A writing iterator (`INSERT ... RETURNING`) is drained inside the guard, so the write is whole. */
+function guardedIterate(this: AnyStatement, ...params: unknown[]): unknown {
+  const rows = connectionOf(this).guardedWrite(() => [...(driverMethod(this, 'iterate').apply(this, params) as Iterable<unknown>)]);
+  return rows[Symbol.iterator]();
+}
+
+/**
+ * THE WRITE CHOKEPOINT (critic R3-1): every statement that writes, issued on the store's connection,
+ * runs inside a transaction whose snapshot has had its generation marker read.
+ *
+ * Three rounds of critique found the same class of defect each time: a write some call site issued as
+ * a bare autocommit statement, which no marker check saw (a key-less verb, a helper, a run log). Each
+ * round wrapped the call sites it was shown, and the next round found more, because the next verb is
+ * the next call site. So the guard now sits where every engine write passes, the connection itself:
+ * `SqliteStore.db` is this class, and
+ *
+ *  - `prepare` hands back the driver's own statement, except that a statement SQLite reports as
+ *    WRITING (`readonly === false`, from `sqlite3_stmt_readonly`) has its `run` routed through
+ *    `guardedWrite`, and, when it also returns rows (`INSERT ... RETURNING`), its `get`, `all` and
+ *    `iterate`. Not `reader`: that says whether a statement RETURNS rows, so `INSERT ... RETURNING` is
+ *    a reader that writes and `PRAGMA foreign_keys = OFF` a non-reader that does not (measured on
+ *    this driver). SQLite reports SELECT, BEGIN, COMMIT, SAVEPOINT, RELEASE and the connection
+ *    pragmas as read-only, and INSERT, UPDATE, DELETE, every DDL and a pragma that writes the file
+ *    (`user_version = n`) as writing.
+ *  - `exec` is a write unless its SQL is ONE statement SQLite reports as read-only, or one
+ *    transaction-control statement. A string of several statements is a write, conservatively: run
+ *    inside the guard, a `BEGIN` among them fails loudly instead of slipping past.
+ *  - `pragma` is routed the same way when SQLite reports the pragma as writing (`user_version = n`),
+ *    except the two that are file housekeeping and cannot run inside a transaction at all
+ *    (`wal_checkpoint`, `journal_mode`: see `HOUSEKEEPING_PRAGMA`).
+ *
+ * `guardedWrite` then does one of three things:
+ *
+ *  1. OUTSIDE a transaction, the write runs inside `SqliteStore.tx`: BEGIN IMMEDIATE, the marker read
+ *     under the write lock, the statement, COMMIT. Still one commit per statement, so a verb that
+ *     committed step by step still does, and under D12 the BEGIN waits for the other process's lock
+ *     exactly as the autocommit it replaces did. What changed is that no step can land in a book a
+ *     newer TILL migrated: the read under the lock refuses first, and nothing is written.
+ *  2. INSIDE a transaction the store opened (`tx`, `snapshotTx`, both of which read the marker as
+ *     their first statement), the statement runs as it is. Nothing is wrapped twice, so nesting cannot
+ *     deadlock, and the verbs that were already one transaction pay one flag check per write.
+ *  3. INSIDE a transaction the store did NOT open (a raw `db.transaction`, an `exec('BEGIN')`), the
+ *     statement runs and then the marker is read. After a write the connection holds the write lock on
+ *     the newest snapshot, so that read is authoritative; on a newer book the store rolls the whole
+ *     transaction back itself, so a caller that catches the error cannot commit it, and throws.
+ *
+ * WHY ONE READ PER TRANSACTION COVERS EVERY WRITE IN IT. A transaction reads one snapshot for its
+ * whole life, and a write can only land on the newest one: in WAL mode, a connection whose snapshot
+ * is older than another's commit fails its first write with SQLITE_BUSY_SNAPSHOT; in rollback-journal
+ * mode, no other connection can commit while this one holds its shared lock. So the marker read
+ * anywhere in a transaction describes the book every write of that transaction lands in.
+ *
+ * Reads are untouched: a read-only statement is the driver's own object with nothing added, and
+ * pays only the one `readonly` lookup at prepare. The verb-level READ guarantee lives one level up:
+ * the registry reads the marker before a workspace verb and again after it (critic R3-2).
+ *
+ * What stays outside, deliberately: the open's schema build, which runs before the guard is switched
+ * on, inside one transaction whose first statement reads the marker (see the constructor); the two
+ * housekeeping pragmas above; and other connections to other files (a backup snapshot, a landscape
+ * build's read-only look), which `test/core/store-durability.test.mjs` confines to a short list of
+ * modules.
+ */
+class GuardedDatabase extends Database {
+  /** Switched on by `SqliteStore` once its open has finished; until then every call is the driver's. */
+  writeGuard: WriteGuard | undefined = undefined;
+
+  override prepare<BindParameters extends unknown[] | {} = unknown[], Result = unknown>(
+    source: string,
+  ): Database.Statement<BindParameters, Result> {
+    const statement = super.prepare<BindParameters, Result>(source);
+    // The guard decides at CALL time whether it is on, so a statement prepared during the open and
+    // run after it is guarded too.
+    if (!statement.readonly) {
+      const own = statement as unknown as Record<StatementMethod, unknown>;
+      own.run = guardedRun;
+      if (statement.reader) {
+        own.get = guardedGet;
+        own.all = guardedAll;
+        own.iterate = guardedIterate;
+      }
+    }
+    return statement;
+  }
+
+  override exec(source: string): this {
+    if (this.writeGuard === undefined || !this.execWrites(source)) return super.exec(source);
+    this.guardedWrite(() => super.exec(source));
+    return this;
+  }
+
+  override pragma(source: string, options?: Database.PragmaOptions): unknown {
+    if (this.writeGuard === undefined || HOUSEKEEPING_PRAGMA.test(source) || super.prepare(`PRAGMA ${source}`).readonly) {
+      return super.pragma(source, options);
+    }
+    return this.guardedWrite(() => super.pragma(source, options));
+  }
+
+  /** The three cases in the note above. */
+  guardedWrite<T>(write: () => T): T {
+    const guard = this.writeGuard;
+    if (guard === undefined) return write();
+    if (!this.inTransaction) return guard.tx(write);
+    const result = write();
+    guard.afterWriteInOpenTransaction();
+    return result;
+  }
+
+  /** Does this `exec` string write? SQLite answers for one statement; several count as a write. */
+  private execWrites(source: string): boolean {
+    let statement: AnyStatement;
+    try {
+      statement = super.prepare(source);
+    } catch {
+      // Several statements (the driver prepares one at a time) or one that does not compile: treated
+      // as a write. Run inside the guard, a compile error surfaces exactly as it would have.
+      return true;
+    }
+    if (statement.readonly || TRANSACTION_CONTROL.test(source)) return false;
+    const pragma = /^\s*PRAGMA\s+(.*)$/is.exec(source);
+    return pragma === null || !HOUSEKEEPING_PRAGMA.test(pragma[1] ?? '');
+  }
+}
+
+/**
+ * Run one step of a file-backed open, and close the connection before rethrowing if it fails, so a
+ * refused or failed open never leaves a live writable handle on the book. The caller never receives
+ * a store from a constructor that threw, so nothing else could ever close it. A close that itself
+ * fails is swallowed: the step's error is the one worth reporting.
+ */
+function closingOnFailure(db: Database.Database, step: () => void): void {
+  try {
+    step();
+  } catch (e) {
+    try {
+      db.close();
+    } catch {
+      // Already failing; see above.
+    }
+    throw e;
+  }
+}
+
 export class SqliteStore {
   readonly db: Database.Database;
   private readonly clock: Clock;
@@ -373,20 +669,30 @@ export class SqliteStore {
       // The build path below (SCHEMA_SQL + additive + data migrations) is the one the template itself
       // ran, so this database is byte-for-byte what that path produces. Only the per-connection
       // pragmas remain to set, because they are not part of the serialized image.
-      this.db = new Database(freshMemoryTemplate(), { timeout });
+      this.db = new GuardedDatabase(freshMemoryTemplate(), { timeout });
       this.db.pragma('foreign_keys = ON');
       // Without this, SQLite's REPLACE conflict resolution deletes the conflicting row WITHOUT firing
       // the BEFORE DELETE trigger, so `INSERT OR REPLACE` would route around posted-row immutability.
       // With it on, REPLACE's implicit delete fires journal_entry_no_delete_posted and aborts.
       this.db.pragma('recursive_triggers = ON');
+      this.switchOnWriteGuard();
       return;
     }
 
-    this.db = new Database(location, { timeout });
+    // The read-only first look (critic R1 F4), before any writable connection to the book exists.
+    refuseNewerBookBeforeOpening(location);
+    this.db = new GuardedDatabase(location, { timeout });
     // Durable commits FIRST, before any statement on this connection can commit: the WAL switch below
     // is itself a commit on a new file, and a re-opened file may run data migrations over real rows.
     // See `applyDurableSync` for why this is not optional on a ledger.
     applyDurableSync(this.db);
+    // THE GENERATION GUARD (`./generation.ts`, critic finding M3), again on the writable connection,
+    // before ANYTHING else touches the file: the WAL switch, the schema DDL, the additive ALTERs, the
+    // data migrations and every write all come after it. The read-only look above already refused a
+    // book that was newer when this open began; this catches one that became newer in between, and
+    // the schema transaction below reads the marker once more as its first statement. The
+    // durable-sync pragmas above are per-connection and write nothing.
+    closingOnFailure(this.db, () => assertGenerationNotNewer(bookGenerationOf(this.db), location));
     // A brand-new file (the open above created it, empty): make its directory entry durable before
     // anything commits into it, so the first durable commit's F_FULLFSYNC flushes that entry too.
     // SQLite never syncs the main database file's directory (see `fsyncDirectory`). One-off per file.
@@ -401,9 +707,20 @@ export class SqliteStore {
     switchToWal(this.db, timeout);
     // Build (or, on a re-opened file, idempotently top up) the schema: base CREATE, the additive
     // widening, then the data migrations, exactly as the `:memory:` template above did.
+    //
+    // ONE TRANSACTION WHOSE FIRST STATEMENT READS THE MARKER (critic R1 F3). Checked on its own and
+    // then built statement by statement, the whole schema pass (about 5 ms) was a window in which a
+    // newer TILL could commit, and this build then ran its DDL over the newer book (re-creating an
+    // index the newer schema had dropped) before any later check refused. Inside one transaction the
+    // marker read pins the snapshot the DDL runs against: a newer commit after it makes this build's
+    // first write fail with SQLITE_BUSY_SNAPSHOT, and nothing it wrote lands.
+    const build = (): void => {
+      assertGenerationNotNewer(bookGenerationOf(this.db), location);
+      buildCurrentSchema(this.db);
+    };
     if (brandNew) {
-      // A BRAND-NEW file builds its schema as ONE transaction. Run statement by statement, as a
-      // re-open does, the build is several hundred autocommits, and with durable commits each of them
+      // A BRAND-NEW file builds its schema as ONE transaction. Run statement by statement, the build
+      // is several hundred autocommits, and with durable commits each of them
       // pays an F_FULLFSYNC: measured 2.1 s to create a store, against 0.18 s before durability. As
       // one transaction it is a single durable commit, and a crash mid-build leaves no half-built
       // schema behind.
@@ -414,18 +731,200 @@ export class SqliteStore {
       // which is the one case SQLite's busy handler waits on. So the second queues until the first
       // has committed, then finds the finished schema, and every statement in its build is a no-op.
       //
-      // A re-open keeps the statement-by-statement path. On an up-to-date file every statement there
-      // is a no-op that commits nothing, so opening never takes the write lock, and an upgrade's few
-      // additive ALTERs pay one durable commit each.
-      this.db.transaction(() => buildCurrentSchema(this.db)).immediate();
+      // A re-open runs the same build in a DEFERRED transaction. On an up-to-date file every
+      // statement is a no-op that writes nothing, so opening still never takes the write lock and the
+      // COMMIT is a read transaction ending; an upgrade's additive ALTERs now share ONE durable commit.
+      // A busy failure (a concurrent opener upgrading the same file, or a newer commit after the
+      // snapshot) retries the whole transaction up to the busy timeout, and the retry reads the
+      // marker again first.
+      closingOnFailure(this.db, () => this.db.transaction(build).immediate());
     } else {
-      buildCurrentSchema(this.db);
+      closingOnFailure(this.db, () => retryWhileBusy(() => this.db.transaction(build)(), timeout));
     }
+    // And once more after the build committed: a newer TILL that committed after the snapshot above
+    // changed nothing this build wrote (it wrote nothing it could not), but the open must not hand
+    // back a store over a book that is now newer. Refused here, the caller never holds it.
+    closingOnFailure(this.db, () => this.assertGenerationKnown());
+    this.switchOnWriteGuard();
   }
 
-  /** Run `fn` in a single transaction: all of its writes commit together, or none do. */
+  /**
+   * THE WRITE CHOKEPOINT goes live (see `GuardedDatabase`): from here on, a writing statement on this
+   * connection outside a transaction runs inside `tx`, and one inside a transaction the store did not
+   * open is checked under the lock. The closures look `tx` up at call time, so a caller that wraps
+   * `store.tx` sees the chokepoint's transactions too.
+   */
+  private switchOnWriteGuard(): void {
+    (this.db as GuardedDatabase).writeGuard = {
+      tx: <T>(write: () => T): T => this.tx(write),
+      afterWriteInOpenTransaction: () => this.afterWriteInOpenTransaction(),
+    };
+  }
+
+  /**
+   * How many of the store's OWN transactions (`tx`, `snapshotTx`) are running on the stack. Each read
+   * the marker as its first statement, so while one is open every write in the transaction is covered
+   * (see "why one read per transaction" on `GuardedDatabase`).
+   */
+  private ownTransactions = 0;
+
+  /**
+   * The one transaction function every `tx` and `snapshotTx` runs through, built once per connection.
+   * better-sqlite3 builds its wrapper functions on every `db.transaction(fn)` call; taking the body as
+   * an argument instead keeps a guarded bare write close to the autocommit it replaces (measured on
+   * `:memory:`: 12.5 microseconds per statement with a new transaction function per call, 3.2 with
+   * this one, 1.4 for the bare autocommit).
+   */
+  private transactionRunner: Database.Transaction<(body: () => unknown) => unknown> | undefined;
+
+  private runner(): Database.Transaction<(body: () => unknown) => unknown> {
+    this.transactionRunner ??= this.db.transaction((body: () => unknown): unknown => {
+      this.assertGenerationKnown();
+      this.ownTransactions += 1;
+      try {
+        return body();
+      } finally {
+        this.ownTransactions -= 1;
+      }
+    });
+    return this.transactionRunner;
+  }
+
+  /**
+   * Case 3 of the chokepoint: a write just ran inside a transaction that is already open. In one of
+   * the store's own it is covered already. In any other (a raw `db.transaction`, an `exec('BEGIN')`)
+   * the write has just taken the write lock on the newest snapshot, so this read is authoritative; on a
+   * newer book the whole transaction is rolled back HERE, before the error leaves, so a caller that
+   * catches it has nothing left to commit.
+   */
+  private afterWriteInOpenTransaction(): void {
+    if (this.ownTransactions > 0 || !this.db.inTransaction) return;
+    const refusal = newerGenerationRefusal(this.readGeneration(), this.location);
+    if (refusal === null) return;
+    Database.prototype.exec.call(this.db, 'ROLLBACK');
+    this.refusals += 1;
+    throw new SchemaNewerThanRuntimeError(refusal);
+  }
+
+  /**
+   * How many generation refusals this store has raised since it opened (critic R4-2), counted BEFORE
+   * each throw, so a refusal a caller catches and swallows is still counted. A verb that turns per-item
+   * failures into an ok answer (`run_due_recurring`, `run_due_automations`) can return normally after
+   * the book moved on and part of its work was refused; the registry reads this before and after a
+   * verb, and says a call was saved WHOLE only when none was raised in between.
+   */
+  private refusals = 0;
+
+  refusalCount(): number {
+    return this.refusals;
+  }
+
+  /**
+   * Run `fn` in a single transaction: all of its writes commit together, or none do.
+   *
+   * THE LIVE GENERATION GUARD (`./generation.ts`, critic finding M3). The open-time check cannot see
+   * a book that moves on AFTER this store opened it: a newer TILL opening the same file (D12 puts a
+   * second process on it, and the .mcpb extension and the CLI can be different releases) migrates it
+   * to a generation this build does not know, and this long-lived store would go on writing
+   * old-meaning rows into it. So the transaction's FIRST statement reads the marker and throws
+   * `schema_newer_than_runtime` when the book is newer, before `fn` runs: `fn` never reads, writes
+   * or acts outside the database on a book this build does not know. `rememberIdempotent` runs
+   * through here, so every idempotent verb is covered with it.
+   *
+   * IMMEDIATE, BECAUSE D12 PUTS A SECOND WRITER ON THE FILE (critic R2-1). The outermost transaction
+   * asks for the write lock in its BEGIN, before this connection holds any lock, and that is the one
+   * request SQLite's busy handler waits on (btree.c `sqlite3BtreeBeginTrans` invokes it only from
+   * TRANS_NONE). So a transaction that meets the other process's write lock WAITS for it, up to the
+   * busy timeout, and then runs. Three things follow from holding the lock from the start:
+   *
+   *  - The marker read is AUTHORITATIVE: no other connection can commit between it and this
+   *    transaction's COMMIT, a newer TILL's migration included. That is why there is no second read
+   *    before commit; it would read the same value under the same lock (critic R2 B8 measured it as
+   *    dead code).
+   *  - SQLITE_BUSY_SNAPSHOT cannot happen: the snapshot is the newest one, taken under the lock.
+   *  - It costs the lock for the whole of `fn`, reads included. A census over every conformance write
+   *    scenario found no outermost `tx` that writes nothing (critic R2 q8), and the network and email
+   *    steps of the verbs that have them run outside their transactions by design, so the lock is
+   *    held for local work only.
+   *
+   * Round 1 began these DEFERRED with the marker as the first read. That pinned the snapshot, but a
+   * deferred transaction that has read can never wait for the write lock (a reader waiting on a
+   * writer is the deadlock the busy handler refuses to risk), so every write under D12 contention
+   * failed at once as `store_busy`: measured 97 of 124 Studio posts against a second posting process,
+   * where develop failed none. Do not go back to DEFERRED here.
+   *
+   * Nested `tx` calls run as savepoints inside the outermost transaction (better-sqlite3 switches to
+   * SAVEPOINT whenever a transaction is open, whatever variant is asked for) and read the marker
+   * again under the same lock, which costs 0.3 microseconds and can only agree.
+   *
+   * EVERY WRITE REACHES HERE, not only the verbs that ask for a transaction (critic R3-1). A writing
+   * statement issued outside a transaction is run inside `tx` by the connection itself (THE WRITE
+   * CHOKEPOINT, on `GuardedDatabase`), so a key-less verb, a helper or a run log that writes one
+   * statement at a time is guarded exactly like a verb that wraps its work in one transaction. The
+   * call sites that still wrap several writes in one `tx` (`set_bank_opening_balance`, `update_item`,
+   * `stock_move`, `stock_stocktake_count`, `accept_invite`, the audit append) do it for ATOMICITY:
+   * those writes commit together, and their checks read the same snapshot. The generation guarantee
+   * no longer depends on any call site, and no census of bare writes is needed to keep it true.
+   */
   tx<T>(fn: () => T): T {
-    return this.db.transaction(fn)();
+    return this.runner().immediate(fn) as T;
+  }
+
+  /**
+   * `tx` for a LONG READ that ends in a small write: `create_backup` and `export_workspace`, and
+   * nothing else. It begins DEFERRED, so the read (2 to 12 s on a loaded box, critic R2 q4) holds no
+   * write lock and the D12 second writer keeps posting meanwhile. Its first statement reads the
+   * marker exactly as `tx` does, which pins the snapshot the whole read runs on to a generation this
+   * build knows.
+   *
+   * The price is the one `tx` refuses to pay on every verb: a deferred transaction that has read
+   * cannot wait for the write lock. When the other process commits during the read, or holds the lock
+   * at the moment of the final write, that write fails at once with SQLITE_BUSY_SNAPSHOT or
+   * SQLITE_BUSY and the registry answers the retryable `store_busy`; the caller removes what it
+   * published (see `withKey` in `../data/portability.ts`). A newer TILL's commit after the pin lands
+   * the same way, and the retry meets the marker read and is refused by name. Taking the write lock
+   * for the whole read instead would make every write of the other process wait out the backup, and
+   * fail once it ran past the busy timeout.
+   */
+  snapshotTx<T>(fn: () => T): T {
+    return this.runner().deferred(fn) as T;
+  }
+
+  /** The marker read, prepared once per connection. */
+  private generationRead: Database.Statement | undefined;
+
+  /** `total_changes()`, prepared once per connection. */
+  private changesRead: Database.Statement | undefined;
+
+  /**
+   * How many rows this connection has inserted, updated or deleted since it opened (SQLite's
+   * `total_changes()`; it never touches the file, so it cannot be busy). The registry reads it before
+   * and after a verb to tell a refusal that follows nothing from one that follows a commit (critic
+   * R2-4): only the first may say the book was not changed. It over-counts, never under-counts: rows a
+   * rolled-back statement changed are counted too, so a refusal is at worst called partial when
+   * nothing it changed survived.
+   */
+  changeCount(): number {
+    this.changesRead ??= this.db.prepare('SELECT total_changes()').pluck();
+    return this.changesRead.get() as number;
+  }
+
+  /**
+   * Throw `schema_newer_than_runtime` when the book has moved on to a generation newer than this
+   * build since this store opened it. One prepared read of `PRAGMA user_version`, measured at about
+   * 0.3 microseconds. `tx` and `snapshotTx` call it as their first statement; the registry and the
+   * A35 seam call it before a verb runs.
+   */
+  assertGenerationKnown(): void {
+    const refusal = newerGenerationRefusal(this.readGeneration(), this.location);
+    if (refusal === null) return;
+    this.refusals += 1;
+    throw new SchemaNewerThanRuntimeError(refusal);
+  }
+
+  private readGeneration(): number {
+    this.generationRead ??= this.db.prepare('PRAGMA user_version').pluck();
+    return this.generationRead.get() as number;
   }
 
   /**
@@ -471,6 +970,7 @@ export class SqliteStore {
   checkpoint(): void {
     if (this.location === ':memory:') return;
     try {
+      // A housekeeping pragma: the write chokepoint passes it through (see `HOUSEKEEPING_PRAGMA`).
       this.db.pragma('wal_checkpoint(TRUNCATE)');
     } catch {
       // A checkpoint that loses a race with another connection is not a failure worth propagating:

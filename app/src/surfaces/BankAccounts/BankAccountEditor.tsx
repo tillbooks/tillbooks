@@ -43,7 +43,7 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
-import { ErrorBanner, Skeleton } from '../../components/states';
+import { ErrorBanner, Skeleton, refusalText } from '../../components/states';
 import { Select } from '../../components/Select';
 import { HelpHint } from '../../components/HelpHint';
 import { BankDrawer } from './BankDrawer';
@@ -477,7 +477,7 @@ export function BankAccountEditor({
               <p className="field-error" role="alert">
                 {error.error === 'permission_denied'
                   ? t('bank.error.permissionDenied.write')
-                  : t('errors.fallback')}
+                  : refusalText(t, error)}
               </p>
             )}
 

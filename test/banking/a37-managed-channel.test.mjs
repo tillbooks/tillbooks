@@ -397,7 +397,9 @@ test('cross-rail: a batch submitted over MANAGED cannot then be transmitted over
     `INSERT INTO ebics_connection_account (id, workspace_id, connection_id, bank_account_id, created_at) VALUES (?, ?, ?, ?, ?)`,
   ).run('ebca_xr', t.workspaceId, ebId, bankAccountId, now);
 
-  refused(transmitPaymentBatch(ctx, { batchId, confirm: true, idempotencyKey: 'xr-e' }), 'already_transmitted', 'EBICS transmit after managed');
+  // A36 (D-A36.11): the EBICS channel uploads nothing at all, so a batch routed over it is refused
+  // `upload_disabled` before any port call, which is stronger than the old cross-rail guard.
+  refused(transmitPaymentBatch(ctx, { batchId, confirm: true, idempotencyKey: 'xr-e' }), 'upload_disabled', 'EBICS transmit after managed');
 });
 
 // --- status read model (kind-labelled, both rails) --------------------------------------------

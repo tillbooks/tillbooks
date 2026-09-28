@@ -406,4 +406,27 @@ describe('Projects: the editor', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Speichern' }));
     expect(await within(dialog).findByText('Projektcode bereits vergeben.')).toBeInTheDocument();
   });
+
+  it('a create saved whole before the book moved on to a newer TILL says so, never "not changed" (critic R4 follow-up)', async () => {
+    const user = userEvent.setup();
+    renderProjects({
+      ...happyCanned(),
+      project_create: {
+        status: 422,
+        body: {
+          ok: false, error: 'schema_newer_than_runtime', bookGeneration: 8, buildGeneration: 7, path: '/x/book.db',
+          partial: true, completed: true,
+        },
+      },
+    });
+    await screen.findByRole('table', { name: 'Projektliste' });
+    await user.click(screen.getByRole('button', { name: 'Neues Projekt' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Name'), 'Gespeichert');
+    await user.click(within(dialog).getByRole('button', { name: 'Speichern' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent('Diese Aktion ist gespeichert.');
+    expect(alert).toHaveTextContent('Wiederhole die Aktion nicht, sonst entsteht sie doppelt.');
+    expect(alert).not.toHaveTextContent(/nicht verändert|schema_newer_than_runtime/);
+  });
 });

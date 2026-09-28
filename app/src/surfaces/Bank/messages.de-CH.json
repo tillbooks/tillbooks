@@ -1,0 +1,887 @@
+{
+  "nav": {
+    "bankInbox": "Bankzeilen"
+  },
+  "bankInbox": {
+    "title": "Bank",
+    "subtitleMany": "{count} Bankkonten",
+    "loading": "Die Bankzeilen werden geladen.",
+    "denied": {
+      "title": "Kein Zugriff auf die Bankzeilen.",
+      "body": "Deiner Rolle fehlt das Recht, Verkäufe und Bankzeilen zu lesen. Eine Person mit Adminrechten kann es dir unter Mitglieder geben."
+    },
+    "header": {
+      "more": "Weitere Aktionen für die Bank",
+      "bankAccounts": "Bankkonten verwalten",
+      "fetchStatements": "Kontoauszüge abrufen",
+      "fetching": "Wird abgerufen…",
+      "lastFetched": "Zuletzt abgerufen: {date}",
+      "fetched": "Abgerufen: {imported} Auszüge importiert, {waiting} warten.",
+      "fetchedNothing": "Die ZKB hat keine neuen Auszüge."
+    },
+    "bulk": {
+      "bookSure": "Alle sicheren buchen ({count})"
+    },
+    "pick": {
+      "label": "Ausgewählte Zeilen",
+      "row": "{party}, {amount} auswählen",
+      "all": "Alle sichtbaren Zeilen auswählen",
+      "count": {
+        "one": "{count} Zeile ausgewählt",
+        "other": "{count} Zeilen ausgewählt"
+      },
+      "book": {
+        "one": "Sichere buchen ({count})",
+        "other": "Sichere buchen ({count})"
+      },
+      "notReady": {
+        "one": "{count} Zeile ist nicht durch eine Referenz belegt, wurde geändert oder wartet auf den Agenten und bleibt stehen.",
+        "other": "{count} Zeilen sind nicht durch eine Referenz belegt, wurden geändert oder warten auf den Agenten und bleiben stehen."
+      },
+      "ignore": "Ignorieren …",
+      "ignoreReason": "Grund",
+      "ignoreConfirm": {
+        "one": "{count} Zeile ignorieren",
+        "other": "{count} Zeilen ignorieren"
+      },
+      "clear": "Auswahl aufheben"
+    },
+    "first": {
+      "noAccountTitle": "Noch kein Bankkonto erfasst.",
+      "noAccountHint": "Erfasse dein Bankkonto, dann importierst du hier seine Kontoauszüge.",
+      "createAccount": "Bankkonto erfassen",
+      "noStatementTitle": "Noch kein Kontoauszug importiert.",
+      "noStatementHint": "Nach dem Import erscheint jede Zeile hier, mit einem Vorschlag zum Buchen."
+    },
+    "empty": {
+      "openTitle": "Alles gebucht.",
+      "openHint": "Neue Zeilen erscheinen hier, sobald du den nächsten Kontoauszug importierst.",
+      "bookedTitle": "Noch nichts gebucht.",
+      "bookedHint": "Gebuchte und abgeglichene Zeilen erscheinen hier, mit Storno.",
+      "ignoredTitle": "Keine ignorierten Zeilen.",
+      "ignoredHint": "Ignorierte Zeilen erscheinen hier und lassen sich wieder zu buchen holen.",
+      "filteredTitle": "Keine Zeile passt zu Suche und Filter.",
+      "filteredHint": "Setze die Suche und den Filter zurück, um alle Zeilen zu sehen.",
+      "showBooked": "Gebuchte Zeilen zeigen",
+      "showOpen": "Zu buchende Zeilen zeigen"
+    },
+    "tab": {
+      "label": "Bankzeilen nach Stand",
+      "open": "Zu buchen",
+      "openCount": "Zu buchen {count}",
+      "booked": "Gebucht",
+      "bookedCount": "Gebucht {count}",
+      "ignored": "Ignoriert",
+      "ignoredCount": "Ignoriert {count}"
+    },
+    "caption": {
+      "open": "Bankzeilen, die noch zu buchen sind",
+      "booked": "Gebuchte und abgeglichene Bankzeilen",
+      "ignored": "Ignorierte Bankzeilen"
+    },
+    "search": {
+      "label": "Suchen",
+      "placeholder": "Name, Text, Referenz oder Betrag"
+    },
+    "facet": {
+      "label": "Zeilen filtern",
+      "all": "Alle",
+      "needs": "Brauchen dich",
+      "sure": "Sicher",
+      "in": "Eingänge",
+      "out": "Ausgänge"
+    },
+    "accounts": {
+      "label": "Bankkonto",
+      "all": "Alle Konten"
+    },
+    "fresh": {
+      "showAll": "Alle Zeilen zeigen"
+    },
+    "col": {
+      "date": "Datum",
+      "party": "Gegenpartei",
+      "target": "Buchen auf",
+      "decision": "Entscheid",
+      "vat": "MWST",
+      "amount": "Betrag",
+      "actions": "Aktionen"
+    },
+    "row": {
+      "unnamed": "Bankzeile ohne Namen",
+      "book": "Buchen",
+      "match": "Abgleichen",
+      "review": "Prüfen",
+      "busy": "Wird gebucht …",
+      "targetLabel": "Buchen auf, {party}",
+      "targetPlaceholder": "Worauf buchen?",
+      "vatLabel": "MWST, {party}",
+      "more": "Weitere Aktionen für {party}, {amount}",
+      "needsPost": "Zum Buchen fehlt dir das Recht, zu buchen.",
+      "needsPay": "Eine Rechnung oder einen Zahlungslauf begleichen braucht das Recht, Zahlungen zu buchen."
+    },
+    "menu": {
+      "split": "Aufteilen oder manuell buchen",
+      "link": "Mit bestehender Buchung abgleichen",
+      "agent": "Agent fragen",
+      "ignore": "Ignorieren"
+    },
+    "certainty": {
+      "sure": "Sicher",
+      "learned": "Gelernt",
+      "check": "Bitte prüfen",
+      "open": "Kein Vorschlag",
+      "edited": "Von dir geändert",
+      "agent": "Vorschlag des Agenten"
+    },
+    "state": {
+      "open": "Offen",
+      "booked": "Gebucht",
+      "matched": "Abgeglichen",
+      "ignored": "Ignoriert"
+    },
+    "picker": {
+      "search": "Konto, Rechnung oder Betrag suchen",
+      "searchAccount": "Kontonummer oder Name",
+      "noMatch": "Nichts gefunden.",
+      "groupCurrent": "Aktuell",
+      "groupSuggested": "Vorschläge",
+      "groupInvoices": "Offene Rechnungen",
+      "groupBills": "Offene Lieferantenrechnungen",
+      "groupAccounts": "Konten",
+      "groupMore": "Weitere",
+      "currentMeta": "so steht es jetzt",
+      "proposalMeta": "Vorschlag von TILL",
+      "agentMeta": "Vorschlag des Agenten",
+      "moreLink": "Mit bestehender Buchung abgleichen …",
+      "moreLinkMeta": "schon gebucht, zum Beispiel von Hand",
+      "moreLinkKeywords": "abgleichen bestehende buchung journal",
+      "moreSplit": "Aufteilen oder manuell buchen …",
+      "moreSplitMeta": "mehrere Konten oder eigener Text",
+      "moreSplitKeywords": "aufteilen split mehrere manuell"
+    },
+    "vat": {
+      "none": "ohne MWST",
+      "phrase": "{label} ({code})",
+      "perPosition": "pro Position",
+      "fromEntry": "aus der Buchung",
+      "fromBills": "aus den Rechnungen",
+      "fromInvoice": "aus der Rechnung",
+      "fromBill": "aus der Rechnung"
+    },
+    "target": {
+      "split": "Aufgeteilt auf {count} Konten",
+      "unknownAccount": "Konto nicht gefunden",
+      "invoice": "Rechnung",
+      "otherAccount": "dem anderen Bankkonto",
+      "invoiceName": "offene Rechnung",
+      "bill": "Lieferantenrechnung",
+      "billName": "offene Lieferantenrechnung",
+      "batchCode": "Zahlungslauf",
+      "batch": "mehrere Lieferantenrechnungen",
+      "entry": "bestehende Buchung"
+    },
+    "reason": {
+      "existing_entry_reference": "In der Buchhaltung steht schon eine Buchung vom {date} mit derselben Referenz: {description}. Abgleichen verbindet beide, es entsteht keine neue Buchung.",
+      "existing_entry_amount_date": {
+        "one": "In der Buchhaltung steht eine Buchung vom {date} über denselben Betrag, noch ohne Bankzeile ({days} Tag Abstand). Keine Referenz verbindet beide sicher, es könnte auch eine zweite Zahlung sein.",
+        "other": "In der Buchhaltung steht eine Buchung vom {date} über denselben Betrag, noch ohne Bankzeile ({days} Tage Abstand). Keine Referenz verbindet beide sicher, es könnte auch eine zweite Zahlung sein."
+      },
+      "existing_entry_same_day": "In der Buchhaltung steht eine Buchung vom selben Tag ({date}) über denselben Betrag, noch ohne Bankzeile. Keine Referenz verbindet beide sicher, es könnte auch eine zweite Zahlung sein.",
+      "candidates": "{count} Buchungen kommen in Frage.",
+      "qr_reference_exact": "Die QR-Referenz gehört zur offenen Rechnung {number} von {contact}, und der Betrag stimmt auf den Rappen.",
+      "qr_reference_amount_differs": "Die QR-Referenz gehört zur Rechnung {number} von {contact}, aber der Betrag weicht um {delta} ab.",
+      "payment_batch_reference": "TILL hat diesen Zahlungslauf erstellt. Die Bank meldet dieselbe Referenz und denselben Betrag, {total}.",
+      "payment_batch_total_differs": "Die Bank meldet die Referenz eines Zahlungslaufs, aber der Betrag weicht ab: Zahlungslauf {batch}, Bank {line}. So lässt sich die Zeile nicht mit dem Lauf abgleichen. Verwirf den Lauf unter Kreditorenzahlungen, erfass die ausgeführten Zahlungen unter Zahlungen von Hand und ignoriere diese Zeile als «Wird anderswo gebucht».",
+      "vendor_bill_reference": "Die Referenz gehört zur offenen Lieferantenrechnung {number} von {vendor}.",
+      "vendor_bill_amount": "Eine offene Lieferantenrechnung lautet auf denselben Betrag: {number} von {vendor}. Keine Referenz beweist es.",
+      "own_account_transfer": "Die Gegenpartei ist dein eigenes Konto «{name}». Das ist ein Übertrag, kein Aufwand.",
+      "own_account_transfer_booked": {
+        "one": "Der Übertrag von «{name}» steht schon in der Buchhaltung, gebucht am {date} ({days} Tag Abstand). Gleiche ihn ab, statt ihn ein zweites Mal zu buchen.",
+        "other": "Der Übertrag von «{name}» steht schon in der Buchhaltung, gebucht am {date} ({days} Tage Abstand). Gleiche ihn ab, statt ihn ein zweites Mal zu buchen."
+      },
+      "own_account_transfer_booked_same_day": "Der Übertrag von «{name}» steht schon in der Buchhaltung, gebucht am selben Tag ({date}). Gleiche ihn ab, statt ihn ein zweites Mal zu buchen.",
+      "history": "Zuletzt am {date} hast du diese Gegenpartei auf {account} gebucht, {vat} ({count} Mal so).",
+      "withVat": "mit {vat}",
+      "withoutVat": "ohne MWST",
+      "no_proposal": "Keine Referenz und keine frühere Buchung passen. Wähle ein Konto oder eine Rechnung, oder frage den Agenten.",
+      "payment_batch_item": "Die Bank meldet eine einzelne Zahlung eines Zahlungslaufs, über ihre Referenz benannt: {amount}.",
+      "payment_batch_item_amount_differs": "Die Referenz nennt eine Zahlung eines Zahlungslaufs, aber der Betrag weicht ab: Zahlung {item}, Bank {line}. So lässt sich die Zeile nicht mit dem Lauf abgleichen. Verwirf den Lauf unter Kreditorenzahlungen, erfass die ausgeführten Zahlungen unter Zahlungen von Hand und ignoriere diese Zeile als «Wird anderswo gebucht».",
+      "payment_batch_total_differs_paid": "Die Bank meldet die Referenz eines Zahlungslaufs, aber der Betrag weicht ab: Zahlungslauf {batch}, Bank {line}. Der Lauf ist schon als bezahlt markiert und lässt sich nicht mehr verwerfen: ignoriere diese Zeile als «Wird anderswo gebucht» und storniere unter Zahlungen jede Zahlung des Laufs, die die Bank nicht ausgeführt hat.",
+      "payment_batch_item_amount_differs_paid": "Die Referenz nennt eine Zahlung eines Zahlungslaufs, aber der Betrag weicht ab: Zahlung {item}, Bank {line}. Der Lauf ist schon als bezahlt markiert und lässt sich nicht mehr verwerfen: ignoriere diese Zeile als «Wird anderswo gebucht» und storniere unter Zahlungen jede Zahlung des Laufs, die die Bank nicht ausgeführt hat.",
+      "own_account_transfer_booked_other_month": "Der Übertrag von «{name}» ist dort am {date} gebucht, in einem anderen Monat als diese Zeile. So lässt er sich nicht abgleichen: hol die andere Seite zurück und buche beide Seiten je an ihrem Tag über ein Durchgangskonto, das du im Kontenplan erfasst."
+    },
+    "next": {
+      "agent": "Nächster Schritt: du gibst den Vorschlag des Agenten frei oder lehnst ihn ab.",
+      "pick": "Nächster Schritt: du wählst, worauf gebucht wird.",
+      "match": "Nächster Schritt: du gleichst ab, es entsteht keine neue Buchung.",
+      "book": "Nächster Schritt: du bestätigst mit Buchen."
+    },
+    "panel": {
+      "label": "Bankzeile {party}",
+      "emptyLabel": "Bankzeile",
+      "empty": "Wähle eine Zeile, um ihre Buchung zu sehen.",
+      "statusLabel": "Vorschlag und Grund",
+      "agentReason": "Der Agent hat diese Zeile vorbereitet. Du prüfst seinen Vorschlag und gibst ihn frei oder lehnst ihn ab.",
+      "editedReason": "Du hast den Vorschlag geändert.",
+      "iban": "IBAN",
+      "reference": "Referenz",
+      "split": "Aufteilen oder manuell",
+      "notSame": "Nicht dieselbe Zahlung? Neu buchen",
+      "backToProposal": "Zurück zum Vorschlag",
+      "backToLine": "Zurück zur Zeile",
+      "cancel": "Abbrechen",
+      "close": "Schliessen",
+      "linkMissing": "Diese Bankzeile gibt es hier nicht."
+    },
+    "legs": {
+      "title": "So wird gebucht",
+      "account": "Konto",
+      "debit": "Soll",
+      "credit": "Haben",
+      "pickFirst": "Wähle zuerst, worauf gebucht wird.",
+      "computing": "Die Buchung wird berechnet.",
+      "vatFailed": "Die MWST liess sich für diese Vorschau nicht berechnen. Prüfe den MWST-Code.",
+      "unknownAccount": "Konto nicht gefunden"
+    },
+    "item": {
+      "titleInvoice": "Rechnung",
+      "titleBill": "Lieferantenrechnung",
+      "paidInFull": "{item} ist damit ganz bezahlt.",
+      "shortOpen": "Teilzahlung: {item} bleibt mit {rest} offen.",
+      "shortWriteOff": "Teilzahlung: der Rest von {rest} wird als Verlust ausgebucht, {item} ist dann erledigt.",
+      "surplusCredit": "Überzahlung: {rest} bleiben als Guthaben des Kunden stehen, {item} ist ganz bezahlt.",
+      "surplusDebit": "Mehr bezahlt als offen: {rest} bleiben als Guthaben beim Lieferanten stehen, {item} ist ganz bezahlt.",
+      "unknownOpen": "Der offene Betrag von {item} liess sich nicht lesen. TILL rechnet ihn beim Buchen.",
+      "remainderLegend": "Was passiert mit dem Rest von {rest}?",
+      "leaveOpen": "Offen lassen",
+      "writeOff": "Als Verlust ausbuchen",
+      "fees": "Darin enthalten: Mahngebühren von {fees}."
+    },
+    "batch": {
+      "title": "Zahlungslauf",
+      "loading": "Der Zahlungslauf wird geladen.",
+      "markPaid": {
+        "one": "Die Bank hat den Zahlungslauf vom {date} ausgeführt. Buchen markiert ihn als bezahlt: eine Lieferantenrechnung gilt dann als bezahlt.",
+        "other": "Die Bank hat den Zahlungslauf vom {date} ausgeführt. Buchen markiert ihn als bezahlt: {count} Lieferantenrechnungen gelten dann als bezahlt."
+      },
+      "alreadyPaid": {
+        "one": "Dieser Zahlungslauf vom {date} ist schon als bezahlt markiert. Die Zeile wird mit seiner Zahlung verbunden, ohne neue Buchung.",
+        "other": "Dieser Zahlungslauf vom {date} ist schon als bezahlt markiert. Die Zeile wird mit seinen {count} Zahlungen verbunden, ohne neue Buchung."
+      },
+      "totalDiffers": "Der Zahlungslauf lautet auf {batch}, die Bank auf {line}."
+    },
+    "compare": {
+      "title": "Bank und Buchhaltung",
+      "differenceReason": "Warum weicht der Betrag um {amount} ab?",
+      "differenceReasonHint": "zum Beispiel Bankspesen abgezogen",
+      "matchWithDifference": "Mit Differenz abgleichen",
+      "bank": "Bank",
+      "books": "Buchhaltung",
+      "amount": "Betrag",
+      "date": "Datum",
+      "text": "Text",
+      "same": "gleich",
+      "differs": "abweichend",
+      "days": {
+        "one": "{days} Tag",
+        "other": "{days} Tage"
+      },
+      "none": "keiner",
+      "loading": "Die Buchung wird geladen.",
+      "readFailed": "Die Buchung liess sich nicht lesen.",
+      "entryTitle": "Bestehende Buchung",
+      "entryUnchanged": "vom {date}, bleibt unverändert"
+    },
+    "split": {
+      "title": "Aufteilen oder manuell buchen",
+      "text": "Buchungstext",
+      "textPlaceholder": "Bank: {party}",
+      "bankLine": "{account}, {side}",
+      "position": "Position {n}",
+      "remove": "Position {n} entfernen",
+      "account": "Konto",
+      "accountOf": "Konto der Position {n}",
+      "accountPlaceholder": "Konto wählen",
+      "vat": "MWST",
+      "vatOf": "MWST der Position {n}",
+      "amount": "Betrag",
+      "add": "Position hinzufügen",
+      "restOpen": "Noch zu verteilen: {amount}",
+      "restOver": "Zu viel verteilt: {amount}",
+      "accountMissing": "Betrag verteilt, ein Konto fehlt noch",
+      "complete": "Vollständig verteilt"
+    },
+    "link": {
+      "title": "Mit bestehender Buchung abgleichen",
+      "lead": "Schon gebucht, zum Beispiel von Hand oder als Zahlung einer Rechnung? Wähle die Buchung, die zu dieser Zeile gehört. Es entsteht keine neue Buchung.",
+      "searchPlaceholder": "Text, Datum oder Betrag",
+      "loading": "Die Buchungen werden geladen.",
+      "readFailed": "Die Buchungen auf dem Bankkonto liessen sich nicht lesen.",
+      "none": "Keine Buchung auf dem Bankkonto passt, 30 Tage vor und nach der Zeile. Buche die Zeile neu.",
+      "sameAmount": "Gleicher Betrag",
+      "otherAmount": "Anderer Betrag",
+      "sameDay": "am selben Tag",
+      "daysApart": {
+        "one": "{days} Tag Abstand",
+        "other": "{days} Tage Abstand"
+      },
+      "taken": "gehört schon zu einer Bankzeile",
+      "difference": "Die Beträge weichen um {amount} ab. TILL hält die Differenz beim Abgleich fest.",
+      "consequence": "Abgleichen verbindet die Zeile mit dieser Buchung. Die Buchung bleibt unverändert und zählt nur einmal.",
+      "matchWithDifference": "Mit Differenz abgleichen"
+    },
+    "ignore": {
+      "title": "Zeile ignorieren",
+      "private": "Privat bezahlt? Dann nicht ignorieren, sondern auf {account} buchen.",
+      "bookPrivate": "So buchen",
+      "reasonLegend": "Warum?",
+      "note": "Notiz für dich oder den Treuhänder",
+      "noteRequired": "Grund in eigenen Worten",
+      "consequence": "Die Zeile verschwindet aus der Liste, bleibt aber im Saldo der Bank. Kommt ihr Geld nirgends in die Buchhaltung, zeigt es der Abgleich oben als Differenz.",
+      "commit": "Ignorieren",
+      "reason": {
+        "booked_elsewhere": {
+          "label": "Wird anderswo gebucht",
+          "hint": "zum Beispiel vom Treuhänder oder über ein anderes Konto"
+        },
+        "clearing_account": {
+          "label": "Läuft über ein Durchlaufkonto",
+          "hint": "zum Beispiel Kartenumsätze, die gesammelt gebucht werden"
+        },
+        "before_start": {
+          "label": "Vor dem Start in TILL",
+          "hint": "liegt vor dem ersten Buchungsdatum dieser Bücher"
+        },
+        "duplicate": {
+          "label": "Doppelt geliefert",
+          "hint": "dieselbe Bewegung steht schon als andere Zeile da"
+        },
+        "other": {
+          "label": "Anderer Grund",
+          "hint": "mit einer Notiz in eigenen Worten"
+        }
+      }
+    },
+    "reopen": {
+      "title": "Stornieren",
+      "titleMatched": "Abgleich lösen",
+      "why": "Warum?",
+      "reason": {
+        "wrongAccount": "Falsches Konto",
+        "wrongVat": "Falsche MWST",
+        "wrongItem": "Falsche Rechnung",
+        "double": "Doppelt gebucht",
+        "other": "Anderer Grund",
+        "ignoredByMistake": "Versehentlich ignoriert"
+      },
+      "note": "Notiz (freiwillig)",
+      "noteRequired": "Grund in eigenen Worten",
+      "consequenceBooked": "Stornieren bucht eine Gegenbuchung, die ursprüngliche Buchung bleibt im Journal. Die Zeile ist danach wieder zu buchen.",
+      "consequenceSettlement": "Stornieren storniert die Zahlung, die Rechnung ist wieder offen. Die Zeile ist danach wieder zu buchen.",
+      "consequenceMatched": "Die bestehende Buchung bleibt unverändert, nur die Verbindung zur Zeile wird gelöst. Die Zeile ist danach wieder zu buchen.",
+      "commit": "Stornieren",
+      "commitMatched": "Abgleich lösen",
+      "titleIgnored": "Wieder zu buchen",
+      "consequenceIgnored": "Die Zeile kommt zurück in die Liste, gebucht wird nichts. Der frühere Entscheid bleibt mit deinem Grund gespeichert.",
+      "consequenceBatch": "Die Zahlungen des Zahlungslaufs bleiben gebucht, nur die Verbindung zur Zeile wird gelöst. Die Zeile ist danach wieder zu buchen.",
+      "commitIgnored": "Wieder zu buchen"
+    },
+    "decided": {
+      "booked": "auf Konten",
+      "bookedTo": "auf {account}",
+      "bookedSplit": {
+        "one": "auf {count} Konto",
+        "other": "aufgeteilt auf {count} Konten"
+      },
+      "matched": "mit bestehender Buchung",
+      "settled": "als Zahlung der Rechnung",
+      "batch": "im Zahlungslauf",
+      "ignored": "Grund: {reason}",
+      "note": "Notiz: {note}",
+      "difference": "Beim Abgleich festgehaltene Differenz: {amount}",
+      "by": "Entschieden von {who} am {date}",
+      "postedTitle": "Gebucht",
+      "noEntry": "Zu dieser Zeile gehört keine eigene Buchung.",
+      "reopen": "Stornieren",
+      "unmatch": "Abgleich lösen",
+      "unignore": "Wieder zu buchen"
+    },
+    "warning": {
+      "control_account_leg_before": "Du buchst direkt auf {account}, ohne Rechnung dahinter. Eine offene Rechnung begleichst du, indem du sie als Ziel wählst.",
+      "control_account_leg": "Gebucht auf ein Sammelkonto (Debitoren oder Kreditoren), ohne Rechnung dahinter.",
+      "accepted_difference": "Die Differenz ist mit deinem Grund festgehalten und steht im Abgleich.",
+      "reversal_line": "Die Zeile ist eine Rückbuchung der Bank.",
+      "batch_payments_kept": "Die Zahlungen des Zahlungslaufs bleiben gebucht. Eine davon stornierst du unter Zahlungen.",
+      "not_day_end_statement": "Das ist kein Tagesendauszug: ihm fehlt die Auszugsnummer oder der Schlusssaldo. Importiere für diesen Tag auch den Tagesendauszug camt.053.",
+      "statement_number_jump": "Die Auszugsnummer springt: zwischen dem letzten Auszug im Buch und diesem fehlen Nummern. Importiere diese Auszüge von Hand, falls es sie gibt."
+    },
+    "vorschlag": {
+      "kicker": "Vorschlag des Agenten",
+      "when": "vom {date}",
+      "book": "Auf {target} buchen.",
+      "bookVat": "Auf {target} buchen, {vat}.",
+      "bookUnknown": "Diese Zeile buchen.",
+      "ignore": "Ignorieren: {reason}.",
+      "reopen": "Stornieren und wieder öffnen: {reason}",
+      "approve": "Freigeben",
+      "reject": "Ablehnen",
+      "rejectReason": "Warum? (freiwillig, der Agent liest es)",
+      "rejectConfirm": "Vorschlag ablehnen",
+      "own": "Diesen Vorschlag hast du selbst gemacht. Eine zweite Person gibt ihn frei.",
+      "noRight": "Zum Freigeben fehlt dir das Recht, den Agenten zu führen."
+    },
+    "trust": {
+      "label": "Abgleich {name}",
+      "ok": "Bank und Buchhaltung stimmen überein.",
+      "pending": "Stimmt, bis auf die Zeilen, die noch zu buchen sind.",
+      "difference": "Bank und Buchhaltung weichen um {amount} ab.",
+      "unknown": {
+        "no_statement": "Kann nicht beurteilt werden: noch kein Kontoauszug.",
+        "no_balance": "Kann nicht beurteilt werden: der Kontoauszug hat keinen Schlusssaldo.",
+        "currency_differs": "Kann nicht beurteilt werden: der Kontoauszug ist in einer anderen Währung als das Konto.",
+        "inconsistent": "Kann nicht beurteilt werden: die Zahlen gehen nicht auf."
+      },
+      "bank": "Bank",
+      "books": "Buchhaltung",
+      "sentence": "Bank {bank} gleich Buchhaltung {books} plus offene Zeilen {open}.",
+      "openLines": {
+        "one": "{count} Zeile offen, {amount}",
+        "other": "{count} Zeilen offen, {amount}"
+      },
+      "asOf": "Stand Kontoauszug {date}",
+      "menu": {
+        "label": "Aktionen für {name}",
+        "import": "Kontoauszug importieren"
+      },
+      "openTerm": "offene Zeilen",
+      "differenceTerm": "Differenz",
+      "sentenceDifference": "Bank {bank} gleich Buchhaltung {books} plus offene Zeilen {open} plus Differenz {difference}.",
+      "differenceHint": "Eine Differenz entsteht, wenn eine ignorierte Zeile nicht in den Büchern steht, eine Buchung auf dem Bankkonto keine Bankzeile hat, beim Abgleich eine Differenz festgehalten wurde, oder eine Zeile mit einer Buchung nach dem Kontoauszug abgeglichen ist (bis zum nächsten Kontoauszug)."
+    },
+    "import": {
+      "open": "Kontoauszug importieren",
+      "title": "Kontoauszug importieren",
+      "lead": "Lade die camt.053-Datei aus deinem E-Banking. TILL liest das Konto aus der Datei.",
+      "file": "Datei",
+      "choose": "Datei wählen",
+      "drop": "camt-Datei hierher ziehen",
+      "hint": "camt.053, als XML",
+      "account": "Bankkonto",
+      "accountPick": "Bankkonto wählen",
+      "fileMatches": "Die Datei gehört zu «{name}» ({iban}).",
+      "notXml": "Das ist keine XML-Datei. Lade in deinem E-Banking den Kontoauszug als camt.053 herunter.",
+      "commit": "Importieren",
+      "busy": "Wird importiert …"
+    },
+    "ack": {
+      "dismiss": "Ausblenden",
+      "booked": "Gebucht: {party} auf {target}.",
+      "matched": "Abgeglichen: {party} mit der Buchung vom {date}, ohne neue Buchung.",
+      "matchedAny": "Abgeglichen: {party} mit der bestehenden Buchung, ohne neue Buchung.",
+      "remainder": {
+        "open": "Offen bleiben {amount}.",
+        "written_off": "{amount} als Verlust ausgebucht.",
+        "on_account": "{amount} bleiben als Guthaben stehen."
+      },
+      "undo": "Rückgängig",
+      "bulk": {
+        "one": "{count} sichere Zeile gebucht.",
+        "other": "{count} sichere Zeilen gebucht."
+      },
+      "pickedBooked": {
+        "one": "{count} Zeile gebucht.",
+        "other": "{count} Zeilen gebucht."
+      },
+      "pickedIgnored": {
+        "one": "{count} Zeile ignoriert: {reason}.",
+        "other": "{count} Zeilen ignoriert: {reason}."
+      },
+      "pickedRefused": {
+        "one": "Eine Zeile blieb stehen, der Grund steht bei der Zeile.",
+        "other": "{count} Zeilen blieben stehen, der Grund steht bei der Zeile."
+      },
+      "bulkRefused": {
+        "one": "Eine Zeile liess sich nicht buchen, der Grund steht bei der Zeile.",
+        "other": "{count} Zeilen liessen sich nicht buchen, der Grund steht bei der Zeile."
+      },
+      "ignored": "{party} ignoriert. Die Zeile bleibt im Saldo der Bank.",
+      "unignored": "{party} ist wieder zu buchen.",
+      "reopened": "Storniert: {party} ist wieder zu buchen. Die ursprüngliche Buchung bleibt im Journal.",
+      "unmatched": "Abgleich gelöst: {party} ist wieder zu buchen, die Buchung bleibt unverändert.",
+      "approved": "Vorschlag freigegeben: {party} ist gebucht.",
+      "rejected": "Vorschlag abgelehnt. {party} wartet auf dich.",
+      "imported": {
+        "one": "Kontoauszug importiert: eine neue Zeile auf «{name}».",
+        "other": "Kontoauszug importiert: {count} neue Zeilen auf «{name}»."
+      },
+      "importedNothing": "Kontoauszug gelesen: keine neuen Zeilen auf «{name}».",
+      "importDuplicate": "Dieser Kontoauszug ist schon importiert. Nichts wurde doppelt erfasst.",
+      "importSkipped": {
+        "one": "Eine Buchung nicht übernommen, weil schon vorhanden oder noch nicht verbucht.",
+        "other": "{count} Buchungen nicht übernommen, weil schon vorhanden oder noch nicht verbucht."
+      },
+      "showNew": "Nur neue zeigen"
+    },
+    "agent": {
+      "question": "Wie buche ich diese Bankzeile: {date}, {party}, {amount}?"
+    },
+    "month": {
+      "1": "Januar",
+      "2": "Februar",
+      "3": "März",
+      "4": "April",
+      "5": "Mai",
+      "6": "Juni",
+      "7": "Juli",
+      "8": "August",
+      "9": "September",
+      "10": "Oktober",
+      "11": "November",
+      "12": "Dezember"
+    },
+    "billStatus": {
+      "draft": "ein Entwurf",
+      "void": "storniert",
+      "voided": "storniert",
+      "paid": "bezahlt",
+      "posted": "gebucht"
+    },
+    "error": {
+      "fallbackTitle": "Das liess sich nicht ausführen.",
+      "noFigure": "kein Betrag",
+      "periodMonth": "{month} {year}",
+      "periodQuarter": "Quartal {quarter}/{year}",
+      "periodYear": "Geschäftsjahr {year}",
+      "toPeriods": "Zu den Perioden",
+      "toAccounts": "Zum Kontenplan",
+      "toVat": "Zu den MWST-Einstellungen",
+      "toBankAccounts": "Zu den Bankkonten",
+      "toCreditorPayments": "Zu den Kreditorenzahlungen",
+      "toPayments": "Zu den Zahlungen",
+      "createBankAccount": "Bankkonto erfassen",
+      "amendedOpening": "Anfangssaldo von {from} auf {to}",
+      "amendedClosing": "Schlusssaldo von {from} auf {to}",
+      "amendedChanged": {
+        "one": "{count} Buchung geändert",
+        "other": "{count} Buchungen geändert"
+      },
+      "amendedAdded": {
+        "one": "{count} neu",
+        "other": "{count} neu"
+      },
+      "amendedRemoved": {
+        "one": "{count} entfernt",
+        "other": "{count} entfernt"
+      },
+      "action": {
+        "acceptDifference": "Trotzdem abgleichen, Differenz festhalten",
+        "leaveOpen": "Rest offen lassen und buchen",
+        "showLine": "Diese Zeile zeigen",
+        "importFor": "Für «{name}» importieren",
+        "reload": "Neu laden",
+        "ignore": "Zeile ignorieren",
+        "matchEntry": "Mit dieser Buchung abgleichen"
+      },
+      "unsupported": {
+        "title": "Das kann TILL hier nicht buchen."
+      },
+      "periodLocked": {
+        "title": "Die Periode {period} ist gesperrt.",
+        "body": "Dort wird nichts gebucht, auch nicht an einem anderen Datum. Öffne den Monat unter Perioden, dann versuchst du es nochmals."
+      },
+      "periodSealed": {
+        "title": "Die Periode {period} ist abgeschlossen (MWST eingereicht oder Jahresabschluss).",
+        "body": "Dort wird nichts mehr gebucht. Ignoriere die Zeile als «Wird anderswo gebucht»; steht das Geld noch nicht in den Büchern, buchst du die Bewegung von Hand in der offenen Periode. Eine falsche Buchung korrigierst du mit einer Umbuchung in der offenen Periode."
+      },
+      "lineNotOpen": {
+        "title": "Diese Zeile ist schon entschieden.",
+        "body": "Jemand hat sie inzwischen erledigt: {state}. Lade die Liste neu, um den Stand zu sehen."
+      },
+      "batchAmountMismatch": {
+        "title": "Der Betrag passt nicht zum Zahlungslauf.",
+        "body": "Die Bank meldet {line}, der Zahlungslauf lautet auf {batch}, und keine einzelne Zahlung des Laufs ist über ihre Referenz benannt. Verwirf den Lauf unter Kreditorenzahlungen, erfass die ausgeführten Zahlungen unter Zahlungen von Hand und ignoriere diese Zeile als «Wird anderswo gebucht»."
+      },
+      "entryAmountMismatch": {
+        "title": "Die Buchung hat einen anderen Betrag.",
+        "body": "Bank {line}, Buchung {entry}. Gehört sie trotzdem zu dieser Zeile, schreib unter dem Vergleich, warum der Betrag abweicht, und gleiche ab: TILL hält Differenz und Grund fest."
+      },
+      "directionMismatch": {
+        "title": "Die Buchung läuft in die andere Richtung.",
+        "body": "Die Zeile ist {line}, die Buchung bewegt das Bankkonto um {entry}. Wähle eine andere Buchung oder buche die Zeile neu."
+      },
+      "writeOffAboveThreshold": {
+        "title": "Der Rest von {rest} ist zu gross zum Abschreiben.",
+        "body": "Mit einem Klick schreibst du bis {threshold} ab. Lass den Rest offen, dann mahnst oder buchst du ihn später."
+      },
+      "differenceReasonMissing": {
+        "title": "Sag, warum der Betrag abweicht.",
+        "body": "Beim Abgleich mit Differenz hält TILL deinen Grund fest. Schreib ihn ins Feld unter dem Vergleich."
+      },
+      "entryAlreadyLinked": {
+        "title": "Diese Buchung gehört schon zu einer anderen Bankzeile.",
+        "body": "Eine Buchung zählt nur für eine Bankzeile. Wähle eine andere Buchung oder buche die Zeile neu."
+      },
+      "batchAlreadyLinked": {
+        "title": "Dieser Zahlungslauf gehört schon zu einer anderen Bankzeile.",
+        "body": "Ein Zahlungslauf zählt nur für eine Bankzeile. Prüfe die andere Zeile."
+      },
+      "entryNotOnBank": {
+        "title": "Die Buchung betrifft dieses Bankkonto nicht.",
+        "body": "Wähle eine Buchung, die auf das Konto dieser Bank bucht."
+      },
+      "entryIsReversal": {
+        "title": "Das ist eine Stornobuchung.",
+        "body": "Mit einer Stornobuchung lässt sich keine Bankzeile abgleichen. Wähle die Buchung selbst."
+      },
+      "entryReversed": {
+        "title": "Diese Buchung ist storniert.",
+        "body": "Wähle eine gültige Buchung oder buche die Zeile neu."
+      },
+      "legsDoNotSum": {
+        "title": "Die Positionen ergeben nicht den Betrag der Zeile.",
+        "body": "Die Zeile lautet auf {expected}, die Positionen auf {sum}. Verteile den ganzen Betrag."
+      },
+      "vatSplitMismatch": {
+        "title": "Die MWST-Aufteilung geht nicht auf.",
+        "body": "Prüfe die MWST-Codes der Positionen, und buch den Rest ohne MWST."
+      },
+      "currencyMismatch": {
+        "title": "Die Währungen passen nicht zusammen.",
+        "body": "Die Zeile ist in {line}, die Rechnung oder das Konto in {other}. Wähle eine Rechnung in {line}."
+      },
+      "wrongDirectionIn": {
+        "title": "Geld kommt herein.",
+        "body": "Eingehendes Geld begleicht eine Rechnung an einen Kunden, keine Lieferantenrechnung. Wähle eine offene Rechnung oder ein Konto."
+      },
+      "wrongDirectionOut": {
+        "title": "Geld geht hinaus.",
+        "body": "Ausgehendes Geld begleicht eine Lieferantenrechnung, keine Kundenrechnung. Wähle eine Lieferantenrechnung oder ein Konto."
+      },
+      "alreadyPaid": {
+        "title": "Die Rechnung ist schon bezahlt.",
+        "body": "Wähle eine andere Rechnung oder buche die Zeile auf ein Konto. Lade die Liste neu, um die offenen Rechnungen zu sehen."
+      },
+      "notSettleable": {
+        "title": "Diese Lieferantenrechnung ist noch nicht gebucht.",
+        "body": "Sie ist {status}. Buche sie zuerst unter Lieferantenrechnungen."
+      },
+      "wrongBankAccount": {
+        "title": "Der Zahlungslauf gehört zu einem anderen Bankkonto.",
+        "body": "Gleiche ihn mit der Zeile auf seinem eigenen Konto ab."
+      },
+      "needsGeneration": {
+        "title": "Der Zahlungslauf ist noch ein Entwurf.",
+        "body": "Erstelle zuerst die Zahlungsdatei, dann lässt er sich mit der Bank abgleichen."
+      },
+      "batchDiscarded": {
+        "title": "Der Zahlungslauf ist verworfen.",
+        "body": "Buche die Zeile auf die einzelnen Lieferantenrechnungen."
+      },
+      "batchPaymentsNotPosted": {
+        "title": "Eine Zahlung des Laufs fehlt.",
+        "body": "Eine Zahlung wurde storniert oder nie gebucht. Buche den Rest von Hand unter Zahlungen."
+      },
+      "accountArchived": {
+        "title": "Das Konto ist archiviert.",
+        "body": "Wähle ein aktives Konto, oder hol das Konto im Kontenplan zurück."
+      },
+      "taxCodeInactive": {
+        "title": "Den MWST-Code {code} gibt es nicht mehr.",
+        "body": "Wähle einen aktiven Code, oder aktiviere ihn in den MWST-Einstellungen."
+      },
+      "rateEraUnknown": {
+        "title": "Für dieses Datum kennt TILL keinen MWST-Satz.",
+        "body": "Buche die Zeile ohne MWST, oder erfass die Buchung im Journal und gleiche sie dann ab."
+      },
+      "vatLinesRefused": {
+        "title": "Die MWST-Buchung liess sich nicht bilden.",
+        "body": "Prüfe, ob die MWST-Konten 1170 und 2200 im Kontenplan stehen, und versuche es nochmals."
+      },
+      "vatForeignCurrency": {
+        "title": "MWST auf einer Zeile in Fremdwährung bucht TILL hier nicht.",
+        "body": "Buche die Zeile ohne MWST, oder erfass die Buchung im Journal und gleich sie dann ab."
+      },
+      "writeOffOnlyInvoices": {
+        "title": "Ausbuchen geht nur bei Kundenrechnungen.",
+        "body": "Bei einer Lieferantenrechnung bleibt der Rest offen."
+      },
+      "writeOffAccount": {
+        "title": "Ausgebucht wird immer auf das Konto für Debitorenverluste.",
+        "body": "Lass das Konto leer, TILL wählt es."
+      },
+      "ibanUnregistered": {
+        "title": "Das Konto {iban} ist noch nicht erfasst.",
+        "body": "Die Datei gehört zu einem Bankkonto, das TILL noch nicht kennt. Erfasse es mit der IBAN {iban}, dann importierst du die Datei nochmals."
+      },
+      "noBankAccount": {
+        "title": "Das Bankkonto fehlt.",
+        "body": "Erfasse das Bankkonto zuerst, dann importierst du seine Kontoauszüge."
+      },
+      "ibanMismatch": {
+        "title": "Die Datei gehört zu «{name}».",
+        "body": "Die IBAN in der Datei ist {fileIban}, das gewählte Konto «{chosen}» hat {accountIban}. Importiere die Datei auf das richtige Konto."
+      },
+      "bankAccountArchived": {
+        "title": "Das Bankkonto «{name}» ist archiviert.",
+        "body": "Ein archiviertes Konto nimmt keine Kontoauszüge an. Hole es unter Bankkonten zurück."
+      },
+      "camt": {
+        "camt052": {
+          "title": "Das ist ein Zwischenauszug (camt.052).",
+          "body": "TILL liest den Tagesendauszug camt.053. Lade ihn in deinem E-Banking herunter."
+        },
+        "notXml": {
+          "title": "Die Datei ist leer oder kein XML.",
+          "body": "Lade den Kontoauszug in deinem E-Banking nochmals als camt.053 herunter."
+        },
+        "multipleAccounts": {
+          "title": "Die Datei enthält mehrere Konten.",
+          "body": "Lade in deinem E-Banking einen Kontoauszug pro Konto herunter."
+        },
+        "batchSum": {
+          "title": "Eine Sammelbuchung in der Datei geht nicht auf.",
+          "body": "Die Einzelbeträge ergeben nicht die Summe der Sammelbuchung. Frage deine Bank nach einer korrigierten Datei."
+        },
+        "batchAmount": {
+          "title": "Eine Sammelbuchung in der Datei hat keinen lesbaren Betrag.",
+          "body": "Frage deine Bank nach einer korrigierten Datei."
+        },
+        "noStatementId": {
+          "title": "Dem Kontoauszug fehlt seine Kennung.",
+          "body": "Ohne Kennung lässt sich ein doppelter Import nicht erkennen. Lade die Datei nochmals herunter."
+        },
+        "notStatement": {
+          "title": "Die Datei ist kein Kontoauszug.",
+          "body": "TILL liest den Kontoauszug camt.053. Lade ihn in deinem E-Banking in diesem Format herunter."
+        },
+        "unreadable": {
+          "title": "Die Datei liess sich nicht lesen.",
+          "body": "Lade den Kontoauszug in deinem E-Banking nochmals als camt.053 herunter."
+        }
+      },
+      "statementAmended": {
+        "title": "Die Bank hat diesen Kontoauszug geändert geliefert.",
+        "body": "Geändert: {changes}. TILL hat den bestehenden Kontoauszug nicht überschrieben. Prüfe die Zeilen und frage im Zweifel deine Bank."
+      },
+      "permissionDenied": {
+        "title": "Dazu fehlt dir das Recht.",
+        "body": "Eine Person mit Adminrechten kann es dir unter Mitglieder geben."
+      },
+      "cannotSelfApprove": {
+        "title": "Den eigenen Vorschlag gibt eine zweite Person frei.",
+        "body": "Bitte eine andere Person mit dem Recht, den Agenten zu führen."
+      },
+      "notFound": {
+        "title": "Das gibt es nicht mehr.",
+        "body": "Jemand hat es inzwischen geändert. Lade die Liste neu."
+      },
+      "invalidInput": {
+        "title": "Eine Angabe fehlt oder passt nicht.",
+        "body": "Prüfe die Felder und versuche es nochmals. Deine Eingaben sind noch da."
+      },
+      "transport": {
+        "title": "TILL war gerade nicht erreichbar.",
+        "body": "Nichts ist doppelt gebucht. Versuche es nochmals, deine Eingaben sind noch da."
+      },
+      "toJournal": "Zum Journal",
+      "batchItemMismatch": {
+        "title": "Der Betrag passt nicht zur Zahlung im Zahlungslauf.",
+        "body": "Die Bank meldet {line}, die Zahlung im Zahlungslauf lautet auf {item}. Verwirf den Lauf unter Kreditorenzahlungen, erfass die ausgeführten Zahlungen unter Zahlungen von Hand und ignoriere diese Zeile als «Wird anderswo gebucht»."
+      },
+      "batchCurrency": {
+        "title": "Der Zahlungslauf ist in einer anderen Währung.",
+        "body": "Die Zeile ist in {line}, der Lauf in {batch}. Markiere den Lauf unter Kreditorenzahlungen als bezahlt, ignoriere diese Zeile als «Wird anderswo gebucht» und buche die Kursdifferenz von Hand."
+      },
+      "alreadyBatched": {
+        "title": "Die Lieferantenrechnung steckt in einem Zahlungslauf.",
+        "body": "Sie wird mit dem Lauf bezahlt. Gleiche die Zeile mit dem Zahlungslauf ab, oder verwirf den Lauf zuerst unter Kreditorenzahlungen."
+      },
+      "transferAlreadyBooked": {
+        "title": "Die andere Seite dieser Übertragung ist schon gebucht.",
+        "body": "Das andere Bankkonto hat die Übertragung bereits gebucht. Gleiche diese Zeile mit jener Buchung ab, statt sie ein zweites Mal zu buchen."
+      },
+      "ownedByLine": {
+        "title": "Diese Buchung gehört zu einer anderen Bankzeile.",
+        "body": "Hol zuerst jene Zeile zurück, dann diese. Bei einer Übertragung zwischen zwei eigenen Konten heisst das: zuerst die andere Seite."
+      },
+      "ownedByPayment": {
+        "title": "Diese Buchung gehört zu einer Zahlung.",
+        "body": "Storniere die Zahlung unter Zahlungen."
+      },
+      "useBankInbox": {
+        "title": "Diese Gutschrift entscheidest du unter Bank.",
+        "body": "Sie stammt aus einem Kontoauszug und wird auf ihrer Bankzeile gebucht."
+      },
+      "camt054": {
+        "title": "Das ist eine Gutschriftsanzeige (camt.054), kein Kontoauszug.",
+        "body": "TILL liest nur den Tagesendauszug camt.053. Lade ihn in deinem E-Banking herunter und importiere ihn."
+      },
+      "transferCrossesPeriod": {
+        "title": "Die andere Seite dieser Übertragung ist in einem anderen Monat gebucht.",
+        "body": "Die andere Bank hat sie am {entryDate} gebucht, diese Zeile ist vom {lineDate}. Hol die andere Seite zurück und buche beide Seiten je an ihrem Tag über ein Durchgangskonto, sonst geht der Bankabgleich des Monats nie auf."
+      },
+      "currencyMismatchAccount": {
+        "title": "Die Zeile ist in einer anderen Währung als das Bankkonto.",
+        "body": "Die Zeile ist in {line}, das Bankkonto in {other}. Den Kurs, den die Bank angewendet hat, kennt TILL nicht: erfass die Buchung im Journal und gleiche die Zeile dann ab."
+      },
+      "toFx": "Zur Fremdwährung",
+      "needsFxRate": {
+        "title": "Für {currency} fehlt der Kurs vom {date}.",
+        "body": "Ohne Kurs rechnet TILL nichts um und bucht nichts. Hinterleg den Kurs unter Fremdwährung, dann buchst du die Zeile."
+      },
+      "needsAccount": {
+        "title": "Für diese Buchung fehlt ein Konto im Kontenplan.",
+        "body": "Erfass das Konto im Kontenplan, dann buchst du die Zeile."
+      },
+      "counterpartyMerged": {
+        "title": "Die Gegenpartei wurde inzwischen zusammengeführt.",
+        "body": "Sie gehört jetzt zu einem anderen Kontakt. Lade die Liste neu und entscheide die Zeile nochmals."
+      },
+      "vorschlagRejected": {
+        "title": "Dieser Vorschlag ist schon abgelehnt.",
+        "body": "Jemand hat ihn inzwischen abgelehnt. Lade die Liste neu."
+      },
+      "vorschlagExecuted": {
+        "title": "Dieser Vorschlag ist schon ausgeführt.",
+        "body": "Jemand hat ihn inzwischen freigegeben. Lade die Liste neu, um den Stand zu sehen."
+      },
+      "batchAmountMismatchPaid": {
+        "title": "Der Betrag passt nicht zum Zahlungslauf.",
+        "body": "Die Bank meldet {line}, der Zahlungslauf lautet auf {batch}. Der Lauf ist schon als bezahlt markiert und lässt sich nicht mehr verwerfen: ignoriere diese Zeile als «Wird anderswo gebucht» und storniere unter Zahlungen jede Zahlung des Laufs, die die Bank nicht ausgeführt hat."
+      },
+      "batchItemMismatchPaid": {
+        "title": "Der Betrag passt nicht zur Zahlung im Zahlungslauf.",
+        "body": "Die Bank meldet {line}, die Zahlung im Zahlungslauf lautet auf {item}. Der Lauf ist schon als bezahlt markiert und lässt sich nicht mehr verwerfen: ignoriere diese Zeile als «Wird anderswo gebucht» und storniere unter Zahlungen jede Zahlung des Laufs, die die Bank nicht ausgeführt hat."
+      },
+      "feedRule": {
+        "body": "Dieses Konto läuft über EBICS: TILL importiert einen Auszug nur, wenn er lückenlos an die Auszüge im Buch anschliesst. Welcher Auszug im Buch der neueste ist, siehst du unter Bankkonten."
+      }
+    }
+  },
+  "qrmatch": {
+    "applyFull": "Übernehmen",
+    "applyPartial": "Als Teilzahlung buchen",
+    "overrideDismiss": "Keine Kundenzahlung",
+    "reason": {
+      "exact_open": "Referenz und Betrag stimmen genau",
+      "exact_open_plus_fee": "Betrag entspricht Rechnung plus Mahngebühr",
+      "amount_short": "Betrag liegt unter dem offenen Betrag",
+      "amount_over": "Betrag liegt über dem offenen Betrag",
+      "currency_differs": "Währung weicht von der Rechnung ab",
+      "no_invoice": "Keine offene Rechnung zu dieser Referenz",
+      "already_paid": "Die Rechnung ist bereits beglichen",
+      "ambiguous_reference": "Mehrere offene Rechnungen zu dieser Referenz",
+      "reference_invalid": "Die Referenz hat eine ungültige Prüfziffer",
+      "no_reference": "Ohne strukturierte Referenz"
+    }
+  },
+  "help": {
+    "Bank": {
+      "title": "Bank",
+      "body": "Hier steht jede Zeile deiner Kontoauszüge, egal von welchem Konto. Du entscheidest sie auf ihrer eigenen Zeile: buchen auf ein Konto mit MWST, eine offene Rechnung begleichen, mit einer bestehenden Buchung abgleichen oder mit Grund ignorieren. Über der Liste steht pro Konto: Bank gleich Buchhaltung plus offene Zeilen. Was nicht aufgeht, ist eine Differenz; auch eine Zeile, die mit einer Buchung nach dem letzten Kontoauszug abgeglichen ist, zählt bis zum nächsten Kontoauszug als Differenz.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

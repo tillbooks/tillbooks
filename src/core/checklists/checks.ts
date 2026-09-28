@@ -1,6 +1,6 @@
 /**
  * G22's named live checks, composing EXISTING reads only (Pattern P5): the A02 draft count the A26
- * month-end checklist already runs, the A20/A21 unreconciled bank rows the G15 hub already counts,
+ * month-end checklist already runs, A39's per-account balance truth and open-line count,
  * the A26 `detectAnomalies` missing-tax-code kind (the same query A25's `preparePeriod` flags), A07's
  * own `computeVatReturn` and its promoted bridge, A03's `vat_filed` lock the way `vat_periods` reads
  * it, and (leg 2) A03's `period_lock` rows the way `list_period_locks` reads them. Nothing here
@@ -19,6 +19,7 @@ import type { WorkspaceContext } from '../context.js';
 import { listVatPeriods } from '../vat/index.js';
 import { detectAnomalies } from '../agent/index.js';
 import { fiscalYearOf } from '../ledger/index.js';
+import { bankReconciledForPeriod } from '../banking/bankInbox.js';
 import type { ReadMemo } from './anchor.js';
 import { fiscalYearStartOf, monthsBetween, type ChecklistPeriod } from './periods.js';
 import type { ChecklistCheckKey } from './types.js';
@@ -37,6 +38,8 @@ export interface CheckResult {
   readonly count?: number;
   /** The reason a check is unavailable (a refusal code or an exception message). */
   readonly reason?: string;
+  /** A39: the figures behind a check that compares more than a count (`bank_reconciled` per account). */
+  readonly detail?: Readonly<Record<string, unknown>>;
 }
 
 function countDrafts(ctx: WorkspaceContext, period: CheckPeriod): number {
@@ -44,32 +47,6 @@ function countDrafts(ctx: WorkspaceContext, period: CheckPeriod): number {
     .prepare(`SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ? AND status = 'draft' AND date <= ?`)
     .get(ctx.workspaceId, period.periodEnd) as { n: number };
   return row.n;
-}
-
-/**
- * Unreconciled bank movements up to the period end: an A20 `bank_txn` with neither a `bank_txn_link`
- * nor a settled A21 credit, plus every A21 queue row still `open` that no camt row carries (the
- * QR-registered credits). The same tables the G15 `qr_match` provider counts, bounded by the period.
- */
-function countUnreconciledBank(ctx: WorkspaceContext, period: CheckPeriod): number {
-  const txns = ctx.store.db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM bank_txn t
-        WHERE t.workspace_id = ?
-          AND COALESCE(t.value_date, t.booking_date, t.created_at) <= ?
-          AND NOT EXISTS (SELECT 1 FROM bank_txn_link l WHERE l.workspace_id = t.workspace_id AND l.bank_txn_id = t.id)
-          AND (t.credit_id IS NULL
-               OR EXISTS (SELECT 1 FROM reconciliation_match m WHERE m.id = t.credit_id AND m.status = 'open'))`,
-    )
-    .get(ctx.workspaceId, period.periodEnd) as { n: number };
-  const credits = ctx.store.db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM reconciliation_match m
-        WHERE m.workspace_id = ? AND m.status = 'open' AND m.value_date <= ?
-          AND NOT EXISTS (SELECT 1 FROM bank_txn t WHERE t.workspace_id = m.workspace_id AND t.credit_id = m.id)`,
-    )
-    .get(ctx.workspaceId, period.periodEnd) as { n: number };
-  return txns.n + credits.n;
 }
 
 /** The A26 anomaly read per month of the period (from its bounds), the `missing_tax_code` kind unioned. */
@@ -132,8 +109,18 @@ export function evaluateCheck(ctx: WorkspaceContext, key: ChecklistCheckKey, per
         return { key, passed: count === 0, count };
       }
       case 'bank_reconciled': {
-        const count = countUnreconciledBank(ctx, period);
-        return { key, passed: count === 0, count };
+        // A39 §4.5 (D139, critic L11 lean): the BALANCE is the arbiter. Every Bankkonto whose first camt.053
+        // falls before the period's end needs a statement reaching the period's end whose balance, less the
+        // lines still open, equals the ledger balance at that date (L4), and no line dated inside the
+        // period may still be open; a period before an account's first statement is not_started. The
+        // detail names each account's status and difference, so a failing row says what disagrees.
+        const res = bankReconciledForPeriod(ctx, period.periodStart, period.periodEnd);
+        return {
+          key,
+          passed: res.passed,
+          count: res.count,
+          detail: { accounts: res.accounts, openLines: res.openLines, openCredits: res.openCredits },
+        };
       }
       case 'no_missing_tax_codes': {
         const count = countMissingTaxCodes(ctx, period);

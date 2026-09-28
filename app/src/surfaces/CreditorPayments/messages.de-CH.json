@@ -56,7 +56,7 @@
     "download": "Datei herunterladen",
     "transmitNote": {
       "manual": "Diese Datei wird nicht automatisch übermittelt: lade sie selbst in dein E-Banking hoch.",
-      "channel": "Ein Übermittlungskanal ist konfiguriert: die Übertragung läuft über die dafür vorgesehene Freigabe."
+      "ebanking": "Der EBICS-Kanal ruft nur Kontoauszüge ab. Lade diese Datei im eBanking deiner Bank hoch und gib die Zahlung dort frei; bezahlt ist sie, sobald ein Kontoauszug die Belastung bringt."
     },
     "markPaidAction": "Als bezahlt markieren",
     "markPaid": {
@@ -71,11 +71,6 @@
     "newBatch": "Neuer Zahlungslauf",
     "paidOn": "Bezahlt am {date}.",
     "toBillsLink": "Zu den Kreditorenrechnungen",
-    "transmit": "An Bank übertragen",
-    "transmitLocked": "Das Übertragen an die Bank benötigt die Zahlungsberechtigung.",
-    "pendingRelease": "An die Bank übermittelt. Gib die Zahlung im Freigabeprozess deiner Bank frei, um sie abzuschliessen; als bezahlt gilt erst der Belastungseintrag auf einem Kontoauszug.",
-    "transmitDegraded": "Kein EBICS-Kanal verfügbar, es wurde nichts übermittelt: lade die heruntergeladene Datei wie gewohnt in dein E-Banking hoch.",
-    "transmitError": "Die Übertragung konnte nicht abgeschlossen werden. Der Zahlungslauf bleibt unverändert; es wurde nichts bezahlt.",
     "pickAccountInCurrency": "Konto in {currency} wählen"
   },
   "help": {

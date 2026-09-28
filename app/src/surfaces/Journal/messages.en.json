@@ -117,7 +117,25 @@
     "discardConfirmBody": "What you entered in this entry is not saved yet and will be lost.",
     "discardConfirmKeep": "Keep editing",
     "discardConfirmAction": "Discard",
-    "vatUnreconciled": "The VAT does not reconcile: the tagged lines add up to {expected}, but the VAT accounts book {booked}."
+    "vatUnreconciled": "The VAT does not reconcile: the tagged lines add up to {expected}, but the VAT accounts book {booked}.",
+    "ownedBy": {
+      "reopen_bank_line": "This entry belongs to a bank line: take the line back under Bank.",
+      "reverse_payment": "This entry belongs to a payment: reverse the payment under Payments.",
+      "reopen_bank_line_done": "This entry came from a bank line and is already reversed. Decide the line under Bank.",
+      "vat_settlement_reverse": "This entry belongs to a VAT settlement: reverse the settlement under VAT.",
+      "accrual_reverse": "This entry belongs to an accrual: reverse the accrual under Periods.",
+      "provision_reverse": "This entry belongs to a provision: reverse the provision under Periods.",
+      "provision_release_reverse": "This entry releases a provision: take the release back under Periods.",
+      "fx_revaluation_reverse": "This entry belongs to a currency revaluation: reverse the revaluation under Foreign currency."
+    },
+    "ownedByShowLine": "Show the bank line",
+    "ownedByGoTo": {
+      "bank": "Go to Bank",
+      "payments": "Go to payments",
+      "mwst": "Go to VAT",
+      "periods": "Go to periods",
+      "fx": "Go to foreign currency"
+    }
   },
   "errors": {
     "unbalanced": "The entry does not balance. Debits must equal credits.",

@@ -121,11 +121,26 @@ interface StoredRow {
  * Append one row to the workspace's chain. Reads the current tail's hash, computes this row's hash off
  * it, and inserts. Meant to run inside the same transaction as the event it records (A02's post writes
  * the entry and this row together), so a crash leaves neither.
+ *
+ * ALWAYS IN ONE TRANSACTION (critic R3 OUT-1). The append is three statements: read the head, insert
+ * the row, move the head. Called outside a transaction (`invite_member`, `set_role`, a key-less
+ * `create_bank_account` and others), they ran as three separate commits, and the D12 second writer
+ * could append between the read and the insert: both rows then chained off the same head, and the
+ * chain no longer verified (probe q19). So a caller that holds no transaction gets one here
+ * (`store.tx`: IMMEDIATE, the head read under the write lock). Inside a caller's transaction the
+ * three statements already share one snapshot, and a write on a snapshot another connection has
+ * moved past fails instead of landing, so the chain cannot fork there either.
  */
 export function appendAuditLog(
   deps: AuditDeps,
   event: AuditEvent,
 ): { ok: true; hash: string; id: string } {
+  if (deps.store.db.inTransaction) return appendUnderLock(deps, event);
+  return deps.store.tx(() => appendUnderLock(deps, event));
+}
+
+/** The body of `appendAuditLog`, always inside a transaction. */
+function appendUnderLock(deps: AuditDeps, event: AuditEvent): { ok: true; hash: string; id: string } {
   const { db } = deps.store;
   // The head anchor is the tail pointer: it holds the chain length and the last hash, so append reads
   // it (not the log) and truncating the log without rewriting the anchor is detectable at read time.

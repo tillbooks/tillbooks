@@ -34,7 +34,15 @@ import type { Err } from '../../lib/client';
 import { useI18n } from '../../i18n';
 import { useFeedback } from '../FeedbackProvider';
 import { AlertGlyph } from './glyphs';
+import { refusalSuffix, sharedRefusalKey } from './refusalSuffix';
 import './states.css';
+
+/**
+ * Refusals that name their own remedy and are never a defect, even where a locale lacks their sentence:
+ * `schema_newer_than_runtime` (a book a newer TILL wrote or migrated, critic finding M3) is answered by
+ * updating TILL, and a report would only file the person's own upgrade as a bug.
+ */
+const NEVER_REPORTABLE: ReadonlySet<string> = new Set(['schema_newer_than_runtime']);
 
 /** What failed: a write the person asked for, or a read the page made on its own. */
 export type ErrorContext = 'action' | 'read';
@@ -58,16 +66,27 @@ export function ErrorBanner({ error, message, onRetry, context = 'action' }: Err
   const feedback = useFeedback();
   const code = error?.error;
   const fallbackKey = context === 'read' ? 'errors.read_fallback' : 'errors.fallback';
-  const body = message ?? (code !== undefined ? t(`errors.${code}`) : t(fallbackKey));
+  const suffix = refusalSuffix(error);
+  const messageKey = code === undefined ? undefined : `${code}${suffix}`;
+  // A call saved WHOLE before the book moved on (critic R4-1): its sentence says not to repeat it, so
+  // no "try again" button may sit beside it. Every other refusal keeps the offer it was given.
+  const retry = suffix === '_saved' ? undefined : onRetry;
+  // The shared sentence wins over a surface's own `message` for a newer-book or after-save refusal
+  // (critic R5-1): the surface's words were written for a call that did not save, and say so.
+  const shared = error === undefined ? undefined : sharedRefusalKey(error);
+  const body = shared !== undefined ? t(shared) : message ?? (messageKey !== undefined ? t(`errors.${messageKey}`) : t(fallbackKey));
   // A key that has no dedicated message falls back to the generic sentence, never the raw code.
-  const unmapped = body === `errors.${code}`;
+  const unmapped = body === `errors.${messageKey}`;
   const resolved = unmapped ? t(fallbackKey) : body;
   const title = t(context === 'read' ? 'states.error.readTitle' : 'states.error.title');
 
   // The unmapped case is the one that most needs the offer: the generic sentence is all the person
   // gets, and without this there is nothing else on the banner at all.
   const reportable =
-    feedback !== null && code !== undefined && (isDefectShaped(code) || unmapped);
+    feedback !== null &&
+    code !== undefined &&
+    !NEVER_REPORTABLE.has(code) &&
+    (isDefectShaped(code) || unmapped);
 
   return (
     <div className="error-banner panel" role="alert" data-context={context}>
@@ -75,10 +94,10 @@ export function ErrorBanner({ error, message, onRetry, context = 'action' }: Err
       <div className="error-content">
         <p className="error-title">{title}</p>
         <p className="error-body">{resolved}</p>
-        {(onRetry !== undefined || reportable) && (
+        {(retry !== undefined || reportable) && (
           <div className="error-actions">
-            {onRetry !== undefined && (
-              <button type="button" className="error-retry" onClick={onRetry}>
+            {retry !== undefined && (
+              <button type="button" className="error-retry" onClick={retry}>
                 {t('states.error.retry')}
               </button>
             )}

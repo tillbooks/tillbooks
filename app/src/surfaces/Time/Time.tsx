@@ -20,7 +20,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, formatMoney } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, useSkeletonHold } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, useSkeletonHold, refusalText } from '../../components/states';
 import { Status, type StatusKind } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
 import { LockGlyph } from '../../components/states/glyphs';
@@ -281,9 +281,7 @@ export function Time() {
       'invalid_transition',
       'project_not_found',
     ];
-    if (known.includes(error.error)) return t(`time.error.${error.error}`);
-    if (error.error === 'permission_denied') return t('time.error.permissionDenied.write');
-    return t('errors.fallback');
+    return refusalText(t, error, { own: 'time.error', known, keys: { permission_denied: 'time.error.permissionDenied.write' } });
   };
 
   // The timesheet columns for the shared DataTable (D118 B2). Duration and rate are numeric, so they

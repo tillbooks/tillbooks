@@ -232,12 +232,13 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // money to the bank: it must never fire from a stored predicate, the exact reasoning `mark_batch_paid`
   // gives one line up. `bank_channel_connect` and `bank_channel_disconnect` are a key ceremony and its
   // emergency stop, deliberate and rare human acts that assert a comparison against a paper letter only
-  // a human holds. `bank_sync` stays OFF this list deliberately (§6b): it is idempotent, non-posting,
-  // and scheduled egress to the bank from a G01 rule is the whole point of the "daily sync" story, the
-  // ONE and only network-egress verb on this surface a rule may fire.
+  // a human holds. `bank_sync` joins them with A36 (D-A36.10, on demand only): a sync holds the whole
+  // process while it waits on the synchronous EBICS wire (up to 60 s per request), so nothing starts one
+  // unattended. A37's managed sync rides the same verb and goes with it; the scheduled sync is parked.
   'payment_batch_transmit',
   'bank_channel_connect',
   'bank_channel_disconnect',
+  'bank_sync',
   // (d) outside the tenant
   'create_workspace',
   'bootstrap_workspace',
@@ -563,6 +564,40 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // Denylisted like its siblings; a "skill/workflow from us" still invokes it interactively under the
   // owner`s seat. It EMITS `environment.copied` (events.ts), so a rule may react to a copy, never cause one.
   'env_copy',
+  // (c) A39, the bank inbox (spec A39 §3, D-A39.5), one appended block. `book_bank_line` settles an
+  // invoice, a bill or a payment run, or books a bank fact to accounts: a judgment about whose money
+  // moved (D77's leg (c), the `apply_qr_match` reasoning verbatim). `reopen_bank_line` reverses money
+  // and `ignore_bank_line` decides that a line counts elsewhere, the same judgment in reverse.
+  'book_bank_line',
+  'reopen_bank_line',
+  'ignore_bank_line',
+  // (c)+(e) A39 critic round 1 (A39-3/A39-4), ONE rule for unattended money movement: a stored rule never
+  // DECIDES A BANK FACT. `create_entry_for_txn` and `confirm_match` are, since A39, wrappers that decide a
+  // bank line exactly as `book_bank_line` does (probe p7: a rule booked every imported line as revenue
+  // with UST81, unattended). A20 §0 note 4's stance ("the primitive stays automatable, so denying the
+  // convenience form is decorative") held while a line had no single state; it no longer does.
+  // `record_incoming_credit` asserts that money ARRIVED, a bank fact no stored predicate can know (the
+  // `mark_batch_paid` reasoning; probe p9). `import_camt` asserts a whole statement of bank facts from a
+  // stored template. The EBICS fetch, A33's `bank_sync`, is on demand only since A36 and denied above.
+  // `set_write_off_threshold` bounds every one-click forgiveness (A39-6): a stored rule raising it
+  // loosens an unattended settlement bound, the `set_qr_auto_apply` shape.
+  'create_entry_for_txn',
+  'confirm_match',
+  'record_incoming_credit',
+  'import_camt',
+  'set_write_off_threshold',
+  // (c)+(e) A39 critic round 2 (A39R2-5, OWNER DECISION 25.09.2026): a stored rule never moves a bank
+  // ledger. The round-1 exemption of `record_payment` ("the author typed every figure") was false: G01
+  // templates bind EVENT data, so a rule on `invoice.issued` settled every invoice into the bank with no
+  // money arriving (probe q5). Recording, allocating or reversing a payment, and the Bankkonto opening
+  // balance, are denied outright; every other posting a firing makes is checked AT FIRE TIME by the
+  // automation invoker (`src/api/registry.ts`, `automationInvokerFor`): a firing that posts any leg onto a
+  // Bankkonto's ledger account is rolled back and refused. A plain `post_entry` without a bank leg stays
+  // automatable.
+  'record_payment',
+  'allocate_payment',
+  'reverse_payment',
+  'set_bank_opening_balance',
 ]);
 
 /** Is `tool` a verb a rule may never name as its action? */

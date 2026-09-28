@@ -462,6 +462,16 @@ function legsAsLines(legs: readonly OpeningLeg[]): LineInput[] {
  * any of them. The row's `opening_balance_minor` is a cached read of that entry, never the source.
  */
 export function setBankOpeningBalance(ctx: WorkspaceContext, input: SetBankOpeningBalanceInput): Result {
+  // ONE IMMEDIATE TRANSACTION (critic R2-4). The opening entry, `opening_balance_minor` and the
+  // idempotency record were three commits, the middle one a bare autocommit UPDATE of the money
+  // column: it could wait out a newer TILL's migration lock in the busy handler and then land in the
+  // migrated book (critic q5), where no check saw it, and a refusal at the third commit claimed "the
+  // book was not changed" after the entry had posted. Under `store.tx` the marker is read under the
+  // write lock before anything here runs, and the three writes commit together or not at all.
+  return ctx.store.tx(() => setBankOpeningBalanceUnderLock(ctx, input));
+}
+
+function setBankOpeningBalanceUnderLock(ctx: WorkspaceContext, input: SetBankOpeningBalanceInput): Result {
   const keyGuard = requireString(input.idempotencyKey, 'idempotencyKey');
   if (keyGuard) return keyGuard;
 

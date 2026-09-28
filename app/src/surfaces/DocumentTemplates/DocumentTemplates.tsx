@@ -35,7 +35,7 @@ import { Segmented } from '../../components/Segmented';
 import { Status } from '../../components/Status';
 import { FileDrop } from '../../components/FileDrop';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import './DocumentTemplates.css';
 
 /** A fresh key per write, so a retry after a transport failure is a retry and not a second write. */
@@ -319,7 +319,7 @@ export function DocumentTemplates() {
     if (error.error === 'permission_denied') return t('docTemplate.needsPermission');
     if (error.error === 'invalid_line_item_columns') return t('docTemplate.invalidColumns');
     if (error.error === 'template_archived') return t('docTemplate.archivedRefusal');
-    return t('errors.fallback');
+    return refusalText(t, error);
   };
 
   if (workspaceId === null) return <NoWorkspaceState />;

@@ -44,10 +44,11 @@ function accountId(store, workspaceId, number) {
  * was written against. Passing one opens the SAME world in another currency, which is the only way to
  * tell a franc that was read from `workspace.base_currency` apart from a franc somebody typed.
  */
-export function setup({ timing = 'soll', realPeriods = false, at = AT, baseCurrency } = {}) {
+export function setup({ timing = 'soll', realPeriods = false, at = AT, baseCurrency, location } = {}) {
   const clock = fixedClock(at);
   const ids = sequenceIdGen();
-  const store = new SqliteStore({ clock });
+  // `location`: a file path, for a suite that opens a second connection on the same book.
+  const store = new SqliteStore({ clock, ...(location !== undefined ? { location } : {}) });
   const deps = { store, clock, ids };
   const workspaceId = createWorkspace(deps, {
     name: 'Muster Grafik GmbH',

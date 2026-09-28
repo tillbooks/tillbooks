@@ -30,7 +30,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { Status } from '../../components/Status';
@@ -126,7 +126,7 @@ export function ReasonCodes() {
 
   const localError = useCallback(
     (e: Err | null): string | undefined =>
-      e !== null && REASON_ERROR_CODES.has(e.error) ? t(`reasonCodes.errors.${e.error}`) : undefined,
+      e !== null && REASON_ERROR_CODES.has(e.error) ? refusalText(t, e, { own: 'reasonCodes.errors' }) : undefined,
     [t],
   );
 

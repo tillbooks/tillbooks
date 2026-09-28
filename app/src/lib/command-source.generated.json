@@ -1,7 +1,7 @@
 {
   "generatedFrom": "src/api/registry.ts via scripts/generate-command-source.mjs",
   "note": "DO NOT EDIT BY HAND. Regenerate: npm run generate:commands. Guarded by command-source-drift.test.mjs.",
-  "verbCount": 779,
+  "verbCount": 783,
   "verbs": [
     {
       "name": "accept_invite",
@@ -179,7 +179,7 @@
         "post"
       ],
       "gateDynamic": false,
-      "denylisted": false,
+      "denylisted": true,
       "dialCapability": "pay"
     },
     {
@@ -1052,7 +1052,7 @@
         "pay"
       ],
       "gateDynamic": false,
-      "denylisted": false,
+      "denylisted": true,
       "dialCapability": null
     },
     {
@@ -1101,6 +1101,16 @@
       ],
       "gateDynamic": false,
       "denylisted": false,
+      "dialCapability": null
+    },
+    {
+      "name": "book_bank_line",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": true,
+      "capabilities": [],
+      "gateDynamic": true,
+      "denylisted": true,
       "dialCapability": null
     },
     {
@@ -1323,7 +1333,7 @@
         "post"
       ],
       "gateDynamic": false,
-      "denylisted": false,
+      "denylisted": true,
       "dialCapability": "pay"
     },
     {
@@ -1587,7 +1597,7 @@
         "post"
       ],
       "gateDynamic": false,
-      "denylisted": false,
+      "denylisted": true,
       "dialCapability": "post"
     },
     {
@@ -3413,6 +3423,18 @@
       "dialCapability": null
     },
     {
+      "name": "ignore_bank_line",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post"
+    },
+    {
       "name": "implementation_decision_record",
       "kind": "write",
       "reqCount": 3,
@@ -3553,7 +3575,7 @@
         "pay"
       ],
       "gateDynamic": false,
-      "denylisted": false,
+      "denylisted": true,
       "dialCapability": null
     },
     {
@@ -4535,6 +4557,18 @@
       "hasComplexInput": false,
       "capabilities": [
         "read_master_data"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null
+    },
+    {
+      "name": "list_bank_inbox",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_sales"
       ],
       "gateDynamic": false,
       "denylisted": false,
@@ -6956,7 +6990,7 @@
         "pay"
       ],
       "gateDynamic": false,
-      "denylisted": false,
+      "denylisted": true,
       "dialCapability": null
     },
     {
@@ -6969,7 +7003,7 @@
         "post"
       ],
       "gateDynamic": false,
-      "denylisted": false,
+      "denylisted": true,
       "dialCapability": "pay"
     },
     {
@@ -6995,6 +7029,18 @@
       "gateDynamic": false,
       "denylisted": true,
       "dialCapability": null
+    },
+    {
+      "name": "reopen_bank_line",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "pay"
     },
     {
       "name": "reopen_month",
@@ -7398,7 +7444,7 @@
         "post"
       ],
       "gateDynamic": false,
-      "denylisted": false,
+      "denylisted": true,
       "dialCapability": "pay"
     },
     {
@@ -7781,7 +7827,7 @@
         "post"
       ],
       "gateDynamic": false,
-      "denylisted": false,
+      "denylisted": true,
       "dialCapability": null
     },
     {
@@ -7971,7 +8017,7 @@
         "pay"
       ],
       "gateDynamic": false,
-      "denylisted": false,
+      "denylisted": true,
       "dialCapability": null
     },
     {

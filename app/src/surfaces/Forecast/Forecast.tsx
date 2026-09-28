@@ -35,7 +35,7 @@ import { Select } from '../../components/Select';
 import { Segmented } from '../../components/Segmented';
 import { Status } from '../../components/Status';
 import { DataTable, type DataTableColumn, type DataTableFooterCell } from '../../components/DataTable';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import './Forecast.css';
 
 interface PipelineRow {
@@ -325,7 +325,7 @@ export function Forecast() {
             context="read"
             message={
               ['invalid_horizon', 'invalid_range', 'invalid_group_by', 'invalid_period', 'not_found'].includes(readError.error)
-                ? t(`forecast.error.${readError.error}`)
+                ? refusalText(t, readError, { own: 'forecast.error' })
                 : undefined
             }
           />

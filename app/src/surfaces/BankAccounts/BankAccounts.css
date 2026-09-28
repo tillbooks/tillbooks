@@ -193,10 +193,9 @@
   max-width: 60ch;
 }
 
-/* --- A36: the keystore card, the Automatischer Abruf toggle, the bank picker ------------------- */
+/* --- A36: the keystore card, the feed position, the waiting statements, the bank-key review ----- */
 
-.bank-channel-keystore,
-.bank-channel-schedule {
+.bank-channel-keystore {
   font-size: var(--t-font-md);
   color: var(--t-text-dim);
   display: flex;
@@ -215,23 +214,65 @@
 }
 
 .bank-channel-keystore-notice,
-.bank-channel-schedule-note,
-.bank-channel-schedule-cadence,
-.bank-channel-schedule-lastfired {
+.bank-channel-note {
   margin: 0;
+  font-size: var(--t-font-md);
+  color: var(--t-text-dim);
+  max-width: 80ch;
+}
+
+/* One line per routed account: its IBAN and the newest statement in the books (a figure, tabular). */
+ul.bank-channel-accounts {
+  list-style: none;
+  padding: 0;
+}
+
+.bank-channel-newest {
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-channel-pending {
+  font-size: var(--t-font-md);
+  color: var(--t-text);
+  max-width: 80ch;
+}
+
+.bank-channel-pending-title {
+  margin: 0;
+}
+
+.bank-channel-pending ul {
+  margin: var(--t-space-0-5) 0 0;
+  padding-left: var(--t-space-2);
+}
+
+/* The bank-key review: the hashes as ZKB's sheet prints them, 8 byte pairs per line, selectable. */
+.bank-channel-keyreview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  max-width: 80ch;
+}
+
+.bank-channel-keyreview-title,
+.bank-channel-keyreview-purpose,
+.bank-channel-keyreview-label,
+.bank-channel-keyreview-intro {
+  margin: 0;
+  font-size: var(--t-font-md);
+}
+
+.bank-channel-keyreview-intro,
+.bank-channel-keyreview-label {
   color: var(--t-text-dim);
 }
 
-.bank-channel-schedule-inactive {
+.bank-channel-keyhash {
   margin: 0;
-  color: var(--t-text);
-}
-
-.bank-channel-schedule-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--t-space-1);
-  color: var(--t-text);
+  font-family: var(--t-font-mono);
+  font-variant-numeric: tabular-nums;
+  user-select: all;
+  white-space: pre;
 }
 
 /* A36-U4: the connect wizard as a stacked field list, each input under its own visible, persistent

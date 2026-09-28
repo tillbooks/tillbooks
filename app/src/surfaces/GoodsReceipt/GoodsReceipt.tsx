@@ -47,7 +47,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Select } from '../../components/Select';
 import { Provenance } from '../../components/Provenance';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold, refusalText } from '../../components/states';
 import { Status, type StatusKind } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
 import { useSeatLabel } from '../Time/seatLabels';
@@ -276,7 +276,7 @@ export function GoodsReceipt() {
   const [rejectReason, setRejectReason] = useState('');
 
   const localError = useCallback(
-    (e: Err | null): string | undefined => (e !== null && I02_ERROR_CODES.has(e.error) ? t(`goodsReceipt.errors.${e.error}`) : undefined),
+    (e: Err | null): string | undefined => (e !== null && I02_ERROR_CODES.has(e.error) ? refusalText(t, e, { own: 'goodsReceipt.errors' }) : undefined),
     [t],
   );
 
@@ -694,7 +694,7 @@ export function GoodsReceipt() {
               and redden the gate). */}
           {issuesFor(l.id).map((code) => (
             <span key={code} className="gr-issue">
-              {I02_ERROR_CODES.has(code) ? t(`goodsReceipt.errors.${code}`) : code}
+              {I02_ERROR_CODES.has(code) ? refusalText(t, code, { own: 'goodsReceipt.errors' }) : code}
             </span>
           ))}
           {l.rejectReason}
@@ -843,7 +843,7 @@ export function GoodsReceipt() {
                     <Status
                       kind="warn"
                       label={(preview?.issues ?? [])
-                        .map((code) => (I02_ERROR_CODES.has(code) ? t(`goodsReceipt.errors.${code}`) : code))
+                        .map((code) => (I02_ERROR_CODES.has(code) ? refusalText(t, code, { own: 'goodsReceipt.errors' }) : code))
                         .join(' ')}
                     />
                   </p>

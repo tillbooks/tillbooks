@@ -17,6 +17,7 @@ import { useT } from '../../i18n';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { Status } from '../../components/Status';
+import { refusalText } from '../../components/states';
 
 const newKey = () => crypto.randomUUID();
 
@@ -89,7 +90,7 @@ export function BillMatchPanel({ billId, vendorId }: BillMatchPanelProps) {
           setMessage(t('po.error.variance_exceeded'));
         } else {
           setVerdict(null);
-          setMessage(t(`po.error.${res.body.error}`) || res.body.error);
+          setMessage(refusalText(t, res.body, { own: 'po.error' }) || res.body.error);
         }
         return;
       }

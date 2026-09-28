@@ -118,6 +118,76 @@ export type {
   CamtTxnView,
 } from './camtReconcile.js';
 export { CAMT_SCHEMA_SQL } from './camtSchema.js';
+export { lineNeedsReview } from './camtReconcile.js';
+
+// A39, the bank inbox: one line, one proposal, confirm, undo by reversal.
+export {
+  BANK_LINE_STATES,
+  BANK_LINE_IGNORE_REASONS,
+  BANK_LINE_TARGET_KINDS,
+  BANK_LINE_REMAINDER_MODES,
+  BOOK_BANK_LINE_TARGET_KINDS,
+  lineStateOf,
+  readActiveLink,
+  claimedLegs,
+  bankLegsOf,
+  bankLegIdsFor,
+  bankLedgerOfLine,
+  LINE_STATE_JOINS,
+  LINE_STATE_EXPR,
+  HAS_REVERSAL_SQL,
+  entryIsReversed,
+  BankAbort,
+} from './bankLines.js';
+export type {
+  BankLineState,
+  BankLineIgnoreReason,
+  BankLineTargetKind,
+  BankLineRemainderMode,
+  BankLineLeg,
+  BookBankLineTarget,
+  ActiveLink,
+  LineState,
+  ClaimedLegs,
+  BankLeg,
+} from './bankLines.js';
+export { bookBankLine, buildAccountsLines, ignoreBankLine, reopenBankLine } from './bankBooking.js';
+export type {
+  BookBankLineInput,
+  BookBankLineOk,
+  BankLineRemainder,
+  IgnoreBankLineInput,
+  IgnoreBankLineOk,
+  ReopenBankLineInput,
+  ReopenBankLineOk,
+} from './bankBooking.js';
+export {
+  BANK_PROPOSAL_CERTAINTIES,
+  BANK_PROPOSAL_REASONS,
+  EXISTING_ENTRY_WINDOW_DAYS,
+  proposalContext,
+  proposeForLine,
+} from './bankProposals.js';
+export type { BankLineProposal, BankProposalCertainty, BankProposalReason } from './bankProposals.js';
+export { invoiceSettlementFigures, planInvoiceSettlement } from './qrMatch.js';
+export {
+  BANK_INBOX_STATUS_FILTERS,
+  BANK_INBOX_DEFAULT_LIMIT,
+  BANK_INBOX_MAX_LIMIT,
+  listBankInbox,
+  bankReconciledForPeriod,
+  ledgerBalanceInAccountCurrency,
+} from './bankInbox.js';
+export type {
+  BankInboxLine,
+  BankInboxDecision,
+  BankAccountBalance,
+  ListBankInboxInput,
+  ListBankInboxOk,
+  BankReconciledAccount,
+  BankReconciledResult,
+} from './bankInbox.js';
+export { BANK_INBOX_SCHEMA_SQL } from './bankInboxSchema.js';
 
 // A18, creditor payments: select A17's open items, generate a pain.001, mark paid via A14.
 export {

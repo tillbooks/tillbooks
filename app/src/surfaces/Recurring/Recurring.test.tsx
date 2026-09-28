@@ -508,6 +508,42 @@ describe('Recurring, controls and provenance', () => {
   });
 });
 
+// --- A book a newer TILL moved on (critic round 4 follow-up) ---------------------------------------
+
+describe('Recurring, a book a newer TILL moved on', () => {
+  const NEWER = { bookGeneration: 8, buildGeneration: 7, path: '/x/book.db' };
+
+  it('a tick refused after it saved one invoice says part was saved, never "the file was not changed"', async () => {
+    // The engine's answer to the critic's R4-2 probe: one invoice of three saved, the rest refused.
+    const user = userEvent.setup();
+    renderRecurring({
+      ...baseCanned(),
+      run_due_recurring: reject('schema_newer_than_runtime', { ...NEWER, partial: true, completed: false }),
+    });
+    await user.click(await screen.findByRole('button', { name: de.recurring.tick.now }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Bis dahin hatte dieses TILL einen Teil der Aktion gespeichert, den Rest nicht.');
+    expect(alert).not.toHaveTextContent(/nicht verändert/);
+  });
+
+  it('a save refused on a newer book gets the update sentence, never a raw key', async () => {
+    const user = userEvent.setup();
+    renderRecurring({
+      ...baseCanned(),
+      list_recurring_schedules: ok({ schedules: [] }),
+      create_recurring_schedule: reject('schema_newer_than_runtime', { ...NEWER, partial: false, completed: false }),
+    });
+    await user.click(await screen.findByRole('button', { name: de.recurring.new }));
+    await user.type(screen.getByLabelText(de.recurring.form.linePrice), '100');
+    await user.clear(screen.getByLabelText(de.recurring.form.anchorDate));
+    await user.type(screen.getByLabelText(de.recurring.form.anchorDate), '2026-08-01');
+    await user.click(screen.getByRole('button', { name: de.recurring.form.save }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Diese Datenbank wurde von einem neueren TILL geschrieben.');
+    expect(alert).not.toHaveTextContent(/recurring\.error|schema_newer_than_runtime/);
+  });
+});
+
 // --- i18n completeness --------------------------------------------------------------------------
 
 describe('Recurring, the catalogues', () => {

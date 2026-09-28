@@ -36,10 +36,17 @@
  * `bank_txn_link` is A20's OWN settlement record, for the half of the queue A21 does not own: a debit
  * settling one or more vendor bills through `confirmCamtMatch`, or a manual annotation to an existing
  * journal entry. A credit's "match" is never a second row here: it IS the A21 queue row, joined by
- * `bank_txn_id` on `reconciliation_match` (A21 already carries that nullable seam). The unique index
- * makes a txn linkable exactly once, so "matched" is a structural fact (`EXISTS` a link row) rather
- * than a derived status column that could drift from what was actually written.
+ * `bank_txn_id` on `reconciliation_match` (A21 already carries that nullable seam). "Matched" is a
+ * structural fact (an active link row) rather than a derived status column that could drift from what
+ * was actually written.
+ *
+ * A39 (the bank inbox, 25.09.2026) keeps this table as THE link and widens what it means: every line
+ * decision (booked, matched, ignored) is a link row, a correction SUPERSEDES the active link through the
+ * A39 decision row instead of deleting it, and exactly one link per line is active. See
+ * `bankInboxSchema.ts` for the guards that replaced A20's one-link-ever unique index.
  */
+
+import { BANK_INBOX_SCHEMA_SQL } from './bankInboxSchema.js';
 
 export const CAMT_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS bank_statement (
@@ -115,8 +122,10 @@ CREATE TABLE IF NOT EXISTS bank_txn_link (
   created_at    TEXT NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS bank_txn_link_one_per_txn
-  ON bank_txn_link (workspace_id, bank_txn_id);
+-- A39: the A20 unique index "one link per line, ever" (bank_txn_link_one_per_txn) is gone; data
+-- migration generation 8 drops it from an older file, and A39's BANK_INBOX_SCHEMA_SQL (appended below)
+-- holds "exactly one ACTIVE link per line" instead (a partial unique index plus an insert trigger), so
+-- a correction can supersede a link without ever deleting it.
 
 CREATE INDEX IF NOT EXISTS bank_txn_link_target
   ON bank_txn_link (workspace_id, kind, target_id);
@@ -132,4 +141,4 @@ CREATE TABLE IF NOT EXISTS camt_match_config (
   value_date_window_days  INTEGER NOT NULL DEFAULT 5,
   review_threshold        TEXT NOT NULL DEFAULT 'any'
 );
-`;
+${BANK_INBOX_SCHEMA_SQL}`;

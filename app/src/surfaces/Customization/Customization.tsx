@@ -30,7 +30,7 @@ import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Tabs } from '../../components/Tabs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
-import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton, refusalText } from '../../components/states';
 import { CustomFieldRow, labelFor, type FieldDefDto } from './CustomFieldRow';
 import { SavedViewPicker, type SavedViewDto } from './SavedViewPicker';
 import { Status } from '../../components/Status';
@@ -380,7 +380,7 @@ export function Customization() {
     if (isErr(response.body)) {
       // The engine's own code, rendered inline on the panel that owns the input, never a toast and
       // never a stack trace. An unmapped code falls back to its own text rather than to silence.
-      setFeedback({ tone: 'error', text: t(`customization.error.${response.body.error}`) });
+      setFeedback({ tone: 'error', text: refusalText(t, response.body, { own: 'customization.error' }) });
       return;
     }
     setDraft(null);
@@ -394,7 +394,7 @@ export function Customization() {
     const response = await client.call(action, { workspaceId, fieldDefId, idempotencyKey: newIdempotencyKey() });
     setBusy(false);
     if (isErr(response.body)) {
-      setFeedback({ tone: 'error', text: t(`customization.error.${response.body.error}`) });
+      setFeedback({ tone: 'error', text: refusalText(t, response.body, { own: 'customization.error' }) });
       return;
     }
     const referenced = (response.body as unknown as { referencingViews?: number }).referencingViews ?? 0;
@@ -420,7 +420,7 @@ export function Customization() {
     });
     setBusy(false);
     if (isErr(response.body)) {
-      setFeedback({ tone: 'error', text: t(`customization.error.${response.body.error}`) });
+      setFeedback({ tone: 'error', text: refusalText(t, response.body, { own: 'customization.error' }) });
       return;
     }
     setFeedback({ tone: 'success', text: t('customization.views.deleted') });

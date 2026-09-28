@@ -1,7 +1,8 @@
 /**
- * A33, EBICS bank channel: the module's public surface. The five composed verbs (spec §4), the enums
- * (§H-ENUM), the schema, and the default keystore. The transport and keystore PORTS live on
- * `WorkspaceContext` (context.ts); this module never opens a socket itself.
+ * A33 + A36, the EBICS bank channel (download only): the module's public surface. The composed verbs,
+ * the successor rule (`feed.ts`), the certificates and hashes, the enums (§H-ENUM), the schema, and the
+ * keystores. The transport and keystore PORTS live on `WorkspaceContext` (context.ts); this module never
+ * opens a socket itself.
  */
 
 export {
@@ -11,10 +12,23 @@ export {
   getBankChannelStatus,
   disconnectBankChannel,
   setBankSyncSchedule,
-  assertNoSoleAuthority,
-  guardNoSoleAuthority,
-  SoleAuthorityViolation,
+  sameHashes,
+  exactSameHashes,
 } from './channel.js';
+export {
+  decideSuccessor,
+  dayEndPosition,
+  comparePositions,
+  isEbicsFedAccount,
+  readFeedBook,
+  newestFeedStatement,
+  FEED_FINAL_OUTCOMES,
+  FEED_REFUSAL_CODES,
+} from './feed.js';
+export type { FeedDecision, FeedPosition, FeedCandidate, FeedBookRow, FeedRefusalCode } from './feed.js';
+export { issueSelfSignedCertificate, certificateCommonName, EBICS_CERT_NOT_AFTER } from './certificates.js';
+export { ebicsKeyHashHex, certificateHashHex, hashesOfCertificate, EBICS_KEY_PURPOSES } from './key-hashes.js';
+export { formatBankHash, formatBankHashLines, BANK_HASH_BYTES_PER_LINE } from './hash-format.js';
 
 export {
   EBICS_CONNECTION_STATE,
@@ -39,5 +53,6 @@ export { fileEbicsKeystore } from './keystore-file.js';
 export type { FileEbicsKeystore, PassphraseProvider } from './keystore-file.js';
 export { lookupBankDirectory, lookupBankDirectoryData, BANK_DIRECTORY } from './banks.js';
 export type { BankDirectoryEntry, BankFeeNote, BankDirectoryQuirks } from './banks.js';
-export { createEbicsHttpsTransport, unpackContainer, BTF_DOWNLOAD_SERVICES, BTF_UPLOAD_PAIN001 } from './transport-https.js';
-export type { EbicsHttpsTransportOptions, EbicsWire } from './transport-https.js';
+export { createEbicsHttpsTransport, readZipContainer, STATEMENT_BTF, MAX_CONTAINER_MEMBERS, MAX_MEMBER_BYTES } from './transport-https.js';
+export type { EbicsHttpsTransportOptions, EbicsWire, EbicsBtf, ZipReadResult } from './transport-https.js';
+export { KEYSTORE_CHANGED_ELSEWHERE } from './keystore-file.js';

@@ -67,7 +67,16 @@ switch (command) {
     const { ensureDbPath } = await import(new URL('../dist/api/db-path.js', import.meta.url));
     // Always a resolved path, never an implicit in-memory database: an agent that posts into a
     // ledger nobody else can see is worse than one that refuses to start.
-    const { store } = await startMcpServer({ dbPath: ensureDbPath() });
+    let store;
+    try {
+      ({ store } = await startMcpServer({ dbPath: ensureDbPath() }));
+    } catch (e) {
+      // A refused open (a book written by a newer TILL, `schema_newer_than_runtime`) is a sentence for
+      // the human on stderr and a non-zero exit, the way `up` and `serve` fail below, never a stack
+      // trace. stdout stays clean: it is the MCP channel.
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
     // Closing the store is what checkpoints the write-ahead log. Without this the process exits with
     // its WAL still holding the last writes, and `till.db-wal` grows every run.
     let closing = false;

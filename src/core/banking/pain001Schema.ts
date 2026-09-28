@@ -129,4 +129,5 @@ BEFORE DELETE ON payment_batch_item
 BEGIN
   SELECT RAISE(ABORT, 'payment_batch_item_immutable');
 END;
+
 `;

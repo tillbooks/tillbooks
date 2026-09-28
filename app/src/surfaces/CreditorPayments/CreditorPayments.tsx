@@ -115,9 +115,9 @@ export function CreditorPayments() {
 
   const [batch, setBatch] = useState<BatchView | null>(null);
   const [download, setDownload] = useState<{ filename: string; base64: string } | null>(null);
+  // What happens to the generated file, as `generate_pain001` says it (A36: the EBICS channel is
+  // download only, so an EBICS-routed account answers `upload_in_ebanking`; otherwise `no_channel`).
   const [transmitReason, setTransmitReason] = useState<string | null>(null);
-  // A33: the EBICS transmit control's outcome (pending_release on a real upload, or an honest note).
-  const [transmitState, setTransmitState] = useState<{ kind: 'pending' | 'degraded' | 'error'; detail?: string } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<Err | null>(null);
 
@@ -277,32 +277,6 @@ export function CreditorPayments() {
     setConfirmChecked(false);
     setValueDate(executionDate);
   }, [executionDate]);
-
-  /**
-   * A33: transmit the generated batch to the bank over EBICS (P8, confirm in-engine). THE LAW holds
-   * in the engine: v1 uploads without the signature flag, so the bank authorizes and nothing is paid
-   * on transmit. On a real upload the batch shows pending_release; with no channel/transport wired the
-   * verb returns an honest ok:true degrade and the download panel stays the floor.
-   */
-  const transmit = useCallback(async () => {
-    if (workspaceId === null || batch === null) return;
-    setTransmitState(null);
-    const { body } = await client.call('payment_batch_transmit', {
-      workspaceId,
-      batchId: batch.id,
-      confirm: true,
-      idempotencyKey: `a33-transmit-${batch.id}`,
-    });
-    if (isErr(body)) {
-      setTransmitState({ kind: 'error', detail: body.error });
-      return;
-    }
-    if ((body as unknown as { transmitted?: boolean }).transmitted === true) {
-      setTransmitState({ kind: 'pending' });
-    } else {
-      setTransmitState({ kind: 'degraded', detail: (body as unknown as { reason?: string }).reason });
-    }
-  }, [client, workspaceId, batch]);
 
   const confirmMarkPaid = useCallback(async () => {
     if (workspaceId === null || batch === null || !confirmChecked) return;
@@ -534,31 +508,13 @@ export function CreditorPayments() {
                 </a>
               )}
 
+              {/* A36 (D-A36.11): TILL uploads no payment file. The file is downloaded here and the owner
+                  uploads and releases it in the bank's own eBanking; for an account routed over EBICS
+                  the note says so, because that channel fetches statements only. There is no transmit
+                  control on this surface at all. */}
               <p className="pay-cp-transmit-note">
-                {transmitReason === 'use_payment_batch_transmit' ? t('pay.transmitNote.channel') : t('pay.transmitNote.manual')}
+                {transmitReason === 'upload_in_ebanking' ? t('pay.transmitNote.ebanking') : t('pay.transmitNote.manual')}
               </p>
-
-              {/* A33: An Bank übertragen, only when an EBICS channel routes this batch and it is generated.
-                  Secondary, not the tinted commit (K-08): the upload carries no signature, so the bank
-                  releases the money and nothing is paid or booked here. */}
-              {transmitReason === 'use_payment_batch_transmit' && batch.status === 'generated' && (
-                holdsPay ? (
-                  <button type="button" className="btn btn--secondary" onClick={() => void transmit()}>
-                    {t('pay.transmit')}
-                  </button>
-                ) : (
-                  <p className="pay-cp-locked">{t('pay.transmitLocked')}</p>
-                )
-              )}
-              {transmitState?.kind === 'pending' && (
-                <p className="pay-cp-pending-release" role="status">{t('pay.pendingRelease')}</p>
-              )}
-              {transmitState?.kind === 'degraded' && (
-                <p className="pay-cp-transmit-degraded" role="status">{t('pay.transmitDegraded')}</p>
-              )}
-              {transmitState?.kind === 'error' && (
-                <p className="pay-cp-transmit-error" role="alert">{t('pay.transmitError')}</p>
-              )}
 
               {batchDone && batch.status === 'generated' && (
                 <>

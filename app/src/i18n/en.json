@@ -271,7 +271,12 @@
     "permission_denied": "You are missing the right needed for this action. Nothing was changed.",
     "forbidden": "Your role is not allowed to perform this action. Nothing was changed.",
     "unexpected_error": "Something went wrong inside TILL itself. Nothing was changed. Try again, and report it if it keeps happening.",
+    "unexpected_error_partial": "Something went wrong inside TILL itself after it had saved part of this action. The rest was not saved. Check the result, and report it if it keeps happening.",
     "store_busy": "The ledger was busy and could not take this. Nothing was changed. Try again in a moment.",
+    "store_busy_partial": "The ledger was busy after TILL had already saved part of this action. The rest was not saved. Check the result before you try again.",
+    "schema_newer_than_runtime": "That database was written by a newer TILL. Update TILL, then try again. The file was not changed.",
+    "schema_newer_than_runtime_partial": "A newer TILL changed this database while the action ran. This TILL had saved part of the action by then, but not the rest. Update TILL, then check the result before you try again.",
+    "schema_newer_than_runtime_saved": "This action is saved. Right after that, a newer TILL updated the database, so what you see here may be out of date. Update TILL before you go on. Do not repeat the action, or it will be saved twice.",
     "transport_error": "TILL could not reach the ledger service. Nothing was changed. Check that it is running and try again.",
     "fallback": "The action could not be completed. Please try again or check your input.",
     "open_documents": "This contact still has open documents. Settle or cancel them first.",
@@ -381,6 +386,14 @@
     },
     "reverse_entry": {
       "label": "Reverse an entry"
+    },
+    "import_camt": {
+      "label": "Import a bank statement",
+      "aliases": "camt, statement, bank import"
+    },
+    "book_bank_line": {
+      "label": "Book bank lines",
+      "aliases": "Bank, reconciliation, bank line"
     },
     "record_payment": {
       "label": "Record a payment",
@@ -531,7 +544,10 @@
       "reopen_month": "Reopen month",
       "unlock_period": "Unlock period",
       "go_productive": "Switch workspace to live books",
-      "import_open_items": "Import open items"
+      "import_open_items": "Import open items",
+      "book_bank_line": "Book a bank line",
+      "ignore_bank_line": "Ignore a bank line",
+      "reopen_bank_line": "Reverse and reopen a bank line"
     }
   },
   "fileDrop": {
@@ -549,5 +565,30 @@
     "local": "This installation",
     "person": "Person {n}",
     "unknown": "Unknown person"
+  },
+  "taxCode": {
+    "none": "Without VAT",
+    "noneMeta": "not taxable, exempt or without a receipt",
+    "search": "Code, rate or name, for example 8.1 or reverse",
+    "noMatch": "No VAT code fits.",
+    "group": {
+      "current": "Current",
+      "in": "Fitting money in",
+      "out": "Fitting money out",
+      "all": "VAT codes",
+      "other": "Other codes"
+    },
+    "kind": {
+      "output": "Output tax",
+      "input": "Input tax",
+      "reverse_charge": "Reverse charge",
+      "import": "Import tax",
+      "zero": "Zero-rated",
+      "exempt": "Exempt",
+      "none": "Without VAT"
+    }
+  },
+  "picker": {
+    "hint": "Arrows choose · Enter takes · Esc closes"
   }
 }

@@ -1,10 +1,13 @@
 // A36 remediation (critic F1/F2/F3): the non-author critic's own reproduction probes, folded in and
 // rewritten to assert the DEFECT IS FIXED. Each test names the finding it closes.
-//  - F1: a failed import (A20-C2 statement_amended) is NOT acknowledged, so nothing is dropped and the
-//        drop is reported honestly; a re-offer never double-applies (idempotency ON ROWS holds).
-//  - F2: a batch confirmed from the reconciliation board LINKS its funding debit, so that debit is
-//        matched on the board and can no longer be double-booked (confirm_match / create_entry_for_txn
-//        refuse) and cannot be re-settled against a second batch.
+//  - F1, INVERTED BY A36 (D-A36.5): the receipt is no longer withheld. The fetched bytes are committed
+//        BEFORE the receipt, so a statement that does not import (an amended copy: overlap_refused, final;
+//        a gap: pending) keeps its bytes and its outcome in TILL, the receipt goes out, and a pending one
+//        is retried from the stored bytes at every sync. Nothing is dropped, the outcome is reported
+//        honestly, and a re-offer never double-applies (idempotency ON ROWS holds).
+//  - F2: a batch paid from its funding debit is booked on the bank inbox (A39 L2: book_bank_line with
+//        target payment_batch; mark_batch_paid with a bankTxnId refuses use_bank_inbox), so that debit is
+//        decided and can no longer be double-booked (confirm_match / create_entry_for_txn refuse).
 //  - F3: a reversal-flagged txn always needs review, even with a coincidental exact-amount candidate.
 // All offline against the in-process mock EBICS host.
 
@@ -25,10 +28,12 @@ import {
   confirmCamtMatch,
   createEntryForTxn,
   listReconciliation,
+  bookBankLine,
 } from '../../dist/core/banking/index.js';
 import { connectBankChannel, syncBankChannel } from '../../dist/core/banking/ebics/index.js';
 import { compactReference } from '../../dist/core/banking/pain001.js';
 import { makeContext } from '../../dist/core/context.js';
+import { mockBank, container, chain } from './ebics-support.mjs';
 
 const HOST = { url: 'https://ebics.example/ebics', hostId: 'EBICSHST', partnerId: 'PARTNER01', userId: 'USER0001' };
 const B64 = (s) => Buffer.from(s, 'utf8').toString('base64');
@@ -71,27 +76,18 @@ function camtDebit(statementId, amountMajor, opts = {}) {
 <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>OTHR</SubFmlyCd></Fmly></Domn></BkTxCd>
 ${btch}${payer}</Ntry></Stmt></BkToCstmrStmt></Document>`;
 }
-function mockHost(cfg = {}) {
-  const order = [];
-  return {
-    order,
-    port: {
-      sendKeys: () => ({ ok: true }),
-      fetchBankKeys: () => ({ ok: true, bankKeyHashes: { electronicSignature: 'e', authentication: 'a', encryption: 'n' } }),
-      download(req) { order.push(`d:${req.service}`); return { ok: true, files: (cfg.files && cfg.files[req.service]) || [], ackToken: `ack-${req.service}` }; },
-      acknowledge(req) { order.push(`a:${req.ackToken}`); if (cfg.ackThrows) throw new Error('crash'); return { ok: true }; },
-      upload: () => ({ ok: true }),
-      suspend: () => ({ ok: true }),
-    },
-  };
-}
-function ctxWith(t, host) {
-  return makeContext(t.store, { workspaceId: t.workspaceId, actor: 'user_1', clock: t.clock, ids: t.ids, ...(host ? { ebicsTransport: host.port } : {}) });
+function ctxWith(t, bank) {
+  return makeContext(t.store, { workspaceId: t.workspaceId, actor: 'user_1', clock: t.clock, ids: t.ids, ...(bank ? { ebicsTransport: bank.port } : {}) });
 }
 function activeChannel(ctx, bankAccountId, seed) {
   const c1 = must(connectBankChannel(ctx, { host: HOST, routeBankAccountIds: [bankAccountId], confirm: true, idempotencyKey: `${seed}-1` }), 'connect');
-  must(connectBankChannel(ctx, { connectionId: c1.connectionId, confirmBankKeys: true, confirm: true, idempotencyKey: `${seed}-2` }), 'activate');
+  const fetched = must(connectBankChannel(ctx, { connectionId: c1.connectionId, confirm: true }), 'fetch');
+  must(connectBankChannel(ctx, { connectionId: c1.connectionId, confirmBankKeys: true, expectedBankKeyHashes: fetched.bankKeyHashes, confirm: true }), 'activate');
   return c1.connectionId;
+}
+/** A synthetic day-end statement number `seq` on the PLAIN_IBAN account, opening on `opening`. */
+function dayEnd(seq, opening, entries, date = '2026-07-01') {
+  return chain({ iban: IBAN, firstSeq: seq, firstDate: date, opening, days: [entries] })[0].xml;
 }
 
 // Build a generated A18 batch funded by one bank debit; returns { batchId, bankTxnId, acc, otherAmount }.
@@ -114,8 +110,8 @@ test('F2: a batch confirmed with its funding debit refuses a second confirm_matc
   const acc = mkBankAccount(t.ctx, t.acc);
   const { batchId, bankTxnId } = batchWithFundingDebit(t, acc, 'STMT-F2A', 'f2a');
 
-  // Confirm the batch FROM THE RECONCILIATION BOARD: bankTxnId travels so the debit is LINKED.
-  must(markBatchPaid(t.ctx, { batchId, bankTxnId, confirmation: true, valueDate: '2026-07-10', idempotencyKey: 'mbp-a' }), 'markBatchPaid');
+  // Book the funding debit on the bank inbox: the run is marked paid and the debit decided in one step.
+  must(bookBankLine(t.ctx, { bankTxnId, target: { kind: 'payment_batch', batchId }, idempotencyKey: 'mbp-a' }), 'book_bank_line');
   const payAfterBatch = rows(t.store, t.workspaceId, 'payment');
 
   // Now try to ALSO settle the same debit against ANOTHER open bill of the same amount.
@@ -123,12 +119,18 @@ test('F2: a batch confirmed with its funding debit refuses a second confirm_matc
   const dbl = confirmCamtMatch(t.ctx, { bankTxnId, vendorBillId: otherBill, idempotencyKey: 'dbl-a' });
 
   const payAfterDouble = rows(t.store, t.workspaceId, 'payment');
-  // FIXED: the debit carries a payment_batch link, so confirm_match hits the existing-link guard and
-  // books NOTHING. The link is echoed; no second payment row is created.
+  // FIXED: the debit carries a payment_batch link, so confirm_match hits the line-state guard and
+  // books NOTHING. A39 (walk B14.3): a DIFFERENT decision on a decided line is REFUSED, naming the
+  // decision that holds it, instead of an `ok` that echoed someone else's link (an approved stale
+  // Vorschlag then reported executed while nothing ran). No second payment row is created.
   assert.equal(payAfterDouble, payAfterBatch, 'no second payment was booked for the one bank debit');
-  assert.equal(dbl.ok, true, 'confirm_match returns the existing link, idempotently');
-  assert.equal(dbl.kind, 'payment_batch', 'the existing link is the batch settlement');
-  assert.equal(dbl.targetId, batchId, 'the link points at the batch that settled the debit');
+  assert.equal(dbl.ok, false, 'confirm_match refuses a line another decision already booked');
+  assert.equal(dbl.error, 'line_not_open');
+  assert.equal(dbl.state, 'booked', 'the refusal names the state the batch settlement put the line in');
+  assert.equal(dbl.staleProposal, true, 'and marks the call as a stale proposal');
+  const link = t.store.db.prepare('SELECT kind, target_id FROM bank_txn_link WHERE id = ?').get(dbl.linkId);
+  assert.equal(link.kind, 'payment_batch', 'the holding link is the batch settlement');
+  assert.equal(link.target_id, batchId, 'the link points at the batch that settled the debit');
 });
 
 // --- F2 (PROBE 7): the batch-settled debit is MATCHED on the board and create_entry_for_txn refuses --
@@ -137,7 +139,7 @@ test('F2: a batch-settled debit is matched on the board and create_entry_for_txn
   const acc = mkBankAccount(t.ctx, t.acc);
   const { batchId, bankTxnId, statementId } = batchWithFundingDebit(t, acc, 'STMT-F2B', 'f2b');
 
-  must(markBatchPaid(t.ctx, { batchId, bankTxnId, confirmation: true, valueDate: '2026-07-10', idempotencyKey: 'mbp-b' }), 'markBatchPaid');
+  must(bookBankLine(t.ctx, { bankTxnId, target: { kind: 'payment_batch', batchId }, idempotencyKey: 'mbp-b' }), 'book_bank_line');
 
   // The board now lists the funding debit as MATCHED, not perpetually unmatched.
   const board = must(listReconciliation(t.ctx, { statementId }), 'board');
@@ -151,22 +153,30 @@ test('F2: a batch-settled debit is matched on the board and create_entry_for_txn
   const je0 = rows(t.store, t.workspaceId, 'journal_entry');
   const entry = createEntryForTxn(t.ctx, { bankTxnId, contraAccountId: t.acc('6500'), idempotencyKey: 'f2b-cef' });
   assert.equal(entry.ok, false, 'create_entry_for_txn refuses a settled debit');
-  assert.equal(entry.error, 'already_matched', 'refused as already_matched');
+  // A39: one refusal for every decision on a decided line, naming its state (walk B14.3).
+  assert.equal(entry.error, 'line_not_open', 'refused as line_not_open');
+  assert.equal(entry.state, 'booked');
   assert.equal(rows(t.store, t.workspaceId, 'journal_entry'), je0, 'no second ledger movement was booked');
 });
 
-// --- F2 (double-settle across batches): one debit maps to at most one batch --------------------------
-test('F2: a debit already linked to one batch cannot fund a second batch (already_matched)', () => {
+// --- F2 (A39 L2): one door per imported line; mark_batch_paid never takes a bank line -----------------
+test('F2: mark_batch_paid with a funding debit refuses use_bank_inbox and moves nothing; the debit books one run only', () => {
   const t = setup();
   const acc = mkBankAccount(t.ctx, t.acc);
   const a = batchWithFundingDebit(t, acc, 'STMT-F2C1', 'f2c1');
-  must(markBatchPaid(t.ctx, { batchId: a.batchId, bankTxnId: a.bankTxnId, confirmation: true, valueDate: '2026-07-10', idempotencyKey: 'mbp-c1' }), 'markBatchPaid-1');
+  const before = ['payment', 'journal_entry', 'bank_txn_link'].map((tbl) => rows(t.store, t.workspaceId, tbl));
+  const byHand = markBatchPaid(t.ctx, { batchId: a.batchId, bankTxnId: a.bankTxnId, confirmation: true, valueDate: '2026-07-10', idempotencyKey: 'mbp-c1' });
+  assert.equal(byHand.ok, false);
+  assert.equal(byHand.error, 'use_bank_inbox');
+  assert.equal(byHand.bankTxnId, a.bankTxnId, 'the refusal names the line to book on the inbox');
+  assert.deepEqual(['payment', 'journal_entry', 'bank_txn_link'].map((tbl) => rows(t.store, t.workspaceId, tbl)), before, 'nothing moved');
 
-  // A second generated batch; try to settle it against the SAME already-linked debit.
+  must(bookBankLine(t.ctx, { bankTxnId: a.bankTxnId, target: { kind: 'payment_batch', batchId: a.batchId }, idempotencyKey: 'mbp-c1b' }), 'book run A');
+  // A second generated batch; booking the SAME, already decided debit to it is refused.
   const b = batchWithFundingDebit(t, acc, 'STMT-F2C2', 'f2c2');
-  const second = markBatchPaid(t.ctx, { batchId: b.batchId, bankTxnId: a.bankTxnId, confirmation: true, valueDate: '2026-07-11', idempotencyKey: 'mbp-c2' });
+  const second = bookBankLine(t.ctx, { bankTxnId: a.bankTxnId, target: { kind: 'payment_batch', batchId: b.batchId }, idempotencyKey: 'mbp-c2' });
   assert.equal(second.ok, false, 'the second settlement is refused');
-  assert.equal(second.error, 'already_matched', 'refused as already_matched: one debit, at most one batch');
+  assert.equal(second.error, 'line_not_open', 'one debit, one decision');
 });
 
 // --- F2 (regression): the plain A18 path (no bankTxnId) still settles a batch as before ---------------
@@ -179,62 +189,78 @@ test('F2: mark_batch_paid without a funding debit settles the batch unchanged (A
   assert.equal(rows(t.store, t.workspaceId, 'bank_txn_link'), 0, 'no link recorded on the plain path');
 });
 
-// --- F1 (PROBE 8): an amended (import-failing) statement is NOT acknowledged and is reported honestly -
-test('F1: an amended import-failing statement is NOT acknowledged, ledger unchanged, drop reported', () => {
+// --- F1, inverted by A36: the receipt goes out once the bytes are durable; the outcome says the rest --
+test('F1 (A36): an amended copy of an imported statement is overlap_refused and final, ledger unchanged, receipted, reported', () => {
   const t = setup();
   const acc = mkBankAccount(t.ctx, t.acc);
-  const conn = activeChannel(ctxWith(t, mockHost({ files: { statements: [] } })), acc, 'amend');
+  const bank = mockBank();
+  const ctx = ctxWith(t, bank);
+  const conn = activeChannel(ctx, acc, 'amend');
 
-  const orig = B64(camtDebit('STMT-AMEND', '42.50', { ntryRef: 'REF-AM' }));
-  must(syncBankChannel(ctxWith(t, mockHost({ files: { statements: [{ msgName: 'camt.053', contentBase64: orig }] } })), { connectionId: conn, idempotencyKey: 'am-1' }), 's1');
+  bank.offer(container([dayEnd(1, 100000, [{ minor: -4250 }])]));
+  must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'am-1' }), 's1');
   assert.equal(t.store.db.prepare('SELECT amount_minor FROM bank_txn WHERE workspace_id = ?').get(t.workspaceId).amount_minor, 4250, 'original imported');
 
-  const amended = B64(camtDebit('STMT-AMEND', '99.99', { ntryRef: 'REF-AM' }));
-  const host2 = mockHost({ files: { statements: [{ msgName: 'camt.053', contentBase64: amended }] } });
-  const s2 = must(syncBankChannel(ctxWith(t, host2), { connectionId: conn, idempotencyKey: 'am-2' }), 's2');
-
+  // The bank re-issues statement 1 with another amount: the same position, other balances.
+  bank.offer(container([dayEnd(1, 100000, [{ minor: -9999 }])], { stamp: '20260702' }));
+  const s2 = must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'am-2' }), 's2');
   const after = t.store.db.prepare('SELECT amount_minor FROM bank_txn WHERE workspace_id = ?').get(t.workspaceId).amount_minor;
-  assert.equal(after, 4250, 'the amendment was NOT applied (statement_amended)');
-  // FIXED: the statements token is NOT acknowledged, so the bank keeps offering the correction.
-  assert.equal(host2.order.some((o) => o === 'a:ack-statements'), false, 'the failed-import statements token is NOT acknowledged');
-  // FIXED: the drop is reported honestly (not a silent ok:true).
-  assert.equal(s2.unappliedStatements, 1, 'the sync reports one unapplied statement');
-  const matched = s2.files.find((f) => f.routing === 'matched');
-  assert.equal(matched.importOk, false, 'the matched file is flagged import-failed');
-  assert.equal(matched.importReason, 'statement_amended', 'with the A20 reason');
-  // The order log carries a non-ok status for the failed import (the status-card feed).
-  const failedOrder = t.store.db
-    .prepare("SELECT status, bank_reason FROM ebics_order_log WHERE workspace_id = ? AND status = 'failed'")
+  assert.equal(after, 4250, 'the amended copy was NOT applied');
+  assert.deepEqual(s2.statements.map((x) => [x.outcome, x.final]), [['overlap_refused', true]], 'reported honestly, and final');
+  assert.equal(s2.receipt, 'positive', 'its bytes are durable in TILL, so the bank may forget them');
+  const outcome = t.store.db
+    .prepare("SELECT status, bank_reason FROM ebics_order_log WHERE workspace_id = ? AND related_kind = 'member_outcome' AND bank_reason = 'overlap_refused'")
     .get(t.workspaceId);
-  assert.ok(failedOrder, 'a failed order-log row exists');
-  assert.equal(failedOrder.bank_reason, 'statement_amended', 'carrying the reason');
+  assert.deepEqual({ ...outcome }, { status: 'ok', bank_reason: 'overlap_refused' }, 'the final outcome is on the order log');
 });
 
-// --- F1 (idempotency ON ROWS): the un-acked re-offer never double-applies -----------------------------
-test('F1: an un-acked amended statement, re-offered, still lands EXACTLY ONE bank_txn row', () => {
+test('F1 (A36): a statement that cannot import YET is pending after a positive receipt and is retried from its bytes', () => {
   const t = setup();
   const acc = mkBankAccount(t.ctx, t.acc);
-  const conn = activeChannel(ctxWith(t, mockHost({ files: { statements: [] } })), acc, 'idem');
+  const bank = mockBank();
+  const ctx = ctxWith(t, bank);
+  const conn = activeChannel(ctx, acc, 'pend');
+  const days = chain({ iban: IBAN, firstSeq: 1, firstDate: '2026-07-01', opening: 100000, days: [[{ minor: -100 }], [{ minor: -200 }], [{ minor: -300 }]] });
+  must(importCamt(t.ctx, { bankAccountId: acc, xml: days[0].xml, idempotencyKey: 'p-1' }), 'statement 1 by hand');
+  bank.offer(container([days[2].xml]));
+  const s1 = must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'p-s1' }), 's1');
+  assert.deepEqual(s1.statements.map((x) => [x.outcome, x.final]), [['gap_refused', false]]);
+  assert.equal(s1.receipt, 'positive');
+  must(importCamt(t.ctx, { bankAccountId: acc, xml: days[1].xml, idempotencyKey: 'p-2' }), 'the missing day by hand');
+  const s2 = must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'p-s2' }), 's2 (090005)');
+  assert.deepEqual(s2.statements.map((x) => x.outcome), ['imported'], 'retried from the stored bytes');
+  assert.equal(rows(t.store, t.workspaceId, 'bank_statement'), 3);
+});
 
-  const orig = B64(camtDebit('STMT-IDEM', '42.50', { ntryRef: 'REF-ID' }));
-  must(syncBankChannel(ctxWith(t, mockHost({ files: { statements: [{ msgName: 'camt.053', contentBase64: orig }] } })), { connectionId: conn, idempotencyKey: 'id-1' }), 's1');
-  const amended = B64(camtDebit('STMT-IDEM', '99.99', { ntryRef: 'REF-ID' }));
-  // Two further syncs where the bank re-offers the amended statement (because it was never acked).
-  must(syncBankChannel(ctxWith(t, mockHost({ files: { statements: [{ msgName: 'camt.053', contentBase64: amended }] } })), { connectionId: conn, idempotencyKey: 'id-2' }), 's2');
-  must(syncBankChannel(ctxWith(t, mockHost({ files: { statements: [{ msgName: 'camt.053', contentBase64: amended }] } })), { connectionId: conn, idempotencyKey: 'id-3' }), 's3');
+// --- F1 (idempotency ON ROWS): a re-offer never double-applies ---------------------------------------
+test('F1: an amended statement, re-offered, still lands EXACTLY ONE bank_txn row', () => {
+  const t = setup();
+  const acc = mkBankAccount(t.ctx, t.acc);
+  const bank = mockBank();
+  const ctx = ctxWith(t, bank);
+  const conn = activeChannel(ctx, acc, 'idem');
+  bank.offer(container([dayEnd(1, 100000, [{ minor: -4250 }])]));
+  must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'id-1' }), 's1');
+  // The amended copy, offered in two containers with other bytes (a re-offer after each sync).
+  bank.offer(container([dayEnd(1, 100000, [{ minor: -9999 }])], { stamp: '20260702' }));
+  must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'id-2' }), 's2');
+  bank.offer(container([dayEnd(1, 100000, [{ minor: -9999 }])], { stamp: '20260703' }));
+  must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'id-3' }), 's3');
   assert.equal(rows(t.store, t.workspaceId, 'bank_txn'), 1, 'three syncs, exactly one row: no double-apply');
 });
 
-// --- F1 (regression): a CLEAN import still acknowledges the statements token --------------------------
-test('F1: a successful import DOES acknowledge the statements token (success path unchanged)', () => {
+// --- F1 (regression): a clean import is receipted positively -------------------------------------------
+test('F1: a successful import is receipted positively (success path unchanged)', () => {
   const t = setup();
   const acc = mkBankAccount(t.ctx, t.acc);
-  const conn = activeChannel(ctxWith(t, mockHost({ files: { statements: [] } })), acc, 'clean');
-  const host = mockHost({ files: { statements: [{ msgName: 'camt.053', contentBase64: B64(camtDebit('STMT-CLEAN', '42.50')) }] } });
-  const s = must(syncBankChannel(ctxWith(t, host), { connectionId: conn, idempotencyKey: 'clean-1' }), 's');
-  assert.equal(s.files.find((f) => f.routing === 'matched').importOk, true, 'the import succeeded');
-  assert.equal(s.unappliedStatements, undefined, 'nothing unapplied');
-  assert.ok(host.order.some((o) => o === 'a:ack-statements'), 'the statements token IS acknowledged on success');
+  const bank = mockBank();
+  const ctx = ctxWith(t, bank);
+  const conn = activeChannel(ctx, acc, 'clean');
+  bank.offer(container([dayEnd(1, 100000, [{ minor: -4250 }])]));
+  const s = must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'clean-1' }), 's');
+  assert.deepEqual(s.statements.map((x) => x.outcome), ['imported'], 'the import succeeded');
+  assert.equal(s.pendingStatements, 0, 'nothing waits');
+  assert.deepEqual(bank.receipts.map((r) => r.receiptCode), [0], 'the transaction IS receipted positively');
 });
 
 // --- F3 (PROBE 5): a reversal-flagged txn always needs review, even with an exact candidate ----------

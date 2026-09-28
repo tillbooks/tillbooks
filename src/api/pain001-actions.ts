@@ -86,7 +86,7 @@ export function pain001Actions(h: Pain001ActionHelpers): readonly ActionDef[] {
     ctxAction(
       'generate_pain001',
       'write',
-      "Build (or rebuild) the batch's pain.001.001.09 XML, validate it, and flip the batch from draft to generated on first success; regenerating an already-generated batch reproduces byte-identical output (nothing about it changes after creation). Only a valid file is ever returned. NEVER transmits: always answers transmitted:false, with reason 'use_payment_batch_transmit' when an A33 EBICS channel routes the batch's debtor account (transmit is A33's payment_batch_transmit, P8-gated) or 'no_channel' otherwise (the file-download path is then the floor).",
+      "Build (or rebuild) the batch's pain.001.001.09 XML, validate it, and flip the batch from draft to generated on first success; regenerating an already-generated batch reproduces byte-identical output (nothing about it changes after creation). Only a valid file is ever returned. NEVER transmits: always answers transmitted:false, with reason 'upload_in_ebanking' when an EBICS channel routes the batch's debtor account (the channel downloads statements only: the owner uploads the file in the bank's eBanking and releases it there, and the statement brings the debit) or 'no_channel' otherwise (the file-download path is then the floor).",
       ctxSchema({ batchId: STR, idempotencyKey: STR }, ['batchId', 'idempotencyKey']),
       (ctx, input) => generatePain001(ctx, as(input)),
     ),

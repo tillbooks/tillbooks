@@ -4,9 +4,9 @@
  * What the hub row needs from the engine, proven on real stores seeded through the registry and the
  * module engines:
  *
- *  - an A21 credit carries its live-scored `suggestedInvoiceId`, its `reasonCode` (the J8.12 reason)
- *    and the two exits `/reconciliation` offers, plus the link for the hand-picked case; a `none`
- *    score offers no apply at all (the hub never invents a match);
+ *  - a HAND-TYPED A21 credit carries its live-scored `suggestedInvoiceId`, its `reasonCode` (the J8.12
+ *    reason) and the two A21 exits; a `none` score offers no apply at all (the hub never invents a
+ *    match); a credit an imported bank line carries is not in the queue (A39 L2: decided on /bank);
  *  - every option names an EXISTING registry write with a DETERMINISTIC per-item idempotency key,
  *    stable across two reads, so a double click on the row replays the first write: apply twice
  *    posts ONE payment, dismiss twice decides ONCE;
@@ -27,7 +27,8 @@ import assert from 'node:assert/strict';
 
 import { attentionList } from '../../dist/core/attention/index.js';
 import { getAction } from '../../dist/api/registry.js';
-import { createBankAccount, recordIncomingCredit } from '../../dist/core/banking/index.js';
+import { createBankAccount, recordIncomingCredit, importCamt } from '../../dist/core/banking/index.js';
+import { camt } from '../banking/bank-inbox-support.mjs';
 import { buildQrrReference } from '../../dist/core/payments/reference.js';
 import { CONSEQUENCE_FOR_ACTION } from '../../dist/core/agent/index.js';
 import { freshDeps, mintWorkspace, manualPost } from '../api/support.mjs';
@@ -71,7 +72,7 @@ function qrItems(t) {
   return ok(attentionList(t.ctx, { queueId: 'qr_match' }), 'attention_list').items;
 }
 
-test('qr_match: a high-scoring credit carries its suggested invoice, the apply/dismiss/open exits and the pay sentence', () => {
+test('qr_match: a high-scoring credit carries its suggested invoice, the apply and dismiss exits and the pay sentence', () => {
   const t = qrWorld();
   const c = credit(t, { reference: t.reference, amountMinor: GROSS_MINOR, key: 'att-c-high' });
   const [item] = qrItems(t);
@@ -82,7 +83,9 @@ test('qr_match: a high-scoring credit carries its suggested invoice, the apply/d
   assert.equal(item.reasonCode, 'exact_open');
   assert.equal(item.reasonKey, 'qrmatch.reason.exact_open', 'the reason is keyed into the owning catalogue (J8.12)');
   const ids = item.decisionOptions.map((o) => o.id);
-  assert.deepEqual(ids, ['apply', 'dismiss', 'open']);
+  // A39 L2: no per-item link into the /reconciliation redirect (the bank inbox lists bank lines, never
+  // a hand-typed credit), so the row's exits are the two A21 verbs.
+  assert.deepEqual(ids, ['apply', 'dismiss']);
   const apply = item.decisionOptions.find((o) => o.id === 'apply');
   assert.equal(apply.verb, 'apply_qr_match');
   assert.equal(apply.role, 'primary');
@@ -90,12 +93,21 @@ test('qr_match: a high-scoring credit carries its suggested invoice, the apply/d
   assert.equal(apply.input.mode, 'full', 'an exact match applies in full');
   assert.equal(apply.humanConfirm, true);
   assert.equal(apply.capability, 'pay');
-  const open = item.decisionOptions.find((o) => o.id === 'open');
-  assert.equal(open.verb, null);
-  assert.equal(open.deepLink.route, '/reconciliation');
+  assert.equal(item.deepLink.route, '/bank');
   // D118 C4: the sentence is the dial map's own, keyed for the Studio and spelled for the agent.
   assert.equal(item.consequenceKey, 'agent.consequence.pay');
   assert.equal(item.consequence, CONSEQUENCE_FOR_ACTION.apply_qr_match);
+});
+
+test('A39 L2: a credit an imported bank line carries is left out of the qr_match queue; a hand-typed one is in it', () => {
+  const t = qrWorld();
+  ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: camt({ statementId: 'ATT-CAMT', iban: PLAIN_IBAN.replace(/\s+/g, ''), entries: [{ ref: 'Q', amountMinor: GROSS_MINOR, cd: 'CRDT', qrr: t.reference }] }), idempotencyKey: 'att-camt' }), 'importCamt');
+  assert.equal(t.store.db.prepare("SELECT COUNT(*) AS n FROM reconciliation_match WHERE status = 'open'").get().n, 1, 'premise: the camt credit has its A21 row');
+  assert.deepEqual(qrItems(t), [], 'the camt credit is decided on the bank inbox, not here');
+  const typed = credit(t, { reference: t.reference, amountMinor: GROSS_MINOR, key: 'att-typed' });
+  assert.deepEqual(qrItems(t).map((i) => i.entityId), [typed.creditId]);
+  const summary = ok(getAction('attention_summary').run({ store: t.store, clock: t.clock, ids: t.ids, actor: 'user_1' }, { workspaceId: t.workspaceId, topLimit: 5 }));
+  assert.equal(summary.queues.find((q) => q.queueId === 'qr_match').count, 1, 'the count agrees with the list');
 });
 
 test('qr_match: a credit that matches nothing offers NO apply (the hub never invents a match), dismiss leads, and the reason says why', () => {
@@ -104,7 +116,7 @@ test('qr_match: a credit that matches nothing offers NO apply (the hub never inv
   const [item] = qrItems(t);
   assert.equal(item.suggestedInvoiceId, null);
   assert.equal(item.reasonCode, 'no_invoice');
-  assert.deepEqual(item.decisionOptions.map((o) => o.id), ['dismiss', 'open']);
+  assert.deepEqual(item.decisionOptions.map((o) => o.id), ['dismiss']);
   assert.equal(item.decisionOptions[0].role, 'primary', 'with no candidate, "Keine Kundenzahlung" is the row\'s primary');
   // A dismiss books nothing, so the row states no posting (D118 C4: the sentence is about the write
   // the row can make, and this row can make none). The pay sentence belongs to the apply exit only.

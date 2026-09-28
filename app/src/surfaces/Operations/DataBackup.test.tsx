@@ -191,6 +191,81 @@ describe('DataBackup, the row verify and the honesty sentence (F-06)', () => {
     expect(await screen.findByText(/keine Wiederherstellungsquelle/)).toBeInTheDocument();
   });
 
+  it('M3: a snapshot a newer TILL wrote verifies to the update sentence, never the raw code', async () => {
+    const { client } = makeClient({
+      list_backups: OK({ backups: [ROW] }),
+      verify_backup: { status: 422, body: { ok: false, error: 'schema_newer_than_runtime', bookGeneration: 8, buildGeneration: 7, path: '/x/data.sqlite' } },
+    });
+    renderPanel(client);
+    await screen.findByText('Sicherung');
+    await userEvent.click(screen.getByRole('button', { name: 'Sicherung vom 05.09.2026 prüfen' }));
+    expect(await screen.findByText(/Aktualisiere TILL und versuche es erneut/)).toBeInTheDocument();
+    expect(screen.queryByText(/schema_newer_than_runtime/)).not.toBeInTheDocument();
+  });
+
+  it('M3: a restore refused as newer than this TILL shows the update sentence in the banner', async () => {
+    const { client } = makeClient({
+      list_backups: OK({ backups: [] }),
+      restore_backup: { status: 422, body: { ok: false, error: 'schema_newer_than_runtime', bookGeneration: 8, buildGeneration: 7, path: '/x/data.sqlite' } },
+    });
+    renderPanel(client);
+    await screen.findByText(/Noch keine Sicherungen/);
+    await userEvent.type(screen.getByPlaceholderText(/backups/), '/some/backup.tillbackup');
+    await userEvent.click(screen.getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('Diese Datenbank wurde von einem neueren TILL geschrieben. Aktualisiere TILL und versuche es erneut. Die Datei wurde nicht verändert.');
+    expect(banner).not.toHaveTextContent(/schema_newer_than_runtime/);
+  });
+
+  it('R4-1: a restore SAVED whole before the book moved on says so, never "the file was not changed" nor "try again"', async () => {
+    // The engine's answer when restore_backup committed its new workspace and the book moved on to a
+    // newer TILL before the registry's check after the verb (probe r4-completed-then-moved.mjs restore).
+    const { client, calls } = makeClient({
+      list_backups: OK({ backups: [] }),
+      restore_backup: {
+        status: 422,
+        body: {
+          ok: false, error: 'schema_newer_than_runtime', action: 'restore_backup', bookGeneration: 8, buildGeneration: 7,
+          path: '/x/book.db', partial: true, completed: true,
+          message: 'A newer TILL (generation 8) changed this book right after this call. This TILL knows generation 7. Update TILL before you use the book again.\nThis call was saved before that, but its answer may no longer match the book: /x/book.db',
+        },
+      },
+    });
+    renderPanel(client);
+    await screen.findByText(/Noch keine Sicherungen/);
+    await userEvent.type(screen.getByPlaceholderText(/backups/), '/some/backup.tillbackup');
+    await userEvent.click(screen.getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('Diese Aktion ist gespeichert.');
+    expect(banner).toHaveTextContent('Wiederhole die Aktion nicht, sonst entsteht sie doppelt.');
+    expect(banner).not.toHaveTextContent(/nicht verändert|versuche es erneut/);
+    expect(within(banner).queryByRole('button')).toBeNull();
+    expect(calls.filter(([action]) => action === 'restore_backup')).toHaveLength(1);
+  });
+
+  it('R4-1: a restore refused after writing only part of it says part was saved, never "the file was not changed"', async () => {
+    const { client } = makeClient({
+      list_backups: OK({ backups: [] }),
+      restore_backup: {
+        status: 422,
+        body: { ok: false, error: 'schema_newer_than_runtime', bookGeneration: 8, buildGeneration: 7, path: '/x/book.db', partial: true, completed: false },
+      },
+    });
+    renderPanel(client);
+    await screen.findByText(/Noch keine Sicherungen/);
+    await userEvent.type(screen.getByPlaceholderText(/backups/), '/some/backup.tillbackup');
+    await userEvent.click(screen.getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('Bis dahin hatte dieses TILL einen Teil der Aktion gespeichert, den Rest nicht.');
+    expect(banner).not.toHaveTextContent(/nicht verändert/);
+  });
+
   it('J8.10: the padlock names the right in words, never the capability id', async () => {
     const { client } = makeClient({ list_backups: { status: 422, body: { ok: false, error: 'permission_denied' } } });
     renderPanel(client);

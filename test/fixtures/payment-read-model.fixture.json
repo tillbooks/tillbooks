@@ -161,6 +161,7 @@
       "journalEntryId": "entry_3",
       "reversalEntryId": null,
       "reversedAt": null,
+      "bankLineId": null,
       "allocatedMinor": 108100,
       "onAccountMinor": 1900,
       "allocations": [
@@ -215,6 +216,7 @@
         "journalEntryId": "entry_3",
         "reversalEntryId": null,
         "reversedAt": null,
+        "bankLineId": null,
         "allocatedMinor": 108100,
         "onAccountMinor": 1900,
         "allocations": [

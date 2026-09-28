@@ -191,7 +191,10 @@ test('a ZKB-shaped statement imported into the WRONG account IBAN is refused, an
     idempotencyKey: 'zkb-mismatch',
   });
   assert.equal(res.ok, false, 'an IBAN mismatch must be refused');
-  assert.equal(res.error, 'iban_mismatch');
+  // A39 D-A39.9 (walk B2.2): the file's IBAN is registered NOWHERE in this workspace, so this is a
+  // missing account, not a mismatch between two registered ones: `needs_bank_account` names it.
+  assert.equal(res.error, 'needs_bank_account');
+  assert.ok(typeof res.fileIban === 'string' && res.fileIban.length > 0, 'the refusal names the file IBAN');
   const n = t.ctx.store.db.prepare('SELECT COUNT(*) AS n FROM bank_txn WHERE workspace_id = ?').get(t.workspaceId).n;
   assert.equal(n, 0, 'a refused import must book nothing');
 });

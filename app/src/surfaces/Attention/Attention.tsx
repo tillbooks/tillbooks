@@ -30,7 +30,7 @@ import { useFeedback } from '../../components/FeedbackProvider';
 import { useT, formatMoney } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
-import { EmptyState, ErrorBanner, NoWorkspaceState, Padlock, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, Padlock, Skeleton, refusalText } from '../../components/states';
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { ActionFeedback, type FeedbackTone } from '../../components/ActionFeedback';
 import { Status, type StatusKind } from '../../components/Status';
@@ -320,7 +320,7 @@ export function Attention() {
         const code = res.body.error;
         setActFeedback({
           tone: 'error',
-          message: KNOWN_ACT_ERRORS.has(code) ? t(`attention.act.error.${code}`) : t('attention.act.error.generic'),
+          message: refusalText(t, res.body, { own: 'attention.act.error', known: KNOWN_ACT_ERRORS, fallback: 'attention.act.error.generic' }),
         });
         if (code === 'not_found' || code === 'already_applied' || code === 'already_executed') void load();
         return;
@@ -349,10 +349,9 @@ export function Attention() {
       });
       if (activeWs.current !== ws) return;
       if (isErr(res.body)) {
-        const code = res.body.error;
         setActFeedback({
           tone: 'error',
-          message: KNOWN_ACT_ERRORS.has(code) ? t(`attention.act.error.${code}`) : t('attention.act.error.generic'),
+          message: refusalText(t, res.body, { own: 'attention.act.error', known: KNOWN_ACT_ERRORS, fallback: 'attention.act.error.generic' }),
         });
         return;
       }

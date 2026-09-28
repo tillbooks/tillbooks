@@ -1,12 +1,13 @@
 // A36, live bank feed (spec §8): the money-path invariants a non-author critic must SEE bite.
-//  - the explicit acknowledge step: persist+import BEFORE acknowledge (tripwire 1), a crash
-//    mid-acknowledge re-pulls and lands EXACTLY ONE row (idempotency ON ROWS, not on a returned id);
+//  - the receipt step: persist AND process BEFORE the receipt (tripwire 1), a receipt that never
+//    reached the bank re-offers the data and still lands EXACTLY ONE row (idempotency ON ROWS);
 //  - keystore_locked / keystore_unavailable pre-check refuses sync without regenerating;
 //  - ranked debit matching keeps the exact amount+currency gate mandatory and adds reason signals;
 //  - the batch join proposes the A18 batch (delegate-only) and blocks a total mismatch;
 //  - bank_txn.needs_review fires per-txn (result.needsReviewTxnId), §H-TENANT, credits refuse;
-//  - the schedule linkage + status facets.
-// All offline against the in-process mock EBICS host.
+//  - the scheduled sync is parked (D-A36.10): a rule link is refused, the unlink stays valid.
+// All offline against the in-process bank of `ebics-support.mjs` (contract 2). The deeper crash
+// windows live in `ebics-sync.test.mjs`.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -33,6 +34,7 @@ import {
 } from '../../dist/core/banking/ebics/index.js';
 import { compactReference } from '../../dist/core/banking/pain001.js';
 import { makeContext } from '../../dist/core/context.js';
+import { mockBank, container, chain } from './ebics-support.mjs';
 
 const HOST = { url: 'https://ebics.example/ebics', hostId: 'EBICSHST', partnerId: 'PARTNER01', userId: 'USER0001' };
 const B64 = (s) => Buffer.from(s, 'utf8').toString('base64');
@@ -43,42 +45,13 @@ function must(res, label) {
   return res;
 }
 
-/** An in-process mock EBICS host that records call order and returns ackTokens (A36 port). */
-function mockHost(cfg = {}) {
-  const calls = { download: [], acknowledge: [] };
-  const order = [];
-  const BANK_HASHES = { electronicSignature: 'bankES1', authentication: 'bankAU1', encryption: 'bankEN1' };
-  return {
-    calls,
-    order,
-    BANK_HASHES,
-    port: {
-      sendKeys: () => ({ ok: true }),
-      fetchBankKeys: () => ({ ok: true, bankKeyHashes: BANK_HASHES }),
-      download(req) {
-        calls.download.push(req.service);
-        order.push(`download:${req.service}`);
-        return { ok: true, files: (cfg.files && cfg.files[req.service]) || [], ackToken: `ack-${req.service}` };
-      },
-      acknowledge(req) {
-        calls.acknowledge.push(req.ackToken);
-        order.push(`acknowledge:${req.ackToken}`);
-        if (cfg.acknowledgeThrows) throw new Error('crash mid-acknowledge (receipt not sent)');
-        return { ok: true };
-      },
-      upload: () => ({ ok: true }),
-      suspend: () => ({ ok: true }),
-    },
-  };
-}
-
-function ctxWith(t, host, keystore) {
+function ctxWith(t, bank, keystore) {
   return makeContext(t.store, {
     workspaceId: t.workspaceId,
     actor: 'user_1',
     clock: t.clock,
     ids: t.ids,
-    ...(host ? { ebicsTransport: host.port } : {}),
+    ...(bank ? { ebicsTransport: bank.port } : {}),
     ...(keystore ? { ebicsKeystore: keystore } : {}),
   });
 }
@@ -87,10 +60,20 @@ function mkBankAccount(ctx, acc) {
   return must(createBankAccount(ctx, { name: 'Konto', iban: PLAIN_IBAN, ledgerAccountId: acc('1020'), idempotencyKey: 'ba' }), 'ba').bankAccountId;
 }
 
+/** The real ceremony against the in-process bank: connect, fetch the bank keys, confirm the reviewed set. */
 function activeChannel(ctx, bankAccountId, seed) {
   const c1 = must(connectBankChannel(ctx, { host: HOST, routeBankAccountIds: [bankAccountId], confirm: true, idempotencyKey: `${seed}-1` }), 'connect');
-  must(connectBankChannel(ctx, { connectionId: c1.connectionId, confirmBankKeys: true, confirm: true, idempotencyKey: `${seed}-2` }), 'activate');
+  const fetched = must(connectBankChannel(ctx, { connectionId: c1.connectionId, confirm: true }), 'fetch');
+  must(
+    connectBankChannel(ctx, { connectionId: c1.connectionId, confirmBankKeys: true, expectedBankKeyHashes: fetched.bankKeyHashes, confirm: true }),
+    'activate',
+  );
   return c1.connectionId;
+}
+
+/** One synthetic day-end statement for the PLAIN_IBAN account (numbered, with chained balances). */
+function dayEnd(seq, opening, entries) {
+  return chain({ iban: IBAN, firstSeq: seq, firstDate: '2026-07-01', opening, days: [entries] })[0].xml;
 }
 
 /** A camt.053 with one DBIT of `amountMajor`, an optional payer name, value date, and Btch/PmtInfId. */
@@ -129,41 +112,42 @@ function txnCount(store, workspaceId) {
   return store.db.prepare('SELECT COUNT(*) AS n FROM bank_txn WHERE workspace_id = ?').get(workspaceId).n;
 }
 
-// --- the acknowledge step (tripwire 1 + idempotency on ROWS) --------------------------------------
+// --- the receipt step (tripwire 1 + idempotency on ROWS) ------------------------------------------
 
-test('acknowledge is sent AFTER the statement is persisted and imported (tripwire 1)', () => {
+test('the receipt is sent AFTER the statement is persisted and imported (tripwire 1)', () => {
   const t = setup();
   const acc = mkBankAccount(t.ctx, t.acc);
-  const host = mockHost({ files: { statements: [{ msgName: 'camt.053', contentBase64: B64(camtDebit('STMT-A', '42.50')) }] } });
-  const ctx = ctxWith(t, host);
+  const bank = mockBank();
+  const ctx = ctxWith(t, bank);
   const conn = activeChannel(ctx, acc, 'ack');
+  bank.offer(container([dayEnd(1, 100000, [{ minor: -4250 }])]));
+  const atReceipt = [];
+  bank.state.onAck = () => atReceipt.push(txnCount(t.store, t.workspaceId));
 
   const sync = must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'sync-1' }), 'sync');
-  assert.equal(sync.files.find((f) => f.routing === 'matched').importOk, true);
-  // Every download precedes every acknowledge: the persist+import all ran before any receipt.
-  const firstAck = host.order.findIndex((o) => o.startsWith('acknowledge:'));
-  const lastDownload = host.order.map((o) => o.startsWith('download:')).lastIndexOf(true);
-  assert.ok(firstAck > lastDownload, `acknowledge must follow every download: ${host.order.join(',')}`);
-  assert.ok(host.calls.acknowledge.includes('ack-statements'), 'the statements token was acknowledged');
+  assert.deepEqual(sync.statements.map((s) => s.outcome), ['imported']);
+  assert.deepEqual(atReceipt, [1], 'when the bank sees the receipt the line is already committed');
+  const kinds = bank.log.map((e) => e.kind);
+  assert.ok(kinds.indexOf('BTD-ACK') > kinds.lastIndexOf('BTD'), `the receipt follows the download: ${kinds.join(',')}`);
 });
 
-test('a crash mid-acknowledge re-pulls and lands EXACTLY ONE row (idempotency on ROWS)', () => {
+test('a receipt that never reached the bank re-offers the data and still lands EXACTLY ONE row (idempotency on ROWS)', () => {
   const t = setup();
   const acc = mkBankAccount(t.ctx, t.acc);
-  const files = { statements: [{ msgName: 'camt.053', contentBase64: B64(camtDebit('STMT-CRASH', '42.50')) }] };
+  const bank = mockBank();
+  const ctx = ctxWith(t, bank);
+  const conn = activeChannel(ctx, acc, 'crash');
+  bank.offer(container([dayEnd(1, 100000, [{ minor: -4250 }])]));
 
-  // First sync: acknowledge THROWS after the statement is already persisted+imported.
-  const host1 = mockHost({ files, acknowledgeThrows: true });
-  const ctx1 = ctxWith(t, host1);
-  const conn = activeChannel(ctx1, acc, 'crash');
-  must(syncBankChannel(ctx1, { connectionId: conn, idempotencyKey: 'sync-crash-a' }), 'sync-1 survives the ack crash');
+  // First sync: the receipt throws after the statement is already persisted and imported.
+  bank.state.throwOnAck = true;
+  must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'sync-crash-a' }), 'sync-1 survives the lost receipt');
   assert.equal(txnCount(t.store, t.workspaceId), 1, 'one row after the first sync');
 
-  // The bank still offers the un-acknowledged statement: a re-pull (new idempotency key) re-imports.
-  const host2 = mockHost({ files });
-  const ctx2 = ctxWith(t, host2);
-  must(syncBankChannel(ctx2, { connectionId: conn, idempotencyKey: 'sync-crash-b' }), 'sync-2 (the re-pull)');
-  assert.equal(txnCount(t.store, t.workspaceId), 1, 'STILL one row: A20 dedupe no-oped the re-import');
+  // The bank still offers the statement: a re-pull (a new idempotency key) adds nothing.
+  bank.state.throwOnAck = false;
+  must(syncBankChannel(ctx, { connectionId: conn, idempotencyKey: 'sync-crash-b' }), 'sync-2 (the re-pull)');
+  assert.equal(txnCount(t.store, t.workspaceId), 1, 'STILL one row: the member was final, nothing re-imported');
 });
 
 // --- keystore pre-check (US-A36.2) ----------------------------------------------------------------
@@ -172,16 +156,18 @@ test('sync refuses on a locked keystore and an unavailable one, without regenera
   const t = setup();
   const acc = mkBankAccount(t.ctx, t.acc);
   // Bring the channel active with a ready keystore first.
-  const host = mockHost({ files: { statements: [] } });
-  const conn = activeChannel(ctxWith(t, host), acc, 'ks');
+  const bank = mockBank();
+  const conn = activeChannel(ctxWith(t, bank), acc, 'ks');
+  const before = bank.log.length;
 
-  const locked = syncBankChannel(ctxWith(t, host, keystoreStub('locked')), { connectionId: conn, idempotencyKey: 'ks-l' });
+  const locked = syncBankChannel(ctxWith(t, bank, keystoreStub('locked')), { connectionId: conn, idempotencyKey: 'ks-l' });
   assert.equal(locked.ok, false);
   assert.equal(locked.error, 'keystore_locked');
 
-  const gone = syncBankChannel(ctxWith(t, host, keystoreStub('unavailable')), { connectionId: conn, idempotencyKey: 'ks-u' });
+  const gone = syncBankChannel(ctxWith(t, bank, keystoreStub('unavailable')), { connectionId: conn, idempotencyKey: 'ks-u' });
   assert.equal(gone.ok, false);
   assert.equal(gone.error, 'keystore_unavailable');
+  assert.equal(bank.log.length, before, 'nothing was sent to the bank');
 });
 
 // --- ranked debit matching (US-A36.5) -------------------------------------------------------------
@@ -302,16 +288,15 @@ test('set_camt_matching tunes the review threshold so a medium match still flags
   assert.equal(after.needsReview, true, 'a medium match below the raised threshold needs review');
 });
 
-// --- schedule linkage (US-A36.3) ------------------------------------------------------------------
+// --- the scheduled sync is parked (D-A36.10) -----------------------------------------------------
 
-test('set_bank_sync_schedule links a rule, the status shows it, and retire clears it', () => {
+test('set_bank_sync_schedule refuses a rule (sync_schedule_parked); the unlink stays valid; the status has no schedule', () => {
   const t = setup();
   const acc = mkBankAccount(t.ctx, t.acc);
-  const host = mockHost({ files: { statements: [] } });
-  const ctx = ctxWith(t, host);
+  const bank = mockBank();
+  const ctx = ctxWith(t, bank);
   const conn = activeChannel(ctx, acc, 'sch');
 
-  // A minimal schedule rule row (the panel creates it via G01's verbs; here we insert one directly).
   const ruleId = t.ids.next('arule');
   t.store.db
     .prepare(
@@ -320,26 +305,22 @@ test('set_bank_sync_schedule links a rule, the status shows it, and retire clear
     )
     .run(ruleId, t.workspaceId, JSON.stringify({ connectionId: conn }), t.clock.now(), t.clock.now());
 
-  must(setBankSyncSchedule(ctx, { connectionId: conn, ruleId, idempotencyKey: 'link-1' }), 'link');
+  const linked = setBankSyncSchedule(ctx, { connectionId: conn, ruleId, idempotencyKey: 'link-1' });
+  assert.equal(linked.ok, false);
+  assert.equal(linked.error, 'sync_schedule_parked');
+  assert.equal(t.store.db.prepare('SELECT sync_rule_id FROM ebics_connection WHERE id = ?').get(conn).sync_rule_id, null);
+
+  // An older build's stored pointer: the unlink (no ruleId) clears it, idempotently.
+  t.store.db.prepare('UPDATE ebics_connection SET sync_rule_id = ? WHERE id = ?').run(ruleId, conn);
+  const unlinked = must(setBankSyncSchedule(ctx, { connectionId: conn, idempotencyKey: 'unlink-1' }), 'unlink');
+  assert.equal(unlinked.syncRuleId, null);
+  assert.deepEqual(must(setBankSyncSchedule(ctx, { connectionId: conn, idempotencyKey: 'unlink-1' }), 'replay'), unlinked);
+  assert.equal(t.store.db.prepare('SELECT sync_rule_id FROM ebics_connection WHERE id = ?').get(conn).sync_rule_id, null);
+
   const chan = must(getBankChannelStatus(ctx, {}), 'status').channels[0];
-  assert.equal(chan.schedule.ruleId, ruleId);
-  assert.equal(chan.schedule.cadence, 'schedule.daily');
-  assert.equal(chan.schedule.enabled, true);
+  assert.equal(chan.schedule, undefined, 'no cadence facet: the sync is on demand only');
   assert.ok(chan.keystore, 'the status carries a keystore facet');
 
-  // A non-bank_sync rule is refused (refuse-don't-guess).
-  const badRule = t.ids.next('arule');
-  t.store.db
-    .prepare(
-      `INSERT INTO automation_rule (id, workspace_id, name, trigger_event, condition, action_tool, action_input, enabled, archived, created_by, created_at, updated_at)
-       VALUES (?, ?, 'Nope', 'schedule.daily', 'null', 'post_entry', '{}', 1, 0, 'user_1', ?, ?)`,
-    )
-    .run(badRule, t.workspaceId, t.clock.now(), t.clock.now());
-  const bad = setBankSyncSchedule(ctx, { connectionId: conn, ruleId: badRule, idempotencyKey: 'link-bad' });
-  assert.equal(bad.ok, false, 'only a bank_sync rule may drive the schedule');
-
-  // Retire clears the pointer.
   must(disconnectBankChannel(ctx, { connectionId: conn, mode: 'retire', confirm: true, idempotencyKey: 'ret-1' }), 'retire');
-  const after = must(getBankChannelStatus(ctx, {}), 'status2').channels[0];
-  assert.equal(after.schedule.ruleId, null, 'retire clears sync_rule_id');
+  assert.equal(must(getBankChannelStatus(ctx, {}), 'status2').channels[0].state, 'retired');
 });

@@ -77,7 +77,9 @@ export function importContacts(
     let skipped = 0;
     const duplicates: { row: number; candidateIds: string[] }[] = [];
 
-    const tx = ctx.store.db.transaction(() => {
+    // Through `store.tx`, not a raw `db.transaction` (M3, critic R1 F6): the generation guard reads
+    // the marker under the write lock first, so an import never lands in a book a newer TILL migrated.
+    const tx = () => ctx.store.tx(() => {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         if (row === null || typeof row !== 'object') {

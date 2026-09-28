@@ -40,6 +40,7 @@ import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
+import { bankLineHref } from './PaymentError';
 import { Segmented } from '../../components/Segmented';
 import { Status } from '../../components/Status';
 import { useCan, CAP } from '../../lib/capabilities';
@@ -201,15 +202,21 @@ export function Payments() {
    * The row's other verbs, behind its ONE overflow (K-21). Stornieren only for a payment that is not
    * already reversed (`already_reversed` is unreachable from the GUI by construction), destructive and
    * so last; the F03 Zahlungsavis for an OUTGOING payment when the user holds portal.manage (absent
-   * otherwise, never shown and then rejected).
+   * otherwise, never shown and then rejected). A payment a bank line holds (A39 L3) is undone on that
+   * line: the row offers the line instead of a Storno the engine would refuse `owned_by`.
    */
   const paymentActions = (payment: Payment): OverflowMenuItem[] => {
     if (payment.status === 'reversed') return [];
+    const bankLineId = payment.bankLineId ?? null;
     return [
       ...(canAdvise && payment.direction === 'outgoing'
         ? [{ key: 'advice', label: t('payment.createAdvice'), onSelect: () => void createAdvice(payment) }]
         : []),
-      ...(canPay ? [{ key: 'reverse', label: t('payment.reverse'), onSelect: () => setReversing(payment), danger: true }] : []),
+      ...(bankLineId !== null
+        ? [{ key: 'bank-line', label: t('payment.showBankLine'), onSelect: () => navigate(bankLineHref(bankLineId)) }]
+        : canPay
+          ? [{ key: 'reverse', label: t('payment.reverse'), onSelect: () => setReversing(payment), danger: true }]
+          : []),
     ];
   };
 

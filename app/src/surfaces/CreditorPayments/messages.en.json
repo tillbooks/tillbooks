@@ -56,7 +56,7 @@
     "download": "Download file",
     "transmitNote": {
       "manual": "This file is not sent automatically: upload it to your e-banking yourself.",
-      "channel": "A transmission channel is configured: transmission runs through its own dedicated approval."
+      "ebanking": "The EBICS channel fetches statements only. Upload this file in your bank's e-banking and release the payment there; it is paid once a statement brings the debit."
     },
     "markPaidAction": "Mark paid",
     "markPaid": {
@@ -71,11 +71,6 @@
     "newBatch": "New payment run",
     "paidOn": "Paid on {date}.",
     "toBillsLink": "Go to vendor bills",
-    "transmit": "Send to bank",
-    "transmitLocked": "Sending to the bank needs the payment capability.",
-    "pendingRelease": "Uploaded to the bank. Release it in your bank's own approval flow to complete the payment; nothing is booked as paid until the debit appears on a statement.",
-    "transmitDegraded": "No EBICS channel is available, so nothing was sent: upload the downloaded file to your e-banking as usual.",
-    "transmitError": "The transmission could not be completed. The batch is unchanged; nothing was paid.",
     "pickAccountInCurrency": "Choose an account in {currency}"
   },
   "help": {

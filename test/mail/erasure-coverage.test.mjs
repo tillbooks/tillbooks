@@ -122,7 +122,7 @@ test('E04/C00 erasure-coverage drift guard: every E04 table appears in the purge
   assert.ok(purge.includes('custom_field_value'), 'the 6b label values are not purged');
   // And C00 really calls it inside the anonymise transaction, not after it.
   const c00 = readFileSync(fileURLToPath(new URL('../../src/core/sales/contactMerge.ts', import.meta.url)), 'utf8');
-  const txBlock = /const tx = ctx\.store\.db\.transaction\(\(\) => \{[\s\S]*?\}\);\s*tx\(\);/.exec(
+  const txBlock = /const tx = (?:\(\) => ctx\.store\.tx|ctx\.store\.db\.transaction)\(\(\) => \{[\s\S]*?\}\);\s*tx\(\);/.exec(
     /export function anonymiseContact[\s\S]*$/.exec(c00)?.[0] ?? '',
   )?.[0];
   assert.ok(txBlock !== undefined, 'the anonymise transaction block was not found');

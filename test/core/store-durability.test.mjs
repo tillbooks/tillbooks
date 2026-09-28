@@ -495,7 +495,7 @@ const DRIVER_MODULES = {
 const LISTED_OPENS = {
   'src/core/store/sqlite-store.ts#constructor': [
     {
-      call: 'new Database(freshMemoryTemplate(), { timeout })',
+      call: 'new GuardedDatabase(freshMemoryTemplate(), { timeout })',
       reason: 'deserializes the pre-built in-memory template Buffer: an anonymous in-memory database, no file',
     },
   ],
@@ -583,6 +583,13 @@ function analyse(rel, text) {
     }
     return x;
   };
+  // The expression a class `extends`, if any.
+  const extendsOf = (cls) => {
+    for (const clause of cls.heritageClauses ?? []) {
+      if (clause.token === ts.SyntaxKind.ExtendsKeyword) return clause.types[0]?.expression;
+    }
+    return undefined;
+  };
   // The names that act as `require` here: `require` itself, whatever `createRequire(...)` returned, and
   // any alias of either. Filled to a fixpoint below, before any load is read.
   const requireNames = new Set(['require']);
@@ -603,6 +610,11 @@ function analyse(rel, text) {
     const x = unwrap(e);
     if (x === undefined) return null;
     if (ts.isIdentifier(x)) return bindings.get(x.text) ?? null;
+    // `class extends Database {}`: a subclass constructs a driver connection exactly as its base does.
+    if (ts.isClassExpression(x)) {
+      const base = extendsOf(x);
+      return base === undefined ? null : valueOf(base);
+    }
     const load = loadOf(x);
     if (load !== null) return load.dynamic ? namespaceValueOf(load.spec) : defaultValueOf(load.spec);
     if (ts.isPropertyAccessExpression(x) || ts.isElementAccessExpression(x)) {
@@ -666,6 +678,10 @@ function analyse(rel, text) {
   const declarations = [];
   const collect = (node) => {
     if (ts.isVariableDeclaration(node) && node.initializer !== undefined) declarations.push({ name: node.name, init: node.initializer });
+    // `class D extends Database {}` binds D to whatever Database is, the way `const D = Database` does.
+    if (ts.isClassDeclaration(node) && node.name !== undefined && extendsOf(node) !== undefined) {
+      declarations.push({ name: node.name, init: extendsOf(node) });
+    }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(node.left)) {
       declarations.push({ name: node.left, init: node.right });
     }
@@ -781,6 +797,9 @@ function analyse(rel, text) {
       if (bindings.has((node.propertyName ?? node.name).text)) escapes.push({ line: lineOf(node), form: `export { ${node.getText(source)} }` });
     }
     if (ts.isExportAssignment(node) && valueOf(node.expression) !== null) escapes.push({ line: lineOf(node), form: 'export default' });
+    if (ts.isClassDeclaration(node) && exported(node) && extendsOf(node) !== undefined && valueOf(extendsOf(node)) !== null) {
+      escapes.push({ line: lineOf(node), form: `export class ${node.name?.text ?? 'default'} extends the driver` });
+    }
     if (ts.isVariableStatement(node) && exported(node)) {
       for (const d of node.declarationList.declarations) {
         if (d.initializer !== undefined && valueOf(d.initializer) !== null) escapes.push({ line: lineOf(d), form: `export const ${d.name.getText(source)}` });
@@ -851,6 +870,10 @@ test('the guard`s analysis sees every way to open a database, and reads read-onl
     ['node:sqlite read-only (control)', `import { DatabaseSync } from 'node:sqlite';\nexport const f = (p) => new DatabaseSync(p, { readOnly: true });`, 'read-only'],
     ['in-memory (control)', `import Database from 'better-sqlite3';\nexport const f = () => new Database(':memory:');`, 'in-memory'],
     ['durable on the next statement (control)', `import Database from 'better-sqlite3';\nexport function f(p) {\n  const db = new Database(p);\n  applyDurableSync(db);\n  return db;\n}`, 'durable'],
+    ['a subclass of the driver', `import Database from 'better-sqlite3';\nclass D extends Database {}\nexport const f = (p) => new D(p);`, 'writable'],
+    ['a subclass as a class expression', `import Database from 'better-sqlite3';\nconst D = class extends Database {};\nexport const f = (p) => new D(p);`, 'writable'],
+    ['a subclass of a subclass', `import Database from 'better-sqlite3';\nclass A extends Database {}\nclass B extends A {}\nexport const f = (p) => new B(p);`, 'writable'],
+    ['a subclass, durable on the next statement (control)', `import Database from 'better-sqlite3';\nclass D extends Database {}\nexport function f(p) {\n  const db = new D(p);\n  applyDurableSync(db);\n  return db;\n}`, 'durable'],
   ];
   for (const [label, text, expected] of cases) {
     const { loads, opens } = analyse('synthetic.mjs', text);
@@ -877,6 +900,7 @@ test('the guard`s analysis sees every way to open a database, and reads read-onl
     `import Database from 'better-sqlite3';\nexport const Driver = Database;`,
     `module.exports = require('better-sqlite3');`,
     `export { default } from 'better-sqlite3';`,
+    `import Database from 'better-sqlite3';\nexport class Driver extends Database {}`,
   ];
   for (const text of escapes) assert.equal(analyse('synthetic.mjs', text).escapes.length, 1, `must see the driver escape in: ${text}`);
   assert.deepEqual(analyse('synthetic.ts', `import type Database from 'better-sqlite3';\nexport type Db = Database.Database;`).loads, [], 'a type-only import is not a load');

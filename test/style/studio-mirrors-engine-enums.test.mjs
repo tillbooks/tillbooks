@@ -204,6 +204,31 @@ const MIRRORS = [
     studio: { file: 'app/src/surfaces/Checklists/model.ts', symbol: 'ItemStatus' },
     note: 'G22 leg 2 (spec §10.1). The derived item status the run detail renders a word for; `excluded` is derived from a choice and never stored, and a Studio that lacks it would render an excluded row as open.',
   },
+  {
+    engine: { module: 'dist/core/banking/bankLines.js', export: 'BANK_LINE_STATES' },
+    studio: { file: 'app/src/surfaces/Bank/model.ts', symbol: 'BANK_LINE_STATES' },
+    note: 'A39 / A2. The bank inbox has one tab per state and a word per state (bankInbox.state.*); a state the Studio lacks would render as its raw id on a decided row.',
+  },
+  {
+    engine: { module: 'dist/core/banking/bankLines.js', export: 'BANK_LINE_IGNORE_REASONS' },
+    studio: { file: 'app/src/surfaces/Bank/model.ts', symbol: 'BANK_LINE_IGNORE_REASONS' },
+    note: 'A39 / A2. The ignore form offers exactly these reasons, each with a label and a hint; the engine refuses any other with invalid_input.',
+  },
+  {
+    engine: { module: 'dist/core/banking/bankProposals.js', export: 'BANK_PROPOSAL_CERTAINTIES' },
+    studio: { file: 'app/src/surfaces/Bank/model.ts', symbol: 'BANK_PROPOSAL_CERTAINTIES' },
+    note: 'A39 / A2. The row mark and the facet ("Sicher", "Brauchen dich") read the certainty; one the Studio lacks would fall into no facet.',
+  },
+  {
+    engine: { module: 'dist/core/banking/bankProposals.js', export: 'BANK_PROPOSAL_REASONS' },
+    studio: { file: 'app/src/surfaces/Bank/model.ts', symbol: 'BANK_PROPOSAL_REASONS' },
+    note: 'A39 / A2. Every reason code has a sentence in both locales (bankInbox.reason.*); a new engine reason would otherwise reach the panel as its raw code.',
+  },
+  {
+    engine: { module: 'dist/core/banking/bankLines.js', export: 'BANK_LINE_REMAINDER_MODES' },
+    studio: { file: 'app/src/surfaces/Bank/model.ts', symbol: 'BANK_LINE_REMAINDER_MODES' },
+    note: 'A39 / A2. The settlement consequence offers leave_open and write_off for a short payment and names on_account for a surplus.',
+  },
 ];
 
 /**

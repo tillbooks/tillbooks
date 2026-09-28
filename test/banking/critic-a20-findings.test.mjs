@@ -26,6 +26,7 @@ import {
   listReconciliation,
   applyQrMatch,
   setQrAutoApply,
+  bookBankLine,
 } from '../../dist/core/banking/index.js';
 import { buildQrrReference } from '../../dist/core/payments/reference.js';
 import { postEntry } from '../../dist/core/ledger/postEntry.js';
@@ -250,23 +251,29 @@ test('[FIXED A20-C1] the overlap never mints a second queue row, so it cannot be
   assert.equal(queue.length, 1, 'FIXED: the overlapping statement minted no second A21 queue row');
 
   const netBefore = bankNet(t);
-  ok(applyQrMatch(t.ctx, { creditId: queue[0].id, invoiceId: invoice.id, mode: 'full', confirmed: true, idempotencyKey: 'ap1' }), 'apply 1');
+  // A39 L2: the one line is booked on the bank inbox (the A21 verbs refuse use_bank_inbox on it).
+  const line = rows(t, 'SELECT id FROM bank_txn WHERE workspace_id = ? ORDER BY rowid');
+  assert.equal(line.length, 1, 'one line for the one booking');
+  ok(bookBankLine(t.ctx, { bankTxnId: line[0].id, target: { kind: 'open_item', documentId: invoice.id }, idempotencyKey: 'ap1' }), 'book 1');
   const moved = bankNet(t) - netBefore;
   assert.equal(moved, GROSS_MINOR, 'the single real credit moves the bank account exactly once');
 });
 
-test('[FIXED A20-C1] a camt.054 credit notification and the day-end camt.053 book the money ONCE', () => {
+test('[A39 L7 (c), D140] a camt.054 is refused at the door, and the day-end camt.053 books the money ONCE', () => {
   const t = world();
   const entry = { entryRef: 'NTF-7', amountMinor: 25000, creditDebit: 'CRDT' };
-  // The bank notifies the credit intraday (camt.054), then delivers it again on the end-of-day
-  // camt.053. This is the ORDINARY operating shape for a bank that offers both feeds.
-  ok(
+  // The bank notifies the credit intraday (camt.054), then delivers it again on the end-of-day camt.053.
+  // camt.054 is cut for go-live (D140): the notification is refused and writes nothing.
+  const before = moneyCounts(t);
+  fails(
     importCamt(t.ctx, {
       bankAccountId: t.bankAccountId,
       xml: camt({ messageType: 'camt054', statementId: 'NTFCN-1', entries: [entry] }),
       idempotencyKey: 'ntf',
     }),
+    'camt054_refused',
   );
+  assert.deepEqual(moneyCounts(t), before, 'the refused camt.054 wrote nothing');
   const second = ok(
     importCamt(t.ctx, {
       bankAccountId: t.bankAccountId,
@@ -274,14 +281,10 @@ test('[FIXED A20-C1] a camt.054 credit notification and the day-end camt.053 boo
       idempotencyKey: 'day',
     }),
   );
-  // FIXED (D81): both messages carry the same NtryRef (`NTF-7`), so the second import's entry is
-  // recognised as the same booking and skipped, even though the two STATEMENTS (camt.054 vs
-  // camt.053) are obviously different messages.
-  assert.equal(second.txnCount, 0);
-  assert.deepEqual(second.skipped, [{ entryRef: 'NTF-7', reason: 'duplicate_entry' }]);
+  assert.equal(second.txnCount, 1);
   const c = moneyCounts(t);
-  assert.equal(c.txns, 1, 'FIXED: the same credit is not imported from both feeds');
-  assert.equal(c.credits, 1, 'FIXED: queued exactly once');
+  assert.equal(c.txns, 1, 'the credit is imported once, from the statement');
+  assert.equal(c.credits, 1, 'queued exactly once');
 });
 
 test('[FIXED A20-C2] an AMENDED statement (same id/seq, corrected amount) refuses statement_amended, naming the change', () => {
@@ -368,9 +371,10 @@ test("a credit's board status follows the A21 queue row after an override (D77 j
   assert.equal(view.classification, 'incoming_credit');
   assert.notEqual(view.creditId, null, 'the board names the A21 row that decides this credit');
 
-  ok(applyQrMatch(t.ctx, { creditId: view.creditId, invoiceId: invoice.id, mode: 'full', confirmed: true, idempotencyKey: 'ap' }));
+  // A39 L2: the line is decided on the bank inbox; the board and the A21 row both follow the line.
+  ok(bookBankLine(t.ctx, { bankTxnId: view.bankTxnId, target: { kind: 'open_item', documentId: invoice.id }, idempotencyKey: 'ap' }));
   const after = ok(listReconciliation(t.ctx, {}));
-  assert.equal(after.matched.length, 1, 'the board follows the A21 decision without A20 storing a status');
+  assert.equal(after.matched.length, 1, 'the board follows the line decision without A20 storing a status');
 });
 
 // ==================================================================================================
@@ -506,7 +510,10 @@ test('a debit confirmed twice under different keys links and pays exactly once',
   const txnId = rows(t, 'SELECT id FROM bank_txn WHERE workspace_id = ?')[0].id;
   ok(confirmCamtMatch(t.ctx, { bankTxnId: txnId, vendorBillId: bill, idempotencyKey: 'c1' }));
   const mid = moneyCounts(t);
-  ok(confirmCamtMatch(t.ctx, { bankTxnId: txnId, vendorBillId: bill, idempotencyKey: 'c2-different' }));
+  // A39 (walk B14.3): a fresh key on a booked line is a second decision, refused and named, not echoed.
+  const second = confirmCamtMatch(t.ctx, { bankTxnId: txnId, vendorBillId: bill, idempotencyKey: 'c2-different' });
+  assert.equal(second.ok, false);
+  assert.equal(second.error, 'line_not_open');
   assert.deepEqual(moneyCounts(t), mid, 'a second confirm under a fresh key must write nothing');
 });
 
@@ -712,7 +719,6 @@ test('[FIXED A20-C6] an entry the parser cannot read is NAMED, not silently drop
 test('[NEW] a legitimate PDNG skip is reported the same honest way, never invisible', () => {
   const t = world();
   const xml = camt({
-    messageType: 'camt054',
     statementId: 'PDNG-1',
     entries: [{ entryRef: 'PENDING-1', amountMinor: 5000, creditDebit: 'DBIT', status: 'PDNG' }],
   });
@@ -748,6 +754,8 @@ test('a foreign-currency statement on a CHF Bankkonto: import, and what it refus
   if (res.ok) {
     const txn = rows(t, 'SELECT id, currency FROM bank_txn WHERE workspace_id = ?')[0];
     assert.equal(txn.currency, 'EUR', 'the bank_txn keeps its own currency verbatim (§H-FX)');
+    // A39: a EUR line on a CHF Bankkonto cannot book into the CHF bank account's ledger account (a
+    // line in the ACCOUNT's own foreign currency can, at the stored rate); still currency_mismatch.
     fails(
       createEntryForTxn(t.ctx, { bankTxnId: txn.id, contraAccountId: t.acc('3000'), idempotencyKey: 'fxe' }),
       'currency_mismatch',
@@ -770,7 +778,8 @@ test('an IBAN mismatch refuses and writes nothing; an entry with no reference st
       xml: camt({ statementId: 'IB-1', iban: 'CH5604835012345678009', entries: [{ entryRef: 'E', amountMinor: 100, creditDebit: 'DBIT' }] }),
       idempotencyKey: 'ib',
     }),
-    'iban_mismatch',
+    // A39 D-A39.9: an IBAN registered nowhere is a missing account, not a mismatch between two.
+    'needs_bank_account',
   );
   assert.deepEqual(moneyCounts(t), before, 'a refused import writes nothing');
 
@@ -968,8 +977,9 @@ test('[FIXED A20-C9] a MULTI-PAGE camt.053 keeps every movement; page number is 
  *  default so the fan-out is legal (a separate test covers the sum-mismatch refusal). */
 function batchXml({ amountEach = 10000, refs = ['AAA', 'BBB', 'CCC'], totalOverride } = {}) {
   const total = totalOverride ?? amountEach * refs.length;
-  return `<Document><BkToCstmrDbtCdtNtfctn><GrpHdr><MsgId>B</MsgId></GrpHdr>
-<Ntfctn><Id>NTF-BATCH</Id><ElctrncSeqNb>1</ElctrncSeqNb><Acct><Id><IBAN>${IBAN}</IBAN></Id></Acct>
+  // A camt.053 since A39 L7 (c): a camt.054 is refused at import (D140); the batch shape is the same.
+  return `<Document><BkToCstmrStmt><GrpHdr><MsgId>B</MsgId></GrpHdr>
+<Stmt><Id>NTF-BATCH</Id><ElctrncSeqNb>1</ElctrncSeqNb><Acct><Id><IBAN>${IBAN}</IBAN></Id></Acct>
 <Ntry><NtryRef>BATCH-1</NtryRef><Amt Ccy="CHF">${(total / 100).toFixed(2)}</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts>
 <BookgDt><Dt>2026-07-06</Dt></BookgDt><ValDt><Dt>2026-07-06</Dt></ValDt>
 <NtryDtls><Btch><NbOfTxs>${refs.length}</NbOfTxs></Btch>
@@ -979,7 +989,7 @@ ${refs
       `<TxDtls><Amt Ccy="CHF">${(amountEach / 100).toFixed(2)}</Amt><RmtInf><Strd><CdtrRefInf><Tp><CdOrPrtry><Prtry>QRR</Prtry></CdOrPrtry></Tp><Ref>REF-${r}</Ref></CdtrRefInf></Strd></RmtInf><RltdPties><Dbtr><Pty><Nm>Payer ${i}</Nm></Pty></Dbtr></RltdPties></TxDtls>`,
   )
   .join('')}
-</NtryDtls></Ntry></Ntfctn></BkToCstmrDbtCdtNtfctn></Document>`;
+</NtryDtls></Ntry></Stmt></BkToCstmrStmt></Document>`;
 }
 
 test('[FIXED A20-C10] a BATCH entry fans out into one bank_txn per TxDtls, none vanish', () => {
@@ -1016,17 +1026,20 @@ test('[FIXED A20-C10] a BATCH entry fans out into one bank_txn per TxDtls, none 
   ]);
 });
 
-test('[FIXED A20-C10] a batch whose TxDtls do NOT sum to the entry amount is refused, not silently fanned out wrong', () => {
-  // D81: "asserting that the fan-out sums exactly to the entry amount and refusing the import when
-  // it does not". Entry says 300.00; the three TxDtls only sum to 290.00 (a malformed or truncated
-  // export this parser cannot safely account for to the Rappen).
+test('[A39 L7 (b)] a batch whose TxDtls do NOT sum to the entry amount is ONE line of the entry amount, never fanned out wrong', () => {
+  // Entry says 300.00; the two TxDtls only sum to 200.00. The bank's entry amount is the booked fact:
+  // the batch is ONE line of it, keyed like a single-line entry, and the file is not refused.
   const bad = batchXml({ amountEach: 10000, refs: ['AAA', 'BBB'], totalOverride: 30000 });
-  fails(parseCamt(bad), 'schema_invalid');
+  const parsed = ok(parseCamt(bad));
+  assert.deepEqual(
+    parsed.statement.entries.map((e) => [e.entryKey, e.amountMinor, e.referenceValue]),
+    [['nr:BATCH-1', 30000, null]],
+  );
 
   const t = world();
-  const before = moneyCounts(t);
-  fails(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: bad, idempotencyKey: 'bad-batch' }), 'schema_invalid');
-  assert.deepEqual(moneyCounts(t), before, 'a refused batch import writes nothing at all');
+  const imported = ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: bad, idempotencyKey: 'bad-batch' }));
+  assert.equal(imported.txnCount, 1, 'one line of the entry amount');
+  assert.deepEqual(rows(t, 'SELECT amount_minor FROM bank_txn WHERE workspace_id = ?'), [{ amount_minor: 30000 }]);
 });
 
 test('[NEW] allowDuplicateEntries admits a genuine same-day twin the identity key would otherwise skip', () => {

@@ -20,10 +20,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
-import { isErr } from '../../lib/client';
+import { isErr, type Err } from '../../lib/client';
 import { useCapabilities, CAP } from '../../lib/capabilities';
 import { useT, formatDate } from '../../i18n';
-import { PermissionDenied, Skeleton } from '../../components/states';
+import { PermissionDenied, Skeleton, refusalText } from '../../components/states';
 
 function newIdempotencyKey(): string {
   return crypto.randomUUID();
@@ -65,23 +65,18 @@ type DiffState =
   | { status: 'noLive' }
   | { status: 'loaded'; rows: DiffRow[] };
 
-const GO_PRODUCTIVE_ERRORS = new Set([
-  'check_not_clean',
-  'sandbox_contains_demo_rows',
-  'needs_company_profile',
-  'live_workspace_exists',
-  'confirm_name_mismatch',
-]);
-
-/** Map an engine gate-leg error to its catalogue key (each leg gets its own message + recovery). */
-const ERROR_KEY: Record<string, string> = {
-  check_not_clean: 'checkNotClean',
-  sandbox_contains_demo_rows: 'containsDemoRows',
-  needs_company_profile: 'needsCompanyProfile',
-  live_workspace_exists: 'liveWorkspaceExists',
-  confirm_name_mismatch: 'confirmMismatch',
-  not_a_testmandant: 'notATestmandant',
-  plan_already_live: 'planAlreadyLive',
+/**
+ * Each engine gate-leg refusal names its own message and recovery. Everything else, including a
+ * refusal raised after the call had saved (critic R5-1), is worded by `refusalText`.
+ */
+const ERROR_KEYS: Readonly<Record<string, string>> = {
+  check_not_clean: 'migration.testmandant.err.checkNotClean',
+  sandbox_contains_demo_rows: 'migration.testmandant.err.containsDemoRows',
+  needs_company_profile: 'migration.testmandant.err.needsCompanyProfile',
+  live_workspace_exists: 'migration.testmandant.err.liveWorkspaceExists',
+  confirm_name_mismatch: 'migration.testmandant.err.confirmMismatch',
+  not_a_testmandant: 'migration.testmandant.err.notATestmandant',
+  plan_already_live: 'migration.testmandant.err.planAlreadyLive',
 };
 
 export function TestmandantPanel(props: {
@@ -108,7 +103,7 @@ export function TestmandantPanel(props: {
 
   const [phase, setPhase] = useState<Phase>({ status: 'loading' });
   const [confirmName, setConfirmName] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Err | null>(null);
   const [busy, setBusy] = useState(false);
   // f6: the Testmandant-to-live comparison used to be fired and DISCARDED (the response never
   // rendered). It now lands in state, with its own loading, error, no-live and no-differences states.
@@ -149,7 +144,7 @@ export function TestmandantPanel(props: {
     const res = (await client.call('migration_create_testmandant', { workspaceId, planId, idempotencyKey: newIdempotencyKey() })).body;
     setBusy(false);
     if (isErr(res)) {
-      setError(res.error);
+      setError(res);
       return;
     }
     await load();
@@ -163,7 +158,7 @@ export function TestmandantPanel(props: {
     const res = (await client.call('go_productive', { workspaceId, planId, confirmedName: confirmName, idempotencyKey: newIdempotencyKey() })).body;
     setBusy(false);
     if (isErr(res)) {
-      setError(GO_PRODUCTIVE_ERRORS.has(res.error) ? res.error : 'error');
+      setError(res);
       return;
     }
     setConfirmName('');
@@ -193,7 +188,7 @@ export function TestmandantPanel(props: {
     const res = (await client.call('discard_testmandant', { workspaceId, planId, confirmed: true, idempotencyKey: newIdempotencyKey() })).body;
     setBusy(false);
     if (isErr(res)) {
-      setError(res.error);
+      setError(res);
       return;
     }
     setDiscardConfirm(false);
@@ -221,7 +216,7 @@ export function TestmandantPanel(props: {
             {t('migration.testmandant.create')}
           </button>
         )}
-        {error !== null && <p className="testmandant-error" role="alert">{t(`migration.testmandant.err.${ERROR_KEY[error] ?? 'generic'}`)}</p>}
+        {error !== null && <p className="testmandant-error" role="alert">{refusalText(t, error, { keys: ERROR_KEYS, fallback: 'migration.testmandant.err.generic' })}</p>}
       </section>
     );
   }
@@ -308,7 +303,7 @@ export function TestmandantPanel(props: {
       )}
 
       {error !== null && (
-        <p className="testmandant-error" role="alert">{t(`migration.testmandant.err.${ERROR_KEY[error] ?? 'generic'}`)}</p>
+        <p className="testmandant-error" role="alert">{refusalText(t, error, { keys: ERROR_KEYS, fallback: 'migration.testmandant.err.generic' })}</p>
       )}
 
       {/* Discard in an OVERFLOW behind a native disclosure, never a peer of the primary action. */}

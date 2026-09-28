@@ -42,7 +42,7 @@ import { useT } from '../../i18n';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { Status, type StatusKind } from '../../components/Status';
-import { Skeleton } from '../../components/states';
+import { Skeleton, refusalText } from '../../components/states';
 
 const newKey = () => crypto.randomUUID();
 
@@ -131,7 +131,7 @@ export function ThreeWayMatchPanel({ billId, onMatched, onDialogOpenChange }: Th
     setLoading(false);
     if (isErr(res.body)) {
       setEvaluation(null);
-      setMessage(t(`procurement.match.error.${res.body.error}`) || res.body.error);
+      setMessage(refusalText(t, res.body, { own: 'procurement.match.error' }) || res.body.error);
       return;
     }
     setEvaluation((res.body as unknown as { evaluation: Evaluation }).evaluation);
@@ -147,7 +147,7 @@ export function ThreeWayMatchPanel({ billId, onMatched, onDialogOpenChange }: Th
     setMessage('');
     const res = await client.call('match_three_way_create', { workspaceId, billId, evaluation, idempotencyKey: newKey() });
     if (isErr(res.body)) {
-      setMessage(t(`procurement.match.error.${res.body.error}`) || res.body.error);
+      setMessage(refusalText(t, res.body, { own: 'procurement.match.error' }) || res.body.error);
       return;
     }
     setIntent(null);
@@ -164,7 +164,7 @@ export function ThreeWayMatchPanel({ billId, onMatched, onDialogOpenChange }: Th
     setMessage('');
     const res = await client.call('match_three_way_override', { workspaceId, billId, evaluation, reason: reason.trim(), idempotencyKey: newKey() });
     if (isErr(res.body)) {
-      setMessage(t(`procurement.match.error.${res.body.error}`) || res.body.error);
+      setMessage(refusalText(t, res.body, { own: 'procurement.match.error' }) || res.body.error);
       return;
     }
     setIntent(null);

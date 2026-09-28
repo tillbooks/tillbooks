@@ -35,7 +35,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, useSkeletonHold } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, useSkeletonHold, refusalText } from '../../components/states';
 import { Status, type StatusKind } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
@@ -201,7 +201,7 @@ export function LotSerial() {
 
   const localError = useCallback(
     (e: Err | null): string | undefined =>
-      e !== null && J01_ERROR_CODES.has(e.error) ? t(`lotSerial.errors.${e.error}`) : undefined,
+      e !== null && J01_ERROR_CODES.has(e.error) ? refusalText(t, e, { own: 'lotSerial.errors' }) : undefined,
     [t],
   );
 

@@ -18,7 +18,7 @@ import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, formatMoney } from '../../i18n';
-import { EmptyState, ErrorBanner, PermissionDenied, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { Status } from '../../components/Status';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { formatMinutes } from './model';
@@ -240,8 +240,7 @@ export function Unbilled() {
 
   const errorMessage = (error: Err): string => {
     const known = ['mixed_contacts', 'already_billed', 'currency_mismatch', 'invoice_not_draft', 'empty_selection'];
-    if (known.includes(error.error)) return t(`billing.error.${error.error}`);
-    return t('billing.error.transport');
+    return refusalText(t, error, { own: 'billing.error', known, fallback: 'billing.error.transport' });
   };
 
   // The WIP report is a flat table, so it is the shared DataTable now (D118 B2): value and duration

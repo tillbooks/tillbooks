@@ -192,6 +192,17 @@ const CONVERTED = [
     field: 'needsReviewTxnId',
     absent: 'needsReviewId',
   },
+  // A39, the bank inbox (lean, spec §4.6): every verb the /bank Studio inbox builds on declares its
+  // payload. Each absent name is the plausible rename a surface author would reach for: `lines` (never
+  // `items`, the sibling lists' word), `state` (never `status`, A20's lane word), `linkId` (never `id`),
+  // `alreadyIgnored` (never `ignored`), and for reopen `supersededLinkId` (never `linkId`, which names
+  // the ACTIVE link everywhere else). The cut verbs (bank rules, the balance status and the switch,
+  // unignore, the linked-file count) left with their probes.
+  { module: './dist/core/banking/bankInbox.js', verb: 'listBankInbox', field: 'lines', absent: 'items' },
+  { module: './dist/core/banking/bankBooking.js', verb: 'bookBankLine', field: 'state', absent: 'status' },
+  { module: './dist/core/banking/bankBooking.js', verb: 'performBooking', field: 'linkId', absent: 'id' },
+  { module: './dist/core/banking/bankBooking.js', verb: 'ignoreBankLine', field: 'alreadyIgnored', absent: 'ignored' },
+  { module: './dist/core/banking/bankBooking.js', verb: 'reopenBankLine', field: 'supersededLinkId', absent: 'linkId' },
   // G03. `workspaceKind` is what the shell demo banner keys on, and `kind` is exactly the read a
   // caller writes after seeing the workspace row's own column name: the open Result would have
   // handed that caller `undefined` and a banner that never renders.
@@ -304,7 +315,9 @@ const CONVERTED = [
 const UNDECLARED = { module: './dist/core/ledger/draft.js', verb: 'deleteDraft' };
 
 /** The floor for declared payloads. Raise it, deliberately, with each verb converted. */
-const DECLARED_FLOOR = 37;
+// 49 until A39 went lean (2026-09-26): seven declared verbs were CUT from the registry with the spec
+// (§4.6), not converted back to an open Result, so the floor follows the verbs that still exist.
+const DECLARED_FLOOR = 42;
 
 /**
  * The resolved compiler options of `tsconfig.test.json`, read through TypeScript's own JSONC parser

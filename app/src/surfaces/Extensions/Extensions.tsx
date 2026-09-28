@@ -34,7 +34,7 @@ import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Status } from '../../components/Status';
 import { Tabs } from '../../components/Tabs';
 import { Modal } from '../../components/Modal';
-import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton, refusalText } from '../../components/states';
 import { pluginStatusKind, type PluginDto, type PreviewDto, type RegistryEntryDto } from './model';
 import './Extensions.css';
 
@@ -134,7 +134,7 @@ export function Extensions() {
       const response = await client.call('preview_plugin_install', { workspaceId, source, packageRef });
       setBusy(false);
       if (isErr(response.body)) {
-        setFeedback({ tone: 'error', text: t(`plugin.error.${response.body.error}`) });
+        setFeedback({ tone: 'error', text: refusalText(t, response.body, { own: 'plugin.error' }) });
         return;
       }
       const preview = response.body as unknown as PreviewDto;
@@ -173,7 +173,7 @@ export function Extensions() {
     });
     setBusy(false);
     if (isErr(response.body)) {
-      setFeedback({ tone: 'error', text: t(`plugin.error.${response.body.error}`, { name: String(response.body.name ?? '') }) });
+      setFeedback({ tone: 'error', text: refusalText(t, response.body, { own: 'plugin.error', params: { name: String(response.body.name ?? '') } }) });
       return;
     }
     setReview(null);
@@ -190,7 +190,7 @@ export function Extensions() {
       const response = await client.call(action, { workspaceId, pluginId, idempotencyKey: newIdempotencyKey() });
       setBusy(false);
       if (isErr(response.body)) {
-        setFeedback({ tone: 'error', text: t(`plugin.error.${response.body.error}`) });
+        setFeedback({ tone: 'error', text: refusalText(t, response.body, { own: 'plugin.error' }) });
         return;
       }
       setFeedback({ tone: 'success', text: t(successKey) });
@@ -261,7 +261,7 @@ export function Extensions() {
         <Skeleton />
       </div>
     ) : installed.kind === 'error' ? (
-      <ErrorBanner error={{ ok: false, error: installed.code }} context="read" message={t(`plugin.error.${installed.code}`)} onRetry={() => void load()} />
+      <ErrorBanner error={{ ok: false, error: installed.code }} context="read" message={refusalText(t, installed.code, { own: 'plugin.error' })} onRetry={() => void load()} />
     ) : installed.plugins.length === 0 ? (
       <EmptyState title={t('plugin.empty')} action={canManage ? { label: t('plugin.action.install'), onClick: () => fileInputRef.current?.click() } : undefined} />
     ) : (

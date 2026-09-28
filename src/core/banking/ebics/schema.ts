@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS ebics_connection (
   user_id_ebics         TEXT NOT NULL,
   protocol_version      TEXT NOT NULL DEFAULT 'H005',
   state                 TEXT NOT NULL,
-  -- The institution's captured BTF offering (SMPG §5 / "BTF parameters CH"), json; never hardcoded.
+  -- UNUSED since A36 (D-A36.3): the one statement BTF is fixed in code. Kept, never written.
   btf_params            TEXT,
   -- The signature procedures and key length agreed with the institution (SMPG §3.4), json; default
   -- A005 + 2048. Captured per connection, never a unilateral TILL constant.
@@ -49,8 +49,8 @@ CREATE TABLE IF NOT EXISTS ebics_connection (
   ini_letter_document_id TEXT,
   activated_at          TEXT,
   last_sync_at          TEXT,
-  -- A36 (live bank feed): the G01 automation rule driving this connection's scheduled sync, or NULL
-  -- when no cadence is set (default OFF). Also in ADDITIVE_COLUMNS for an A33 book predating A36.
+  -- UNUSED since A36 (D-A36.10: on demand only, the cadence is parked). An older build may have
+  -- stored a rule id; the unlink call clears it. Also in ADDITIVE_COLUMNS for an A33 book predating A36.
   sync_rule_id          TEXT,
   created_by            TEXT,
   created_at            TEXT NOT NULL,
@@ -62,6 +62,15 @@ CREATE TABLE IF NOT EXISTS ebics_connection (
 -- connection no longer counts, so a fresh contract may reuse the same identifiers later.
 CREATE UNIQUE INDEX IF NOT EXISTS ebics_connection_one_live_per_contract
 ON ebics_connection (workspace_id, host_id, partner_id, user_id_ebics)
+WHERE state != 'retired';
+
+-- A36 §4.5: ONE live connection per EBICS subscriber in the whole database, across workspaces
+-- (\`live_connection_exists\`): two feeds for one ZKB subscriber would split its statements between
+-- them. Deliberately WITHOUT workspace_id; the one cross-workspace fact the channel holds. No data
+-- migration: a database carrying the same subscriber live in two workspaces refuses to open here,
+-- which A33's per-workspace ceremony never produced for Nomadik.
+CREATE UNIQUE INDEX IF NOT EXISTS ebics_connection_one_live_per_subscriber
+ON ebics_connection (host_id, partner_id, user_id_ebics)
 WHERE state != 'retired';
 
 CREATE INDEX IF NOT EXISTS ebics_connection_by_workspace

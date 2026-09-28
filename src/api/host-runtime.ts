@@ -21,9 +21,25 @@
  * The `fetchBankKeys` composition (design 4.2 option a). The core's `createEbicsHttpsTransport`
  * degrades HPB even when wired, because parsing the bank's returned public keys into fingerprints is
  * runtime work. So the live transport delegates every method to `createEbicsHttpsTransport({ wire })`
- * EXCEPT `fetchBankKeys`, which it overrides with the private package's HPB parser. Core's
- * pin/compare/MITM logic (`advanceConnection`) is untouched: the runtime only produces fingerprints,
- * the core decides trust.
+ * EXCEPT `fetchBankKeys`, which it overrides with the private package's HPB parser. The core's
+ * pin/compare logic is untouched: the runtime only produces hashes, the core decides trust.
+ *
+ * A36, the core's duties toward the wire (wire `docs/design-decisions.md` A36-7, W2):
+ *  - CONTRACT VERSION 2, EXACTLY. The module must export `WIRE_CONTRACT_VERSION === 2` (a number,
+ *    strictly equal). A missing export, an older or newer wire, or the string '2' is refused at boot:
+ *    a `main`-branch wire satisfies the old duck-typed shape and verifies nothing (design D-1).
+ *  - THE UNTRUSTED-BYTES FOLDER. `untrustedDir` is `<keystore file>.untrusted`, beside the keystore,
+ *    never inside E00, the SQLite folder or a backup set: where the wire keeps the raw bytes of the last
+ *    20 refused answers, to tell a verifier bug from interference (§4.2).
+ *  - EVERY HASH HPB RETURNS. The bank's certificate hashes (what the owner compares against ZKB's "H005
+ *    mit Zertifikat" row) and classic key hashes travel into the pin beside the SPKI fingerprints; the
+ *    wire's pin gate compares every hash the pin holds.
+ *  - THE PASSPHRASE. The launcher reads it from the macOS login Keychain into
+ *    `TILL_EBICS_KEYSTORE_PASSPHRASE`; it is deleted from this process's environment once the keystore
+ *    is unlocked, which keeps it from later child processes but NOT from `ps -E` for this process. No
+ *    secrecy is claimed: OD-2 leaves no signing key behind it (§4.2).
+ *  - An extra TLS anchor (`TILL_EBICS_CA_FILE`) exists for the local mock bank only: a wire built with
+ *    one refuses every host that is not loopback (`extra_trust_anchor_refused`, §4.6).
  */
 
 import { readFileSync } from 'node:fs';
@@ -55,18 +71,33 @@ export const EBICS_KEYSTORE_PASSPHRASE_ENV = 'TILL_EBICS_KEYSTORE_PASSPHRASE';
  *  never disabled. */
 export const EBICS_CA_FILE_ENV = 'TILL_EBICS_CA_FILE';
 
+/** The wire/core contract version this core speaks (A36, download only). The module must export it. */
+export const EBICS_WIRE_CONTRACT_VERSION = 2;
+
 /** The public shape the `TILL_EBICS_RUNTIME` module must expose. This is a CONTRACT the host module
  *  fulfils (the `@tillbooks/ebics-wire` surface), declared structurally so no static import is needed. */
-interface HostWireModule {
+export interface HostWireModule {
+  WIRE_CONTRACT_VERSION: number;
   createEbicsWire(opts: {
     keystore: EbicsSigningKeystore;
     tls?: { minVersion?: 'TLSv1.2' | 'TLSv1.3'; ca?: Array<string | Uint8Array> };
+    untrustedDir?: string;
   }): EbicsWire;
   createEbicsTransport(opts: { wire: EbicsWire }): {
     wire: EbicsWire;
     fetchBankKeys(req: { connection: EbicsConnectionRef }):
-      | { ok: true; bankKeyHashes: { authentication: string; encryption: string } }
-      | { ok: false; reason: string };
+      | {
+          ok: true;
+          bankKeyHashes: {
+            authentication: string;
+            encryption: string;
+            /** SHA-256 over each bank certificate DER, per purpose (H005 with certificates). */
+            certificateHashes?: Partial<Record<'authentication' | 'encryption', string>>;
+            /** The classic EBICS key hash of each bank key, per purpose. */
+            keyHashes?: Partial<Record<'authentication' | 'encryption', string>>;
+          };
+        }
+      | { ok: false; reason: string; codes?: { technical: string | null; business: string | null }; detail?: string };
   };
 }
 
@@ -97,6 +128,33 @@ function isHostWireModule(mod: unknown): mod is HostWireModule {
 }
 
 /**
+ * W2: refuse any module that does not declare EXACTLY this core's contract version, a number strictly
+ * equal to 2. Throws (loud at boot), never degrades: a live wire the owner asked for must not quietly
+ * become a different one.
+ */
+export function assertWireContract(mod: unknown, specifier: string): asserts mod is HostWireModule {
+  if (!isHostWireModule(mod)) {
+    throw new Error(
+      `The module named by ${EBICS_RUNTIME_ENV} ("${specifier}") does not export ` +
+        `createEbicsWire + createEbicsTransport. It is not a compatible @tillbooks/ebics-wire build.`,
+    );
+  }
+  const version = (mod as { WIRE_CONTRACT_VERSION?: unknown }).WIRE_CONTRACT_VERSION;
+  if (typeof version !== 'number' || version !== EBICS_WIRE_CONTRACT_VERSION) {
+    throw new Error(
+      `The module named by ${EBICS_RUNTIME_ENV} ("${specifier}") declares wire contract ` +
+        `${version === undefined ? 'none' : JSON.stringify(version)}; this TILL needs exactly ${EBICS_WIRE_CONTRACT_VERSION} ` +
+        `(A36, download only, every answer authenticated). Build the matching @tillbooks/ebics-wire.`,
+    );
+  }
+}
+
+/** Where the wire keeps the raw bytes of refused answers: beside the keystore file (§4.2, W2). */
+export function untrustedDirFor(keystorePath: string): string {
+  return `${keystorePath}.untrusted`;
+}
+
+/**
  * Resolve the host's live EBICS wire, or return `{}` when none is configured.
  *
  * Unset `TILL_EBICS_RUNTIME` -> `{}` (offline, honest degrade). Set -> build the core file keystore,
@@ -121,6 +179,9 @@ export async function resolveEbicsRuntime(): Promise<HostEbicsPorts> {
   // throw (loud, not deferred): `unlock` returns true for a not-yet-created file (the first ceremony),
   // so a false result means a real problem, and it never mints fresh keys over an existing file.
   if (passphrase !== undefined && passphrase !== '') {
+    // Deleted before anything else can read or inherit it (later child processes). `ps -E` still shows
+    // this process's initial environment, so no secrecy is claimed (A36 §4.2).
+    delete process.env[EBICS_KEYSTORE_PASSPHRASE_ENV];
     if (!keystore.unlock(passphrase)) {
       const why =
         keystore.state?.() === 'unavailable'
@@ -143,15 +204,11 @@ export async function resolveEbicsRuntime(): Promise<HostEbicsPorts> {
       { cause },
     );
   }
-  if (!isHostWireModule(mod)) {
-    throw new Error(
-      `The module named by ${EBICS_RUNTIME_ENV} ("${specifier}") does not export ` +
-        `createEbicsWire + createEbicsTransport. It is not a compatible @tillbooks/ebics-wire build.`,
-    );
-  }
+  assertWireContract(mod, specifier);
 
   const tls = readTlsOptions();
-  const wire = mod.createEbicsWire(tls !== undefined ? { keystore, tls } : { keystore });
+  const untrustedDir = untrustedDirFor(keystorePath);
+  const wire = mod.createEbicsWire(tls !== undefined ? { keystore, tls, untrustedDir } : { keystore, untrustedDir });
   const ebicsTransport = composeLiveTransport(wire, mod);
   return { ebicsTransport, ebicsKeystore: keystore };
 }
@@ -168,10 +225,10 @@ function readTlsOptions(): { ca: Array<string | Uint8Array> } | undefined {
  * Compose the full `EbicsTransportPort`: the core seam handles every method with the live `wire`, and
  * `fetchBankKeys` is overridden with the private package's HPB parser (design 4.2 option a). Banks
  * publish only X002 (authentication) and E002 (encryption) on HPB, so `electronicSignature` has no
- * bank value and is carried as an empty string; `sameHashes` in the core compares the shape it stores
- * against the shape it fetches, both produced here, so the pin/compare stays consistent.
+ * bank value and is carried as an empty string. The certificate hashes and classic key hashes are KEPT
+ * (W2): they are what the owner compares against ZKB's sheet, and the pin carries them.
  */
-function composeLiveTransport(wire: EbicsWire, mod: HostWireModule): EbicsTransportPort {
+export function composeLiveTransport(wire: EbicsWire, mod: HostWireModule): EbicsTransportPort {
   const base = createEbicsHttpsTransport({ wire });
   const parser = mod.createEbicsTransport({ wire });
   return {
@@ -184,11 +241,24 @@ function composeLiveTransport(wire: EbicsWire, mod: HostWireModule): EbicsTransp
       if (parsed === null || typeof parsed !== 'object' || typeof parsed.ok !== 'boolean') {
         return { ok: false, reason: 'ebics_wire_contract_error' };
       }
-      if (!parsed.ok) return { ok: false, reason: parsed.reason ?? 'unreadable_hpb_order_data' };
+      if (!parsed.ok) {
+        return {
+          ok: false,
+          reason: parsed.reason ?? 'unreadable_hpb_order_data',
+          ...(parsed.codes !== undefined ? { codes: parsed.codes } : {}),
+          ...(parsed.detail !== undefined ? { detail: parsed.detail } : {}),
+        };
+      }
+      const b = parsed.bankKeyHashes;
+      if (b === null || typeof b !== 'object' || typeof b.authentication !== 'string' || typeof b.encryption !== 'string') {
+        return { ok: false, reason: 'ebics_wire_contract_error' };
+      }
       const bankKeyHashes: EbicsKeyHashes = {
         electronicSignature: '',
-        authentication: parsed.bankKeyHashes.authentication,
-        encryption: parsed.bankKeyHashes.encryption,
+        authentication: b.authentication,
+        encryption: b.encryption,
+        ...(b.certificateHashes !== undefined ? { certificateHashes: { ...b.certificateHashes } } : {}),
+        ...(b.keyHashes !== undefined ? { keyHashes: { ...b.keyHashes } } : {}),
       };
       return { ok: true, bankKeyHashes };
     },

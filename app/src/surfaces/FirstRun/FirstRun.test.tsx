@@ -109,6 +109,29 @@ describe('FirstRun', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/keine TILL-Datenbank/);
   });
 
+  it('R4-1: a restore saved WHOLE before the book moved on to a newer TILL says so, never "not changed, try again"', async () => {
+    const user = userEvent.setup();
+    const saved: RestResponse = {
+      status: 422,
+      body: { ok: false, error: 'schema_newer_than_runtime', bookGeneration: 8, buildGeneration: 7, path: '/x/book.db', partial: true, completed: true },
+    };
+    setup({ verify_backup: VERIFIED, restore_backup: saved, delivery_status: reject('transport_error', 500) });
+    await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/books.tillbackup');
+    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Diese Aktion ist gespeichert.');
+    expect(alert).toHaveTextContent('Wiederhole die Aktion nicht, sonst entsteht sie doppelt.');
+    expect(alert).not.toHaveTextContent(/nicht verändert|versuche es erneut/);
+  });
+
+  it('R4-1: a newer book refused BEFORE anything was written keeps the first-run sentence', async () => {
+    const user = userEvent.setup();
+    setup({ verify_backup: VERIFIED, restore_backup: reject('schema_newer_than_runtime'), delivery_status: reject('transport_error', 500) });
+    await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/books.tillbackup');
+    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Die Datei wurde nicht verändert.');
+  });
+
   it('S7.3: a schema-mismatched backup renders BOTH generations and the install-current-release remedy, never the raw code', async () => {
     const user = userEvent.setup();
     // F-06: the mismatch is named by the pre-flight verify_backup (the engine emits it there), so the

@@ -145,8 +145,8 @@
   },
   "channel": {
     "title": "Bankkanal",
-    "empty": "Noch kein EBICS-Kanal. Verbinde einen, damit Kontoauszüge und Zahlungsdateien nicht mehr von Hand verarbeitet werden: deine Bank muss EBICS anbieten, und der dateibasierte Weg bleibt in jedem Fall bestehen.",
-    "filePathNote": "Der dateibasierte Kontoauszug-Import und der Zahlungs-Upload bleiben immer verfügbar, mit oder ohne Kanal.",
+    "empty": "Noch kein EBICS-Kanal. Verbinde einen, damit TILL die Tagesauszüge der Bank selbst abruft: deine Bank muss EBICS anbieten, und der Import von Hand bleibt in jedem Fall bestehen.",
+    "filePathNote": "Der Import der Kontoauszüge von Hand bleibt immer verfügbar, mit oder ohne Kanal. Zahlungsdateien lädst du im eBanking hoch und gibst sie dort frei.",
     "connect": "Kanal verbinden",
     "locked": "Das Verwalten eines Bankkanals benötigt die Zahlungsberechtigung.",
     "kind": {
@@ -176,19 +176,19 @@
     },
     "releaseNoteBlink": "Über bLink übermittelt. Gib die Zahlung in deinem eigenen E-Banking frei.",
     "sharedWith": "Zugeordnete Konten",
-    "lastSync": "Letzte Synchronisation",
-    "sync": "Jetzt synchronisieren",
+    "lastSync": "Zuletzt abgerufen",
+    "sync": "Kontoauszüge abrufen",
     "orderLog": "Auftragsprotokoll",
     "unmatchedAccount": "Auszug für ein nicht zugeordnetes Konto (zuordnen und erneut synchronisieren)",
     "transmitInDoubt": "Der Ausgang einer Übermittlung ist unbekannt: eine erneute Übertragung ist gesperrt, bis das Bankprotokoll antwortet.",
     "pendingRelease": "Wartet auf Freigabe der Bank",
     "rejectedReason": "Von der Bank abgelehnt",
-    "bankKeysChanged": "Die Schlüssel der Bank haben sich geändert. Der Verkehr ruht, bis du sie ausserhalb des Kanals erneut bestätigst.",
+    "bankKeysChanged": "Die Schlüssel der ZKB haben sich geändert. Der Abruf ruht, bis du die neuen Schlüssel mit dem Blatt «EBICS Verbindungsparameter» der ZKB verglichen und bestätigt hast.",
     "routeAccount": "Konto zuordnen...",
     "routeAccountLabel": "Konto für die Zuordnung",
     "disconnectRetire": "Stilllegen",
-    "disconnectBlock": "Sperren (SPR)",
-    "disconnectBlockConfirm": "Diese Verbindung wirklich sperren? Alle Aufträge dieser Verbindung werden angehalten.",
+    "disconnectBlock": "Sperren",
+    "disconnectBlockConfirm": "Diesen Kanal wirklich sperren? TILL ruft dann nichts mehr ab. Sperren bei der ZKB: per Telefon.",
     "disconnectRetireConfirm": "Diese Verbindung wirklich stilllegen? Der Bankkanal wird dauerhaft beendet.",
     "disconnectConfirm": "Bestätigen",
     "disconnectCancel": "Abbrechen",
@@ -207,7 +207,8 @@
       "btd": "Download",
       "btu": "Upload",
       "hac": "Auftragsstatus abgeholt",
-      "spr": "Zugang gesperrt"
+      "spr": "Zugang gesperrt",
+      "hev": "Versionsabfrage"
     },
     "orderKind": {
       "consent": "Zustimmung",
@@ -237,7 +238,25 @@
       "consentScopeMissing": "Diese Verbindung hat keine Zahlungszustimmung. Verbinde neu mit PSS, um Zahlungen zu übermitteln.",
       "formatUnsupported": "Diese Bank liefert über bLink nur JSON. Die dateibasierten Wege bleiben die Grundlage.",
       "cloudTierSuspended": "Das Anbieterkonto der verwalteten Anbindung ist abgelaufen. Deine EBICS- und Datei-Wege sind nicht betroffen.",
-      "alreadyTransmitted": "Dieser Stapel ist bereits über einen anderen Weg unterwegs."
+      "alreadyTransmitted": "Dieser Stapel ist bereits über einen anderen Weg unterwegs.",
+      "unsupportedEbicsVersion": "Dieser Bankrechner bietet EBICS 3.0 (H005) nicht an. TILL verwendet nur H005, deshalb wurde nichts erzeugt.",
+      "liveConnectionExists": "Dieser EBICS-Teilnehmer ruft bereits in einem anderen Mandanten dieser Datenbank ab. Zwei Abrufe würden die Auszüge aufteilen.",
+      "camt054LinesRefused": "Dieses Konto enthält Buchungen aus camt.054. Es kann nicht über EBICS laufen, weil die camt.053-Zeilen sie verdoppeln würden.",
+      "trialWorkspaceRefused": "Ein Testmandant oder eine Demo verbindet sich nie mit einer echten Bank.",
+      "untrustedResponse": "Eine Antwort der ZKB liess sich nicht prüfen. Nichts wurde übernommen und nichts quittiert. Importiere den Tag aus dem eBanking und ruf die ZKB an, falls es wieder passiert.",
+      "commitFailed": "Die abgerufenen Daten liessen sich nicht speichern. Die ZKB bietet sie beim nächsten Abruf erneut an.",
+      "keystoreChangedElsewhere": "Die Schlüsseldatei wurde ausserhalb dieser Sitzung geändert. TILL überschreibt sie nicht: starte TILL neu.",
+      "keystoreLocked": "Die Schlüsselablage ist gesperrt: die Passphrase wurde in dieser Sitzung nicht eingegeben.",
+      "keystoreUnavailable": "Die Schlüsseldatei fehlt oder ist beschädigt.",
+      "pendingBankActivation": "Die ZKB hat den Zugang noch nicht freigeschaltet. Versuche es nach ihrer Bestätigung erneut.",
+      "channelBlocked": "Dieser Kanal ist gesperrt. TILL ruft nichts ab.",
+      "noRoutedAccount": "Diesem Kanal ist kein Konto zugeordnet.",
+      "bankKeysChanged": "Die ZKB verwendet neue Schlüssel, deshalb ruht der Abruf. Ruf unten die neuen Bankschlüssel ab, vergleiche sie mit dem Blatt der ZKB und bestätige sie.",
+      "channelRetired": "Dieser Kanal ist stillgelegt.",
+      "unsupportedDateRange": "Ein Zeitraum wird nicht abgerufen: ein fehlender Tag kommt von Hand aus dem eBanking.",
+      "initRefused": "Die ZKB hat INI und HIA mit 091002 abgelehnt. Das heisst: Partner-ID oder User-ID stimmt nicht, EBICS 3.0 (H005) ist für deinen Vertrag nicht freigeschaltet, oder der Teilnehmer ist schon initialisiert. Nur die ZKB kann das unterscheiden und zurücksetzen: ruf sie an.",
+      "certificateRefused": "Die ZKB hat ein Zertifikat abgelehnt (Code {code}). Leg den Kanal still und verbinde neu: TILL erzeugt neue Schlüssel und einen neuen INI-Brief.",
+      "keyExchangeRefused": "Die ZKB hat den Schlüsselaustausch abgelehnt. Nichts wurde bestätigt."
     },
     "state": {
       "draft": "Entwurf",
@@ -269,17 +288,55 @@
       "unavailable": "Die Schlüsseldatei fehlt oder ist beschädigt. Initialisiere die Verbindung neu (der Bankvertrag ist davon nicht betroffen), oder stelle die Datei aus einer Sicherung wieder her.",
       "notPersistent": "Diese Schlüsselablage übersteht keinen Neustart. Die Schlüssel müssen neu erzeugt werden, falls die App neu startet, bevor du eine dauerhafte Ablage verbindest."
     },
-    "schedule": {
-      "title": "Automatischer Abruf",
-      "cadence": "Rhythmus",
-      "cadenceOption": {
-        "daily": "Täglich",
-        "weekly": "Wöchentlich",
-        "monthly": "Monatlich"
+    "blockLocal": "TILL sendet nichts mehr. Sperren bei der ZKB: per Telefon.",
+    "blockExit": "Zum Entsperren rufst du die Bankschlüssel ab, vergleichst sie mit dem Blatt der ZKB und bestätigst sie.",
+    "ebankingPickup": "Solange TILL die Auszüge abruft, lade sie im eBanking nicht mit «Alle nicht abgeholten Daten» herunter, sonst fehlen sie hier.",
+    "iniSent": "INI und HIA sind unterwegs, aber noch nicht beide von der ZKB bestätigt. Sende erneut: TILL schickt nur, was noch fehlt, mit denselben Schlüsseln.",
+    "resend": "Erneut senden",
+    "letterWaiting": "Wartet auf die ZKB. Unterschreibe den INI-Brief (unter Dokumente abgelegt) und schick ihn per Post an die ZKB. Wenn die ZKB den Zugang freigeschaltet hat, rufst du hier die Bankschlüssel ab.",
+    "initRefused": "Die ZKB hat INI und HIA mit 091002 abgelehnt. Das heisst: Partner-ID oder User-ID stimmt nicht, EBICS 3.0 (H005) ist für deinen Vertrag nicht freigeschaltet, oder der Teilnehmer ist schon initialisiert. Nur die ZKB kann das unterscheiden und zurücksetzen: ruf sie an.",
+    "certificateRefused": "Die ZKB hat ein Zertifikat abgelehnt (Code {code}). Leg den Kanal still und verbinde neu: TILL erzeugt neue Schlüssel und einen neuen INI-Brief.",
+    "keyExchangeRefused": "Die ZKB hat den Schlüsselaustausch mit dem Code {code} beantwortet. Nichts wurde bestätigt.",
+    "pendingTitle": "Wartende Auszüge",
+    "newest": "Neuester Auszug im Buch: Nr. {n}/{year} vom {date}, Schlusssaldo {amount}",
+    "noStatement": "Noch kein Tagesauszug im Buch. Der erste abgerufene Auszug startet den Abruf.",
+    "downloadRefused": {
+      "notGranted": "Die ZKB gibt den Abruf der Auszüge (camt.053 Version 08) für deinen Vertrag nicht frei (Code {code}). Bitte die ZKB, ihn freizuschalten.",
+      "busy": "Die ZKB ist gerade ausgelastet (Code {code}). Ruf die Auszüge später erneut ab.",
+      "tooLarge": "Die Auszüge sind zu gross für den Abruf (Code {code}). Lade diesen Tag im eBanking herunter und importiere ihn von Hand.",
+      "other": "Die ZKB hat den Abruf mit dem Code {code} abgelehnt. Nichts wurde geändert."
+    },
+    "feed": {
+      "overlapRefused": "Auszug {n}/{year} vom {date} überschneidet sich mit Auszug {m}/{year} im Buch. Nichts wurde importiert.",
+      "beforeFeedStart": "Auszug {n}/{year} liegt vor dem ersten Auszug im Buch.",
+      "gapRefused": "Auszug {n} schliesst nicht an Auszug {m} an. Importiere den fehlenden Tagesauszug aus dem eBanking, dann ruf erneut ab.",
+      "numberJump": "Nach Auszug {m} kam Auszug {n}. Fehlende Nummern: {skipped}. Importiere diese Auszüge von Hand, falls es sie gibt.",
+      "notDayEnd": "Das ist kein Tagesauszug (Nummer oder Schlusssaldo fehlt). Importiere den Tagesauszug dieses Tages aus dem eBanking.",
+      "multipage": "Auszug {n} ist auf mehrere Dateien verteilt. TILL liest solche Auszüge noch nicht: importiere ihn aus dem eBanking.",
+      "camt054Lines": "Dieses Konto enthält Buchungen aus camt.054. Es kann nicht über EBICS laufen, weil die camt.053-Zeilen sie verdoppeln würden.",
+      "unmatchedAccount": "Auszug für die IBAN {iban}, die keinem zugeordneten Konto gehört. Ordne das Konto zu, dann ruf erneut ab.",
+      "readyToImport": "Auszug {n} passt jetzt: der nächste Abruf importiert ihn."
+    },
+    "keyReview": {
+      "fetch": "Bankschlüssel abrufen und vergleichen",
+      "fetching": "Bankschlüssel werden abgerufen…",
+      "intro": "Vergleiche jedes Bytepaar mit der Zeile «H005 mit Zertifikat» der aktuellen Ausgabe des Blatts «EBICS Verbindungsparameter» der ZKB (8 Paare pro Zeile, wie dort). Bestätige erst, wenn alle übereinstimmen.",
+      "purpose": {
+        "authentication": "Authentifikation (X002)",
+        "encryption": "Verschlüsselung (E002)"
       },
-      "egressNote": "Das Einschalten erzeugt eine gespeicherte Regel, die deine Bank nach Zeitplan kontaktiert: geplanter Netzwerkverkehr nach aussen, unbeaufsichtigt.",
-      "inactive": "Dieser Zeitplan ist eingeschaltet, aber nichts treibt ihn an: der lokale M00-Scheduler läuft nicht. Jetzt synchronisieren funktioniert weiterhin, oder starte den Scheduler.",
-      "lastFired": "Zuletzt ausgelöst"
+      "certificateHash": "Zertifikat, SHA-256",
+      "keyHash": "Öffentlicher Schlüssel, SHA-256",
+      "fingerprint": "Schlüssel-Fingerabdruck (SPKI), SHA-256. Das Blatt der ZKB druckt möglicherweise einen anderen Wert: bestätige nur, wenn dieser dort steht.",
+      "matches": "Diese Werte stimmen mit dem Blatt «EBICS Verbindungsparameter» der ZKB überein",
+      "confirm": "Bankschlüssel bestätigen",
+      "confirming": "Wird bestätigt…",
+      "cancel": "Abbrechen",
+      "retry": "Erneut versuchen",
+      "close": "Schliessen",
+      "confirmed": "Bankschlüssel bestätigt. Der Kanal ist aktiv.",
+      "mismatch": "Die ZKB sendet jetzt andere Schlüssel als die, die du geprüft hast. Deshalb wurde nichts bestätigt. Vergleiche mit der aktuellen Ausgabe des Blatts und ruf die ZKB an, bevor du es erneut versuchst.",
+      "needsTransport": "Zum Abrufen der Bankschlüssel braucht es einen eingerichteten EBICS-Transport."
     }
   },
   "help": {

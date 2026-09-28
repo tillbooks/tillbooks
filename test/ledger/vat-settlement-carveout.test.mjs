@@ -190,9 +190,10 @@ test('the OWNED reversal of a settlement rides the same carve-out into the filed
   const impostor = reverseOwnedEntry(ctx, { entryId: settled.entryId, date: '2026-06-30', idempotencyKey: key('imp') }, 'fx_revaluation_reverse');
   assert.equal(impostor.error, 'owned_by');
   // The settlement's owner is the verb by name; A38's other two sources joined the map at the N2
-  // integration, and A22's `fx` on the critic's BLOCKING finding of 2026-09-10.
+  // integration, A22's `fx` on the critic's BLOCKING finding of 2026-09-10, and A39 L3's `camt` and
+  // `payment` (resolved by row) with the lean bank inbox.
   assert.equal(OWNED_REVERSAL_SOURCES.vat_settlement, 'vat_settlement_reverse');
-  assert.deepEqual(Object.keys(OWNED_REVERSAL_SOURCES).sort(), ['accrual', 'fx', 'provision', 'vat_settlement']);
+  assert.deepEqual(Object.keys(OWNED_REVERSAL_SOURCES).sort(), ['accrual', 'camt', 'fx', 'payment', 'provision', 'vat_settlement']);
 
   const reversed = reverseOwnedEntry(ctx, { entryId: settled.entryId, date: '2026-06-30', idempotencyKey: key('rev') }, 'vat_settlement_reverse');
   assert.equal(reversed.ok, true, JSON.stringify(reversed));

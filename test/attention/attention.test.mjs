@@ -240,7 +240,7 @@ test('real providers: attention_summary composes A21 qr_match with a true COUNT 
   assert.equal(qr.area, 'bank');
   const qrTop = res.top.filter((i) => i.queueId === 'qr_match');
   assert.ok(qrTop.length <= 5, 'the list is capped while the count is not');
-  assert.ok(qrTop.every((i) => i.deepLink.route === '/reconciliation'));
+  assert.ok(qrTop.every((i) => i.deepLink.route === '/bank'));
   // No dunning proposals seeded, so that queue has no row (zero pending has no row).
   assert.ok(res.queues.every((q) => q.queueId !== 'dunning_run'));
 });

@@ -146,14 +146,16 @@
       "reference_unknown": "Diese Referenz gehört zu keinem offenen Posten in diesem Arbeitsbereich.",
       "currency_mismatch": "Eine Zahlung in {payCur} kann einen Beleg in {docCur} nicht begleichen.",
       "intent_required": "Die Zahlung wurde ohne ausdrückliche Absicht gesendet und darum nicht gebucht.",
-      "unexpected": "Die Zahlung konnte nicht gebucht werden."
+      "unexpected": "Die Zahlung konnte nicht gebucht werden.",
+      "ownedByBankLine": "Diese Zahlung gehört zu einer Bankzeile. Hol die Zeile unter Bank zurück: eine dort gebuchte Zahlung wird dabei storniert, eine dort nur abgeglichene stornierst du danach hier."
     },
     "errorCta": {
       "needs_bank_account": "Zur Einrichtung",
       "period_locked": "Perioden öffnen",
       "needs_fx_rate": "Kurs hinterlegen",
       "document_already_settled": "Vorschläge neu laden",
-      "currency_mismatch": "Buchung im Journal erfassen"
+      "currency_mismatch": "Buchung im Journal erfassen",
+      "ownedByBankLine": "Bankzeile zeigen"
     },
     "errorExplain": {
       "needs_fx_rate": "Ohne Kurs wird nichts umgerechnet und nichts gebucht. Hinterleg den Kurs, dann rechnet TILL die Zahlung um."
@@ -181,7 +183,8 @@
       },
       "journalEntry": "Buchung ansehen",
       "documentMissing": "Beleg nicht gefunden"
-    }
+    },
+    "showBankLine": "Bankzeile zeigen"
   },
   "help": {
     "Payments": {

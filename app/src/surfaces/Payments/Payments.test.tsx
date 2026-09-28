@@ -225,6 +225,15 @@ describe('S1: the Zahlungen list, in all five states', () => {
     expect(await within(drawer).findByRole('link', { name: 'R-2026-0001' })).toBeInTheDocument();
   });
 
+  it('A39 (critic M3): a payment a bank line holds offers that line, never a Storno that could only refuse', async () => {
+    const held = { ...listPayments, payments: listPayments.payments.map((p) => ({ ...p, bankLineId: 'btxn_7' })) };
+    renderPayments({ ...HAPPY, list_payments: ok(held) });
+    await screen.findByText('Muster AG');
+    await userEvent.click(screen.getByRole('button', { name: /^Aktionen für die Zahlung vom / }));
+    expect(screen.queryByRole('menuitem', { name: 'Stornieren' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Bankzeile zeigen' })).toBeInTheDocument();
+  });
+
   it('K-11: the direction is a Segmented control', async () => {
     renderPayments();
     await screen.findByText('Muster AG');

@@ -37,7 +37,7 @@ import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
-import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { ActionFeedback } from '../../components/ActionFeedback';
@@ -168,7 +168,7 @@ export function Adjustments() {
 
   const localError = useCallback(
     (e: Err | null): string | undefined =>
-      e !== null && J05_ERROR_CODES.has(e.error) ? t(`adjustments.errors.${e.error}`) : undefined,
+      e !== null && J05_ERROR_CODES.has(e.error) ? refusalText(t, e, { own: 'adjustments.errors' }) : undefined,
     [t],
   );
 

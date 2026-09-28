@@ -32,7 +32,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useCapabilities, CAP } from '../../lib/capabilities';
 import { CATALOG, useI18n, useT, type Locale } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
-import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton } from '../../components/states';
+import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
@@ -213,12 +213,17 @@ function capabilityLabel(t: (key: string) => string, capability: string): string
   return label === `capability.${capability}` ? capability : label;
 }
 
+/**
+ * A write's refusal on this screen: automation's own sentence, except where only the SHARED catalogue
+ * is true (`sharedRefusalKey`: the newer-book refusal, and a refusal raised after the call had saved,
+ * such as a tick that had already claimed a run). Those never render a raw `automation.error.*` key.
+ */
+function actionRefusal(t: (key: string) => string, error: Err): string {
+  return refusalText(t, error, { own: 'automation.error' });
+}
+
 function runReason(t: (key: string) => string, code: string): string {
-  const own = t(`automation.error.${code}`);
-  if (own !== `automation.error.${code}`) return own;
-  const shared = t(`errors.${code}`);
-  if (shared !== `errors.${code}`) return shared;
-  return code;
+  return refusalText(t, code, { own: 'automation.error', fallbackText: code });
 }
 
 export function Automations() {
@@ -295,7 +300,7 @@ export function Automations() {
     if (isErr(response.body)) {
       // The engine's own code, rendered inline on the form that owns the input, never a toast and
       // never a stack trace. An unmapped code falls back to its own text rather than to silence.
-      setFeedback({ tone: 'error', text: t(`automation.error.${response.body.error}`) });
+      setFeedback({ tone: 'error', text: actionRefusal(t, response.body) });
       return;
     }
     setDraft(null);
@@ -312,7 +317,7 @@ export function Automations() {
     const response = await client.call(action, { workspaceId, ruleId });
     setBusy(false);
     if (isErr(response.body)) {
-      setFeedback({ tone: 'error', text: t(`automation.error.${response.body.error}`) });
+      setFeedback({ tone: 'error', text: actionRefusal(t, response.body) });
       return;
     }
     setFeedback({ tone: 'success', text: t(`automation.rules.${action === 'archive_automation_rule' ? 'archived' : 'toggled'}`) });
@@ -336,7 +341,7 @@ export function Automations() {
     });
     setBusy(false);
     if (isErr(response.body)) {
-      setFeedback({ tone: 'error', text: t(`automation.error.${response.body.error}`) });
+      setFeedback({ tone: 'error', text: actionRefusal(t, response.body) });
       return;
     }
     setFeedback({ tone: 'success', text: t('automation.run.retried') });
@@ -349,7 +354,7 @@ export function Automations() {
     const response = await client.call('run_due_automations', { workspaceId });
     setBusy(false);
     if (isErr(response.body)) {
-      setFeedback({ tone: 'error', text: t(`automation.error.${response.body.error}`) });
+      setFeedback({ tone: 'error', text: actionRefusal(t, response.body) });
       return;
     }
     const fired = (response.body as unknown as { occurrences?: number }).occurrences ?? 0;

@@ -186,6 +186,10 @@ const PII_COLUMNS: readonly PiiColumn[] = [
   { table: 'creditor_bank_profile', column: 'iban', category: 'iban' },
   { table: 'payment_batch_item', column: 'creditor_iban', category: 'iban' },
   { table: 'bank_txn', column: 'payer_name', category: 'name' },
+  // A39 (lean critic C12): the counterparty an imported line names. `end_to_end_id` stays: an identifier,
+  // TILL's own on debits and the per-item match key of a payment run.
+  { table: 'bank_txn_detail', column: 'counterparty_name', category: 'name' },
+  { table: 'bank_txn_detail', column: 'counterparty_iban', category: 'iban' },
   { table: 'reconciliation_match', column: 'payer_name', category: 'name' },
   { table: 'gl_archive_line', column: 'source_account_name', category: 'name' },
   { table: 'document', column: 'sent_to_email', category: 'email' },
@@ -199,7 +203,7 @@ const PII_COLUMNS: readonly PiiColumn[] = [
 ];
 
 /** Free-text columns (may carry PII), redacted by name-pattern over every copied table. */
-const FREE_TEXT_RE = /^(notes?|memo|comment|remark|parse_notes|subject|subject_resolved|description|before_description|after_description)$/i;
+const FREE_TEXT_RE = /^(notes?|memo|comment|remark|parse_notes|subject|subject_resolved|description|before_description|after_description|remittance_text|supersede_reason)$/i;
 
 /** The pseudonym value for one PII cell, deterministic on the row id + category. */
 function pseudonymFor(category: PiiCategory, id: string): string {

@@ -21,8 +21,10 @@
  * diagnostics entry (the `emitAutomationEvents` posture).
  */
 
-import { ok } from '../core/result.js';
+import { ok, err } from '../core/result.js';
 import type { Result } from '../core/result.js';
+import { SCHEMA_NEWER_THAN_RUNTIME, SchemaNewerThanRuntimeError, refusalFields } from '../core/store/generation.js';
+import { isBusyError } from '../core/store/sqlite-store.js';
 import { makeContext } from '../core/context.js';
 import type { WorkspaceContext } from '../core/context.js';
 import { capabilityPort, isGovernedSeat, requiredCapabilitiesFor } from '../core/access/index.js';
@@ -102,7 +104,10 @@ function record(
       entry.verb === 'agent_ask'
         ? JSON.stringify({ ...entry.input, text: undefined, textOmitted: true })
         : JSON.stringify(entry.input);
-    recordAgentCall(contextFor(deps, workspaceId), {
+    // Inside `store.tx`, so the generation guard's first-statement check covers the trace rows too
+    // (M3, critic R1 F1): the session, turn and call rows commit together or, in a book a newer TILL
+    // migrated meanwhile, not at all. A refusal here is a recorder failure like any other (below).
+    deps.store.tx(() => recordAgentCall(contextFor(deps, workspaceId), {
       verb: entry.verb,
       kind: entry.kind,
       argsJson,
@@ -116,7 +121,7 @@ function record(
       agentActionId: entry.agentActionId,
       transportKey: deps.agentTransportKey,
       clientLabel: deps.agentClientLabel,
-    });
+    }));
   } catch (e) {
     // The trace must never break the verb: a recorder defect is a diagnostics entry, not an outcome.
     deps.diagnostics?.record({
@@ -130,6 +135,20 @@ function record(
 }
 
 /**
+ * The generation guard at the transport seam: the typed refusal as a Result when the book has moved
+ * on to a generation newer than this build since the store opened it, else undefined.
+ */
+function refuseMovedOnBook(deps: ApiDeps, name: string): Result | undefined {
+  try {
+    deps.store.assertGenerationKnown();
+    return undefined;
+  } catch (e) {
+    if (e instanceof SchemaNewerThanRuntimeError) return err(SCHEMA_NEWER_THAN_RUNTIME, { action: name, ...refusalFields(e) });
+    throw e;
+  }
+}
+
+/**
  * Dispatch one transport call. For every non-agent actor this IS `action.run`, byte for byte. For
  * the agent seat it records the call, and for a dial-governed write it routes execute/draft/deny.
  */
@@ -137,6 +156,14 @@ export function runGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput
   if (!isAgentSeat(deps)) return action.run(deps, input);
 
   const workspaceId = typeof input.workspaceId === 'string' && input.workspaceId.length > 0 ? input.workspaceId : undefined;
+  // M3 (critic R1 F1): a book a newer TILL migrated under this process is refused HERE, before the
+  // trace records the call and before a dial-governed write is drafted, because both of those write
+  // rows of their own that no verb's check sees. The scope is the registry's own: every workspace
+  // call and every pre-workspace write (a pre-workspace read writes no trace row).
+  if (workspaceId !== undefined || action.kind === 'write') {
+    const refused = refuseMovedOnBook(deps, action.name);
+    if (refused !== undefined) return refused;
+  }
   if (workspaceId === undefined) {
     // Pre-workspace verbs (and a missing tenant) have no tenant to record under AT CALL TIME
     // (§H-TENANT). Critic F8: for the tenant-MINTING verbs the tenant exists the moment the call
@@ -192,11 +219,37 @@ export function runGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput
       forceAsk: dialCapabilityIsForceAsk(ctx, dialCapability),
     });
     if (decision.mode === 'draft') {
-      const drafted = enqueueDraftedAction(ctx, {
-        actionTool: action.name,
-        payload: input,
-        dialCapability,
-      });
+      // Inside `store.tx` (M3, critic R1 F1): a draft is a row too, and a pending Vorschlag queued
+      // into a book a newer TILL migrated meanwhile would be replayed by the wrong build later.
+      let drafted: Result;
+      try {
+        drafted = ctx.store.tx(() =>
+          enqueueDraftedAction(ctx, {
+            actionTool: action.name,
+            payload: input,
+            dialCapability,
+          }),
+        );
+      } catch (e) {
+        if (e instanceof SchemaNewerThanRuntimeError) return err(SCHEMA_NEWER_THAN_RUNTIME, { action: action.name, ...refusalFields(e) });
+        // D12 (critic R2-2): the draft's transaction waited out the busy timeout behind the other
+        // process's write lock. This runs outside the registry's `guarded()`, so without this the
+        // SQLITE_BUSY escaped `callTool` as a JSON-RPC internal error and `handleRest` as a bare 500;
+        // it is the same retryable `store_busy` every verb answers, and nothing was queued.
+        if (isBusyError(e)) {
+          deps.diagnostics?.record({
+            kind: 'verb_error',
+            at: new Date().toISOString(),
+            code: 'store_busy',
+            action: action.name,
+            error: e,
+          });
+          const message = e instanceof Error ? e.message : String(e);
+          // `partial: false`: the seam wrote nothing of this call before the draft (see `guarded`).
+          return err('store_busy', { action: action.name, retryable: true, partial: false, message });
+        }
+        throw e;
+      }
       if (!drafted.ok) return drafted;
       const actionId = typeof drafted.actionId === 'string' ? drafted.actionId : undefined;
       const replayed = drafted.replayed === true;

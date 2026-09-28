@@ -16,6 +16,7 @@ import type { OkFields, Result } from '../core/result.js';
 import { err } from '../core/result.js';
 import type { SqliteStore } from '../core/store/sqlite-store.js';
 import { isBusyError } from '../core/store/sqlite-store.js';
+import { SchemaNewerThanRuntimeError, SCHEMA_NEWER_THAN_RUNTIME, refusalFields } from '../core/store/generation.js';
 import type { Clock } from '../core/clock.js';
 import type { IdGen } from '../core/ids.js';
 import type {
@@ -181,6 +182,7 @@ import { dunningActions } from './dunning-actions.js';
 import { recurringActions } from './recurring-actions.js';
 import { qrMatchActions } from './qr-match-actions.js';
 import { camtActions } from './camt-actions.js';
+import { bankInboxActions } from './bank-inbox-actions.js';
 import { pain001Actions } from './pain001-actions.js';
 import { workspaceActions } from './workspace-actions.js';
 import { reviewActions } from './review-actions.js';
@@ -196,6 +198,7 @@ import {
   registerWriteActions,
 } from '../core/automation/index.js';
 import type { ActionInvoker } from '../core/automation/index.js';
+import { postedBankLedgerLegs } from '../core/banking/automationGuard.js';
 import {
   createContact,
   updateContact,
@@ -388,11 +391,44 @@ function as<T>(input: ActionInput): T {
  * that escaped, it would be a 500 on REST and a JSON-RPC protocol error on MCP: the ONE way the two
  * faces could diverge. Catching it HERE, in the shared dispatch both adapters call, keeps every input
  * mapping to a Result and keeps the faces identical.
+ *
+ * `partial` (critic R2-4): every Result made here says whether THIS call had already written to the
+ * book before it threw. A verb that commits in steps (the send recorded before and after its email,
+ * the draft settled after the verb it approved) can fail at a later step, and the sentences these
+ * codes carry ("the book was not changed", the Studio's "nothing was changed") are then false. The
+ * connection's change count is read before the verb and again here, so the rule holds for every verb,
+ * including one written next year, with no census to keep true.
+ *
+ * `checkAfter` (critic R3-2): the marker is read again AFTER the verb, for every call the registry
+ * also checks BEFORE it (every workspace verb, reads included, and every pre-workspace write). The
+ * check before holds no snapshot, so a read verb whose statements straddle a newer TILL's migration
+ * read some rows at the old meaning and some at the new one, and answered ok. The connection's write
+ * chokepoint keeps every WRITE out of a newer book, but a read has nothing to refuse it mid-verb. So
+ * a book that is newer once the verb is done turns ANY answer (ok, a rejection, or an error the newer
+ * schema caused) into `schema_newer_than_runtime`, with `partial` measured as above: a read reports
+ * `partial: false`, and a write that had already committed says so.
  */
-function guarded<T extends OkFields>(name: string, run: () => Result<T>, deps?: ApiDeps): Result<T> {
+function guarded<T extends OkFields>(name: string, run: () => Result<T>, deps?: ApiDeps, checkAfter = false): Result<T> {
+  const changesBefore = changeCountOf(deps);
+  const refusalsBefore = refusalCountOf(deps);
+  const partialSince = (): boolean => {
+    const changesAfter = changeCountOf(deps);
+    return changesBefore !== undefined && changesAfter !== undefined && changesAfter > changesBefore;
+  };
+  let outcome: Result<T>;
   try {
-    return run();
+    outcome = run();
   } catch (e) {
+    const partial = partialSince();
+    // The book moved on under this process: a newer TILL migrated it after this store opened it, and
+    // the store refused the write before it ran (critic finding M3). That is a condition the caller
+    // must act on (update TILL), not a fault, so it keeps its code and its version pair. An error of
+    // another kind thrown on a book that has moved on (a statement meeting the newer schema) is the
+    // same condition, and is named as such.
+    const moved = e instanceof SchemaNewerThanRuntimeError ? e : checkAfter ? bookMovedOn(deps) : undefined;
+    if (moved !== undefined) {
+      return err(SCHEMA_NEWER_THAN_RUNTIME, { action: name, ...refusalFields(moved, partial) });
+    }
     // Lock contention is NOT an unexpected error, and flattening it into one loses the only fact the
     // caller can act on. D12 put a second writer on the file (the Studio and an agent subprocess hold
     // the same SQLite database), so a write can legitimately lose a race after waiting out its busy
@@ -406,14 +442,71 @@ function guarded<T extends OkFields>(name: string, run: () => Result<T>, deps?: 
       action: name,
       error: e,
     });
+    const message = e instanceof Error ? e.message : String(e);
     if (isBusyError(e)) {
-      return err('store_busy', {
-        action: name,
-        retryable: true,
-        message: e instanceof Error ? e.message : String(e),
-      });
+      return err('store_busy', { action: name, retryable: true, partial, message });
     }
-    return err('unexpected_error', { action: name, message: e instanceof Error ? e.message : String(e) });
+    return err('unexpected_error', { action: name, partial, message });
+  }
+  if (checkAfter) {
+    // Read BEFORE the check below, which raises (and counts) a refusal of its own.
+    const refusalsAfter = refusalCountOf(deps);
+    const moved = bookMovedOn(deps);
+    if (moved !== undefined) {
+      // SAVED WHOLE (`completed`) only when the verb answered ok AND no refusal was raised while it
+      // ran (critic R4-2). The chokepoint refuses every write after the move, so such a verb wrote
+      // nothing after it. A verb that swallowed a refusal (a tick answering ok with per-item
+      // failures) did not finish its work, and says part of it was saved. Unknown counts (a store
+      // stub) are never taken as proof.
+      const refusedDuring = refusalsBefore === undefined || refusalsAfter === undefined || refusalsAfter > refusalsBefore;
+      return err(SCHEMA_NEWER_THAN_RUNTIME, { action: name, ...refusalFields(moved, partialSince(), outcome.ok && !refusedDuring) });
+    }
+  }
+  return outcome;
+}
+
+/** The verb store's refusal count (`SqliteStore.refusalCount`, critic R4-2), or undefined. Never throws. */
+function refusalCountOf(deps?: ApiDeps): number | undefined {
+  try {
+    const store: unknown = deps?.store;
+    if (typeof store !== 'object' || store === null) return undefined;
+    const count = (store as { refusalCount?: unknown }).refusalCount;
+    return typeof count === 'function' ? (count.call(store) as number) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The typed refusal when the verb store's book has moved on to a generation newer than this build,
+ * else undefined. Never throws: a unit suite's store stub has no marker to read, and a failed read is
+ * not evidence that the book moved on.
+ */
+function bookMovedOn(deps?: ApiDeps): SchemaNewerThanRuntimeError | undefined {
+  try {
+    const store: unknown = deps?.store;
+    if (typeof store !== 'object' || store === null) return undefined;
+    const check = (store as { assertGenerationKnown?: unknown }).assertGenerationKnown;
+    if (typeof check === 'function') check.call(store);
+    return undefined;
+  } catch (e) {
+    return e instanceof SchemaNewerThanRuntimeError ? e : undefined;
+  }
+}
+
+/**
+ * The verb store's change count (`SqliteStore.changeCount`), or undefined when there is none to read:
+ * a unit suite's store stub, or a store whose connection is already gone. Never throws, because it is
+ * read inside the catch above.
+ */
+function changeCountOf(deps?: ApiDeps): number | undefined {
+  try {
+    const store: unknown = deps?.store;
+    if (typeof store !== 'object' || store === null) return undefined;
+    const count = (store as { changeCount?: unknown }).changeCount;
+    return typeof count === 'function' ? (count.call(store) as number) : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -529,6 +622,12 @@ function ctxAction<N extends string, T extends OkFields = OkFields>(
           .prepare('SELECT archived FROM workspace WHERE id = ?')
           .get(workspaceId) as { archived: number } | undefined;
         if (exists === undefined) return err('workspace_not_found', { workspaceId });
+        // M3: a book a newer TILL migrated under this process is refused before the verb runs, reads
+        // included (their numbers may mean something else now). Every write the verb then issues is
+        // checked again under the write lock by the connection's chokepoint (`GuardedDatabase` in
+        // `core/store/sqlite-store.ts`), and `guarded` reads the marker once more after the verb, so
+        // a read that straddles a newer TILL's migration is refused as well (critic R3-2).
+        deps.store.assertGenerationKnown();
         // The `as Result<T>` is the same widening every rejection path here performs: an `Err` is a
         // `Result<T>` for every T, and this branch only ever returns one.
         const denied = assertActionCapability(name, deps, input, workspaceId);
@@ -545,7 +644,7 @@ function ctxAction<N extends string, T extends OkFields = OkFields>(
         const outcome = call(ctxOf(deps, input), input, deps);
         if (kind === 'write' && outcome.ok) emitAutomationEvents(deps, name, input, outcome);
         return outcome;
-      }, deps),
+      }, deps, true),
   };
 }
 
@@ -573,7 +672,7 @@ function emitAutomationEvents(
 ): void {
   if (eventsEmittedBy(name).length === 0) return;
   try {
-    dispatchAutomationEvent(ctxOf(deps, input), invokerFor(deps), name, input, outcome);
+    dispatchAutomationEvent(ctxOf(deps, input), automationInvokerFor(deps), name, input, outcome);
   } catch (e) {
     deps.diagnostics?.record({
       kind: 'verb_error',
@@ -610,6 +709,55 @@ function invokerFor(deps: ApiDeps): ActionInvoker {
   };
 }
 
+/** Thrown inside a firing's savepoint to roll it back; never escapes `automationInvokerFor`. */
+class FiringRolledBack {
+  constructor(readonly refusal: Result) {}
+}
+
+/**
+ * The invoker a STORED RULE fires through (A39 critic A39R2-5, owner decision): `invokerFor` plus the
+ * fire-time half of "a stored rule never moves a bank ledger". The firing runs inside a savepoint; when
+ * it posted a leg onto a Bankkonto's ledger account (the count of posted bank-ledger legs grew, which also
+ * catches a posted draft or a reversal), the savepoint rolls back and the firing answers
+ * `action_not_automatable` with `reason: 'bank_ledger_leg'`, which G01 records on the run row. Every
+ * other firing is untouched. Used for event dispatch, the G01 firing verbs and the camt review signal;
+ * an agent-approval replay keeps the plain `invokerFor` (a human approved it).
+ */
+function automationInvokerFor(deps: ApiDeps): ActionInvoker {
+  const plain = invokerFor(deps);
+  return (tool, actionInput, asActor) => {
+    const workspaceId = typeof actionInput['workspaceId'] === 'string' ? (actionInput['workspaceId'] as string) : undefined;
+    if (workspaceId === undefined) return plain(tool, actionInput, asActor);
+    // The generation marker is read BEFORE the savepoint opens, exactly where every verb path reads it
+    // (the registry's pre-verb check): inside the transaction a newer TILL could not move the book, so
+    // the check has to see the book as the firing meets it, and a refusal counts on the store.
+    deps.store.assertGenerationKnown();
+    try {
+      return deps.store.tx(() => {
+        const before = postedBankLedgerLegs(deps.store.db, workspaceId);
+        const result = plain(tool, actionInput, asActor);
+        if (result.ok && firingPostedBankLeg(before, postedBankLedgerLegs(deps.store.db, workspaceId))) {
+          throw new FiringRolledBack(
+            err('action_not_automatable', {
+              tool,
+              reason: 'bank_ledger_leg',
+              detail: 'a stored rule never posts onto a Bankkonto ledger account; book the bank line instead',
+            }),
+          );
+        }
+        return result;
+      });
+    } catch (e) {
+      if (e instanceof FiringRolledBack) return e.refusal;
+      throw e;
+    }
+  };
+}
+
+function firingPostedBankLeg(before: number, after: number): boolean {
+  return after > before;
+}
+
 /** A deps-based action (pre-workspace setup): `run` calls the verb with the raw deps, throw-guarded. */
 function depsAction<N extends string, T extends OkFields = OkFields>(
   name: N,
@@ -627,8 +775,17 @@ function depsAction<N extends string, T extends OkFields = OkFields>(
       guarded(name, () => {
         const mismatch = typeMismatch(inputSchema, input);
         if (mismatch !== undefined) return err('invalid_input', { field: mismatch });
+        // M3, as in `ctxAction`: a pre-workspace WRITE never lands in a book a newer TILL migrated.
+        // Pre-workspace READS stay open on purpose (critic R1 F6 asked which): `delivery_status`
+        // reports the book's generation, which is how the mismatch is diagnosed at all;
+        // `list_workspaces` reads names and ids, never an amount; `verify_backup` (which applies its
+        // own generation rule to the bundle), `list_restorable_backups`, `get_api_catalog`, the
+        // `list_concepts`/`get_concept` guidance and the `migration_list_*`/extraction-guide
+        // registries do not read the book at all. None interprets a number whose meaning a
+        // generation can change.
+        if (kind === 'write') deps.store.assertGenerationKnown();
         return call(deps, input);
-      }, deps),
+      }, deps, kind === 'write'),
   };
 }
 
@@ -828,7 +985,7 @@ const postEntryAction = ctxAction(
 const reverseEntryAction = ctxAction(
   'reverse_entry',
   'write',
-  'Reverse a posted entry by posting its faithful mirror (OR 957a). Refuses `owned_by` on an entry a capability minted with a row of its own (an MWST-Saldierung, an Abgrenzung, a Rückstellung and their mirrors): reverse those through the owning verb (`vat_settlement_reverse`, `accrual_reverse`, `provision_reverse`, `provision_release_reverse`) so the row moves with the entry.',
+  'Reverse a posted entry by posting its faithful mirror (OR 957a). Refuses `owned_by` on an entry a capability minted with a row of its own (an MWST-Saldierung, an Abgrenzung, a Rückstellung, a payment, a bank-line booking, and their mirrors): reverse those through the owning verb the refusal names (`vat_settlement_reverse`, `accrual_reverse`, `provision_reverse`, `provision_release_reverse`, `reverse_payment`, `reopen_bank_line`) so the row moves with the entry. An entry a bank line holds (booked or matched on it) always refuses `owned_by reopen_bank_line` with that line\'s `bankTxnId`.',
   ctxSchema({ entryId: STR, date: STR, description: STR, idempotencyKey: STR }, ['entryId', 'idempotencyKey']),
   (ctx, input) => reverseEntry(ctx, as(input)),
 );
@@ -1640,7 +1797,7 @@ export const ACTIONS: readonly ActionDef[] = [
   // G01, automation rules. The one capability whose verbs can cause another verb to run, which is why
   // `invokerFor` rides along: it is the only route from an engine module back into this dispatch, and
   // it is the reason G01 needs no write path of its own.
-  ...automationActions({ ctxAction, ctxSchema, invokerFor, STR, BOOL, INT }),
+  ...automationActions({ ctxAction, ctxSchema, invokerFor: automationInvokerFor, STR, BOOL, INT }),
 
   // D00, the products/items master's NEW verbs (delete_item, the category tree, the price lists and
   // the resolver). Defined in `./item-actions.ts` and spread in as one line; the item CRUD itself
@@ -1745,6 +1902,10 @@ export const ACTIONS: readonly ActionDef[] = [
   // as one line. A CREDIT never settles here (`confirm_match` refuses `use_qr_queue`): it is decided
   // in A21's own queue, which `import_camt` routes it into.
   ...camtActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // A39, the bank inbox: one line, one proposal, confirm, undo by reversal. Three writes and one read,
+  // spread in as one line; the A20 verbs above stay as wrappers over the same core.
+  ...bankInboxActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
 
   // A18, creditor payments: select A17's open items, generate a pain.001.001.09 credit-transfer
   // initiation, mark paid through A14's recordPayment. Eight verbs (five writes, three reads), spread

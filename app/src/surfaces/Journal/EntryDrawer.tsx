@@ -145,6 +145,41 @@ function lineFrom(line: EntryLine): DraftLine {
   };
 }
 
+
+/** Where an owned entry is undone, and in which words (A39 §6, lean critic C11 and L4). */
+interface OwnedByWording {
+  messageKey: string;
+  href: string;
+  linkKey: string;
+}
+
+/** The owner verbs whose undo lives on one surface, and that surface. */
+const OWNER_SURFACE: Readonly<Record<string, string>> = {
+  reverse_payment: '/payments',
+  vat_settlement_reverse: '/mwst',
+  accrual_reverse: '/periods',
+  provision_reverse: '/periods',
+  provision_release_reverse: '/periods',
+  fx_revaluation_reverse: '/fx',
+};
+
+/**
+ * An `owned_by` refusal in the owner's words: a live bank line links to that line; a camt entry already
+ * reversed (or its Storno) has no live line, so it says so and links to the inbox; every other owner verb
+ * names its surface. Null for anything else, which the shared banner words.
+ */
+function ownedByWording(error: { error: string; [key: string]: unknown }): OwnedByWording | null {
+  if (error.error !== 'owned_by' || typeof error.verb !== 'string') return null;
+  if (error.verb === 'reopen_bank_line') {
+    return typeof error.bankTxnId === 'string'
+      ? { messageKey: 'entry.ownedBy.reopen_bank_line', href: `/bank?tab=booked&line=${encodeURIComponent(error.bankTxnId)}`, linkKey: 'entry.ownedByShowLine' }
+      : { messageKey: 'entry.ownedBy.reopen_bank_line_done', href: '/bank', linkKey: 'entry.ownedByGoTo.bank' };
+  }
+  const surface = OWNER_SURFACE[error.verb];
+  if (surface === undefined) return null;
+  return { messageKey: `entry.ownedBy.${error.verb}`, href: surface, linkKey: `entry.ownedByGoTo.${surface.slice(1)}` };
+}
+
 export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: EntryDrawerProps) {
   const t = useT();
   const tRich = useTRich();
@@ -1061,6 +1096,21 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
                   })}
                 </p>
               </div>
+            ) : writeErr !== null && ownedByWording(writeErr) !== null ? (
+              /* A39 §6 (lean critic C11, L4): an owned entry is undone by its owner's own verb, so the
+                 refusal names the owner and where to undo it, one sentence per verb, never the generic
+                 banner. The shared banner still carries the report offer. */
+              (() => {
+                const owned = ownedByWording(writeErr) as OwnedByWording;
+                return (
+                  <>
+                    <ErrorBanner error={writeErr} message={t(owned.messageKey)} />
+                    <Link className="link-inline" to={owned.href}>
+                      {t(owned.linkKey)}
+                    </Link>
+                  </>
+                );
+              })()
             ) : (
               writeErr !== null && <ErrorBanner error={writeErr} />
             )}
