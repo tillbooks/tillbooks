@@ -306,6 +306,56 @@ describe('AccountDrawer', () => {
     expect(updateSpy.mock.calls[0][0]).toMatchObject({ accountId: IN_USE.id, name: 'Kasse CHF' });
   });
 
+  it('D142 amendment: "Beleg = Kontoauszug" is a checkbox in the edit drawer, sent with update_account', async () => {
+    const updateSpy = vi.fn<CannedHandler>(() => ok());
+    renderAccounts({
+      ...happyCanned(),
+      update_account: updateSpy,
+      account_set_tax_default: ok(),
+    });
+    const row = (await screen.findByText(IN_USE.name)).closest('li') as HTMLElement;
+    await userEvent.click(within(row).getByRole('button', { name: /bearbeiten$/ }));
+    const dialog = await screen.findByRole('dialog');
+    const flag = within(dialog).getByRole('checkbox', { name: 'Beleg = Kontoauszug' });
+    expect(flag).not.toBeChecked();
+    expect(flag).toHaveAccessibleDescription(/Der Kontoauszug ist der Beleg/);
+    await userEvent.click(flag);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledOnce());
+    expect(updateSpy.mock.calls[0][0]).toMatchObject({ accountId: IN_USE.id, statementIsVoucher: true });
+  });
+
+  it('critic R2-3a: a rename leaves "Beleg = Kontoauszug" unsent, so the seed default is never pinned', async () => {
+    const updateSpy = vi.fn<CannedHandler>(() => ok());
+    renderAccounts({
+      ...happyCanned(),
+      update_account: updateSpy,
+      account_set_tax_default: ok(),
+    });
+    const row = (await screen.findByText(IN_USE.name)).closest('li') as HTMLElement;
+    await userEvent.click(within(row).getByRole('button', { name: /bearbeiten$/ }));
+    const dialog = await screen.findByRole('dialog');
+    const name = within(dialog).getByLabelText('Bezeichnung');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Kasse CHF');
+    // Toggled and toggled back is no change either.
+    const flag = within(dialog).getByRole('checkbox', { name: 'Beleg = Kontoauszug' });
+    await userEvent.click(flag);
+    await userEvent.click(flag);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledOnce());
+    expect(updateSpy.mock.calls[0][0]).toMatchObject({ accountId: IN_USE.id, name: 'Kasse CHF' });
+    expect('statementIsVoucher' in (updateSpy.mock.calls[0][0] as Record<string, unknown>)).toBe(false);
+  });
+
+  it('D142 amendment: a new account offers no "Beleg = Kontoauszug" box (it is set on the account afterwards)', async () => {
+    renderAccounts(happyCanned());
+    await screen.findByText(IN_USE.name);
+    await userEvent.click(screen.getByRole('button', { name: 'Neues Konto' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('checkbox', { name: 'Beleg = Kontoauszug' })).toBeNull();
+  });
+
   /**
    * THE SURFACE'S ONLY OTHER axe BLOCK RUNS WITH THIS DRAWER CLOSED, so the drawer element has
    * never once entered the accessibility tree an audit reads. That is why the defect below survived

@@ -23,6 +23,7 @@ export const DASHBOARD_TILES = [
   'project_margin',
   'mwst_due',
   'stock_value',
+  'bank_inbox',
 ] as const;
 
 export type DashboardTile = (typeof DASHBOARD_TILES)[number];
@@ -65,6 +66,10 @@ export const TILE_REGISTRY: readonly DashboardTileDef[] = [
   { tile: 'project_margin', requires: ['costing.read'], glyph: '◭', studioRoute: '/projects', mcpTool: 'costing_pl_list' },
   { tile: 'mwst_due', requires: ['read_vat'], glyph: '▣', studioRoute: '/mwst', mcpTool: 'vat_return' },
   { tile: 'stock_value', requires: ['read_master_data'], glyph: '▦', studioRoute: '/inventory', mcpTool: 'stock_valuation_report' },
+  // D142: the Übersicht's Bankeingang band. ALL-OF: `read_sales` is `list_bank_inbox`'s gate (the lines
+  // and their facets), `read_books` is `bank_channel_status`'s (the fetch line). The Studio renders it as
+  // the full-width band above the grid, not as a tile in it.
+  { tile: 'bank_inbox', requires: ['read_sales', 'read_books'], glyph: '⇄', studioRoute: '/bank', mcpTool: 'list_bank_inbox' },
 ];
 
 const DEF_BY_TILE: ReadonlyMap<string, DashboardTileDef> = new Map(TILE_REGISTRY.map((d) => [d.tile, d]));

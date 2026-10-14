@@ -495,6 +495,36 @@ export function acceptQuote(ctx: WorkspaceContext, input: AcceptQuoteInput): Res
   return runTx(ctx, 'quotes_accept', input.idempotencyKey, run);
 }
 
+/**
+ * The registered `transition_document` verb (A10's public edge). Every edge is `transitionDocument`
+ * except a quote's `accepted`, which is `acceptQuote`: accepting a quote binds it (OR Art. 1/3), so the
+ * expiry refusal, the `accepted_by` stamp and the single-use token spend apply on every face that names
+ * the engine verb, exactly as on `quotes_accept` (critic B1 on claude/rmap-land: the bare edge made a sent
+ * quote binding past its window, unstamped, with its customer link still live). Routed rather than
+ * refused because `transition_document {to:'accepted'}` is a documented, exercised path (A10 parity, the
+ * convert_document seed, the demo seed). The idempotency identity stays (this document, this key), as on
+ * every other `transition_document` edge. `acceptQuote` itself calls the raw `transitionDocument`.
+ */
+export function transitionDocumentVerb(
+  ctx: WorkspaceContext,
+  input: { documentId: string; to: string; idempotencyKey?: string },
+): Result {
+  if (input.to === 'accepted' && typeof input.documentId === 'string' && readQuoteColumns(ctx, input.documentId) !== undefined) {
+    const key =
+      typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0
+        ? JSON.stringify([input.documentId, input.idempotencyKey])
+        : undefined;
+    // K1: the derived (document, key) pair memoises in this composite's own scope
+    // (`transition_document>quotes_accept`), which no public verb writes. In the public `quotes_accept`
+    // scope a caller could store a result under `["<doc>","K"]` first (on any quote), and this route
+    // would replay it while the named quote never moved.
+    return ctx.store.innerWrite('transition_document', () =>
+      acceptQuote(ctx, { quoteId: input.documentId, ...(key === undefined ? {} : { idempotencyKey: key }) }),
+    );
+  }
+  return transitionDocument(ctx, input);
+}
+
 export interface DeclineQuoteInput {
   quoteId?: string;
   token?: string;
@@ -576,7 +606,7 @@ export function reviseQuote(ctx: WorkspaceContext, input: ReviseQuoteInput): Res
       supplyDate: string | null;
     }
     const sourceView = before as unknown as {
-      document: { status: string; contactId: string | null; currency: string };
+      document: { status: string; contactId: string | null; currency: string; supplyDate?: string | null };
       lines: ClonableLine[];
     };
     const source = sourceView.document;
@@ -613,7 +643,14 @@ export function reviseQuote(ctx: WorkspaceContext, input: ReviseQuoteInput): Res
       taxCode: l.taxCode,
       supplyDate: l.supplyDate,
     }));
-    const created = createDocument(ctx, { type: 'quote', contactId: source.contactId, lines: cloned, currency: source.currency });
+    // D164: a revision keeps the document-level Leistungsdatum as well as each line's own date.
+    const created = createDocument(ctx, {
+      type: 'quote',
+      contactId: source.contactId,
+      lines: cloned,
+      currency: source.currency,
+      supplyDate: source.supplyDate ?? null,
+    });
     if (!created.ok) return created;
     const newId = documentIdOf(created);
     ctx.store.db

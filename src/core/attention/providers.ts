@@ -20,12 +20,15 @@
  * A24 gate, and nothing else.
  */
 
+import type { VorschlagFigures } from '../agent/vorschlagPin.js';
 import type { WorkspaceContext } from '../context.js';
 import { listUnmatchedIncoming } from '../banking/index.js';
 import { listDunningRuns } from '../dunning/index.js';
 import { listDraftedActions, dialCapabilityForCall, CONSEQUENCE_FOR_ACTION } from '../agent/index.js';
 import { AGENT_ACTOR, SERVED_MEMBER_ACTOR_PREFIX } from '../access/actors.js';
 import { checklistItemsDueProvider } from '../checklists/attentionProvider.js';
+import { bankActivationProvider, bankKeysReviewProvider } from '../banking/ebics/attentionProvider.js';
+import { bankFetchFailedProvider, bankLinesWaitingProvider, bankStatementGapProvider } from '../banking/attentionProviders.js';
 import type { ActorKind, AttentionDecisionOption, AttentionItem, QueueProvider } from './types.js';
 
 /**
@@ -35,7 +38,7 @@ import type { ActorKind, AttentionDecisionOption, AttentionItem, QueueProvider }
  * `deepLinkRoute` is not in this set fails registration, which is how the design's row 2.3 dead end
  * (a hub row that opens a Placeholder) is designed out rather than handled.
  */
-export const ROUTED_SURFACES: ReadonlySet<string> = new Set(['/bank', '/dunning', '/agent', '/journal', '/checklisten']);
+export const ROUTED_SURFACES: ReadonlySet<string> = new Set(['/bank', '/dunning', '/agent', '/journal', '/checklisten', '/bank-accounts']);
 
 /**
  * The OP3 entity kinds the providers reference, hoisted to consts rather than written inline.
@@ -67,12 +70,30 @@ function okOrThrow(res: { ok: boolean } & Record<string, unknown>, queueId: stri
  */
 function consequenceOf(verb: string, payload: Readonly<Record<string, unknown>> = {}): { consequenceKey: string | null; consequence: string | null } {
   // Per CALL, not per name: an input-keyed rule (G22's ePortal attestation) governs one payload of a
-  // verb the name-keyed map does not list, and its Vorschlag card must carry that capability's sentence.
+  // verb the name-keyed map does not list. This is for a write the row CAN MAKE; a Vorschlag that was
+  // already drafted takes `draftedConsequenceOf` instead (critic F1, D141.5 R4-1).
   const capability = dialCapabilityForCall(verb, payload);
   const sentence = CONSEQUENCE_FOR_ACTION[verb];
   return {
     consequenceKey: capability === undefined ? null : `agent.consequence.${capability}`,
     consequence: sentence ?? null,
+  };
+}
+
+/**
+ * The consequence of a DRAFTED Vorschlag, keyed on the tier the transport seam STORED when it drafted
+ * (`agent_action.dial_capability`), never recomputed from the payload (non-author critic F1, D141.5
+ * R4-1, 30.09.2026). "Genehmigen und künftig automatisch" grants exactly that stored tier
+ * (`approveDraftedAction`), so the sentence beside it must name the same one. Recomputing from the input
+ * was wrong for every tier the seam reads from the book (an automation rule's enable drafts at the tier
+ * of the verb the stored rule fires, `post` for a `post_entry` rule, while the input alone says
+ * `customize`): the hub told the approver "Anpassen" and the grant wrote `post=auto`. A row with no
+ * stored tier carries no sentence key rather than an invented one.
+ */
+function draftedConsequenceOf(verb: string, storedCapability: unknown): { consequenceKey: string | null; consequence: string | null } {
+  return {
+    consequenceKey: typeof storedCapability === 'string' && storedCapability.length > 0 ? `agent.consequence.${storedCapability}` : null,
+    consequence: CONSEQUENCE_FOR_ACTION[verb] ?? null,
   };
 }
 
@@ -328,7 +349,6 @@ const agentActionProvider: QueueProvider = {
     return actions.slice(0, opts.limit).map((a) => {
       const actionId = String(a.actionId);
       const tool = String(a.actionTool ?? '');
-      const payload = typeof a.payload === 'object' && a.payload !== null ? (a.payload as Record<string, unknown>) : {};
       const deepLink = { route: '/agent', params: { actionId } };
       const options: AttentionDecisionOption[] = [
         {
@@ -371,7 +391,10 @@ const agentActionProvider: QueueProvider = {
         deepLink,
         ...(typeof a.actor === 'string' ? { proposedBy: a.actor } : {}),
         decisionOptions: options,
-        ...consequenceOf(tool, payload),
+        ...draftedConsequenceOf(tool, a.dialCapability),
+        // Critic N1: what is being approved, as the agent proposed it, and whether it changed since.
+        ...(a.figures !== undefined ? { figures: a.figures as VorschlagFigures | null } : {}),
+        ...(a.changedSinceProposal === true ? { changedSinceProposal: true } : {}),
       } satisfies AttentionItem;
     });
   },
@@ -491,4 +514,17 @@ export const ATTENTION_PROVIDERS: readonly QueueProvider[] = [
   // G22 (D127): open checklist items due within 14 days, overdue after their date. Defined beside the
   // checklist engine (`src/core/checklists/attentionProvider.ts`) and spread in as one line.
   checklistItemsDueProvider,
+  // D143: a bank that answered HPB while its activation is in progress: the human compares the keys.
+  // Defined beside the EBICS engine (`src/core/banking/ebics/attentionProvider.ts`), one line.
+  bankKeysReviewProvider,
+  // The activation BEFORE the bank is ready (send INI/HIA, sign and post the INI letter, wait for the
+  // bank), mutually exclusive with the review above by construction. Same file, one line.
+  bankActivationProvider,
+  // D150 (A36 §4.7): what the Übersicht missed on 01.10.2026. A failed automatic fetch that waits for a
+  // person, every open statement gap, and the bank lines that need a person (minus those a pending
+  // Vorschlag already names, which `agent_action` counts). Defined beside the banking engine
+  // (`src/core/banking/attentionProviders.ts`), one line each.
+  bankFetchFailedProvider,
+  bankStatementGapProvider,
+  bankLinesWaitingProvider,
 ];

@@ -269,3 +269,124 @@ export function allocationSummary(payment: Payment): { kind: 'none' | 'one' | 'm
   if (allocations.length === 1) return { kind: 'one', value: allocations[0].targetNumber };
   return { kind: 'many', value: String(allocations.length) };
 }
+
+/**
+ * A registered Bankkonto (A19) as `list_bank_accounts` answers it, narrowed to what the Werkbank's
+ * Konto default reads. Declared against `app/src/surfaces/BankAccounts/list-bank-accounts.fixture.json`,
+ * which `test/banking/studio-bank-accounts-fixture.test.mjs` pins to the live engine.
+ */
+export interface BankAccountLink {
+  id: string;
+  name: string;
+  currency: string;
+  /** The ledger account the Bankkonto books on: the id `record_payment` takes as `bankAccountId`. */
+  ledgerAccountId: string;
+  /** A QR-IBAN only ever receives money, so it is never the default for an outgoing payment. */
+  receiveOnly: boolean;
+  archived: boolean;
+}
+
+/**
+ * The Konto a new payment defaults to, or null when TILL has to ask (D152 rule 1, infer before asking).
+ *
+ * The default comes from the Bankkonten, never from the chart's first cash account: the Werkbank used
+ * to preselect `1000 Kassenbestand` simply because it sorts first, so an unread default booked bank
+ * money on the till.
+ *
+ * EVERY rule runs on the Bankkonten in the books' BASE currency only, because the drawer sends no
+ * currency and the engine therefore books the payment in the base currency. An EUR Bankkonto is never
+ * the default for a CHF payment, however alone it is (critic F2). An unknown base currency asks.
+ *
+ * The answer is a LEDGER account, so Bankkonten are grouped by the ledger account they book on. A
+ * ledger account can carry the payment when at least one of its Bankkonten can: any live one for an
+ * incoming payment, one that is not a receive-only QR-IBAN for an outgoing one. A QR-IBAN sharing its
+ * ledger account with an ordinary Bankkonto therefore changes nothing; a ledger account reached only
+ * through a QR-IBAN is not a default for money going out. Exactly one ledger account that can carry
+ * it is the default; none or several, and the picker asks.
+ *
+ * Pure, so the rule is asserted without a render. The answer is shown in the picker before anything
+ * posts, and a person's own choice always wins over it.
+ */
+export function inferBankLedgerAccount(
+  offered: readonly BankAccountOption[],
+  links: readonly BankAccountLink[],
+  direction: string,
+  baseCurrency: string | null,
+): string | null {
+  if (baseCurrency === null) return null;
+  const offeredIds = new Set(offered.map((account) => account.id));
+  const carrying = new Set<string>();
+  for (const link of links) {
+    if (link.archived || link.currency !== baseCurrency || !offeredIds.has(link.ledgerAccountId)) continue;
+    if (direction === 'outgoing' && link.receiveOnly) continue;
+    carrying.add(link.ledgerAccountId);
+  }
+  return carrying.size === 1 ? [...carrying][0] : null;
+}
+
+/** The two tiers the engine says settle a match on their own (`src/core/payments/matching.ts`). */
+const SETTLES_ON_ITS_OWN = new Set(['exact_reference', 'exact_amount_customer']);
+
+/**
+ * The open item an untouched payment is pre-assigned to, read off the ENGINE's answer (critic F1).
+ *
+ * The Studio ranks nothing of its own. `suggest_payment_matches` already decides which single item a
+ * payment settles: it prefills (`prefillMinor > 0`) the one candidate of the top tier, and only when
+ * that tier settles a match on its own (a matching QR reference, or the exact amount AND the customer)
+ * and holds exactly one candidate. A Studio rule of its own once pre-assigned an amount coincidence
+ * while the payer's QR reference named a different invoice, and an untouched drawer posted it.
+ *
+ * So the pre-assignment is the engine's prefill, taken only when it is complete and unambiguous:
+ *
+ *  - exactly one candidate carries a prefill, it is live (not settled, not disabled), and its tier
+ *    settles on its own;
+ *  - the prefill is the whole Betrag AND the whole open amount of that item, so the item is settled by
+ *    exactly this money and nothing is left to guess (a part payment, or money left over, is the
+ *    person's call);
+ *  - no exact_reference candidate names a different item;
+ *  - when a Gegenpartei is chosen, the item is that Gegenpartei's, and the exact-amount-and-customer
+ *    tier is only taken with one chosen.
+ *
+ * Anything else pre-assigns nothing. `tied` lists the candidates of a top tier that settles on its
+ * own but holds two or more items: the engine's own tie, shown to the person as a tie.
+ */
+export function enginePreAssignment(
+  candidates: readonly Candidate[],
+  amountMinor: number,
+  counterpartyId: string,
+): { target: Candidate | null; tied: Candidate[] } {
+  const top = candidates.find((c) => c.kind !== null);
+  const tied =
+    top !== undefined && top.kind !== null && SETTLES_ON_ITS_OWN.has(top.kind)
+      ? candidates.filter((c) => c.kind === top.kind)
+      : [];
+  const none = { target: null, tied: tied.length > 1 ? tied : [] };
+  if (amountMinor <= 0) return none;
+
+  const prefilled = candidates.filter((c) => c.prefillMinor > 0);
+  if (prefilled.length !== 1) return none;
+  const target = prefilled[0];
+  if (target.settled || target.disabledReason !== null) return none;
+  if (target.kind === null || !SETTLES_ON_ITS_OWN.has(target.kind)) return none;
+  if (target.prefillMinor !== amountMinor || target.openMinor !== amountMinor) return none;
+  if (candidates.some((c) => c.kind === 'exact_reference' && c.targetId !== target.targetId)) return none;
+  // "The customer agrees" needs a customer: without a chosen Gegenpartei the engine cannot give this
+  // tier at all, so a list claiming it is not trusted to pre-assign.
+  if (target.kind === 'exact_amount_customer' && counterpartyId === '') return none;
+  if (counterpartyId !== '' && target.contactId !== counterpartyId) return none;
+  return { target, tied: [] };
+}
+
+/**
+ * Whether a confirm may post what it was shown (critic F3, R2-F5). Only the SAME question the person
+ * clicked on, only while every read the post depends on has answered THAT question
+ * (`everythingAnswered`, the one predicate the button uses too), and only on a postable plan.
+ */
+export function confirmMayPost(
+  shown: { question: string } | null,
+  currentQuestion: string,
+  everythingAnswered: boolean,
+  postable: boolean,
+): boolean {
+  return shown !== null && shown.question === currentQuestion && everythingAnswered && postable;
+}

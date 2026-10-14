@@ -6,10 +6,19 @@
  * the settings-shaped screen is Setup and is A00's), so it lands as a rail item in the
  * workspace-governance cluster, the DocumentTemplates precedent exactly (spec §0 item 8e).
  *
- * THE SEND LINE, stated where it renders: this surface changes NO send behaviour. The lede says
- * so, because the operator editing the Mahnung text deserves to know the channels, confirmations
- * and recipients stay with the documents. The Protokoll is append-only: no control here (or
- * anywhere) edits or deletes a logged send.
+ * THE SEND LINE: this surface changes NO send behaviour. The title's help says so (D152 rule 4:
+ * words on demand, not a lede at rest), because the operator editing the Mahnung text deserves to
+ * know the channels, confirmations and recipients stay with the documents. The Protokoll is
+ * append-only: no control here (or anywhere) edits or deletes a logged send.
+ *
+ * THE STANDARD TEXT IS A VALUE, NOT A GAP (D152 rule 1). An unsaved slot prefills Betreff and
+ * Nachrichtentext with the engine's own built-in text (`dispatchDefaultText`, the literal the send
+ * falls back to, imported from its pure leaf, never mirrored), tagged "Standard" while a field
+ * equals it. Speichern appears only once the text differs from what is in force, so saving an
+ * untouched standard can never create a stored override: an unsaved slot stays unsaved, and the
+ * send keeps falling back to the built-in text exactly as before. "Auf Standard zurücksetzen" on a
+ * SAVED slot calls `dispatch_text_reset`, which deletes the stored text so the slot follows the
+ * built-in default again; on an unsaved slot it only discards the edit.
  *
  * TWO LANGUAGES ON ONE SCREEN, deliberately (the §6 discipline): the editor chrome renders in the
  * operator's Studio locale; the text being edited belongs to the slot's locale tab.
@@ -18,7 +27,7 @@
  * gates are the Studio convenience over `whoami` (fail-open); the engine is the real gate, and the
  * pre-disabled Speichern carries its reason as a `.lock-note` beside it, never a hover-only title.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
@@ -34,6 +43,9 @@ import { Select } from '../../components/Select';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { Segmented } from '../../components/Segmented';
 import { Status, type StatusKind } from '../../components/Status';
+import { Tooltip } from '../../components/Tooltip';
+import { InfoGlyph } from '../Bank/glyphs';
+import { dispatchDefaultText } from '../../../../src/core/customization/dispatchDefaults.js';
 import { formatCalendar } from '../../lib/format';
 import './Dispatch.css';
 
@@ -180,9 +192,11 @@ export function Dispatch() {
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
   const [writeError, setWriteError] = useState<Err | null>(null);
-  const [saved, setSaved] = useState(false);
+  // The one-line outcome under the editor after a write: the save, or the reset to the standard.
+  const [notice, setNotice] = useState<'saved' | 'reset' | null>(null);
   const [busy, setBusy] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const fieldId = useId();
 
   const load = useCallback(async () => {
     if (workspaceId === null) {
@@ -227,13 +241,14 @@ export function Dispatch() {
     [client, workspaceId],
   );
 
-  /** Prefill the editor from the saved slot (or empty when the built-in default is in force). */
+  /** Prefill the editor from the saved slot, or with the built-in standard text when none is saved. */
   const pickSlot = useCallback(
     (forKind: Kind, forLocale: string) => {
       setWriteError(null);
       const slot = texts.find((x) => x.documentKind === forKind && x.locale === forLocale);
-      setSubject(slot?.subject ?? '');
-      setBodyText(slot?.body ?? '');
+      const standard = dispatchDefaultText(forKind, forLocale);
+      setSubject(slot?.subject ?? standard.subject);
+      setBodyText(slot?.body ?? standard.body);
       void renderPreview(forKind, forLocale);
     },
     [texts, renderPreview],
@@ -246,8 +261,13 @@ export function Dispatch() {
 
   const save = useCallback(async () => {
     if (workspaceId === null || subject.trim() === '' || bodyText.trim() === '') return;
+    // Nothing to write while the editor holds exactly what is in force: for an unsaved slot that is
+    // the built-in standard, so an untouched standard never becomes a stored override (D152 rule 1).
+    const slot = texts.find((x) => x.documentKind === kind && x.locale === locale);
+    const inForce = slot ?? dispatchDefaultText(kind, locale);
+    if (subject === inForce.subject && bodyText === inForce.body) return;
     setWriteError(null);
-    setSaved(false);
+    setNotice(null);
     setBusy(true);
     // Naturally idempotent (spec §10.4): the verb asserts the absolute state of one slot, so there
     // is deliberately NO idempotencyKey here.
@@ -263,10 +283,33 @@ export function Dispatch() {
       setWriteError(response.body);
       return;
     }
-    setSaved(true);
+    setNotice('saved');
     await load();
     void renderPreview(kind, locale);
-  }, [client, workspaceId, kind, locale, subject, bodyText, load, renderPreview]);
+  }, [client, workspaceId, texts, kind, locale, subject, bodyText, load, renderPreview]);
+
+  /**
+   * Return a SAVED slot to the built-in default: `dispatch_text_reset` deletes the stored text, so
+   * the slot follows the standard again (a later change to the built-in text reaches it) instead of
+   * freezing a copy of it. No Speichern step: the reset is the write. The reload re-prefills the
+   * fields with the standard and the preview re-renders as "Eingebauter Standardtext".
+   */
+  const resetSaved = useCallback(async () => {
+    if (workspaceId === null) return;
+    setWriteError(null);
+    setNotice(null);
+    setBusy(true);
+    // Naturally idempotent (spec §10.4): resetting an unsaved slot is a no-op, so no idempotencyKey.
+    const response = await client.call('dispatch_text_reset', { workspaceId, documentKind: kind, locale });
+    setBusy(false);
+    if (isErr(response.body)) {
+      setWriteError(response.body);
+      return;
+    }
+    setNotice('reset');
+    await load();
+    void renderPreview(kind, locale);
+  }, [client, workspaceId, kind, locale, load, renderPreview]);
 
   /** Insert a variable chip into the body at the cursor (keyboard-reachable: chips are buttons). */
   const insertVariable = useCallback(
@@ -312,7 +355,44 @@ export function Dispatch() {
   if (workspaceId === null) return <NoWorkspaceState />;
   if (denied) return <PermissionDenied body={t('dispatch.permissionDenied.read')} />;
 
-  const slotSaved = texts.some((x) => x.documentKind === kind && x.locale === locale);
+  const savedSlot = texts.find((x) => x.documentKind === kind && x.locale === locale);
+  const standard = dispatchDefaultText(kind, locale);
+  const inForce = savedSlot ?? standard;
+  const subjectIsStandard = subject === standard.subject;
+  const bodyIsStandard = bodyText === standard.body;
+  // Speichern exists only when there is something to save: the text differs from what is in force
+  // and neither field is blank (D152 rule 3: absent, not disabled, beside the fields that unlock it).
+  const canSave =
+    (subject !== inForce.subject || bodyText !== inForce.body) && subject.trim() !== '' && bodyText.trim() !== '';
+  const ids = {
+    subject: `${fieldId}-subject`,
+    subjectTag: `${fieldId}-subject-standard`,
+    body: `${fieldId}-body`,
+    bodyTag: `${fieldId}-body-standard`,
+  };
+  // A saved slot resets through the engine (the stored text is deleted); an unsaved slot with an
+  // edit only discards the edit, because the standard is already what is in force.
+  const resetToStandard = () => {
+    if (savedSlot !== undefined) {
+      void resetSaved();
+      return;
+    }
+    setSubject(standard.subject);
+    setBodyText(standard.body);
+    setNotice(null);
+    setWriteError(null);
+  };
+  // The reset is offered while the text differs from the standard, and on any saved slot: a stored
+  // copy of the standard text still freezes the slot, and releasing it is a real reset.
+  const canReset = savedSlot !== undefined || !subjectIsStandard || !bodyIsStandard;
+  /** The (i) beside a heading: an icon button whose one-sentence explanation is its tooltip (D152 rule 4). */
+  const info = (label: string, text: string) => (
+    <Tooltip content={text} placement="bottom">
+      <button type="button" className="btn btn--ghost btn--icon btn--sm dispatch-info" aria-label={label}>
+        <InfoGlyph size={16} />
+      </button>
+    </Tooltip>
+  );
   const visibleRows = outcomeFilter === '' ? rows : rows.filter((r) => r.outcome === outcomeFilter);
 
   const textsTab = (
@@ -327,7 +407,7 @@ export function Dispatch() {
             value={kind}
             onChange={(k) => {
               setKind(k);
-              setSaved(false);
+              setNotice(null);
             }}
           />
           <Segmented
@@ -336,12 +416,10 @@ export function Dispatch() {
             value={locale}
             onChange={(l) => {
               setLocale(l);
-              setSaved(false);
+              setNotice(null);
             }}
           />
         </div>
-
-        {!slotSaved && <p className="dispatch-muted">{t('dispatch.texts.defaultInUse')}</p>}
 
         <form
           className="dispatch-editor"
@@ -350,35 +428,55 @@ export function Dispatch() {
             void save();
           }}
         >
-          <label className="dispatch-field">
-            <span>{t('dispatch.texts.subject')}</span>
+          <div className="dispatch-field">
+            <span className="dispatch-field-head">
+              <label htmlFor={ids.subject}>{t('dispatch.texts.subject')}</label>
+              {subjectIsStandard && (
+                <span id={ids.subjectTag}>
+                  <Status kind="neutral" label={t('dispatch.texts.standard')} />
+                </span>
+              )}
+            </span>
             <input
+              id={ids.subject}
               className="field"
               type="text"
               value={subject}
+              aria-describedby={subjectIsStandard ? ids.subjectTag : undefined}
               onChange={(e) => {
                 setSubject(e.target.value);
-                setSaved(false);
+                setNotice(null);
               }}
             />
-          </label>
-          <label className="dispatch-field">
-            <span>{t('dispatch.texts.body')}</span>
+          </div>
+          <div className="dispatch-field">
+            <span className="dispatch-field-head">
+              <label htmlFor={ids.body}>{t('dispatch.texts.body')}</label>
+              {bodyIsStandard && (
+                <span id={ids.bodyTag}>
+                  <Status kind="neutral" label={t('dispatch.texts.standard')} />
+                </span>
+              )}
+            </span>
             <textarea
+              id={ids.body}
               className="field"
               ref={bodyRef}
               rows={7}
               value={bodyText}
+              aria-describedby={bodyIsStandard ? ids.bodyTag : undefined}
               onChange={(e) => {
                 setBodyText(e.target.value);
-                setSaved(false);
+                setNotice(null);
               }}
             />
-          </label>
+          </div>
 
           <fieldset className="dispatch-field">
-            <legend>{t('dispatch.texts.variables')}</legend>
-            <p className="dispatch-muted">{t('dispatch.texts.variablesHint')}</p>
+            <legend className="dispatch-field-head">
+              {t('dispatch.texts.variables')}
+              {info(t('dispatch.texts.variablesInfo'), t('dispatch.texts.variablesHint'))}
+            </legend>
             <div className="dispatch-chips">
               {VARIABLES[kind].map((name) => (
                 <button
@@ -394,27 +492,38 @@ export function Dispatch() {
           </fieldset>
 
           {writeError !== null && <ErrorBanner message={errorMessage(writeError)} />}
-          {saved && <p role="status" className="dispatch-muted">{t('dispatch.texts.saved')}</p>}
+          {notice !== null && (
+            <p role="status" className="dispatch-muted">
+              {t(notice === 'saved' ? 'dispatch.texts.saved' : 'dispatch.texts.resetDone')}
+            </p>
+          )}
 
           <div className="dispatch-actions">
-            {/* A text save is not a money write, so it is the primary, never the tinted commit (K-08). */}
-            <button
-              type="submit"
-              className="btn btn--primary"
-              disabled={!canManage || busy || subject.trim() === '' || bodyText.trim() === ''}
-            >
-              {t('dispatch.texts.save')}
-            </button>
+            {/* A text save is not a money write, so it is the primary, never the tinted commit (K-08).
+                Without the capability it stays, pre-disabled, with its reason beside it; with it, it
+                appears only once there is a change to save. */}
+            {(!canManage || canSave) && (
+              <button type="submit" className="btn btn--primary" disabled={!canManage || busy}>
+                {t('dispatch.texts.save')}
+              </button>
+            )}
+            {canManage && canReset && (
+              <button type="button" className="btn btn--ghost" disabled={busy} onClick={resetToStandard}>
+                {t('dispatch.texts.reset')}
+              </button>
+            )}
             {!canManage && <p className="lock-note">{t('dispatch.needsPermission')}</p>}
           </div>
         </form>
       </div>
 
       <aside className="dispatch-preview" aria-labelledby="dispatch-preview-title">
-        <h2 id="dispatch-preview-title" className="dispatch-preview-title">
-          {t('dispatch.texts.preview')}
-        </h2>
-        <p className="dispatch-muted">{t('dispatch.texts.previewHint')}</p>
+        <div className="dispatch-field-head">
+          <h2 id="dispatch-preview-title" className="dispatch-preview-title">
+            {t('dispatch.texts.preview')}
+          </h2>
+          {info(t('dispatch.texts.previewInfo'), t('dispatch.texts.previewHint'))}
+        </div>
         {preview !== null && (
           <>
             <p className="dispatch-muted">
@@ -500,9 +609,6 @@ export function Dispatch() {
         titleId="dispatch-title"
         help={<SurfaceHelp surface="Dispatch" />}
       />
-      {/* The send line, in place: what this surface can NEVER change. */}
-      <p className="dispatch-lede">{t('dispatch.lede')}</p>
-
       {failed && <ErrorBanner context="read" onRetry={() => void load()} />}
 
       <Tabs

@@ -6,6 +6,9 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { axe } from 'jest-axe';
 
 import { I18nProvider } from '../i18n';
+import { TillClientProvider } from '../lib/client-context';
+import { TillClient, type Transport } from '../lib/client';
+import { WorkspaceProvider } from './workspace';
 import { IconRail } from './IconRail';
 
 /** Focus a trigger the way a keyboard user would land on it. Wrapped in act, because focusing opens
@@ -22,16 +25,24 @@ function LocationDisplay() {
   return <output data-testid="path">{location.pathname}</output>;
 }
 
-function renderIconRail(initialPath = '/journal') {
+const quiet: Transport = async () => ({ status: 200, body: { ok: true, visibleQueues: 1, total: 0, top: [] } });
+
+// A null workspace keeps the Pendenzen icon's live count dormant (no read), which is all the flyout
+// tests need; the count tests below pass a real workspace and a transport of their own.
+function renderIconRail(initialPath = '/journal', { workspaceId = null, transport = quiet }: { workspaceId?: string | null; transport?: Transport } = {}) {
   return render(
     <I18nProvider>
-      <MemoryRouter initialEntries={[initialPath]}>
-        {/* A landmark so an axe scan has the region it expects; the Shell supplies the real nav. */}
-        <nav aria-label="Hauptnavigation">
-          <IconRail />
-        </nav>
-        <LocationDisplay />
-      </MemoryRouter>
+      <TillClientProvider client={new TillClient(transport)}>
+        <WorkspaceProvider initialId={workspaceId}>
+          <MemoryRouter initialEntries={[initialPath]}>
+            {/* A landmark so an axe scan has the region it expects; the Shell supplies the real nav. */}
+            <nav aria-label="Hauptnavigation">
+              <IconRail />
+            </nav>
+            <LocationDisplay />
+          </MemoryRouter>
+        </WorkspaceProvider>
+      </TillClientProvider>
     </I18nProvider>,
   );
 }
@@ -95,5 +106,40 @@ describe('IconRail: the collapsed icon strip and its flyouts (D118 A4)', () => {
     focus(screen.getByRole('button', { name: 'Stammdaten' }));
     expect(screen.getByRole('group', { name: 'Stammdaten' })).toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
+describe('IconRail: the Pendenzen icon carries the live waiting-work count (collapsed rail)', () => {
+  const summary = (total: number | null): Transport => async () => ({
+    status: 200,
+    body: { ok: true, visibleQueues: total === null ? 0 : 2, total, top: [] },
+  });
+
+  it('puts the count in the accessible NAME and on the icon, never colour alone', async () => {
+    const { container } = renderIconRail('/journal', { workspaceId: 'ws_icon', transport: summary(3) });
+    const icon = await screen.findByRole('button', { name: 'Pendenzen, 3 offen' });
+    expect(within(icon).getByText('3')).toHaveAttribute('aria-hidden', 'true');
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('caps the figure at 99+', async () => {
+    renderIconRail('/journal', { workspaceId: 'ws_icon', transport: summary(250) });
+    expect(await screen.findByRole('button', { name: 'Pendenzen, 99+ offen' })).toHaveTextContent('99+');
+  });
+
+  it('shows nothing for a true zero and for a denied actor: the plain name, no figure', async () => {
+    for (const total of [0, null]) {
+      const { unmount } = renderIconRail('/journal', { workspaceId: `ws_${String(total)}`, transport: summary(total) });
+      await act(async () => {});
+      const icon = screen.getByRole('button', { name: 'Pendenzen' });
+      expect(icon.querySelector('.rail-icon-count')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('a failed read says so in words and shows no stale number', async () => {
+    renderIconRail('/journal', { workspaceId: 'ws_icon', transport: async () => ({ status: 422, body: { ok: false, error: 'boom' } }) });
+    const icon = await screen.findByRole('button', { name: /Pendenzen, Die Anzahl Pendenzen konnte nicht geladen werden/ });
+    expect(icon.querySelector('.rail-icon-count')).toHaveTextContent('!');
   });
 });

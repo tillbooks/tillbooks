@@ -289,7 +289,10 @@ test('the graphic is genuinely ON the artifact: unwiring it fails here, not at a
   );
   assert.match(content, /^q$/m, 'the graphic is isolated in its own q/Q pair');
   assert.match(content, /^Q$/m);
-  assert.match(content, /Swiss QR-bill: payment part enclosed/, 'and the page still says so');
+  // The line says what is drawn, and no more: the Swiss QR Code, not the SIX payment part and receipt
+  // (critic phase0-installable r1: "payment part enclosed" overstated a page that carries the code alone).
+  assert.match(content, /Swiss QR Code zum Bezahlen unten links \\\(ohne Zahlteil und Empfangsschein\\\)/, 'the page names what it carries (parentheses PDF-escaped)');
+  assert.doesNotMatch(content, /payment part enclosed/, 'and never claims a payment part it does not draw');
 });
 
 test('IG 6.3 / 6.4: the reported module size is the 46 mm symbol scaled, and the floor is reported not enforced', () => {

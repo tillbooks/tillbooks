@@ -2,19 +2,22 @@
  * A2, the bank inbox: the read models the surface renders and the pure rules it applies.
  *
  * EVERY FIGURE IS THE ENGINE'S. The lines, their one state, the proposal with its certainty and its
- * reason, the receipt count and the per-account balance truth come from `list_bank_inbox`; the VAT
- * split of a leg comes from `vat_preview` and a settlement's legs from `preview_payment`. What this
- * file adds is arrangement, never arithmetic the engine did not do: which verb target a row's draft
- * becomes, which words a reason code reads as, and where each leg of a VAT split sits (Soll or Haben),
- * mirroring `buildVatLines` (A06) exactly as `buildAccountsLines` (A39) calls it. That one mirror is
- * the interim for a `preview_bank_line` read the engine does not have yet; it is recorded as an
- * engine request in the A2 report, and replacing it is a one-function change here.
+ * reason, the receipt count and the per-account balance truth come from `list_bank_inbox`; the lines an
+ * `accounts` booking posts, its VAT legs included, come from `compose_entry` (`bankCompose.ts`, the
+ * Journal composer's read, D152 amendment). What this file adds is arrangement, never arithmetic the
+ * engine did not do: which verb target a row's draft becomes and which words a reason code reads as.
  *
  * The engine's types are imported as TYPES (erased at build), so the Studio reads the shapes the
  * engine declares and the bundle gains no engine code (`studio-sees-payloads.test.mjs`).
  */
 import type { BankAccountBalance, BankInboxLine, ListBankInboxOk } from '../../../../src/core/banking/bankInbox';
 import type { BankLineProposal } from '../../../../src/core/banking/bankProposals';
+// The ONE asset-range predicate the composer and the bill drawer read too (owner D152 point 5, 04.10.2026).
+// An explicit `.ts` specifier: root suites import this module through Node's type stripping.
+import { isVatAssetAccount } from '../Journal/composerPayload.ts';
+// Type-only: the root suites load this module straight through Node's type stripping, which cannot
+// follow the Agent model's JSON and i18n imports, so the parser below stays local.
+import type { VorschlagFigures } from '../Agent/model';
 
 export type { BankAccountBalance, BankInboxLine, BankLineProposal };
 
@@ -47,6 +50,7 @@ export const BANK_PROPOSAL_REASONS = [
   'own_account_transfer',
   'own_account_transfer_booked',
   'history',
+  'model_suggested',
   'no_proposal',
 ] as const;
 export type ReasonCode = (typeof BANK_PROPOSAL_REASONS)[number];
@@ -78,6 +82,46 @@ export interface ChartAccount {
   number: string;
   name: string;
   vatCodeDefault: string | null;
+  /** The chart's account type (`kmuSeed.ts` AccountType), or null when the read did not carry it. */
+  type: string | null;
+}
+
+/** The KMU VAT accounts (`kmuSeed.ts`: 1170 / 1171 Vorsteuer, 2200 / 2201 Umsatzsteuer): never a VAT target. */
+export const VAT_ACCOUNT_NUMBERS: readonly string[] = ['1170', '1171', '2200', '2201'];
+
+/**
+ * True when a VAT code can apply to a booking on this account (B2: the row's MWST shows only "where a
+ * code can apply"; owner, 01.10.2026: "asset accounts get MWST"). The composer's rule exactly
+ * (`Journal/composerPayload.ts isTaxBearing`): an Erfolgskonto (type income or expense) or an asset account
+ * 12xx or 14xx to 17xx (`isVatAssetAccount`, the one shared predicate: Vorräte and Anlagevermögen), never a VAT account, and false for everything else, an account of unknown type
+ * included. A default code is a pre-fill for an account that qualifies, never a reason to qualify. The
+ * Bank adds one exclusion the composer cannot know: a Bankkonto's own ledger account (`bankLedgerIds`).
+ */
+export function vatCanApply(
+  account: Pick<ChartAccount, 'id' | 'type' | 'number'> | undefined,
+  bankLedgerIds: ReadonlySet<string> = new Set(),
+): boolean {
+  if (account === undefined || vatNeverApplies(account, bankLedgerIds)) return false;
+  if (account.type === 'income' || account.type === 'expense') return true;
+  return isVatAssetAccount(account);
+}
+
+/**
+ * The code a leg takes when its account is chosen: the account's default where a code can apply (else
+ * whatever the leg held), and none where it cannot, so a hidden MWST cell never carries a value.
+ */
+export function taxCodeOnChoosing(
+  account: Pick<ChartAccount, 'id' | 'type' | 'number' | 'vatCodeDefault'> | undefined,
+  held: string,
+  bankLedgerIds: ReadonlySet<string> = new Set(),
+): string {
+  if (!vatCanApply(account, bankLedgerIds)) return '';
+  return account?.vatCodeDefault ?? held;
+}
+
+/** A VAT account or a Bankkonto's ledger account: MWST is never offered there, whatever the leg holds. */
+export function vatNeverApplies(account: Pick<ChartAccount, 'id' | 'number'>, bankLedgerIds: ReadonlySet<string> = new Set()): boolean {
+  return VAT_ACCOUNT_NUMBERS.includes(account.number) || bankLedgerIds.has(account.id);
 }
 
 export interface TaxCode {
@@ -113,12 +157,34 @@ export interface LineVorschlag {
   bankTxnId: string;
   payload: Record<string, unknown>;
   createdAt: string;
+  /** Critic N1: the figures frozen at the proposal (null when the verb pins no record). */
+  figures?: VorschlagFigures | null;
+  /** Critic N1: the pinned record changed since the proposal; approving would run nothing. */
+  changedSinceProposal?: boolean;
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const rec = (v: unknown): Record<string, unknown> | null =>
   typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+
+/** Critic N1: the figures frozen at the proposal, read defensively (the Agent model's own shape). */
+function parseFigures(raw: unknown): VorschlagFigures | null {
+  const f = rec(raw);
+  if (f === null) return null;
+  return {
+    number: str(f.number),
+    numberPending: f.numberPending === true,
+    counterparty: str(f.counterparty),
+    recipient: str(f.recipient),
+    amountMinor: num(f.amountMinor),
+    amountBasis: f.amountBasis === 'net' || f.amountBasis === 'amount' ? f.amountBasis : null,
+    currency: str(f.currency),
+    taxMinor: num(f.taxMinor),
+    grossMinor: num(f.grossMinor),
+    lineCount: num(f.lineCount),
+  };
+}
 
 /** `list_bank_inbox`, read defensively: an unreadable body is `null`, never a guessed list. */
 export function parseInbox(body: unknown): ListBankInboxOk | null {
@@ -163,7 +229,7 @@ export function parseChart(body: unknown): ChartAccount[] {
     const id = str(a.id);
     const number = str(a.number);
     if (id === null || number === null) continue;
-    out.push({ id, number, name: str(a.name) ?? '', vatCodeDefault: str(a.vatCodeDefault) });
+    out.push({ id, number, name: str(a.name) ?? '', vatCodeDefault: str(a.vatCodeDefault), type: str(a.type) });
   }
   return out.sort((x, y) => x.number.localeCompare(y.number, 'de-CH', { numeric: true }));
 }
@@ -238,6 +304,8 @@ export function parseVorschlaege(body: unknown): LineVorschlag[] {
       bankTxnId,
       payload,
       createdAt: str(a.createdAt) ?? '',
+      figures: parseFigures(a.figures),
+      changedSinceProposal: a.changedSinceProposal === true,
     });
   }
   return out;
@@ -412,6 +480,15 @@ export function isUntouched(line: BankInboxLine, draft: RowDraft | undefined): b
   return draft === undefined || targetKey(draft.target) === targetKey(proposalTarget(line));
 }
 
+/**
+ * D144 (A39 §12): the row shows a model's suggestion as it stands, so it carries the AI disclosure
+ * (a transparency design choice; EU AI Act Art. 50 is our reading, not legal clearance). Once the
+ * person changed the target it is their booking, not the model's.
+ */
+export function isModelSuggestion(line: BankInboxLine, draft: RowDraft | undefined): boolean {
+  return line.proposal?.reasonCode === 'model_suggested' && isUntouched(line, draft);
+}
+
 export function rowCertainty(line: BankInboxLine, draft: RowDraft | undefined): RowCertainty {
   if (isUntouched(line, draft)) return line.proposal?.certainty ?? 'open';
   if (draft === undefined || draft.target === null) return 'open';
@@ -471,126 +548,6 @@ export function trustView(b: BankAccountBalance): TrustView {
 export function trustIdentityHolds(b: BankAccountBalance): boolean {
   if (b.bankBalanceMinor === null || b.ledgerBalanceMinor === null || b.differenceMinor === null) return false;
   return b.bankBalanceMinor === b.ledgerBalanceMinor + b.openSumMinor + b.differenceMinor;
-}
-
-// --- The Soll/Haben preview of an accounts booking ------------------------------------------------------
-
-/** One journal line the preview shows. */
-export interface PreviewLine {
-  accountId: string;
-  debit: number;
-  credit: number;
-}
-
-/** A leg's VAT figures, as `vat_preview` answers them (A06 `computeLineTax`). */
-export interface VatFigures {
-  netMinor: number;
-  taxMinor: number;
-  grossMinor: number;
-  kind: string;
-  deductible: boolean;
-  formLine: string | null;
-}
-
-export interface VatAccounts {
-  /** 1170, Vorsteuer auf Material und Dienstleistungen. */
-  input: string | null;
-  /** 1171, Vorsteuer auf Investitionen (ESTV Ziffer 405). */
-  investment: string | null;
-  /** 2200, geschuldete MWST. */
-  output: string | null;
-}
-
-/** The kinds whose natural direction is money in (`bankBooking.ts` NATURAL_IN_KINDS). */
-const NATURAL_IN_KINDS: ReadonlySet<string> = new Set(['output', 'zero', 'exempt']);
-
-/** The input a leg's `vat_preview` takes: gross for every kind but Bezugsteuer, whose paid amount is the base. */
-export function vatPreviewInput(leg: DraftLeg, kind: string | null): { amountMinor: number; amountIsGross: boolean; taxCode: string } {
-  return { amountMinor: Math.abs(leg.amountMinor), amountIsGross: kind !== 'reverse_charge', taxCode: leg.taxCode };
-}
-
-/**
- * The balanced line set an accounts booking posts, leg by leg, as `buildAccountsLines` builds it:
- * `buildVatLines` per taxed leg (Vorsteuer, Umsatzsteuer, Bezugsteuer, Einfuhrsteuer, the saldo fold
- * when `deductible` is false), a leg against its code's natural direction mirrored, and every bank leg
- * merged into ONE bank line first. Returns null while a taxed leg's figures are not in yet.
- */
-export function composeAccountsPreview(
-  lineSignedMinor: number,
-  legs: readonly DraftLeg[],
-  bankLedgerId: string,
-  vat: ReadonlyMap<number, VatFigures>,
-  vatAccounts: VatAccounts,
-): PreviewLine[] | null {
-  const moneyIn = lineSignedMinor > 0;
-  const out: (PreviewLine & { bank: boolean })[] = [];
-  const push = (accountId: string | null, debit: number, credit: number, bank = false) => {
-    out.push({ accountId: accountId ?? '', debit, credit, bank });
-  };
-  for (let i = 0; i < legs.length; i += 1) {
-    const leg = legs[i] as DraftLeg;
-    const legIn = leg.amountMinor > 0 ? moneyIn : !moneyIn;
-    const abs = Math.abs(leg.amountMinor);
-    const figures = leg.taxCode === '' ? null : vat.get(i);
-    if (leg.taxCode !== '' && figures === undefined) return null;
-    if (figures === null || figures === undefined || figures.kind === 'none') {
-      if (legIn) {
-        push(leg.accountId, 0, abs);
-        push(bankLedgerId, abs, 0, true);
-      } else {
-        push(leg.accountId, abs, 0);
-        push(bankLedgerId, 0, abs, true);
-      }
-      continue;
-    }
-    const naturalIn = NATURAL_IN_KINDS.has(figures.kind);
-    const inputVat = figures.formLine === '405' ? vatAccounts.investment : vatAccounts.input;
-    const built: (PreviewLine & { bank: boolean })[] = [];
-    const add = (accountId: string | null, debit: number, credit: number, bank = false) => built.push({ accountId: accountId ?? '', debit, credit, bank });
-    if (figures.kind === 'reverse_charge') {
-      add(leg.accountId, figures.netMinor, 0);
-      add(bankLedgerId, 0, figures.netMinor, true);
-      add(vatAccounts.output, 0, figures.taxMinor);
-      if (figures.deductible) add(inputVat, figures.taxMinor, 0);
-      else add(leg.accountId, figures.taxMinor, 0);
-    } else if (figures.kind === 'import') {
-      if (figures.deductible) add(inputVat, figures.taxMinor, 0);
-      else add(leg.accountId, figures.taxMinor, 0);
-      add(bankLedgerId, 0, figures.taxMinor, true);
-    } else if (naturalIn) {
-      add(bankLedgerId, figures.grossMinor, 0, true);
-      add(leg.accountId, 0, figures.netMinor);
-      if (figures.taxMinor !== 0) add(vatAccounts.output, 0, figures.taxMinor);
-    } else if (figures.deductible && figures.taxMinor !== 0) {
-      add(leg.accountId, figures.netMinor, 0);
-      add(inputVat, figures.taxMinor, 0);
-      add(bankLedgerId, 0, figures.grossMinor, true);
-    } else {
-      add(leg.accountId, figures.grossMinor, 0);
-      add(bankLedgerId, 0, figures.grossMinor, true);
-    }
-    const mirrored = legIn === naturalIn ? built : built.map((l) => ({ ...l, debit: l.credit, credit: l.debit }));
-    out.push(...mirrored);
-  }
-  let bankNet = 0;
-  const merged: PreviewLine[] = [];
-  for (const l of out) {
-    if (l.bank) {
-      bankNet += l.debit - l.credit;
-      continue;
-    }
-    if (l.debit === 0 && l.credit === 0) continue;
-    merged.push({ accountId: l.accountId, debit: l.debit, credit: l.credit });
-  }
-  const bankLine: PreviewLine = bankNet >= 0 ? { accountId: bankLedgerId, debit: bankNet, credit: 0 } : { accountId: bankLedgerId, debit: 0, credit: -bankNet };
-  return [bankLine, ...merged];
-}
-
-/** True when a preview balances (Soll equals Haben): the one check a composed preview must pass. */
-export function previewBalances(lines: readonly PreviewLine[]): boolean {
-  const debit = lines.reduce((s, l) => s + l.debit, 0);
-  const credit = lines.reduce((s, l) => s + l.credit, 0);
-  return debit === credit;
 }
 
 // --- Money input -----------------------------------------------------------------------------------

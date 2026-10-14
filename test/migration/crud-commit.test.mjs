@@ -182,6 +182,18 @@ test('G09 CRUD: payment_terms commit through update_contact; a missing contact f
   assert.equal(recommit.skipped.length, 1);
 });
 
+test('G09 CRUD (critic M1): a payment-terms row over 365 days is invalid, never committed', () => {
+  const { deps, wid } = ws('terms-bound');
+  must(call(deps, 'create_contact', { workspaceId: wid, name: 'Muster AG', partyRole: 'customer', idempotencyKey: 'c-1' }), 'create_contact');
+  const { planId, stepId } = seedCrudStep(deps, wid, 'ptb', 'payment_terms', 'kunde,tage\nMuster AG,400\n');
+  const committed = must(call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: 'ptb-commit' }), 'commit');
+  assert.equal(committed.created.length, 0);
+  assert.equal(committed.failed.length, 1);
+  assert.equal(committed.failed[0].reason, 'invalid_days');
+  const c = deps.store.db.prepare('SELECT payment_terms_days FROM contact WHERE workspace_id = ? AND name = ?').get(wid, 'Muster AG');
+  assert.equal(c.payment_terms_days, null, 'the refused row left the contact without terms of its own');
+});
+
 // --- bank_accounts ------------------------------------------------------------------------------
 
 test('G09 CRUD: bank_accounts commit through create_bank_account keyed on IBAN; a missing ledger account fails honestly', () => {

@@ -37,11 +37,12 @@ import {
   agentAsk,
   agentProseDelete,
 } from '../core/agent/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface AgentActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,
@@ -93,7 +94,7 @@ export function agentActions(h: AgentActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'set_agent_dial',
-      'write',
+      'write:reversible:access',
       'Set one approval-dial level to ask or auto for one governed capability (post/issue/send/dun/pay/vat-file/customize/plugin-install/close-period/go-live). ask drafts the agent write for human approval; auto executes it when RBAC also permits. An unknown capability or level is rejected. Owner-only (manage_agent_dial).',
       ctxSchema({ capability: STR, level: STR, idempotencyKey: STR }, ['capability', 'level', 'idempotencyKey']),
       (ctx, input) => setAgentDial(ctx, as(input)),
@@ -108,28 +109,28 @@ export function agentActions(h: AgentActionHelpers): readonly ActionDef[] {
     // The one A26 verb holding an invoker: registered through the same handshake G01/A12 use, below.
     ctxAction(
       'approve_drafted_action',
-      'write',
+      'write:final:access',
       'Approve a drafted agent action from the inbox: replay its verb through the shared dispatch as the approver (RBAC re-checked, idempotent on the stored key, so approve-twice never double-posts) and mark it executed. allowFuture additionally records the standing per-capability grant to auto (D103): the same attributed, revocable dial write set_agent_dial performs. The agent can never self-approve; a second, independent actor must review. Owner-gated (manage_agent_dial).',
       ctxSchema({ actionId: STR, allowFuture: BOOL }, ['actionId']),
       (ctx, input, deps) => approveDraftedAction(ctx, invokerFor(deps), as(input)),
     ),
     ctxAction(
       'reject_drafted_action',
-      'write',
+      'write:correctable:human-only',
       'Reject a drafted agent action from the inbox: drop it unexecuted (idempotent on actionId; an already-executed action refuses). reason is the human\'s optional sentence on why, stored on the proposal and shown in the trace beside the drafting call, so the next session reads it. Owner-gated (manage_agent_dial).',
       ctxSchema({ actionId: STR, reason: STR }, ['actionId']),
       (ctx, input) => rejectDraftedAction(ctx, as(input)),
     ),
     ctxAction(
       'agent_ask',
-      'write',
+      'write:correctable:internal',
       'Ask the books a question in prose (the Studio composer, D90 D-1). Needs a registered E05 local runtime (needs_local_runtime otherwise); the runtime only classifies the question onto one of the three A26 read models and the executed verb is ALWAYS a read, so no write is reachable from prose. Persists the sentence as a turn (D-5) and records the answering call in the trace.',
       ctxSchema({ text: STR, periodStart: STR, periodEnd: STR, idempotencyKey: STR }, ['text', 'idempotencyKey']),
       (ctx, input) => agentAsk(ctx, as(input)),
     ),
     ctxAction(
       'agent_prose_delete',
-      'write',
+      'write:final:erase',
       'Delete one agent session’s stored prose (D90 D-5): every turn text of the session is cleared, the call trace stays. The words are the user’s to remove; what actually ran is the trust view’s substrate and remains. Owner-gated (manage_agent_dial); idempotent per key.',
       ctxSchema({ sessionId: STR, idempotencyKey: STR }, ['sessionId', 'idempotencyKey']),
       (ctx, input) => agentProseDelete(ctx, as(input)),

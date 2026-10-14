@@ -105,6 +105,21 @@ export interface HostWireModule {
 export interface HostEbicsPorts {
   ebicsTransport?: EbicsTransportPort;
   ebicsKeystore?: EbicsKeystorePort;
+  /**
+   * D142: how to build the SAME live wire again in another thread (the `till up` sync worker), read
+   * once at boot. It carries the keystore passphrase IN MEMORY (the process already holds it, in the
+   * keystore's provider): the worker receives it through `workerData`, never through the environment,
+   * which this module cleared. Absent exactly when no live wire is configured.
+   */
+  recipe?: EbicsRuntimeRecipe;
+}
+
+/** D142: everything needed to rebuild the live wire in a worker thread. */
+export interface EbicsRuntimeRecipe {
+  specifier: string;
+  keystorePath: string;
+  passphrase?: string;
+  caFile?: string;
 }
 
 function requireEnv(name: string): string {
@@ -166,22 +181,37 @@ export async function resolveEbicsRuntime(): Promise<HostEbicsPorts> {
   if (specifier === undefined || specifier.trim() === '') return {};
 
   const keystorePath = requireEnv(EBICS_KEYSTORE_PATH_ENV);
-
   const passphrase = process.env[EBICS_KEYSTORE_PASSPHRASE_ENV];
-  const passphraseProvider: PassphraseProvider | undefined =
-    passphrase !== undefined && passphrase !== '' ? () => passphrase : undefined;
-
-  const keystore = fileEbicsKeystore(keystorePath, passphraseProvider);
+  const caFile = process.env[EBICS_CA_FILE_ENV];
+  const recipe: EbicsRuntimeRecipe = {
+    specifier,
+    keystorePath,
+    ...(passphrase !== undefined && passphrase !== '' ? { passphrase } : {}),
+    ...(caFile !== undefined && caFile.trim() !== '' ? { caFile } : {}),
+  };
   // A headless server (`till serve` / `till up`) has no prompt, so the env passphrase is how the store
-  // is unlocked up front for the wire to sign/decrypt. Without it the store stays `locked` and every
-  // channel verb refuses loudly at call time (`keystore_locked`, US-A36.2); there is no interactive
-  // fallback in these entrypoints. When the passphrase IS given, a failure to open is a boot-time
-  // throw (loud, not deferred): `unlock` returns true for a not-yet-created file (the first ceremony),
-  // so a false result means a real problem, and it never mints fresh keys over an existing file.
-  if (passphrase !== undefined && passphrase !== '') {
-    // Deleted before anything else can read or inherit it (later child processes). `ps -E` still shows
-    // this process's initial environment, so no secrecy is claimed (A36 §4.2).
-    delete process.env[EBICS_KEYSTORE_PASSPHRASE_ENV];
+  // is unlocked up front for the wire to sign/decrypt. It is deleted before anything else can read or
+  // inherit it (later child processes and the D142 sync worker, which receives the recipe instead).
+  // `ps -E` still shows this process's initial environment, so no secrecy is claimed (A36 §4.2).
+  if (recipe.passphrase !== undefined) delete process.env[EBICS_KEYSTORE_PASSPHRASE_ENV];
+  return { ...(await buildEbicsPorts(recipe)), recipe };
+}
+
+/**
+ * Build the live ports from a recipe: the core file keystore (unlocked with the recipe's passphrase),
+ * the private wire module, the composed transport. The boot path above and the D142 sync worker both
+ * build through here, so the worker's wire is the boot wire, rule for rule.
+ *
+ * Without a passphrase the store stays `locked` and every channel verb refuses loudly at call time
+ * (`keystore_locked`, US-A36.2). With one, a failure to open is a throw (loud, not deferred): `unlock`
+ * returns true for a not-yet-created file (the first ceremony), so a false result means a real problem,
+ * and it never mints fresh keys over an existing file.
+ */
+export async function buildEbicsPorts(recipe: EbicsRuntimeRecipe): Promise<Pick<HostEbicsPorts, 'ebicsTransport' | 'ebicsKeystore'>> {
+  const { specifier, keystorePath, passphrase } = recipe;
+  const passphraseProvider: PassphraseProvider | undefined = passphrase !== undefined ? () => passphrase : undefined;
+  const keystore = fileEbicsKeystore(keystorePath, passphraseProvider);
+  if (passphrase !== undefined) {
     if (!keystore.unlock(passphrase)) {
       const why =
         keystore.state?.() === 'unavailable'
@@ -206,7 +236,7 @@ export async function resolveEbicsRuntime(): Promise<HostEbicsPorts> {
   }
   assertWireContract(mod, specifier);
 
-  const tls = readTlsOptions();
+  const tls = readTlsOptions(recipe.caFile);
   const untrustedDir = untrustedDirFor(keystorePath);
   const wire = mod.createEbicsWire(tls !== undefined ? { keystore, tls, untrustedDir } : { keystore, untrustedDir });
   const ebicsTransport = composeLiveTransport(wire, mod);
@@ -214,8 +244,7 @@ export async function resolveEbicsRuntime(): Promise<HostEbicsPorts> {
 }
 
 /** Read the optional extra TLS trust anchor, or undefined (platform anchors only). Never disables verification. */
-function readTlsOptions(): { ca: Array<string | Uint8Array> } | undefined {
-  const caFile = process.env[EBICS_CA_FILE_ENV];
+function readTlsOptions(caFile: string | undefined): { ca: Array<string | Uint8Array> } | undefined {
   if (caFile === undefined || caFile.trim() === '') return undefined;
   const pem = readFileSync(caFile);
   return { ca: [pem] };

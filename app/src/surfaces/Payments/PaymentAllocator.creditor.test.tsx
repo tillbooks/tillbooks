@@ -35,6 +35,12 @@ import previewPayment from './preview-payment.fixture.json';
 import recordPayment from './record-payment.fixture.json';
 import listAccounts from './list-accounts.fixture.json';
 import getPayment from './get-payment.fixture.json';
+// Pinned to the live engine by `test/banking/studio-bank-accounts-fixture.test.mjs`; both of its
+// Bankkonten book on acc_2, which is what the Werkbank's Konto defaults to (D152).
+import listBankAccounts from '../BankAccounts/list-bank-accounts.fixture.json';
+// The books' base currency, which the Konto default needs (critic F2): the Setup recording, pinned to the
+// live engine by `test/setup/profile-fixture.test.mjs`.
+import companyProfile from '../Setup/company-profile.fixture.json';
 
 type Canned = Record<string, RestResponse | ((input: Record<string, unknown>) => RestResponse)>;
 
@@ -80,6 +86,8 @@ const HAPPY: Canned = {
   record_payment: ok(recordPayment),
   list_accounts: ok(listAccounts),
   list_contacts: ok({ contacts: [{ id: 'vendor_1', name: 'Lieferant GmbH' }] }),
+  list_bank_accounts: ok(listBankAccounts),
+  get_company_profile: ok(companyProfile),
 };
 
 function renderPayments(canned: Canned = HAPPY) {
@@ -108,6 +116,16 @@ async function openAllocator(canned: Canned = HAPPY) {
   return dialog;
 }
 
+/**
+ * Give the Werkbank something to rank by (D152): a Betrag and the supplier. The bill then is a
+ * suggestion of its Gegenpartei and carries its field; at rest no candidate is listed at all.
+ */
+async function rank(dialog: HTMLElement, amount = '1581') {
+  await userEvent.type(within(dialog).getByLabelText('Betrag'), amount);
+  await userEvent.click(within(dialog).getByLabelText('Gegenpartei'));
+  await userEvent.click(await screen.findByRole('option', { name: 'Lieferant GmbH' }));
+}
+
 beforeEach(() => {
   installMemoryStorage();
 });
@@ -115,6 +133,7 @@ beforeEach(() => {
 describe('the allocator creditor branch', () => {
   it('links a vendor-bill candidate into the Kreditoren list, never /documents', async () => {
     const dialog = await openAllocator();
+    await rank(dialog);
     const link = await within(dialog).findByRole('link', { name: 'LG-2026-0093' });
     expect(link).toHaveAttribute('href', '/bills?bill=vbill_1');
     // The sibling DOCUMENT candidate keeps its own route, untouched by the branch.
@@ -132,6 +151,7 @@ describe('the allocator creditor branch', () => {
         candidates: [{ ...VENDOR_BILL_CANDIDATE, number: null }],
       }),
     });
+    await rank(dialog);
     expect(await within(dialog).findByRole('link', { name: 'Kreditorenrechnung' })).toHaveAttribute(
       'href',
       '/bills?bill=vbill_1',
@@ -148,9 +168,9 @@ describe('the allocator creditor branch', () => {
       },
     });
 
-    await userEvent.type(within(dialog).getByLabelText('Betrag'), '1581');
-    // Allocate against BOTH candidates: the bill and the recorded document row.
-    const rows = within(dialog).getAllByLabelText('Zuweisen');
+    await rank(dialog, '1581');
+    // Allocate against BOTH candidates: the bill (the supplier's own item) and the ranked document.
+    const rows = await within(dialog).findAllByLabelText('Zuweisen');
     await userEvent.type(rows[0], '1081');
     await userEvent.type(rows[1], '500');
 

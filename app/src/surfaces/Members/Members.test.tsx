@@ -35,6 +35,7 @@ import { CapabilitiesProvider } from '../../lib/CapabilitiesProvider';
 import { neverSettles, watchReads } from '../../test-transport';
 import Members from './index';
 import de from './messages.de-CH.json';
+import { consequenceSentence } from '../../lib/approval-tiers';
 
 type CannedHandler = (input: Record<string, unknown>) => RestResponse;
 type Canned = Record<string, RestResponse | CannedHandler>;
@@ -741,7 +742,7 @@ describe('Members, Phase 2c: kind, confirm, re-invite', () => {
     await userEvent.click(screen.getAllByRole('button', { name: de.members.revoke })[1] as HTMLElement);
     const dialog = await screen.findByRole('alertdialog', { name: de.members.revokeConfirm.title });
     expect(dialog.textContent).toContain(de.members.revokeConfirm.body.replace('{name}', 'B. Halter'));
-    expect(dialog.textContent).toContain('Entzieht einem Mitglied den Zugang zum Arbeitsbereich.');
+    expect(dialog.textContent).toContain(consequenceSentence('revoke_member', 'de-CH') as string);
     await userEvent.click(within(dialog).getByRole('button', { name: de.members.revokeConfirm.cancel }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(revoke).not.toHaveBeenCalled();

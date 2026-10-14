@@ -528,11 +528,10 @@ test('C13: after the invoice is cancelled by reversal, its Mahngebühr is dunned
   const first = must(call(deps, 'propose_dunning_run', { workspaceId, idempotencyKey: 'c13-1' }), 'propose 1');
   must(call(deps, 'issue_dunning_run', { workspaceId, runId: first.runId, confirmed: true, idempotencyKey: 'c13-1i' }), 'issue 1');
 
-  // Cancel the invoice the way A10 cancels: reverse its posted entry (never a delete).
-  const postedEntryId = deps.store.db
-    .prepare('SELECT posted_entry_id AS e FROM document WHERE workspace_id = ? AND id = ?')
-    .get(workspaceId, documentId).e;
-  must(call(deps, 'reverse_entry', { workspaceId, entryId: postedEntryId, idempotencyKey: 'c13-rev' }), 'reverse_entry');
+  // Cancel the invoice the way A10 cancels: its cancel reverses the posted entry (never a delete). The
+  // raw reverse_entry refuses an invoice's entry `owned_by transition_document` since 28.09.2026 (it
+  // left the document `issued` beside a netted 1100), so the cancel is the one path.
+  must(call(deps, 'transition_document', { workspaceId, documentId, to: 'cancelled', idempotencyKey: 'c13-rev' }), 'cancel');
 
   setNow('2026-06-15T00:00:00.000Z');
   const second = must(call(deps, 'propose_dunning_run', { workspaceId, idempotencyKey: 'c13-2' }), 'propose 2');

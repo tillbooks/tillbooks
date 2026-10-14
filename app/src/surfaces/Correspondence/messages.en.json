@@ -110,6 +110,11 @@
     "model": {
       "changed": "Created with a different model."
     },
+    "edited": {
+      "question": "You changed this draft since it was generated. Regenerate anyway?",
+      "overwrite": "Regenerate anyway",
+      "keep": "Keep my changes"
+    },
     "review": {
       "note": "You review and send in your mail app. TILL never sends."
     },

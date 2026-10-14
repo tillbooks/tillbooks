@@ -50,7 +50,9 @@
     "emptyHint": "The SME chart of accounts ships with the workspace; add your own accounts here.",
     "noMatch": "No account matches the search.",
     "noMatchHint": "Adjust the search term or show archived accounts.",
-    "clearSearch": "Clear the search"
+    "clearSearch": "Clear the search",
+    "statementIsVoucher": "Receipt = bank statement",
+    "statementIsVoucherHint": "For bank charges and interest: the bank statement is the receipt. Bank lines booked only to such accounts do not count as \"no receipt\"."
   },
   "costCenter": {
     "title": "Cost centres",

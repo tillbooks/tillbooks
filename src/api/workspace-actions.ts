@@ -39,18 +39,19 @@ import {
   archiveWorkspace,
   unarchiveWorkspace,
 } from '../core/setup/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface WorkspaceActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
   ): ActionDef;
   depsAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (deps: ApiDeps, input: ActionInput) => Result,
@@ -111,7 +112,7 @@ export function workspaceActions(h: WorkspaceActionHelpers): readonly ActionDef[
     ),
     depsAction(
       'onboard_client',
-      'write',
+      'write:correctable:pre-workspace',
       'Onboard a new client workspace (ein neues Mandat) in one call: mints the workspace via create_workspace with its Kontenrahmen KMU chart, seeds the tax codes and sets the VAT method when vatMethod and vatAccounting are given together, and seats the operator as accepted owner (A24). Idempotent per key: replaying returns the existing workspace, never a duplicate client.',
       depsSchema(
         {
@@ -129,7 +130,7 @@ export function workspaceActions(h: WorkspaceActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'archive_workspace',
-      'write',
+      'write:reversible:internal',
       'Archivieren: retire a finished mandate (archived:true) or put it back in play (archived:false). A reversible flag, never a delete: the books stay intact and exportable (OR 958f), reads keep answering, and every OTHER write into an archived workspace returns workspace_archived.',
       ctxSchema({ archived: BOOL, idempotencyKey: STR }, ['archived', 'idempotencyKey']),
       (ctx, input) =>

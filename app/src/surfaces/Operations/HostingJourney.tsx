@@ -35,6 +35,8 @@ import { ErrorBanner, Skeleton } from '../../components/states';
 import { LockGlyph } from '../../components/states/glyphs';
 import { StatusNeutralGlyph, StatusSuccessGlyph } from '../../components/icons';
 import { HelpHint } from '../../components/HelpHint';
+import { Tooltip } from '../../components/Tooltip';
+import { InfoGlyph } from '../../components/states/glyphs';
 import { Modal } from '../../components/Modal';
 import { docsUrl } from '../../lib/guidance';
 
@@ -142,6 +144,7 @@ export function HostingJourney({ workspaceId }: { workspaceId: string }) {
   const served = (whoami?.identitySource ?? 'local_client') === 'served_subject';
   const hintId = useId();
   const retireBodyId = useId();
+  const modelId = useId();
 
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [target, setTarget] = useState<Rung | null>(null);
@@ -496,11 +499,29 @@ export function HostingJourney({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="hosting-block">
-      <h3 className="diag-subtitle">{t('journey.hosting.title')}</h3>
-      {/* The D106 sentence renders ABOVE any rung, in plain language, never buried in help (S3.3). */}
-      <p className="diag-prose hosting-model">{t('journey.hosting.model')}</p>
+      {/* The D106 sentence still comes BEFORE any rung (S3.3), now behind the (i) on the heading
+          line (D152 rule 4, the owner's pick of 03.10.2026: words on demand). It stays in the DOM
+          ahead of the rungs, and the rung group names it as its description, so a screen reader
+          hears the model before it reaches the first choice. */}
+      <div className="hosting-head">
+        <h3 className="diag-subtitle">{t('journey.hosting.title')}</h3>
+        <span className="hosting-info">
+          <Tooltip
+            placement="bottom"
+            content={
+              <span id={modelId} className="hosting-model">
+                {t('journey.hosting.model')}
+              </span>
+            }
+          >
+            <button type="button" className="btn btn--ghost btn--icon hosting-info-trigger" aria-label={t('journey.hosting.modelLabel')}>
+              <InfoGlyph size={16} />
+            </button>
+          </Tooltip>
+        </span>
+      </div>
       {actionError !== null && <ErrorBanner error={actionError} />}
-      <div className="hosting-rungs" role="radiogroup" aria-label={t('journey.hosting.title')}>
+      <div className="hosting-rungs" role="radiogroup" aria-label={t('journey.hosting.title')} aria-describedby={modelId}>
         {rungs.map(({ rung, disabled }) => {
           const isCurrent = rung === current;
           const selected = target === null ? isCurrent : target === rung;

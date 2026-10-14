@@ -13,7 +13,8 @@
  *      quietly dropping one on the way across.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
@@ -25,6 +26,9 @@ import { ROUTE_REGISTRY } from '../../app/nav';
 import { BUILT_SURFACE_PATHS } from '../../app/router';
 import { Operations } from './Operations';
 import de from './messages.de-CH.json';
+import shell from '../../i18n/de-CH.json';
+
+const BACKUP = (shell as { data: { action: { backup: string } } }).data.action.backup;
 
 const ok = (data: Record<string, unknown> = {}): RestResponse => ({ status: 200, body: { ok: true, ...data } });
 
@@ -33,8 +37,11 @@ const ok = (data: Record<string, unknown> = {}): RestResponse => ({ status: 200,
  * to drive any one panel's states (each panel owns those in its own suite). So an ok answer to
  * whatever a panel asks lets all six mount without throwing, and the titles below prove they did.
  */
-function permissiveTransport(): Transport {
+function permissiveTransport(calls: string[] = [], deny: string[] = []): Transport {
   return async (action) => {
+    calls.push(action);
+    if (deny.includes(action)) return { status: 403, body: { ok: false, error: 'permission_denied' } };
+    if (action === 'list_backups') return ok({ backups: [] });
     if (action === 'whoami') {
       return ok({
         actor: 'studio',
@@ -61,9 +68,9 @@ function permissiveTransport(): Transport {
   };
 }
 
-function tree() {
+function tree(calls: string[] = [], deny: string[] = []) {
   return (
-    <TillClientProvider client={new TillClient(permissiveTransport())}>
+    <TillClientProvider client={new TillClient(permissiveTransport(calls, deny))}>
       <I18nProvider>
         <WorkspaceProvider initialId="ws_1">
           <CapabilitiesProvider>
@@ -100,5 +107,51 @@ describe('Operations (Betrieb) surface', () => {
     const { container } = render(tree());
     await waitFor(() => expect(screen.getByText(de.egress.panel.title)).toBeInTheDocument());
     expect(container.querySelector('.operations-stack')).not.toBeNull();
+  });
+
+  /**
+   * D152 (the owner's pick of 03.10.2026): "Jetzt sichern", the surface's ONE primary, renders in the
+   * SurfaceHeader action slot, in view at load, and nowhere else. It used to sit at the foot of Data
+   * & Backup at y=1962, off screen at 1280x800 and outside the slot DESIGN.md requires.
+   */
+  it('PRIMARY: Jetzt sichern sits in the header action slot, once, and is the only primary', async () => {
+    const { container } = render(tree());
+    const header = container.querySelector('.surface-header') as HTMLElement;
+    const button = await within(header).findByRole('button', { name: BACKUP });
+    expect(button.closest('.surface-header-actions')).not.toBeNull();
+    expect(button).toHaveClass('btn--primary');
+    expect(screen.getAllByRole('button', { name: BACKUP })).toHaveLength(1);
+    expect(container.querySelectorAll('.btn--primary')).toHaveLength(1);
+    // The panel keeps its secondary export, and no second Jetzt sichern.
+    const panel = container.querySelector('.data-panel') as HTMLElement;
+    expect(within(panel).queryByRole('button', { name: BACKUP })).toBeNull();
+  });
+
+  it('PRIMARY: pressing the header Jetzt sichern runs create_backup through the panel and re-reads the history', async () => {
+    const calls: string[] = [];
+    const { container } = render(tree(calls));
+    const header = container.querySelector('.surface-header') as HTMLElement;
+    const button = await within(header).findByRole('button', { name: BACKUP });
+    const before = calls.filter((c) => c === 'list_backups').length;
+    await userEvent.click(button);
+    await waitFor(() => expect(calls).toContain('create_backup'));
+    await waitFor(() => expect(calls.filter((c) => c === 'list_backups').length).toBeGreaterThan(before));
+  });
+
+  it('PRIMARY: without the backup right the panel shows its padlock and the header slot stays empty', async () => {
+    const { container } = render(tree([], ['list_backups']));
+    await screen.findByText(de.egress.panel.title);
+    await waitFor(() => expect(container.querySelector('.data-panel')).not.toBeNull());
+    await waitFor(() => expect(screen.queryByRole('button', { name: BACKUP })).toBeNull());
+  });
+
+  it('REST: no multi-sentence prose block on the working surface above Sync & Hosting', async () => {
+    const { container } = render(tree());
+    await screen.findByText(de.egress.panel.title);
+    const trust = container.querySelector('.trust') as HTMLElement;
+    // Every <p> left at rest in the Vertrauen panel is one line, never two sentences.
+    for (const p of Array.from(trust.querySelectorAll('p'))) {
+      expect((p.textContent ?? '').match(/[.!?](\s|$)/g)?.length ?? 0).toBeLessThan(2);
+    }
   });
 });

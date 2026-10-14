@@ -15,6 +15,9 @@
  *       (D139): the first side proposes the transfer entry, the other side then matches that entry;
  *   (d) history: the account and VAT code this counterparty was booked to last time, with the count:
  *       `learned`;
+ *   (d') D144 (spec §12): a calibrated model's recorded choice among code-built candidate accounts
+ *       (`bankModelRung.ts`), ALWAYS `check` (a probability is not a reference), and only while the
+ *       model that recorded it is the one registered now; with no fit model the rung is silent;
  *   (e) nothing: `open`.
  *
  * `sure` IS RESERVED FOR A REFERENCE-PROVEN MATCH (owner answer 2: "Alle sicheren buchen" stays
@@ -30,11 +33,12 @@ import { normalizeIban } from '../setup/iban.js';
 import type { Result } from '../result.js';
 import { resolveRole, isRejection } from '../payments/accounts.js';
 import { matchIncomingByQrr } from './qrMatch.js';
-import { compactReference } from './pain001.js';
 import { rankDebitCandidates, readCamtMatchConfig } from './debitRanking.js';
 import type { CamtMatchConfig } from './debitRanking.js';
 import { HAS_REVERSAL_SQL, bankLegsOf, claimedLegs, lineBookingDate, signedAmountOf } from './bankLines.js';
 import type { BankTxnDetailRow, BankTxnRow, BookBankLineTarget, ClaimedLegs } from './bankLines.js';
+import { modelRungContext, modelRungProposal } from './bankModelRung.js';
+import type { ModelRungContext } from './bankModelRung.js';
 
 export const BANK_PROPOSAL_CERTAINTIES = ['sure', 'learned', 'check', 'open'] as const;
 export type BankProposalCertainty = (typeof BANK_PROPOSAL_CERTAINTIES)[number];
@@ -53,6 +57,7 @@ export const BANK_PROPOSAL_REASONS = [
   'own_account_transfer',
   'own_account_transfer_booked',
   'history',
+  'model_suggested',
   'no_proposal',
 ] as const;
 export type BankProposalReason = (typeof BANK_PROPOSAL_REASONS)[number];
@@ -88,6 +93,8 @@ export interface ProposalContext {
   ownAccounts: OwnAccount[];
   history: Map<string, HistoryHit[]>;
   ledgerOf: Map<string, { ledgerAccountId: string; openingEntryId: string | null }>;
+  /** D144: the registered model's recorded decisions, or null when no fit model is registered. */
+  model: ModelRungContext | null;
 }
 
 const LEGAL_FORM_STOPWORDS = new Set(['ag', 'gmbh', 'sa', 'sarl', 'sagl', 'ltd', 'inc', 'the', 'und', 'co', 'kg']);
@@ -119,8 +126,11 @@ export function counterpartyKeyOf(row: BankTxnRow, detail: BankTxnDetailRow | un
   return name === null ? null : `name:${name}`;
 }
 
-/** Build the per-page context once. */
-export function proposalContext(ctx: WorkspaceContext): ProposalContext {
+/**
+ * Build the per-page context once. `withModel: false` builds the ladder WITHOUT the model rung: what
+ * `suggest_bank_lines` reads to find the lines that end at `open` today.
+ */
+export function proposalContext(ctx: WorkspaceContext, opts: { withModel?: boolean } = {}): ProposalContext {
   const accounts = ctx.store.db
     .prepare('SELECT id, iban, ledger_account_id, opening_entry_id FROM bank_account WHERE workspace_id = ?')
     .all(ctx.workspaceId) as { id: string; iban: string; ledger_account_id: string; opening_entry_id: string | null }[];
@@ -132,6 +142,7 @@ export function proposalContext(ctx: WorkspaceContext): ProposalContext {
     ownAccounts: accounts.map((a) => ({ bankAccountId: a.id, ledgerAccountId: a.ledger_account_id, iban: normalizeIban(a.iban) })),
     history: historyIndex(ctx),
     ledgerOf,
+    model: opts.withModel === false ? null : modelRungContext(ctx),
   };
 }
 
@@ -280,10 +291,21 @@ function existingEntryProposal(
 
   // The TILL payment behind each candidate, and the A18 item behind that payment.
   const paymentOf = ctx.store.db.prepare('SELECT id, reference_value FROM payment WHERE workspace_id = ? AND journal_entry_id = ?');
-  const itemOf = ctx.store.db.prepare('SELECT id, batch_id FROM payment_batch_item WHERE workspace_id = ? AND posted_payment_id = ?');
+  // The item's EndToEndId and its run's PmtInfId are read as FROZEN on the rows (A18 F9), never derived
+  // from an id: a restore or env_copy re-mints the ids, and the camt.053 reports what the bank was sent.
+  const itemOf = ctx.store.db.prepare(
+    `SELECT i.id AS id, i.batch_id AS batch_id, i.end_to_end_id AS end_to_end_id, b.pmt_inf_id AS pmt_inf_id
+       FROM payment_batch_item i JOIN payment_batch b ON b.workspace_id = i.workspace_id AND b.id = i.batch_id
+      WHERE i.workspace_id = ? AND i.posted_payment_id = ?`,
+  );
   const facts = open.map((c) => {
     const payment = paymentOf.get(ctx.workspaceId, c.entryId) as { id: string; reference_value: string | null } | undefined;
-    const item = payment === undefined ? undefined : (itemOf.get(ctx.workspaceId, payment.id) as { id: string; batch_id: string } | undefined);
+    const item =
+      payment === undefined
+        ? undefined
+        : (itemOf.get(ctx.workspaceId, payment.id) as
+            | { id: string; batch_id: string; end_to_end_id: string | null; pmt_inf_id: string | null }
+            | undefined);
     return { candidate: c, payment, item };
   });
   // Critic H1 (lean): a line that names an A18 item by TILL's own EndToEndId is THAT item's payment, never
@@ -291,7 +313,7 @@ function existingEntryProposal(
   const e2e = detail?.end_to_end_id ?? null;
   const named =
     e2e !== null
-      ? facts.find((f) => f.item !== undefined && compactReference('E', f.item.id) === e2e)
+      ? facts.find((f) => f.item !== undefined && f.item.end_to_end_id === e2e)
       : facts.find((f) => f.payment !== undefined && sameReference(f.payment.reference_value, row.reference_value));
   const chosen = named ?? facts[0]!;
   const best = chosen.candidate;
@@ -304,10 +326,10 @@ function existingEntryProposal(
   let proven = false;
   const { payment, item } = chosen;
   if (item !== undefined && e2e !== null) {
-    proven = e2e === compactReference('E', item.id);
+    proven = e2e === item.end_to_end_id;
   } else if (payment !== undefined && sameReference(payment.reference_value, row.reference_value)) {
     proven = true;
-  } else if (item !== undefined && row.batch_pmt_inf_id !== null && row.batch_pmt_inf_id === compactReference('P', item.batch_id)) {
+  } else if (item !== undefined && row.batch_pmt_inf_id !== null && row.batch_pmt_inf_id === item.pmt_inf_id) {
     proven = facts.filter((f) => f.item !== undefined && f.item.batch_id === item.batch_id).length === 1;
   }
   let transfer: OwnAccount | undefined;
@@ -357,8 +379,9 @@ function existingEntryProposal(
 
 /**
  * (b) an A18 run on this Bankkonto, in the LINE's currency (spec L6), generated or paid: by an item's
- * EndToEndId (TILL's own `compactReference('E', item.id)`, one payment per camt.053 line "mit Details"),
- * else by the run's PmtInfId (the line is the run total). `sure` on the item's EndToEndId with its amount,
+ * EndToEndId (the value A18 froze on `payment_batch_item.end_to_end_id` and sent, one payment per camt.053
+ * line "mit Details"), else by the run's PmtInfId (`payment_batch.pmt_inf_id`; the line is the run total).
+ * Both are read from the stored columns, never derived from an id (A18 F9: a restore re-mints ids). `sure` on the item's EndToEndId with its amount,
  * or on the PmtInfId with the total. A paid run whose leg another line already accounts for is not
  * proposed again (critic A39-2: the claim set the booking guard reads).
  */
@@ -369,25 +392,26 @@ function batchProposal(ctx: WorkspaceContext, pc: ProposalContext, row: BankTxnR
   if (e2e === null && pmtInfId === null) return null;
   const batches = ctx.store.db
     .prepare(
-      `SELECT id, status, ctrl_sum_minor FROM payment_batch
+      `SELECT id, status, ctrl_sum_minor, pmt_inf_id FROM payment_batch
         WHERE workspace_id = ? AND bank_account_id = ? AND status IN ('generated', 'paid')`,
     )
-    .all(ctx.workspaceId, row.bank_account_id) as { id: string; status: string; ctrl_sum_minor: number | null }[];
+    .all(ctx.workspaceId, row.bank_account_id) as { id: string; status: string; ctrl_sum_minor: number | null; pmt_inf_id: string | null }[];
   const ledger = pc.ledgerOf.get(row.bank_account_id);
   const itemsOf = (batchId: string) =>
     ctx.store.db
       .prepare(
-        `SELECT i.id AS id, i.amount_minor AS amountMinor, i.currency AS currency, p.journal_entry_id AS entryId
+        `SELECT i.id AS id, i.amount_minor AS amountMinor, i.currency AS currency, i.end_to_end_id AS endToEndId,
+                p.journal_entry_id AS entryId
            FROM payment_batch_item i LEFT JOIN payment p ON p.workspace_id = i.workspace_id AND p.id = i.posted_payment_id
-          WHERE i.workspace_id = ? AND i.batch_id = ? ORDER BY i.rowid`,
+          WHERE i.workspace_id = ? AND i.batch_id = ? ORDER BY i.seq, i.rowid`,
       )
-      .all(ctx.workspaceId, batchId) as { id: string; amountMinor: number; currency: string; entryId: string | null }[];
+      .all(ctx.workspaceId, batchId) as { id: string; amountMinor: number; currency: string; endToEndId: string | null; entryId: string | null }[];
   const takenBy = (entryIds: (string | null)[]): boolean =>
     ledger !== undefined && bankLegsOf(ctx, ledger.ledgerAccountId, entryIds).some((l) => pc.claimed.lineIds.has(l.lineId));
   for (const b of batches) {
     const items = itemsOf(b.id);
     if (items.length === 0 || items[0]!.currency !== row.currency) continue;
-    const item = e2e === null ? undefined : items.find((i) => compactReference('E', i.id) === e2e);
+    const item = e2e === null ? undefined : items.find((i) => i.endToEndId === e2e);
     if (item !== undefined) {
       if (b.status === 'paid' && takenBy([item.entryId])) continue;
       const exact = item.amountMinor === row.amount_minor;
@@ -401,7 +425,7 @@ function batchProposal(ctx: WorkspaceContext, pc: ProposalContext, row: BankTxnR
         vatCode: null,
       };
     }
-    if (pmtInfId === null || compactReference('P', b.id) !== pmtInfId) continue;
+    if (pmtInfId === null || b.pmt_inf_id !== pmtInfId) continue;
     if (b.status === 'paid' && takenBy(items.map((i) => i.entryId))) continue;
     const total = b.ctrl_sum_minor ?? items.reduce((sum, i) => sum + i.amountMinor, 0);
     const totalMatches = total === row.amount_minor;
@@ -578,6 +602,25 @@ export function proposeForLine(
       reasonCode: 'history',
       reasonParams: { accountId: last.accountId, taxCode: last.taxCode, count, lastDate: last.date },
       vatCode: last.taxCode,
+    };
+  }
+
+  // (d') D144: a recorded model choice, never `sure` (A39 §12).
+  const m = pc.model === null ? null : modelRungProposal(pc.model, row);
+  if (m !== null) {
+    return {
+      target: m.target,
+      certainty: 'check',
+      reasonCode: 'model_suggested',
+      reasonParams: {
+        accountId: m.accountId,
+        probability: m.probability,
+        decisionId: m.decisionId,
+        modelRef: m.modelRef,
+        candidates: m.candidates,
+        ece: m.ece,
+      },
+      vatCode: m.vatCode,
     };
   }
 

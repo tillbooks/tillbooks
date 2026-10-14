@@ -35,11 +35,12 @@ import {
   runDueAutomations,
   updateAutomationRule,
 } from '../core/automation/index.js';
+import type { ActionKind, ClassifiedWriteKind } from './actionKind.js';
 
 export interface AutomationActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,
@@ -70,12 +71,13 @@ export function automationActions(h: AutomationActionHelpers): readonly ActionDe
   const firingVerbs: string[] = [];
   const firingAction = (
     name: string,
+    kind: ClassifiedWriteKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, invoke: ActionInvoker, input: ActionInput) => Result,
   ): ActionDef => {
     firingVerbs.push(name);
-    return ctxAction(name, 'write', summary, inputSchema, (ctx, input, deps) =>
+    return ctxAction(name, kind, summary, inputSchema, (ctx, input, deps) =>
       call(ctx, invokerFor(deps), input),
     );
   };
@@ -89,7 +91,7 @@ export function automationActions(h: AutomationActionHelpers): readonly ActionDe
   const actions: readonly ActionDef[] = [
     ctxAction(
       'create_automation_rule',
-      'write',
+      'write:reversible:outbound',
       'Define an automation: when this event happens, and this condition holds, call this write verb with this input. The action must name a registered write verb, the trigger must name a registered event, and a rule whose action is the very verb that emits its own trigger is refused outright. A rule created by the agent actor lands DISABLED and a human must enable it.',
       ctxSchema(
         {
@@ -106,40 +108,42 @@ export function automationActions(h: AutomationActionHelpers): readonly ActionDe
     ),
     ctxAction(
       'update_automation_rule',
-      'write',
+      'write:reversible:outbound',
       'Patch a rule: its name, trigger, condition or action. The patched shape is validated exactly as a new rule is, so an edit can never leave a rule the engine would have refused to create. The change takes effect on the next event; an archived rule refuses.',
       ctxSchema({ ruleId: STR, patch: OBJ, idempotencyKey: STR }, ['ruleId', 'patch']),
       (ctx, input) => updateAutomationRule(ctx, input as unknown as Parameters<typeof updateAutomationRule>[1]),
     ),
     ctxAction(
       'enable_automation_rule',
-      'write',
+      'write:reversible:outbound',
       'Let a rule fire again. Requires manage_automations, which is the asymmetry that makes disabling safe to leave open: anyone may stop a rule, only an administrator may start one. An archived rule refuses.',
       ctxSchema({ ruleId: STR }, ['ruleId']),
       (ctx, input) => enableAutomationRule(ctx, input as unknown as { ruleId: string }),
     ),
     ctxAction(
       'disable_automation_rule',
-      'write',
+      'write:reversible:stop',
       'Stop a rule firing, immediately. Deliberately requires NO capability at all: a stop button that needs a permission is not a stop button, and disabling only ever prevents a write, never causes one.',
       ctxSchema({ ruleId: STR }, ['ruleId']),
       (ctx, input) => disableAutomationRule(ctx, input as unknown as { ruleId: string }),
     ),
     ctxAction(
       'archive_automation_rule',
-      'write',
+      'write:correctable:stop',
       'Retire a rule: it stops matching, disappears from the default list, and stops being enable-able. Never a delete, and its run history is untouched, because a firing that happened stays true after the rule that caused it is gone.',
       ctxSchema({ ruleId: STR }, ['ruleId']),
       (ctx, input) => archiveAutomationRule(ctx, input as unknown as { ruleId: string }),
     ),
     firingAction(
       'run_due_automations',
+      'write:final:outbound',
       'The tick for schedule triggers: fire every enabled rule whose cadence has come due at asOf, at most ONCE each however far behind it had fallen. Requires manage_automations, because the tick is what makes a schedule rule write unattended. asOf may name a past instant but never a future one: the injected clock decides what is due, not the caller. Safe to call as often as you like: a repeated tick for the same asOf computes the same occurrence key and does nothing.',
       ctxSchema({ asOf: STR }),
       (ctx, invoke, input) => runDueAutomations(ctx, invoke, input as unknown as { asOf?: string }),
     ),
     firingAction(
       'retry_automation_run',
+      'write:final:outbound',
       'Finish a run that is stuck in `running`, which is what a process death between the claim and the settle leaves behind. Re-sends the SAME stored input, including the derived idempotency key, so a lost invocation that had in fact committed cannot happen twice. Runs as the actor the firing ran as, so a since-demoted author is refused now exactly as it would be on a fresh firing. Requires manage_automations. A settled run refuses with run_not_stuck.',
       ctxSchema({ runId: STR, idempotencyKey: STR }, ['runId']),
       (ctx, invoke, input) =>

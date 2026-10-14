@@ -68,6 +68,8 @@ import type { Result } from '../result.js';
 import { computeVatReturn } from './abrechnung.js';
 import type { VatReturnLine } from './abrechnung.js';
 import { generationsGoverning } from './saldoGenerations.js';
+import { nextUnfiledMonthStart } from './config.js';
+import { TILL_PACKAGE_VERSION } from '../version.js';
 
 /** The eCH-0217 v2.0.0 target namespace, and the two namespaces its `generalInformation` imports. */
 const NS_0217 = 'http://www.ech.ch/xmlns/eCH-0217/2';
@@ -118,11 +120,56 @@ function collapseToken(s: string): string {
 /** eCH-0108 `unitNameType`, after collapsing: minLength 1, maxLength 255. */
 const ORG_NAME_MAX = 255;
 
+/** eCH-0058 v5 `productVersion`: an `xs:token` of 1 to 10 characters (the vendored `eCH-0058-5-0.xsd`). */
+const PRODUCT_VERSION_MAX = 10;
+
+/** The prerelease stage identifiers spelled with one letter when a version must be compacted. */
+const STAGE_LETTER: Readonly<Record<string, string>> = { alpha: 'a', beta: 'b', rc: 'r' };
+
+/**
+ * The package version as eCH-0058 can carry it. A plain `X.Y.Z` or a short prerelease fits as is
+ * (`1.0.0-rc.1` is exactly 10). A longer prerelease is compacted deterministically, and it STAYS a
+ * prerelease (critic phase0-installable r1: `1.0.0-rc.10` used to collapse to `1.0.0`, which reads as
+ * the final release in a file handed to the ESTV). The steps, first fit wins:
+ *
+ *   1. the stage identifier as one letter, `alpha`/`beta`/`rc` -> `a`/`b`/`r`
+ *      (`1.0.0-beta.1` -> `1.0.0-b.1`, `1.0.0-rc.10` -> `1.0.0-r.10`);
+ *   2. the same without the dots (`10.2.3-beta.10` -> `10.2.3-b10`);
+ *   3. the stage letters alone (`10.20.30-beta.100` -> `10.20.30-b`): less precise, but still a
+ *      prerelease of that line and never a number that names a different one.
+ *
+ * Only a core so long that not even `X.Y.Z-b` fits falls back to the core itself, which
+ * `ops/release.mjs` (it accepts `X.Y.Z[-id]` with small numbers) never produces.
+ */
+export function ech0058ProductVersion(version: string): string {
+  if (version.length <= PRODUCT_VERSION_MAX) return version;
+  const m = /^(\d+\.\d+\.\d+)-([0-9A-Za-z.-]+)$/.exec(version);
+  if (m === null || m[1] === undefined || m[2] === undefined) return version.slice(0, PRODUCT_VERSION_MAX);
+  const core = m[1];
+  const lettered = m[2]
+    .split('.')
+    .map((id) => STAGE_LETTER[id] ?? id)
+    .join('.');
+  const lettersOnly = lettered.replace(/[^A-Za-z]/g, '');
+  const candidates = [lettered, lettered.replace(/\./g, ''), lettersOnly].filter((pre) => pre.length > 0);
+  for (const pre of candidates) {
+    const compact = `${core}-${pre}`;
+    if (compact.length <= PRODUCT_VERSION_MAX) return compact;
+  }
+  return core.length <= PRODUCT_VERSION_MAX ? core : core.slice(0, PRODUCT_VERSION_MAX);
+}
+
 /**
  * `sendingApplication`, an eCH-0058 triple. `manufacturer` is capped at 30 characters by that
- * schema, which is why the legal name is used bare rather than with a suffix.
+ * schema, which is why the legal name is used bare rather than with a suffix. `productVersion` is the
+ * running package's own version (`TILL_PACKAGE_VERSION`, read off `package.json`), so the file says
+ * which build wrote it; it said `0.0.0` for every build until the beta launch P0.1.
  */
-const SENDING_APPLICATION = { manufacturer: 'Nomadik GmbH', product: 'TILL', productVersion: '0.0.0' } as const;
+const SENDING_APPLICATION = {
+  manufacturer: 'Nomadik GmbH',
+  product: 'TILL',
+  productVersion: ech0058ProductVersion(TILL_PACKAGE_VERSION),
+} as const;
 
 // --- The Ziffer -> element translation table ------------------------------------------------------
 
@@ -863,7 +910,7 @@ export function exportVatReturnEch0217(ctx: WorkspaceContext, input: ExportVatRe
   // period, the method and the timing is already answered there, and answering any of them a second
   // time here would create a second opinion about whether a return may be filed.
   const computed = computeVatReturn(ctx, { periodStart, periodEnd });
-  if (!computed.ok) return withNextStep(computed);
+  if (!computed.ok) return withNextStep(ctx, computed);
 
   const ws = ctx.store.db
     .prepare('SELECT name, uid, base_currency FROM workspace WHERE id = ?')
@@ -1073,10 +1120,27 @@ function taxCrossCheck(
  * (Soll) basis only`), which is not the same thing as telling a person on a filing deadline what to
  * do in the next five minutes.
  */
-function withNextStep(refusal: Result): Result {
-  const nextStep = NEXT_STEP_BY_ERROR[refusal.error as string] ?? DEFAULT_NEXT_STEP;
+function withNextStep(ctx: WorkspaceContext, refusal: Result): Result {
+  const code = refusal.error as string;
+  // ONCE A PERIOD IS FILED, `set_vat_method` refuses a change of method or timing
+  // (`vat_method_change_undated`, D160.5), so a next step naming it would be a dead end. The remedy
+  // is then `vat_configure` with a dated `methodChange` from the first day not yet filed.
+  const firstUnfiledFrom = nextUnfiledMonthStart(ctx);
+  const filedStep = firstUnfiledFrom === null ? undefined : NEXT_STEP_WHEN_FILED[code]?.(firstUnfiledFrom);
+  const nextStep = filedStep ?? NEXT_STEP_BY_ERROR[code] ?? DEFAULT_NEXT_STEP;
   return { ...refusal, nextStep };
 }
+
+/**
+ * The two next steps that name `set_vat_method`, restated for a workspace with a filed period, where
+ * that verb refuses (D160.5 critic F1). Each hands over the day to date the change from.
+ */
+const NEXT_STEP_WHEN_FILED: Readonly<Record<string, (firstUnfiledFrom: string) => string>> = {
+  needs_vat_config: (from) =>
+    `Configure MWST first: \`vat_configure\` with the method (effektiv or saldo) and the timing (soll or ist) the ESTV granted this business, and \`methodChange: { validFrom: '${from}' }\`, the first day not yet filed (Studio: Einstellungen, MWST). \`set_vat_method\` refuses here, because periods are already filed. Nothing can be computed or exported until then.`,
+  unsupported: (from) =>
+    `This workspace files on vereinnahmte Entgelte (Ist). A07 computes the vereinbarte (Soll) basis only, and handing an Ist filer Soll figures would produce a file that looks right and is not. Either file this period in the ESTV ePortal by hand, or, if the ESTV granted this business the vereinbarte basis, record it with \`vat_configure\` (timing: soll) and \`methodChange: { validFrom: '${from}' }\`, the first day not yet filed. \`set_vat_method\` refuses here, because periods are already filed.`,
+};
 
 const DEFAULT_NEXT_STEP =
   'The return could not be computed, so there is nothing to export. Resolve the reason above, or file this period in the ESTV ePortal by hand: the figures are on the MWST-Abrechnung screen.';

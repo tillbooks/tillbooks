@@ -81,7 +81,11 @@ CREATE TABLE IF NOT EXISTS recurring_run_log (
   error         TEXT,
   -- The due date the tick stamped on the draft (clock day + due_days), or NULL. See module note.
   due_stamped   TEXT,
-  ran_at        TEXT NOT NULL
+  ran_at        TEXT NOT NULL,
+  -- D141 (non-author critic R2, 28.09.2026): the fingerprint of the draft the tick CREATED, on every
+  -- row it writes for a waiting auto-issue draft. The next tick issues that draft only while it is
+  -- byte-identical (bar the due date), and only a draft a row of this schedule names is the tick's own.
+  draft_fingerprint TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS recurring_run_log_settled

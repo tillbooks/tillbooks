@@ -28,6 +28,14 @@
  * by the replay answer, and by the trace (`get_agent_session` joins it onto the drafting call), so the
  * next session can read why the last proposal was refused instead of proposing it again blind.
  *
+ * `agent_action.pin_digest` / `pin_json` (critic N1, 11.10.2026: what you approved is what runs) are the
+ * content pin of a Vorschlag whose verb names a mutable record (`vorschlagPin.ts`): the sha256 over the
+ * records the act will consume, taken when the Vorschlag is drafted, and the key figures the card shows.
+ * Approval recomputes the digest and refuses `vorschlag_stale` on a mismatch, flipping the row to the
+ * fourth status `stale` (pending -> stale, never back). Both are additive (`ADDITIVE_COLUMNS`) and
+ * nullable: a row drafted before the pin existed, or for a verb that needs none, carries NULL and
+ * replays exactly as before.
+ *
  * `agent_action_by_key` (F-08 c, 2026-09-05) is the replay lookup: a governed write at `ask` that
  * arrives AGAIN with the same `idempotency_key` for the same `action_tool` answers with the row it
  * already minted instead of a second Vorschlag (measured in J3.10: two proposals for one booking, and
@@ -69,7 +77,9 @@ CREATE TABLE IF NOT EXISTS agent_action (
   created_at       TEXT NOT NULL,
   resolved_at      TEXT,
   resolved_by      TEXT,
-  reject_reason    TEXT
+  reject_reason    TEXT,
+  pin_digest       TEXT,
+  pin_json         TEXT
 );
 
 CREATE INDEX IF NOT EXISTS agent_action_queue

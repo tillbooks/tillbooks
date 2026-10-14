@@ -47,7 +47,8 @@
       "swico": "Rechnungsinformationen (Swico)",
       "local_model": "Lokales Modell",
       "agent": "Agent",
-      "operator": "Manuell"
+      "operator": "Manuell",
+      "viaQr": "aus dem QR-Code"
     },
     "confidence": {
       "high": "Hoch",
@@ -59,7 +60,7 @@
       "queueHint": "Ein Beleg, den du wählst, erscheint hier zur Prüfung.",
       "fields": "Keine Felder erkannt.",
       "fieldsHintManual": "Felder manuell erfassen.",
-      "fieldsHintNoqr": "Kein QR-Code gefunden. Felder manuell erfassen."
+      "fieldsHintNoqr": "Kein QR-Code gefunden. Füge unten den Inhalt des QR-Codes ein oder erfasse die Felder manuell."
     },
     "duplicate": "Diese Datei ist bereits im Belegeingang.",
     "field": {
@@ -80,7 +81,9 @@
       "import_vat": "Einfuhrsteuer",
       "payment_conditions": "Zahlungskonditionen",
       "expense_account_id": "Aufwandskonto",
-      "tax_code": "Steuercode"
+      "tax_code": "Steuercode",
+      "vendor_address": "Adresse Lieferant",
+      "payment_message": "Mitteilung"
     },
     "error": {
       "unsupported_mime": "Dieser Dateityp kann nicht erfasst werden.",
@@ -90,7 +93,13 @@
       "needs_amount": "Kein Betrag erkannt; vor dem Übernehmen erfassen.",
       "invalid_state": "Dieser Beleg wurde bereits übernommen oder verworfen.",
       "no_matching_tax_code": "Kein konfigurierter MWST-Code entspricht diesem Satz.",
-      "needs_open_claim": "Vor dem Übernehmen eine Spesenabrechnung wählen oder erstellen."
+      "needs_open_claim": "Vor dem Übernehmen eine Spesenabrechnung wählen oder erstellen.",
+      "currency_conflict": "Betrag und Währung dieses Belegs widersprechen sich. Korrigiere den Betrag oder die Währung, bevor du übernimmst.",
+      "qr_payload_invalid": "Dieser QR-Code hält die Regeln der QR-Rechnung nicht ein, darum wurde kein Feld ausgefüllt:"
+    },
+    "discarded": {
+      "title": "Korrektur zur vorherigen Rechnung verworfen",
+      "hint": "Diese Werte hattest du für eine andere Rechnung erfasst. Jetzt gilt die gelesene Rechnung. Prüfe sie, bevor du übernimmst. Kehrst du zu einer früheren Rechnung zurück, erfasse deine Korrekturen dort neu."
     },
     "pick": {
       "vendor": "Lieferant zuordnen",
@@ -108,12 +117,64 @@
       "posted": "Übernommen und gebucht.",
       "drafted": "Übernommen. Die Buchung wartet auf Freigabe.",
       "openBill": "Rechnung öffnen"
+    },
+    "qr": {
+      "title": "QR-Code",
+      "label": "Inhalt des QR-Codes",
+      "hint": "Scanne den QR-Code der Rechnung mit dem Handy und füge den Text hier ein. TILL prüft ihn nach den Regeln der QR-Rechnung, bevor ein Feld ausgefüllt wird.",
+      "read": "Einlesen",
+      "found": "Im Bild steht ein QR-Code. Prüf den Text und lies ihn dann ein.",
+      "done": "Eingelesen. Bei jedem Feld steht, woher der Wert kommt.",
+      "warningsTitle": "Eingelesen, mit Hinweisen:",
+      "line": "Zeile {line}",
+      "issue": {
+        "empty_payload": "Der Text ist leer.",
+        "not_spc": "Das ist keine QR-Rechnung: Die erste Zeile muss SPC lauten.",
+        "unsupported_version": "Nur die Version 0200 wird unterstützt.",
+        "separator": "Die Zeilenumbrüche sind gemischt oder von einer Art, die die QR-Rechnung nicht erlaubt.",
+        "element_count": "Es fehlen Zeilen oder es hat zu viele: Eine QR-Rechnung hat 31 bis 34 Zeilen.",
+        "unsupported_coding": "Der Codierungstyp muss 1 sein.",
+        "payload_too_long": "Der Text ist länger als die 997 Zeichen, die eine QR-Rechnung erlaubt.",
+        "disallowed_character": "Er enthält ein Zeichen, das die QR-Rechnung nicht erlaubt.",
+        "field_too_long": "Der Wert ist länger, als die QR-Rechnung erlaubt.",
+        "blank_only": "Die Zeile enthält nur Leerzeichen. Eine unbenutzte Zeile muss leer sein.",
+        "trailer": "Zeile 31 muss EPD lauten.",
+        "iban_format": "Die IBAN muss aus 21 Buchstaben und Ziffern ohne Leerzeichen bestehen.",
+        "iban_country": "Nur IBANs aus der Schweiz (CH) oder aus Liechtenstein (LI) sind erlaubt.",
+        "iban_check_digits": "Die Prüfziffern der IBAN stimmen nicht.",
+        "address_type_combined": "Kombinierte Adressen (Typ K) sind seit November 2025 nicht mehr erlaubt.",
+        "address_type": "Der Adresstyp muss S (strukturiert) sein.",
+        "address_incomplete": "Die Adresse braucht Name, Postleitzahl, Ort und Land.",
+        "country_code": "Das Land muss ein ISO-Ländercode sein, zum Beispiel CH.",
+        "ultimate_creditor_filled": "Der endgültige Zahlungsempfänger muss leer bleiben.",
+        "amount_format": "Der Betrag braucht einen Punkt und genau zwei Nachkommastellen, zum Beispiel 1081.00.",
+        "amount_range": "Der Betrag muss zwischen 0.01 und 999'999'999.99 liegen.",
+        "currency": "Nur CHF und EUR sind erlaubt.",
+        "reference_type": "Der Referenztyp muss QRR, SCOR oder NON sein.",
+        "qr_iban_requires_qrr": "Eine QR-IBAN braucht eine QR-Referenz (QRR).",
+        "qrr_requires_qr_iban": "Eine QR-Referenz (QRR) braucht eine QR-IBAN.",
+        "reference_missing": "Die Referenz fehlt.",
+        "qrr_format": "Eine QR-Referenz hat genau 27 Ziffern.",
+        "qrr_check_digit": "Die Prüfziffer der QR-Referenz stimmt nicht.",
+        "scor_format": "Eine Creditor Reference beginnt mit RF und hat 5 bis 25 Zeichen.",
+        "scor_check_digit": "Die Prüfziffern der Creditor Reference stimmen nicht.",
+        "non_reference_present": "Beim Referenztyp NON muss die Referenz leer sein.",
+        "additional_info_too_long": "Mitteilung und Rechnungsinformationen sind zusammen länger als 140 Zeichen.",
+        "trailing_separator": "Ein Zeilenumbruch am Ende wurde ignoriert.",
+        "blank_padding": "Leerzeichen am Anfang oder Ende eines Werts wurden entfernt.",
+        "amount_open": "Die Rechnung nennt keinen Betrag. Gib ihn von Hand ein.",
+        "billing_info_unrecognised": "Die Rechnungsinformationen sind nicht im Swico-Format und wurden nicht ausgewertet.",
+        "swico_value": "Ein Wert in den Rechnungsinformationen war nicht lesbar und wurde weggelassen.",
+        "eur_qrr_ig_v24": "Ab dem 14.11.2026 sieht die Version 2.4 der Richtlinien EUR nur noch mit IBAN und SCOR-Referenz oder ohne Referenz vor. Die Version 2.3, nach der diese Rechnung gültig ist, gilt noch bis November 2027.",
+        "notification": "Die Rechnung ist eine Mitteilung: Der Betrag wird per Lastschrift oder eBill bezahlt. Gib ihn von Hand ein.",
+        "country_user_assigned": "XK (Kosovo) ist kein Code nach ISO 3166-1, und SIX führt ihn nicht auf. Prüf die Adresse, bevor du übernimmst."
+      }
     }
   },
   "help": {
     "Capture": {
       "title": "Belegeingang",
-      "body": "Der Belegeingang sammelt eingelesene Belege zur Prüfung: auf der einen Seite das Originaldokument, auf der anderen der Feldvorschlag. Jedes Feld trägt seine Herkunft, ob der Wert maschinenlesbar aus der QR-Rechnung stammt oder von Hand korrigiert wurde.\n\nÜbernehmen erstellt die Lieferantenrechnung und bucht sie im selben Schritt. Aufwandskonto und Vorsteuercode sind von der letzten Rechnung des Lieferanten vorbelegt, und vor dem Klick steht, was gebucht wird.\n\nEin Spesenbeleg landet als Position in einer Spesenabrechnung.",
+      "body": "Der Belegeingang sammelt eingelesene Belege zur Prüfung: auf der einen Seite das Originaldokument, auf der anderen der Feldvorschlag. Jedes Feld trägt seine Herkunft, ob der Wert maschinenlesbar aus der QR-Rechnung stammt oder von Hand korrigiert wurde.\n\nÜbernehmen erstellt die Lieferantenrechnung und bucht sie im selben Schritt. Aufwandskonto und Vorsteuercode sind von der letzten Rechnung des Lieferanten vorbelegt, und vor dem Klick steht, was gebucht wird.\n\nEin Spesenbeleg landet als Position in einer Spesenabrechnung.\n\nSteht der QR-Code nicht als Text in der Datei, scanne ihn mit dem Handy und füge den Text unter QR-Code ein. TILL prüft ihn zuerst und übernimmt nichts aus einem fehlerhaften Code.",
       "concepts": [],
       "docsPath": "swiss/qr-bill"
     }

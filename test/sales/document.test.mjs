@@ -16,7 +16,10 @@ import { makeContext } from '../../dist/core/context.js';
 import { fixedClock } from '../../dist/core/clock.js';
 import { sequenceIdGen } from '../../dist/core/ids.js';
 import { createWorkspace } from '../../dist/core/setup/index.js';
-import { postEntry, reverseEntry } from '../../dist/core/ledger/index.js';
+import { postEntry } from '../../dist/core/ledger/index.js';
+// The stub poster reverses the way the real one does: a document's entry is owned by its cancel
+// (`OWNED_REVERSAL_SOURCES`), so it goes through the owned seam, never the raw `reverseEntry`.
+import { reverseOwnedEntry, DOCUMENT_REVERSAL_OWNER } from '../../dist/core/ledger/reverseEntry.js';
 import {
   createDocument,
   updateDocument,
@@ -55,7 +58,7 @@ registerDocumentPoster('invoice', {
   },
   onCancel: (ctx, doc) => {
     if (doc.posted_entry_id === null) return { ok: true };
-    const reversed = reverseEntry(ctx, { entryId: doc.posted_entry_id, idempotencyKey: `test-cancel-${doc.id}` });
+    const reversed = reverseOwnedEntry(ctx, { entryId: doc.posted_entry_id, idempotencyKey: `test-cancel-${doc.id}` }, DOCUMENT_REVERSAL_OWNER);
     if (!reversed.ok) return reversed;
     return { ok: true, reversalEntryId: reversed.reversalId };
   },

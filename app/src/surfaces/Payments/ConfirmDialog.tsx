@@ -42,17 +42,17 @@ export function ConfirmDialog({
   return (
     <div className="pay-confirm-overlay" role="presentation" onClick={onCancel}>
       <div
-        className="pay-confirm panel"
+        className="pay-confirm panel motion-reveal--center"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(event) => event.stopPropagation()}
       >
-        <p id={titleId} className="pay-confirm-message">
+        <p id={titleId} className="pay-confirm-message" data-motion-item="1">
           {message}
         </p>
         {children}
-        <div className="pay-confirm-foot">
+        <div className="pay-confirm-foot" data-motion-item="2">
           <button type="button" className="btn btn--secondary" onClick={onCancel}>
             {cancelLabel ?? t('payment.cancel')}
           </button>

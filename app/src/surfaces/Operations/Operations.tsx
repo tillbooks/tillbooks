@@ -18,6 +18,8 @@
  * to have no h1 at all, so it read as a document whose first heading was "Vertrauen", with no name
  * for a screen reader and no help entry point.
  */
+import { useState } from 'react';
+
 import { DataBackup } from './DataBackup';
 import { Diagnostics } from './Diagnostics';
 import { ImplementationRoster } from './ImplementationRoster';
@@ -32,11 +34,21 @@ import './Diagnostics.css';
 
 export function Operations() {
   const t = useT();
+  // D152 (03.10.2026): the header's action slot, handed to Data & Backup so "Jetzt sichern", the
+  // surface's one primary, renders in the header and is in view at load. The panel keeps the
+  // button's behaviour; only where it renders moves. With no workspace or no right the panel
+  // renders away, and the slot stays empty (hide, never show-then-reject).
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   return (
     // One column, one measure, one rhythm: the operational panels sit in a single stack, the same
     // gap and measure the profile surface uses, so the two surfaces read as siblings.
     <section className="operations-stack" aria-labelledby="operations-title">
-      <SurfaceHeader title={t('nav.operations')} titleId="operations-title" help={<SurfaceHelp surface="Operations" />} />
+      <SurfaceHeader
+        title={t('nav.operations')}
+        titleId="operations-title"
+        help={<SurfaceHelp surface="Operations" />}
+        actions={<span ref={setActionSlot} className="operations-header-action" />}
+      />
       {/* M02: Trust and SyncHosting read the SAME sync contract; the provider lets a dial flip on
           SyncHosting refresh Trust's availability line live, without a reload (they stay decoupled). */}
       <SyncSignalProvider>
@@ -53,7 +65,7 @@ export function Operations() {
       </SyncSignalProvider>
       {/* G04 Data & Backup: a full-workspace tool with a handful of actions (spec §6). Renders itself
           away with no workspace, like Diagnostics and Trust. */}
-      <DataBackup />
+      <DataBackup headerSlot={actionSlot} />
       {/* G20 US-G20.4: the cross-client implementation roster, the Datenübernahme home. One row per
           mandate, composed over A23 client-side, metadata only. Renders away with no projects. */}
       <ImplementationRoster />

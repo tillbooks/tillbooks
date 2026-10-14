@@ -34,11 +34,46 @@ interface ProgressRow {
   completed_at: string | null;
 }
 
+/**
+ * Which first-hour steps the BOOKS already answer (beta launch P0.4d). The Übersicht's setup card
+ * used to tick only the two steps the company profile answers, so a customer created inline while
+ * writing the first invoice left "Ersten Kontakt anlegen" open, and visiting the chart ticked
+ * nothing. Each flag is read off the data itself, never off where the person clicked:
+ *
+ *   - `chart`: the workspace has a chart of accounts (the KMU chart is seeded at creation);
+ *   - `contact`: at least one contact that is not archived, however it was created;
+ *   - `item`: at least one item that is not archived;
+ *   - `invoice`: at least one invoice that was ISSUED (any status but `draft`): a draft is not yet
+ *     the first invoice a customer can pay.
+ */
+export type OnboardingFirstSteps = {
+  chart: boolean;
+  contact: boolean;
+  item: boolean;
+  invoice: boolean;
+};
+
 export type OnboardingProgressOk = {
   progress: { path: string; step: string; completedAt: string | null } | null;
   /** The G12 `workspace.kind` (`demo | sandbox | live`), so the shell banner needs no second verb. */
   workspaceKind: string;
+  /** What the books already hold for the first-hour steps (P0.4d), so the card ticks from state. */
+  firstSteps: OnboardingFirstSteps;
 };
+
+/** The first-hour facts, four EXISTS probes on the tenant's own rows (§H-TENANT on each). */
+export function firstStepsOf(ctx: WorkspaceContext): OnboardingFirstSteps {
+  const row = ctx.store.db
+    .prepare(
+      `SELECT
+         EXISTS(SELECT 1 FROM account WHERE workspace_id = @ws) AS chart,
+         EXISTS(SELECT 1 FROM contact WHERE workspace_id = @ws AND archived = 0) AS contact,
+         EXISTS(SELECT 1 FROM item WHERE workspace_id = @ws AND archived = 0) AS item,
+         EXISTS(SELECT 1 FROM document WHERE workspace_id = @ws AND type = 'invoice' AND status <> 'draft') AS invoice`,
+    )
+    .get({ ws: ctx.workspaceId }) as { chart: number; contact: number; item: number; invoice: number };
+  return { chart: row.chart === 1, contact: row.contact === 1, item: row.item === 1, invoice: row.invoice === 1 };
+}
 
 /** The wizard resume point plus the workspace kind, in one read (spec §5). */
 export function getOnboardingProgress(ctx: WorkspaceContext): Result<OnboardingProgressOk> {
@@ -53,6 +88,7 @@ export function getOnboardingProgress(ctx: WorkspaceContext): Result<OnboardingP
     progress:
       row === undefined ? null : { path: row.path, step: row.step, completedAt: row.completed_at },
     workspaceKind: ws.kind,
+    firstSteps: firstStepsOf(ctx),
   });
 }
 

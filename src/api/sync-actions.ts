@@ -28,11 +28,12 @@ import {
   readSyncArtifact,
   syncStreamStatus,
 } from '../core/sync/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface SyncActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -61,14 +62,14 @@ export function syncActions(h: SyncActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'sync_publish_enable',
-      'write',
+      'write:final:outbound',
       'Turn the till-sync publish stream ON for this workspace (owner dial, default OFF: a local install publishes nothing). Enabling is the consent act for any egress; it mints the stream epoch once and backfills existing posted history so the stream is complete. Reversible with sync_publish_disable.',
       ctxSchema({ idempotencyKey: STR }, ['idempotencyKey']),
       (ctx, input) => enableSyncPublish(ctx, input as never),
     ),
     ctxAction(
       'sync_publish_disable',
-      'write',
+      'write:reversible:stop',
       'Turn the till-sync publish stream OFF for this workspace. Stops new appends and refuses stream reads (publishing_disabled), but the already-published outbox rows remain, append-only, for audit; the epoch is kept so re-enabling resumes the same stream. The stop button.',
       ctxSchema({ idempotencyKey: STR }, ['idempotencyKey']),
       (ctx, input) => disableSyncPublish(ctx, input as never),

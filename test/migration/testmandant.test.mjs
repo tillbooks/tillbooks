@@ -227,6 +227,36 @@ test('promote-twice is idempotent: a second promotion is a no-op, never a double
   assert.equal(auditAfterSecond, auditAfterFirst, 'no second audit row: the transition happens once');
 });
 
+test('D158 critic round 2: an ABANDONED plan never goes productive, and the plan stays abandoned', () => {
+  const { deps, call } = world('abd');
+  const { planId, tId, name } = promotable(call, 'abd');
+  // Abandon WITHOUT discarding first is not reachable any more (abandon discards the sandbox), so the
+  // pre-fix shape is rebuilt the way an older book holds it: an abandoned plan still linked to a sandbox.
+  deps.store.db.prepare("UPDATE migration_plan SET status = 'abandoned' WHERE id = ?").run(planId);
+  const statusOf = () => deps.store.db.prepare('SELECT status FROM migration_plan WHERE id = ?').get(planId).status;
+  refuse(call('go_productive', { planId, confirmedName: name, idempotencyKey: 'abd-1' }), 'plan_abandoned', 'promote an abandoned plan');
+  assert.equal(statusOf(), 'abandoned', 'the plan is never flipped back to live');
+  assert.equal(kindOf(deps, tId), 'sandbox', 'nothing was promoted');
+  // A closed plan's sandbox is refused the same way (the plan is never reopened to live).
+  deps.store.db.prepare("UPDATE migration_plan SET status = 'closed' WHERE id = ?").run(planId);
+  refuse(call('go_productive', { planId, confirmedName: name, idempotencyKey: 'abd-2' }), 'plan_closed', 'promote a closed plan');
+  assert.equal(statusOf(), 'closed');
+  assert.equal(kindOf(deps, tId), 'sandbox');
+});
+
+test('abandoning a plan deletes the Testmandant these books created (G09.6, owner decision 11.10.2026), and the result says so', () => {
+  const { deps, call } = world('abk');
+  const { planId, tId } = promotable(call, 'abk');
+  const abandoned = must(call('migration_abandon_plan', { planId, confirmed: true, idempotencyKey: 'abk-1' }), 'abandon');
+  assert.equal(abandoned.testmandantDiscarded, true, 'true only because a workspace was deleted');
+  assert.equal(kindOf(deps, tId), undefined, 'the Testmandant workspace is gone');
+  assert.equal(deps.store.db.prepare('SELECT COUNT(*) AS n FROM account WHERE workspace_id = ?').get(tId).n, 0, 'and every row under it');
+  const plan = deps.store.db.prepare('SELECT status, testmandant_workspace_id AS link FROM migration_plan WHERE id = ?').get(planId);
+  assert.deepEqual([plan.status, plan.link], ['abandoned', null], 'abandoned, its link cleared');
+  // The abandoned plan cannot be revived into live books through it (d1e301e0).
+  refuse(call('go_productive', { planId, confirmedName: 'x', idempotencyKey: 'abk-go' }), 'plan_abandoned', 'promote after abandon');
+});
+
 test('demo never promotes and demo never discards through this family', () => {
   const { deps, call } = world('dmo');
   const { planId, tId, name } = promotable(call, 'dmo');

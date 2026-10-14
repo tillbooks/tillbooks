@@ -31,11 +31,12 @@ import {
   listClaims,
   getClaim,
 } from '../core/hr/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface HrActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -58,7 +59,7 @@ export function hrActions(h: HrActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'hr_employee_upsert',
-      'write',
+      'write:correctable:internal',
       'Add or edit an employee (Mitarbeitende): first/last name, employment_pct (integer 1-100), starts_on and optional ends_on, an optional linked contact (the counterparty a reimbursement pays), and an optional actor_ref (the member whose calls self-scope to this person). Requires hr.manage. ahv_nr is OPTIONAL and captured only for the external payroll hand-off (revDSG Art. 6 minimisation); writing it additionally requires hr.sensitive, and it is masked on every read that does not hold hr.sensitive. Pass employee.id to edit an existing row.',
       ctxSchema({ employee: OBJ, idempotencyKey: STR }, ['employee', 'idempotencyKey']),
       (ctx, input) => upsertEmployee(ctx, as(input)),
@@ -79,7 +80,7 @@ export function hrActions(h: HrActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'hr_absence_record',
-      'write',
+      'write:correctable:internal',
       'Record an absence (ArG Art. 46 record-keeping): kind is vacation|sick|other, plus from_date and to_date (YYYY-MM-DD). Requires hr.manage. An overlapping absence for the same employee is ACCEPTED with overlap:true in the result (a half-day sick during vacation), never merged. Sick leave is health data (revDSG Art. 5 lit. c Ziff. 2).',
       ctxSchema({ employeeId: STR, kind: STR, fromDate: STR, toDate: STR, notes: STR, idempotencyKey: STR }, [
         'employeeId',
@@ -92,7 +93,7 @@ export function hrActions(h: HrActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'hr_absence_cancel',
-      'write',
+      'write:correctable:internal',
       'Cancel an absence by flipping its status to cancelled (append-only spirit: the row stays, it is never deleted). Requires hr.manage.',
       ctxSchema({ absenceId: STR, idempotencyKey: STR }, ['absenceId', 'idempotencyKey']),
       (ctx, input) => cancelAbsence(ctx, as(input)),
@@ -106,42 +107,42 @@ export function hrActions(h: HrActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'expense_claim_create',
-      'write',
+      'write:correctable:internal',
       'Create a draft expense claim (Spesenabrechnung) for an employee. Requires spesen.submit. Add lines with expense_line_upsert, then submit with expense_claim_submit.',
       ctxSchema({ employeeId: STR, title: STR, currency: STR, idempotencyKey: STR }, ['employeeId', 'title', 'idempotencyKey']),
       (ctx, input) => createClaim(ctx, as(input)),
     ),
     ctxAction(
       'expense_line_upsert',
-      'write',
+      'write:correctable:internal',
       'Add or edit a claim line (only while the claim is draft). line carries expense_date, category (travel|meals|supplies|it|other), amountMinor (integer Rappen, the receipt total), currency (default CHF), an optional fxRate for a foreign line, an optional taxCode (an input-side Vorsteuer code, or none), an optional receiptDocumentId (an E00 file), and optional costCenterId/projectId/expenseAccountId. The per-line tax_code + base + tax are resolved ONCE by A05 and stored as values (MWSTG Art. 28). Requires spesen.submit. Pass line.lineId to edit.',
       ctxSchema({ claimId: STR, line: OBJ, idempotencyKey: STR }, ['claimId', 'line', 'idempotencyKey']),
       (ctx, input) => upsertLine(ctx, as(input)),
     ),
     ctxAction(
       'expense_claim_submit',
-      'write',
+      'write:correctable:internal',
       'Submit a draft claim for approval. Refuses empty_claim (no lines) and receipt_required (a line over CHF 50 with no receipt, naming the offending line_ids). Snapshots the base total. Requires spesen.submit. Idempotent on the key.',
       ctxSchema({ claimId: STR, idempotencyKey: STR }, ['claimId', 'idempotencyKey']),
       (ctx, input) => submitClaim(ctx, as(input)),
     ),
     ctxAction(
       'expense_claim_approve',
-      'write',
+      'write:correctable:books',
       'Approve a submitted claim: POSTS the reimbursement liability via A02 (Dr per-category expense + Dr 1170/1171 Vorsteuer; Cr 2000 Kreditoren gross, the A17 vendor-bill shape with the employee as counterparty). P8 draft-gated: WITHOUT confirm:true it returns the journal-entry preview and posts NOTHING. Requires spesen.approve AND post. Refuses self_approval (approving your own claim, four-eyes, including an automation firing), period_locked (a locked posting period, pre-checked, no partial post), and invalid_transition (not submitted). Re-approving never double-posts. needs_employee_contact if the employee has no vendor-role contact to settle against.',
       ctxSchema({ claimId: STR, confirm: BOOL, idempotencyKey: STR }, ['claimId', 'idempotencyKey']),
       (ctx, input) => approveClaim(ctx, as(input)),
     ),
     ctxAction(
       'expense_claim_reject',
-      'write',
+      'write:correctable:internal',
       'Reject a submitted claim with a reason (reason_required if empty). Terminal (submitted -> rejected). An APPROVED (posted) claim is not rejected: it is corrected by an A02 reversing entry plus a fresh claim (invalid_transition otherwise). Requires spesen.approve (approve and reject share the review right).',
       ctxSchema({ claimId: STR, reason: STR, idempotencyKey: STR }, ['claimId', 'reason', 'idempotencyKey']),
       (ctx, input) => rejectClaim(ctx, as(input)),
     ),
     ctxAction(
       'expense_claim_reimburse',
-      'write',
+      'write:correctable:books',
       'Reimburse an approved claim: pays the employee via A14 recordPayment (outgoing supplier settlement clearing 2000 Kreditoren, Dr 2000 / Cr bank) and prepares the pain.001 as a LOCAL artifact. P8 draft-gated: WITHOUT confirm:true it returns the payment + artifact plan and pays NOTHING. Transmission of the pain.001 to a bank is cloud-tier: the result carries transmitted:false, reason:cloud_tier. Idempotent: a reimbursed claim is never paid twice. Requires spesen.approve AND pay AND post. bankAccountId names the paying Bankkonto.',
       ctxSchema({ claimId: STR, bankAccountId: STR, confirm: BOOL, idempotencyKey: STR }, ['claimId', 'idempotencyKey']),
       (ctx, input) => reimburseClaim(ctx, as(input)),

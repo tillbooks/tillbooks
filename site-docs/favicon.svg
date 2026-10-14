@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="TILL">
+  <!--
+    Theme-aware favicon. The browser tab follows the BROWSER's theme, not the site's, so this
+    carries its own prefers-color-scheme rather than reading a data-theme it cannot see.
+    Derived from brand/logo-mark-small.svg: the pull is dropped at this size.
+    favicon.ico ships alongside as the walnut tile, because Safari pinned tabs and older Windows
+    do not read the media query.
+  -->
+  <style>
+    .tile { fill: #221e19; }
+    .mark { stroke: #e0b444; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #e0b444; }
+      .mark { stroke: #221e19; }
+    }
+  </style>
+  <rect class="tile" width="32" height="32" rx="6"/>
+  <g class="mark" fill="none" stroke-width="2.6">
+    <rect x="6.5" y="9.5" width="19" height="14" rx="2"/>
+    <path d="M6.5 15.2h19"/>
+  </g>
+</svg>

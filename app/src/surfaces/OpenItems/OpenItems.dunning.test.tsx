@@ -77,7 +77,10 @@ describe('A16 Mahnstufe and booked fee (K-29)', () => {
     const cell = within(row as HTMLElement);
     expect(cell.getByText('Mahnstufe 1')).toBeInTheDocument();
     // The booked fee (2000 Rappen) is shown as its own muted sub-line in this row: CHF 20.00.
-    expect(cell.getByText('davon Mahngebühr CHF 20.00')).toBeInTheDocument();
+    // The figure takes its own line under the words (D152), so the note is read whole off its element.
+    const note = (row as HTMLElement).querySelector('.oi-fee-note');
+    expect(note).toHaveTextContent('davon Mahngebühr CHF 20.00');
+    expect(note?.querySelector('.oi-fee-amount')).toHaveTextContent('CHF 20.00');
   });
 
   it('renders no Mahnstufe chip and no fee sub-line on an undunned, fee-free row', async () => {

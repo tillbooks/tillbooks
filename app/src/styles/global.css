@@ -240,7 +240,37 @@ body {
      content sideways the moment the bar appears. `min-width: 0` above is what keeps a wide child
      (a table, a code block) scrolling INSIDE its own frame instead of forcing the body sideways. */
   scrollbar-gutter: stable;
-  padding: var(--t-space-3);
+  /* P6, chrome never cuts content. The top padding is ONE custom property, read by the mask below and
+     overridden by the mobile layout, so both layouts state the band once and in tokens. */
+  --main-pad-top: var(--t-space-3);
+  padding: var(--main-pad-top) var(--t-space-3) var(--t-space-3);
+  /* Focus Not Obscured (WCAG 2.4.11): a focused or scrolled-into-view element lands below the mask
+     and the sticky surface header (its height is published on this element by SurfaceHeader.tsx),
+     never under them. */
+  scroll-padding-top: calc(var(--main-pad-top) + var(--surface-header-height, 0px));
+}
+
+/* The top-padding mask (P6). A sticky element inside a scroll container pins to the container's
+   padding edge, not its scroll edge, so the sticky SurfaceHeader (top: 0) and every other sticky band
+   in <main> pinned --main-pad-top BELOW the visible top, and scrolled content showed through that
+   open strip and was cut in half by the header's edge (24px on desktop, 64px on mobile). This box is
+   the strip, made opaque: exactly --main-pad-top tall, pulled up into the padding by an equal negative
+   margin (so it takes no room in the flow and nothing at rest moves by a pixel), pinned to the scroll
+   edge by the same negative top, spanning the padding box, on the page ground and on the sticky tier.
+   The header pins flush beneath it, so the two read as one opaque band from the scroll edge down. It
+   is a stylesheet fact rather than a measured one, so it holds before any script runs, for a surface
+   with a banner above its header, and under the mobile hamburger, which lives in this band. It takes
+   pointer events on purpose: a click on the band must not reach a row hidden beneath it. */
+.frame > main::before {
+  content: '';
+  display: block;
+  position: sticky;
+  top: calc(-1 * var(--main-pad-top));
+  z-index: var(--t-z-sticky);
+  height: var(--main-pad-top);
+  margin-top: calc(-1 * var(--main-pad-top));
+  margin-inline: calc(-1 * var(--t-space-3));
+  background: var(--t-bg);
 }
 
 /* The rail masthead (K-01, D137): a budget of about 96px. ONE 36px row carries the wordmark and the
@@ -1640,13 +1670,14 @@ textarea.field:disabled {
 
 /* Five-state primitives. */
 
-/* Skeleton: a block that matches the real layout, animated with opacity only (no colour signal). */
+/* Skeleton: a block that matches the real layout, animated with opacity only (no colour signal). The
+   pulse runs on `--t-motion-loop`, the one loop the motion vocabulary allows (D155). */
 .skeleton {
   display: block;
   background: var(--t-bg-elev);
   border: 1px solid var(--t-border);
   border-radius: var(--t-radius-sm);
-  animation: skeleton-pulse 1.4s ease-in-out infinite;
+  animation: skeleton-pulse var(--t-motion-loop) ease-in-out infinite;
 }
 
 @keyframes skeleton-pulse {
@@ -2294,8 +2325,10 @@ textarea.field:disabled {
     z-index: var(--t-z-rail);
     background: var(--t-scrim);
   }
+  /* The band clears the fixed hamburger: the base 24px plus 40px for the trigger, 64px in all. Set as
+     the custom property, never as padding, so the mask and the padding cannot disagree. */
   .frame > main {
-    padding-top: calc(var(--t-space-3) + 2.5rem);
+    --main-pad-top: var(--t-space-8);
   }
   /* A4: the splitter is a desktop affordance; below the collapse width the drawer takes over. */
   .rail-resizer {

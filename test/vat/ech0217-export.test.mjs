@@ -56,6 +56,9 @@ import { fileURLToPath } from 'node:url';
 
 import { computeVatReturn } from '../../dist/core/vat/abrechnung.js';
 import { exportVatReturnEch0217, mapReturnToEch0217 } from '../../dist/core/vat/ech0217.js';
+import { configureVat } from '../../dist/core/vat/config.js';
+import { setVatMethod } from '../../dist/core/setup/workspace.js';
+import { lockPeriodSealed } from '../../dist/core/ledger/periods.js';
 import { loadSchemas, validateXml, parseXml } from './ech0217-xsd.mjs';
 import {
   Q2,
@@ -755,6 +758,36 @@ test('eCH-0217 refusals: the IST refusal keeps the engine reason, so a client br
   // Declaring `formOfReporting` 2 (vereinnahmt) over Soll figures would produce a file the schema
   // accepts and the ESTV would act on. The refusal is the whole point.
   assert.match(r.nextStep, /vereinbart|Soll|set_vat_method/);
+});
+
+test('eCH-0217 refusals (D160.5 critic F1): once a period is filed, the IST next step names vat_configure with a dated methodChange, not set_vat_method', () => {
+  const ctx = istWorld();
+  // Q1 filed with the ESTV (by hand) and marked filed: the filing locks `markVatPeriodFiled` writes.
+  for (const month of ['2026-01', '2026-02', '2026-03']) {
+    assert.equal(lockPeriodSealed(ctx, { period: month, reason: 'vat_filed', idempotencyKey: `f1-${month}` }).ok, true);
+  }
+  const r = exportVatReturnEch0217(ctx, Q2);
+  assert.equal(r.error, 'unsupported');
+  assert.match(r.nextStep, /`vat_configure`/);
+  assert.match(r.nextStep, /methodChange: \{ validFrom: '2026-04-01' \}/, 'the first unfiled day is handed over');
+  assert.doesNotMatch(r.nextStep, /correct it with `set_vat_method`/, 'set_vat_method refuses once a period is filed');
+
+  // The step is not a dead end: set_vat_method refuses, the named route records the change.
+  const viaSet = setVatMethod(ctx, { vatMethod: 'effektiv', vatAccounting: 'soll' });
+  assert.equal(viaSet.error, 'vat_method_change_undated');
+  const viaConfigure = configureVat(ctx, {
+    method: 'effektiv',
+    timing: 'soll',
+    registered: true,
+    asOf: '2026-04-01',
+    methodChange: { validFrom: '2026-04-01' },
+    idempotencyKey: 'f1-soll',
+  });
+  assert.equal(viaConfigure.ok, true, JSON.stringify(viaConfigure));
+
+  // With nothing filed, the ordinary onboarding verb stays the named remedy.
+  const open = exportVatReturnEch0217(istWorld(), Q2);
+  assert.match(open.nextStep, /`set_vat_method`/);
 });
 
 test('eCH-0217 refusals: a base currency other than CHF is refused, not silently filed', () => {

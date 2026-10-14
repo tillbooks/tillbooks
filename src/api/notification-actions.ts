@@ -27,11 +27,12 @@ import {
   listPreferences,
   runDigest,
 } from '../core/notifications/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface NotificationActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -53,7 +54,7 @@ export function notificationActions(h: NotificationActionHelpers): readonly Acti
   return [
     ctxAction(
       'notifications_deliver',
-      'write',
+      'write:final:outbound',
       'Stelle ein Ereignis in den Posteingang zu (the OP8 action target a G01 rule names, US-G06.1): validates the event against the single automation-event registry, resolves the recipient\'s notification preference (exact event row, else the * wildcard, else the built-in default: inbox on), and inserts ONE unread inbox_item, or answers delivered:false reason muted when the recipient silenced the moment (never an error). An entityKind/entityId pair links back to the source record (OP3, workspace-scoped). Nothing is ever transmitted here: outbound channels are the digest\'s OP4 business.',
       ctxSchema(
         {
@@ -78,29 +79,29 @@ export function notificationActions(h: NotificationActionHelpers): readonly Acti
     ),
     ctxAction(
       'notifications_mark_read',
-      'write',
+      'write:final:ui-state',
       'Markiere eine Benachrichtigung als gelesen (US-G06.2): unread wird read und read_at gestempelt. Self-scoped: a foreign user\'s item answers the same notification_not_found a nonexistent one does; an ARCHIVED item is outside the mutable set and is refused the same way. Marking an already-read item read is a successful state assertion.',
       ctxSchema({ notificationId: STR, idempotencyKey: STR }, ['notificationId']),
       (ctx, input) => markRead(ctx, as(input)),
     ),
     ctxAction(
       'notifications_mark_all_read',
-      'write',
+      'write:final:ui-state',
       'Alle als gelesen markieren (US-G06.2): clears the caller\'s whole unread set in one call and answers how many rows moved. Self-scoped structurally: userId must be the caller\'s own (forbidden otherwise).',
       ctxSchema({ userId: STR, idempotencyKey: STR }, ['userId']),
       (ctx, input) => markAllRead(ctx, as(input)),
     ),
     ctxAction(
       'notifications_archive',
-      'write',
+      'write:final:ui-state',
       'Archiviere eine Benachrichtigung (US-G06.2): unread oder read wird archived (reading first is not required), reversible via the Archiv filter. Self-scoped: a foreign item answers notification_not_found; archiving an archived item is a successful state assertion.',
       ctxSchema({ notificationId: STR, idempotencyKey: STR }, ['notificationId']),
       (ctx, input) => archiveNotification(ctx, as(input)),
     ),
     ctxAction(
       'notifications_set_preference',
-      'write',
-      'Setze eine Benachrichtigungs-Einstellung (US-G06.3): upserts one (recipient, event, channel) row; event omitted writes the * wildcard row every unlisted event falls back to. channel is inbox|email|push (invalid_channel otherwise); the in-app inbox is ALWAYS instant, so any other cadence on it answers inbox_is_always_instant. Setting another user\'s preference asserts manage_members (an admin configuring a teammate\'s defaults); your own needs only membership.',
+      'write:reversible:ui-state',
+      'Setze eine Benachrichtigungs-Einstellung (US-G06.3): upserts one (recipient, event, channel) row; event omitted writes the * wildcard row every unlisted event falls back to. channel is inbox|email|push (invalid_channel otherwise); the in-app inbox is ALWAYS instant, so any other cadence on it answers inbox_is_always_instant. Setting another user\'s preference asserts manage_members (an admin configuring a teammate\'s defaults); your own needs only membership. The agent seat sets only its own: another user\'s answers capability_forbidden, reason needs_a_person.',
       ctxSchema(
         { userId: STR, event: STR, channel: STR, enabled: BOOL, digest: STR, idempotencyKey: STR },
         ['userId', 'channel', 'enabled'],
@@ -116,7 +117,7 @@ export function notificationActions(h: NotificationActionHelpers): readonly Acti
     ),
     ctxAction(
       'notifications_run_digest',
-      'write',
+      'write:final:outbound',
       'Erzeuge eine Zusammenfassung (OP4, US-G06.4): gathers the recipient\'s inbox items in the window whose preference opted the outbound channel (email|push) into a digest cadence, renders ONE local digest artifact, and persists the digest_run honesty record. The OSS core wires no transmitter, so the answer is always transmitted:false with the reason named (cloud_tier, or empty when the window held nothing: an empty digest is never transmitted). channel inbox answers digest_channel_required. Running another user\'s digest asserts manage_members.',
       ctxSchema(
         { userId: STR, channel: STR, periodStart: STR, periodEnd: STR, idempotencyKey: STR },

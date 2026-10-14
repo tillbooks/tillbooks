@@ -101,6 +101,19 @@ describe('FirstRun', () => {
     expect(call?.input.confirmed).toBe(true);
   });
 
+  it('D161.2: a restore whose portal links wait for a new hand-over says how many before it leaves', async () => {
+    const user = userEvent.setup();
+    setup({
+      verify_backup: VERIFIED,
+      restore_backup: ok({ workspaceId: 'ws_r', portalLinksAwaitingHandover: 2 }),
+      delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }),
+    });
+    await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/books.tillbackup');
+    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    expect(await screen.findByText(/2 Portal-Links bleiben zu, bis du sie wieder freigibst/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeInTheDocument();
+  });
+
   it('renders the remedy when the restored file is not a TILL database', async () => {
     const user = userEvent.setup();
     setup({ verify_backup: VERIFIED, restore_backup: reject('not_a_till_database'), delivery_status: reject('transport_error', 500) });

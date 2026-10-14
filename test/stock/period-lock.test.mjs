@@ -17,12 +17,13 @@ import assert from 'node:assert/strict';
 
 import { recordStockMove, stocktakeOpen, stocktakeCount, stocktakeCommit, upsertStockLocation } from '../../dist/core/stock/index.js';
 import { lockPeriod } from '../../dist/core/ledger/index.js';
+import { lockPeriodSealed } from '../../dist/core/ledger/periods.js';
 import { setup, counts } from './support.mjs';
 
 // A hard year-close seal on fiscal year 2026 (default fiscal_year_start 01-01), the strongest legal
 // seal. Any date whose fiscal year is 2026 is then closed.
 function sealYear2026(t) {
-  const sealed = lockPeriod(t.ctx, { period: '2026', kind: 'hard', reason: 'year_close', idempotencyKey: 'seal-2026' });
+  const sealed = lockPeriodSealed(t.ctx, { period: '2026', reason: 'year_close', idempotencyKey: 'seal-2026' });
   assert.equal(sealed.ok, true, `seal failed: ${JSON.stringify(sealed)}`);
 }
 

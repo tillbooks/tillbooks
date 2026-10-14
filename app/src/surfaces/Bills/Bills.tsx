@@ -48,7 +48,7 @@
  * the server-side read. The transport error keeps its own surface copy above the table rather than
  * DataTable's error slot, so a failed read never renders as an empty ledger.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
@@ -61,11 +61,13 @@ import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { AlertGlyph, InfoGlyph } from '../../components/states/glyphs';
+import { Tooltip } from '../../components/Tooltip';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { Status, type StatusKind } from '../../components/Status';
 import { BillEditor } from './BillEditor';
 import { COMMIT_TARGET_CLASS, useCommitAck } from '../../lib/motion';
-import { VENDOR_BILL_STATUSES, parseBills, type BillsView, type VendorBill } from './model';
+import { VENDOR_BILL_STATUSES, parseBill, parseBills, type BillsView, type VendorBill } from './model';
 import './Bills.css';
 
 /**
@@ -123,15 +125,26 @@ export function Bills() {
     [navigate],
   );
 
-  const [view, setView] = useState<BillsView | null>(null);
+  /**
+   * The list read, held WITH the workspace it was read in. A list surface does not remount on a
+   * workspace switch, so a view from the workspace just left must never render under the new one, not
+   * even for the one frame before the new read starts: `view` below is null unless its workspace is the
+   * current one. The same holds for the Commit moment's row.
+   */
+  const [held, setHeld] = useState<{ workspaceId: string; view: BillsView | null } | null>(null);
+  const view = held !== null && held.workspaceId === workspaceId ? held.view : null;
   // The Commit moment (D122 D-I): the bill the editor just posted or captured lands in the list.
-  const [justSavedId, setJustSavedId] = useState<string | null>(null);
+  const [justSaved, setJustSaved] = useState<{ workspaceId: string | null; id: string } | null>(null);
+  const justSavedId = justSaved !== null && justSaved.workspaceId === workspaceId ? justSaved.id : null;
   useCommitAck(justSavedId, view);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
 
+  // Only the NEWEST read may land: an older answer (another filter, another workspace) is dropped.
+  const readSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++readSeq.current;
     if (workspaceId === null) {
       setLoading(false);
       return;
@@ -144,6 +157,7 @@ export function Bills() {
       ...(statusParam === null ? {} : { status: statusParam }),
       ...(vendorParam === null ? {} : { vendorId: vendorParam }),
     });
+    if (seq !== readSeq.current) return;
     if (isErr(response.body)) {
       // A24: a missing capability is its own state, not an error banner. Only a denied READ is here.
       if (response.body.error === 'permission_denied' || response.status === 403) setDenied(true);
@@ -153,7 +167,7 @@ export function Bills() {
     }
     const parsed = parseBills(response.body);
     if (parsed === null) setFailed(true);
-    setView(parsed);
+    setHeld({ workspaceId, view: parsed });
     setLoading(false);
   }, [client, workspaceId, statusParam, vendorParam]);
 
@@ -170,6 +184,21 @@ export function Bills() {
     },
     [params, setParams],
   );
+
+  /**
+   * A WORKSPACE SWITCH LEAVES THE OPEN BILL BEHIND. The drawer's `bill`/`new` params belong to the
+   * workspace they were opened in (a bill id can recur in another workspace), so a switch drops them,
+   * and the drawer itself is keyed by the workspace below, so a half-typed capture never carries over.
+   */
+  const shownWorkspace = useRef(workspaceId);
+  useEffect(() => {
+    if (shownWorkspace.current === workspaceId) return;
+    shownWorkspace.current = workspaceId;
+    if (!params.has('bill') && !params.has('new')) return;
+    const next = new URLSearchParams(params);
+    for (const key of ['new', 'bill']) next.delete(key);
+    setParams(next, { replace: true });
+  }, [workspaceId, params, setParams]);
 
   const closeDrawer = useCallback(() => {
     const next = new URLSearchParams(params);
@@ -193,9 +222,29 @@ export function Bills() {
       .sort((a, b) => a.label.localeCompare(b.label, 'de-CH'));
   }, [view, vendorParam, t]);
 
+  /**
+   * A bill the list read does not carry (it is capped, or a filter hides it, critic L-c) is read BY ID, so
+   * `?bill=` and "Öffnen" after a key conflict always open the bill they name. Held with its workspace,
+   * and only the newest read lands.
+   */
+  const [byId, setById] = useState<{ workspaceId: string; bill: VendorBill } | null>(null);
+  const inList = billParam === null ? null : (view?.bills.find((b) => b.id === billParam) ?? null);
+  const byIdSeq = useRef(0);
+  useEffect(() => {
+    const seq = ++byIdSeq.current;
+    if (workspaceId === null || billParam === null || loading || view === null || inList !== null) return;
+    if (byId !== null && byId.workspaceId === workspaceId && byId.bill.id === billParam) return;
+    void client.call('get_vendor_bill', { workspaceId, vendorBillId: billParam }).then((response) => {
+      if (seq !== byIdSeq.current || isErr(response.body)) return;
+      const bill = parseBill((response.body as { vendorBill?: unknown }).vendorBill);
+      if (bill !== null) setById({ workspaceId, bill });
+    });
+  }, [client, workspaceId, billParam, loading, view, inList, byId]);
   const selected = useMemo(
-    () => (billParam === null ? null : (view?.bills.find((b) => b.id === billParam) ?? null)),
-    [view, billParam],
+    () =>
+      inList ??
+      (billParam !== null && byId !== null && byId.workspaceId === workspaceId && byId.bill.id === billParam ? byId.bill : null),
+    [inList, billParam, byId, workspaceId],
   );
   if (workspaceId === null) return <NoWorkspaceState />;
   if (denied) return <PermissionDenied body={t('bills.error.permissionDenied.read')} />;
@@ -215,15 +264,44 @@ export function Bills() {
       key: 'reference',
       header: t('bills.column.reference'),
       // The leading cell names the row; the row itself opens the drawer (K-21), so the cell holds no
-      // button of its own.
-      render: (bill) => bill.vendorReference ?? t('bills.noReference'),
+      // button of its own. ONE line (D152): a long reference ends in an ellipsis, the whole of it in
+      // the title, so a row is one line tall and ten of them fit the first screen.
+      width: '24%',
+      render: (bill) => {
+        const reference = bill.vendorReference ?? t('bills.noReference');
+        return (
+          <span className="bills-clip" title={reference}>
+            {reference}
+          </span>
+        );
+      },
     },
-    { key: 'vendor', header: t('bills.vendor'), render: (bill) => bill.vendorName ?? t('bills.unknownVendor') },
-    { key: 'billDate', header: t('bills.billDate'), render: (bill) => formatDate(bill.billDate) },
+    {
+      key: 'vendor',
+      header: t('bills.vendor'),
+      width: '22%',
+      render: (bill) => {
+        const name = bill.vendorName ?? t('bills.unknownVendor');
+        return (
+          <span className="bills-clip" title={name}>
+            {name}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'billDate',
+      // "Datum" under the list head (the drawer keeps "Rechnungsdatum"): the long head alone held the
+      // column 25px wider than its dates, width the Nummer needs more.
+      header: t('bills.column.billDate'),
+      render: (bill) => <span className="bills-nowrap">{formatDate(bill.billDate)}</span>,
+    },
     {
       key: 'dueDate',
       header: t('bills.dueDate'),
-      render: (bill) => (bill.dueDate === null ? t('bills.noDueDate') : formatDate(bill.dueDate)),
+      render: (bill) => (
+        <span className="bills-nowrap">{bill.dueDate === null ? t('bills.noDueDate') : formatDate(bill.dueDate)}</span>
+      ),
     },
     {
       key: 'gross',
@@ -296,17 +374,58 @@ export function Bills() {
         so its three honest states survive: a skeleton while loading, the verbatim engine figure when
         settled, and NOTHING during an error rather than a plausible `CHF 0.00`.
       */}
-      {loading ? (
-        <p className="bills-total bills-total--pending" aria-hidden="true">
-          <span className="bills-total-skeleton" />
-        </p>
-      ) : settled ? (
-        <p className="bills-total">
-          {tRich('bills.headerTotal', {
-            total: <span className="t-money">{formatMoney(view.baseTotalOpenMinor, view.baseCurrency)}</span>,
-          })}
-        </p>
-      ) : null}
+      <div className="bills-summary">
+        {loading ? (
+          <p className="bills-total bills-total--pending" aria-hidden="true">
+            <span className="bills-total-skeleton" />
+          </p>
+        ) : settled ? (
+          <p className="bills-total">
+            {tRich('bills.headerTotal', {
+              total: <span className="t-money">{formatMoney(view.baseTotalOpenMinor, view.baseCurrency)}</span>,
+            })}
+          </p>
+        ) : null}
+
+        {/*
+          THE RECONCILIATION IS ONLY MEANINGFUL OVER THE WHOLE WORKSPACE, so the line is suppressed on a
+          filtered list: comparing a subset to the ledger would report a false mismatch on every filter.
+          The engine says which figure its mark is about with `filtered`, and this reads it.
+
+          ONE LINE beside the total it is about (D152, the /open-items pattern): the fact and the signed
+          difference stay on the working surface, and the sentence with both figures and what it means
+          sits behind the (i), the shared Tooltip on an icon button, named through `aria-describedby`.
+        */}
+        {settled && !view.reconciled && !view.filtered && (
+          <p className="bills-mismatch" role="status">
+            <AlertGlyph className="bills-mismatch-glyph" size={16} />
+            <span className="bills-mismatch-title">
+              {tRich('bills.reconciliation.short', {
+                difference: <span className="t-money">{formatMoney(view.reconciliationDifferenceMinor, view.baseCurrency)}</span>,
+              })}
+            </span>
+            <Tooltip
+              placement="bottom"
+              content={
+                <span className="bills-mismatch-explain">
+                  {tRich('bills.reconciliation.mismatch', {
+                    difference: (
+                      <span className="t-money">{formatMoney(view.reconciliationDifferenceMinor, view.baseCurrency)}</span>
+                    ),
+                    list: <span className="t-money">{formatMoney(view.workspaceBaseTotalOpenMinor, view.baseCurrency)}</span>,
+                    ledger: <span className="t-money">{formatMoney(view.payablesBalanceMinor, view.baseCurrency)}</span>,
+                  })}{' '}
+                  {t('bills.reconciliation.hint')}
+                </span>
+              }
+            >
+              <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('bills.reconciliation.info')}>
+                <InfoGlyph size={16} />
+              </button>
+            </Tooltip>
+          </p>
+        )}
+      </div>
 
       <div className="bills-toolbar">
         <div className="bills-filter">
@@ -337,24 +456,6 @@ export function Bills() {
           />
         </div>
       </div>
-
-      {/*
-        THE RECONCILIATION IS ONLY MEANINGFUL OVER THE WHOLE WORKSPACE, so the band is suppressed on a
-        filtered list: comparing a subset to the ledger would report a false mismatch on every filter.
-        The engine says which figure its mark is about with `filtered`, and this reads it.
-      */}
-      {settled && !view.reconciled && !view.filtered && (
-        <div className="bills-band" role="status">
-          <p>
-            {tRich('bills.reconciliation.mismatch', {
-              difference: <span className="t-money">{formatMoney(view.reconciliationDifferenceMinor, view.baseCurrency)}</span>,
-              list: <span className="t-money">{formatMoney(view.workspaceBaseTotalOpenMinor, view.baseCurrency)}</span>,
-              ledger: <span className="t-money">{formatMoney(view.payablesBalanceMinor, view.baseCurrency)}</span>,
-            })}
-          </p>
-          <p className="bills-dim">{t('bills.reconciliation.hint')}</p>
-        </div>
-      )}
 
       {/*
         The transport error stays a SURFACE-level banner (its own copy and retry), rendered above the
@@ -406,10 +507,19 @@ export function Bills() {
 
       {(creating || selected !== null) && (
         <BillEditor
+          // Keyed by the workspace and the bill: a switch or another bill is a fresh drawer, so no
+          // typed value, inferred default, idempotency key or in-flight answer outlives its context.
+          key={`${workspaceId}:${selected?.id ?? 'new'}`}
           bill={selected}
           onClose={closeDrawer}
           onSaved={(billId) => {
-            setJustSavedId(billId ?? null);
+            setJustSaved(billId === undefined ? null : { workspaceId, id: billId });
+            void load();
+          }}
+          // A capture that already landed (its answer lost) is opened, never captured twice: the list is
+          // re-read so the bill is in it, and the filters are dropped so a filter cannot hide it.
+          onOpenBill={(billId) => {
+            setParams(new URLSearchParams({ bill: billId }), { replace: false });
             void load();
           }}
         />

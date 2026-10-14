@@ -97,16 +97,27 @@
       "quantity": "Quantity",
       "unitPrice": "Unit price",
       "vat": "VAT",
+      "lineSupplyDate": "Supply date {date}",
+      "lineSupplyResetShort": "use the date",
+      "lineSupplyReset": "Set position {number} to the date",
       "amount": "Amount",
       "addLine": "Add position",
       "removeLine": "Remove position {number}",
       "subtotal": "Subtotal",
       "total": "Total",
+      "totalPending": "being worked out",
+      "figures": "Amounts",
       "vatSummary": "VAT summary",
       "saveDraft": "Save draft",
       "saved": "Saved",
-      "reasonNoCustomer": "Choose a customer first.",
       "reasonNoLines": "Add a position first.",
+      "reasonNoDate": "The date is missing: set the date of the supply.",
+      "reasonZeroLine": "Position {number} has no amount yet.",
+      "reasonVatPending": "The VAT is still being worked out. Press again in a moment.",
+      "reasonNeedsSupplyDate": "Position {number} with {code} needs a supply date: set the date to the day of the supply.",
+      "reasonVatRefused": "The VAT for position {number} cannot be worked out.",
+      "typeAdopted": "This draft was already saved as {type} and stays one.",
+      "dayMoved": "It is now {date}: the date and the amounts are worked out again, check them and then issue.",
       "reasonNeedsFxRate": "No rate for {currency} on {date}.",
       "reasonFxMethod": "The rate for {currency} does not match the conversion basis elected for tax period {taxPeriod}.",
       "noContactsInline": "No customers yet. Add the first one right here:",
@@ -135,12 +146,14 @@
         "system": "System"
       },
       "issuedAndSentAck": "{number} is issued and sent to {email}.",
-      "issuedNotSentAck": "{number} is issued but not yet sent to {email}."
+      "issuedNotSentAck": "{number} is issued but not yet sent to {email}.",
+      "vatPosted": "VAT on this document: {tax}"
     },
     "issue": {
       "title": "Issue document",
       "numberLine": "A number will be assigned.",
       "postingLine": "An entry for {total} will be created.",
+      "postingLineUnpriced": "A posting is made; TILL works out the amounts when it issues.",
       "immutabilityLine": "Issued documents can no longer be edited, only cancelled.",
       "quoteLine": "The quote is issued and receives a number.",
       "confirm": "Issue",
@@ -157,26 +170,33 @@
     "terms": {
       "title": "Terms",
       "dueDate": "Payable by",
-      "paymentTerms": "Customer payment terms",
-      "termsDays": "{days} days",
-      "applyTerms": "Apply terms",
+      "infoLabel": "More about the terms",
+      "fromTerms": "Left empty, TILL sets the due date at issue: the issue date plus {name}'s payment terms ({days} days).",
+      "fromTermsImmediate": "{name} pays immediately: left empty, the invoice is due on its issue date.",
+      "fromDefault": "Left empty, TILL sets the due date at issue: {name} has no payment terms of their own, so the default of {days} days applies.",
+      "fromNone": "Neither {name} nor the workspace has payment terms: left empty, the invoice is due on its issue date.",
+      "derivedDays": "Set at issue: {days} days from the invoice date.",
+      "derivedImmediate": "Set at issue: due on the invoice date.",
       "reference": "Payment reference",
-      "referencePending": "The reference is built from the invoice number when you issue."
+      "referencePending": "The payment reference is built from the invoice number when you issue."
     },
     "qr": {
       "title": "QR payment part",
       "readiness": "QR readiness",
+      "infoLabel": "More about the QR payment part",
       "ready": "All set: the address, the IBAN and the currency are in order.",
       "pendingIssue": "The QR payment part appears when you issue the invoice. Before that, the reference would be made up.",
-      "missingAddress": "The customer address is incomplete, missing: {fields}.",
+      "missingAddress": "For a QR-bill the customer address still lacks: {fields}.",
       "fixAddress": "Complete the address",
       "fixCreditorAddress": "Complete your own address",
-      "needsIban": "No IBAN is stored for this workspace. Without one there is no QR payment part.",
+      "needsIban": "No IBAN is stored for this workspace, so there is no QR payment part.",
+      "needsCreditorAddress": "Your own address is still missing, so there is no QR payment part.",
       "toSetup": "Add an IBAN",
       "unsupportedCurrency": "There is no QR payment part in {currency}.",
       "qrIbanChfOnly": "From {date} your QR-IBAN carries CHF only, so {currency} gets no payment part.",
       "field": {
         "street": "Street",
+        "houseNo": "No.",
         "zip": "Postal code",
         "city": "Town",
         "country": "Country"
@@ -207,6 +227,7 @@
     },
     "currency": {
       "baseOption": "{currency} (ledger currency)",
+      "infoLabel": "More about the currency",
       "other": "Other currency",
       "otherCode": "Currency code",
       "otherHint": "Three letters per ISO 4217, for example USD.",
@@ -214,7 +235,8 @@
         "qrr": "The payment part is created at issue, with a QR reference.",
         "scor": "The payment part is created at issue, with a SCOR reference.",
         "noIban": "Without a stored IBAN there is no payment part in any currency.",
-        "unsupported": "The QR payment part allows CHF and EUR only. You can invoice and post in {currency}, it simply gets no payment part.",
+        "unsupported": "The QR payment part allows CHF and EUR only.",
+        "unsupportedDetail": "You can invoice and post in {currency}, it simply gets no payment part.",
         "chfOnly": "From {date} a QR-IBAN carries CHF only, so an invoice in {currency} dated on or after that gets no payment part.",
         "chfOnlyRemedy": "A plain IBAN would still get you a payment part, with a SCOR reference instead. That is our inference: SIX says nothing about a creditor who holds only a QR-IBAN.",
         "chfOnlyValidity": "Invoices you issue before then stay payable. Version 2.3 remains valid until November 2027."
@@ -291,7 +313,33 @@
       "vatLine": "Of which VAT {tax}.",
       "noQrLine": "This invoice gets no QR payment part:",
       "sendLine": "Then email it to {email}",
-      "confirmAndSend": "Issue and send"
+      "confirmAndSend": "Issue and send",
+      "dueBeforeIssue": "Due by {due} is before today's issue date, so the invoice is overdue at once."
+    },
+    "qrFix": {
+      "title": "The QR payment part still needs something",
+      "lead": "Fill it in here and the invoice gets its QR payment part, so it can be paid from any banking app. Leave the fields empty and it is issued without a payment part.",
+      "creditorHeading": "Your address (payee)",
+      "ibanHeading": "Your account",
+      "customerHeading": "Address of {name}",
+      "field": {
+        "name": "Name",
+        "street": "Street",
+        "number": "No.",
+        "zip": "Postcode",
+        "town": "Town",
+        "country": "Country (e.g. CH)",
+        "iban": "IBAN or QR-IBAN"
+      },
+      "incomplete": "An address is incomplete. Fill in every field or clear the block. Nothing was saved and nothing was issued.",
+      "invalidIban": "That is not a valid IBAN. Nothing was saved and nothing was issued.",
+      "illegalCharacter": "A character is not allowed in the QR payment part. Nothing was issued.",
+      "invalidCountry": "The country is the two-letter code, for example CH. Nothing was issued.",
+      "fieldTooLong": "A field is longer than the QR payment part allows. Please shorten it. Nothing was issued.",
+      "ibanNotChLi": "The QR payment part needs an IBAN starting with CH or LI. Nothing was issued.",
+      "saveFailed": "That could not be saved. Nothing was issued.",
+      "saveAndIssue": "Save and issue",
+      "saveIssueAndSend": "Save, issue and send"
     },
     "error": {
       "needsQrIban": "Without a stored IBAN there is no QR payment part. The invoice itself stays valid.",
@@ -314,7 +362,8 @@
       "invalidQrBill": "The QR payment part does not meet the SIX guidelines yet.",
       "notAvailable": "A draft has no number yet, so it has neither a reference nor a PDF.",
       "sendFailed": "Sending did not work. The invoice stays issued, so you can try again.",
-      "notAnInvoice": "This document is not an invoice."
+      "notAnInvoice": "This document is not an invoice.",
+      "needsSupplyDate": "Position {number} with {code} needs a supply date. Set the date to the day of the supply, or give the position its own supply date."
     }
   },
   "creditNote": {
@@ -336,7 +385,8 @@
     "listForInvoice": "Credit notes for this invoice",
     "issue": {
       "title": "Issue credit note",
-      "postingLine": "A posting of {total} is created. It reduces what the customer owes."
+      "postingLine": "A posting of {total} is created. It reduces what the customer owes.",
+      "postingLineUnpriced": "A posting is made; TILL works out the amounts when it issues. It reduces what the customer owes."
     },
     "linesDerived": "The positions of a credit note are derived from the invoice and cannot be edited here.",
     "changeSelectionHint": "To change the selection, delete this draft and create a new credit note from the invoice.",

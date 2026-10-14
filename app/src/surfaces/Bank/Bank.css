@@ -1,12 +1,12 @@
-/* A2, the bank inbox (`/bank`). Only --t-* tokens, both themes through them.
-   The shapes: the page ground, one elevated panel per block (the trust lines, the list, the line
-   panel), hairlines only where a boundary helps (the table rules, the inputs). One accent, spent on
-   the selected row and focus; the one solid primary lives in the surface header. */
+/* A2, the bank inbox (`/bank`), in B2 "Eine Zeile Kontext" (the owner's pick of 01.10.2026). Only
+   --t-* tokens, both themes through them. The shapes: the page ground, ONE elevated panel (the list),
+   hairlines only where a boundary helps (the table rules, the inputs). One accent, spent on the
+   selected row, focus and the row's money commit; the one solid primary lives in the surface header.
+   There is no side panel and no inline panel at any width: the selected line gets one context strip. */
 
 .bank {
-  /* The side panel's width, and the room the floating agent toggle takes at the bottom right
-     (44px tall, one step above the viewport edge): the sticky panel and the page end above it. */
-  --bank-panel-w: 376px;
+  /* The room the floating agent toggle takes at the bottom right (44px tall, one step above the
+     viewport edge): the page ends above it. */
   --bank-dock-clear: calc(44px + var(--t-space-6) + var(--t-space-1));
   display: flex;
   flex-direction: column;
@@ -20,29 +20,8 @@
   margin-bottom: 0;
 }
 
-/* A36: "Zuletzt abgerufen" beside the fetch button: a quiet fact, never a control. */
-.bank-last-fetched {
-  align-self: center;
-  font-size: var(--t-font-md);
-  color: var(--t-text-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-/* The header's overflow is a standalone control beside 44px actions: 44px square too (D116). */
-.bank .surface-header-actions .overflow-menu-trigger,
-.bank-trust__actions .overflow-menu-trigger {
-  width: 44px;
-  height: 44px;
-}
-
-.bank-account-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--t-space-1);
-}
-
 .bank-account-filter__select {
-  min-width: 200px;
+  min-width: 160px;
 }
 
 /* D116: a standalone or primary control is at least 44px. The header actions, the panel's commits,
@@ -58,35 +37,37 @@
 .bank-trusts {
   display: flex;
   flex-direction: column;
-  gap: var(--t-space-1);
 }
 
+/* One line per Bankkonto: the glyph, the one number, the (i). No box: it is a fact, not a panel.
+   Every line is the (i)'s height, whether it carries one or not, so the lines keep one rhythm. */
 .bank-trust {
   display: flex;
   align-items: center;
-  gap: var(--t-space-3);
-  padding: var(--t-space-2) var(--t-space-3);
-  border-radius: var(--t-radius-md);
-  background: var(--t-bg-elev);
-}
-
-.bank-trust__main {
-  display: flex;
-  flex-direction: column;
   gap: var(--t-space-0-5);
-  flex: 1 1 auto;
   min-width: 0;
+  min-height: 32px;
 }
 
 .bank-trust__headline {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--t-space-1);
   margin: 0;
   color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 500;
+}
+
+/* The line's own words only: a summary card inside the line colours each account by its own tone. */
+.bank-trust[data-tone='difference'] > .bank-trust__headline .bank-trust__words {
+  color: var(--t-warn);
+}
+
+.bank-trust__card-title {
+  margin: 0;
   font-weight: 600;
-  line-height: var(--t-lh-body);
 }
 
 .bank-trust__glyph {
@@ -103,26 +84,8 @@
 }
 
 .bank-trust__account {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--t-space-1);
   color: var(--t-text);
-}
-
-.bank-trust__account::after {
-  content: '';
-  width: 1px;
-  height: 14px;
-  margin-left: var(--t-space-0-5);
-  align-self: center;
-  background: var(--t-border-strong);
-}
-
-.bank-trust__iban {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .bank-trust__figures {
@@ -157,7 +120,6 @@
   color: var(--t-warn);
 }
 
-.bank-trust__breakdown,
 .bank-trust__hint {
   margin: 0;
   color: var(--t-text-dim);
@@ -165,49 +127,121 @@
   line-height: var(--t-lh-md);
 }
 
-/* A figure you can open (DESIGN.md "a figure you cannot open is a defect"): quiet at rest, the
-   underline arrives on hover (the owner's "Ohne Unterstrich, Hover-Cue"). */
 .bank-trust__open {
+  align-self: flex-start;
+}
+
+/* D152: several accounts in view. The summary card is a list of one fact per account; each row opens
+   that account's own words under it, the rest stay one line each. */
+.bank-trust-sum__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: 0;
   padding: 0;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  background: transparent;
-  color: var(--t-text-dim);
-  font: inherit;
-  cursor: pointer;
-  text-decoration: none;
-  transition: border-color var(--t-motion-hover) var(--t-ease-out), color var(--t-motion-hover) var(--t-ease-out);
+  list-style: none;
 }
 
-.bank-trust__open:hover {
-  color: var(--t-text);
-  border-bottom-color: var(--t-border-strong);
-}
-
-.bank-trust__actions {
+.bank-trust-sum__fact {
   display: flex;
   align-items: center;
   gap: var(--t-space-1);
-  flex: 0 0 auto;
+  min-height: 32px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-trust-sum__toggle {
+  width: 100%;
+  padding: 0 var(--t-space-1);
+  margin: 0 calc(-1 * var(--t-space-1));
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  background: transparent;
+  color: var(--t-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bank-trust-sum__toggle:hover {
+  background: var(--t-bg-soft);
+}
+
+/* The summary card is wider than one account's, so each account's name and figure read on one line;
+   where the width still runs out the figure moves under the name whole, never cutting either. */
+.bank-trust-sum__info .bank-info__card {
+  width: min(520px, calc(100vw - var(--t-space-4)));
+}
+
+.bank-trust-sum__fact {
+  flex-wrap: wrap;
+  column-gap: var(--t-space-1);
+  row-gap: 0;
+}
+
+.bank-trust-sum__fact > .bank-trust__account,
+.bank-trust-sum__fact > .bank-trust__words {
+  white-space: nowrap;
+}
+
+.bank-trust-sum__row[data-tone='difference'] .bank-trust__words {
+  color: var(--t-warn);
+}
+
+.bank-trust-sum__caret {
+  margin-left: auto;
+  color: var(--t-text-dim);
+  transition: transform var(--t-motion-hover) var(--t-ease-out);
+}
+
+.bank-trust-sum__toggle[aria-expanded='true'] .bank-trust-sum__caret {
+  transform: rotate(180deg);
+}
+
+.bank-trust-sum__details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) 0 var(--t-space-2) calc(16px + var(--t-space-1));
+}
+
+.bank-trust-sum__details[hidden] {
+  display: none;
 }
 
 /* --- the toolbar -------------------------------------------------------------------------------- */
 
+/* ONE row: the tabs, then the facets, the direction, the account and the search at the far end. It
+   wraps only when the width runs out. */
 .bank-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-}
-
-.bank-toolbar__row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--t-space-1) var(--t-space-2);
+  justify-content: space-between;
+  gap: var(--t-space-1);
 }
 
-/* The search: a field box with the glyph and a VISIBLE label inside it, the input borderless within.
-   The box takes the focus cue while the input holds focus. */
+.bank-toolbar__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.bank-direction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* A pressed direction is a chosen facet: the accent-soft pill with accent ink, as the chips. */
+.bank-direction__toggle[aria-pressed='true'] {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+/* The search: a compact field box with the glyph, the input borderless within (its label is for
+   assistive tech). The box takes the focus cue while the input holds focus. */
 .bank-search {
   display: inline-flex;
   align-items: center;
@@ -222,11 +256,6 @@
   transition: border-color var(--t-motion-hover) var(--t-ease-out);
 }
 
-.bank-search--main {
-  width: 340px;
-  max-width: 100%;
-}
-
 .bank-search:focus-within {
   border-color: var(--t-focus-border);
   box-shadow: var(--t-focus-ring);
@@ -236,6 +265,7 @@
   flex: 0 0 auto;
 }
 
+/* The editors' search (the link chooser) keeps its visible label inside the box. */
 .bank-search__label {
   flex: 0 0 auto;
   color: var(--t-text-dim);
@@ -246,6 +276,7 @@
 
 .bank-search__input {
   flex: 1 1 auto;
+  width: 96px;
   min-width: 0;
   height: 100%;
   padding: 0;
@@ -266,14 +297,7 @@
   color: var(--t-text-faint);
 }
 
-/* --- the body: the list and the panel ----------------------------------------------------------- */
-
-.bank-body {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--t-space-2);
-  min-width: 0;
-}
+/* --- the list ------------------------------------------------------------------------------------ */
 
 .bank-list {
   flex: 1 1 auto;
@@ -308,7 +332,7 @@
 }
 
 .bank-col--pick {
-  width: 44px;
+  width: 40px;
 }
 
 .bank-col--date {
@@ -316,11 +340,12 @@
 }
 
 .bank-col--target {
-  width: 212px;
+  width: 240px;
 }
 
+/* The MWST cell shows a code ("VST-M") or "Ohne MWST", never a label to cut: the party gets the room. */
 .bank-col--vat {
-  width: 148px;
+  width: 120px;
 }
 
 .bank-col--amount {
@@ -328,7 +353,7 @@
 }
 
 .bank-col--actions {
-  width: 136px;
+  width: 128px;
 }
 
 .bank-table th {
@@ -400,6 +425,22 @@
   cursor: pointer;
 }
 
+/* The row itself is focusable (Enter or Space selects it): the focus cue is the accent edge on the
+   row's first cell, inset, so the 36px band does not grow. */
+.bank-row:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.bank-row:focus-visible > .bank-cell:first-child {
+  box-shadow: inset 2px 0 0 var(--t-focus-border);
+}
+
+/* A file dragged over the row: the line it will be attached to. */
+.bank-row[data-drop='true'] .bank-cell {
+  background: var(--t-accent-soft);
+}
+
 .bank-row:hover .bank-cell {
   background: var(--t-bg-soft);
 }
@@ -409,11 +450,12 @@
   background: var(--t-accent-soft);
 }
 
-.bank-row:last-child .bank-cell {
+.bank-table tbody > tr:last-child > td {
   border-bottom-color: transparent;
 }
 
-/* A line that just arrived with an import: the Commit moment's tint, once (D122 D-I). */
+/* A line that arrived with the latest import keeps this dot; the Commit moment's decaying tint lands on
+   it once, through `data-just-committed` (motion.css, D122 D-I). */
 .bank-row[data-fresh='true'] .bank-cell--date::before {
   content: '';
   display: inline-block;
@@ -430,9 +472,46 @@
   font-weight: 600;
 }
 
+/*
+ * The counterparty wins the width. The cell's words sit on one flex line and give way in order: the
+ * Bankkonto tag first (to an ellipsis), then the detail, and the name last of all.
+ */
+.bank-party-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.bank-party-line > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The name never shrinks (a flex share, however small, cuts a fraction of a pixel and the ellipsis then
+ * eats whole letters: measured in the browser). Only a name wider than the whole cell is cut.
+ */
+.bank-party {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
 .bank-detail {
-  margin-left: var(--t-space-1);
+  flex: 0 1 auto;
   color: var(--t-text-dim);
+}
+
+/* Which Bankkonto, while several share the list: small and dim, after the name, the first thing cut. */
+.bank-account-tag {
+  flex: 0 10000 auto;
+  min-width: 2ch;
+  max-width: 120px;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
 }
 
 .bank-cell--target,
@@ -442,6 +521,43 @@
 
 .bank-picker.picker-trigger {
   height: 32px;
+  max-width: 100%;
+}
+
+/* MWST reads as text (B2): the code's label in dim ink, no box at rest; the edge and the caret come
+   back on hover and focus, so it is still the picker it is. */
+.bank-picker--vat.picker-trigger {
+  border-color: transparent;
+  background: transparent;
+}
+
+.bank-picker--vat.picker-trigger:hover,
+.bank-picker--vat.picker-trigger[aria-expanded='true'] {
+  border-color: var(--t-border-strong);
+}
+
+/* The code, quiet; its label is in the accessible name and the tooltip. "Ohne MWST" keeps its words. */
+.bank-picker--vat .picker-trigger__code + .picker-trigger__name,
+.bank-picker--vat:not(:hover):not(:focus-visible):not([aria-expanded='true']) .picker-trigger__caret {
+  display: none;
+}
+
+.bank-picker--vat .picker-trigger__code,
+.bank-picker--vat .picker-trigger__name {
+  color: var(--t-text-dim);
+  font-weight: 400;
+}
+
+.bank-cell--vat .tooltip-wrap,
+.bank-vat-tip {
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* A line with no target: the picker IS the call to action, so it keeps its edge. */
+.bank-picker--empty .picker-trigger__placeholder {
+  color: var(--t-text);
 }
 
 .bank-picker--target .bank-cert {
@@ -502,6 +618,21 @@
   font-weight: 600;
 }
 
+/* D144: the AI disclosure beside a model's suggestion. Text ink in a hairline box, no colour of its
+   own: the check mark beside it already says "look before booking". */
+.bank-ai-tag {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 600;
+}
+
 .bank-cell--amount {
   text-align: right;
 }
@@ -538,8 +669,15 @@
 }
 
 .bank-row__book {
-  min-width: 84px;
+  min-width: 72px;
   padding-inline: var(--t-space-1);
+}
+
+/* A control in the row is a 32px control (K-14); in Kompakt's 32px row its block margin gives the 1px
+   rule back, so the row stays the token's height and never grows to its tallest control (K-20). */
+.bank-row .picker-trigger,
+.bank-row .bank-row__actions {
+  margin-block: -1px;
 }
 
 /* The row's overflow keeps its 32px square in the dense band. */
@@ -571,197 +709,6 @@
   text-overflow: ellipsis;
 }
 
-/* The narrow layout: the panel under its row, a full-width row of its own, two columns inside it
-   (what the line becomes on the left, the refusal and the commit on the right). The row above
-   already names the line, so the panel's own head keeps only the facts the row does not show. */
-.bank-inline-panel > td {
-  padding: 0;
-  border-bottom: 1px solid var(--t-border);
-  background: var(--t-bg-soft);
-}
-
-.bank-panel.bank-panel--inline {
-  width: auto;
-  padding: var(--t-space-2) var(--t-space-3) var(--t-space-3);
-  background: transparent;
-}
-
-.bank-panel--inline .bank-panel__date,
-.bank-panel--inline .bank-panel__party,
-.bank-panel--inline .bank-panel__text,
-.bank-panel--inline .bank-panel__amount {
-  display: none;
-}
-
-.bank-panel--inline .bank-panel__facts {
-  margin: 0;
-}
-
-.bank-panel--inline .bank-panel__body {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: var(--t-space-3);
-  align-items: start;
-}
-
-.bank-panel--inline .bank-mode {
-  max-width: 560px;
-}
-
-.bank-panel__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-2);
-}
-
-.bank-panel__col {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-2);
-  min-width: 0;
-}
-
-/* --- the panel -------------------------------------------------------------------------------- */
-
-.bank-panel {
-  min-width: 0;
-  box-sizing: border-box;
-  padding: var(--t-space-3) var(--t-space-3) var(--t-space-3);
-}
-
-.bank-body--wide > .bank-panel {
-  flex: 0 0 var(--bank-panel-w);
-  width: var(--bank-panel-w);
-  position: sticky;
-  top: calc(var(--surface-header-height, 0px) + var(--t-space-1));
-  max-height: calc(100vh - var(--surface-header-height, 0px) - var(--t-space-1) - var(--bank-dock-clear));
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-}
-
-.bank-panel--block {
-  width: auto;
-  max-width: 640px;
-}
-
-.bank-panel__empty {
-  margin: 0;
-  color: var(--t-text-dim);
-}
-
-.bank-panel__inner {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-2);
-}
-
-.bank-panel__head {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.bank-panel__date {
-  margin: 0;
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  font-variant-numeric: tabular-nums;
-}
-
-.bank-panel__party {
-  margin: 0;
-  color: var(--t-text);
-  font-size: var(--t-font-lg);
-  line-height: var(--t-lh-lg);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.bank-panel__text {
-  margin: 0;
-  color: var(--t-text-dim);
-  overflow-wrap: anywhere;
-}
-
-.bank-panel__amount {
-  margin: var(--t-space-0-5) 0 0;
-  font-size: var(--t-font-2xl);
-  line-height: var(--t-lh-2xl);
-  font-weight: 600;
-}
-
-.bank-panel__amount .bank-amount {
-  font-weight: 600;
-}
-
-.bank-panel__facts {
-  display: grid;
-  gap: 2px;
-  margin: var(--t-space-0-5) 0 0;
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-}
-
-.bank-panel__facts > div {
-  display: flex;
-  gap: var(--t-space-1);
-  min-width: 0;
-}
-
-.bank-panel__facts dt {
-  flex: 0 0 auto;
-  color: var(--t-text-dim);
-}
-
-.bank-panel__facts dd {
-  margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--t-text);
-}
-
-.bank-panel__back {
-  align-self: flex-start;
-  margin: calc(var(--t-space-0-5) * -1) 0;
-  padding-left: 0;
-  color: var(--t-text-dim);
-}
-
-.bank-panel__status {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-}
-
-.bank-panel__chip,
-.bank-panel__reason,
-.bank-panel__next,
-.bank-panel__provenance,
-.bank-panel__consequence {
-  margin: 0;
-}
-
-.bank-panel__reason {
-  color: var(--t-text);
-}
-
-.bank-panel__next,
-.bank-panel__provenance {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-}
-
-.bank-panel__consequence {
-  color: var(--t-text);
-}
-
-.bank-panel__section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-}
 
 .bank-section-title {
   margin: 0;
@@ -770,18 +717,6 @@
   font-size: var(--t-font-sm);
   line-height: var(--t-lh-sm);
   font-weight: 500;
-}
-
-.bank-panel__commit {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-  padding-top: var(--t-space-1);
-}
-
-.bank-panel__alt {
-  align-self: flex-start;
-  color: var(--t-text-dim);
 }
 
 /* The commit: the secondary edge in the text ink at 600, full width in the panel (the one
@@ -859,80 +794,6 @@
 
 /* --- the comparison, the batch, the refusal ----------------------------------------------------- */
 
-.bank-compare {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-}
-
-.bank-compare th,
-.bank-compare td {
-  padding: var(--t-space-0-5) var(--t-space-0-5) var(--t-space-0-5) 0;
-  border-bottom: 1px solid var(--t-border);
-  text-align: left;
-  vertical-align: top;
-  overflow-wrap: anywhere;
-}
-
-.bank-compare thead th {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  font-weight: 500;
-}
-
-.bank-compare tbody th {
-  width: 88px;
-  color: var(--t-text-dim);
-  font-weight: 400;
-}
-
-.bank-compare thead td:first-child {
-  width: 88px;
-}
-
-/* A figure (the amount, the date) never breaks inside itself; the text row may wrap. */
-.bank-compare tr[data-kind='figure'] td {
-  white-space: nowrap;
-  overflow-wrap: normal;
-}
-
-.bank-compare__verdict {
-  display: block;
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  font-weight: 500;
-  color: var(--t-text-dim);
-}
-
-.bank-compare__verdict[data-tone='ok'] {
-  color: var(--t-success);
-}
-
-.bank-compare__verdict[data-tone='warn'] {
-  color: var(--t-warn);
-}
-
-.bank-batch {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-}
-
-.bank-batch__item {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--t-space-1);
-  padding: var(--t-space-0-5) 0;
-  border-bottom: 1px solid var(--t-border);
-}
-
 .bank-refusal {
   display: flex;
   gap: var(--t-space-1);
@@ -967,7 +828,6 @@
 
 .bank-refusal__action {
   margin-top: var(--t-space-1);
-  height: 44px;
 }
 
 /* --- the modes (split, match, ignore, reopen) --------------------------------------------------- */
@@ -1132,54 +992,6 @@
   white-space: nowrap;
 }
 
-.bank-inline-choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--t-space-0-5) var(--t-space-1);
-}
-
-.bank-choice--inline {
-  padding-right: var(--t-space-2);
-}
-
-.bank-check {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--t-space-1);
-  min-height: 44px;
-  padding: var(--t-space-1);
-  border-radius: var(--t-radius-sm);
-  cursor: pointer;
-}
-
-.bank-check:hover {
-  background: var(--t-bg-soft);
-}
-
-.bank-check > input {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  margin: 2px 0 0;
-}
-
-.bank-check__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.bank-check__title {
-  color: var(--t-text);
-  font-weight: 500;
-}
-
-.bank-check__hint {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-}
-
 .bank-split__meta {
   display: flex;
   gap: var(--t-space-1);
@@ -1284,24 +1096,34 @@
 
 /* --- the agent's Vorschlag on the line ---------------------------------------------------------- */
 
+/* In the strip: one line, the kicker, the sentence and the decision. */
 .bank-vorschlag {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-  padding: var(--t-space-2);
-  border-radius: var(--t-radius-md);
-  background: var(--t-bg-soft);
-}
-
-.bank-vorschlag__kicker {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--t-space-0-5);
+  gap: var(--t-space-0-5) var(--t-space-2);
+}
+
+.bank-vorschlag__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--t-space-1);
   margin: 0;
+  min-width: 0;
+}
+
+.bank-vorschlag__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.bank-vorschlag__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
   color: var(--t-text);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
   font-weight: 600;
 }
 
@@ -1320,6 +1142,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--t-space-1);
+  flex-basis: 100%;
+  max-width: 560px;
 }
 
 /* --- the import dialog ------------------------------------------------------------------------ */
@@ -1414,4 +1238,384 @@
   color: var(--t-text-dim);
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
+}
+
+/* D142: the line's receipts on its row: the paperclip with its count, or the words "Ohne Beleg" on a
+   line booked to accounts without one. Dim ink, never the accent and never a colour alone. */
+.bank-receipts {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin-left: var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+/* --- the context strip (B2) ------------------------------------------------------------------------ */
+
+/* ONE table row under the selected line, a single line where it fits: the selected row's ground runs
+   on into it, so the two read as one line and its context. Type one step down from the row (md). */
+.bank-strip > .bank-strip__cell {
+  padding: 0 var(--t-space-1) var(--t-space-0-5) var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+  background: var(--t-accent-soft);
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* A person-opened editor may be tall: it sits on the panel's own ground, at a readable measure. */
+.bank-strip > .bank-strip__cell--editor {
+  padding: var(--t-space-2) var(--t-space-2) var(--t-space-3);
+  background: var(--t-bg-soft);
+}
+
+.bank-strip__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.bank-strip__editor {
+  max-width: 640px;
+}
+
+.bank-strip__line {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: 32px;
+  min-width: 0;
+}
+
+/* The words flow as ONE sentence, wrapping like prose where they must, never one block per part. */
+.bank-strip__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.bank-strip__cert {
+  display: inline-flex;
+  vertical-align: text-bottom;
+}
+
+.bank-strip__text > * + * {
+  margin-left: var(--t-space-1);
+}
+
+.bank-strip__reason,
+.bank-strip__note {
+  color: var(--t-text);
+}
+
+.bank-strip__vat {
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bank-strip__vat::before,
+.bank-strip__note::before,
+.bank-strip__link::before {
+  content: '·';
+  margin-right: var(--t-space-1);
+  color: var(--t-text-dim);
+}
+
+/* A run's bills, named compactly; every bill with its amount in the tooltip. */
+.bank-strip__bills {
+  border: 1px solid transparent;
+  color: var(--t-text);
+  white-space: nowrap;
+}
+
+/* The line's reference and IBAN, a dim tail cut to keep the strip one line; the tooltip has the whole. */
+.bank-strip__id {
+  display: inline-block;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  border: 1px solid transparent;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-strip__id::before {
+  content: '·';
+  margin-right: var(--t-space-1);
+}
+
+/*
+ * A decided line's strip stays ONE line at 1280 (critic F7 rule for every strip): the state word, the
+ * Buchungssatz and "Buchung öffnen" keep their width; a note, who decided it and the identity tail give
+ * way, cut with an ellipsis, their whole text in their tooltip.
+ */
+.bank-strip__text--one {
+  display: flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.bank-strip__text--one > * {
+  flex: 0 0 auto;
+}
+
+/* The tooltip's wrapper shrinks, never clips (its tooltip must show); the part inside it cuts. */
+.bank-strip__text--one > .tooltip-wrap:has(> .bank-strip__cut, > .bank-strip__id) {
+  flex: 0 1 auto;
+  min-width: 48px;
+}
+
+.bank-strip__text--one .bank-strip__cut,
+.bank-strip__text--one .bank-strip__id {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid transparent;
+}
+
+.bank-strip__note--dim {
+  color: var(--t-text-dim);
+}
+
+/* The posted entry, one Buchungssatz in tabular figures: a fact the eye compares, never wrapped mid-leg. */
+.bank-strip__satz {
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bank-strip__vat--warn,
+.bank-strip__warn {
+  color: var(--t-warn);
+}
+
+.bank-strip__tools {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.bank-strip__tool {
+  color: var(--t-text-dim);
+}
+
+.bank-strip__tool[aria-disabled='true'] {
+  color: var(--t-text-faint);
+  cursor: default;
+}
+
+.bank-strip__receipts {
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-strip__choices {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin-left: var(--t-space-1);
+}
+
+.bank-strip__choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.bank-strip__reason-field {
+  display: inline-flex;
+}
+
+.bank-strip__input.field {
+  height: 32px;
+  width: 240px;
+}
+
+.bank-strip__more {
+  margin: 0;
+}
+
+.bank-strip .bank-refusal {
+  padding: var(--t-space-1) var(--t-space-2);
+}
+
+/* --- the (i) card ------------------------------------------------------------------------------- */
+
+.bank-info {
+  position: relative;
+  display: inline-flex;
+}
+
+.bank-info__trigger {
+  color: var(--t-text-dim);
+}
+
+/* One overlay tier (K-28): the elevated ground, one hairline, one shadow, the popover radius. */
+.bank-info__card {
+  position: absolute;
+  top: calc(100% + var(--t-space-1));
+  left: 0;
+  z-index: var(--t-z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  width: min(440px, calc(100vw - var(--t-space-4)));
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  box-shadow: var(--t-shadow-overlay);
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 400;
+  text-align: left;
+}
+
+/* A hover bridge over the gap, so the pointer never leaves the card's wrap on the way to it. */
+.bank-info__card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(-1 * var(--t-space-1));
+  height: var(--t-space-1);
+}
+
+.bank-info__card[hidden] {
+  display: none;
+}
+
+/* --- the header's statement menu ------------------------------------------------------------------ */
+
+.bank-menu__trigger {
+  gap: var(--t-space-1);
+}
+
+.bank-menu__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bank-menu__list {
+  min-width: 240px;
+}
+
+.bank-menu__caption {
+  margin: 0;
+  padding: var(--t-space-1) var(--t-space-1) var(--t-space-0-5);
+  border-top: 1px solid var(--t-border);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- loading ------------------------------------------------------------------------------------ */
+
+/* The list's own shape (K-34): the head strip and the rows at the height the real rows take. */
+.bank-skeleton[data-pending] {
+  visibility: hidden;
+}
+
+.bank-skeleton__head {
+  height: var(--t-row-head-h);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.bank-skeleton__row {
+  display: flex;
+  align-items: center;
+  height: var(--t-row-h);
+  padding: 0 var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.bank-skeleton__bar {
+  width: 100%;
+  height: var(--t-space-2);
+}
+
+/* A36 §4.7 (D150): the gap repair dialog. One column, the warning in the warn ink, the results list
+   tabular so the statement numbers line up. */
+.gap-repair {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  min-width: 0;
+}
+
+.gap-repair p {
+  margin: 0;
+}
+
+.gap-repair__why,
+.gap-repair__lead {
+  color: var(--t-text);
+  line-height: var(--t-lh-body);
+}
+
+.gap-repair__steps {
+  margin: 0;
+  padding-left: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.gap-repair__warn {
+  color: var(--t-warn);
+}
+
+.gap-repair__denied,
+.gap-repair__status {
+  color: var(--t-text-dim);
+}
+
+.gap-repair__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-variant-numeric: tabular-nums;
+}
+
+.gap-repair__result.is-refused {
+  color: var(--t-danger);
+}
+
+.gap-repair__result.is-already_imported {
+  color: var(--t-text-dim);
+}
+
+.gap-repair__error {
+  color: var(--t-danger);
+}
+
+.gap-repair__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding-top: var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+}
+
+.gap-repair__confirm .btn {
+  align-self: flex-start;
 }

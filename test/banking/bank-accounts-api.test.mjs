@@ -47,6 +47,30 @@ function seedOpeningAccount(deps, workspaceId) {
   assert.equal(res.ok, true, JSON.stringify(res));
 }
 
+/**
+ * `set_bank_opening_balance` is dial-governed under `post` since the governance check of 28.09.2026
+ * (it mints an opening entry), so an agent seat at the default `ask` DRAFTS it. The claims in this file
+ * are about the two faces and the idempotency key, not about the dial, so the flows grant the agent
+ * `post` at `auto` first (as a human would, through the Studio): the governed verb then executes, and
+ * both faces still answer through the same governed dispatch. The drafting itself is pinned in
+ * `test/agent/entry-minting-dial.test.mjs` and `test/agent/dial-covers-entry-minting.test.mjs`.
+ */
+function grantPost(deps, workspaceId) {
+  const res = getAction('set_agent_dial').run({ ...deps, actor: 'studio' }, { workspaceId, capability: 'post', level: 'auto', idempotencyKey: 'grant-post' });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  grantPay(deps, workspaceId);
+}
+
+/**
+ * D161: `create_bank_account` is governed under `pay` (the IBAN every later payment run debits), so a
+ * flow that registers an account as the agent seat grants `pay` too, as a human would. The drafting is
+ * pinned in `test/agent/dial-covers-d161.test.mjs`.
+ */
+function grantPay(deps, workspaceId) {
+  const res = getAction('set_agent_dial').run({ ...deps, actor: 'studio' }, { workspaceId, capability: 'pay', level: 'auto', idempotencyKey: 'grant-pay' });
+  assert.equal(res.ok, true, JSON.stringify(res));
+}
+
 test('all eight A19 verbs are registered exactly once, and the read verbs are marked read', () => {
   for (const name of A19_TOOLS) {
     const matches = ACTIONS.filter((a) => a.name === name);
@@ -89,6 +113,8 @@ test('MCP and REST agree across the whole A19 flow, step for step', () => {
   const workspaceId = mw.workspaceId;
   seedOpeningAccount(mcp, workspaceId);
   seedOpeningAccount(rest, workspaceId);
+  grantPost(mcp, workspaceId);
+  grantPost(rest, workspaceId);
   const ledgerAccountId = mw.accId('1020');
   assert.equal(ledgerAccountId, rw.accId('1020'));
 
@@ -164,6 +190,7 @@ test('over REST, the previewed base amount is the base amount the posting then w
   const deps = freshDeps();
   const { workspaceId, accId } = mintWorkspace(deps);
   seedOpeningAccount(deps, workspaceId);
+  grantPost(deps, workspaceId);
 
   const created = handleRest(
     'create_bank_account',
@@ -209,10 +236,12 @@ test('over REST, the previewed base amount is the base amount the posting then w
 test('a rejected verb answers 422 on REST and still carries the machine-readable code', () => {
   const deps = freshDeps();
   const { workspaceId, accId } = mintWorkspace(deps);
+  // D161: the agent seat's create_bank_account drafts at the default ask (pay), so the 422 mapping is
+  // driven by the person's REST call, which runs the verb itself.
   const res = handleRest(
     'create_bank_account',
     { workspaceId, name: 'Falsch', iban: 'nope', ledgerAccountId: accId('1020'), idempotencyKey: 'x' },
-    deps,
+    { ...deps, actor: 'studio' },
   );
   assert.equal(res.status, 422, 'a P9 rejection is a 422, never a 500 and never a 200');
   assert.equal(res.body.ok, false);
@@ -223,6 +252,7 @@ test('the MCP face forwards the idempotency key: a replayed opening balance post
   const deps = freshDeps();
   const { workspaceId, accId } = mintWorkspace(deps);
   seedOpeningAccount(deps, workspaceId);
+  grantPost(deps, workspaceId);
 
   const created = viaMcp(deps, 'create_bank_account', {
     workspaceId,
@@ -261,6 +291,7 @@ test('the MCP face forwards the idempotency key: a replayed opening balance post
 test('a QR-IBAN registered through MCP reports receiveOnly, so A18 cannot pick it to debit', () => {
   const deps = freshDeps();
   const { workspaceId, accId } = mintWorkspace(deps);
+  grantPay(deps, workspaceId);
   const created = viaMcp(deps, 'create_bank_account', {
     workspaceId,
     name: 'QR Konto',
@@ -277,6 +308,7 @@ test('§H-TENANT holds at the API edge: a neighbouring workspace cannot read the
   const deps = freshDeps();
   const a = mintWorkspace(deps, 'Acme GmbH', 'ws-a');
   const b = mintWorkspace(deps, 'Nachbar AG', 'ws-b');
+  grantPay(deps, a.workspaceId);
   const created = viaMcp(deps, 'create_bank_account', {
     workspaceId: a.workspaceId,
     name: 'PostFinance Geschäft',
@@ -285,6 +317,7 @@ test('§H-TENANT holds at the API edge: a neighbouring workspace cannot read the
     idempotencyKey: 'ba-1',
   });
   assert.equal(created.ok, true, JSON.stringify(created));
+  assert.equal(typeof created.bankAccountId, 'string', 'the account exists (pay granted), so the fence is what refuses');
 
   const stolen = viaMcp(deps, 'get_bank_account', {
     workspaceId: b.workspaceId,

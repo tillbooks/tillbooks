@@ -52,6 +52,14 @@ function save(filename: string, blob: Blob): void {
 
 export interface VatExportState {
   working: boolean;
+  /**
+   * The verb answered with a file for the period on screen, in this session (D152: the journey line
+   * moves on to step 4 and "Als eingereicht markieren" joins the header). Keyed on the workspace AND
+   * the period, so switching either never carries one export over to another, and cleared when a new
+   * run starts. It is never the strip's
+   * "exportiert am": that tick stays on the engine's recorded evidence.
+   */
+  exported: boolean;
   refusal: ExportRefusal | null;
   crossCheck: TaxCrossCheck | null;
   run: () => Promise<void>;
@@ -76,24 +84,44 @@ export interface UseVatExportInput {
  * picker, while the outcome needs the body's full measure to be readable: a refusal naming an ESTV
  * Ziffer and a next step does not belong squeezed under a right-aligned toolbar.
  */
+/**
+ * What one export run left behind, stamped with the workspace and period it was run FOR.
+ *
+ * Every field is read back only while that stamp matches what the screen shows (critic F1 of the D152
+ * pass): a file exported for Q2 in one workspace must not move another workspace, or another period,
+ * to step 4, and a refusal or a cross-check about one period's file must not sit above another
+ * period's figures. Before the stamp, the refusal and the cross-check already survived a switch.
+ */
+interface ExportOutcome {
+  key: string;
+  exported: boolean;
+  refusal: ExportRefusal | null;
+  crossCheck: TaxCrossCheck | null;
+}
+
 export function useVatExport({ workspaceId, periodStart, periodEnd, onExported }: UseVatExportInput): VatExportState {
   const client = useClient();
-  const [working, setWorking] = useState(false);
-  const [refusal, setRefusal] = useState<ExportRefusal | null>(null);
-  const [crossCheck, setCrossCheck] = useState<TaxCrossCheck | null>(null);
+  const key = `${workspaceId}/${periodStart}/${periodEnd}`;
+  const [workingFor, setWorkingFor] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<ExportOutcome | null>(null);
 
   const run = useCallback(async () => {
-    setWorking(true);
-    setRefusal(null);
-    setCrossCheck(null);
+    const runKey = `${workspaceId}/${periodStart}/${periodEnd}`;
+    setWorkingFor(runKey);
+    // A new run forgets the last one first: a re-export that fails must not leave the journey on
+    // step 4 beside its own refusal (critic F2).
+    setOutcome(null);
+    const settle = (next: Omit<ExportOutcome, 'key'>) => {
+      setOutcome({ key: runKey, ...next });
+      setWorkingFor((current) => (current === runKey ? null : current));
+    };
     const { body, status } = await client.call('vat_export_ech0217', {
       workspaceId,
       periodStart,
       periodEnd,
     });
     if (isErr(body)) {
-      setRefusal(exportRefusalOf(body, status));
-      setWorking(false);
+      settle({ exported: false, refusal: exportRefusalOf(body, status), crossCheck: null });
       return;
     }
     const artifact = parseEch0217(body);
@@ -101,18 +129,23 @@ export function useVatExport({ workspaceId, periodStart, periodEnd, onExported }
       // A 200 whose shape this surface cannot read is a failure like any other: no file is written,
       // because writing a Blob out of a payload nobody could parse is how an empty return reaches
       // the ESTV.
-      setRefusal({ band: 'failed', code: '', codes: [], baseCurrency: null, configuredRates: null });
-      setWorking(false);
+      settle({ exported: false, refusal: { band: 'failed', code: '', codes: [], baseCurrency: null, configuredRates: null }, crossCheck: null });
       return;
     }
     save(artifact.filename, new Blob([artifact.xml], { type: artifact.contentType }));
-    setCrossCheck(artifact.crossCheck);
-    setWorking(false);
+    settle({ exported: true, refusal: null, crossCheck: artifact.crossCheck });
     // G22: only AFTER the verb succeeded and the file was handed over. The checklist re-verifies.
     if (onExported !== undefined) await onExported();
   }, [client, workspaceId, periodStart, periodEnd, onExported]);
 
-  return { working, refusal, crossCheck, run };
+  const mine = outcome !== null && outcome.key === key ? outcome : null;
+  return {
+    working: workingFor === key,
+    exported: workspaceId !== '' && periodStart !== '' && mine !== null && mine.exported,
+    refusal: mine?.refusal ?? null,
+    crossCheck: mine?.crossCheck ?? null,
+    run,
+  };
 }
 
 /** The one solid `.btn--primary` on this surface (W3). */

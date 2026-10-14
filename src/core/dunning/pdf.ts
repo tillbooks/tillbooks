@@ -49,6 +49,7 @@ import {
   renderSwissQrCodePdfOps,
   SwissQrPayloadTooLongError,
   QR_IBAN_CHF_ONLY_FROM,
+  QR_CODE_DRAWN_LINE,
   PT_PER_MM,
 } from '../sales/index.js';
 import type { BuildQrBillInput, QrReferenceType, QrStructuredAddress } from '../sales/index.js';
@@ -374,10 +375,23 @@ export function renderDunningPdf(ctx: WorkspaceContext, input: RenderDunningPdfI
       text: `Hinweis: Der aufgelaufene Verzugszins (Art. 104 OR) beträgt ${letterMoney(interestTotal, noteCurrency)}. Er ist in den obigen Beträgen nicht enthalten.`,
     });
   }
+  // One Swiss QR Code page per invoice, resolved here so the letter can say truthfully what follows.
+  // This renderer draws the Swiss QR Code alone, not the SIX payment part with its receipt, so the
+  // letter no longer promises "beiliegende Zahlteile" (critic phase0-installable r2, R2-4; the invoice
+  // PDF's own line is `QR_CODE_DRAWN_LINE`, reused on each page below).
+  const qrParts = items.map((i) => resolveItemQr(i, ws.creditor_iban, creditor, debtor, run.run_date));
+  const withCode = qrParts.filter((p) => p.hasQr).length;
   letter.push({ text: '' });
-  letter.push({
-    text: 'Wir bitten Sie, den offenen Betrag mit den beiliegenden Zahlteilen zu begleichen.',
-  });
+  letter.push({ text: 'Wir bitten Sie, den offenen Betrag zu begleichen.' });
+  if (withCode > 0) {
+    letter.push({
+      text:
+        withCode === qrParts.length
+          ? 'Auf den folgenden Seiten steht zu jeder Rechnung ein Swiss QR Code zum Bezahlen'
+          : 'Auf den folgenden Seiten steht zu jeder Rechnung, wo verfügbar, ein Swiss QR Code zum Bezahlen',
+    });
+    letter.push({ text: '(ohne Zahlteil und Empfangsschein).' });
+  }
   letter.push({ text: 'Sollte sich Ihre Zahlung mit diesem Schreiben kreuzen, betrachten Sie es bitte als gegenstandslos.' });
   letter.push({ text: '' });
   letter.push({ text: 'Freundliche Grüsse' });
@@ -385,7 +399,7 @@ export function renderDunningPdf(ctx: WorkspaceContext, input: RenderDunningPdfI
 
   // G05: the template seam, the A11 shape. Footer lines only, resolved from the snapshot frozen at
   // issue (or the preview override). Every FIGURE above stays the frozen demand, and the per-invoice
-  // payment parts below are untouched: the footer joins the letter page, never a Zahlteil page.
+  // QR pages below are untouched: the footer joins the letter page, never a QR page.
   const tpl = resolveRenderTemplate(ctx, {
     documentKind: 'dunning_run',
     table: 'dunning_run',
@@ -398,17 +412,17 @@ export function renderDunningPdf(ctx: WorkspaceContext, input: RenderDunningPdfI
     for (const line of tpl.footerLines) letter.push({ text: line, size: 9 });
   }
 
-  // One payment-part page per invoice.
-  const qrParts = items.map((i) => resolveItemQr(i, ws.creditor_iban, creditor, debtor, run.run_date));
+  // One page per invoice: the Swiss QR Code when there is one, else the honest reason.
   const pages: string[] = [pageContent(letter)];
   for (const part of qrParts) {
     const head: { text: string; size?: number }[] = [
-      { text: `Zahlteil zu Rechnung ${part.number ?? part.documentId}`, size: 12 },
+      { text: `Rechnung ${part.number ?? part.documentId}`, size: 12 },
       { text: `Betrag: ${letterMoney(part.amountMinor, part.currency)}` },
       part.reference !== null ? { text: `Referenz: ${part.reference}` } : { text: '' },
       part.hasQr
-        ? { text: '' }
-        : { text: `Zahlteil nicht verfügbar (${part.reason ?? 'unbekannt'}). Bitte verwenden Sie den Zahlteil der ursprünglichen Rechnung.` },
+        ? { text: QR_CODE_DRAWN_LINE['de-CH'] }
+        : { text: `Swiss QR Code nicht verfügbar (${part.reason ?? 'unbekannt'}).` },
+      part.hasQr ? { text: '' } : { text: 'Bitte überweisen Sie den Betrag auf das Konto, das auf der ursprünglichen Rechnung steht.' },
     ];
     pages.push(pageContent(head, part.ops ?? undefined));
   }

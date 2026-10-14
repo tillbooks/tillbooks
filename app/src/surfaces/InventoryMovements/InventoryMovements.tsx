@@ -6,6 +6,10 @@
  * lot/serial and actor. Two drawers write through the one ledger path: Record a movement, and Transfer
  * between locations. No local quantity mutation: after a write the history and balance are re-read.
  *
+ * A LIST NEVER OPENS ITSELF (D152 rule 5, the /bank B2 pattern). Nothing is selected on load: the
+ * detail pane holds one quiet line until an item is opened by a click (or Enter/Space on its focused
+ * row) or by a deep link (`?focus=<itemId>`). A second click on the open item closes it again.
+ *
  * Type badge is glyph + label, never colour alone (WCAG 2.2 AA); no new colour token (design-canon).
  *
  * THE PERMISSION GATE HERE IS A CONVENIENCE (the standing Studio rule): capabilities fail open and the
@@ -30,7 +34,8 @@
  * column. No `ConsequenceLine` (C4): `inventory_move` / `inventory_transfer` carry no engine
  * consequence sentence, and the Studio never invents one (design law).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -193,7 +198,29 @@ export function InventoryMovements() {
 
   const [items, setItems] = useState<Item[]>([]);
   const [locations, setLocations] = useState<Loc[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const focusParam = params.get('focus');
+  // D152 rule 5: nothing is selected on load. Only a deep link selects before the person acts, and a
+  // link that arrives while the surface is mounted (a search hit, the /w/:ws/ handover) opens too.
+  const [selectedId, setSelectedId] = useState<string | null>(focusParam);
+  useEffect(() => {
+    if (focusParam !== null) setSelectedId(focusParam);
+  }, [focusParam]);
+  /**
+   * The person's own choice. It retires the deep link (`?focus=` is dropped, replacing the history
+   * entry), so a row they closed stays closed and following the same link again opens it again.
+   */
+  const choose = useCallback(
+    (id: string | null) => {
+      setSelectedId(id);
+      if (params.has('focus')) {
+        const next = new URLSearchParams(params);
+        next.delete('focus');
+        setParams(next, { replace: true });
+      }
+    },
+    [params, setParams],
+  );
   const [movements, setMovements] = useState<Movement[]>([]);
   const [onHand, setOnHand] = useState<number>(0);
   const [allowNegative, setAllowNegative] = useState<boolean>(false);
@@ -210,6 +237,31 @@ export function InventoryMovements() {
   const [transferDrawer, setTransferDrawer] = useState(false);
   const [transferDraft, setTransferDraft] = useState<TransferDraft>(emptyTransfer);
 
+  // §H-TENANT (critic round 2): a workspace switch does not remount the surface, so nothing chosen,
+  // read or drafted in the workspace just left may survive into the next one. Reset during render
+  // (React's "adjust state when a prop changes"), so no effect ever runs with the old selection
+  // under the new workspace. The first workspace (null -> id at boot) is not a switch: a deep link
+  // made before it resolved stays.
+  // The workspace on screen NOW, for a read or a write that started under the previous one: its
+  // answer is dropped (a refresh closure from before the switch would otherwise re-read the old
+  // workspace and paint it under the new one).
+  const liveWorkspace = useRef(workspaceId);
+  liveWorkspace.current = workspaceId;
+  const [shownWorkspace, setShownWorkspace] = useState(workspaceId);
+  if (shownWorkspace !== workspaceId) {
+    setShownWorkspace(workspaceId);
+    if (shownWorkspace !== null) {
+      setSelectedId(null);
+      setMovements([]);
+      setOnHand(0);
+      setWriteError(null);
+      setMoveDrawer(false);
+      setMoveDraft(emptyMove());
+      setTransferDrawer(false);
+      setTransferDraft(emptyTransfer());
+    }
+  }
+
   const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
   const locName = useCallback((id: string) => locations.find((l) => l.id === id)?.name ?? id, [locations]);
 
@@ -219,12 +271,17 @@ export function InventoryMovements() {
     [t],
   );
 
+  // Every list read is numbered; only the latest may answer, so a read from the workspace just left
+  // (or one a refresh overtook) never lands on screen.
+  const listSeq = useRef(0);
   const loadBase = useCallback(async () => {
     if (workspaceId === null) {
       setLoading(false);
       return;
     }
+    if (liveWorkspace.current !== workspaceId) return;
     setLoading(true);
+    const mine = ++listSeq.current;
     setFailed(false);
     setDenied(false);
     const [itemsRes, stockRes, cfgRes] = await Promise.all([
@@ -232,6 +289,7 @@ export function InventoryMovements() {
       client.call('stock_on_hand', { workspaceId }),
       client.call('inventory_get_config', { workspaceId }),
     ]);
+    if (mine !== listSeq.current || liveWorkspace.current !== workspaceId) return;
     if (isErr(itemsRes.body)) {
       if (itemsRes.body.error === 'permission_denied' || itemsRes.status === 403) setDenied(true);
       else setFailed(true);
@@ -242,18 +300,25 @@ export function InventoryMovements() {
     setItems(parsed);
     setLocations(isErr(stockRes.body) ? [] : parseLocations(stockRes.body));
     setAllowNegative(!isErr(cfgRes.body) && (cfgRes.body as { allowNegativeStock?: boolean }).allowNegativeStock === true);
-    setSelectedId((prev) => (prev !== null && parsed.some((i) => i.id === prev) ? prev : (parsed[0]?.id ?? null)));
+    // An item that left the list closes; nothing takes its place (D152 rule 5).
+    setSelectedId((prev) => (prev !== null && parsed.some((i) => i.id === prev) ? prev : null));
     setLoading(false);
   }, [client, workspaceId]);
 
+  // Every detail read is numbered; only the LATEST may answer into the pane. A read that a close or a
+  // newer selection overtook is dropped, so the pane never shows one item under another item's pill.
+  const detailSeq = useRef(0);
   const loadDetail = useCallback(
     async (item: Item) => {
       if (workspaceId === null) return;
+      if (liveWorkspace.current !== workspaceId) return;
+      const mine = ++detailSeq.current;
       setDetailLoading(true);
       const [listRes, balRes] = await Promise.all([
         client.call('inventory_movement_list', { workspaceId, itemId: item.id, limit: 200 }),
         client.call('inventory_balance', { workspaceId, itemId: item.id }),
       ]);
+      if (mine !== detailSeq.current || liveWorkspace.current !== workspaceId) return;
       setMovements(isErr(listRes.body) ? [] : parseMovements(listRes.body));
       setOnHand(isErr(balRes.body) ? 0 : ((balRes.body as { qtyOnHand?: number }).qtyOnHand ?? 0));
       setDetailLoading(false);
@@ -268,14 +333,18 @@ export function InventoryMovements() {
   useEffect(() => {
     if (selected !== null) void loadDetail(selected);
     else {
+      detailSeq.current += 1;
       setMovements([]);
       setOnHand(0);
+      setDetailLoading(false);
     }
   }, [selected, loadDetail]);
 
   const refresh = useCallback(async () => {
     await loadBase();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (selected !== null) await loadDetail(selected);
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [loadBase, loadDetail, selected]);
 
   const submitMove = useCallback(async () => {
@@ -300,6 +369,7 @@ export function InventoryMovements() {
       description: moveDraft.description.trim() === '' ? undefined : moveDraft.description.trim(),
       idempotencyKey: newKey(),
     });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (isErr(response.body)) {
       setWriteError(response.body);
       return;
@@ -307,6 +377,7 @@ export function InventoryMovements() {
     setMoveDrawer(false);
     setMoveDraft(emptyMove());
     await refresh();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [client, workspaceId, selected, moveDraft, refresh]);
 
   const submitTransfer = useCallback(async () => {
@@ -327,6 +398,7 @@ export function InventoryMovements() {
       description: transferDraft.description.trim() === '' ? undefined : transferDraft.description.trim(),
       idempotencyKey: newKey(),
     });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (isErr(response.body)) {
       setWriteError(response.body);
       return;
@@ -334,6 +406,7 @@ export function InventoryMovements() {
     setTransferDrawer(false);
     setTransferDraft(emptyTransfer());
     await refresh();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [client, workspaceId, selected, transferDraft, refresh]);
 
   const toggleNegative = useCallback(async () => {
@@ -341,6 +414,7 @@ export function InventoryMovements() {
     setWriteError(null);
     const next = !allowNegative;
     const response = await client.call('inventory_set_config', { workspaceId, allowNegativeStock: next, idempotencyKey: newKey() });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (isErr(response.body)) {
       setWriteError(response.body);
       return;
@@ -382,14 +456,15 @@ export function InventoryMovements() {
   ];
 
   // The two write actions ride the SurfaceHeader actions slot (primary top-right). Both act on the
-  // selected item, so they disable until an item and the locations they need are present, and behind
-  // the A24 capability padlock. The engine is still the real gate.
+  // open item, so they exist only once an item is open (D152 rule 3: absent, not a grey button, while
+  // the list that unlocks them sits beside them). They disable until the locations they need are
+  // present, and behind the A24 capability padlock. The engine is still the real gate.
   const headerActions = (
     <>
       <button
         type="button"
         className="btn btn--ghost"
-        disabled={!canWrite || selected === null || locations.length < 2}
+        disabled={!canWrite || locations.length < 2}
         onClick={() => {
           setWriteError(null);
           setTransferDraft({ ...emptyTransfer(), fromLocationId: locations[0]?.id ?? '', toLocationId: locations[1]?.id ?? '' });
@@ -401,7 +476,7 @@ export function InventoryMovements() {
       <button
         type="button"
         className="btn btn--primary"
-        disabled={!canWrite || selected === null || locations.length === 0}
+        disabled={!canWrite || locations.length === 0}
         onClick={() => {
           setWriteError(null);
           setMoveDraft({ ...emptyMove(), locationId: locations[0]?.id ?? '' });
@@ -415,7 +490,11 @@ export function InventoryMovements() {
 
   return (
     <div className="im">
-      <SurfaceHeader title={t('invMovements.title')} help={<SurfaceHelp surface="InventoryMovements" />} actions={headerActions} />
+      <SurfaceHeader
+        title={t('invMovements.title')}
+        help={<SurfaceHelp surface="InventoryMovements" />}
+        actions={selected === null ? undefined : headerActions}
+      />
 
       {failed && (
         <ErrorBanner context="read" message={t('invMovements.error.transport')} onRetry={() => void loadBase()} />
@@ -435,7 +514,7 @@ export function InventoryMovements() {
                   <button
                     type="button"
                     className="im-list-item"
-                    onClick={() => setSelectedId(i.id)}
+                    onClick={() => choose(selectedId === i.id ? null : i.id)}
                     aria-current={i.id === selectedId ? 'true' : undefined}
                   >
                     {i.name}

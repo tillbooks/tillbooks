@@ -95,6 +95,11 @@ export interface SkippedRate {
  * rather than on a memoised blob. Storing one giant result under one key would also mean a partially
  * completed import could never be resumed, and a feed import is exactly the operation an operator
  * retries.
+ *
+ * Those per-rate memos live in this verb's OWN inner scope (`import_exchange_rates>record_exchange_rate`,
+ * K1), never in the public `record_exchange_rate` scope a caller could pre-claim. A replay of an import
+ * run before K1 finds no inner memo and re-reads each rate instead: the rows are unchanged (an existing
+ * identical rate answers `created: false`), only that replay's `created` count reads 0.
  */
 export function importExchangeRates(ctx: WorkspaceContext, input: ImportExchangeRatesInput): Result {
   const capable = ctx.capabilities.assert('post');
@@ -176,16 +181,27 @@ export function importExchangeRates(ctx: WorkspaceContext, input: ImportExchange
     }
 
     for (const asOf of admissible) {
-      const stored = recordExchangeRate(ctx, {
-        baseCurrency: rate.currency,
-        quoteCurrency: base,
-        rate: rate.rate,
-        asOf,
-        source: 'rate_api',
-        method,
-        provenance: provenanceFor(feed, rate, asOf, base),
-        idempotencyKey: `${input.idempotencyKey}:${feed.series}:${rate.currency}:${asOf}`,
-      });
+      // K1: the per-rate key is DERIVED from the import's own key, so it runs in this composite's own
+      // idempotency scope: a `record_exchange_rate` made first under the same key (any currency, any
+      // day) used to be replayed here and reported as this rate imported while no such rate existed.
+      const stored = ctx.store.innerWrite('import_exchange_rates', () =>
+        recordExchangeRate(ctx, {
+          baseCurrency: rate.currency,
+          quoteCurrency: base,
+          rate: rate.rate as string,
+          asOf,
+          source: 'rate_api',
+          method,
+          provenance: provenanceFor(feed, rate, asOf, base),
+          idempotencyKey: `${input.idempotencyKey}:${feed.series}:${rate.currency}:${asOf}`,
+        }),
+      );
+      // ...and a rate it reports as imported is READ BACK: the row the store holds for this pair, day and
+      // source. One that is not is a per-currency refusal like any other, never a line in `imported`.
+      if (stored.ok && !holdsImportedRate(ctx, stored.rateId, rate.currency, base, asOf)) {
+        skipped.push({ currency: rate.currency, asOf, reason: 'inner_write_not_own', rate: rate.rate, unit: rate.unit, quotedRate: rate.quotedRate });
+        continue;
+      }
       if (!stored.ok) {
         skipped.push({
           currency: rate.currency,
@@ -217,6 +233,15 @@ export function importExchangeRates(ctx: WorkspaceContext, input: ImportExchange
     skipped,
     counts: { imported: imported.length, created, unchanged: imported.length - created, skipped: skipped.length },
   });
+}
+
+/** K1 read-back: the row `rateId` names is a `rate_api` rate for this pair on this day. */
+function holdsImportedRate(ctx: WorkspaceContext, rateId: unknown, baseCurrency: string, quoteCurrency: string, asOf: string): boolean {
+  if (typeof rateId !== 'string') return false;
+  const row = ctx.store.db
+    .prepare('SELECT base_currency, quote_currency, as_of, source FROM exchange_rate WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, rateId) as { base_currency: string; quote_currency: string; as_of: string; source: string } | undefined;
+  return row !== undefined && row.base_currency === baseCurrency && row.quote_currency === quoteCurrency && row.as_of === asOf && row.source === 'rate_api';
 }
 
 /**

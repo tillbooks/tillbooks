@@ -8,7 +8,9 @@
       "error": "The waiting-work count could not be loaded.",
       "retry": "Try again",
       "allClear": "Nothing is waiting for you right now.",
-      "count": "{count} waiting for you"
+      "count": "{count} waiting for you",
+      "countOne": "1 waiting for you",
+      "all": "All waiting work"
     },
     "mandates": {
       "label": "Mandates",
@@ -91,12 +93,139 @@
       "backup": "Back up",
       "demo": "Try the demo",
       "demoBusy": "Creating the demo"
+    },
+    "bankBand": {
+      "loading": "Loading the bank inbox",
+      "error": "The bank inbox could not be loaded.",
+      "retry": "Try again",
+      "caption": "Bank",
+      "bankFallback": "Bank",
+      "count": {
+        "one": "{count} open bank line",
+        "other": "{count} open bank lines"
+      },
+      "countTitle": "Open bank lines",
+      "facet": {
+        "needs": {
+          "one": "{count} needs you",
+          "other": "{count} need you"
+        },
+        "sure": {
+          "one": "{count} sure proposal",
+          "other": "{count} sure proposals"
+        },
+        "noReceipt": {
+          "one": "{count} without a receipt",
+          "other": "{count} without a receipt"
+        }
+      },
+      "facetTitle": {
+        "needs": "Need you",
+        "sure": "Sure proposals",
+        "noReceipt": "Without a receipt"
+      },
+      "lamp": {
+        "active": "{bank} active",
+        "running": "{bank}: fetching statements",
+        "waiting": "{bank}: waiting for activation",
+        "ready": "{bank}: review the keys",
+        "fault": "{bank}: fetch failed",
+        "off": "{bank}: automatic fetch off",
+        "serveOnly": "{bank}: no automatic fetch",
+        "keysChanged": "{bank}: bank keys changed",
+        "blocked": "{bank}: fetching blocked",
+        "jump": "{bank}: statements missing",
+        "inactive": "{bank}: not connected",
+        "checkFault": "{bank}: check failed",
+        "resend": "{bank}: resend INI and HIA"
+      },
+      "card": {
+        "active": "Statements arrive every morning at {time} by themselves. If TILL was closed at {time}, it fetches them when it starts.",
+        "letterFirst": "The keys exist, but INI and HIA have not been sent to {bank} yet. Send them on the bank accounts screen and post the signed INI letter.",
+        "waitingChecking": "TILL asks {bank} every morning at {time} whether the access is active. You need to do nothing.",
+        "waitingOff": "The daily check is off. Ask {bank} yourself on the bank accounts screen.",
+        "waitingServe": "TILL checks by itself only under till up. Ask {bank} yourself on the bank accounts screen.",
+        "ready": "{bank} activated the access. Compare the hashes shown once with the sheet from {bank}. TILL cannot do this for you: this comparison is what protects you from a fake bank.",
+        "readySince": "Activation seen {when}",
+        "lastCheck": "Last checked {when}",
+        "nextCheck": "next check {when}",
+        "legsUnconfirmed": "INI and HIA are not both confirmed by {bank} yet. Resend them on the bank accounts screen: TILL sends only what is missing. The daily check sends nothing.",
+        "checkUnreachable": "The last check with {bank} did not get through.",
+        "checkNoWire": "This TILL has no bank connection set up, so TILL cannot ask {bank}.",
+        "checkNoKeystore": "The key store is missing or damaged, so TILL cannot ask {bank}.",
+        "checkLocked": "The key store is locked, so TILL cannot ask {bank}.",
+        "lastAttempt": "Last attempt {when}",
+        "checkNotStarted": "The check with {bank} could not start."
+      },
+      "action": {
+        "compareKeys": "Compare the keys",
+        "resendLegs": "Resend"
+      },
+      "steps": {
+        "label": "Setup in four steps",
+        "letter": "Letter sent to {bank}",
+        "activate": "{bank} activates the access",
+        "compare": "Compare the keys once",
+        "daily": "Daily fetch running",
+        "state": {
+          "done": "done",
+          "now": "now",
+          "fault": "stuck",
+          "todo": "to do"
+        }
+      },
+      "facetsLabel": "Open bank lines by state",
+      "empty": {
+        "title": "No bank account yet.",
+        "hint": "Add your bank account and its open bank lines show up here.",
+        "action": "Add a bank account"
+      },
+      "fetch": {
+        "button": "Fetch now",
+        "buttonBusy": "Fetching",
+        "denied": "Only someone who may make payments can fetch statements.",
+        "running": "Fetching statements",
+        "runningHint": "You can keep working.",
+        "fetched": "Fetched {when}",
+        "fetchedAuto": "Fetched {when}, automatically",
+        "nothingNew": "Nothing new.",
+        "never": "Not fetched yet.",
+        "next": "Next automatic fetch: {when}",
+        "retryAt": "Next try: {when}",
+        "off": "The automatic fetch is off.",
+        "offLink": "Change",
+        "serveOnly": "TILL fetches automatically only under till up.",
+        "keysChanged": "The bank keys changed. Review them before the next fetch.",
+        "blocked": "Fetching is blocked.",
+        "manage": "Go to bank accounts",
+        "members": "Go to members",
+        "keystoreLocked": "The key store is locked, so TILL fetches no statements.",
+        "keystoreLockedAction": "Restart TILL with the key store passphrase. TILL does not try again on its own."
+      },
+      "jumpLink": "Go to {name}",
+      "when": {
+        "today": "today {time}",
+        "yesterday": "yesterday {time}",
+        "tomorrow": "tomorrow {time}",
+        "date": "on {date} at {time}"
+      },
+      "waiting": {
+        "one": "{count} bank line is waiting for you",
+        "other": "{count} bank lines are waiting for you"
+      },
+      "waitingLabel": {
+        "one": "bank line is waiting for you",
+        "other": "bank lines are waiting for you"
+      },
+      "nothingWaiting": "Nothing is waiting for you",
+      "openShort": "{count} open",
+      "withVorschlag": "{count} with a proposal"
     }
   },
   "help": {
     "Uebersicht": {
       "title": "Overview",
-      "body": "The landing page of your books: a wall of key figures, each with its value, its as-of date and a path into the surface behind it. Everything is computed in the engine; this page only composes.\n\nYou pick the range at the top. An arrangement can be saved as a view and recalled.\n\nA tile whose module is not set up moves behind the further-tiles hint instead of showing a fake zero.",
+      "body": "Your key figures, each with its value, its date and a way into the screen behind it.\n\nThe bank inbox above shows the open bank lines as one number, with three symbols: the person for lines that need you, the check mark for sure proposals, the crossed-out paperclip for lines without a receipt. Each number opens the bank screen. Your bank sits on the right with a dot: green runs, orange waits, red failed, grey means the automatic fetch is off. Point at its name for the words. Under till up, TILL fetches every morning and, during setup, asks daily whether the bank has activated the access.\n\nA tile never shows a false zero.",
       "concepts": [],
       "docsPath": "quickstart"
     }

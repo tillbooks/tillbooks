@@ -23,6 +23,7 @@
  * (`data.error.unrestorable_format`) instead of printing "Gültig" over a file restore would refuse.
  */
 import { useCallback, useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -37,6 +38,21 @@ import './DataBackup.css';
 /** The restore confirmation is a consequential dialog. Held as a value so the Modal role travels as
  *  a prop, not a literal attribute the modal-role source guard scans for (see Diagnostics). */
 const ALERT_DIALOG = 'alertdialog' as const;
+
+/**
+ * `restore_invariant_failed` carries WHICH pre-commit check refused the restore in `reason`
+ * (`core/data/portability.ts`). One sentence per reason, as literal keys (the refusal-rendering
+ * convention forbids building an error key from a runtime value); any other reason reads the neutral
+ * `data.error.restore_invariant_failed`.
+ */
+const RESTORE_INVARIANT = 'restore_invariant_failed';
+const RESTORE_INVARIANT_REASON_KEYS: Readonly<Record<string, string>> = {
+  unbalanced_entry: 'data.error.restore_invariant_reason.unbalanced_entry',
+  foreign_reference: 'data.error.restore_invariant_reason.foreign_reference',
+  constraint_violation: 'data.error.restore_invariant_reason.constraint_violation',
+  ambiguous_reference: 'data.error.restore_invariant_reason.ambiguous_reference',
+  referential_integrity: 'data.error.restore_invariant_reason.referential_integrity',
+};
 
 interface BackupRow {
   backupId: string;
@@ -63,7 +79,18 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function DataBackup() {
+export interface DataBackupProps {
+  /**
+   * The surface header's action slot (D152, the owner's pick of 03.10.2026). When the Betrieb
+   * surface hands one in, "Jetzt sichern", the surface's ONE primary, renders THERE, in view at load
+   * as DESIGN.md's header slot requires, instead of at the panel's foot two screens down. The button
+   * stays this panel's: its busy state, its refresh and its error banner are all still here. Without
+   * a slot (the panel rendered on its own) it stays in the panel's action row.
+   */
+  headerSlot?: HTMLElement | null;
+}
+
+export function DataBackup({ headerSlot = null }: DataBackupProps = {}) {
   const t = useT();
   const client = useClient();
   const workspaceId = useWorkspaceId();
@@ -76,6 +103,9 @@ export function DataBackup() {
   const [rowVerify, setRowVerify] = useState<Record<string, string>>({});
   const [catalog, setCatalog] = useState<string | null>(null);
   const [confirmingRestore, setConfirmingRestore] = useState(false);
+  // D161.2 (critic F2): a restore lands every portal link a draft, so the person hears how many wait
+  // for a new hand-over instead of learning it from a customer whose link stopped working.
+  const [portalNotice, setPortalNotice] = useState<string | null>(null);
   const restoreBodyId = useId();
 
   const refresh = useCallback(async () => {
@@ -145,6 +175,16 @@ export function DataBackup() {
     // included, gets the banner's own sentence, which says what was saved and never invites a retry
     // that would restore a second workspace.
     if (error.error === NEWER && error.partial !== true) return t('firstrun.error.schema_newer_than_runtime');
+    // A restore the pre-commit gate refused rolled back whole; the engine names WHICH check in
+    // `reason`, and each one reads its own sentence (a reason this build has no words for reads the
+    // neutral one). Through refusalText, so a shared newer-book or after-save sentence still wins.
+    if (error.error === RESTORE_INVARIANT) {
+      const reason = typeof error.reason === 'string' ? error.reason : '';
+      const key = Object.prototype.hasOwnProperty.call(RESTORE_INVARIANT_REASON_KEYS, reason)
+        ? RESTORE_INVARIANT_REASON_KEYS[reason]
+        : 'data.error.restore_invariant_failed';
+      return refusalText(t, error, { keys: { [RESTORE_INVARIANT]: key } });
+    }
     return undefined;
   };
   /** A verify never rides the panel's error banner: its answer belongs beside the thing checked. */
@@ -237,8 +277,28 @@ export function DataBackup() {
     },
   ];
 
+  // S2.1: "Jetzt sichern" is the panel's primary; the export stays secondary, so the ritual has one
+  // visually primary action. In the header slot, a press also brings this panel into view, because
+  // its answer (the new history row with its own Prüfen, or the error banner) lands HERE.
+  const backupButton = (
+    <button
+      type="button"
+      className="btn btn--primary"
+      disabled={busy}
+      onClick={() => {
+        const panelTitle = headerSlot === null ? null : document.getElementById('data-title');
+        // Guarded: a layout-less DOM (jsdom) has no scrollIntoView, and the backup must still run.
+        if (typeof panelTitle?.scrollIntoView === 'function') panelTitle.scrollIntoView({ block: 'start' });
+        void run('create_backup', { workspaceId, idempotencyKey: key() }, refresh);
+      }}
+    >
+      {t('data.action.backup')}
+    </button>
+  );
+
   return (
     <section className="data-panel" aria-labelledby="data-title">
+      {headerSlot !== null && createPortal(backupButton, headerSlot)}
       <header className="data-head">
         <h2 id="data-title" className="diag-subtitle">
           {t('data.title')}
@@ -254,11 +314,7 @@ export function DataBackup() {
         <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => void run('export_workspace', { workspaceId, idempotencyKey: key() }, refresh)}>
           {t('data.action.export')}
         </button>
-        {/* S2.1: "Jetzt sichern" is the SECTION'S primary (the Trust link's acceptance names it);
-            the export stays secondary, so the ritual has one visually primary action. */}
-        <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void run('create_backup', { workspaceId, idempotencyKey: key() }, refresh)}>
-          {t('data.action.backup')}
-        </button>
+        {headerSlot === null && backupButton}
       </div>
 
       <DataTable
@@ -305,6 +361,11 @@ export function DataBackup() {
             {verify}
           </p>
         )}
+        {portalNotice !== null && (
+          <p className="diag-prose data-restore-portal" role="status">
+            {portalNotice}
+          </p>
+        )}
       </div>
 
       {/* The P8 human gate: the engine is called with `confirmed:true` ONLY after the operator
@@ -331,13 +392,18 @@ export function DataBackup() {
               className="btn btn--primary"
               onClick={async () => {
                 setConfirmingRestore(false);
+                setPortalNotice(null);
                 const body = await run('restore_backup', {
                   source: source.trim(),
                   newWorkspaceName: t('data.restore.defaultName'),
                   confirmed: true,
                   idempotencyKey: key(),
                 });
-                if (body) void refresh();
+                if (body) {
+                  const waiting = (body as unknown as { portalLinksAwaitingHandover?: number }).portalLinksAwaitingHandover ?? 0;
+                  if (waiting > 0) setPortalNotice(t(`data.restore.portalLinks.${waiting === 1 ? 'one' : 'other'}`, { count: String(waiting) }));
+                  void refresh();
+                }
               }}
             >
               {t('data.action.restore')}

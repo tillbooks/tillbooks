@@ -25,11 +25,12 @@ import {
   waiveControl,
   exportCheck,
 } from '../core/migration/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface MigrationCheckActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -51,14 +52,14 @@ export function migrationCheckActions(h: MigrationCheckActionHelpers): readonly 
   return [
     ctxAction(
       'migration_declare_control_total',
-      'write',
+      'write:correctable:internal',
       'Declare an expectation for one Eröffnungsprüfung control: the figure the old system said (a per-account trial-balance total, the open AR or AP total, the VAT position at the Übernahmestichtag), in integer Rappen against a scope (an account number, an IBAN, or workspace). A control nobody declared reports "nicht geprüft" and never green; declaring reopens the control until the next check.',
       ctxSchema({ planId: STR, stepId: STR, kind: STR, scope: STR, declaredMinor: INT, idempotencyKey: STR }, ['planId', 'kind', 'scope', 'declaredMinor', 'idempotencyKey']),
       (ctx, input) => declareControlTotal(ctx, as(input)),
     ),
     ctxAction(
       'migration_check_step',
-      'write',
+      'write:correctable:derived',
       'Run the Eröffnungsprüfung for a step: every applicable control (trial balance balanced and per-account against the declared source, open AR/AP against their control accounts, each bank opening against the camt.053 OPBD, the VAT position at the Stichtag, row counts, document integrity, the export date against the Übernahmestichtag), persisted as an append-only snapshot whose hash a commit approval binds to. Idempotent: unchanged inputs return the stored snapshot. clean means every control passed or was waived; a failed or undeclared control refuses the commit.',
       ctxSchema({ planId: STR, stepId: STR, against: STR, idempotencyKey: STR }, ['planId', 'stepId', 'idempotencyKey']),
       (ctx, input) => checkStepVerb(ctx, as(input)),
@@ -79,7 +80,7 @@ export function migrationCheckActions(h: MigrationCheckActionHelpers): readonly 
     ),
     ctxAction(
       'migration_waive_control',
-      'write',
+      'write:correctable:statutory',
       'Set one control aside with a RECORDED reason, which becomes part of the check and of the Prüfbericht. A waiver without a reason is refused (waiver_needs_reason), empty string included; a waived control reports "waived", never "passed", and readiness renders "bereit, mit N Ausnahmen" rather than plain ready. A passed control cannot be waived.',
       ctxSchema({ controlId: STR, reason: STR, idempotencyKey: STR }, ['controlId', 'reason', 'idempotencyKey']),
       (ctx, input) => waiveControl(ctx, as(input)),

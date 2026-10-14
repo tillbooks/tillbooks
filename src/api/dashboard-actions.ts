@@ -29,11 +29,13 @@ import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
 import { dashboardOverview, dashboardTile, DASHBOARD_TILES } from '../core/dashboards/index.js';
+import { getDeliveryRuntime } from './runtime-state.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface DashboardActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -47,6 +49,23 @@ function as<T>(input: ActionInput): T {
   return input as unknown as T;
 }
 
+/**
+ * D142: the one fact the engine cannot know about the `bank_inbox` band: whether THIS process runs the
+ * scheduler that fetches daily (`till up`), or not (`till serve`, a bare `till mcp`). Added here, at the
+ * process boundary, as `autoAvailable`; every figure stays the engine's.
+ */
+function withProcessFacts(result: Result): Result {
+  if (!result.ok) return result;
+  const autoAvailable = getDeliveryRuntime().scheduler.enabled;
+  const mark = (t: unknown): unknown =>
+    typeof t === 'object' && t !== null && (t as { tile?: unknown }).tile === 'bank_inbox' && (t as { ok?: unknown }).ok === true
+      ? { ...(t as Record<string, unknown>), autoAvailable }
+      : t;
+  if (Array.isArray(result.tiles)) return { ...result, tiles: result.tiles.map(mark) };
+  if (typeof result.tile === 'object' && result.tile !== null) return { ...result, tile: mark(result.tile) };
+  return result;
+}
+
 /** The F00 verbs, in append order. */
 export function dashboardActions(h: DashboardActionHelpers): readonly ActionDef[] {
   const { ctxAction, ctxSchema, STR } = h;
@@ -55,16 +74,16 @@ export function dashboardActions(h: DashboardActionHelpers): readonly ActionDef[
     ctxAction(
       'dashboard_overview',
       'read',
-      `Die Übersicht (dashboard): one KPI tile wall for a date range, composed live from the read models the product already computes and never cached (pure read, F00 posts nothing and owns no tables). Core tiles: ${DASHBOARD_TILES.join(' | ')}, each an integer-Rappen (or basis-point) figure that equals its source verb's answer for the same filter: revenue from income_statement (the Nettoerlöse section, with a previous-window trendBp), cash from the A19 bank accounts' Kontoblatt closing balances (general_ledger), AR from aging_report, AP from list_vendor_bills, utilisation as the billable share of time_list minutes (B01 has no capacity model), margin from costing_pl_list, MWST due verbatim from vat_return for the settlement period containing the range end, stock value from stock_valuation_report under the books' method. Every tile embeds a drill descriptor (studioRoute, mcpTool, params) naming the EXISTING source tool behind the number: call that tool for the rows. Tiles the caller's A24 role may not see are omitted server-side into omitted[] (per-tile gates: read_books, read_sales, read_vat, read_master_data, time.read, costing.read); an unconfigured or unused module degrades its one tile to ok:false with the source's own code (needs_vat_config, needs_chart, needs_projects, needs_stock_items) while the rest still render; an empty workspace answers ok:true zero states, never an error. from > to answers invalid_range. savedViewId applies a G00 saved view (entityKind 'workspace', layout 'dashboard') to restrict and order tiles; an unresolvable view falls back to the full default with viewFallback:true and can never widen access.`,
+      `Die Übersicht (dashboard): one KPI tile wall for a date range, composed live from the read models the product already computes and never cached (pure read, F00 posts nothing and owns no tables). Core tiles: ${DASHBOARD_TILES.join(' | ')}, each an integer-Rappen (or basis-point) figure that equals its source verb's answer for the same filter: revenue from income_statement (the Nettoerlöse section, with a previous-window trendBp), cash from the A19 bank accounts' Kontoblatt closing balances (general_ledger), AR from aging_report, AP from list_vendor_bills, utilisation as the billable share of time_list minutes (B01 has no capacity model), margin from costing_pl_list, MWST due verbatim from vat_return for the settlement period containing the range end, stock value from stock_valuation_report under the books' method. bank_inbox is the Bankeingang band (current, not ranged): the open bank lines, those that need you, the sure proposals and the lines booked to accounts without a Beleg, each by list_bank_inbox's own per-line definitions, per Bankkonto with money in and out, plus the last statement fetch, a fetch running now, the daily automatic fetch (autoMode, nextAutoSyncAt, lastAutoOutcome) and autoAvailable (false when this process runs no scheduler, e.g. till serve). Every tile embeds a drill descriptor (studioRoute, mcpTool, params) naming the EXISTING source tool behind the number: call that tool for the rows. Tiles the caller's A24 role may not see are omitted server-side into omitted[] (per-tile gates: read_books, read_sales, read_vat, read_master_data, time.read, costing.read); an unconfigured or unused module degrades its one tile to ok:false with the source's own code (needs_vat_config, needs_chart, needs_projects, needs_stock_items) while the rest still render; an empty workspace answers ok:true zero states, never an error. from > to answers invalid_range. savedViewId applies a G00 saved view (entityKind 'workspace', layout 'dashboard') to restrict and order tiles; an unresolvable view falls back to the full default with viewFallback:true and can never widen access.`,
       ctxSchema({ from: STR, to: STR, savedViewId: STR }, ['from', 'to']),
-      (ctx, input) => dashboardOverview(ctx, as(input)),
+      (ctx, input) => withProcessFacts(dashboardOverview(ctx, as(input))),
     ),
     ctxAction(
       'dashboard_tile',
       'read',
       `Eine Kachel der Übersicht in voller Tiefe: the same figure dashboard_overview shows for '${DASHBOARD_TILES.join("' | '")}', plus its detail block (the aging buckets behind the Debitoren figure, the top and bottom projects behind the Marge, the MWST settlement period and filed flag, the per-bank-account closing balances) and the drill descriptor naming the source tool that owns the rows. The value is the source verb's own answer, recomputed on every call; F00 fabricates nothing. An unknown tile id answers unknown_tile naming the valid set; a tile the caller's A24 role may not see answers permission_denied outright (the same per-tile gate the overview applies as an omission); an unavailable module answers the tile with ok:false and the source's own structured code.`,
       ctxSchema({ tile: STR, from: STR, to: STR }, ['tile', 'from', 'to']),
-      (ctx, input) => dashboardTile(ctx, as(input)),
+      (ctx, input) => withProcessFacts(dashboardTile(ctx, as(input))),
     ),
   ];
 }

@@ -107,6 +107,11 @@ export interface EntryLine {
   taxCode?: string | null;
   taxBase?: number | null;
   taxAmount?: number | null;
+  /**
+   * The Leistungsdatum the line's VAT was priced at (`get_entry`, C10), or null when it is the entry
+   * date. Optional on this TYPE only for a client-composed row.
+   */
+  supplyDate?: string | null;
 }
 
 /** A chart-of-accounts row for the per-line account picker (`list_accounts`). */
@@ -114,7 +119,17 @@ export interface Account {
   id: string;
   number: string;
   name: string;
+  /**
+   * asset | liability | equity | income | expense (`list_accounts`). The A1 composer offers MWST on an
+   * Erfolgskonto (income, expense) and on any account carrying a `vatCodeDefault`.
+   */
+  type?: string;
+  /** The code the account brings into the composer's MWST control (A01 `vat_code_default`). */
+  vatCodeDefault?: string | null;
+  /** Whether a cost centre may ride this account (A01 `cost_center_allowed`). */
+  costCenterAllowed?: boolean;
 }
+
 
 /** A tax code for the per-line tax picker (`vat_codes`), the full engine `listTaxCodes` row. */
 export interface TaxCode {

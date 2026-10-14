@@ -356,6 +356,7 @@
 
 .att-decide-reason,
 .att-decide-consequence,
+.att-decide-figures,
 .att-decide-hint {
   margin: 0;
   font-size: var(--t-font-sm);

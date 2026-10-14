@@ -14,9 +14,8 @@
       "byCustomer": "Nach Kunde"
     },
     "asOf": "Stand",
-    "showAll": "Alle anzeigen",
     "noDate": "kein Datum",
-    "noDueDate": "kein Fälligkeitsdatum",
+    "noDueDate": "kein Datum",
     "noOverdue": "nicht überfällig",
     "noCustomer": "Ohne Kunde",
     "filter": {
@@ -58,17 +57,16 @@
     "bucket": {
       "upTo": "0 bis {days} Tage",
       "between": "{from} bis {to} Tage",
-      "beyond": "Über {days} Tage",
-      "count": "{n} Posten"
+      "beyond": "Über {days} Tage"
     },
     "tiles": {
       "label": "Aufteilung nach Fälligkeit",
-      "heading": "Nach Fälligkeit",
       "help": {
         "label": "Hilfe zur Aufteilung nach Fälligkeit",
         "title": "Was die Aufteilung zeigt",
         "body": "Die Aufteilung zeigt, wie lange ein Betrag schon offen ist. Sie ist eine Darstellung und keine Frist: sie ändert weder die Summe noch die Übereinstimmung mit 1100."
-      }
+      },
+      "chip": "{bucket} · {amount}"
     },
     "editBoundaries": "Aufteilung nach Fälligkeit anpassen",
     "boundaries": {
@@ -95,10 +93,12 @@
       "action": "Auf heute"
     },
     "mismatch": {
+      "short": "Abweichung zum Hauptbuch: {difference}",
       "title": "Die offenen Posten und Konto 1100 unterscheiden sich um {difference}.",
       "body": "Die Liste zeigt {list}, das Konto {ledger}.",
       "action": "Journal öffnen",
       "disclosure": "Was jetzt?",
+      "info": "Was die Abweichung bedeutet",
       "cause": {
         "direct": "Eine Buchung direkt auf 1100, die zu keiner Rechnung und zu keiner Zahlung gehört.",
         "document": "Eine Rechnung auf 1100, deren Beleg nach dem Buchen verändert wurde.",

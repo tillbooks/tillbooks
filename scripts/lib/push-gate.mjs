@@ -184,3 +184,83 @@ export function satisfiedByCache(lane, kinds) {
   const full = kinds.has('gate') && kinds.has('web');
   return lane === 'full' ? full : full || kinds.has('fast');
 }
+
+// ---- The background verdict and how it is reported. ----------------------------------------------
+// A background run that could not provide its dependencies, or whose dependencies vanished while it
+// ran, tested nothing: it is `untested` (shown as "not tested (environment)"), never `red`, and never
+// moves `refs/till/develop-green` (30.09.2026: a docs-only commit was recorded RED on
+// `sh: tsc: command not found`).
+
+export const UNTESTED_LABEL = 'not tested (environment)';
+
+/**
+ * Critic LD-1: a dependency failure whose cause is the COMMIT (its own lockfile cannot be installed,
+ * `provideDeps`'s `cause: 'commit'`) is red: the commit broke its own install, and a fresh checkout of
+ * it fails the same way on any machine.
+ * @param {{ depsOk: boolean, gateOk: boolean, depsIntactAfter?: boolean, depsCause?: 'commit' | 'environment' }} run
+ * @returns {{ state: 'green' | 'red' | 'untested', moveGreen: boolean }}
+ */
+export function backgroundVerdict({ depsOk, gateOk, depsIntactAfter = true, depsCause = 'environment' }) {
+  if (!depsOk) return { state: depsCause === 'commit' ? 'red' : 'untested', moveGreen: false };
+  if (gateOk) return { state: 'green', moveGreen: true };
+  if (!depsIntactAfter) return { state: 'untested', moveGreen: false };
+  return { state: 'red', moveGreen: false };
+}
+
+/** @param {string | undefined} state */
+export function stateLabel(state) {
+  if (state === undefined) return 'none yet';
+  if (state === 'untested') return UNTESTED_LABEL;
+  if (state === 'red') return 'RED';
+  return state;
+}
+
+/**
+ * @typedef {{ state?: string, sha?: string, subject?: string, log?: string, at?: string, reason?: string,
+ *   verdict?: Verdict }} GateStatus
+ * @typedef {{ state: string, sha?: string, subject?: string, at?: string, log?: string }} Verdict
+ */
+
+/**
+ * The last TESTED verdict (green or red) a status knows of, carried through later `running`,
+ * `untested` and `skipped` statuses so an environment failure never hides a red develop.
+ * @param {GateStatus} status @returns {Verdict | undefined}
+ */
+export function lastVerdict(status) {
+  if (status.state === 'red' || status.state === 'green') {
+    return { state: status.state, sha: status.sha, subject: status.subject, at: status.at, log: status.log };
+  }
+  return status.verdict;
+}
+
+/**
+ * What a push prints about the last background run. Empty when there is nothing to say.
+ * @param {GateStatus} status @returns {string[]}
+ */
+export function pushWarnings(status) {
+  /** @type {string[]} */
+  const lines = [];
+  if (status.state === 'red') {
+    lines.push(`pre-push: WARNING develop is RED since ${status.at}: ${status.subject}`);
+    lines.push(`pre-push:         fix forward first. Log: ${status.log}`);
+    return lines;
+  }
+  if (status.state === 'untested') {
+    lines.push(`pre-push: WARNING develop is ${UNTESTED_LABEL} since ${status.at}: ${status.subject}`);
+    lines.push(`pre-push:         the background gate could not run: ${status.reason ?? 'unknown'}. Log: ${status.log}`);
+    lines.push('pre-push:         nothing was tested; run `npm run gate` on develop to get a verdict.');
+  } else if (status.state === 'running') {
+    lines.push(`pre-push: a background full gate is running for ${status.subject}`);
+  }
+  const verdict = status.verdict;
+  if (verdict?.state === 'red') {
+    if (lines.length > 0) {
+      lines.push(`pre-push:         the last tested verdict is RED: ${verdict.subject}. Fix forward. Log: ${verdict.log}`);
+    } else {
+      // Critic LD-2: any other state (`skipped`, a push that never landed) still carries a red verdict.
+      lines.push(`pre-push: WARNING the last tested verdict for develop is RED: ${verdict.subject}`);
+      lines.push(`pre-push:         fix forward first. Log: ${verdict.log}`);
+    }
+  }
+  return lines;
+}

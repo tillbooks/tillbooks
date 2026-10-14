@@ -662,7 +662,7 @@ export function writeMailDraft(ctx: WorkspaceContext, input: DraftWriteInput): R
         input.draftRunId ?? null,
         inReplyTo,
         storeRef,
-        bodySha256(raw),
+        storedDraftSha256(adapter, account.store_path, storeRef, raw),
         now,
       );
     const row = ctx.store.db
@@ -681,7 +681,56 @@ export interface DraftReplaceInput {
   draftId: string;
   body: string;
   draftRunId?: string;
+  /** D161.2: replace a draft the person edited since TILL wrote it. Without it that is `draft_edited`. */
+  overwriteEdits?: boolean;
   idempotencyKey?: string;
+}
+
+/**
+ * The hash of a draft AS THE STORE HOLDS IT, read straight back after the write (D161.2). The edit
+ * check compares a later read with this, so it must hash what `readBody` returns, not what TILL handed
+ * the adapter: the mbox dialect trims trailing newlines on read, so the written string and the read
+ * one differ for a model answer that ends in a newline, and an untouched draft would read as edited.
+ * For Maildir and Apple Mail the read-back is the written message byte for byte.
+ */
+function storedDraftSha256(adapter: MailStoreAdapter, storePath: string, storeRef: string, raw: string): string {
+  return bodySha256(adapter.readBody(storePath, storeRef) ?? raw);
+}
+
+/**
+ * D161.2: has the person edited this TILL-written draft in their own mail client since TILL last wrote
+ * it? `mail_draft.body_sha256` is the hash of the message TILL wrote, as the store holds it (at
+ * generation, and again at every replace, `storedDraftSha256`), so any change to the stored message, a
+ * single character included, reads as an edit.
+ * `undefined` when the draft is gone (sent or deleted).
+ */
+export function draftEditedSinceWritten(adapter: MailStoreAdapter, storePath: string, draft: { store_ref: string; body_sha256: string }): boolean | undefined {
+  const current = adapter.readBody(storePath, draft.store_ref);
+  if (current === undefined) return undefined;
+  return !sameModuloTrimmedNewlines(current, draft.body_sha256);
+}
+
+/**
+ * The most trailing newlines a draft written before the read-back hash can have lost to the store.
+ * A model answer ends in one or two; the bound only limits the hashes tried, and a draft that differs
+ * anywhere else, or by more newlines than this, still reads as edited.
+ */
+const MAX_TRIMMED_NEWLINES = 4;
+
+/**
+ * Does the stored message `current` match `storedSha` once trailing newlines are normalised (critic nit
+ * on D161.2)? A draft written since `storedDraftSha256` is hashed as the store holds it, so it matches
+ * `current` exactly. A draft written BEFORE it was hashed as handed to the adapter, and the mbox read
+ * trims trailing newlines, so an untouched one would read as edited: it matches `current` with the
+ * trimmed newlines put back. Only trailing newlines are forgiven, never a changed character.
+ */
+function sameModuloTrimmedNewlines(current: string, storedSha: string): boolean {
+  let candidate = current;
+  for (let i = 0; i <= MAX_TRIMMED_NEWLINES; i += 1) {
+    if (bodySha256(candidate) === storedSha) return true;
+    candidate = `${candidate}\n`;
+  }
+  return false;
 }
 
 /**
@@ -709,10 +758,20 @@ export function replaceMailDraft(ctx: WorkspaceContext, input: DraftReplaceInput
   if (account === undefined) return err('not_found', { accountId: draft.account_id });
   const adapter = adapterOf(account);
 
+  if (input.overwriteEdits !== undefined && typeof input.overwriteEdits !== 'boolean') {
+    return err('invalid_input', { field: 'overwriteEdits' });
+  }
+
   const run = (): Result => {
     // The store is the authority: a draft the user already sent or deleted is gone, not re-minted.
-    if (adapter.readBody(account.store_path, draft.store_ref) === undefined) {
+    const edited = draftEditedSinceWritten(adapter, account.store_path, draft);
+    if (edited === undefined) {
       return err('draft_gone', { draftId: draft.id });
+    }
+    // D161.2: a person's unsent edits are theirs. A draft that changed since TILL wrote it is replaced
+    // only on the explicit `overwriteEdits: true`.
+    if (edited && input.overwriteEdits !== true) {
+      return err('draft_edited', { draftId: draft.id });
     }
     const newestInbound = ctx.store.db
       .prepare(
@@ -751,7 +810,7 @@ export function replaceMailDraft(ctx: WorkspaceContext, input: DraftReplaceInput
         `UPDATE mail_draft SET store_ref = ?, body_sha256 = ?, draft_run_id = COALESCE(?, draft_run_id)
           WHERE workspace_id = ? AND id = ?`,
       )
-      .run(storeRef, bodySha256(raw), input.draftRunId ?? null, ctx.workspaceId, draft.id);
+      .run(storeRef, storedDraftSha256(adapter, account.store_path, storeRef, raw), input.draftRunId ?? null, ctx.workspaceId, draft.id);
     const row = ctx.store.db
       .prepare('SELECT * FROM mail_draft WHERE workspace_id = ? AND id = ?')
       .get(ctx.workspaceId, draft.id) as MailDraftRow;

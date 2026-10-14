@@ -23,7 +23,7 @@ import type { WorkspaceContext } from '../context.js';
 import type { SqliteStore } from '../store/sqlite-store.js';
 import type { Clock } from '../clock.js';
 import type { IdGen } from '../ids.js';
-import { requireString, optionalId, optionalText } from '../ledger/inputGuards.js';
+import { requireString, optionalText } from '../ledger/inputGuards.js';
 import type { Capability } from './capabilities.js';
 import { CAPABILITY_IDS, OWNER_ROLE } from './capabilities.js';
 import { isMemberKind, MEMBER_KINDS, seatingOrder, SERVED_STRANGER_ACTOR, servedMemberActor } from './actors.js';
@@ -361,7 +361,8 @@ export function inviteMember(ctx: WorkspaceContext, input: InviteMemberInput): R
     requireString(input.email, 'email') ??
     requireString(input.role, 'role') ??
     optionalText(input.displayName, 'displayName') ??
-    optionalId(input.idempotencyKey, 'idempotencyKey');
+    // D156 critic F1: the schema requires the key, so the engine does too.
+    requireString(input.idempotencyKey, 'idempotencyKey');
   if (guard) return guard;
 
   const email = (input.email as string).trim().toLowerCase();

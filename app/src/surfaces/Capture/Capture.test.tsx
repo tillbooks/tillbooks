@@ -132,6 +132,32 @@ describe('the Belegeingang queue', () => {
     expect(screen.queryByText('108100')).not.toBeInTheDocument();
   });
 
+  it('DISCARDED (owner decision 01.10.2026): a correction a different bill reset shows as history with its reason; other history does not', async () => {
+    const detail = ok({
+      documentId: 'file_9',
+      capture: { id: 'cap1', status: 'needs_review', qrPresent: false, swicoPresent: false, createdAt: '2026-03-01T09:00:00.000Z', targetKind: null, targetId: null },
+      fields: [
+        { id: 'f_live', key: 'amount', value: { minor: 200000, currency: 'CHF' }, provenance: 'operator', confidence: 'high', superseded: false, qrPayloadId: 'capq_2', supersededReason: null },
+        { id: 'f_old', key: 'amount', value: { minor: 432100, currency: 'CHF' }, provenance: 'operator', confidence: 'high', superseded: true, qrPayloadId: 'capq_1', supersededReason: null },
+        { id: 'f_fix', key: 'amount', value: { minor: 98000, currency: 'CHF' }, provenance: 'operator', confidence: 'high', superseded: true, qrPayloadId: null, supersededReason: 'discarded_with_bill' },
+      ],
+    });
+    renderCapture({ list_captures: QUEUE_ONE, get_capture: detail }, { route: '/capture-inbox?capture=cap1' });
+    const section = await screen.findByRole('region', { name: 'Korrektur zur vorherigen Rechnung verworfen' });
+    expect(section).toHaveTextContent('Diese Werte hattest du für eine andere Rechnung erfasst. Jetzt gilt die gelesene Rechnung. Prüfe sie, bevor du übernimmst. Kehrst du zu einer früheren Rechnung zurück, erfasse deine Korrekturen dort neu.');
+    expect(section).toHaveTextContent(/980\.00/);
+    // The other bill's superseded row is ordinary history, not a discarded correction.
+    expect(section).not.toHaveTextContent(/4['’]?321\.00/);
+    // The live proposal still shows the new bill's amount.
+    expect(screen.getByText(/2['’]?000\.00/)).toBeInTheDocument();
+  });
+
+  it('DISCARDED: no section when nothing was discarded', async () => {
+    renderCapture({ list_captures: QUEUE_ONE, get_capture: DETAIL_WITH_FIELDS }, { route: '/capture-inbox?capture=cap1' });
+    expect(await screen.findByText('Lieferant')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Korrektur zur vorherigen Rechnung verworfen' })).not.toBeInTheDocument();
+  });
+
   it('EMPTY EXTRACTION: an honest first-class state, naming the QR-less reason', async () => {
     renderCapture({ list_captures: QUEUE_ONE, get_capture: DETAIL_EMPTY }, { route: '/capture-inbox?capture=cap1' });
     expect(await screen.findByText('Keine Felder erkannt.')).toBeInTheDocument();
@@ -180,6 +206,40 @@ describe('the Belegeingang queue', () => {
     const target = calls[0]?.input.target as Record<string, unknown>;
     expect(target).toMatchObject({ kind: 'vendor_bill', vendorId: 'c_roest', expenseAccountId: ACC_4200.id, taxCode: 'VST-M' });
     expect(calls[1]?.input).toMatchObject({ vendorBillId: 'vb_1' });
+  });
+
+  it('COMMIT (G04/A31 critic R1-H2): a currency_conflict refusal reads its own sentence through refusalText, and nothing posts', async () => {
+    const seen: string[] = [];
+    renderCapture(
+      {
+        list_captures: QUEUE_ONE,
+        get_capture: DETAIL_WITH_FIELDS,
+        ...PICKER_READS,
+        list_vendor_bills: ok({ bills: [] }),
+        // The engine's shape (`core/purchase/capture.ts` `commitCurrency`): the amount says one
+        // currency, the read currency field another, and neither silently wins.
+        capture_commit: () => ({
+          status: 409,
+          body: { ok: false, error: 'currency_conflict', captureId: 'cap1', amountCurrency: 'CHF', currency: 'EUR' },
+        }),
+        post_vendor_bill: () => ok({ vendorBillId: 'vb_1', status: 'posted', entryId: 'je_1' }),
+      },
+      { route: '/capture-inbox?capture=cap1', seen },
+    );
+    const commit = await screen.findByRole('button', { name: 'Übernehmen und buchen' });
+    await userEvent.type(screen.getByRole('combobox', { name: 'Lieferant zuordnen' }), 'Röst');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.type(screen.getByRole('combobox', { name: 'Aufwandskonto' }), '4200');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.click(screen.getByLabelText('Vorsteuer'));
+    await userEvent.click(await screen.findByRole('option', { name: /^VST-M/ }));
+    await waitFor(() => expect(commit).toBeEnabled());
+    await userEvent.click(commit);
+    expect(
+      await screen.findByText('Betrag und Währung dieses Belegs widersprechen sich. Korrigiere den Betrag oder die Währung, bevor du übernimmst.'),
+    ).toBeInTheDocument();
+    expect(seen).toContain('capture_commit');
+    expect(seen).not.toContain('post_vendor_bill');
   });
 
   it('COMMIT (F-03, J3.1): the account defaults from the matched vendor\'s last bill, and a double press replays the same keys', async () => {
@@ -481,5 +541,145 @@ describe('the Belegeingang queue', () => {
     await userEvent.upload(input, new File(['%PDF-1.4'], 'beleg.pdf', { type: 'application/pdf' }));
     await waitFor(() => expect(seen).toContain('capture_document'));
     expect(await screen.findByText('Diese Datei ist bereits im Belegeingang.')).toBeInTheDocument();
+  });
+});
+
+// --- A31 §0a: reading the bill's QR code in ------------------------------------------------------
+
+/** A payload as a phone scanner hands it over. Its content is the engine's to judge; here it is text. */
+const PASTED = 'SPC\n0200\n1\nCH4431999123000889012';
+
+const DETAIL_AFTER_READ = ok({
+  documentId: 'file_2',
+  capture: { id: 'cap1', status: 'needs_review', qrPresent: false, swicoPresent: false, createdAt: '2026-03-01T09:00:00.000Z', targetKind: null, targetId: null },
+  fields: [
+    { id: 'f1', key: 'vendor_name', value: 'Beispiel Werkstatt AG', provenance: 'operator', confidence: 'high', superseded: false, qrPayloadId: 'capq_1' },
+    { id: 'f2', key: 'vendor_address', value: { street: 'Talweg', buildingNumber: '7', postalCode: '3000', town: 'Bern', country: 'CH' }, provenance: 'operator', confidence: 'high', superseded: false, qrPayloadId: 'capq_1' },
+    { id: 'f3', key: 'amount', value: { minor: 21540, currency: 'CHF' }, provenance: 'operator', confidence: 'high', superseded: false, qrPayloadId: null },
+  ],
+  qrPayloads: [{ id: 'capq_1', source: 'operator', decoder: 'pasted', fieldIds: ['f1', 'f2'] }],
+});
+
+describe('reading the QR code in (A31 §0a)', () => {
+  it('READ IN: a pasted payload goes to capture_extract as the operator, and decoded fields say they came from the QR code', async () => {
+    const calls: Record<string, unknown>[] = [];
+    let read = false;
+    renderCapture(
+      {
+        list_captures: QUEUE_ONE,
+        get_capture: () => (read ? DETAIL_AFTER_READ : DETAIL_EMPTY),
+        ...PICKER_READS,
+        list_vendor_bills: ok({ bills: [] }),
+        capture_extract: (input) => {
+          calls.push(input);
+          read = true;
+          return ok({ captureId: 'cap1', fields: [], qrPayload: { id: 'capq_1', warnings: [] } });
+        },
+      },
+      { route: '/capture-inbox?capture=cap1' },
+    );
+    // Nothing to review yet, so the QR panel is open and its field is empty.
+    const box = await screen.findByLabelText('Inhalt des QR-Codes');
+    expect(box).toHaveValue('');
+    const readIn = screen.getByRole('button', { name: 'Einlesen' });
+    expect(readIn).toBeDisabled();
+    await userEvent.click(box);
+    await userEvent.paste(PASTED);
+    await userEvent.click(readIn);
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toMatchObject({ captureId: 'cap1', source: 'operator', qrPayload: PASTED, decoder: 'pasted' });
+    expect(await screen.findByText('Eingelesen. Bei jedem Feld steht, woher der Wert kommt.')).toBeInTheDocument();
+    // The decoded rows carry the channel beside the provenance; the typed amount does not.
+    expect(await screen.findAllByText('Manuell · aus dem QR-Code')).toHaveLength(2);
+    expect(screen.getByText('Manuell')).toBeInTheDocument();
+    expect(screen.getByText('Talweg 7, 3000 Bern, CH')).toBeInTheDocument();
+    expect(screen.getByText('Adresse Lieferant')).toBeInTheDocument();
+  });
+
+  it('INVALID: every issue the decoder named is listed in de-CH with its line, and nothing is claimed as read', async () => {
+    renderCapture(
+      {
+        list_captures: QUEUE_ONE,
+        get_capture: DETAIL_EMPTY,
+        ...PICKER_READS,
+        capture_extract: {
+          status: 422,
+          body: {
+            ok: false,
+            error: 'qr_payload_invalid',
+            errors: [
+              { code: 'qrr_check_digit', element: 'RmtInf.Ref', line: 29, message: 'x' },
+              { code: 'separator', element: 'payload', line: null, message: 'y' },
+            ],
+            warnings: [],
+          },
+        },
+      },
+      { route: '/capture-inbox?capture=cap1' },
+    );
+    const box = await screen.findByLabelText('Inhalt des QR-Codes');
+    await userEvent.click(box);
+    await userEvent.paste(PASTED);
+    await userEvent.click(screen.getByRole('button', { name: 'Einlesen' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Dieser QR-Code hält die Regeln der QR-Rechnung nicht ein, darum wurde kein Feld ausgefüllt:');
+    expect(alert).toHaveTextContent('Zeile 29: Die Prüfziffer der QR-Referenz stimmt nicht.');
+    expect(alert).toHaveTextContent('Die Zeilenumbrüche sind gemischt');
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    expect(box).toHaveValue(PASTED);
+    expect(screen.queryByText(/Eingelesen/)).toBeNull();
+  });
+
+  it('IMAGE: where the browser reads barcodes, a dropped photo pre-fills the field and the read-in names the reader', async () => {
+    const scope = globalThis as Record<string, unknown>;
+    const saved = { BarcodeDetector: scope.BarcodeDetector, createImageBitmap: scope.createImageBitmap };
+    scope.BarcodeDetector = class {
+      async detect() {
+        return [{ rawValue: 'https://example.invalid' }, { rawValue: PASTED }];
+      }
+    };
+    scope.createImageBitmap = async () => ({ close: () => undefined });
+    try {
+      const calls: Record<string, unknown>[] = [];
+      renderCapture({
+        list_captures: QUEUE_ONE,
+        get_capture: DETAIL_EMPTY,
+        ...PICKER_READS,
+        capture_document: ok({ captureId: 'cap1', duplicate: false }),
+        capture_extract: (input) => {
+          calls.push(input);
+          return ok({ captureId: 'cap1', fields: [], qrPayload: { id: 'capq_1', warnings: [] } });
+        },
+      });
+      await userEvent.upload(await screen.findByLabelText('Beleg wählen'), new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'rechnung.png', { type: 'image/png' }));
+      expect(await screen.findByText('Im Bild steht ein QR-Code. Prüf den Text und lies ihn dann ein.')).toBeInTheDocument();
+      expect(screen.getByLabelText('Inhalt des QR-Codes')).toHaveValue(PASTED);
+      // Found, not written: nothing reached the engine until the person reads it in.
+      expect(calls).toHaveLength(0);
+      await userEvent.click(screen.getByRole('button', { name: 'Einlesen' }));
+      await waitFor(() => expect(calls).toHaveLength(1));
+      expect(calls[0]).toMatchObject({ source: 'operator', qrPayload: PASTED, decoder: 'studio-barcode-detector' });
+    } finally {
+      scope.BarcodeDetector = saved.BarcodeDetector;
+      scope.createImageBitmap = saved.createImageBitmap;
+    }
+  });
+
+  it('WITHOUT a barcode reader in the browser, an image drop pre-fills nothing', async () => {
+    renderCapture({
+      list_captures: QUEUE_ONE,
+      get_capture: DETAIL_EMPTY,
+      ...PICKER_READS,
+      capture_document: ok({ captureId: 'cap1', duplicate: false }),
+    });
+    await userEvent.upload(await screen.findByLabelText('Beleg wählen'), new File([new Uint8Array([1, 2, 3])], 'rechnung.png', { type: 'image/png' }));
+    expect(await screen.findByLabelText('Inhalt des QR-Codes')).toHaveValue('');
+    expect(screen.queryByText(/Im Bild steht ein QR-Code/)).toBeNull();
+  });
+
+  it('PERMISSION: without the file right the QR panel is not offered', async () => {
+    renderCapture({ list_captures: QUEUE_ONE, get_capture: DETAIL_EMPTY, ...PICKER_READS }, { route: '/capture-inbox?capture=cap1', held: [CAP.post] });
+    await screen.findByText('Keine Felder erkannt.');
+    expect(screen.queryByLabelText('Inhalt des QR-Codes')).toBeNull();
   });
 });

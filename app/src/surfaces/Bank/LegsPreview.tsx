@@ -2,10 +2,16 @@
  * "So wird gebucht": the Soll/Haben lines a decision posts, shown BEFORE anything posts (a MUST-SURVIVE
  * of the bank-process judge: the Buchungsvorschau). Account number and name, Soll and Haben as words
  * in the head, money right-aligned and tabular. The same table shows an existing entry that a match
- * leaves untouched, and a booked line's entry.
+ * leaves untouched.
+ *
+ * In B2 (the owner's pick of 01.10.2026) the MUST-SURVIVE is met in three places: the account, the
+ * amount and the MWST code in the row, the VAT split in the context strip (read off the same
+ * `compose_entry` answer, `bankCompose.ts`), and this full table inside the split editor and the link
+ * chooser. For a booking to accounts the rows are the engine's lines verbatim, the lines `book_bank_line`
+ * posts; for a match they are the stored entry's.
  */
 import { useT, formatMoney } from '../../i18n';
-import type { PreviewLine } from './model';
+import type { PreviewLine } from './bankCompose';
 import type { Lookups } from './lookups';
 import { accountLabel } from './lookups';
 

@@ -30,11 +30,12 @@ import {
   inventoryEnsureDefaultLocation,
   inventoryBalanceByLocation,
 } from '../core/inventory/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface InventoryActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -75,7 +76,7 @@ export function inventoryActions(h: InventoryActionHelpers): readonly ActionDef[
   return [
     ctxAction(
       'warehouse_create',
-      'write',
+      'write:correctable:internal',
       'Create a warehouse (a physical or logical site stock lives at). code is 1-20 chars, unique per workspace case-insensitively (duplicate_code); an empty or over-long code is invalid_code. The FIRST warehouse a workspace creates becomes the workspace default; pass isDefault to force it, which demotes the previous default. Plain master data: posts no journal entry.',
       ctxSchema(
         {
@@ -96,21 +97,21 @@ export function inventoryActions(h: InventoryActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'warehouse_update',
-      'write',
+      'write:reversible:internal',
       'Edit a warehouse through a patch object (name, description, address fields, countryCode). code and the default flag are not changed here (use warehouse_set_default for the default). Only the fields present in patch change.',
       ctxSchema({ warehouseId: STR, patch: WAREHOUSE_PATCH, idempotencyKey: STR }, ['warehouseId', 'idempotencyKey']),
       (ctx, input) => warehouseUpdate(ctx, as(input)),
     ),
     ctxAction(
       'warehouse_set_default',
-      'write',
+      'write:reversible:internal',
       'Make this warehouse the workspace default, demoting the previous default in the same transaction (exactly one default per workspace). An archived warehouse is refused with warehouse_archived. Omitted-location callers resolve to the default warehouse.',
       ctxSchema({ warehouseId: STR, idempotencyKey: STR }, ['warehouseId', 'idempotencyKey']),
       (ctx, input) => warehouseSetDefault(ctx, as(input)),
     ),
     ctxAction(
       'warehouse_archive',
-      'write',
+      'write:correctable:internal',
       'Soft-archive a warehouse (active=false). Refused with cannot_archive_default while it is the workspace default; refused with location_has_stock or location_in_use when any location under it still holds stock or is referenced by an open stocktake. On success its empty locations are archived too. Deletion is never offered.',
       ctxSchema({ warehouseId: STR, idempotencyKey: STR }, ['warehouseId', 'idempotencyKey']),
       (ctx, input) => warehouseArchive(ctx, as(input)),
@@ -131,7 +132,7 @@ export function inventoryActions(h: InventoryActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'location_create',
-      'write',
+      'write:correctable:internal',
       'Create a location under a warehouse. code is 1-30 chars, unique within the warehouse case-insensitively (duplicate_code). parentId nests it (null = root under the warehouse); the parent must belong to the SAME warehouse (parent_warehouse_mismatch) and the depth is capped at 8 (max_depth_exceeded). locationType is one of zone|aisle|shelf|bin|staging|other (invalid_location_type). The FIRST location in a warehouse becomes its default; pass isDefaultForWarehouse to force it.',
       ctxSchema(
         {
@@ -150,21 +151,21 @@ export function inventoryActions(h: InventoryActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'location_update',
-      'write',
+      'write:reversible:internal',
       'Edit a location through a patch object (name, description, locationType, parentId). Re-parenting via parentId is allowed only within the same warehouse (parent_warehouse_mismatch) and never into the location itself or a descendant (location_cycle); the whole subtree moves and its materialised paths and depths are rewritten. Only the fields present in patch change.',
       ctxSchema({ locationId: STR, patch: LOCATION_PATCH, idempotencyKey: STR }, ['locationId', 'idempotencyKey']),
       (ctx, input) => locationUpdate(ctx, as(input)),
     ),
     ctxAction(
       'location_set_default',
-      'write',
+      'write:reversible:internal',
       'Make this location the default for its warehouse, demoting the previous default in the same transaction. An archived location is refused with location_archived.',
       ctxSchema({ locationId: STR, idempotencyKey: STR }, ['locationId', 'idempotencyKey']),
       (ctx, input) => locationSetDefault(ctx, as(input)),
     ),
     ctxAction(
       'location_archive',
-      'write',
+      'write:reversible:internal',
       'Soft-archive a location (and its empty descendants). Refused with location_has_stock when the location or any descendant still has non-zero on-hand, location_in_use when an open stocktake references it, or cannot_archive_default when it is a default. Deletion is never offered; historical movements keep their location_id.',
       ctxSchema({ locationId: STR, idempotencyKey: STR }, ['locationId', 'idempotencyKey']),
       (ctx, input) => locationArchive(ctx, as(input)),
@@ -194,7 +195,7 @@ export function inventoryActions(h: InventoryActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'inventory_ensure_default_location',
-      'write',
+      'write:correctable:internal',
       'Return the workspace default warehouse + location, creating the MAIN / DEFAULT pair if none exists yet. Idempotent and race-safe: concurrent calls produce exactly one pair. This is how a legacy D01 single-location workspace gains a default with no migration.',
       ctxSchema({}),
       (ctx) => inventoryEnsureDefaultLocation(ctx),

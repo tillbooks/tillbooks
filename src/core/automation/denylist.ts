@@ -234,11 +234,20 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // emergency stop, deliberate and rare human acts that assert a comparison against a paper letter only
   // a human holds. `bank_sync` joins them with A36 (D-A36.10, on demand only): a sync holds the whole
   // process while it waits on the synchronous EBICS wire (up to 60 s per request), so nothing starts one
-  // unattended. A37's managed sync rides the same verb and goes with it; the scheduled sync is parked.
+  // unattended. A37's managed sync rides the same verb and goes with it. D142 (28.09.2026) built the
+  // daily fetch as an explicit branch of the till up tick, NOT a rule, so `bank_sync` stays here; and
+  // `set_bank_sync_schedule` joins it (critic F4): it decides when the owner's statements are fetched
+  // and who the unattended fetch runs as, so no stored rule may switch an owner's `off` back to `daily`.
   'payment_batch_transmit',
   'bank_channel_connect',
   'bank_channel_disconnect',
   'bank_sync',
+  'set_bank_sync_schedule',
+  // A36 §4.7 (D150): "nothing is missing in this gap" is a person's statement about the bank, made at
+  // the button with a reason. A stored rule cannot know it, so neither the confirmation nor its
+  // withdrawal ever fires unattended.
+  'confirm_statement_gap',
+  'revoke_statement_gap_confirmation',
   // (d) outside the tenant
   'create_workspace',
   'bootstrap_workspace',
@@ -450,6 +459,8 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // workspace, it asserts nothing and destroys nothing.
   'go_productive',
   'discard_testmandant',
+  // The orphan exit is the same hard delete of a trial workspace: a human act behind a confirm.
+  'discard_orphan_testmandant',
   // G03 (spec §6b): the demo pair. `create_demo_workspace` is leg (d) verbatim (pre-workspace, no
   // `workspaceId`, so `evaluateAndFire`'s tenant overwrite binds nothing and a rule naming it would
   // mint tenants outside the workspace it lives in, the `create_workspace`/`onboard_client` shape).
@@ -571,6 +582,9 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   'book_bank_line',
   'reopen_bank_line',
   'ignore_bank_line',
+  // D144 (A39 §12): `suggest_bank_lines` consults the local decision model and records what it said.
+  // A model nobody asked is a model nobody watches: a person or an agent asks, a stored rule never does.
+  'suggest_bank_lines',
   // (c)+(e) A39 critic round 1 (A39-3/A39-4), ONE rule for unattended money movement: a stored rule never
   // DECIDES A BANK FACT. `create_entry_for_txn` and `confirm_match` are, since A39, wrappers that decide a
   // bank line exactly as `book_bank_line` does (probe p7: a rule booked every imported line as revenue
@@ -585,6 +599,8 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   'confirm_match',
   'record_incoming_credit',
   'import_camt',
+  // A36 §4.7 (D150): the multi-file hand repair is `import_camt` repeated, so it is denied with it.
+  'import_camt_files',
   'set_write_off_threshold',
   // (c)+(e) A39 critic round 2 (A39R2-5, OWNER DECISION 25.09.2026): a stored rule never moves a bank
   // ledger. The round-1 exemption of `record_payment` ("the author typed every figure") was false: G01
@@ -599,6 +615,184 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   'reverse_payment',
   'set_bank_opening_balance',
 ]);
+
+/**
+ * THE LEG TAGS, as data (D156 point 3, 10.10.2026). The criterion above was prose only, so nothing
+ * outside this file could ask "which of these cannot be undone". The agent approval dial now does:
+ * `test/agent/dial-covers-irreversible.test.mjs` holds every leg (a) and leg (f) verb either governed
+ * by the dial or excluded in writing (`NOT_DIAL_GOVERNED`, `src/core/agent/dialMap.ts`).
+ *
+ * Each tag restates the leg the block comment above already names for the entry. Where a block names
+ * no letter, the tag is the leg its own reasoning describes, and the line says so:
+ *  - `zero-egress` is not one of the six legs: it is the E04/E05/E06 cluster inversion ("fixed
+ *    unless provably leak-safe"), named as such above;
+ *  - G12/G03 discards and G13's purge hard-delete a workspace or archive data: leg (a);
+ *  - `go_productive`, "the least reversible act in the product": leg (a);
+ *  - `agent_prose_delete` erases the user's words with no way back: (a) beside its (e);
+ *  - `env_copy` replaces the target environment's data: (a) beside its siblings' (e);
+ *  - `migration_close_plan`, "the same class as commit/rollback/abandon": (b)+(c);
+ *  - `confirm_statement_gap` and its withdrawal, a person's statement about the bank: (c);
+ *  - `suggest_bank_lines` (D144) drives the local decision model unattended: (e).
+ * `test/automation/denylist-legs.test.mjs` holds the keys equal to `NOT_AUTOMATABLE`, so a verb
+ * added to the set without a tag fails there.
+ */
+export type DenylistLeg = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'zero-egress';
+
+export const DENYLIST_LEGS: readonly DenylistLeg[] = ['a', 'b', 'c', 'd', 'e', 'f', 'zero-egress'];
+
+export const NOT_AUTOMATABLE_LEGS: Readonly<Record<string, readonly DenylistLeg[]>> = {
+  // (a) irreversible
+  contacts_merge: ['a'],
+  contacts_anonymise: ['a'],
+  delete_account: ['a'],
+  delete_cost_center: ['a'],
+  delete_draft: ['a'],
+  delete_item: ['a'],
+  item_categories_delete: ['a'],
+  price_lists_delete: ['a'],
+  price_lists_unset_price: ['a'],
+  files_delete: ['a'],
+  sign_requests_delete_draft: ['a'],
+  time_delete: ['a'],
+  close_year: ['a'],
+  // (b) statutory acts a human owns
+  vat_mark_filed: ['b'],
+  vat_saldo_declaration_basis: ['b'],
+  unlock_period: ['b'],
+  approve_entry: ['b'],
+  // (c) who may act, and the money judgments (D77)
+  revoke_member: ['c'],
+  set_role: ['c'],
+  define_role: ['c'],
+  invite_member: ['c'],
+  apply_qr_match: ['c'],
+  override_qr_match: ['c'],
+  mark_batch_paid: ['c'],
+  payment_batch_transmit: ['c'],
+  bank_channel_connect: ['c'],
+  bank_channel_disconnect: ['c'],
+  bank_sync: ['c'],
+  set_bank_sync_schedule: ['c'],
+  confirm_statement_gap: ['c'],
+  revoke_statement_gap_confirmation: ['c'],
+  // (d) outside the tenant
+  create_workspace: ['d'],
+  bootstrap_workspace: ['d'],
+  onboard_client: ['d'],
+  accept_invite: ['d'],
+  restore_backup: ['d'],
+  portal_quote_accept: ['d'],
+  // (a)+(c) F03's vendor grant pair, as its block names them
+  vendor_portal_grant: ['a', 'c'],
+  vendor_portal_revoke: ['a', 'c'],
+  // (e) the unattended subsystems
+  create_automation_rule: ['e'],
+  update_automation_rule: ['e'],
+  enable_automation_rule: ['e'],
+  run_due_automations: ['e'],
+  retry_automation_run: ['e'],
+  create_recurring_schedule: ['e'],
+  update_recurring_schedule: ['e'],
+  run_due_recurring: ['e'],
+  retainer_run_due: ['e'],
+  set_qr_auto_apply: ['e'],
+  // the E04/E05/E06 zero-egress inversion (not one of the six legs)
+  mail_connect: ['zero-egress'],
+  mail_reindex: ['zero-egress'],
+  mail_draft_write: ['zero-egress'],
+  voice_build: ['zero-egress'],
+  runtime_select: ['zero-egress'],
+  draft_generate: ['zero-egress'],
+  draft_regenerate: ['zero-egress'],
+  // (f) alters a payment destination (D65)
+  set_creditor_profile: ['f'],
+  update_bank_account: ['f'],
+  set_creditor_bank_profile: ['f'],
+  // (b) period-end statutory valuations and postings
+  post_fx_revaluation: ['b'],
+  accrual_create: ['b'],
+  accrual_post: ['b'],
+  accrual_reverse: ['b'],
+  accrual_discard: ['b'],
+  provision_create: ['b'],
+  provision_post: ['b'],
+  provision_release: ['b'],
+  provision_reverse: ['b'],
+  provision_release_reverse: ['b'],
+  provision_discard: ['b'],
+  fx_revaluation_reverse: ['b'],
+  vat_settlement_post: ['b'],
+  vat_settlement_reverse: ['b'],
+  wage_journal_post: ['b'],
+  // (e) A26/A35's own oversight surface; the prose delete also erases for good (a)
+  set_agent_dial: ['e'],
+  approve_drafted_action: ['e'],
+  reject_drafted_action: ['e'],
+  agent_ask: ['e'],
+  agent_prose_delete: ['a', 'e'],
+  // (b)+(c) G09/G11/G18/G21 migration
+  migration_commit_step: ['b'],
+  migration_record_approval: ['c'],
+  migration_rollback_step: ['b', 'c'],
+  migration_abandon_plan: ['b', 'c'],
+  migration_close_plan: ['b', 'c'],
+  migration_declare_control_total: ['c'],
+  migration_waive_control: ['c'],
+  import_open_items: ['b'],
+  // G13: the import is the commit's side door (b)+(c); the purge destroys records (a)
+  gl_archive_import: ['b', 'c'],
+  gl_archive_purge: ['a'],
+  // G12/G03: the least reversible act, and the workspace hard deletes (a); the demo mint is (d)
+  go_productive: ['a'],
+  discard_testmandant: ['a'],
+  discard_orphan_testmandant: ['a'],
+  create_demo_workspace: ['d'],
+  discard_demo_workspace: ['a'],
+  project_delete: ['a'],
+  // (b) inventory and purchasing judgments
+  stock_run_valuation: ['b'],
+  stock_stocktake_commit: ['b'],
+  inventory_stocktake_commit: ['b'],
+  match_bill: ['b', 'c'],
+  goods_receipt_reverse: ['b'],
+  landed_cost_allocate_confirm: ['b'],
+  landed_cost_reverse: ['b'],
+  // (f)+(e) M02's two publish dials, as their block names them
+  sync_publish_enable: ['f', 'e'],
+  sync_publish_disable: ['f', 'e'],
+  // (b)+(a) G20, as its block names them
+  implementation_signoff_record: ['b', 'a'],
+  implementation_project_close: ['b', 'a'],
+  // (e) N00 the landscape; reset, delete and copy replace or remove a data root (a)
+  env_create: ['e'],
+  env_switch: ['e'],
+  env_reset: ['e', 'a'],
+  env_delete: ['e', 'a'],
+  env_copy: ['e', 'a'],
+  // (c) A39 the bank inbox; (e) the decision model nobody asked
+  book_bank_line: ['c'],
+  reopen_bank_line: ['c'],
+  ignore_bank_line: ['c'],
+  suggest_bank_lines: ['e'],
+  // (c)+(e) a stored rule never decides a bank fact or moves a bank ledger
+  create_entry_for_txn: ['c', 'e'],
+  confirm_match: ['c', 'e'],
+  record_incoming_credit: ['c', 'e'],
+  import_camt: ['c', 'e'],
+  import_camt_files: ['c', 'e'],
+  set_write_off_threshold: ['c', 'e'],
+  record_payment: ['c', 'e'],
+  allocate_payment: ['c', 'e'],
+  reverse_payment: ['c', 'e'],
+  set_bank_opening_balance: ['c', 'e'],
+};
+
+/** The denylisted verbs tagged with `leg`, in `NOT_AUTOMATABLE_LEGS` order. */
+export function denylistVerbsOnLeg(leg: DenylistLeg): string[] {
+  return Object.entries(NOT_AUTOMATABLE_LEGS)
+    .filter(([, legs]) => legs.includes(leg))
+    .map(([verb]) => verb);
+}
 
 /** Is `tool` a verb a rule may never name as its action? */
 export function isNotAutomatable(tool: unknown): boolean {

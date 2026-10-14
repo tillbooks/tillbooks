@@ -286,10 +286,11 @@ export async function startHttpServer(opts: ServeOptions = {}): Promise<ServeHan
 
   // D108: attach the private live bank wire when configured; otherwise EBICS steps degrade honestly.
   const { deps, store } = makeApiDeps(opts.dbPath, await resolveEbicsRuntime());
-  // The MCP face ONLY: the REST twins carry the dev-bridge REST actor (D25) and are not mounted on
-  // the production host. The MCP seat is the `session.ts` rule (an unrecognised client is `agent`),
-  // the same rule `till up` and the dev bridge consume, so no host seats a client differently. An `/api/...` request here therefore matches no face and 404s, which is
-  // the pre-existing behaviour and is asserted by the Host/Origin matrix.
+  // The MCP face ONLY: the REST twins are the Studio's own bridge (D25) and this host serves no
+  // Studio. The MCP seat is the `session.ts` rule, the same rule `till up` and the dev bridge consume,
+  // so no host seats a client differently. No Studio key is minted here, so EVERY local session is the
+  // governed `agent` seat whatever name it declares, and a request presenting any key is refused. An
+  // `/api/...` request matches no face and 404s, asserted by the Host/Origin matrix.
   //
   // M01: `servedMode` reaches the router (and through it the MCP face), so a served `till serve` behind
   // a reverse proxy requires and resolves the subject on every /mcp request.

@@ -33,6 +33,7 @@ import { createBankAccount, updateBankAccount } from '../banking/index.js';
 import { normalizeToken } from './locale/registry.js';
 import type { ParsedRow } from './adapters/parse.js';
 import type { DataClass } from './dataClasses.js';
+import { isPaymentTermsDays } from '../setup/paymentTerms.js';
 
 /** The five CRUD classes this module commits. `contacts` keeps its bespoke `contacts_import` path. */
 export const CRUD_COMMIT_CLASSES: readonly DataClass[] = [
@@ -311,17 +312,21 @@ function classifyOne(ctx: WorkspaceContext, dataClass: string, ref: string, n: R
     case 'payment_terms': {
       if ((n.contact ?? '') === '') return classified(ref, 'error', n, 'missing_contact');
       const days = Number(n.days);
-      if (!Number.isInteger(days) || days < 0) return classified(ref, 'error', n, 'invalid_days');
+      // The contact verb's own bound (0 to 365, critic M1): a row it would refuse is classified invalid
+      // here, never offered for commit.
+      if (!isPaymentTermsDays(days)) return classified(ref, 'error', n, 'invalid_days');
       const hit = db
         .prepare('SELECT id, payment_terms_days FROM contact WHERE workspace_id = ? AND name = ? AND merged_into_id IS NULL')
-        .get(ctx.workspaceId, n.contact) as { id: string; payment_terms_days: number } | undefined;
+        .get(ctx.workspaceId, n.contact) as { id: string; payment_terms_days: number | null } | undefined;
       // The target of a payment-terms row IS the contact: a missing one is an error the operator
       // fixes by importing contacts first, never a silent create of a half-known party.
       if (hit === undefined) return classified(ref, 'error', n, 'contact_not_found');
       // Match key: contact + days. Same days = nothing to do; a DIFFERENT explicit value already on
-      // the contact is a conflict (the operator chose it); the 0 default is overwritable.
+      // the contact is a conflict (the operator chose it); no terms of its own (NULL, D163) is
+      // overwritable. Since generation 10 a stored 0 is an explicit "due immediately", so it
+      // conflicts like any other chosen value; before it, 0 was also the create default.
       if (hit.payment_terms_days === days) return classified(ref, 'skip', n, undefined, hit.id);
-      if (hit.payment_terms_days !== 0) return classified(ref, 'conflict', n, 'payment_terms_differ', hit.id);
+      if (hit.payment_terms_days !== null) return classified(ref, 'conflict', n, 'payment_terms_differ', hit.id);
       return classified(ref, 'create', n, undefined, hit.id);
     }
     case 'bank_accounts': {

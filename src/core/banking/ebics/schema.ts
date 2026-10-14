@@ -52,6 +52,22 @@ CREATE TABLE IF NOT EXISTS ebics_connection (
   -- UNUSED since A36 (D-A36.10: on demand only, the cadence is parked). An older build may have
   -- stored a rule id; the unlink call clears it. Also in ADDITIVE_COLUMNS for an A33 book predating A36.
   sync_rule_id          TEXT,
+  -- D142: the sync lease. Set by one conditional UPDATE when a sync starts, cleared when it ends; a
+  -- second sync meanwhile is refused sync_in_progress. A stamp older than 15 minutes is a process that
+  -- died mid-sync. Also in ADDITIVE_COLUMNS for a book predating D142.
+  sync_started_at       TEXT,
+  -- D142, critic F2: WHO holds the lease: pid:<pid>:boot:<nonce>[:job:<id>]. The host clears exactly
+  -- its job's lease when a worker times out or dies, and till up at boot takes over a lease whose
+  -- process is gone. Also in ADDITIVE_COLUMNS for a book predating it.
+  sync_lease_owner      TEXT,
+  -- D142: the daily automatic fetch under till up. auto_sync_mode is 'daily' | 'off' (NULL reads as
+  -- daily: an active connection that never set it is fetched daily); auto_sync_at is the Swiss local
+  -- time HH:MM (NULL reads as 07:00). Both also in ADDITIVE_COLUMNS for a book predating D142.
+  auto_sync_mode        TEXT,
+  auto_sync_at          TEXT,
+  -- D142, critic F1: who last set the schedule. The automatic fetch runs as this actor, its rights
+  -- checked live at every attempt, and falls back to the owner seat; NULL = never set.
+  auto_sync_actor       TEXT,
   created_by            TEXT,
   created_at            TEXT NOT NULL,
   updated_at            TEXT NOT NULL
@@ -125,4 +141,54 @@ ON ebics_order_log (workspace_id, order_ref, occurred_at);
 
 CREATE INDEX IF NOT EXISTS ebics_order_log_by_related
 ON ebics_order_log (workspace_id, related_kind, related_id);
+
+-- D142: APPEND-ONLY, one row per automatic fetch attempt the till up scheduler made (A36 §12). The
+-- scheduler reads it to decide the next attempt (at most three a day, a retry an hour after a bank that
+-- did not answer or was busy, never a retry of a state a person must clear), and the status and the
+-- Übersicht band read the last row. local_date is the Swiss calendar day (Europe/Zurich) the attempt
+-- belongs to; outcome_code is the download outcome on success or the refusal code. Never updated.
+CREATE TABLE IF NOT EXISTS bank_auto_sync_run (
+  id               TEXT PRIMARY KEY,
+  workspace_id     TEXT NOT NULL REFERENCES workspace(id),
+  connection_id    TEXT NOT NULL REFERENCES ebics_connection(id),
+  local_date       TEXT NOT NULL,
+  attempt          INTEGER NOT NULL,
+  idempotency_key  TEXT NOT NULL,
+  started_at       TEXT NOT NULL,
+  finished_at      TEXT NOT NULL,
+  outcome_ok       INTEGER NOT NULL,
+  outcome_code     TEXT NOT NULL,
+  retryable        INTEGER NOT NULL,
+  -- critic F1: the seated actor the attempt ran as (NULL when no seated actor held pay).
+  run_as           TEXT,
+  detail           TEXT
+);
+
+CREATE INDEX IF NOT EXISTS bank_auto_sync_run_by_connection
+ON bank_auto_sync_run (workspace_id, connection_id, local_date, attempt);
+
+-- D143: APPEND-ONLY, one row per daily activation check the till up scheduler made (A36 §12.1): an
+-- HPB-only probe of a connection whose activation is in progress (ini_sent, pending_bank_activation).
+-- The scheduler reads it to decide the next check (one a Swiss day, at most two hourly retries after a
+-- transient failure), and the status reads the last row. outcome_code is bank_ready, not_activated,
+-- channel_unreachable, keystore_locked, keystore_unavailable, needs_bank_transport or
+-- auto_sync_no_actor, or worker_failed (the main thread's record of a worker that never asked the bank,
+-- bank_code sync_worker_failed or worker_no_report), each attempt preceded by a started mark written before the probe (critic F7: an
+-- attempt whose outcome could not be written still counts); bank_code is the bank's raw answer. bankReady is DERIVED from the
+-- order log's latest HPB, never stored here. No hash is stored: the human confirm re-fetches. Never updated.
+CREATE TABLE IF NOT EXISTS ebics_activation_check (
+  id               TEXT PRIMARY KEY,
+  workspace_id     TEXT NOT NULL REFERENCES workspace(id),
+  connection_id    TEXT NOT NULL REFERENCES ebics_connection(id),
+  local_date       TEXT NOT NULL,
+  attempt          INTEGER NOT NULL,
+  checked_at       TEXT NOT NULL,
+  outcome_code     TEXT NOT NULL,
+  retryable        INTEGER NOT NULL,
+  run_as           TEXT,
+  bank_code        TEXT
+);
+
+CREATE INDEX IF NOT EXISTS ebics_activation_check_by_connection
+ON ebics_activation_check (workspace_id, connection_id, local_date, attempt);
 `;

@@ -84,6 +84,48 @@ test('completed_at stamps once and a later advance never un-completes it', () =>
   assert.equal(after.progress.completedAt, done.progress.completedAt);
 });
 
+// --- P0.4d: the first-step facts the setup card ticks from ------------------------------------------
+
+test('P0.4d: firstSteps reads the books themselves: the seeded chart, a contact however made, an item, an ISSUED invoice', () => {
+  const { deps, call } = world('first');
+  must(call('vat_seed_defaults', {}), 'vat seed');
+  must(call('set_vat_method', { vatMethod: 'effektiv', vatAccounting: 'soll' }), 'vat method');
+  const read = () => must(call('get_onboarding_progress', {}), 'read').firstSteps;
+
+  // A fresh workspace: the KMU chart is seeded at creation, nothing else exists yet.
+  assert.deepEqual(read(), { chart: true, contact: false, item: false, invoice: false });
+
+  // The customer the first-run audit created INLINE in the invoice form is a contact like any other.
+  const contact = must(call('create_contact', { partyRole: 'customer', name: 'Muster AG', idempotencyKey: 'c1' }), 'contact');
+  assert.equal(read().contact, true);
+
+  must(call('create_item', { name: 'Beratung', defaultUnitPriceMinor: 15000, idempotencyKey: 'i1' }), 'item');
+  assert.equal(read().item, true);
+
+  // A draft is not yet the first invoice; issuing it is.
+  const draft = must(
+    call('create_document', {
+      type: 'invoice',
+      contactId: contact.contactId ?? contact.contact?.id,
+      lines: [{ description: 'Beratung', quantityMilli: 1000, unitPriceMinor: 15000, taxCode: 'UST81' }],
+      idempotencyKey: 'd1',
+    }),
+    'draft',
+  );
+  assert.equal(read().invoice, false, 'a draft does not tick the invoice step');
+  must(call('issue_invoice', { invoiceId: draft.document.id, idempotencyKey: 'iss1' }), 'issue');
+  assert.equal(read().invoice, true);
+
+  // Archived master data no longer counts.
+  must(call('archive_contact', { contactId: contact.contactId ?? contact.contact?.id }), 'archive');
+  assert.equal(read().contact, false);
+
+  // §H-TENANT: a second workspace on the same store sees none of it.
+  const other = must(getAction('create_workspace').run(deps, { name: 'Andere GmbH', idempotencyKey: 'first-ws-2' }), 'second');
+  const otherSteps = must(getAction('get_onboarding_progress').run(deps, { workspaceId: other.workspaceId }), 'other read').firstSteps;
+  assert.deepEqual(otherSteps, { chart: true, contact: false, item: false, invoice: false });
+});
+
 test('advance refuses a path outside the enum and a blank step, by name', () => {
   const { call } = world('bad');
   refuse(call('advance_onboarding_step', { path: 'bexio', step: 'x' }), 'invalid_path', 'bad path');

@@ -52,9 +52,10 @@ import type {
   EbicsTransportFailure,
   EbicsFetchedFile,
 } from '../../context.js';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { threadId } from 'node:worker_threads';
 import { ok, err } from '../../result.js';
-import type { Result } from '../../result.js';
+import type { Err, Result } from '../../result.js';
 import { importCamt } from '../camtReconcile.js';
 import { parseCamt } from '../camt.js';
 import type { ParsedCamtStatement } from '../camt.js';
@@ -64,6 +65,15 @@ import { statutoryRetentionUntil } from '../../files/retention.js';
 import { getCompanyProfile } from '../../setup/companyProfile.js';
 import { applySavedView } from '../../customization/views.js';
 import { defaultEbicsKeystore } from './keystore.js';
+import { autoSyncActor, autoSyncSettings, autoSyncStatus, isAutoSyncMode, isAutoSyncTime, AUTO_SYNC_MODES } from './autoSync.js';
+import {
+  ACTIVATION_CHECK_RELATED_KIND,
+  activationCheckDecision,
+  activationStatus,
+  recordActivationCheck,
+} from './activationCheck.js';
+import type { ActivationCheckOutcome } from './activationCheck.js';
+import { bankShortName } from './banks.js';
 import { EBICS_DEFAULT_KEY_PARAMS, EBICS_UNLIMITED_VALIDITY } from './enums.js';
 import { formatBankHashLines } from './hash-format.js';
 import { EBICS_KEY_PURPOSES } from './key-hashes.js';
@@ -78,6 +88,8 @@ import {
   readFeedBook,
 } from './feed.js';
 import type { FeedNumberJump, FeedPosition } from './feed.js';
+import { statementGaps } from '../statementGaps.js';
+import type { PendingGapStatement, StatementGap } from '../statementGaps.js';
 // A37 dispatch: the managed (bLink) rail sits behind these same verbs (spec A37 §5). This module
 // imports the managed engine one-directionally (managed never imports back), so the channel-kind
 // dispatch is the whole seam and the managed rail is untouched by A36.
@@ -118,6 +130,14 @@ interface ConnectionRow {
   activated_at: string | null;
   last_sync_at: string | null;
   sync_rule_id: string | null;
+  /** D142: the sync lease (null when no sync runs). */
+  sync_started_at: string | null;
+  /** D142 critic F2: who holds it (`pid:<pid>:boot:<nonce>[:job:<id>]`). */
+  sync_lease_owner: string | null;
+  /** D142: the daily automatic fetch ('daily' | 'off', NULL reads as daily) and its Swiss time. */
+  auto_sync_mode: string | null;
+  auto_sync_at: string | null;
+  auto_sync_actor: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -892,6 +912,116 @@ function advanceConnection(
 }
 
 /**
+ * The HPB failure reasons that ARE a transient network failure, as the wire and the core send them
+ * (critic F5, D143): the wire's `transport_error` (no answer, a timeout) and the core's `answer_lost` (a
+ * port that threw). Only these earn the activation check's hourly retry. Everything else (the bank's own
+ * code, the wire's `protocol_error`, an untrusted answer, a pre-wire refusal such as
+ * `certificate_missing`, `keystore_unavailable`, `invalid_request` or `internal_error`) waits for a person
+ * or for the next day: a retry an hour later would get the same answer.
+ */
+const HPB_TRANSIENT: ReadonlySet<string> = new Set(['transport_error', 'answer_lost']);
+
+/** What one activation check did (D143), for the scheduler's report and the suites. */
+export interface ActivationCheckReport {
+  connectionId: string;
+  localDate: string;
+  attempt: number;
+  outcome: ActivationCheckOutcome;
+  retryable: boolean;
+  runAs: string | null;
+  bankCode: string | null;
+}
+
+/**
+ * D143 (A36 §12.1), THE DAILY ACTIVATION CHECK: an HPB-ONLY probe of a connection whose activation is in
+ * progress, so TILL notices by itself when ZKB switched the subscriber on. Called ONLY from the explicit
+ * `till up` scheduler branch (never by a G01 rule, never over MCP or REST: it is not a verb).
+ *
+ * WHAT IT NEVER DOES, by construction rather than by care: it sends no INI or HIA leg (`runLegs` is not
+ * called), pins nothing and confirms nothing (`decideBankKeys` and `pinAndActivate` are not called, and
+ * the fetched hashes are not stored), and never moves a connection into `active`. The one state it may
+ * move is `ini_sent` to `pending_bank_activation` on an HPB 000000, the inference `advanceConnection`
+ * already makes (an HPB answer proves the bank holds both keys). Comparing the hashes with the bank's
+ * sheet stays a human act (P8): `bank_channel_connect` with `confirmBankKeys`.
+ *
+ * WHO IT RUNS AS: the D142 fetch's seated actor (`autoSyncActor`: the schedule's setter, else the owner
+ * seat, never a governed seat), its `pay` right (the right `bank_channel_connect` needs) checked live
+ * here. With none, the check is recorded `auto_sync_no_actor` and nothing reaches the bank.
+ *
+ * Returns null when the connection is not due (the decision is re-read here, so a double tick checks once).
+ */
+export function checkBankActivation(ctx: WorkspaceContext, input: { connectionId: string; now?: string }): ActivationCheckReport | null {
+  const row = readConnection(ctx, input.connectionId);
+  if (row === undefined) return null;
+  const now = input.now ?? ctx.clock.now();
+  const decision = activationCheckDecision(ctx, row, now);
+  if (!decision.due) return null;
+
+  const report = (outcome: ActivationCheckOutcome, retryable: boolean, runAs: string | null, bankCode: string | null = null): ActivationCheckReport => {
+    ctx.store.tx(() => {
+      recordActivationCheck(ctx, {
+        connectionId: row.id,
+        localDate: decision.localDate,
+        attempt: decision.attempt,
+        checkedAt: ctx.clock.now(),
+        outcome,
+        retryable,
+        runAs,
+        bankCode,
+      });
+      return ok({});
+    });
+    return { connectionId: row.id, localDate: decision.localDate, attempt: decision.attempt, outcome, retryable, runAs, bankCode };
+  };
+
+  // Critic F7: the attempt is marked BEFORE anything can reach the bank, so an outcome row that cannot be
+  // written afterwards still counts against the day's cap; a mark that cannot be written stops here.
+  ctx.store.tx(() => {
+    recordActivationCheck(ctx, {
+      connectionId: row.id,
+      localDate: decision.localDate,
+      attempt: decision.attempt,
+      checkedAt: ctx.clock.now(),
+      outcome: 'started',
+      retryable: true,
+      runAs: null,
+      bankCode: null,
+    });
+    return ok({});
+  });
+
+  // The seated actor, checked live now (critic F1 of D142, reused as is).
+  const runAs = autoSyncActor(ctx, row);
+  if (runAs === null) return report('auto_sync_no_actor', false, null);
+  const t = transport(ctx);
+  if (t === undefined) return report('needs_bank_transport', false, runAs);
+  const ks = keystore(ctx).state?.();
+  if (ks === 'locked') return report('keystore_locked', false, runAs);
+  if (ks === 'unavailable') return report('keystore_unavailable', false, runAs);
+
+  const hpb = callPort(() => t.fetchBankKeys({ connection: connectionRef(row) }));
+  if (!hpb.ok) {
+    const code = effectiveCode(hpb.codes);
+    appendOrderTx(ctx, {
+      connectionId: row.id,
+      orderRef: 'HPB',
+      direction: 'download',
+      orderType: 'HPB',
+      relatedKind: ACTIVATION_CHECK_RELATED_KIND,
+      status: 'failed',
+      bankReason: code ?? hpb.reason,
+    });
+    if (hpb.reason === 'bank_code') return report('not_activated', false, runAs, code);
+    // Only a network hiccup is retried; an answer nobody can trust or read waits, like a code.
+    return report('channel_unreachable', HPB_TRANSIENT.has(hpb.reason), runAs, code ?? hpb.reason);
+  }
+  appendOrderTx(ctx, { connectionId: row.id, orderRef: 'HPB', direction: 'download', orderType: 'HPB', relatedKind: ACTIVATION_CHECK_RELATED_KIND, status: 'ok' });
+  // The bank holds both keys. Only `ini_sent` moves; never into `active`, never a pin.
+  moveState(ctx, row.id, 'pending_bank_activation', ['ini_sent']);
+  return report('bank_ready', false, runAs);
+}
+
+/**
  * The trust decision (§4.2, SMPG §6.1 steps 7 and 8). The ORDER is load-bearing:
  *  1. The PIN first. A fresh HPB that contradicts the pin is a rotation or an attacker: an active
  *     channel halts (`bank_keys_changed`) and nothing new is pinned, unless the channel is ALREADY
@@ -1434,6 +1564,135 @@ export function syncBankChannel(
   if (conn.state !== 'active') return err('pending_bank_activation', { connectionId: conn.id, state: conn.state });
   if (readRoutedAccountIds(ctx, conn.id).length === 0) return err('no_routed_account', { connectionId: conn.id });
 
+  // D142: ONE SYNC PER CONNECTION. The lease is taken with one conditional UPDATE under SQLite's write
+  // lock, so it holds across threads (the `till up` sync worker) and processes (an MCP agent beside the
+  // Studio); a second call meanwhile is refused, never joined. A lease older than SYNC_LEASE_MS is a
+  // process that died mid-sync and is taken over.
+  const lease = takeSyncLease(ctx, conn.id);
+  if (!lease.ok) return lease;
+  try {
+    return syncLeased(ctx, conn, t, scopedKey);
+  } finally {
+    releaseSyncLease(ctx, conn.id, lease.stamp);
+  }
+}
+
+/** How long a sync lease holds before it counts as abandoned (a process that died mid-sync). */
+export const SYNC_LEASE_MS = 15 * 60_000;
+
+/**
+ * CRITIC F2: the lease names its HOLDER, so an abnormal end is cleared by whoever can see it rather than
+ * left for the 15-minute expiry. `pid:<pid>:boot:<nonce>` identifies this process (the nonce tells a
+ * restarted process that got the same pid back from the dead one); the host's sync worker adds
+ * `:job:<id>` (`setSyncLeaseHolder`), so the host clears exactly the lease of the job it gave up on.
+ */
+const PROCESS_BOOT = randomUUID();
+const PROCESS_HOLDER = `pid:${process.pid}:boot:${PROCESS_BOOT}`;
+let leaseHolder = threadId === 0 ? PROCESS_HOLDER : `${PROCESS_HOLDER}:thread:${threadId}`;
+
+/** This process's holder prefix (`pid:<pid>:boot:<nonce>`), for the host to mint job holders from. */
+export function processSyncLeaseHolder(): string {
+  return PROCESS_HOLDER;
+}
+
+/** The holder the next lease this thread takes is stamped with (the sync worker sets its job's). */
+export function setSyncLeaseHolder(holder: string): void {
+  leaseHolder = holder;
+}
+
+/** When a lease stamped at `startedAt` frees itself if nobody clears it. */
+export function syncLeaseFreesAt(startedAt: string): string {
+  return new Date(Date.parse(startedAt) + SYNC_LEASE_MS).toISOString();
+}
+
+/**
+ * Clear the lease a holder took (the host, after its worker timed out, errored or exited without an
+ * answer). Only that holder's lease: a lease another sync took since is left alone. §H-TENANT.
+ */
+export function releaseSyncLeaseOf(store: WorkspaceContext['store'], workspaceId: string, holder: string): number {
+  return Number(
+    store.tx(() =>
+      store.db
+        .prepare('UPDATE ebics_connection SET sync_started_at = NULL, sync_lease_owner = NULL WHERE workspace_id = ? AND sync_lease_owner = ?')
+        .run(workspaceId, holder).changes,
+    ),
+  );
+}
+
+/**
+ * AT `till up` BOOT (critic F2): take over every lease whose holder process is gone, so a book whose
+ * process was killed mid-sync (Cmd-Q, an upgrade restart, a reboot) does not say "a fetch is running"
+ * for 15 minutes. A holder is gone when its pid is not alive, or when the pid is THIS process's but the
+ * boot nonce is another (the same pid, handed back after a restart). A live foreign holder (an MCP
+ * agent process beside till up) keeps its lease; a lease with no holder (an older build's) waits for
+ * the expiry. Walks every workspace, each update tenant-bound. Returns how many it freed.
+ */
+export function reclaimDeadSyncLeases(store: WorkspaceContext['store'], isAlive: (pid: number) => boolean): number {
+  const rows = store.db
+    .prepare('SELECT workspace_id, id, sync_lease_owner FROM ebics_connection WHERE sync_started_at IS NOT NULL AND sync_lease_owner IS NOT NULL')
+    .all() as { workspace_id: string; id: string; sync_lease_owner: string }[];
+  let freed = 0;
+  for (const r of rows) {
+    const m = /^pid:(\d+):boot:([^:]+)/.exec(r.sync_lease_owner);
+    if (m === null) continue;
+    const pid = Number(m[1]);
+    const dead = pid === process.pid ? m[2] !== PROCESS_BOOT : !isAlive(pid);
+    if (!dead) continue;
+    freed += Number(
+      store.tx(() =>
+        store.db
+          .prepare('UPDATE ebics_connection SET sync_started_at = NULL, sync_lease_owner = NULL WHERE workspace_id = ? AND id = ? AND sync_lease_owner = ?')
+          .run(r.workspace_id, r.id, r.sync_lease_owner).changes,
+      ),
+    );
+  }
+  return freed;
+}
+
+/** The instant before which a lease stamp is stale, for `now`. */
+export function syncLeaseCutoff(now: string): string {
+  return new Date(Date.parse(now) - SYNC_LEASE_MS).toISOString();
+}
+
+/** Take the connection's sync lease, or refuse `sync_in_progress` naming when the running one began. */
+function takeSyncLease(ctx: WorkspaceContext, connectionId: string): { ok: true; stamp: string } | Err {
+  const stamp = ctx.clock.now();
+  const taken = ctx.store.tx(() =>
+    ctx.store.db
+      .prepare(
+        `UPDATE ebics_connection SET sync_started_at = ?, sync_lease_owner = ?
+          WHERE workspace_id = ? AND id = ? AND (sync_started_at IS NULL OR sync_started_at < ?)`,
+      )
+      .run(stamp, leaseHolder, ctx.workspaceId, connectionId, syncLeaseCutoff(stamp)).changes,
+  );
+  if (Number(taken) === 1) return { ok: true, stamp };
+  const running = ctx.store.db
+    .prepare('SELECT sync_started_at AS s FROM ebics_connection WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, connectionId) as { s: string | null } | undefined;
+  const startedAt = running?.s ?? null;
+  // Critic F2: say what is KNOWN. The lease may belong to a fetch that is still running or to one that
+  // ended abnormally where nobody could clear it; either way it frees itself at `freesAt`.
+  return err('sync_in_progress', {
+    connectionId,
+    syncStartedAt: startedAt,
+    freesAt: startedAt === null ? null : syncLeaseFreesAt(startedAt),
+    retryable: true,
+    reason:
+      'a statement fetch for this connection is marked running since syncStartedAt; if none is running any more, the mark frees itself at freesAt',
+  });
+}
+
+/** Clear the lease this sync took (and only that one: a stale lease another process took over stays). */
+function releaseSyncLease(ctx: WorkspaceContext, connectionId: string, stamp: string): void {
+  ctx.store.tx(() =>
+    ctx.store.db
+      .prepare('UPDATE ebics_connection SET sync_started_at = NULL, sync_lease_owner = NULL WHERE workspace_id = ? AND id = ? AND sync_started_at = ?')
+      .run(ctx.workspaceId, connectionId, stamp),
+  );
+}
+
+/** Steps 2 to 6 of §4.3, run under the connection's sync lease. */
+function syncLeased(ctx: WorkspaceContext, conn: ConnectionRow, t: EbicsTransportPort, scopedKey: string): Result {
   // 2. DOWNLOAD (D-A36.3, D-A36.4). The wire authenticates; the core refuses a replayed TransactionID.
   let download: DownloadOutcome;
   let receiptFor: string | null = null;
@@ -1529,6 +1788,11 @@ export function transmitPaymentBatch(
   if (typeof input.batchId !== 'string' || input.batchId.length === 0) {
     return err('invalid_input', { field: 'batchId' });
   }
+  // D156 critic F1: the schema REQUIRES the key, so the engine does too. With it optional, a call
+  // without one ran unkeyed (and, from a governed seat, fell past the dial's draft screen).
+  if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
+    return err('invalid_input', { field: 'idempotencyKey' });
+  }
   const batchId = input.batchId;
   const batch = ctx.store.db
     .prepare('SELECT id, status, bank_account_id FROM payment_batch WHERE workspace_id = ? AND id = ?')
@@ -1595,6 +1859,63 @@ function pendingView(ctx: WorkspaceContext, p: PendingMember, routed: Map<string
 }
 
 /**
+ * A36 §4.7: the downloaded statements of one connection the successor rule refuses as `gap_refused`
+ * NOW (re-derived from the stored bytes and the books, as `pendingView` does), in the gap read model's
+ * shape. Pure read; nothing is written.
+ */
+function pendingGapsOf(ctx: WorkspaceContext, pendings: readonly PendingMember[], routed: Map<string, string>): PendingGapStatement[] {
+  const out: PendingGapStatement[] = [];
+  for (const p of pendings) {
+    if (p.parsed === null || p.position === null || p.parsed.iban === null) continue;
+    const bankAccountId = routed.get(normaliseIban(p.parsed.iban));
+    if (bankAccountId === undefined) continue;
+    const decision = decideSuccessor(p.parsed, readFeedBook(ctx, bankAccountId));
+    if (decision.verdict !== 'refused' || decision.code !== 'gap_refused') continue;
+    const details = decision.details as { differenceMinor?: unknown; reason?: unknown };
+    out.push({
+      bankAccountId,
+      documentId: p.member.fileId ?? p.member.sha,
+      position: p.position,
+      fromDate: p.parsed.fromDate,
+      toDate: p.parsed.toDate,
+      openingBalanceMinor: p.parsed.openingBalanceMinor,
+      closingBalanceMinor: p.parsed.closingBalanceMinor,
+      currency: p.parsed.balanceCurrency,
+      differenceMinor: typeof details.differenceMinor === 'number' ? details.differenceMinor : 0,
+      reason: typeof details.reason === 'string' ? details.reason : 'balance_does_not_chain',
+    });
+  }
+  return out;
+}
+
+/** The routed IBANs of one connection (normalised IBAN to Bankkonto id). */
+function routedIbanMap(ctx: WorkspaceContext, connectionId: string): Map<string, string> {
+  const routed = new Map<string, string>();
+  for (const id of readRoutedAccountIds(ctx, connectionId)) {
+    const iban = accountIban(ctx, id);
+    if (iban !== null) routed.set(normaliseIban(iban), id);
+  }
+  return routed;
+}
+
+/** Every downloaded statement of the workspace's live connections waiting as `gap_refused` (§4.7). */
+export function pendingGapStatements(ctx: WorkspaceContext): PendingGapStatement[] {
+  const rows = ctx.store.db
+    .prepare("SELECT id FROM ebics_connection WHERE workspace_id = ? AND state != 'retired' ORDER BY created_at, rowid")
+    .all(ctx.workspaceId) as { id: string }[];
+  return rows.flatMap((r) => pendingGapsOf(ctx, pendingMembers(ctx, r.id), routedIbanMap(ctx, r.id)));
+}
+
+/**
+ * A36 §4.7, THE GAP READ MODEL WITH THE CHANNEL'S WAITING STATEMENTS: every open gap of every Bankkonto
+ * (or the one named), book gaps and the gaps a refused download stands behind. The one reader the
+ * status, the Übersicht tile, the attention hub and the repair dialog share.
+ */
+export function readStatementGaps(ctx: WorkspaceContext, input: { bankAccountId?: string } = {}): StatementGap[] {
+  return statementGaps(ctx, input, pendingGapStatements(ctx));
+}
+
+/**
  * The status read (§5): per channel the state, the ceremony legs, the keystore, per routed account the
  * newest statement (position, date, CLBD), every pending member with its message, and the last sync.
  * Upload and protocol fields are gone with BTU, PSR and HAC. Read-only.
@@ -1638,7 +1959,11 @@ export function getBankChannelStatus(
       const book = readFeedBook(ctx, id);
       return { bankAccountId: id, iban, newestStatement: newestFeedStatement(book), lastNumberJump: lastNumberJump(book, feedStatementIds) };
     });
-    const pendingStatements = pendingMembers(ctx, row.id).map((p) => pendingView(ctx, p, routed));
+    const pendings = pendingMembers(ctx, row.id);
+    const pendingStatements = pendings.map((p) => pendingView(ctx, p, routed));
+    // A36 §4.7 (D150): the durable gaps per routed account, the jump notice's successor.
+    const pendingGaps = pendingGapsOf(ctx, pendings, routed);
+    const accountsWithGaps = accounts.map((a) => ({ ...a, statementGaps: statementGaps(ctx, { bankAccountId: a.bankAccountId }, pendingGaps) }));
     return {
       connectionId: row.id,
       channelKind: 'ebics',
@@ -1647,8 +1972,17 @@ export function getBankChannelStatus(
       state: row.state,
       activatedAt: row.activated_at,
       ceremony: ceremonyFacet(allOrders),
-      accounts,
+      accounts: accountsWithGaps,
       lastSyncAt: row.last_sync_at,
+      // D142: a fetch running right now, in this process or another (the lease on the row).
+      ...syncLeaseFacet(ctx, row),
+      // D142: the daily automatic fetch: its mode and time, the last automatic attempt, the next run.
+      autoSync: autoSyncStatus(ctx, row, ctx.clock.now()),
+      // D143: the bank's short name for the band's mark, and the daily activation check. `bankReady`
+      // means ZKB answered HPB: a PERSON compares the hashes with the bank's sheet and confirms
+      // (bank_channel_connect with confirmBankKeys); no agent and no tick may do it.
+      bankName: bankShortName({ hostId: row.host_id, hostUrl: row.host_url }),
+      activation: activationStatus(ctx, row, ctx.clock.now()),
       pendingIniLetter: PRE_ACTIVE.includes(row.state) ? row.ini_letter_document_id : null,
       iniLetterDocumentId: row.ini_letter_document_id,
       pendingStatements,
@@ -1660,6 +1994,12 @@ export function getBankChannelStatus(
   // A37: the managed (bLink) channels ride the SAME read model, kind-labelled.
   const managed = managedChannelStatusList(ctx, input).channels;
   return ok({ channels: [...channels, ...managed] });
+}
+
+/** D142: whether a sync holds the connection's lease right now, and since when. */
+export function syncLeaseFacet(ctx: WorkspaceContext, row: { sync_started_at: string | null }): { syncInProgress: boolean; syncStartedAt: string | null } {
+  const live = row.sync_started_at !== null && row.sync_started_at >= syncLeaseCutoff(ctx.clock.now());
+  return { syncInProgress: live, syncStartedAt: live ? row.sync_started_at : null };
 }
 
 /** The keystore health for the status card (`keystore:{kind,state,persistent}`). */
@@ -1734,13 +2074,15 @@ export function disconnectBankChannel(
 // --- verb 6: setBankSyncSchedule ---------------------------------------------------------------
 
 /**
- * D-A36.10: there is no cadence. A `ruleId` is refused `sync_schedule_parked` (an unattended scheduled
- * sync is parked: it would hold the process while the synchronous wire waits). The unlink call (no
- * `ruleId`) stays valid and clears a pointer an older build stored. Idempotent; §H-TENANT.
+ * The connection's schedule. `ruleId` is still refused `sync_schedule_parked` (D-A36.10's protection for
+ * stored rules stands: no G01 rule fires `bank_sync`). D142 (A36 §12): `mode` (`daily` | `off`) and
+ * `atTime` (`HH:MM`, Swiss time) set the daily automatic fetch the `till up` scheduler runs; either one
+ * alone changes only itself. The unlink call (neither, no `ruleId`) stays valid and clears the pointer an
+ * older build stored. Idempotent per (connection, key); banking-write; §H-TENANT.
  */
 export function setBankSyncSchedule(
   ctx: WorkspaceContext,
-  input: { connectionId?: unknown; ruleId?: unknown; idempotencyKey?: unknown },
+  input: { connectionId?: unknown; ruleId?: unknown; mode?: unknown; atTime?: unknown; idempotencyKey?: unknown },
 ): Result {
   const capable = ctx.capabilities.assert('pay');
   if (!capable.ok) return capable;
@@ -1751,7 +2093,16 @@ export function setBankSyncSchedule(
     return err('invalid_input', { field: 'idempotencyKey' });
   }
   if (typeof input.ruleId === 'string' && input.ruleId.length > 0) {
-    return err('sync_schedule_parked', { connectionId: input.connectionId, reason: 'the statements are fetched on demand only (Kontoauszüge abrufen)' });
+    return err('sync_schedule_parked', {
+      connectionId: input.connectionId,
+      reason: 'no automation rule fetches statements; the daily fetch is set with mode and atTime (D142)',
+    });
+  }
+  if (input.mode !== undefined && input.mode !== null && !isAutoSyncMode(input.mode)) {
+    return err('invalid_input', { field: 'mode', allowed: [...AUTO_SYNC_MODES] });
+  }
+  if (input.atTime !== undefined && input.atTime !== null && !isAutoSyncTime(input.atTime)) {
+    return err('invalid_input', { field: 'atTime', reason: 'a Swiss local time HH:MM, 00:00 to 23:59' });
   }
 
   const row = readConnection(ctx, input.connectionId);
@@ -1762,10 +2113,20 @@ export function setBankSyncSchedule(
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'set_bank_sync_schedule');
   if (replayed !== undefined) return replayed;
 
+  const mode = isAutoSyncMode(input.mode) ? input.mode : row.auto_sync_mode;
+  const atTime = isAutoSyncTime(input.atTime) ? input.atTime : row.auto_sync_at;
+  // Critic F1: setting the schedule names who the automatic fetch runs as (its rights are checked live
+  // at every attempt). The unlink-only call sets nothing, so it names nobody.
+  const setsSchedule = isAutoSyncMode(input.mode) || isAutoSyncTime(input.atTime);
+  const actor = setsSchedule ? ctx.actor : row.auto_sync_actor;
   return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'set_bank_sync_schedule', () => {
     ctx.store.db
-      .prepare('UPDATE ebics_connection SET sync_rule_id = NULL, updated_at = ? WHERE workspace_id = ? AND id = ?')
-      .run(ctx.clock.now(), ctx.workspaceId, row.id);
-    return ok({ connectionId: row.id, syncRuleId: null });
+      .prepare(
+        `UPDATE ebics_connection SET sync_rule_id = NULL, auto_sync_mode = ?, auto_sync_at = ?, auto_sync_actor = ?, updated_at = ?
+          WHERE workspace_id = ? AND id = ?`,
+      )
+      .run(mode, atTime, actor, ctx.clock.now(), ctx.workspaceId, row.id);
+    const settings = autoSyncSettings({ auto_sync_mode: mode, auto_sync_at: atTime });
+    return ok({ connectionId: row.id, syncRuleId: null, autoSync: { mode: settings.mode, atTime: settings.atTime, explicit: settings.explicit } });
   });
 }

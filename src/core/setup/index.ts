@@ -20,3 +20,14 @@ export type { CreditorAddress, SetCreditorProfileInput, UpdateCompanyProfileInpu
 export { bootstrapWorkspace, parseBootstrapDescription } from './bootstrap.js';
 export type { BootstrapWorkspaceInput } from './bootstrap.js';
 export { isValidIban, isQrIban, normalizeIban } from './iban.js';
+export {
+  PAYMENT_TERMS_MAX_DAYS,
+  deriveDueDate,
+  dueDateFor,
+  workspaceDefaultTermsDays,
+  contactTermsDays,
+  isWorkspaceTermsDays,
+  isPaymentTermsDays,
+  NEW_WORKSPACE_PAYMENT_TERMS_DAYS,
+} from './paymentTerms.js';
+export type { DueDateInput, DueDateSource } from './paymentTerms.js';

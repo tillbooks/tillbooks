@@ -185,6 +185,13 @@ const PII_COLUMNS: readonly PiiColumn[] = [
   { table: 'bank_account', column: 'iban', category: 'iban' },
   { table: 'creditor_bank_profile', column: 'iban', category: 'iban' },
   { table: 'payment_batch_item', column: 'creditor_iban', category: 'iban' },
+  // A18 F9 (critic r1 C2): the company name a batch froze for its pain.001 InitgPty/Dbtr, a copy of
+  // `workspace.name` / `workspace.creditor_name`, masked like them.
+  { table: 'payment_batch', column: 'debtor_name', category: 'name' },
+  // A18 critic r2 R2-1: the debtor IBAN a batch froze, a copy of `bank_account.iban`, masked like it.
+  { table: 'payment_batch', column: 'debtor_iban', category: 'iban' },
+  // A18 D148: the vendor name each payment-batch item snapshotted for its pain.001 Cdtr/Nm.
+  { table: 'payment_batch_item', column: 'creditor_name', category: 'name' },
   { table: 'bank_txn', column: 'payer_name', category: 'name' },
   // A39 (lean critic C12): the counterparty an imported line names. `end_to_end_id` stays: an identifier,
   // TILL's own on debits and the per-item match key of a payment run.
@@ -334,6 +341,22 @@ export function applySanitization(db: Database.Database, opts: SanitizeOptions):
       for (const r of rows) {
         update.run(`[redigiert ${token('freetext', `${table}:${col.name}:${r.rid}`, 6)}]`, r.rid);
         freeTextRedacted += 1;
+      }
+    }
+  }
+
+  // 2b. D144 (critic C3): a model decision's input fingerprint is a keyed hash of the line's facts,
+  //     the counterparty among them. The secret floor randomizes the key, and here the fingerprint
+  //     itself is re-derived from the row id, so even a copy made with retained secrets cannot confirm
+  //     a guessed name against it. Deterministic on the row id, so a re-run is idempotent.
+  if (existing.has('model_decision')) {
+    const scope = workspaceScope(db, 'model_decision', wsIds);
+    if (scope.clause !== '1 = 0') {
+      const rows = db.prepare(`SELECT id FROM "model_decision" WHERE (${scope.clause})`).all(...scope.params) as { id: string }[];
+      const update = db.prepare('UPDATE "model_decision" SET input_sha256 = ? WHERE id = ?');
+      for (const r of rows) {
+        update.run(digest('decision-input', r.id), r.id);
+        piiCellsMasked += 1;
       }
     }
   }

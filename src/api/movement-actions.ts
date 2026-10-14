@@ -22,11 +22,12 @@ import {
   inventoryGetConfig,
   inventorySetConfig,
 } from '../core/inventory/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface MovementActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -50,7 +51,7 @@ export function movementActions(h: MovementActionHelpers): readonly ActionDef[] 
   return [
     ctxAction(
       'inventory_move',
-      'write',
+      'write:correctable:books',
       "Record ONE append-only inventory movement, the only way on-hand ever changes (on-hand is always the live SUM of movements, never a stored column). movementType is one of opening|receipt|issue|transfer_out|transfer_in|adjustment|return|scrap; qty is signed integer units (opening/receipt/transfer_in must be positive, issue/transfer_out/scrap negative, adjustment/return carry the caller's sign) and must be non-zero (invalid_qty). unitCostMinor is the integer-Rappen cost snapshot for later valuation. The item must be stockable (item_not_stockable) and, when its tracking_mode demands it, carry a lotId (lot_required) and/or serialId (serial_required); a serial movement is a unit of one, so an INBOUND movement for a serial the workspace already holds is refused with serial_already_in_stock before any row is written (issue, return or scrap it first; use inventory_transfer to relocate it). When allow_negative_stock is false (default) an issue that would drive the balance below zero is refused with insufficient_stock before any row is written. Rows are immutable; a correction is another movement, never an edit.",
       ctxSchema(
         {
@@ -73,7 +74,7 @@ export function movementActions(h: MovementActionHelpers): readonly ActionDef[] 
     ),
     ctxAction(
       'inventory_transfer',
-      'write',
+      'write:correctable:books',
       'Move stock between two locations as an ATOMIC pair: a transfer_out at fromLocationId and a transfer_in at toLocationId, both under one transferGroupId, equal absolute quantity, summing to zero. qty is always POSITIVE (the helper applies the sign). Either both legs land or neither does. When allow_negative_stock is false a transfer that would overdraw the source is refused with insufficient_stock and nothing is written. Same tracking rules as inventory_move; a serial transfer moves one unit and re-parks it at the destination. Idempotent under idempotencyKey (a replay returns the original pair).',
       ctxSchema(
         {
@@ -137,7 +138,7 @@ export function movementActions(h: MovementActionHelpers): readonly ActionDef[] 
     ),
     ctxAction(
       'inventory_set_config',
-      'write',
+      'write:reversible:internal',
       'Set the workspace negative-stock posture. allowNegativeStock true disables the insufficient_stock guard (a warning posture for backorder workflows); false (default) enforces it. Plain policy: posts no journal entry and never rewrites history, so flipping the flag changes only future writes.',
       ctxSchema({ allowNegativeStock: BOOL, idempotencyKey: STR }, ['allowNegativeStock', 'idempotencyKey']),
       (ctx, input) => inventorySetConfig(ctx, as(input)),

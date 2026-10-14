@@ -1,12 +1,23 @@
 /**
- * The aging tiles: the bucket subtotals, and each one a filter (D-S1, INV-3).
+ * The aging chips: the bucket subtotals, and each one a filter (D-S1, INV-3).
  *
- * WHY TILES AND NOT THE BAR THE SPEC ASKS FOR. A bucket subtotal can be NEGATIVE: a parked Guthaben
+ * TILES BECAME CHIPS (D152, the owner's pick for this surface). Four 100px cards stood between the
+ * header and the list, so 2 of 23 rows were visible at 1280x800. They are now the shared FilterChips
+ * on one row, each chip carrying its bucket label AND its base-currency amount, so the breakdown is
+ * still read at a glance and still ties to the header total. A chip filters the list to its bucket and
+ * pressing it again clears the filter: the chip is its own way back, so there is no second "Alle
+ * anzeigen" beside it (one action, one place). One bucket at a time, as the `?bucket=` URL always was.
+ * A chip whose bucket holds no row is absent (it would filter to nothing), unless it is the one
+ * filtered to, which stays so it can be released. The row count is not on the chip: the list under it
+ * is the count.
+ *
+ * WHY TILES (NOW CHIPS) AND NOT THE BAR THE SPEC ASKS FOR. A bucket subtotal can be NEGATIVE: a parked Guthaben
  * carries a negative open and is filed into the first bucket, so a workspace holding CHF 2'000.00 of
  * fresh invoices and CHF 2'500.00 of customer credit has a first bucket of -500.00. A stacked bar has
  * no honest width for that, and every available treatment is a lie (clamp, absolute value, or a
- * negative width). Tiles survive it with no special case, carry a row COUNT as well as an amount,
- * hold the German labels at full length, and are each a filter. Owner decision B1.
+ * negative width). Tiles survived it with no special case, and the chips that replaced them still do:
+ * a chip prints "CHF -500.00" like any other figure, holds the German label at full length, and is a
+ * filter. Owner decision B1.
  *
  * THE FIGURE IS THE BASE-CURRENCY ONE, ALWAYS. `bucketTotals` sums FACE amounts, so in a workspace
  * holding francs and euros it is a number with no unit, and prefixing it `CHF` would fabricate a
@@ -15,11 +26,11 @@
  * workspace rather than only in single-currency ones.
  *
  * THE COUNT IS DERIVED, NEVER FOUR. `boundariesDays` yields `length + 1` buckets, so a workspace
- * configuring [15, 30] gets three tiles and one configuring [30, 60, 90, 120] gets five. The row is a
- * wrapping grid, and the popover caps the boundary list at five so the group tops out at seven
- * choices including "Alle anzeigen".
+ * configuring [15, 30] gets three chips and one configuring [30, 60, 90, 120] gets five. The row
+ * wraps, and the popover caps the boundary list at five so the group tops out at six chips.
  */
 import { useT, formatMoney } from '../../i18n';
+import { FilterChips, type FilterChip } from '../../components/FilterChips';
 import { bucketKeysFor, bucketLabel, type OpenItem } from './model';
 
 export interface AgingTilesProps {
@@ -27,7 +38,7 @@ export interface AgingTilesProps {
   /** Base-currency subtotals per bucket key, as the engine reduces them. */
   baseBucketTotals: Record<string, number>;
   baseCurrency: string;
-  /** The rows in view, for the per-tile count. Counts are unit-free and therefore always true. */
+  /** The rows in view, to leave out a bucket that holds none. */
   items: readonly OpenItem[];
   /** The bucket currently filtered to, or null for all of them. */
   selected: string | null;
@@ -43,33 +54,28 @@ export function AgingTiles({
   onSelect,
 }: AgingTilesProps) {
   const t = useT();
-  const keys = bucketKeysFor(boundaries);
+  const chips: FilterChip[] = bucketKeysFor(boundaries).flatMap((key, index) => {
+    if (key !== selected && !items.some((item) => item.bucket === key)) return [];
+    const label = bucketLabel(boundaries, index);
+    return [
+      {
+        value: key,
+        label: t('openItems.tiles.chip', {
+          bucket: t(label.key, label.params),
+          amount: formatMoney(baseBucketTotals[key] ?? 0, baseCurrency),
+        }),
+      },
+    ];
+  });
 
   return (
-    <div className="oi-tiles" role="group" aria-label={t('openItems.tiles.label')}>
-      {keys.map((key, index) => {
-        const label = bucketLabel(boundaries, index);
-        const count = items.filter((item) => item.bucket === key).length;
-        const on = selected === key;
-        return (
-          <button
-            key={key}
-            type="button"
-            className={`oi-tile${on ? ' oi-tile--on' : ''}`}
-            aria-pressed={on}
-            onClick={() => onSelect(on ? null : key)}
-          >
-            <span className="oi-tile-label">{t(label.key, label.params)}</span>
-            <span className="oi-tile-amount t-money">{formatMoney(baseBucketTotals[key] ?? 0, baseCurrency)}</span>
-            <span className="oi-tile-count">{t('openItems.bucket.count', { n: count })}</span>
-          </button>
-        );
-      })}
-      {selected !== null && (
-        <button type="button" className="btn btn--ghost btn--sm oi-tile-reset" onClick={() => onSelect(null)}>
-          {t('openItems.showAll')}
-        </button>
-      )}
-    </div>
+    <FilterChips
+      className="oi-chips"
+      label={t('openItems.tiles.label')}
+      chips={chips}
+      selected={selected === null ? [] : [selected]}
+      // One bucket at a time: the chip just pressed wins, and releasing the pressed one clears.
+      onChange={(next) => onSelect(next.find((value) => value !== selected) ?? null)}
+    />
   );
 }

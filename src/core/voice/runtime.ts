@@ -29,7 +29,9 @@ import { existsSync } from 'node:fs';
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
-import { isRuntimeSource, RUNTIME_SOURCES } from './enums.js';
+import { isRuntimeSource, isDecideQuestionType, RUNTIME_SOURCES } from './enums.js';
+import type { DecideQuestionType } from './enums.js';
+import type { DecideAnswer, DecideQuestion } from './decide.js';
 
 /**
  * The OP6 adapter: one local inference engine, loaded by the companion package on this machine.
@@ -44,6 +46,36 @@ export interface Op6Adapter {
   device: string;
   complete(prompt: string, opts?: Record<string, unknown>): string;
   embed(text: string): Float32Array;
+  /**
+   * D144 (E05 §10.1), OPTIONAL: the "System One" operation. Typed questions about `state` (text or
+   * serialised JSON) in, calibrated probabilities out, one answer per question. A runtime without it
+   * still drafts and embeds. Consumers never call it directly: `decide()` in `./decide.ts` is the one
+   * door, and it validates what comes back fail-closed.
+   */
+  decide?(state: string, questions: readonly DecideQuestion[]): DecideAnswer[];
+}
+
+/**
+ * D144: how a decision model's probabilities were checked against reality. `measured:false` claims
+ * nothing (the `qualityMeasured` rule applied to calibration): `ece` is then null, and a consumer that
+ * shows probabilities to a person may refuse the row.
+ */
+export interface DecideCalibration {
+  /** How the probabilities were calibrated or checked, in a few words (e.g. "temperature scaling"). */
+  method: string;
+  measured: boolean;
+  /** Expected calibration error on the evaluation set, in [0, 1]; null when not measured. */
+  ece: number | null;
+  /** What it was measured on, in words; null when not measured. */
+  evaluatedOn: string | null;
+}
+
+/** D144: what a row's model can decide (E05 §10.1). */
+export interface DecideCapability {
+  questionTypes: DecideQuestionType[];
+  /** The most options (or levels) one question may carry: 2 to 255. */
+  maxChoices: number;
+  calibration: DecideCalibration;
 }
 
 /** One offered model: the manifest contract of spec §4. The rows are DATA shipped by the companion. */
@@ -61,6 +93,10 @@ export interface RuntimeManifestEntry {
   /** False until somebody has RUN the model and READ its German (spec §3): an unmeasured row claims nothing. */
   qualityMeasured: boolean;
   contextTokens: number;
+  /** D144: the ISO 639-1 codes of the languages the model reads. Required when `decide` is present. */
+  languages?: string[];
+  /** D144: present when the model answers `decide()` questions. */
+  decide?: DecideCapability;
 }
 
 interface Registration {
@@ -78,6 +114,52 @@ const SHA256_RE = /^[0-9a-f]{64}$/;
 const SPDX_RE = /^[A-Za-z0-9.+-]+$/;
 /** A URL that tracks a moving branch is a latent break in every installation at once (spec §4). */
 const MOVING_BRANCH_RE = /\/(main|master)(\/|$)/;
+/** ISO 639-1: two lowercase letters. A language we cannot name that way is not one a consumer can require. */
+const LANGUAGE_RE = /^[a-z]{2}$/;
+/** The `choice` ceiling of the System One contract (Jev's own: 255 options). */
+export const DECIDE_MAX_CHOICES_CEILING = 255;
+
+/** D144 (E05 §10.1): the two optional manifest fields, under the same fail-closed gate as the rest. */
+function assertDecideFieldsValid(entry: RuntimeManifestEntry, fail: (rule: string) => never): void {
+  if (entry.languages !== undefined) {
+    const langs: unknown = entry.languages;
+    if (!Array.isArray(langs) || langs.length === 0) fail('declares languages that are not a non-empty list');
+    const list = langs as unknown[];
+    if (!list.every((l) => typeof l === 'string' && LANGUAGE_RE.test(l))) {
+      fail('declares a language that is not an ISO 639-1 code (two lowercase letters)');
+    }
+    if (new Set(list).size !== list.length) fail('declares a language twice');
+  }
+  if (entry.decide === undefined) return;
+  const d: unknown = entry.decide;
+  if (d === null || typeof d !== 'object') fail('declares a decide block that is not an object');
+  const block = d as Record<string, unknown>;
+  if (entry.languages === undefined) fail('declares decide but no languages: a decision model must say what it can read');
+  const types = block.questionTypes;
+  if (!Array.isArray(types) || types.length === 0 || !types.every((t) => isDecideQuestionType(t))) {
+    fail('declares decide questionTypes that are not a non-empty list of noul | choice | score');
+  }
+  const max = block.maxChoices;
+  if (typeof max !== 'number' || !Number.isInteger(max) || max < 2 || max > DECIDE_MAX_CHOICES_CEILING) {
+    fail(`declares a decide maxChoices outside 2..${DECIDE_MAX_CHOICES_CEILING}`);
+  }
+  const cal = block.calibration;
+  if (cal === null || cal === undefined || typeof cal !== 'object') fail('declares decide without a calibration');
+  const c = cal as Record<string, unknown>;
+  if (typeof c.method !== 'string' || c.method.trim().length === 0) fail('names no calibration method');
+  if (typeof c.measured !== 'boolean') fail('does not say whether its calibration was measured');
+  if (c.measured === true) {
+    const ece = c.ece;
+    if (typeof ece !== 'number' || !Number.isFinite(ece) || ece < 0 || ece > 1) {
+      fail('claims a measured calibration without an expected calibration error in [0, 1]');
+    }
+    if (typeof c.evaluatedOn !== 'string' || c.evaluatedOn.trim().length === 0) {
+      fail('claims a measured calibration without saying what it was measured on');
+    }
+  } else if (c.ece !== null && c.ece !== undefined) {
+    fail('states an expected calibration error for a calibration it says was not measured');
+  }
+}
 
 /** Refuse a manifest whose rows fail the contract, naming the first offending row and rule. */
 function assertManifestValid(manifest: readonly RuntimeManifestEntry[]): void {
@@ -101,6 +183,7 @@ function assertManifestValid(manifest: readonly RuntimeManifestEntry[]): void {
     }
     if (typeof entry.minRamGb !== 'number' || entry.minRamGb <= 0) fail('states no RAM floor');
     if (typeof entry.qualityDe !== 'string' || entry.qualityDe.length === 0) fail('states no German-quality sentence');
+    assertDecideFieldsValid(entry, fail);
   }
 }
 

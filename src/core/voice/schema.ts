@@ -65,10 +65,61 @@ CREATE TABLE IF NOT EXISTS runtime_selection (
   selected_at  TEXT NOT NULL,
   updated_at   TEXT NOT NULL
 );
+
+-- D144 (E05 §10.2, A35 §11): one row per decide() answer a consumer showed a person, written BEFORE
+-- anything renders it. Append-only by trigger, never pruned: a suggestion that led to a booking stays
+-- explainable as long as the booking. It holds no state: a KEYED fingerprint of the input (critic C3,
+-- pseudonymous data, A35 §11), the questions with their options, every probability, the model's ref
+-- and pinned sha256.
+CREATE TABLE IF NOT EXISTS model_decision (
+  id              TEXT PRIMARY KEY,
+  workspace_id    TEXT NOT NULL REFERENCES workspace(id),
+  consumer        TEXT NOT NULL,
+  subject_kind    TEXT NOT NULL,
+  subject_id      TEXT NOT NULL,
+  runtime_id      TEXT NOT NULL,
+  model_ref       TEXT NOT NULL,
+  model_sha256    TEXT NOT NULL,
+  input_sha256    TEXT NOT NULL,
+  questions_json  TEXT NOT NULL,
+  answers_json    TEXT NOT NULL,
+  chosen_value    TEXT,
+  chosen_label    TEXT,
+  chosen_probability REAL,
+  -- The model row's calibration AS IT WAS when the model answered (method, measured, ece, evaluatedOn):
+  -- the person reads the percentage beside the measured error that qualifies it (owner, 30.09.2026).
+  calibration_json TEXT,
+  created_by      TEXT NOT NULL,
+  created_at      TEXT NOT NULL
+);
+
+-- D144, critic C3: the per-workspace key of the decision fingerprint (HMAC-SHA256). A plain hash of a
+-- bank line's facts re-identifies its counterparty from a list of names; keyed, it does not without
+-- this secret, which every environment copy randomises (landscape SECRET_COLUMNS).
+CREATE TABLE IF NOT EXISTS model_decision_key (
+  workspace_id TEXT PRIMARY KEY REFERENCES workspace(id),
+  secret       TEXT NOT NULL,
+  created_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS model_decision_subject
+ON model_decision (workspace_id, consumer, subject_kind, subject_id, model_sha256);
+
+CREATE TRIGGER IF NOT EXISTS model_decision_no_update
+BEFORE UPDATE ON model_decision
+BEGIN
+  SELECT RAISE(ABORT, 'model_decision is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS model_decision_no_delete
+BEFORE DELETE ON model_decision
+BEGIN
+  SELECT RAISE(ABORT, 'model_decision is append-only');
+END;
 `;
 
 /**
  * The E05 tables, exported as data so the guard suites can hold the schema assertions (no excerpt
  * column, no money column, no OP3 registration) to this list rather than to a hand-copied one.
  */
-export const VOICE_TABLES = ['voice_profile', 'voice_exemplar', 'runtime_selection'] as const;
+export const VOICE_TABLES = ['voice_profile', 'voice_exemplar', 'runtime_selection', 'model_decision', 'model_decision_key'] as const;

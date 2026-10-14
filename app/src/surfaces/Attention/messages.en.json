@@ -52,7 +52,13 @@
       "qr_match": "Reconciliation",
       "dunning_run": "Dunning",
       "agent_action": "Proposals",
-      "review_flag": "Flags"
+      "review_flag": "Flags",
+      "checklist_items_due": "Checklists",
+      "bank_keys_review": "Bank keys",
+      "bank_activation": "Bank activation",
+      "bank_fetch_failed": "Bank fetch",
+      "bank_statement_gap": "Statement gaps",
+      "bank_lines_waiting": "Bank lines"
     },
     "collapsedWith": "also in {queue}",
     "overflow": {
@@ -113,7 +119,8 @@
         "approve_allow": "Proposal approved. The agent will run this kind directly from now on.",
         "reject": "Proposal rejected. Nothing was posted.",
         "resolve": "Flag resolved, entry approved.",
-        "issue": "Reminder run issued."
+        "issue": "Reminder run issued.",
+        "confirm_gap": "Confirmed: nothing is missing in this gap."
       },
       "error": {
         "generic": "That did not work. The row stays: try again or open the page it belongs to.",
@@ -124,7 +131,12 @@
         "already_paid": "This invoice is already settled.",
         "currency_mismatch": "The currencies differ: record the payment with a conversion under Payments.",
         "already_executed": "This proposal has been executed in the meantime.",
-        "not_found": "This row no longer exists. The list reloads."
+        "not_found": "This row no longer exists. The list reloads.",
+        "gap_not_chained": "There is money in this gap that is not in the books yet. It cannot be confirmed: import the missing statements.",
+        "gap_not_found": "This gap has been closed in the meantime. The list reloads.",
+        "human_only": "A person confirms this, not the agent.",
+        "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on. It cannot be confirmed: import the missing statements.",
+        "vorschlag_stale": "Not run: the record behind this proposal changed after the agent made it. Ask the agent to propose it again."
       }
     }
   },

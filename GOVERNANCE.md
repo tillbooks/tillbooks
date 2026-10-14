@@ -8,7 +8,7 @@ contributes.
 
 Nomadik GmbH maintains TILL and holds the copyright on the original work
 (contributions stay under the contributor's copyright, licensed to the project
-under MIT). While TILL is pre-alpha, the maintainers make the final call on
+under MIT). While TILL is in beta, the maintainers make the final call on
 direction, scope, and what ships. This is deliberate: a Swiss accounting engine
 has to be internally consistent and statutorily correct before it is democratic.
 
@@ -25,7 +25,7 @@ to move more decisions into the open. That evolution will be recorded here.
   is the one place self-review is not trusted.
 - **Direction and scope** (new capability families, breaking changes, licensing,
   a new statutory regime) are decided by the maintainers, in the open where
-  possible, in an issue or a discussion.
+  possible, in an issue.
 
 ## Principles that are not up for negotiation
 

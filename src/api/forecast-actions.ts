@@ -30,11 +30,12 @@ import {
   HORIZON_MIN,
   HORIZON_MAX,
 } from '../core/forecast/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ForecastActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,

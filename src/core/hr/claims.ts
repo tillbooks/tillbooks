@@ -282,6 +282,15 @@ export function upsertLine(ctx: WorkspaceContext, input: LineUpsertInput): Resul
     ? (ctx.store.db.prepare('SELECT * FROM expense_line WHERE workspace_id = ? AND id = ? AND claim_id = ?').get(ctx.workspaceId, line.lineId, claim.id) as LineRow | undefined)
     : undefined;
   if (line.lineId !== undefined && existing === undefined) return err('not_found', { lineId: line.lineId });
+  // The raw key is unique per workspace on `expense_line` (the partial index), so a NEW line under a key
+  // another line already holds (another claim's, or an inner write's from K1's own scope) is refused by
+  // name here, as `createClaim` does, rather than escaping as a driver constraint throw.
+  if (existing === undefined) {
+    const holder = ctx.store.db
+      .prepare('SELECT id, claim_id FROM expense_line WHERE workspace_id = ? AND idempotency_key = ?')
+      .get(ctx.workspaceId, input.idempotencyKey) as { id: string; claim_id: string } | undefined;
+    if (holder !== undefined) return err('idempotency_key_conflict', { idempotencyKey: input.idempotencyKey, lineId: holder.id, claimId: holder.claim_id });
+  }
 
   return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'expense_line_upsert', () => {
     const now = ctx.clock.now();

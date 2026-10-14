@@ -7,7 +7,6 @@
 
 import type { WorkspaceContext } from '../context.js';
 import type { QrMatchConfidence } from './qrMatch.js';
-import { compactReference } from './pain001.js';
 import { settledOnVendorBill } from '../purchase/reads.js';
 import type { BankTxnRow } from './bankLines.js';
 import { readBankTxnDetail } from './bankLines.js';
@@ -144,7 +143,8 @@ function dayDistance(a: string | null, b: string | null): number | null {
 
 /**
  * A36 the batch-debit join (spec §4): a debit whose `batch_pmt_inf_id` equals the PmtInfId TILL wrote
- * for an A18 `generated` batch (`compactReference('P', batch.id)`) proposes the BATCH. Amount equal to
+ * for an A18 `generated` batch (the value frozen on `payment_batch.pmt_inf_id`, never derived from the
+ * batch id, which a restore re-mints: A18 F9) proposes the BATCH. Amount equal to
  * the batch control sum: top confidence, one-click confirm routes through A18's settlement (never a
  * bespoke split). Amount NOT equal: shown for information, `blocked` so the one-click is disabled
  * (a partial execution goes to the manual split). Integer Rappen equality only, no rounding (P2).
@@ -152,10 +152,10 @@ function dayDistance(a: string | null, b: string | null): number | null {
 function batchJoin(ctx: WorkspaceContext, row: BankTxnRow): CamtMatchProposal | null {
   if (row.batch_pmt_inf_id === null || row.batch_pmt_inf_id.length === 0) return null;
   const batches = ctx.store.db
-    .prepare("SELECT id, ctrl_sum_minor FROM payment_batch WHERE workspace_id = ? AND status = 'generated'")
-    .all(ctx.workspaceId) as { id: string; ctrl_sum_minor: number | null }[];
+    .prepare("SELECT id, ctrl_sum_minor, pmt_inf_id FROM payment_batch WHERE workspace_id = ? AND status = 'generated'")
+    .all(ctx.workspaceId) as { id: string; ctrl_sum_minor: number | null; pmt_inf_id: string | null }[];
   for (const b of batches) {
-    if (compactReference('P', b.id) !== row.batch_pmt_inf_id) continue;
+    if (b.pmt_inf_id !== row.batch_pmt_inf_id) continue;
     const totalMatches = b.ctrl_sum_minor === row.amount_minor;
     return {
       kind: 'payment_batch',

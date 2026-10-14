@@ -1,20 +1,28 @@
 /**
- * A03 Periods surface (Studio §6): the period-lock grid with month soft-close / reopen and the
- * irreversible year-end close, plus the tamper-evident Audit-Log panel (AuditPanel).
+ * A03 Periods surface (Studio §6): the period-lock grid with month soft-close / reopen, the door to
+ * the guided year-end close, plus the tamper-evident Audit-Log panel (AuditPanel).
  *
  * Lock state is glyph PLUS text (soft vs hard/sealed), never colour alone. A hard, legally sealed lock
  * (a filed VAT return or a year-end close) never offers a reopen/unlock control at all: its row says
- * why in words ("Gesetzlich versiegelt"), rather than showing the control and rejecting it. The
- * year-end close is the most destructive action, so it is confirm-gated. Every write carries an
- * idempotency key (§H-IDEMPOTENT). Dates render through the shared `formatDate`, a month through
- * `formatMonth` ("Juni 2026", never `2026-06`, K-38), money through `formatMoney`.
+ * why in words ("Gesetzlich versiegelt"), rather than showing the control and rejecting it. Every
+ * write carries an idempotency key (§H-IDEMPOTENT). Dates render through the shared `formatDate`, a
+ * month through `formatMonth` ("Juni 2026", never `2026-06`, K-38).
  *
  * ONE OVERFLOW PER ROW (K-21, D137). "Monat wieder öffnen" and "Periode entsperren" sit in the row's
  * one trailing overflow instead of a 440px column of stacked buttons and notes; an actor who may not
  * act sees the item disabled with the reason in its label. The deep-linked month is the row the
  * view is on (`isRowCurrent`, the selection pill), no longer an inset warn bar (K-24).
+ *
+ * ONE VISIBLE YEAR-CLOSE DOOR (D152 rule 3, owner's pick "Guided + overflow", 04.10.2026). The year
+ * close used to have two doors side by side: a bare "Jahresabschluss durchführen" behind a year
+ * picker (disabled until a year was picked) and a link to the guided close. The guided one is the
+ * visible door: it opens the open `year_close` run when there is one, else the checklist list with
+ * the year-close template preselected (`?start=year_close&year=`). The DIRECT seal survives behind
+ * the header's overflow ("Direkt abschliessen …"): the same year picker (this year plus ten back),
+ * the same confirm and the same `close_year` call with the same payload as before, and nothing in it
+ * is disabled at rest because its confirm appears only once a year is chosen.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
@@ -25,7 +33,7 @@ import { useT, formatDate, formatMoney } from '../../i18n';
 import { useCalendarFormat } from '../../lib/format';
 import { EmptyState, NoWorkspaceState, PermissionDenied } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
-import type { OverflowMenuItem } from '../../components/OverflowMenu';
+import { OverflowMenu, type OverflowMenuItem } from '../../components/OverflowMenu';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { Modal } from '../../components/Modal';
@@ -38,7 +46,7 @@ import { SoftLockGlyph, HardLockGlyph } from './glyphs';
 import { LockGlyph } from '../../components/states/glyphs';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { COMMIT_TARGET_CLASS, useCommitAck } from '../../lib/motion';
-import { parseRunList, YEAR_CLOSE_TEMPLATE_ID } from '../Checklists/model';
+import { lastEndedYears, parseRunList, todayIso, YEAR_CLOSE_TEMPLATE_ID } from '../Checklists/model';
 import './Periods.css';
 
 /** Hard locks carrying one of these reasons are legally final and cannot be casually reopened. */
@@ -72,6 +80,9 @@ const YEAR_RE = /^\d{4}$/;
  */
 const CLOSABLE_YEARS_BACK = 10;
 
+/** How many ended years the guided start offers (`lastEndedYears(today, 3)` in `Checklists.tsx`). */
+const GUIDED_YEARS = 3;
+
 /**
  * The month a person closing "the month" most likely means: the previous calendar month (J4.1's
  * trigger is the first working day after month end). A `?month=YYYY-MM` deep link overrides it: the
@@ -88,13 +99,38 @@ function previousMonth(now = new Date()): string {
 /**
  * The month-close confirm renders the ENGINE'S sentence for `close_month` (D118 C4, F-07 J4.1).
  * F-08 mapped `close_month` to the `close-period` capability in `src/core/agent/dialMap.ts`, so
- * `ConfirmPeriodDialog` resolves `agent.consequence.close-period` for it directly: the same string
- * the year close, the Review lock dialog and the Vorschlag card render. Nothing is authored here,
+ * `ConfirmPeriodDialog` renders the engine's own consequence for it (D156, the one catalogue): the same string
+ * the guided year close, the Review lock dialog and the Vorschlag card render. Nothing is authored here,
  * and there is no fallback to a sibling verb any more (the pre-F-08 `lock_period` fallback is gone).
  */
 /** Newest period first: the month just closed lands at the top, not below the sealed years. */
 function newestFirst(a: PeriodLock, b: PeriodLock): number {
   return a.period < b.period ? 1 : a.period > b.period ? -1 : 0;
+}
+
+/** One open `year_close` run: the fiscal year label it closes and its id. */
+interface YearRun {
+  year: string;
+  runId: string;
+}
+
+/**
+ * What this surface knows about the open `year_close` runs (D152, fail closed, critic R2-F1). The
+ * direct seal is offered ONLY on `known` with no run for the picked year: while the read is in
+ * flight (`loading`), or refused or unreadable (`unknown`, e.g. a role with manage_periods but no
+ * read_books), the dialog says so and offers no confirm. The engine refuses `close_year` over an
+ * open run too (`year_close_in_progress`); this is the face of that rule, not its only holder.
+ */
+type RunsState = { kind: 'loading' } | { kind: 'unknown' } | { kind: 'known'; runs: readonly YearRun[] };
+
+/** The open year runs off a `checklist_list` answer, oldest year first; null for an unreadable answer. */
+function yearRunsOf(body: unknown): YearRun[] | null {
+  if (isErr(body as Result)) return null;
+  const parsed = parseRunList(body);
+  if (parsed === null) return null;
+  return parsed
+    .map((r) => ({ year: r.periodLabel, runId: r.runId }))
+    .sort((a, b) => (a.year < b.year ? -1 : a.year > b.year ? 1 : 0));
 }
 
 interface PeriodLock {
@@ -159,7 +195,19 @@ function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }
 
+/**
+ * ONE WORKSPACE PER MOUNT (critic F2/F3 on cl-periods). Every piece of this surface's state belongs to
+ * one workspace: the open year_close runs behind the door, the year result in the banner, the direct
+ * seal's open dialog and picked year, the committed row, the accrual drawer. Keying the surface on the
+ * workspace remounts it on a switch, so nothing of A survives into B, and a read or a write still in
+ * flight for A lands on an unmounted instance, which the `live` guard below then drops.
+ */
 export function Periods(props: PeriodsProps = {}) {
+  const workspaceId = useWorkspaceId();
+  return <PeriodsSurface key={workspaceId ?? ''} {...props} />;
+}
+
+function PeriodsSurface(props: PeriodsProps) {
   // Both hooks run UNCONDITIONALLY and the prop overrides the result afterwards. Writing this as
   // `props.canManage ?? useCan(...)` would make the hook call conditional on a prop, which is the
   // rules-of-hooks violation that breaks a component the first time a caller passes one and not the
@@ -177,10 +225,12 @@ export function Periods(props: PeriodsProps = {}) {
 
   const [state, setState] = useState<ListState>({ kind: 'loading' });
   const [monthInput, setMonthInput] = useState(() => focusMonth ?? previousMonth());
+  /** The open `year_close` runs (see `RunsState`); the year-close door opens the oldest of them. */
+  const [runs, setRuns] = useState<RunsState>({ kind: 'loading' });
+  const yearRuns: readonly YearRun[] = runs.kind === 'known' ? runs.runs : [];
+  /** The direct seal behind the header overflow: open, and the year picked in it ('' = none yet). */
+  const [directOpen, setDirectOpen] = useState(false);
   const [yearInput, setYearInput] = useState('');
-  const [confirmYear, setConfirmYear] = useState<string | null>(null);
-  /** The open `year_close` run per fiscal year label, for the hand-off from the year form. */
-  const [yearRuns, setYearRuns] = useState<Record<string, string>>({});
   // A month close is a period lock on the money path exactly as a year close is: it changes what
   // can be posted and it is awkward to undo. It gets the same confirm gate, not a bare submit.
   const [confirmMonth, setConfirmMonth] = useState<string | null>(null);
@@ -191,28 +241,52 @@ export function Periods(props: PeriodsProps = {}) {
   const [committedPeriod, setCommittedPeriod] = useState<string | null>(null);
   useCommitAck(committedPeriod, state);
 
+  // Stale-read guards. `live` is false once this instance unmounted (a workspace switch remounts the
+  // surface), and `loadToken` names the newest load, so an older read that answers late never paints
+  // over a newer one. Every await below checks both before it touches state.
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const loadToken = useRef(0);
+
   const load = useCallback(async () => {
+    const token = ++loadToken.current;
+    const current = () => live.current && token === loadToken.current;
+    // The runs are re-read with the locks; until they answer they are `loading`, never a run an
+    // earlier read reported and never "none".
+    setRuns({ kind: 'loading' });
     if (workspaceId === null) {
       setState({ kind: 'ok', locks: [] });
+      setRuns({ kind: 'known', runs: [] });
       return;
     }
     setState({ kind: 'loading' });
-    const { body } = await client.call('list_period_locks', { workspaceId });
+    // Both reads leave together and each lands on its own: a refused lock read must not leave the
+    // runs `loading` forever, and a refused runs read must not hide the locks.
+    const locksRead = client.call('list_period_locks', { workspaceId });
+    // G22 leg 2 (D129, spec §10.12): the open year_close runs, so the one year-close door lands in
+    // the run already under way rather than on the checklist list. Years close in order, so the
+    // OLDEST open run is the one to finish first. A refused or unreadable answer is `unknown`.
+    const runsRead = client.call('checklist_list', { workspaceId, templateId: YEAR_CLOSE_TEMPLATE_ID, status: 'open' });
+    const { body } = await locksRead;
+    if (!current()) return;
     if (isErr(body)) {
       setState({ kind: 'error', error: body });
-      return;
+    } else {
+      // No cast and no `?? []`. `locks` is a REQUIRED field of the declared payload, so the fallback
+      // was for a response the engine cannot send, and the engine's row type is assignable to this
+      // surface's `PeriodLock` as it stands: `PeriodLock` is the wider of the two about `lockedAt` and
+      // `lockedBy`, which is the safe direction.
+      setState({ kind: 'ok', locks: [...body.locks].sort(newestFirst) });
     }
-    // No cast and no `?? []`. `locks` is a REQUIRED field of the declared payload, so the fallback
-    // was for a response the engine cannot send, and the engine's row type is assignable to this
-    // surface's `PeriodLock` as it stands: `PeriodLock` is the wider of the two about `lockedAt` and
-    // `lockedBy`, which is the safe direction.
-    setState({ kind: 'ok', locks: [...body.locks].sort(newestFirst) });
-    // G22 leg 2 (D129, spec §10.12): the open year_close runs, so the year form hands over to the
-    // guided close instead of the bare seal when one exists. A refusal here (no read_books on the
-    // checklists, an older engine) leaves the bare action in place: the hand-off is an addition.
-    const runs = await client.call('checklist_list', { workspaceId, templateId: YEAR_CLOSE_TEMPLATE_ID, status: 'open' });
-    const parsed = isErr(runs.body) ? null : parseRunList(runs.body);
-    setYearRuns(Object.fromEntries((parsed ?? []).map((r) => [r.periodLabel, r.runId])));
+    const answered = await runsRead;
+    if (!current()) return;
+    const known = yearRunsOf(answered.body);
+    setRuns(known === null ? { kind: 'unknown' } : { kind: 'known', runs: known });
   }, [client, workspaceId]);
 
   useEffect(() => {
@@ -239,6 +313,9 @@ export function Periods(props: PeriodsProps = {}) {
           return t('period.err.sealed', { period });
         case 'year_already_closed':
           return t('period.err.yearClosed');
+        // Critic R6-1: the close read its own entries and balances back and refused to seal.
+        case 'year_close_unverified':
+          return t('period.err.yearUnverified');
         default:
           return t('period.err.generic');
       }
@@ -246,18 +323,26 @@ export function Periods(props: PeriodsProps = {}) {
     [t, cal],
   );
 
-  /** Run one write, then either surface a success feedback and refetch, or an error feedback. */
+  /**
+   * Run one write, then either surface a success feedback and refetch, or an error feedback. `onErr`
+   * may take a refusal over (answer true) when the surface has a better place for it than the banner.
+   */
   const runWrite = useCallback(
     async (
       action: string,
       input: Record<string, unknown>,
       onOk: (body: Extract<Result, { ok: true }>) => Feedback,
+      onErr?: (body: Err) => boolean,
     ) => {
       if (workspaceId === null) return;
       setBusy(true);
       const { body } = await client.call(action, { workspaceId, ...input });
+      // The workspace changed while the write was in flight: this instance is gone, and nothing it
+      // learned (a banner, a refetch of the old workspace's locks) may reach the new one.
+      if (!live.current) return;
       setBusy(false);
       if (isErr(body)) {
+        if (onErr?.(body) === true) return;
         setFeedback({ tone: 'error', text: explain(body) });
         return;
       }
@@ -299,40 +384,82 @@ export function Periods(props: PeriodsProps = {}) {
     [runWrite, t, cal],
   );
 
+  /**
+   * The direct seal, failing closed (D152, critic R2-F1). At confirm time the open runs are READ
+   * AGAIN: an unreadable answer turns the dialog to `unknown` and sends nothing, a run for the year
+   * turns it to the hand-off and sends nothing. Only a fresh, readable "no run for this year" sends
+   * `close_year`, with the 60429dd5 payload. Should the engine still answer `year_close_in_progress`
+   * (a run started in between), the dialog stays open on the hand-off to the run it names.
+   */
   const closeYear = useCallback(
-    (year: string) => {
-      setConfirmYear(null);
-      void runWrite('close_year', { year, idempotencyKey: newIdempotencyKey() }, (body) => ({
-        tone: 'success',
-        text: t('period.yearClosed', { period: year }),
-        // `close_year` names its own unit. `result` is swept from `base_debit_minor -
-        // base_credit_minor`, so it is a base-currency figure by construction, and the engine sends
-        // `baseCurrency` beside it UNCONDITIONALLY (yearClose.ts), in a CHF book and on a year that
-        // closed at zero alike. The client therefore reads the name off the very answer that
-        // carries the number, and no longer holds a second read open to label it.
-        //
-        // Both halves or neither. If the engine ever stopped naming the currency, the honest
-        // outcome is a close confirmed with no figure, never a figure under a guessed CHF: that
-        // guess is the original defect, and defaulting here would only move it.
-        result:
-          typeof body.result === 'number' &&
-          typeof body.baseCurrency === 'string' &&
-          body.baseCurrency !== ''
-            ? { minor: body.result, currency: body.baseCurrency }
-            : undefined,
-        entryId:
-          typeof body.closingEntryId === 'string'
-            ? body.closingEntryId
-            : typeof body.carryEntryId === 'string'
-              ? body.carryEntryId
+    async (year: string) => {
+      if (workspaceId === null) return;
+      setBusy(true);
+      const recheck = await client.call('checklist_list', { workspaceId, templateId: YEAR_CLOSE_TEMPLATE_ID, status: 'open' });
+      if (!live.current) return;
+      setBusy(false);
+      const fresh = yearRunsOf(recheck.body);
+      if (fresh === null) {
+        setRuns({ kind: 'unknown' });
+        return;
+      }
+      setRuns({ kind: 'known', runs: fresh });
+      if (fresh.some((r) => r.year === year)) return;
+      const closeDialog = () => {
+        setDirectOpen(false);
+        setYearInput('');
+      };
+      const onErr = (body: Err): boolean => {
+        if (body.error === 'year_close_in_progress' && typeof body.yearRunId === 'string') {
+          const named: YearRun = { year, runId: body.yearRunId };
+          setRuns((r) => ({ kind: 'known', runs: [...(r.kind === 'known' ? r.runs.filter((x) => x.year !== year) : []), named] }));
+          return true;
+        }
+        closeDialog();
+        return false;
+      };
+      void runWrite('close_year', { year, idempotencyKey: newIdempotencyKey() }, (body) => {
+        closeDialog();
+        return {
+          tone: 'success',
+          text: t('period.yearClosed', { period: year }),
+          // `close_year` names its own unit. `result` is swept from `base_debit_minor -
+          // base_credit_minor`, so it is a base-currency figure by construction, and the engine sends
+          // `baseCurrency` beside it UNCONDITIONALLY (yearClose.ts), in a CHF book and on a year that
+          // closed at zero alike. The client therefore reads the name off the very answer that
+          // carries the number, and no longer holds a second read open to label it.
+          //
+          // Both halves or neither. If the engine ever stopped naming the currency, the honest
+          // outcome is a close confirmed with no figure, never a figure under a guessed CHF: that
+          // guess is the original defect, and defaulting here would only move it.
+          result:
+            typeof body.result === 'number' &&
+            typeof body.baseCurrency === 'string' &&
+            body.baseCurrency !== ''
+              ? { minor: body.result, currency: body.baseCurrency }
               : undefined,
-      }));
+          entryId:
+            typeof body.closingEntryId === 'string'
+              ? body.closingEntryId
+              : typeof body.carryEntryId === 'string'
+                ? body.carryEntryId
+                : undefined,
+        };
+      }, onErr);
     },
-    [runWrite, t],
+    [client, workspaceId, runWrite, t],
   );
 
   const monthValid = MONTH_RE.test(monthInput);
   const yearValid = YEAR_RE.test(yearInput);
+  /**
+   * G22 §10.12 (critic F1 and R2-F1 on cl-periods): a year whose guided year_close run is OPEN is never
+   * sealed from here. As at 60429dd5 the picked year's run replaces the seal with the hand-off to that
+   * run, and the confirm appears only once the runs are KNOWN (`canSeal`); the engine refuses the
+   * same call (`year_close_in_progress`) whatever this renders.
+   */
+  const yearRun = yearValid ? yearRuns.find((r) => r.year === yearInput) : undefined;
+  const canSeal = yearValid && runs.kind === 'known' && yearRun === undefined;
   const noWorkspace = workspaceId === null;
   const monthLocked =
     state.kind === 'ok' && state.locks.some((l) => l.period === monthInput || l.period === monthInput.slice(0, 4));
@@ -342,6 +469,18 @@ export function Periods(props: PeriodsProps = {}) {
     const thisYear = new Date().getFullYear();
     return Array.from({ length: CLOSABLE_YEARS_BACK + 1 }, (_, i) => String(thisYear - i));
   }, []);
+
+  /**
+   * The year the guided start is handed when no run is open: the newest ENDED year the guided start
+   * offers that is not sealed yet (a sealed year would only be refused `year_already_closed`). Null
+   * when all of them are sealed or the locks are not read yet: the dialog then picks its own default.
+   */
+  const guidedYear = useMemo(() => {
+    if (state.kind !== 'ok') return null;
+    const sealed = new Set(state.locks.filter((l) => l.kind === 'hard' && l.reason === 'year_close').map((l) => l.period));
+    return lastEndedYears(todayIso(), GUIDED_YEARS).map((y) => y.label).find((y) => !sealed.has(y)) ?? null;
+  }, [state]);
+  const guidedStart = `/checklisten?start=${YEAR_CLOSE_TEMPLATE_ID}${guidedYear === null ? '' : `&year=${guidedYear}`}`;
 
   const isSealed = (lock: PeriodLock) =>
     lock.kind === 'hard' && lock.reason !== null && SEALED_REASONS.has(lock.reason);
@@ -447,6 +586,17 @@ export function Periods(props: PeriodsProps = {}) {
         title={t('period.title')}
         titleId="periods-title"
         help={<SurfaceHelp surface="Periods" />}
+        // The direct seal, behind the header's overflow (owner, 04.10.2026): the guided close is the
+        // visible door, and this is the way past it. Hidden, never shown-then-refused, for an actor
+        // who may not manage periods (A24); the engine gates `close_year` whatever this renders.
+        actions={
+          canManage ? (
+            <OverflowMenu
+              label={t('period.moreActions')}
+              items={[{ key: 'direct-close', label: t('period.directClose'), onSelect: () => setDirectOpen(true) }]}
+            />
+          ) : undefined
+        }
       />
 
       {feedback !== null && (
@@ -458,15 +608,22 @@ export function Periods(props: PeriodsProps = {}) {
           onDismiss={() => setFeedback(null)}
           dismissLabel={t('period.dismiss')}
         >
-          {feedback.result !== undefined && (
-            <p className="action-feedback__detail">
-              {t('period.yearResult')}:{' '}
-              <span className="t-money">{formatMoney(feedback.result.minor, feedback.result.currency)}</span>
-            </p>
-          )}
-          {feedback.entryId !== undefined && (
-            <p className="action-feedback__detail">
-              {t('period.carryTo2979')} ({t('period.viewCarryEntry')}: {feedback.entryId})
+          {/* The year close's result in ONE line: the figure in the unit the engine named, and the
+              closing entry it posted. */}
+          {(feedback.result !== undefined || feedback.entryId !== undefined) && (
+            <p className="action-feedback__detail" data-testid="period-year-result">
+              {feedback.result !== undefined && (
+                <>
+                  {t('period.yearResult')}:{' '}
+                  <span className="t-money">{formatMoney(feedback.result.minor, feedback.result.currency)}</span>
+                </>
+              )}
+              {feedback.result !== undefined && feedback.entryId !== undefined && ' · '}
+              {feedback.entryId !== undefined && (
+                <>
+                  {t('period.carryTo2979')} ({t('period.viewCarryEntry')}: {feedback.entryId})
+                </>
+              )}
             </p>
           )}
         </ActionFeedback>
@@ -505,50 +662,16 @@ export function Periods(props: PeriodsProps = {}) {
           </button>
         </form>
 
-        <form
-          className="period-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (yearValid && !noWorkspace) setConfirmYear(yearInput);
-          }}
+        {/* The one visible year-close door (D152 rule 3): the guided close, which ends in the seal. It
+            lands in the open run when there is one (its year in the label), else on the checklist
+            list with the year-close Start dialog open on the year to close. */}
+        <Link
+          className="btn btn--secondary period-year-close"
+          to={yearRuns[0] !== undefined ? `/checklisten?run=${encodeURIComponent(yearRuns[0].runId)}` : guidedStart}
+          data-testid="period-year-close"
         >
-          <div className="period-field">
-            {t('period.yearLabel')}
-            {/* D15/C1: there is no native picker for a bare year, so the honest equivalent is a
-                closed list. It makes a malformed year unrepresentable, which a number input never
-                could, and it still hands the engine the plain ISO `2026`. */}
-            <Select
-              value={yearInput}
-              onChange={(value) => setYearInput(value)}
-              options={[
-                { value: '', label: t('period.yearPlaceholder') },
-                ...closableYears.map((year) => ({ value: year, label: year })),
-              ]}
-              ariaLabel={t('period.yearLabel')}
-            />
-          </div>
-          {yearValid && yearRuns[yearInput] !== undefined ? (
-            <>
-              <Link className="btn btn--secondary" to={`/checklisten?run=${encodeURIComponent(yearRuns[yearInput] as string)}`} data-testid="period-open-year-close">
-                {t('period.openYearClose')}
-              </Link>
-              <span className="period-note">{t('period.yearCloseRunNote', { year: yearInput })}</span>
-            </>
-          ) : (
-            <>
-              <button
-                type="submit"
-                className="btn btn--secondary"
-                disabled={!yearValid || noWorkspace || busy}
-              >
-                {t('period.closeYear')}
-              </button>
-              <Link className="btn btn--secondary" to="/checklisten">
-                {t('period.guidedYearClose')}
-              </Link>
-            </>
-          )}
-        </form>
+          {yearRuns[0] !== undefined ? t('period.yearCloseFor', { year: yearRuns[0].year }) : t('period.yearClose')}
+        </Link>
       </div>
 
       {monthValid && workspaceId !== null && (
@@ -605,6 +728,85 @@ export function Periods(props: PeriodsProps = {}) {
 
       <AuditPanel />
 
+      {/* The direct seal (header overflow). The picker comes first; the confirm, its message and the
+          engine's consequence sentence appear only once a year is chosen, so nothing here sits
+          disabled at rest. */}
+      {directOpen && (
+        <Modal
+          open
+          role={ALERT_DIALOG}
+          title={canSeal ? t('period.confirmYearTitle', { year: yearInput }) : t('period.directClose')}
+          onClose={() => {
+            setDirectOpen(false);
+            setYearInput('');
+          }}
+          closeLabel={t('period.closeDialog')}
+          footer={
+            <>
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => {
+                  setDirectOpen(false);
+                  setYearInput('');
+                }}
+              >
+                {t('period.cancel')}
+              </button>
+              {yearRun !== undefined ? (
+                <Link className="btn btn--secondary" to={`/checklisten?run=${encodeURIComponent(yearRun.runId)}`} data-testid="period-open-year-close">
+                  {t('period.openYearClose')}
+                </Link>
+              ) : yearValid && runs.kind === 'unknown' ? (
+                <Link className="btn btn--secondary" to="/checklisten" data-testid="period-runs-unknown-link">
+                  {t('period.runsUnknownLink')}
+                </Link>
+              ) : (
+                canSeal && (
+                  <button type="button" className="btn btn--danger" disabled={busy} onClick={() => void closeYear(yearInput)}>
+                    {t('period.confirm')}
+                  </button>
+                )
+              )}
+            </>
+          }
+        >
+          <div className="period-field">
+            {t('period.yearLabel')}
+            {/* D15/C1: there is no native picker for a bare year, so the honest equivalent is a
+                closed list. It makes a malformed year unrepresentable, which a number input never
+                could, and it still hands the engine the plain ISO `2026`. */}
+            <Select
+              value={yearInput}
+              onChange={(value) => setYearInput(value)}
+              options={[
+                { value: '', label: t('period.yearPlaceholder') },
+                ...closableYears.map((year) => ({ value: year, label: year })),
+              ]}
+              ariaLabel={t('period.yearLabel')}
+            />
+          </div>
+          {yearRun !== undefined ? (
+            <p className="period-confirm-message">{t('period.yearCloseRunNote', { year: yearInput })}</p>
+          ) : yearValid && runs.kind === 'loading' ? (
+            <p className="period-confirm-message" role="status" data-testid="period-runs-checking">
+              {t('period.runsChecking')}
+            </p>
+          ) : yearValid && runs.kind === 'unknown' ? (
+            <p className="period-confirm-message" data-testid="period-runs-unknown">
+              {t('period.runsUnknown')}
+            </p>
+          ) : (
+            canSeal && (
+              <>
+                <p className="period-confirm-message">{t('period.confirmYear')}</p>
+                <ConsequenceLine verb="close_year" />
+              </>
+            )
+          )}
+        </Modal>
+      )}
+
       {confirmMonth !== null && (
         <ConfirmPeriodDialog
           title={t('period.confirmMonthTitle', { period: cal.calendar(confirmMonth) })}
@@ -616,16 +818,6 @@ export function Periods(props: PeriodsProps = {}) {
         />
       )}
 
-      {confirmYear !== null && (
-        <ConfirmPeriodDialog
-          title={t('period.confirmYearTitle', { year: confirmYear })}
-          message={t('period.confirmYear')}
-          verb="close_year"
-          confirmLabel={t('period.confirm')}
-          onConfirm={() => closeYear(confirmYear)}
-          onCancel={() => setConfirmYear(null)}
-        />
-      )}
     </section>
   );
 }
@@ -633,15 +825,15 @@ export function Periods(props: PeriodsProps = {}) {
 /**
  * The confirm gate for a period-lock write (Tier-3 forgiveness), on the shared `Modal` primitive.
  *
- * Both closes come through here as an ALERT dialog: a period lock is a consequential, awkward-to-undo
+ * The month close comes through here as an ALERT dialog (the direct year seal is the same kind of
+ * alert dialog, with its year picker in front): a period lock is a consequential, awkward-to-undo
  * write on the money path, so a stray scrim click must not answer it, which is exactly the alertdialog
  * contract Modal enforces (no dismiss-on-scrim, focus trapped, Escape and the close control both cancel).
  * The consequence is the ENGINE'S sentence (D118 C4): the shared `ConsequenceLine` renders
- * `agent.consequence.close-period` for the verb given, the identical string the Review surface's
+ * engine's consequence (D156, the one catalogue) for the verb given, the identical string the Review surface's
  * lock dialog and the Vorschlag card show, so one consequence has one sentence across the Studio
- * (F-07, J4.1). The message above it carries only what differs between the two closes: the year
- * close names the accounts it posts to, the month close says when it can be reopened. Neither line
- * restates the consequence in its own words any more.
+ * (F-07, J4.1). The message above it carries only what the soft close adds (when it can be
+ * reopened); it never restates the consequence in its own words.
  */
 function ConfirmPeriodDialog({
   title,

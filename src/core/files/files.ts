@@ -35,6 +35,7 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { entityKindDef, ENTITY_KIND_IDS, tenantColumnOf } from '../customization/entities.js';
 import { IS_HEAD } from './head.js';
+import { isGovernedSeat } from '../access/capability.js';
 import {
   RETENTION_SOURCES,
   accountingRecordDate,
@@ -672,6 +673,17 @@ export function linkFile(
   return ctx.store.tx(run);
 }
 
+/**
+ * Is `fileId` linked to exactly this record right now? Read off the row, never off a result: the K1
+ * read-back a composite runs after its inner `linkFile`, so a link it reports is a link the file holds.
+ */
+export function fileLinkedTo(ctx: WorkspaceContext, fileId: string, entityKind: string, entityId: string): boolean {
+  const row = ctx.store.db
+    .prepare('SELECT entity_kind, entity_id FROM stored_file WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, fileId) as { entity_kind: string | null; entity_id: string | null } | undefined;
+  return row !== undefined && row.entity_kind === entityKind && row.entity_id === entityId;
+}
+
 /** The OP3 `listLinked` read model (P5): everything attached to one record, heads only by default. */
 export function listLinkedFiles(
   ctx: WorkspaceContext,
@@ -1144,8 +1156,16 @@ export function deleteFile(
     return err('not_head_version', { fileId: existing.id, supersededBy: successor.id });
   }
 
-  // P8. `agent` is the D13 actor a `till mcp` session runs as; a human at the Studio is `studio`.
-  const staging = ctx.actor === 'agent' && !confirmed;
+  // P8. `agent` is the D13 actor a `till mcp` session runs as; a human at the Studio is `studio`. The
+  // test is the ONE governed-seat rule (`isGovernedSeat`), so a served agent member (`member:<id>` of
+  // kind `agent`) stages like the local agent instead of erasing at once (D156 point 5).
+  //
+  // D156: since `files_delete` is dial-governed under `erase`, an agent seat's call reaches this verb
+  // only at a GRANTED `auto` (at `ask` the transport seam drafts it, `confirmed: true` or not). The
+  // approved draft replays AS THE APPROVING HUMAN with `confirmed: true` (`APPROVAL_CONFIRMS_FIELD`),
+  // so the approval satisfies this step; the stage below remains the in-verb belt for an embedder
+  // that calls `action.run` past the seam, and for the agent at `auto` that has not confirmed.
+  const staging = isGovernedSeat(ctx.store, ctx.actor) && !confirmed;
 
   const run = (): Result => {
     const at = ctx.clock.now();

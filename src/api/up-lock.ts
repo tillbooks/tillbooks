@@ -31,6 +31,12 @@ export interface UpLock {
   port: number;
   url: string;
   startedAt: string;
+  /**
+   * The ledger file this `till up` serves (beta launch P0.5). Optional: a lock an older build wrote has
+   * none. It lets `till mcp` and the agent's approval pointer tell whether the running Studio has the
+   * SAME book open as the agent, instead of sending a human to a Studio where the draft is not.
+   */
+  dbPath?: string;
 }
 
 /** The lock's path inside the support directory. */
@@ -69,7 +75,8 @@ export function readLock(supportDir: string): UpLock | null {
       typeof parsed.host === 'string' &&
       typeof parsed.port === 'number' &&
       typeof parsed.url === 'string' &&
-      typeof parsed.startedAt === 'string'
+      typeof parsed.startedAt === 'string' &&
+      (parsed.dbPath === undefined || typeof parsed.dbPath === 'string')
     ) {
       return parsed as UpLock;
     }

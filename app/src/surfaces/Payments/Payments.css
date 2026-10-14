@@ -188,7 +188,8 @@
   gap: var(--t-space-2);
   align-self: start;
   position: sticky;
-  top: 0;
+  /* P6 (D152): pins under the sticky surface header, never behind it. */
+  top: var(--surface-header-height, 0px);
 }
 
 /* The STALE state: a figure the engine has not confirmed is never presentable as fact, so the whole
@@ -236,12 +237,73 @@
   border-collapse: collapse;
   font-size: var(--t-font-body);
   line-height: var(--t-lh-body);
+  /* Fixed columns, so a long label clips inside its own cell instead of widening it and wrapping its
+     neighbours (the "R-2026-0019 Mahngebühr Stufe 2" row measured four lines tall). */
+  table-layout: fixed;
+}
+
+.pay-col-party {
+  width: 24%;
+}
+
+.pay-col-due {
+  width: 92px;
+}
+
+.pay-col-open {
+  width: 120px;
+}
+
+.pay-col-allocate {
+  width: 124px;
+}
+
+/* One line, clipped with an ellipsis; the cell's `title` carries the whole label. */
+.pay-clip {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The one quiet line the pane holds before there is anything to rank (and when nothing matches). */
+.pay-cand-prompt {
+  margin: 0;
+  padding: var(--t-space-2) 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.pay-cand-note {
+  display: block;
+  margin: 0 0 var(--t-space-1);
+}
+
+/* The disclosure holding every open item that is not a suggestion. */
+.pay-cand-more {
+  margin-top: var(--t-space-1);
+}
+
+/* "zugewiesen" plus its check, on the pre-assigned exact match, beside its undo. Success ink, never the
+   accent: the accent is reserved for the money commit. */
+.pay-cand-preassigned {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.pay-cand-preassigned-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-success);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
 }
 
 .pay-cand-table th {
   height: var(--t-row-head-h);
   text-align: left;
-  padding: var(--t-row-pad-y) var(--t-space-2);
+  padding: var(--t-row-pad-y) var(--t-space-1);
   font-weight: 500;
   font-size: var(--t-font-sm);
   line-height: var(--t-lh-sm);
@@ -255,11 +317,13 @@
 
 .pay-cand-row td {
   height: var(--t-row-h);
-  padding: var(--t-row-pad-y) var(--t-space-2);
+  /* 8px gutters inside the Werkbank's half-width pane: five columns at 16px each left the document
+     number itself no room at 1280px. */
+  padding: var(--t-row-pad-y) var(--t-space-1);
 }
 
 .pay-cand-sub td {
-  padding: 0 var(--t-space-2) var(--t-space-2);
+  padding: 0 var(--t-space-1) var(--t-space-2);
   border-bottom: 1px solid var(--t-border);
 }
 
@@ -278,7 +342,7 @@
 
 /* The allocation field is the shared `.field` (K-15); only its width and money alignment are local. */
 .pay-cand-amount .field {
-  width: 120px;
+  width: 108px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -294,7 +358,7 @@
 .pay-cand-controls {
   display: flex;
   gap: var(--t-space-2);
-  align-items: flex-end;
+  align-items: center;
   flex-wrap: wrap;
 }
 

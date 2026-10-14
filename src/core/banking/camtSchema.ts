@@ -141,4 +141,40 @@ CREATE TABLE IF NOT EXISTS camt_match_config (
   value_date_window_days  INTEGER NOT NULL DEFAULT 5,
   review_threshold        TEXT NOT NULL DEFAULT 'any'
 );
+
+-- A36 §4.7 (D150): APPEND-ONLY, one row per confirmation that a statement gap holds nothing (a person
+-- says the numbers between two neighbouring day-end statements carry no money) and one per withdrawal
+-- of it. The LATEST row of a pair (after, before) decides; nothing here is ever updated or deleted. A
+-- row is written only for a gap whose balances chain (difference_minor 0, recorded as evidence). It
+-- hides the attention item and nothing else: the successor rule still imports a statement found later.
+-- No CHECK on action: the enum (confirm | revoke) lives at the verb boundary.
+CREATE TABLE IF NOT EXISTS bank_statement_gap_ack (
+  id                   TEXT PRIMARY KEY,
+  workspace_id         TEXT NOT NULL REFERENCES workspace(id),
+  bank_account_id      TEXT NOT NULL REFERENCES bank_account(id),
+  after_statement_id   TEXT NOT NULL REFERENCES bank_statement(id),
+  before_statement_id  TEXT NOT NULL REFERENCES bank_statement(id),
+  action               TEXT NOT NULL,
+  reason               TEXT NOT NULL,
+  difference_minor     INTEGER NOT NULL,
+  actor                TEXT NOT NULL,
+  created_at           TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS bank_statement_gap_ack_by_pair
+ON bank_statement_gap_ack (workspace_id, bank_account_id, after_statement_id, before_statement_id);
+
+-- Critic LOW 1: append-only is a property of the table, not of the code that writes it (the
+-- bank_line_decision precedent). A withdrawal is a new 'revoke' row, never an edit.
+CREATE TRIGGER IF NOT EXISTS bank_statement_gap_ack_no_update
+BEFORE UPDATE ON bank_statement_gap_ack
+BEGIN
+  SELECT RAISE(ABORT, 'bank_statement_gap_ack rows are immutable: a withdrawal is a new revoke row');
+END;
+
+CREATE TRIGGER IF NOT EXISTS bank_statement_gap_ack_no_delete
+BEFORE DELETE ON bank_statement_gap_ack
+BEGIN
+  SELECT RAISE(ABORT, 'bank_statement_gap_ack rows are never deleted');
+END;
 ${BANK_INBOX_SCHEMA_SQL}`;

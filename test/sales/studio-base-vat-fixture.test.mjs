@@ -65,6 +65,7 @@ function kindOf(value) {
   if (Array.isArray(value)) return 'array';
   return typeof value;
 }
+
 function assertShape(fixture, live, where) {
   assert.deepEqual(keysOf(fixture), keysOf(live), `${where}: key drift`);
   for (const key of Object.keys(live)) {

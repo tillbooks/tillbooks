@@ -70,6 +70,8 @@ export { CHECKLISTS_SCHEMA_SQL } from './schema.js';
 export { DEADLINE_DAYS_AFTER_PERIOD_END, MONTHS_6, addDays, addMonths, dayBefore, endOfMonth, resolveDueDates } from './deadlines.js';
 export {
   resolveChecklistPeriod,
+  booksStartOf,
+  periodPredatesBooks,
   fiscalYearBounds,
   fiscalYearStartOf,
   monthBounds,
@@ -77,7 +79,7 @@ export {
   todayOf,
   yearSealedOf,
 } from './periods.js';
-export type { ChecklistPeriod } from './periods.js';
+export type { ChecklistPeriod, BooksStart } from './periods.js';
 export { evaluateCheck, liveReturnOf, periodLockOf, lockOnMonth, lockOnYear, sealOnYear, yearLabelOf } from './checks.js';
 export type { CheckResult, CheckPeriod, LiveReturn } from './checks.js';
 export { returnHashOf, canonicalHashOf, canonicalize } from './hash.js';
@@ -120,6 +122,8 @@ export {
   checklistItemSkip,
   checklistItemReopen,
   checklistAbandon,
+  closeYearGuarded,
+  type CloseYearInput,
 } from './runs.js';
 export type {
   ChecklistRunStatus,

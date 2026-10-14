@@ -24,7 +24,8 @@ import { Link } from 'react-router-dom';
 import { RunbookItemRow } from '../../components/RunbookItemRow';
 import { Tooltip } from '../../components/Tooltip';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
-import { useT, formatDate } from '../../i18n';
+import { useT, formatDate, formatMoney } from '../../i18n';
+import { useConsequence } from '../../lib/approval-tiers';
 import { AttestDialog, ConfirmActDialog, GvDialog, ReasonDialog, SignoffDialog } from './Dialogs';
 import { ChoiceBody, PostingBody, PreviewBody, StatementsBody, ValidationBody, settlementRowsOf, useMoney, type SettlementRow } from './RowBodies';
 import {
@@ -70,6 +71,8 @@ export interface RunDetailProps {
   onReopen: (itemId: string) => void;
   onAbandon: (reason: string) => void;
   onAct: (itemId: string, calls: ActCall[]) => void;
+  /** The result the seal (`close_year`) answered in this session, with its unit; shown on the seal row. */
+  sealResult?: { minor: number; currency: string } | null;
   onReload: () => void;
 }
 
@@ -108,7 +111,7 @@ function idsOf(item: ItemView, key: string): string[] {
   return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
 }
 
-export function RunDetail({ run, workspaceId, canManage, canFile, canPost, canPeriods, working, currency, refusal, onComplete, onSkip, onReopen, onAbandon, onAct, onReload }: RunDetailProps) {
+export function RunDetail({ run, workspaceId, canManage, canFile, canPost, canPeriods, working, currency, refusal, onComplete, onSkip, onReopen, onAbandon, onAct, onReload, sealResult = null }: RunDetailProps) {
   const t = useT();
   const money = useMoney(currency);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -135,10 +138,18 @@ export function RunDetail({ run, workspaceId, canManage, canFile, canPost, canPe
   const owner = (kind: string): string => t(`checklists.owner.${kind}`);
   const who = (kind: string | null, name: string | null): string => (kind === 'member' && name !== null ? name : t(`checklists.actor.${kind ?? 'unknown'}`));
   const resolved = (key: string, fallback: string): string => (knownKey(key) ? t(key) : fallback);
+  /**
+   * A refusal on a row, in words (critic R4-3): the seal row's own refusals (the run's state, the
+   * year's seal, a blocked row) read as one sentence each; any other code keeps the generic
+   * "Abgelehnt: {code}" line rather than inventing a sentence the engine did not mean.
+   */
+  const refusalText = (itemId: string, code: string): string =>
+    itemId === SEAL_ITEM_ID ? resolved(`checklists.sealRefusal.${code}`, t('checklists.error.refused', { code })) : t('checklists.error.refused', { code });
   const itemTitle = (item: ItemView): string => resolved(`checklists.item.${item.itemId}`, item.title);
   const checkLabel = (key: string): string => resolved(`checklists.check.${key}`, key);
   const verbLabel = (verb: string): string => resolved(`agent.verb.${verb}`, resolved(`checklists.verb.${verb}`, verb.replace(/_/g, ' ')));
-  const sealSentence = t('agent.consequenceVerb.close_year');
+  // D156: the engine's one consequence for the year seal (never null: close_year carries its own entry).
+  const sealSentence = useConsequence('close_year') ?? '';
   const autostart = autostartTemplateOf(run.createdBy);
 
   const statusLabel = (item: ItemView): ReactNode => {
@@ -183,6 +194,16 @@ export function RunDetail({ run, workspaceId, canManage, canFile, canPost, canPe
     if (item.status === 'open' && item.stale) return item.signoffKind === 'statements_signoff' ? t('checklists.note.staleStatements') : t('checklists.note.stale');
     if (item.status === 'open' && item.precondition !== null && item.preconditionResult?.passed !== true) {
       return t('checklists.note.preconditionOpen', { check: checkLabel(item.precondition) });
+    }
+    // The sealed year's one line (D152, 04.10.2026): the result `close_year` answered, in the unit it
+    // named, read off that answer and never recomputed. Only in the session that sealed: the seal
+    // probe carries no figure, so a later visit shows the done row without one.
+    if (item.status === 'done' && item.itemId === SEAL_ITEM_ID && sealResult !== null) {
+      return (
+        <span data-testid="chk-year-result">
+          {t('checklists.posting.yearResult')}: <span className="t-money">{formatMoney(sealResult.minor, sealResult.currency)}</span>
+        </span>
+      );
     }
     if (item.status === 'done' && item.evidenceKind === 'posting' && item.probeResult !== null && item.probeResult.entryIds.length > 0) {
       return t('checklists.note.entries', { entries: item.probeResult.entryIds.join(', ') });
@@ -333,8 +354,11 @@ export function RunDetail({ run, workspaceId, canManage, canFile, canPost, canPe
           reversal: posted ? reverseButton(verbLabel('reopen_month'), [{ verb: 'reopen_month', input: { period: value } }], t('checklists.confirm.reopenMonth')) : null,
         };
       case 'close_year':
+        // G22 §10.12 (D152, 04.10.2026): close_year refuses year_close_in_progress over an open run
+        // unless the call names it, so the run's seal row sends its runId; the engine then seals only
+        // when this row is unblocked. Same verb, same gate, same close-period dial.
         return {
-          primary: posted ? null : gate(t('checklists.act.seal'), () => confirmAct(item, verb, [{ verb, input: { year: value } }], t('checklists.confirm.seal', { year: value })), 'seal'),
+          primary: posted ? null : gate(t('checklists.act.seal'), () => confirmAct(item, verb, [{ verb, input: { year: value, runId: run.runId } }], t('checklists.confirm.seal', { year: value })), 'seal'),
           reversal: null,
         };
       default:
@@ -539,7 +563,7 @@ export function RunDetail({ run, workspaceId, canManage, canFile, canPost, canPe
               note={
                 <>
                   {rowRefusal !== null && dialog === null ? (
-                    <span role="alert">{t('checklists.error.refused', { code: rowRefusal })}</span>
+                    <span role="alert">{refusalText(item.itemId, rowRefusal)}</span>
                   ) : (
                     note(item)
                   )}

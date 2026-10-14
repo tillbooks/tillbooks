@@ -181,6 +181,42 @@ describe('the draft pane, the error states', () => {
   });
 });
 
+describe('the draft pane, a draft the person edited (D161.2)', () => {
+  it('asks before overwriting, and only the explicit choice resends with overwriteEdits:true', async () => {
+    const regenSpy = vi.fn<CannedHandler>((input) =>
+      input['overwriteEdits'] === true ? ok({ draftRunId: 'draftrun_2', grounded: true, factsCount: 2 }) : reject('draft_edited', { draftRunId: 'draftrun_1' }),
+    );
+    render(tree({ ...baseCanned(), draft_list: ok({ runs: [RUN()], total: 1 }), draft_regenerate: regenSpy }));
+    const pane = await openThread();
+    await userEvent.click(await within(pane).findByRole('button', { name: de.draft.hint.shorter }));
+
+    // A calm question in a polite live region, not an alert, and nothing was overwritten yet.
+    const text = await within(pane).findByText(de.draft.edited.question);
+    const question = text.closest('.mail-draft-edited') as HTMLElement;
+    expect(question.getAttribute('role')).toBe('status');
+    expect(within(pane).queryByRole('alert')).not.toBeInTheDocument();
+    expect(regenSpy).toHaveBeenCalledTimes(1);
+    expect(regenSpy.mock.calls[0]?.[0]).not.toHaveProperty('overwriteEdits');
+
+    await userEvent.click(within(question).getByRole('button', { name: de.draft.edited.overwrite }));
+    await waitFor(() => expect(regenSpy).toHaveBeenCalledTimes(2));
+    expect(regenSpy.mock.calls[1]?.[0]).toMatchObject({ draftRunId: 'draftrun_1', hint: de.draft.hint.shorter, overwriteEdits: true });
+    // A fresh key: the refusal was never remembered under the first one, and the choice is a new request.
+    expect(regenSpy.mock.calls[1]?.[0]?.['idempotencyKey']).not.toBe(regenSpy.mock.calls[0]?.[0]?.['idempotencyKey']);
+    await waitFor(() => expect(within(pane).queryByText(de.draft.edited.question)).not.toBeInTheDocument());
+  });
+
+  it('keeps the edits when the person says so, and sends nothing more', async () => {
+    const regenSpy = vi.fn<CannedHandler>(() => reject('draft_edited', { draftRunId: 'draftrun_1' }));
+    render(tree({ ...baseCanned(), draft_list: ok({ runs: [RUN()], total: 1 }), draft_regenerate: regenSpy }));
+    const pane = await openThread();
+    await userEvent.click(await within(pane).findByRole('button', { name: de.draft.action.regenerate }));
+    await userEvent.click(await within(pane).findByRole('button', { name: de.draft.edited.keep }));
+    expect(within(pane).queryByText(de.draft.edited.question)).not.toBeInTheDocument();
+    expect(regenSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('the draft pane, the permission posture (real provider, never shown-then-rejected)', () => {
   it('hides generate/regenerate without draft.write, and the pane stays readable', async () => {
     const canned = {

@@ -10,7 +10,7 @@
     "methodsTitle": "Bewertungsmethoden",
     "listLabel": "Lagerartikel",
     "detailLabel": "Bewertung des Artikels",
-    "selectHint": "Wähle einen Artikel, um seine Bewertung und seine Kostenschichten zu sehen.",
+    "selectHint": "Wähle einen Artikel.",
     "changeDefault": "Standardmethode ändern",
     "defaultInForce": "Aktuell gilt: {method}",
     "since": "seit {date}",

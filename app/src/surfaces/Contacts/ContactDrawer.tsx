@@ -37,6 +37,7 @@ import { OverflowMenu } from '../../components/OverflowMenu';
 import { Select } from '../../components/Select';
 import { Status, type StatusKind } from '../../components/Status';
 import { Tabs } from '../../components/Tabs';
+import { ConsequenceLine } from '../../components/ConsequenceLine';
 import type { Err } from '../../lib/client';
 import { ActivityGlyph, KindGlyph } from './glyphs';
 import { VendorPortalPanel } from './VendorPortalPanel';
@@ -1117,11 +1118,14 @@ function TimelineTab({ contact, workspaceId }: { contact: Contact; workspaceId: 
 /**
  * F02, Portal-Zugang (US-F02.1/4/6): the operator's grant-management panel on the contact detail. It
  * LISTS the customer's portal grants (each with a glyph+label status, never colour-only, WCAG 2.2
- * AA), CREATES a scoped, expiring grant (showing the one-time link exactly once), and REVOKES one.
+ * AA), CREATES a scoped, expiring grant (showing the one-time link exactly once), ACTIVATES a draft,
+ * and REVOKES one. D157: a new grant is a DRAFT whose link opens nothing until `portal_grant_send`
+ * activates it, so a draft row says so and carries the "Link freischalten" action; without it the
+ * panel would hand out links that never open.
  * The hosted portal page itself is cloud-tier and out of this repo (OP4): the OSS-core surface is the
  * link artifact plus the "Lokal (nicht gehostet)" row state.
  *
- * A24: create and revoke render only with `portal.manage` (the padlock pattern, never
+ * A24: create, activate and revoke render only with `portal.manage` (the padlock pattern, never
  * shown-then-rejected). Without it the panel is READ-ONLY: the list still reads (it rides
  * `read_master_data`, the contact-detail domain), which is the split the spec draws.
  */
@@ -1197,6 +1201,22 @@ function PortalTab({ contact, workspaceId }: { contact: Contact; workspaceId: st
     void load();
   }
 
+  /** D157: the operator's own hand-over. A person clicking it IS the confirmation `portal_grant_send` asks for. */
+  async function activate(grantId: string) {
+    setWriteError(null);
+    const resp = await client.call('portal_grant_send', {
+      workspaceId,
+      grantId,
+      confirmed: true,
+      idempotencyKey: idemKey('psend'),
+    });
+    if (isErr(resp.body)) {
+      setWriteError(resp.body);
+      return;
+    }
+    void load();
+  }
+
   async function revoke(grantId: string) {
     setWriteError(null);
     const resp = await client.call('portal_grant_revoke', {
@@ -1230,6 +1250,8 @@ function PortalTab({ contact, workspaceId }: { contact: Contact; workspaceId: st
               {t('portal.link.copy')}
             </button>
           </div>
+          {/* D157: the link is a draft until it is activated; say so where it is handed out. */}
+          <span className="ct-field-hint">{t('portal.link.draftNote')}</span>
         </section>
       )}
 
@@ -1278,8 +1300,15 @@ function PortalTab({ contact, workspaceId }: { contact: Contact; workspaceId: st
                 {/* glyph AND word, never colour-only (WCAG 2.2 AA). */}
                 <Status kind={PORTAL_STATUS_KIND[g.status]} label={t(`portal.status.${g.status}`)} />
                 <span className="ct-portal-expiry t-num">{formatCalendar(g.expiresAt)}</span>
+                {/* D157: a draft opens nothing; the row says so in words, not only by its status. */}
+                {g.status === 'draft' && <span className="ct-field-hint">{t('portal.status.draftHint')}</span>}
                 {/* OP4/P9: the OSS core mints the artifact and stops; every grant is local-only here. */}
                 {!g.hosted && <span className="ct-portal-hosting">{t('portal.not_hosted')}</span>}
+                {canManage && g.status === 'draft' && (
+                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => void activate(g.id)}>
+                    {t('portal.action.activate')}
+                  </button>
+                )}
                 {canManage && g.status !== 'revoked' && (
                   <button type="button" className="btn btn--ghost btn--sm" onClick={() => void revoke(g.id)}>
                     {t('portal.action.revoke')}
@@ -1289,6 +1318,8 @@ function PortalTab({ contact, workspaceId }: { contact: Contact; workspaceId: st
             ))}
           </ul>
         )}
+        {/* The engine's own sentence for the activation (D156 one catalogue), shown while a draft waits. */}
+        {canManage && grants.some((g) => g.status === 'draft') && <ConsequenceLine verb="portal_grant_send" />}
       </section>
     </div>
   );
@@ -1302,6 +1333,15 @@ function PortalTab({ contact, workspaceId }: { contact: Contact; workspaceId: st
 function FinanceTab() {
   const t = useT();
   return <p className="ct-field-hint">{t('contact.finance.hint')}</p>;
+}
+
+/** The execution dates of the draft payment batches a `contact_in_open_payment_batch` refusal names. */
+function draftBatchDates(error: Err): string {
+  const batches = Array.isArray(error.batches) ? (error.batches as { executionDate?: unknown }[]) : [];
+  return batches
+    .map((b) => (typeof b.executionDate === 'string' ? formatDate(b.executionDate) : ''))
+    .filter((d) => d.length > 0)
+    .join(', ');
 }
 
 /**
@@ -1356,7 +1396,17 @@ function AnonymiseAction({
   const matches = typed.trim() === expected;
   return (
     <div className="ct-confirm">
-      {error !== null && <ErrorBanner error={error} />}
+      {error !== null && (
+        <ErrorBanner
+          error={error}
+          message={refusalText(t, error, {
+            // Owner decision 01.10.2026: a draft payment batch naming this contact refuses the erasure;
+            // the sentence names each draft by its execution date so it can be found and discarded.
+            keys: { contact_in_open_payment_batch: 'contact.anonymise.inOpenPaymentBatch' },
+            params: { dates: draftBatchDates(error) },
+          })}
+        />
+      )}
       <p className="ct-confirm-text">{t('contact.anonymise.warning', { word: expected })}</p>
       <label className="ct-field-inner">
         <span className="ct-field-label">{t('contact.anonymise.typeLabel', { word: expected })}</span>

@@ -28,11 +28,13 @@
  * It must not offer a correction: A16 writes nothing to the ledger, and a correction is a reversing
  * entry in the Journal.
  */
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useT, useTRich, formatMoney } from '../../i18n';
-import { CheckGlyph, WarnGlyph } from './glyphs';
+import { Tooltip } from '../../components/Tooltip';
+import { InfoGlyph } from '../../components/states/glyphs';
+import { CheckGlyph, ChevronGlyph, WarnGlyph } from './glyphs';
 
 export interface ReconciledLineProps {
   /** True when the caller is showing a narrowed set, which moves the statement onto its own line. */
@@ -45,7 +47,7 @@ export interface ReconciledLineProps {
 export function ReconciledLine({ filtered, workspaceBaseTotalOpenMinor, baseCurrency }: ReconciledLineProps) {
   const t = useT();
   return (
-    <p className="oi-reconciled">
+    <p className={`oi-reconciled${filtered ? ' oi-reconciled--own-line' : ''}`}>
       <CheckGlyph className="oi-reconciled-glyph" aria-label={t('openItems.reconciled.glyph')} />
       <span>
         {filtered
@@ -73,6 +75,17 @@ export interface ReconciliationBandProps {
   currencies: readonly string[];
 }
 
+/**
+ * The mismatch, in ONE line (D152, the owner's pick for this surface, after the Bank's TrustLine):
+ *
+ *   ⚠ Abweichung zum Hauptbuch: CHF -12.50 (i) ›
+ *
+ * The fact and the figure stay on the working surface. The sentence that explains it (both derivations
+ * and their figures) sits behind the (i), the shared Tooltip on an icon button that names it through
+ * `aria-describedby`. The causes and the door to the Journal sit behind the chevron, a disclosure the
+ * operator opens on purpose, so nothing opens itself. The red is spent on the glyph and the words of the
+ * line only: no box, no tinted ground, so the warning is one line tall and the list starts under it.
+ */
 export function ReconciliationBand({
   differenceMinor,
   listMinor,
@@ -83,43 +96,58 @@ export function ReconciliationBand({
   const t = useT();
   const tRich = useTRich();
   const [open, setOpen] = useState(false);
+  const moreId = useId();
 
   return (
-    <div className="oi-mismatch" role="status">
-      <WarnGlyph className="oi-mismatch-glyph" aria-hidden="true" focusable="false" />
-      <div className="oi-mismatch-body">
-        <p className="oi-mismatch-title">
-          {tRich('openItems.mismatch.title', {
+    <>
+      <p className="oi-mismatch" role="status">
+        <WarnGlyph className="oi-mismatch-glyph" aria-hidden="true" focusable="false" />
+        <span className="oi-mismatch-title">
+          {tRich('openItems.mismatch.short', {
             difference: <span className="t-money">{formatMoney(differenceMinor, baseCurrency)}</span>,
           })}
-        </p>
-        <p className="oi-mismatch-detail">
-          {tRich('openItems.mismatch.body', {
-            list: <span className="t-money">{formatMoney(listMinor, baseCurrency)}</span>,
-            ledger: <span className="t-money">{formatMoney(ledgerMinor, baseCurrency)}</span>,
-          })}
-        </p>
-        <div className="oi-mismatch-actions">
-          <Link className="btn btn--secondary btn--sm" to="/journal">
-            {t('openItems.mismatch.action')}
-          </Link>
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            aria-expanded={open}
-            onClick={() => setOpen(!open)}
+        </span>
+        <span className="oi-mismatch-info">
+          <Tooltip
+            placement="bottom"
+            content={
+              <span className="oi-mismatch-explain">
+                {tRich('openItems.mismatch.title', {
+                  difference: <span className="t-money">{formatMoney(differenceMinor, baseCurrency)}</span>,
+                })}{' '}
+                {tRich('openItems.mismatch.body', {
+                  list: <span className="t-money">{formatMoney(listMinor, baseCurrency)}</span>,
+                  ledger: <span className="t-money">{formatMoney(ledgerMinor, baseCurrency)}</span>,
+                })}
+              </span>
+            }
           >
-            {t('openItems.mismatch.disclosure')}
-          </button>
-        </div>
-        {open && (
-          <ol className="oi-mismatch-causes">
-            <li>{t('openItems.mismatch.cause.direct')}</li>
-            <li>{t('openItems.mismatch.cause.document')}</li>
-            {currencies.length > 1 && <li>{t('openItems.mismatch.cause.fxSkonto')}</li>}
-          </ol>
-        )}
+            <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('openItems.mismatch.info')}>
+              <InfoGlyph size={16} />
+            </button>
+          </Tooltip>
+        </span>
+        <button
+          type="button"
+          className={`btn btn--ghost btn--icon btn--sm oi-mismatch-toggle${open ? ' oi-mismatch-toggle--on' : ''}`}
+          aria-label={t('openItems.mismatch.disclosure')}
+          aria-expanded={open}
+          aria-controls={moreId}
+          onClick={() => setOpen(!open)}
+        >
+          <ChevronGlyph className="oi-mismatch-chevron" size={16} />
+        </button>
+      </p>
+      <div id={moreId} className="oi-mismatch-more" hidden={!open}>
+        <ol className="oi-mismatch-causes">
+          <li>{t('openItems.mismatch.cause.direct')}</li>
+          <li>{t('openItems.mismatch.cause.document')}</li>
+          {currencies.length > 1 && <li>{t('openItems.mismatch.cause.fxSkonto')}</li>}
+        </ol>
+        <Link className="btn btn--secondary btn--sm oi-mismatch-journal" to="/journal">
+          {t('openItems.mismatch.action')}
+        </Link>
       </div>
-    </div>
+    </>
   );
 }

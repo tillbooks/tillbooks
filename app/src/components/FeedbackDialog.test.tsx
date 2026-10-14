@@ -150,6 +150,13 @@ describe('FeedbackDialog, the overlay tier (K-28)', () => {
 });
 
 describe('FeedbackDialog, the modal contract', () => {
+  it('rises in the middle like the shared Modal: the title, then the form, on the stagger', async () => {
+    const { dialog } = await openDialog();
+    expect(dialog).toHaveClass('motion-reveal--center');
+    expect(dialog.querySelector('.fb-title')).toHaveAttribute('data-motion-item', '1');
+    expect(dialog.querySelector('form.fb-body')).toHaveAttribute('data-motion-item', '2');
+  });
+
   it('is a labelled modal dialog, which ConfirmDialog is not', async () => {
     const { dialog } = await openDialog();
     expect(dialog).toHaveAttribute('aria-modal', 'true');

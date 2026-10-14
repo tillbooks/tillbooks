@@ -39,7 +39,7 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result, Err } from '../result.js';
 import { requireString, requireDate, optionalText, optionalId } from '../ledger/inputGuards.js';
-import { postEntry } from '../ledger/postEntry.js';
+import { postEntryInternalChecked } from '../ledger/innerPosting.js';
 import type { LineInput } from '../ledger/postEntry.js';
 import { reverseOwnedEntry } from '../ledger/reverseEntry.js';
 import { applySavedView } from '../customization/views.js';
@@ -504,14 +504,14 @@ export function accrualPost(ctx: WorkspaceContext, input: AccrualPostInput): Res
   const lines = linesOfRow(row);
   return runGuarded(() =>
     ctx.store.tx(() => {
-      const posted = postEntry(ctx, {
+      const posted = postEntryInternalChecked(ctx, {
         date: row.period_end,
         source: ACCRUAL_SOURCE,
         idempotencyKey: `accrual:${row.id}`,
         description: row.description,
         ...(row.source_ref !== null ? { ref: row.source_ref } : {}),
         lines,
-      });
+      }, 'accrual_post_internal');
       // The throw is the ONLY abort that rolls the tx back (a `return` would COMMIT the partial
       // writes and memoise the failure under the entry key).
       if (!posted.ok) throw new AccrualAbort(err(posted.error, { ...posted, date: row.period_end, leg: 'accrual' }));
@@ -603,7 +603,7 @@ export function accrualReverse(ctx: WorkspaceContext, input: AccrualReverseInput
   const description = input.reason === undefined ? `Storno: ${row.description}` : `Storno: ${row.description} (${input.reason})`;
   return runGuarded(() =>
     ctx.store.tx(() => {
-      const storno = postEntry(ctx, {
+      const storno = postEntryInternalChecked(ctx, {
         date: row.period_end,
         source: ACCRUAL_SOURCE,
         idempotencyKey: `accrual-storno:${row.id}`,
@@ -611,7 +611,7 @@ export function accrualReverse(ctx: WorkspaceContext, input: AccrualReverseInput
         // The journal carries no storno column; `ref` names the entry this one mirrors.
         ref: originalEntryId,
         lines: stornoLines,
-      });
+      }, 'accrual_reverse_internal');
       if (!storno.ok) throw new AccrualAbort(err(storno.error, { ...storno, date: row.period_end, leg: 'storno' }));
 
       const stornoReversal = reverseOwnedEntry(

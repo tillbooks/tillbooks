@@ -13,6 +13,7 @@ import {
   parseVatPeriods,
   parseVatReturn,
   exportRefusalOf,
+  journeyPosition,
   parseEch0217,
   periodTitle,
   rateLabel,
@@ -293,5 +294,38 @@ describe('formatting helpers', () => {
   it('renders a rate in the percent form the ESTV ladder is published in', () => {
     expect(rateLabel(620)).toBe('6.2');
     expect(rateLabel(10)).toBe('0.1');
+  });
+});
+
+describe('journeyPosition: the ONE next step the journey line names (D152)', () => {
+  const base = { computed: true, exported: false, attested: false, marked: false, settlement: null };
+
+  it('waits at step 1 until the figures are on screen', () => {
+    expect(journeyPosition({ ...base, computed: false })).toEqual({ step: 1, total: 5 });
+  });
+
+  it('names step 3 once computed, and never holds the journey at step 2 (W2: the Abstimmung warns, it does not block)', () => {
+    expect(journeyPosition(base)).toEqual({ step: 3, total: 5 });
+  });
+
+  it('counts six steps only when the A38 settlement read answered', () => {
+    expect(journeyPosition({ ...base, settlement: { posted: false } })).toEqual({ step: 3, total: 6 });
+  });
+
+  it('moves to step 4 on an export, to step 5 on the ePortal attestation (with or without a TILL export)', () => {
+    expect(journeyPosition({ ...base, exported: true })).toEqual({ step: 4, total: 5 });
+    expect(journeyPosition({ ...base, attested: true })).toEqual({ step: 5, total: 5 });
+    expect(journeyPosition({ ...base, exported: true, attested: true })).toEqual({ step: 5, total: 5 });
+  });
+
+  it('after the filing lock: step 6 until the settlement is posted, then nothing left', () => {
+    expect(journeyPosition({ ...base, marked: true, settlement: { posted: false } })).toEqual({ step: 6, total: 6 });
+    expect(journeyPosition({ ...base, marked: true, settlement: { posted: true } })).toEqual({ step: null, total: 6 });
+    // No settlement step to show: five steps, all behind.
+    expect(journeyPosition({ ...base, marked: true })).toEqual({ step: null, total: 5 });
+  });
+
+  it('reads the lock first: a filed period is filed whatever the export or the attestation say', () => {
+    expect(journeyPosition({ ...base, computed: false, marked: true, settlement: { posted: false } })).toEqual({ step: 6, total: 6 });
   });
 });

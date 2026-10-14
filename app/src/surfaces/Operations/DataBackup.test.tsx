@@ -122,6 +122,50 @@ describe('DataBackup', () => {
     });
   });
 
+  it('D161.2: says how many restored portal links wait for a new hand-over, and nothing when none do', async () => {
+    const { client } = makeClient({
+      list_backups: OK({ backups: [] }),
+      restore_backup: OK({ workspaceId: 'ws_new', portalLinksAwaitingHandover: 3 }),
+    });
+    renderPanel(client);
+    await screen.findByText(/Noch keine Sicherungen/);
+    await userEvent.type(screen.getByPlaceholderText(/backups/), '/some/backup.tillbackup');
+    await userEvent.click(screen.getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    expect(await screen.findByText(/3 Portal-Links bleiben zu, bis du sie wieder freigibst/)).toBeInTheDocument();
+  });
+
+  it('D161.2: one waiting portal link reads in the singular', async () => {
+    const { client } = makeClient({
+      list_backups: OK({ backups: [] }),
+      restore_backup: OK({ workspaceId: 'ws_new', portalLinksAwaitingHandover: 1 }),
+    });
+    renderPanel(client);
+    await screen.findByText(/Noch keine Sicherungen/);
+    await userEvent.type(screen.getByPlaceholderText(/backups/), '/some/backup.tillbackup');
+    await userEvent.click(screen.getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    expect(await screen.findByText(/1 Portal-Link bleibt zu, bis du ihn wieder freigibst/)).toBeInTheDocument();
+  });
+
+  it('D161.2: a restore with no waiting portal link adds no sentence', async () => {
+    const { client, calls } = makeClient({
+      list_backups: OK({ backups: [] }),
+      restore_backup: OK({ workspaceId: 'ws_new', portalLinksAwaitingHandover: 0 }),
+    });
+    renderPanel(client);
+    await screen.findByText(/Noch keine Sicherungen/);
+    await userEvent.type(screen.getByPlaceholderText(/backups/), '/some/backup.tillbackup');
+    await userEvent.click(screen.getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    await waitFor(() => expect(calls.some(([a]) => a === 'restore_backup')).toBe(true));
+    await waitFor(() => expect(calls.filter(([a]) => a === 'list_backups').length).toBeGreaterThan(1));
+    expect(screen.queryByText(/Portal-Links bleiben zu/)).not.toBeInTheDocument();
+  });
+
   it('does NOT restore when the confirmation is declined', async () => {
     const { client, calls } = makeClient({ list_backups: OK({ backups: [] }), restore_backup: OK({ workspaceId: 'x' }) });
     renderPanel(client);
@@ -217,6 +261,37 @@ describe('DataBackup, the row verify and the honesty sentence (F-06)', () => {
     const banner = await screen.findByRole('alert');
     expect(banner).toHaveTextContent('Diese Datenbank wurde von einem neueren TILL geschrieben. Aktualisiere TILL und versuche es erneut. Die Datei wurde nicht verändert.');
     expect(banner).not.toHaveTextContent(/schema_newer_than_runtime/);
+  });
+
+  // G04 critic R1-M3 follow-up: the engine's pre-commit gate names WHICH check refused the restore
+  // (`restore_invariant_failed` + `reason`); each reason reads its own sentence in the banner, and a
+  // reason this build has no words for (or none at all) reads the neutral one, never a raw code.
+  const NEUTRAL = 'Die Sicherung hat eine Konsistenzprüfung nicht bestanden und wurde nicht wiederhergestellt. Es wurde nichts verändert.';
+  it.each([
+    ['unbalanced_entry', 'Die Sicherung enthält eine Buchung, bei der Soll und Haben nicht übereinstimmen. Sie wurde nicht wiederhergestellt, es wurde nichts verändert.'],
+    ['foreign_reference', 'Die Sicherung verweist auf Daten eines anderen Arbeitsbereichs in diesem Buch. Sie wurde nicht wiederhergestellt, es wurde nichts verändert. Prüfe, woher die Datei stammt.'],
+    ['constraint_violation', 'Die Sicherung verletzt eine Regel dieses Buchs, zum Beispiel einen eindeutigen Schlüssel, der hier schon vergeben ist. Sie wurde nicht wiederhergestellt, es wurde nichts verändert.'],
+    ['ambiguous_reference', 'Ein Wert in der Sicherung passt auf mehrere Datensätze, darum kann TILL ihn nicht eindeutig zuordnen. Sie wurde nicht wiederhergestellt, es wurde nichts verändert.'],
+    ['referential_integrity', 'Die Sicherung verweist auf Datensätze, die sie selbst nicht enthält. Sie wurde nicht wiederhergestellt, es wurde nichts verändert.'],
+    ['audit_row_unmapped', NEUTRAL],
+    [undefined, NEUTRAL],
+  ])('R1-M3: a restore refused with reason %s reads its own sentence', async (reason, sentence) => {
+    const { client } = makeClient({
+      list_backups: OK({ backups: [] }),
+      restore_backup: {
+        status: 422,
+        body: { ok: false, error: 'restore_invariant_failed', ...(reason === undefined ? {} : { reason }), ...(reason === 'foreign_reference' ? { table: 'journal_entry', column: 'reverses_entry_id', references: 'journal_entry' } : {}) },
+      },
+    });
+    renderPanel(client);
+    await screen.findByText(/Noch keine Sicherungen/);
+    await userEvent.type(screen.getByPlaceholderText(/backups/), '/some/backup.tillbackup');
+    await userEvent.click(screen.getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'In neuen Arbeitsbereich wiederherstellen' }));
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent(sentence);
+    expect(banner).not.toHaveTextContent(/restore_invariant|Bilanzprüfung/);
   });
 
   it('R4-1: a restore SAVED whole before the book moved on says so, never "the file was not changed" nor "try again"', async () => {

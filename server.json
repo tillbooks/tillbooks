@@ -2,19 +2,19 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.tillbooks/tillbooks",
   "title": "TILL",
-  "description": "Swiss accounting your agent can actually use: the TILL ledger over MCP.",
+  "description": "Agent-first open-source ERP for Swiss SMEs: 800 MCP tools, one local file.",
   "websiteUrl": "https://tillbooks.ch",
   "repository": {
     "url": "https://github.com/tillbooks/tillbooks",
     "source": "github"
   },
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-beta.1",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "tillbooks",
-      "version": "1.0.0-rc.1",
+      "version": "1.0.0-beta.1",
       "transport": {
         "type": "stdio"
       },

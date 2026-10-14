@@ -151,3 +151,96 @@ export function BankGlyph(props: GlyphProps) {
     </svg>
   );
 }
+
+/** A receipt on the line: the paperclip (D142). Always beside its count or its word. */
+export function PaperclipGlyph(props: GlyphProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M20.5 11.5 12.4 19.6a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" />
+    </svg>
+  );
+}
+
+/** Aufteilen: one line forking into two. */
+export function SplitGlyph(props: GlyphProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 12h6" />
+      <path d="M10 12c3 0 4-5 8-5h2" />
+      <path d="M10 12c3 0 4 5 8 5h2" />
+      <path d="M17.5 4.5 20 7l-2.5 2.5" />
+      <path d="M17.5 14.5 20 17l-2.5 2.5" />
+    </svg>
+  );
+}
+
+/** Mit Buchung abgleichen: two links of a chain. */
+export function LinkGlyph(props: GlyphProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+    </svg>
+  );
+}
+
+/** Ignorieren: a circle struck through. */
+export function IgnoreGlyph(props: GlyphProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M6.5 17.5 17.5 6.5" />
+    </svg>
+  );
+}
+
+/** Money in: an arrow arriving at the lower left. */
+export function InGlyph(props: GlyphProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M17 7 7 17" />
+      <path d="M7 9v8h8" />
+    </svg>
+  );
+}
+
+/** Money out: an arrow leaving at the upper right. */
+export function OutGlyph(props: GlyphProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M7 17 17 7" />
+      <path d="M9 7h8v8" />
+    </svg>
+  );
+}
+
+/** Kontoauszug holen: an arrow into a tray. */
+export function FetchGlyph(props: GlyphProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 4v11" />
+      <path d="M7.5 10.5 12 15l4.5-4.5" />
+      <path d="M4 17v2.5h16V17" />
+    </svg>
+  );
+}
+
+/** The (i) that opens an explanation. */
+export function InfoGlyph(props: GlyphProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5" />
+      <path d="M12 7.5v.01" />
+    </svg>
+  );
+}
+
+/** The caret of a menu button. */
+export function CaretGlyph(props: GlyphProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M6 9.5 12 15.5 18 9.5" />
+    </svg>
+  );
+}

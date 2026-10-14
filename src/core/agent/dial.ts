@@ -35,6 +35,18 @@ export const DIAL_CAPABILITIES: readonly string[] = [
   'close-period',
   // go-live: the migration cutover into the real books (go_productive, import_open_items).
   'go-live',
+  // erase (D156.3/.4): the writes that delete, merge away or anonymise for good (the G01 denylist's
+  // leg (a)): contacts_anonymise, contacts_merge, files_delete, the hard deletes. An ORDINARY ask by
+  // owner decision (D156.4), deliberately NOT in STRONG_DEFAULT_ASK_CAPABILITIES below.
+  'erase',
+  // share (D156.3): consent for data leaving this machine or for outside access to it
+  // (sync_publish_enable, vendor_portal_grant). An ordinary ask, like erase.
+  'share',
+  // stock (D161): the stock the balance sheet's inventory stands on, moved or valued with NO journal
+  // entry (stock movements, goods receipts, adjustments, valuation methods and runs). Thirteen writes
+  // that fit no other family: `post` is the family of the verbs that mint an entry, which none of these
+  // do. An ordinary ask.
+  'stock',
 ];
 const DIAL_CAPABILITY_SET = new Set(DIAL_CAPABILITIES);
 
@@ -105,6 +117,25 @@ export function dialCapabilityIsForceAsk(ctx: WorkspaceContext, dialCapability: 
   return effectiveDialLevel(ctx, dialCapability).effective !== 'auto';
 }
 
+/**
+ * D156 critic nit: the env verbs (`INSTANCE_WIDE_DIAL_ACTIONS`, dialMap.ts) rebuild, remove or overwrite
+ * an ENVIRONMENT, a data root on this host, whatever workspace the call names. Reading the dial of the
+ * one workspace the agent chose let a grant in a scratch workspace authorise wiping a landscape the
+ * owner's real books share. Their effective level is therefore the MOST restrictive on the instance:
+ * `auto` only when every workspace in this store has an attributed `auto` grant for the capability.
+ * Chosen over a separate instance-level dial because it needs no new row, no new Vertrauen line and no
+ * migration, and it can only ever be stricter than the per-workspace reading it replaces.
+ */
+export function instanceEffectiveDialLevel(ctx: WorkspaceContext, dialCapability: string): DialLevel {
+  const ids = ctx.store.db.prepare('SELECT id FROM workspace ORDER BY id').all() as { id: string }[];
+  if (ids.length === 0) return 'ask';
+  for (const { id } of ids) {
+    const scoped = { ...ctx, workspaceId: id } as WorkspaceContext;
+    if (effectiveDialLevel(scoped, dialCapability).effective !== 'auto') return 'ask';
+  }
+  return 'auto';
+}
+
 /** Resolve the STORED dial level for one capability. An absent row means the safe `ask`. */
 export function readDialLevel(ctx: WorkspaceContext, dialCapability: string): DialLevel {
   const row = ctx.store.db
@@ -151,7 +182,7 @@ export function effectiveDialLevel(ctx: WorkspaceContext, dialCapability: string
  */
 export function writeDialLevel(ctx: WorkspaceContext, capability: string, level: DialLevel, idempotencyKey: string): void {
   // The last line of the F1 defence: both callers already refuse the agent seat (`cannot_self_grant`
-  // in setAgentDial, `cannot_self_approve` plus the A24 step-0 denial on the allowFuture arm), so
+  // in setAgentDial, `cannot_self_approve` for any governed seat in approveDraftedAction), so
   // reaching here as the agent is a wiring defect, and a wiring defect in a safety rail crashes
   // rather than writes.
   if (isGovernedSeat(ctx.store, ctx.actor)) {

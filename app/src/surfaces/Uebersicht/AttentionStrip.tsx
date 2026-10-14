@@ -1,75 +1,42 @@
 /**
- * F00's "Wartet auf dich" strip (D90 D-2): the dashboard's top row names the waiting work without
- * becoming the work queue. It is F00's own composition pattern applied to G15's verb, so F00 stays an
- * amendment rather than a no-op: it OWNS the strip, G15 owns the verb behind it (`attention_summary`).
+ * F00's "Wartet auf dich" list (D90 D-2, extended 30.09.2026): the dashboard's top block names the
+ * waiting work without becoming the work queue. The owner's ask: acts like "Unterschreibe den INI-Brief"
+ * and "Schlüssel vergleichen" must not go unnoticed, so the block shows the total AND the leading rows
+ * (at most `ATTENTION_TOP_LIMIT`), each a link straight to the surface that settles it, plus one link
+ * into `/attention` for the rest. It is F00's composition of G15's verb: the engine ranks and words the
+ * rows (urgency, then queue rank), the block only renders them.
+ *
+ * It is LIVE: it reads the shared store the rail count reads (`useAttentionSummary`), so the two never
+ * disagree, and both refresh on the same cadence (a minute while visible, on focus, after a hub act).
  *
  * It carries its OWN loading, empty, denied and failed states, and never shows a fake zero: a denied
  * actor (`visibleQueues == 0`, `total: null`) renders nothing here (the padlock lives on the hub), a
- * failed read is a muted line with a retry, an all-clear (`total: 0`) is a quiet line, and pending work
- * is a link into `/attention`. Counts now appear in a fourth place (rail, hub, dashboard, module); the
- * strip is the dashboard one.
+ * failed read is a muted line with a retry, an all-clear (`total: 0`) is a quiet line.
+ *
+ * ZERO ACCENT: the count is ink, the urgency is the shared Status glyph (its shape carries it, never
+ * colour alone), and the only accent the block ever shows is the focus ring.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
-import { useClient } from '../../lib/client-context';
-import { isErr } from '../../lib/client';
-import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { ChevronRightGlyph } from '../../components/icons';
+import { Status, type StatusKind } from '../../components/Status';
+import { announceAttentionChanged, useAttentionSummary, type AttentionTopItem, type AttentionUrgency } from '../Attention/attentionSummary';
+import { itemSubtitle, itemTitle } from '../Attention/itemText';
 import './AttentionStrip.css';
 
-type StripState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'ok'; total: number | null; leadTitleKey: string | null; leadTitleParams: Record<string, string | number> };
+const URGENCY_KIND: Record<AttentionUrgency, StatusKind> = { overdue: 'warn', due: 'pending', open: 'neutral' };
 
-interface LeadItem {
-  titleKey: string;
-  titleParams: Record<string, string | number>;
-}
-
-function parseLead(body: unknown): LeadItem | null {
-  const top = (body as { top?: unknown }).top;
-  if (!Array.isArray(top) || top.length === 0) return null;
-  const first = top[0] as Record<string, unknown>;
-  if (typeof first.titleKey !== 'string') return null;
-  return { titleKey: first.titleKey, titleParams: (first.titleParams ?? {}) as Record<string, string | number> };
+function hrefOf(item: AttentionTopItem): string {
+  const qs = new URLSearchParams(item.deepLink.params).toString();
+  return qs === '' ? item.deepLink.route : `${item.deepLink.route}?${qs}`;
 }
 
 export function AttentionStrip() {
   const t = useT();
-  const client = useClient();
-  const navigate = useNavigate();
-  const workspaceId = useWorkspaceId();
-  const [state, setState] = useState<StripState>({ status: 'loading' });
-  const active = useRef<string | null>(workspaceId);
+  const state = useAttentionSummary();
 
-  const load = useCallback(async () => {
-    if (workspaceId === null) return;
-    active.current = workspaceId;
-    setState({ status: 'loading' });
-    const res = await client.call('attention_summary', { workspaceId, topLimit: 1 });
-    if (active.current !== workspaceId) return;
-    if (isErr(res.body)) {
-      setState({ status: 'error' });
-      return;
-    }
-    const total = (res.body as { total?: unknown }).total;
-    const lead = parseLead(res.body);
-    setState({
-      status: 'ok',
-      total: typeof total === 'number' ? total : null,
-      leadTitleKey: lead?.titleKey ?? null,
-      leadTitleParams: lead?.titleParams ?? {},
-    });
-  }, [client, workspaceId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (workspaceId === null) return null;
+  if (state.status === 'idle') return null;
   if (state.status === 'loading') {
     // K-34 (D137): a placeholder in the strip's own measure, never a visible "wird geladen" sentence;
     // the sentence stays for screen readers only. Deliberately NOT a live region (`Skeleton` would
@@ -86,25 +53,48 @@ export function AttentionStrip() {
     return (
       <div className="att-strip att-strip--muted">
         {t('dashboard.attentionStrip.error')}{' '}
-        <button type="button" className="btn btn--ghost btn--sm" onClick={() => void load()}>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={announceAttentionChanged}>
           {t('dashboard.attentionStrip.retry')}
         </button>
       </div>
     );
   }
+  const { total, top } = state.data;
   // A denied actor is told nothing here (the hub's padlock is where that is explained).
-  if (state.total === null) return null;
-  if (state.total === 0) {
+  if (total === null) return null;
+  if (total === 0) {
     return <div className="att-strip att-strip--muted">{t('dashboard.attentionStrip.allClear')}</div>;
   }
-  const count = state.total > 99 ? '99+' : String(state.total);
-  const lead = state.leadTitleKey !== null ? t(state.leadTitleKey, state.leadTitleParams) : '';
+  const count = total > 99 ? '99+' : String(total);
   return (
-    <button type="button" className="att-strip att-strip--link" onClick={() => navigate('/attention')}>
-      <span className="att-strip-count">{t('dashboard.attentionStrip.count', { count })}</span>
-      {lead !== '' && <span className="att-strip-lead">{lead}</span>}
-      {/* An SVG chevron from the icon set, never a text dingbat (K-22). */}
-      <ChevronRightGlyph className="att-strip-go" size={16} />
-    </button>
+    <section className="att-strip att-strip--list" aria-labelledby="att-strip-title">
+      <div className="att-strip-head">
+        <h2 id="att-strip-title" className="att-strip-count">
+          {total === 1 ? t('dashboard.attentionStrip.countOne') : t('dashboard.attentionStrip.count', { count })}
+        </h2>
+        <Link to="/attention" className="att-strip-all">
+          {t('dashboard.attentionStrip.all')}
+          <ChevronRightGlyph className="att-strip-go" size={16} />
+        </Link>
+      </div>
+      {top.length > 0 && (
+        <ul className="att-strip-items">
+          {top.map((item) => {
+            const subtitle = itemSubtitle(t, item);
+            return (
+              <li key={`${item.queueId}:${item.entityId}`}>
+                <Link to={hrefOf(item)} className="att-strip-item">
+                  <Status kind={URGENCY_KIND[item.urgency]} label={t(`attention.urgency.${item.urgency}`)} className="att-strip-urgency" />
+                  <span className="att-strip-text">
+                    <span className="att-strip-title">{itemTitle(t, item)}</span>
+                    {subtitle !== null && subtitle !== '' && <span className="att-strip-sub">{subtitle}</span>}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

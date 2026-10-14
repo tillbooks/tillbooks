@@ -40,6 +40,7 @@ import {
   type ExchangeRateRowDto,
   type FxState,
 } from './currency';
+import { EditorInfo } from './EditorInfo';
 
 /** The select value that reveals the free-text ISO field. Never a currency code itself. */
 const OTHER = '__other__';
@@ -69,8 +70,8 @@ export interface CurrencyPickerProps {
   /** Permission-denied: the currency renders as read-only text, with no edit affordance. */
   readOnly?: boolean;
   /**
-   * The resolved FX state, reported upward so the editor can pre-disable Ausstellen with an inline
-   * reason (D15/C3) instead of letting the operator discover `needs_fx_rate` at the posting step.
+   * The resolved FX state, reported upward so the editor can name `needs_fx_rate` in one line the
+   * moment Ausstellen is pressed (D152 rule 3), before anything is saved or posted.
    */
   onFxStateChange?: (state: FxState) => void;
 }
@@ -185,10 +186,24 @@ export function CurrencyPicker({
   // quote in USD is simply a quote in USD.
   const consequence = isInvoice ? qrConsequence({ currency: value, iban, issueDate }) : null;
 
+  // D152 rule 4 (words on demand): what a currency choice MEANS, as opposed to what it costs, lives
+  // behind the (i) beside the label. That is the payment part's reference type, the base-currency
+  // "nothing is converted" and the resolved rate's "this is how it will post", plus the second and
+  // third sentence of a consequence whose first sentence stays on the surface. A refusal, a missing
+  // IBAN and every rate state that needs an act stay visible, each in one line with its way out.
+  const info = [...consequenceInfo(consequence, value, t), ...fxInfo(fx, value, t)];
+
   return (
     <div className="documents-currency">
       <div className="documents-field">
-        <span aria-hidden="true">{t('document.editor.currency')}</span>
+        <span className="documents-field-head">
+          <span aria-hidden="true">{t('document.editor.currency')}</span>
+          {info.length > 0 && (
+            <EditorInfo label={t('invoice.currency.infoLabel')} dataFx={fx.kind === 'base' ? 'base' : undefined}>
+              {info.join(' ')}
+            </EditorInfo>
+          )}
+        </span>
         <Select
           value={selectValue}
           ariaLabel={t('document.editor.currency')}
@@ -233,7 +248,6 @@ export function CurrencyPicker({
 
       <FxPanel
         fx={fx}
-        currency={value}
         posts={posts}
         ratesLoaded={ratesLoaded}
         hasRates={rates.length > 0}
@@ -258,18 +272,8 @@ function QrConsequenceLine({
 }) {
   const t = useT();
 
-  if (consequence.kind === 'qr') {
-    return (
-      <p className="documents-currency-note" role="note">
-        {t(
-          consequence.referenceType === 'QRR'
-            ? 'invoice.currency.qr.qrr'
-            : 'invoice.currency.qr.scor',
-          { currency },
-        )}
-      </p>
-    );
-  }
+  // The payment part is fine: what it will carry is said behind the (i), not on the surface.
+  if (consequence.kind === 'qr') return null;
 
   if (consequence.kind === 'no_iban') {
     return (
@@ -292,26 +296,43 @@ function QrConsequenceLine({
     );
   }
 
-  // The v2.4 cutover. Three sentences, and the third one is the honest label on the second: SIX
-  // states no guidance at all for a creditor who holds only a QR-IBAN, so the remedy TILL names is
-  // an inference and says so rather than borrowing the authority of a citation it does not have.
+  // The v2.4 cutover. The consequence is the line on the surface; the remedy and the honest label on
+  // it (SIX states no guidance at all for a creditor who holds only a QR-IBAN, so the remedy TILL
+  // names is an inference and says so) sit behind the (i) beside the label.
   return (
-    <div className="documents-currency-consequence" role="note">
-      <p>
-        {t('invoice.currency.qr.chfOnly', {
-          currency,
-          date: formatDate(consequence.effectiveFrom),
-        })}
-      </p>
-      <p>{t('invoice.currency.qr.chfOnlyRemedy')}</p>
-      <p>{t('invoice.currency.qr.chfOnlyValidity')}</p>
-    </div>
+    <p className="documents-currency-consequence" role="note">
+      {t('invoice.currency.qr.chfOnly', {
+        currency,
+        date: formatDate(consequence.effectiveFrom),
+      })}
+    </p>
   );
+}
+
+type Translate = ReturnType<typeof useT>;
+
+/** The (i) part of the payment-part consequence: what an untroubled bill carries, or the rest of a gap. */
+function consequenceInfo(consequence: ReturnType<typeof qrConsequence> | null, currency: string, t: Translate): string[] {
+  if (consequence === null) return [];
+  if (consequence.kind === 'qr') {
+    return [t(consequence.referenceType === 'QRR' ? 'invoice.currency.qr.qrr' : 'invoice.currency.qr.scor', { currency })];
+  }
+  if (consequence.kind === 'unsupported_currency') return [t('invoice.currency.qr.unsupportedDetail', { currency })];
+  if (consequence.kind === 'qr_iban_chf_only') {
+    return [t('invoice.currency.qr.chfOnlyRemedy'), t('invoice.currency.qr.chfOnlyValidity')];
+  }
+  return [];
+}
+
+/** The (i) part of the rate: the base currency's "nothing is converted", a resolved rate's posting. */
+function fxInfo(fx: FxState, currency: string, t: Translate): string[] {
+  if (fx.kind === 'base') return [t('invoice.fx.base', { currency: fx.baseCurrency })];
+  if (fx.kind === 'resolved') return [t('invoice.fx.willPost', { currency, baseCurrency: fx.baseCurrency })];
+  return [];
 }
 
 interface FxPanelProps {
   fx: FxState;
-  currency: string;
   /** See `CurrencyPickerProps.posts`: it decides whether a missing rate blocks anything today. */
   posts: boolean;
   ratesLoaded: boolean;
@@ -334,17 +355,13 @@ interface FxPanelProps {
  * in three and reported it as a regression. A state marker says what the flows actually mean, in a
  * way no styling decision can quietly redefine.
  */
-function FxPanel({ fx, currency, posts, ratesLoaded, hasRates, onRetry, t, tStrict }: FxPanelProps) {
+function FxPanel({ fx, posts, ratesLoaded, hasRates, onRetry, t, tStrict }: FxPanelProps) {
   // The base-currency arm is not "a rate of 1". It is the absence of conversion, and §H-FX stores no
   // rate for it, so the panel states that instead of rendering a rate nobody will ever see in the
   // books.
-  if (fx.kind === 'base') {
-    return (
-      <p className="documents-currency-note" data-fx="base" role="note">
-        {t('invoice.fx.base', { currency: fx.baseCurrency })}
-      </p>
-    );
-  }
+  // The base currency converts nothing, so there is nothing to show here: the sentence that says so
+  // is behind the (i), which also carries the `data-fx="base"` marker the flows wait on.
+  if (fx.kind === 'base') return null;
 
   if (fx.kind === 'loading') {
     return (
@@ -387,10 +404,10 @@ function FxPanel({ fx, currency, posts, ratesLoaded, hasRates, onRetry, t, tStri
             Telling its operator they are blocked would be false, and they would go hunting for a
             rate they do not need yet. The rate matters for the invoice the quote becomes.
 
-            A11-G14: the posting case says nothing here. Ausstellen is already pre-disabled with the
-            currency and the date beside it (D15/C3), so a lead sentence here would be the SAME fact
-            a second time, on the same screen, three inches away. The quote case keeps its lead,
-            because nothing is disabled there and no inline reason exists to carry it. */}
+            A11-G14: the posting case says nothing more here. Pressing Ausstellen names the
+            currency and the date in one line at the moment of the act (D152 rule 3), so a lead
+            sentence here would be the SAME fact twice. The quote case keeps its lead, because
+            nothing refuses there and no act-time reason exists to carry it. */}
         {!posts && (
           <p>{t('invoice.fx.needsRateNoPosting', { currency: fx.currency, date: formatDate(fx.date) })}</p>
         )}
@@ -468,10 +485,6 @@ function FxPanel({ fx, currency, posts, ratesLoaded, hasRates, onRetry, t, tStri
       <div>
         <dt>{t('invoice.fx.origin')}</dt>
         <dd>{tStrict(fxSourceKey(fx.rateSource))}</dd>
-      </div>
-      <div className="documents-currency-willpost">
-        <dt className="visually-hidden">{t('invoice.fx.title')}</dt>
-        <dd>{t('invoice.fx.willPost', { currency, baseCurrency: fx.baseCurrency })}</dd>
       </div>
     </dl>
   );

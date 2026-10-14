@@ -594,6 +594,13 @@ test('the letter renders per debtor with one QR payment part per invoice, determ
 
   const again = must(call(deps, 'get_dunning_pdf', { workspaceId, runId: run.runId, debtorId: customerId }), 'pdf again');
   assert.equal(again.pdf.base64, rendered.pdf.base64, 'same frozen rows, same bytes');
+
+  // Critic phase0-installable r2, R2-4: the letter says what it carries, the Swiss QR Code alone, and
+  // never promises the SIX payment part and receipt it does not draw (the invoice PDF's own wording).
+  assert.ok(bytes.includes('ein Swiss QR Code zum Bezahlen'), 'the letter names the code on the next pages');
+  assert.ok(bytes.includes('Swiss QR Code zum Bezahlen unten links \\(ohne Zahlteil und Empfangsschein\\)'), 'each QR page carries QR_CODE_DRAWN_LINE');
+  assert.ok(!bytes.includes('beiliegenden Zahlteilen'), 'no enclosed payment parts are promised');
+  assert.ok(!bytes.includes('Zahlteil zu Rechnung'), 'no page is titled a payment part');
 });
 
 // --- Send -----------------------------------------------------------------------------------------

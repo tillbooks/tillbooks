@@ -24,6 +24,7 @@ import type { WorkspaceContext } from '../context.js';
 import { err } from '../result.js';
 import type { Err } from '../result.js';
 import { resolveRole, isRejection } from '../payments/accounts.js';
+import { deriveStatutoryOnPost } from '../files/postedFloor.js';
 import type { CamtClassification, CamtCreditDebit } from './camt.js';
 
 /**
@@ -352,6 +353,11 @@ export function writeLineLink(ctx: WorkspaceContext, input: WriteLineLinkInput):
      VALUES (?, ?, ?, ?, ?, ?, NULL)`,
   );
   for (const leg of legs) insert.run(linkId, ctx.workspaceId, input.bankTxnId, leg.lineId, leg.entryId, leg.signedMinor);
+  // D142 (A39 §11, OR 958f): the ONE chokepoint every booking and match passes. A Beleg attached to the
+  // line while it was open becomes a retained voucher the moment the line is booked or matched, counted
+  // from the later of the line's date and its claimed entries' dates, in this same transaction. A Beleg
+  // attached afterwards derives in `linkFile`. Nothing here, and nothing on reopen, lowers a floor.
+  if (input.state === 'booked' || input.state === 'matched') deriveStatutoryOnPost(ctx, 'bank_txn', input.bankTxnId);
   return linkId;
 }
 

@@ -32,11 +32,12 @@ import {
   inventoryOnHandByLot,
   inventoryAvailableSerials,
 } from '../core/inventory/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface TrackingActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -76,14 +77,14 @@ export function trackingActions(h: TrackingActionHelpers): readonly ActionDef[] 
   return [
     ctxAction(
       'item_set_tracking_mode',
-      'write',
+      'write:reversible:internal',
       "Set an item's lot/serial tracking mode: none | lot | serial | lot_and_serial. The item must be stockable (track_stock true) and its current on-hand must be 0 for any non-none mode (else tracking_mode_requires_zero_stock); a service or non-stockable item is tracking_not_applicable. Going back to none needs every lot and serial for the item archived and balanced. Plain master data: posts no journal entry.",
       ctxSchema({ itemId: STR, mode: STR, idempotencyKey: STR }, ['itemId', 'mode', 'idempotencyKey']),
       (ctx, input) => itemSetTrackingMode(ctx, as(input)),
     ),
     ctxAction(
       'lot_create',
-      'write',
+      'write:correctable:internal',
       'Create a lot (a batch) against a lot-tracked item. number is 1-60 chars, unique per item case-insensitively (lot_number_taken); the item must be lot-tracked (else tracking_not_applicable). Optional expiryDate, manufacturedDate, supplierReference, notes and an initial status (default open). No quantity column: on-hand is always derived from movements.',
       ctxSchema(
         {
@@ -102,21 +103,21 @@ export function trackingActions(h: TrackingActionHelpers): readonly ActionDef[] 
     ),
     ctxAction(
       'lot_update',
-      'write',
+      'write:reversible:internal',
       'Edit a lot through a descriptive patch (number if still unique, expiryDate, manufacturedDate, supplierReference, notes). The status is changed via lot_set_status, not here. Only the fields present in patch change.',
       ctxSchema({ lotId: STR, patch: LOT_PATCH, idempotencyKey: STR }, ['lotId', 'idempotencyKey']),
       (ctx, input) => lotUpdate(ctx, as(input)),
     ),
     ctxAction(
       'lot_set_status',
-      'write',
+      'write:reversible:internal',
       'Change a lot status: open | held | expired | closed | archived, with an optional reason. Setting closed or archived while the lot still has non-zero derived on-hand is refused with lot_has_balance (quarantine or expire it instead, which keeps the quantity). Never mints a stock movement.',
       ctxSchema({ lotId: STR, status: STR, reason: STR, idempotencyKey: STR }, ['lotId', 'status', 'idempotencyKey']),
       (ctx, input) => lotSetStatus(ctx, as(input)),
     ),
     ctxAction(
       'lot_archive',
-      'write',
+      'write:reversible:internal',
       'Soft-archive a lot (status archived). Refused with lot_has_balance while its derived on-hand is non-zero. Deletion is never offered; the movements that reference it keep their lot_id.',
       ctxSchema({ lotId: STR, idempotencyKey: STR }, ['lotId', 'idempotencyKey']),
       (ctx, input) => lotArchive(ctx, as(input)),
@@ -144,35 +145,35 @@ export function trackingActions(h: TrackingActionHelpers): readonly ActionDef[] 
     ),
     ctxAction(
       'serial_create',
-      'write',
+      'write:correctable:internal',
       'Create one serial (an individually identified unit) against a serial-tracked item. number is 1-60 chars, unique per item case-insensitively (serial_number_taken); the item must be serial-tracked (else tracking_not_applicable). When the item is lot_and_serial a lotId is required (lot_reference_required) and must belong to the same item (lot_item_mismatch). Starts status available.',
       ctxSchema({ itemId: STR, number: STR, lotId: STR, notes: STR, idempotencyKey: STR }, ['itemId', 'number', 'idempotencyKey']),
       (ctx, input) => serialCreate(ctx, as(input)),
     ),
     ctxAction(
       'serial_create_bulk',
-      'write',
+      'write:correctable:internal',
       'Create many serials at once for one item from a list of numbers (receiving a carton). ALL-OR-NOTHING: any duplicate number (against the store or within the batch) aborts the whole call with serial_number_taken and writes nothing. Same lotId rules as serial_create.',
       ctxSchema({ itemId: STR, numbers: STR_ARRAY, lotId: STR, idempotencyKey: STR }, ['itemId', 'numbers', 'idempotencyKey']),
       (ctx, input) => serialCreateBulk(ctx, as(input)),
     ),
     ctxAction(
       'serial_update',
-      'write',
+      'write:reversible:internal',
       'Edit a serial through a descriptive patch (number if still unique, notes, lotId which must belong to the same item). The status is changed via serial_set_status, not here. Only the fields present in patch change.',
       ctxSchema({ serialId: STR, patch: SERIAL_PATCH, idempotencyKey: STR }, ['serialId', 'idempotencyKey']),
       (ctx, input) => serialUpdate(ctx, as(input)),
     ),
     ctxAction(
       'serial_set_status',
-      'write',
+      'write:reversible:internal',
       'Change a serial status: available | reserved | issued | returned | scrapped | archived, with an optional reason. Scrapping an available unit is allowed and removes it from availability. Never mints a stock movement.',
       ctxSchema({ serialId: STR, status: STR, reason: STR, idempotencyKey: STR }, ['serialId', 'status', 'idempotencyKey']),
       (ctx, input) => serialSetStatus(ctx, as(input)),
     ),
     ctxAction(
       'serial_archive',
-      'write',
+      'write:reversible:internal',
       'Soft-archive a serial (status archived). Refused with serial_has_balance while the unit is still available or reserved (issue, return or scrap it first). Deletion is never offered.',
       ctxSchema({ serialId: STR, idempotencyKey: STR }, ['serialId', 'idempotencyKey']),
       (ctx, input) => serialArchive(ctx, as(input)),

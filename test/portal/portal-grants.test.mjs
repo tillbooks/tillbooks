@@ -15,6 +15,10 @@
  *   - quote_accept delegates to C02's REAL accept, idempotent (ONE acceptance, no double-issue);
  *   - TX-ATOMICITY: a refused accept/grant writes zero rows;
  *   - send P8 draft-gate; revoke stamps and never deletes; the audit trail.
+ *
+ * D157: a draft opens nothing, so the fence and read-model tests start from a HANDED-OVER grant
+ * (`liveGrant`: create, then a confirmed send). The draft's own deadness is proven in
+ * `grant-liveness.test.mjs`.
  */
 
 import test from 'node:test';
@@ -98,6 +102,19 @@ function sentQuote(call, contactId, amount = 30000) {
 
 function grant(call, contactId, scopes, expiresAt = '2027-01-31') {
   return call('portal_grant_create', { contactId, scopes, expiresAt, idempotencyKey: k('g') });
+}
+
+/**
+ * A grant that is HANDED OVER: created, then sent with `confirmed: true`. D157: a draft opens nothing,
+ * so every test about what a token can reach starts from a live link. A refused create is returned as
+ * is (the create-time fences are asserted through it too).
+ */
+function liveGrant(call, contactId, scopes, expiresAt = '2027-01-31') {
+  const g = grant(call, contactId, scopes, expiresAt);
+  if (!g.ok) return g;
+  const sent = call('portal_grant_send', { grantId: g.grantId, confirmed: true, idempotencyKey: k('send') });
+  assert.equal(sent.ok, true, `portal_grant_send refused: ${JSON.stringify(sent)}`);
+  return g;
 }
 
 // --- Create validation + clamp -------------------------------------------------------------------
@@ -192,14 +209,14 @@ test('F02 fence: an unknown, expired, or revoked token all deny IDENTICALLY (gra
   assert.equal(unknown.error, 'grant_denied');
 
   // Revoked.
-  const gr = grant(call, contactId, [{ kind: 'all_invoices' }]);
+  const gr = liveGrant(call, contactId, [{ kind: 'all_invoices' }]);
   call('portal_grant_revoke', { grantId: gr.grantId, idempotencyKey: k('rev') });
   const revoked = tokenCall(deps, 'portal_resolve', { token: gr.tokenOnce });
   assert.equal(revoked.ok, false);
   assert.equal(revoked.error, 'grant_denied');
 
   // Expired: stamp the row's expiry into the past (the resolver's expiry fence is what is under test).
-  const ge = grant(call, contactId, [{ kind: 'all_invoices' }]);
+  const ge = liveGrant(call, contactId, [{ kind: 'all_invoices' }]);
   deps.store.db.prepare('UPDATE portal_grant SET expires_at = ? WHERE id = ?').run('2020-01-01', ge.grantId);
   const expired = tokenCall(deps, 'portal_resolve', { token: ge.tokenOnce });
   assert.equal(expired.ok, false);
@@ -226,12 +243,12 @@ test('F02 fence: a token minted in workspace A can NEVER read workspace B (§H-T
   const invB = issuedInvoice(callB, custB);
 
   // A grant in A cannot even be SCOPED to B's invoice id: it is not A's contact's record.
-  const cross = grant(callA, custA, [{ kind: 'invoice', id: invB }]);
+  const cross = liveGrant(callA, custA, [{ kind: 'invoice', id: invB }]);
   assert.equal(cross.ok, false);
   assert.equal(cross.error, 'invalid_scope');
 
   // A legitimate A grant resolves ONLY A's invoice, never B's.
-  const gA = grant(callA, custA, [{ kind: 'invoice', id: invA }]);
+  const gA = liveGrant(callA, custA, [{ kind: 'invoice', id: invA }]);
   const resA = tokenCall(deps, 'portal_resolve', { token: gA.tokenOnce });
   assert.equal(resA.ok, true, JSON.stringify(resA));
   const ids = resA.invoices.map((i) => i.id);
@@ -248,7 +265,7 @@ test('F02 fence: the scope fence returns ONLY listed entities, never the contact
   const scoped = issuedInvoice(call, contactId);
   const unscoped = issuedInvoice(call, contactId); // same contact, NOT in scope
 
-  const g = grant(call, contactId, [{ kind: 'invoice', id: scoped }]);
+  const g = liveGrant(call, contactId, [{ kind: 'invoice', id: scoped }]);
   const res = tokenCall(deps, 'portal_resolve', { token: g.tokenOnce });
   assert.equal(res.ok, true, JSON.stringify(res));
   const ids = res.invoices.map((i) => i.id);
@@ -266,7 +283,7 @@ test('F02 resolve: an invoice carries its open amount (A14) and A11\'s QR refere
   const contactId = customer(call, 'Kundin AG');
   const invoiceId = issuedInvoice(call, contactId, 20000);
 
-  const g = grant(call, contactId, [{ kind: 'invoice', id: invoiceId }]);
+  const g = liveGrant(call, contactId, [{ kind: 'invoice', id: invoiceId }]);
   const res = tokenCall(deps, 'portal_resolve', { token: g.tokenOnce });
   assert.equal(res.ok, true, JSON.stringify(res));
   const inv = res.invoices[0];
@@ -291,7 +308,7 @@ test('F02 quote_accept: delegates to C02\'s real accept (sent -> accepted), no i
   const contactId = customer(call, 'Kundin AG');
   const quoteId = sentQuote(call, contactId);
 
-  const g = grant(call, contactId, [{ kind: 'quote', id: quoteId }]);
+  const g = liveGrant(call, contactId, [{ kind: 'quote', id: quoteId }]);
   const before = call('quotes_get', { quoteId });
   assert.equal(before.document.status, 'sent');
 
@@ -311,7 +328,7 @@ test('F02 quote_accept: idempotent - the same key twice yields ONE acceptance, n
   const call = callFor(deps, workspaceId);
   const contactId = customer(call, 'Kundin AG');
   const quoteId = sentQuote(call, contactId);
-  const g = grant(call, contactId, [{ kind: 'quote', id: quoteId }]);
+  const g = liveGrant(call, contactId, [{ kind: 'quote', id: quoteId }]);
 
   const first = tokenCall(deps, 'portal_quote_accept', { token: g.tokenOnce, quoteId, idempotencyKey: 'once' });
   assert.equal(first.ok, true, JSON.stringify(first));
@@ -339,7 +356,7 @@ test('F02 tx-atomicity: a REFUSED accept (out of scope) writes ZERO rows and lea
   const scopedQuote = sentQuote(call, contactId);
   const otherQuote = sentQuote(call, contactId); // same contact, NOT in the grant's scope
 
-  const g = grant(call, contactId, [{ kind: 'quote', id: scopedQuote }]);
+  const g = liveGrant(call, contactId, [{ kind: 'quote', id: scopedQuote }]);
 
   const journalBefore = deps.store.db.prepare('SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?').get(workspaceId).n;
   const refused = tokenCall(deps, 'portal_quote_accept', { token: g.tokenOnce, quoteId: otherQuote, idempotencyKey: k('bad') });
@@ -362,12 +379,12 @@ test('F02 fence: a token for contact X cannot accept contact Y\'s quote (cross-g
   const yQuote = sentQuote(call, y);
 
   // A grant for X, even if we try to name Y's quote, is refused at create (contact fence)...
-  const badScope = grant(call, x, [{ kind: 'quote', id: yQuote }]);
+  const badScope = liveGrant(call, x, [{ kind: 'quote', id: yQuote }]);
   assert.equal(badScope.ok, false);
   assert.equal(badScope.error, 'invalid_scope');
 
   // ...and an X grant with a legitimate (empty-of-Y) scope cannot accept Y's quote either.
-  const gx = grant(call, x, [{ kind: 'all_invoices' }]);
+  const gx = liveGrant(call, x, [{ kind: 'all_invoices' }]);
   const cross = tokenCall(deps, 'portal_quote_accept', { token: gx.tokenOnce, quoteId: yQuote, idempotencyKey: k('cg') });
   assert.equal(cross.ok, false, 'X\'s token accepted Y\'s quote: cross-grantee leak');
   assert.equal(cross.error, 'grant_denied');
@@ -398,7 +415,7 @@ test('F02 F1: a shared idempotency key cannot make the portal return ANOTHER con
 
   // X, scoped only to qx, replays the SAME raw key through the portal. It must accept X's OWN quote
   // (or error), and can NEVER return Y's document across the grantee fence.
-  const gx = grant(call, x, [{ kind: 'quote', id: qx }]);
+  const gx = liveGrant(call, x, [{ kind: 'quote', id: qx }]);
   const res = tokenCall(deps, 'portal_quote_accept', { token: gx.tokenOnce, quoteId: qx, idempotencyKey: 'shared' });
   assert.equal(res.ok, true, JSON.stringify(res));
   assert.notEqual(res.document.id, qy, 'the portal returned another contact\'s quote via a shared idempotency key (cross-grantee disclosure)');
@@ -414,7 +431,7 @@ test('F02 F1: one key reused across two of X\'s OWN quotes never returns the fir
   const x = customer(call, 'Kundin X AG');
   const q1 = sentQuote(call, x, 12300);
   const q2 = sentQuote(call, x, 45600);
-  const gx = grant(call, x, [{ kind: 'quote', id: q1 }, { kind: 'quote', id: q2 }]);
+  const gx = liveGrant(call, x, [{ kind: 'quote', id: q1 }, { kind: 'quote', id: q2 }]);
 
   const first = tokenCall(deps, 'portal_quote_accept', { token: gx.tokenOnce, quoteId: q1, idempotencyKey: 'accept' });
   assert.equal(first.ok, true, JSON.stringify(first));

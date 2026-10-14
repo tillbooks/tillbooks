@@ -8,7 +8,6 @@
   },
   "review": {
     "title": "Prüfung",
-    "subtitle": "Kommentiere, markiere und gib die gebuchten Buchungen einer Periode frei und sperre sie, sobald alles sauber ist.",
     "permission": "Für die Prüfung der Bücher brauchst du die Treuhänder-Rolle. Bitte einen Workspace-Besitzer, sie dir zu geben.",
     "coverage": "Abdeckung",
     "lockPeriod": "Periode sperren",
@@ -27,7 +26,9 @@
     "empty": "Keine Bewegungen in dieser Periode",
     "emptyHint": "Hier wurde nichts gebucht, also gibt es noch nichts zu prüfen.",
     "allApproved": "Nichts zu prüfen, alles freigegeben. Du kannst die Periode sperren oder zum Export gehen.",
+    "allApprovedNoLock": "Nichts zu prüfen, alles freigegeben. Du kannst zum Export gehen.",
     "noAmount": "Kein Betrag",
+    "row": "{date}, {text}, {status}",
     "comment": "Kommentieren",
     "flag": "Markieren",
     "approve": "Freigeben",
@@ -58,10 +59,9 @@
       "yearLabel": "Jahr"
     },
     "lock": {
-      "locked": "Gesperrt",
-      "alreadyLocked": "Diese Periode ist bereits gesperrt.",
       "needsManagePeriods": "Zum Sperren brauchst du das Recht, Perioden zu verwalten.",
-      "notClean": "Jede Buchung muss freigegeben und keine markiert sein, bevor du sperren kannst.",
+      "notClean": "Sperren kannst du, sobald jede Buchung freigegeben und keine markiert ist.",
+      "info": "Wann du sperren kannst",
       "confirmTitle": "{period} sperren?",
       "confirmBody": "Das betrifft die Buchungen von {from} bis {to}.",
       "failed": "Die Periode konnte nicht gesperrt werden. Versuch es nochmals.",
@@ -97,7 +97,7 @@
   "help": {
     "Review": {
       "title": "Prüfung",
-      "body": "Geh die gebuchten Buchungen einer Periode durch: kommentiere, was du hinterfragen willst, markiere, was falsch aussieht, und gib frei, was du geprüft hast.\n\nDie Zeile oben zählt, was erledigt ist und was offen bleibt. Der Sperren-Knopf bleibt aus, bis alles freigegeben und nichts markiert ist.\n\nEin Kommentar oder eine Markierung ändert eine gebuchte Buchung nie. Eine Korrektur ist eine Stornierung in einer späteren Periode.",
+      "body": "Geh die gebuchten Buchungen einer Periode durch: kommentiere, was du hinterfragen willst, markiere, was falsch aussieht, und gib frei, was du geprüft hast. Die drei Aktionen einer Zeile erscheinen, sobald du die Zeile anwählst, mit der Maus darauf zeigst oder sie mit der Tabulatortaste erreichst.\n\nDie Zeile oben zählt, was erledigt ist und was offen bleibt. Periode sperren erscheint dort, sobald alles freigegeben und nichts markiert ist; das (i) daneben sagt, was noch fehlt.\n\nEin Kommentar oder eine Markierung ändert eine gebuchte Buchung nie. Eine Korrektur ist eine Stornierung in einer späteren Periode.",
       "concepts": [
         "steuerperiode"
       ]

@@ -1,8 +1,7 @@
 /*
- * F00's "Wartet auf dich" strip. It spends ZERO accent (the count is not attention-coloured); the
- * whole row is one quiet link into /attention, with the focus ring the only accent it ever shows.
- * One panel treatment (K-09): the elevated ground, no hairline; the transparent border is the edge
- * the focus cue turns brass on the link variant (K-10).
+ * F00's "Wartet auf dich" block. It spends ZERO accent (the count is ink, not attention-coloured); the
+ * rows are quiet links, with the focus ring the only accent it ever shows. One panel treatment (K-09):
+ * the elevated ground, no hairline; the transparent border is the edge the focus cue turns brass on.
  */
 .att-strip {
   display: flex;
@@ -35,33 +34,111 @@
   max-width: 16rem;
 }
 
-.att-strip--link {
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
+/* With work waiting: a head line (the count and the door to the hub) over the leading rows. */
+.att-strip--list {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--t-space-0-5);
+}
+
+.att-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  min-height: 32px;
+}
+
+/* A heading is one ink, full stop; it is sized as body text, the rows are what matter. */
+.att-strip-count {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.att-strip-all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+  text-decoration: none;
+  border-radius: var(--t-radius-sm);
+}
+
+.att-strip-all:hover {
+  color: var(--t-text);
+}
+
+.att-strip-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.att-strip-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  min-height: 36px;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  text-decoration: none;
   transition: background-color var(--t-motion-hover) var(--t-ease-out);
 }
 
-.att-strip--link:hover {
+.att-strip-item:hover {
   background: var(--t-bg-soft);
 }
 
-/* Focus is the shared global :focus-visible ring (tokens.css); no local outline restated here. */
-
-.att-strip-count {
-  font-weight: 600;
+/* The urgency is the Status glyph's SHAPE; its word stays for assistive tech only in this compact list. */
+.att-strip-urgency {
+  flex: 0 0 auto;
+  padding-top: 2px;
 }
 
-.att-strip-lead {
+.att-strip-urgency .status-word-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.att-strip-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.att-strip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.att-strip-sub {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
   color: var(--t-text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Focus is the shared global :focus-visible ring (tokens.css); no local outline restated here. */
+
 /* A decorative chevron: faint is for decorative glyphs (K-36); the words carry the meaning. */
 .att-strip-go {
   flex: 0 0 auto;
-  margin-left: auto;
   color: var(--t-text-faint);
 }

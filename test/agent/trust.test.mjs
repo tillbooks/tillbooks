@@ -16,6 +16,7 @@ import {
   CONSEQUENCE_FOR_ACTION,
   TRUST_SUGGEST_THRESHOLD,
 } from '../../dist/core/agent/index.js';
+import { consequenceFor } from '../../dist/core/agent/consequences.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
 
 function rest(deps, name, input) {
@@ -124,6 +125,8 @@ test('ActionDef.consequence: every mapped verb carries its sentence, and only re
     const action = getAction(name);
     assert.equal(typeof action.consequence, 'string', `${name}: a dial-governed verb states its consequence`);
     assert.ok(action.consequence.length > 20, `${name}: a consequence is a sentence, not a label`);
+    // D156: the stamped sentence IS the catalogue's English entry (own, else the family's).
+    assert.equal(action.consequence, consequenceFor(name, DIAL_CAPABILITY_FOR_ACTION[name]).en, `${name}: consequence is the catalogue's`);
   }
   for (const name of Object.keys(CONSEQUENCE_FOR_ACTION)) {
     assert.ok(getAction(name) !== undefined, `${name}: CONSEQUENCE_FOR_ACTION names only registered verbs`);

@@ -383,9 +383,17 @@ rather than contradicting it (D118 C1-C4):
   the Vorschläge queue; the top two tiers ALWAYS take a synchronous human confirmation before the
   write leaves the surface. That rule is a floor, never a ceiling, and blanket confirmation on
   everything is banned because it trains blind clicking. Every governed confirm renders the ONE
-  consequence sentence resolved from the engine's dial map, the identical string the Vorschlag
-  card shows, so a human confirming a write and an approver clearing an agent's draft of the same
-  write read the same sentence. A verb with no engine sentence gets none invented in the Studio.
+  consequence sentence from the engine's catalogue (`src/core/agent/consequences.ts`, D156): the
+  verb's own entry, else its family's, in EN and de-CH. The Studio reads the generated projection,
+  MCP reads the same entry (English in the tool description, both languages in `_meta`), and
+  `test/agent/consequence-parity.test.mjs` holds them byte-identical, so a human confirming a write,
+  an approver clearing an agent's draft of it, and the agent itself read the same sentence. A verb
+  with no engine sentence gets none invented in the Studio.
+  **Where the sentence sits (D152, owner, 01.10.2026):** beside a money commit on a working surface
+  (Buchen in the composer, Buchen on a bank line), the sentence is the tooltip of an (i) button next
+  to the commit, and the commit carries `aria-describedby` to it, so a screen reader hears it on the
+  button and a pointer finds it on hover or focus. It is the same string, never shortened or
+  reworded; only its resting visibility changed. A confirm dialog still renders it in full.
 
 ## Interaction
 
@@ -429,6 +437,64 @@ rather than contradicting it (D118 C1-C4):
 - **Danger fills use `--t-on-danger` for their text and icon**, never a borrowed `--t-on-accent`.
   The two are equal by coincidence in one theme and declared separately on purpose.
 
+## Cognitive load (D152, 01.10.2026)
+
+The owner's words for the bank band (D143) became the rule for every working surface: "reduce to
+max", "the number is enough". These six rules are what that means in practice. They were measured on
+the Neue Buchung composer and the Bankzeilen queue before they were written down, and a surface that
+breaks one needs a reason a reviewer would accept, not a preference.
+
+1. **Infer before asking.** What TILL already knows, TILL fills in, as a visible and editable value:
+   the account's default MWST code, the balancing amount on the last line, the VAT leg of a taxed
+   line. An empty control that the system could have filled is load handed to the user.
+2. **A control appears only where it can apply.** Kostenstelle only on an account that allows one
+   (`costCenterAllowed`), MWST only where a tax code is possible (an Erfolgskonto or an asset account
+   12xx or 14xx to 17xx (Vorräte and Anlagevermögen), never a VAT or bank account), a filter only when
+   it would change the list (a facet whose count is 0 or equals the total is hidden). Nothing hidden
+   ever carries a value.
+3. **One action, one place.** No action appears twice on a surface. A button that cannot act yet is
+   absent rather than disabled when the control that unlocks it sits beside it ("Worauf buchen?"
+   is the next step on a bank line with no target, not a grey Buchen).
+4. **Words on demand.** Explanations, equations and "next step" sentences live behind an (i) as a
+   hover and focus card. The working surface carries values and a one-line state. A derived figure
+   is said in one line ("davon MWST 8.07 auf 1170 · netto 99.63"), not repeated as a table of what
+   the fields above already show.
+5. **A list never opens itself.** Selecting is the user's act; nothing is pre-selected on load
+   (a deep link is the user's act too, carried as `?focus=<id>` and dropped from the URL once the
+   user selects something else). A resting selection adds at most one line of context under
+   its row. An editor the user opens on purpose may be as tall as it needs. Nothing is pre-ticked
+   either: a box that commits money (a payment run, a bulk approval) is ticked by the user, and a
+   suggestion is said as a line ("Vorschlag: 1 Zahlung fällig · auswählen"), never as a ticked box.
+6. **Chrome never cuts content.** The sticky surface header is flush with the scroll edge, so
+   nothing scrolls visibly above it, and its bottom hairline appears only once content passes under
+   it.
+
+**Three rules learnt from the critics (D153, 04.10.2026).** The D152 follow-up pass took the rules to
+thirteen more surfaces; independent critics found the same three defects on several branches, so they
+are rules now, not review comments:
+
+- **One glyph per line.** A one-line state carries exactly one status glyph (check, warn or error)
+  with its words; a second fact on the same line is said in words, never with a second glyph
+  ("✓ Keine Differenz ⚠" reads as a contradiction). The glyph's accessible name is its own fact.
+- **A workspace switch resets the surface.** A surface does not remount on a switch, so anything it
+  holds (a selection, a draft, a dialog, a refusal, a "done in this session" flag) is reset when the
+  workspace changes, and an answer that started under the old workspace or was overtaken by a newer
+  read is dropped. A session flag is keyed by workspace and object, never by object alone.
+- **One idempotency key per act.** A key minted per object (`approve:<ws>:<entry>`) replays the stored
+  answer after the state has moved back (approve, flag, approve again), so the user is told "done"
+  while nothing happened. The Studio mints a key when the user acts and reuses it only to retry that
+  same act.
+
+**The measured budgets** (1280x800, Komfortabel; re-measure when a surface changes):
+
+| Surface | Before D152 | Budget |
+|---|---|---|
+| Neue Buchung, a simple expense with MWST | 18 inputs, 3 lines, Vorsteuer typed by hand | 7 inputs or fewer, 1 Buchungssatz, VAT leg derived |
+| Bankzeilen, open lines fully visible | 1 | 10 or more |
+| Bankzeilen, words above the first line | 81 | 20 or fewer |
+| Bankzeilen, height of the selected line | 358px | 80px or less at rest |
+| Any surface, content visible above the sticky header | a 24px strip (64px on mobile) | none |
+
 ## Motion
 
 Motion is a courtesy, not a personality (D118 D3):
@@ -447,8 +513,8 @@ Motion is a courtesy, not a personality (D118 D3):
 
 ### The vocabulary: three moments, one ease pair (D122 D-I, 05.09.2026)
 
-Motion is spent on exactly three moments, plus one hover beat (K-41), and each one is a set of
-tokens in `tokens.css`, never a number typed into a surface. A surface says `var(--t-motion-reveal)`; it never says `200ms`. The
+Motion is spent on exactly three moments, plus one hover beat (K-41) and one loading loop (D155), and
+each one is a set of tokens in `tokens.css`, never a number typed into a surface. A surface says `var(--t-motion-reveal)`; it never says `200ms`. The
 `test/style/motion-tokens.test.mjs` guard holds the set, the values and the kill switch, and
 ratchets the raw duration literals left in the Studio down to zero.
 
@@ -458,6 +524,7 @@ ratchets the raw duration literals left in the Studio down to zero.
 | **Commit** (post, pay, issue, lock, apply) | The pressed control scales to 0.98 in 80 ms. The new or updated row lands in 180 ms from 8 px above, a check draws in 180 ms beside the words, and an `--t-accent-soft` tint on the row decays over 720 ms. Never a toast that says "Success", never colour alone: the `ActionFeedback` primitive carries the words. | `--t-motion-press` 80 ms, `--t-press-scale` 0.98, `--t-motion-commit` 180 ms, `--t-motion-tint` 720 ms |
 | **Reveal** (a dock, a drawer, a disclosure) | The panel slides from the edge it lives on in 200 ms; its items follow with a 30 ms per-item stagger over at most three items. A disclosure's body fades under its chevron in 200 ms. | `--t-motion-reveal` 200 ms, `--t-motion-stagger` 30 ms |
 | **Hover** (a pointer over a control; UI polish round 2, K-41) | The one beat under the pointer: a shared primitive's background, ink and edge colour ease in 120 ms (`.btn`, `.field`, `.select-trigger`, `.help-trigger`, the rail tree rows, table row hover). Nothing else moves on hover. | `--t-motion-hover` 120 ms |
+| **Loop** (a loading or pending state; owner, 09.10.2026, D155) | A skeleton pulses, or a pending indicator breathes, on one 1400 ms cycle. It is the single allowed exception to the 120-200 ms budget, used only for a skeleton or a pending indicator, never for decoration. Reduced motion stops it. | `--t-motion-loop` 1400 ms |
 
 - **The hover beat is colour only.** It animates `background-color`, `color` and `border-color`,
   never `transition: all`; the only properties that move anywhere are `transform`, `opacity` and
@@ -642,3 +709,8 @@ de-CH and en are both first-class from day one. fr-CH and it-CH follow.
 - No coined jargon: the words on screen are the words a Treuhänder or a shop owner already uses.
 - All outward and in-app copy runs through the humanizer for its language (`/humanizer-en`,
   `/humanizer-de`), and de-CH copy keeps its real umlauts.
+- **Consequence sentences (D156).** At most two sentences: what happens, in the words an owner uses
+  ("books", "issues", "sends"), then what you can still do afterwards, naming the correction or
+  saying plainly there is no way back. Never "irreversible" or "immutable" where a governed way back
+  exists, never a way back that does not exist. A correction is a new entry and both stay traceable
+  (de-CH: "Korrekturbuchung", the original stays visible); never "the law forbids".

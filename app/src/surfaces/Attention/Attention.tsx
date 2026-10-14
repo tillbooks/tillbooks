@@ -1,9 +1,11 @@
 /**
  * G15, Pendenzen (`/attention`): the one screen that answers "what is waiting for a decision from me".
  *
- * It leads with the WORK (the urgency list, at most five rows, the top row selected on arrival and
- * opened by Enter or a click), then a per-area index for navigating, then the events zone. There is
- * no hide, no mute, no snooze anywhere on it.
+ * It leads with the WORK (the urgency list, at most five rows, opened by Enter or a click), then a
+ * per-area index for navigating, then the events zone. There is no hide, no mute, no snooze anywhere
+ * on it. NO ROW IS SELECTED ON ARRIVAL (D152 rule 5, the /bank B2 pattern): the roving tab stop sits
+ * on the first row so Tab still lands in the list, but no row is current until the person focuses
+ * one (Tab, the arrows, Home/End) or opens it.
  *
  * THE ROW CARRIES ITS DECISION (F-01, 2026-09-05; measured J2.1 at S 16 / C 33 / W 14 against an
  * ideal of S 2 / W 1 while every row deep-linked away). Each item arrives from the engine with the
@@ -27,7 +29,7 @@ import { isErr } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useCan } from '../../lib/capabilities';
 import { useFeedback } from '../../components/FeedbackProvider';
-import { useT, formatMoney } from '../../i18n';
+import { useI18n, formatMoney } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { EmptyState, ErrorBanner, NoWorkspaceState, Padlock, Skeleton, refusalText } from '../../components/states';
@@ -36,7 +38,10 @@ import { ActionFeedback, type FeedbackTone } from '../../components/ActionFeedba
 import { Status, type StatusKind } from '../../components/Status';
 import { ChevronRightGlyph, StatusNeutralGlyph, StatusPendingGlyph, StatusWarnGlyph } from '../../components/icons';
 import { EventsZone } from './EventsZone';
-import { RowDecision, parseDecisionOptions, verbLabel, parseActorKind, type ActorKind, type DecisionOption } from './RowDecision';
+import { RowDecision, parseDecisionOptions, parseActorKind, type ActorKind, type DecisionOption } from './RowDecision';
+import { parseFigures, type VorschlagFigures } from '../Agent/model';
+import { itemSubtitle, itemTitle, queueName } from './itemText';
+import { announceAttentionChanged } from './attentionSummary';
 import { readLastSeen, writeLastSeen, isNew } from './marker';
 import './Attention.css';
 
@@ -67,6 +72,9 @@ interface Item {
   consequenceKey?: string | null;
   proposedBy?: string;
   proposedByKind?: ActorKind;
+  /** Critic N1, `agent_action` rows: the figures frozen at the proposal, and whether the record changed. */
+  figures?: VorschlagFigures | null;
+  changedSinceProposal?: boolean;
 }
 
 /** The refusal codes the hub carries its own sentence for; anything else renders the generic one. */
@@ -79,10 +87,19 @@ const KNOWN_ACT_ERRORS: ReadonlySet<string> = new Set([
   'currency_mismatch',
   'already_executed',
   'not_found',
+  // D150: the statement-gap confirmation's refusals.
+  'gap_not_chained',
+  'gap_has_waiting_statement',
+  'gap_not_found',
+  'human_only',
+  // Critic N1: the record behind a Vorschlag changed after the proposal; nothing ran.
+  'vorschlag_stale',
 ]);
 
 interface QueueSummary {
   queueId: string;
+  /** The provider's own label key, the fallback when `attention.queueLabel.<queueId>` is missing. */
+  labelKey?: string;
   area: string;
   count: number;
   topUrgency: Urgency;
@@ -164,6 +181,8 @@ function parseItem(raw: unknown): Item | null {
     consequenceKey: typeof n.consequenceKey === 'string' ? n.consequenceKey : null,
     proposedBy: typeof n.proposedBy === 'string' ? n.proposedBy : undefined,
     proposedByKind: parseActorKind(n.proposedByKind),
+    figures: parseFigures(n.figures),
+    changedSinceProposal: n.changedSinceProposal === true,
   };
 }
 
@@ -176,6 +195,7 @@ function parseSummary(body: unknown): Summary | null {
         .filter((q) => typeof q.queueId === 'string' && typeof q.count === 'number')
         .map((q) => ({
           queueId: q.queueId as string,
+          ...(typeof q.labelKey === 'string' ? { labelKey: q.labelKey } : {}),
           area: typeof q.area === 'string' ? q.area : '',
           count: q.count as number,
           topUrgency: (q.topUrgency === 'overdue' || q.topUrgency === 'due' ? q.topUrgency : 'open') as Urgency,
@@ -200,7 +220,7 @@ function standTime(iso: string): string {
 }
 
 export function Attention() {
-  const t = useT();
+  const { t, locale } = useI18n();
   const client = useClient();
   const navigate = useNavigate();
   const workspaceId = useWorkspaceId();
@@ -210,13 +230,18 @@ export function Attention() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [selected, setSelected] = useState(0);
+  /** The row the person has focused, or -1 for none: D152 rule 5, nothing is current on arrival. */
+  const [selected, setSelected] = useState(-1);
   const [openArea, setOpenArea] = useState<string | null>(null);
   const [areaItems, setAreaItems] = useState<Item[] | null>(null);
   const [lastSeen, setLastSeen] = useState<string | null>(null);
   // The act in flight (one at a time: a double press on any row cannot fire twice) and its outcome.
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [actFeedback, setActFeedback] = useState<{ tone: FeedbackTone; message: string } | null>(null);
+  // A success is the Commit moment (D122 D-I): the decided row leaves the list with the re-read (no exit
+  // animation on a list item), so the acknowledgement lands on this banner. `id` re-mounts it per act,
+  // so a second decision lands again even if no empty render came between the two.
+  const [actFeedback, setActFeedback] = useState<{ tone: FeedbackTone; message: string; id?: number } | null>(null);
+  const feedbackSeq = useRef(0);
 
   // Discards an in-flight answer whose workspace is no longer active (design story 6.2).
   const activeWs = useRef<string | null>(workspaceId);
@@ -247,7 +272,7 @@ export function Attention() {
       return;
     }
     setSummary(parsed);
-    setSelected(0);
+    setSelected(-1);
     setLoading(false);
     if (parsed.computedAt !== '') writeLastSeen(ws, parsed.computedAt);
   }, [client, workspaceId]);
@@ -258,7 +283,11 @@ export function Attention() {
     setSummary(null);
     setAreaItems(null);
     setOpenArea(null);
-    setSelected(0);
+    setSelected(-1);
+    // An act's outcome and its in-flight lock belong to the workspace they were made in (critic
+    // round 2): the old answer is discarded by `activeWs`, so its lock must not outlive the switch.
+    setActFeedback(null);
+    setBusyKey(null);
     void load();
   }, [workspaceId, load]);
 
@@ -266,7 +295,7 @@ export function Attention() {
     async (area: string) => {
       if (workspaceId === null) return;
       setOpenArea(area);
-      setSelected(0);
+      setSelected(-1);
       setAreaItems(null);
       const res = await client.call('attention_list', { workspaceId, area, limit: 5 });
       if (activeWs.current !== workspaceId) return;
@@ -284,7 +313,7 @@ export function Attention() {
   const backToAllAreas = () => {
     setOpenArea(null);
     setAreaItems(null);
-    setSelected(0);
+    setSelected(-1);
   };
 
   const openItem = useCallback(
@@ -322,10 +351,12 @@ export function Attention() {
           tone: 'error',
           message: refusalText(t, res.body, { own: 'attention.act.error', known: KNOWN_ACT_ERRORS, fallback: 'attention.act.error.generic' }),
         });
-        if (code === 'not_found' || code === 'already_applied' || code === 'already_executed') void load();
+        if (code === 'not_found' || code === 'already_applied' || code === 'already_executed' || code === 'gap_not_found') void load();
         return;
       }
-      setActFeedback({ tone: 'success', message: t(`attention.act.done.${option.id}`) });
+      setActFeedback({ tone: 'success', message: t(`attention.act.done.${option.id}`), id: ++feedbackSeq.current });
+      // The rail count and the Übersicht list re-read now, not at their next minute.
+      announceAttentionChanged();
       await load();
       if (openArea !== null) await openArea_(openArea);
     },
@@ -343,7 +374,7 @@ export function Attention() {
       setActFeedback(null);
       const res = await client.call('tasks_create', {
         workspaceId: ws,
-        title: t(item.titleKey, item.titleParams),
+        title: itemTitle(t, item),
         ...(item.entityKind !== '' ? { entityKind: item.entityKind, entityId: item.entityId } : {}),
         idempotencyKey: newKey(),
       });
@@ -355,7 +386,7 @@ export function Attention() {
         });
         return;
       }
-      setActFeedback({ tone: 'success', message: t('attention.act.taskCreated') });
+      setActFeedback({ tone: 'success', message: t('attention.act.taskCreated'), id: ++feedbackSeq.current });
     },
     [client, workspaceId, t],
   );
@@ -438,7 +469,7 @@ export function Attention() {
     openArea !== null
       ? t(`attention.area.${openArea}`)
       : singleQueue
-        ? t(`attention.queueLabel.${summary.queues[0].queueId}`)
+        ? queueName(t, locale, summary.queues[0].queueId, summary.queues[0].labelKey)
         : t('attention.subtitle.work');
   const celebratory = summary.failed.length === 0 && (summary.total ?? 0) === 0;
 
@@ -467,7 +498,7 @@ export function Attention() {
       {/* A failed provider is named exactly once, with its own retry, and carries no count (story 1.3). */}
       {summary.failed.map((queueId) => (
         <div key={queueId} className="att-provider-error" role="status">
-          <span>{t('attention.providerFailed', { queue: t(`attention.queueLabel.${queueId}`) })}</span>
+          <span>{t('attention.providerFailed', { queue: queueName(t, locale, queueId) })}</span>
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => void load()}>
             {t('attention.retry')}
           </button>
@@ -493,8 +524,10 @@ export function Attention() {
 
         {actFeedback !== null && (
           <ActionFeedback
+            key={actFeedback.id ?? 0}
             tone={actFeedback.tone}
             message={actFeedback.message}
+            landed={actFeedback.tone === 'success'}
             onDismiss={() => setActFeedback(null)}
             dismissLabel={t('attention.act.dismissFeedback')}
           />
@@ -529,12 +562,10 @@ export function Attention() {
                 { key: 'copy', label: t('attention.overflow.copyRef'), onSelect: () => copyRef(item) },
               ];
               const rowKey = `${item.queueId}:${item.entityId}`;
-              const subtitle =
-                item.queueId === 'agent_action'
-                  ? verbLabel(t, String(item.subtitleParams?.tool ?? ''))
-                  : item.subtitleKey !== undefined
-                    ? t(item.subtitleKey, item.subtitleParams ?? {})
-                    : null;
+              const subtitle = itemSubtitle(t, item);
+              const title = itemTitle(t, item);
+              // The collapsed queue's fallback label key rides its own summary line, when it has one.
+              const collapsedLabelKey = summary.queues.find((q) => q.queueId === item.collapsedWithQueueId)?.labelKey;
               return (
                 <li key={rowKey} className="att-row" aria-busy={busyKey === rowKey ? 'true' : undefined}>
                   <div className="att-row-line">
@@ -544,7 +575,9 @@ export function Attention() {
                       rowRefs.current[index] = el;
                     }}
                     className={`att-row-open att-row-open--${item.urgency}`}
-                    tabIndex={index === selected ? 0 : -1}
+                    // The roving tab stop: the focused row, else the first, so Tab enters the list
+                    // even while nothing is current.
+                    tabIndex={index === Math.max(selected, 0) ? 0 : -1}
                     aria-current={index === selected ? 'true' : undefined}
                     onFocus={() => setSelected(index)}
                     onClick={() => openItem(item)}
@@ -556,7 +589,7 @@ export function Attention() {
                     />
                     <span className="att-row-main">
                       <span className="att-row-title">
-                        {t(item.titleKey, item.titleParams)}
+                        {title}
                         {tagged && <span className="att-new">{t('attention.new')}</span>}
                       </span>
                       {subtitle !== null && (
@@ -565,7 +598,7 @@ export function Attention() {
                           {item.collapsedWithQueueId !== undefined && (
                             <span className="att-collapsed">
                               {' · '}
-                              {t('attention.collapsedWith', { queue: t(`attention.queueLabel.${item.collapsedWithQueueId}`) })}
+                              {t('attention.collapsedWith', { queue: queueName(t, locale, item.collapsedWithQueueId, collapsedLabelKey) })}
                             </span>
                           )}
                         </span>
@@ -578,7 +611,7 @@ export function Attention() {
                     )}
                   </button>
                   <div className="att-row-overflow">
-                    <OverflowMenu label={t('attention.overflow.label', { title: t(item.titleKey, item.titleParams) })} items={overflowItems} />
+                    <OverflowMenu label={t('attention.overflow.label', { title })} items={overflowItems} />
                   </div>
                   </div>
                   {(item.decisionOptions?.length ?? 0) > 0 && (

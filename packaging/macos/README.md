@@ -80,6 +80,6 @@ the answer to "Gatekeeper blocked it" is the signed artifact, not a workaround.
 
 ## Linux and Windows
 
-Linux is `npm i -g tillbooks && till up`, no installer needed. Windows is out of scope (D104): a
+Linux is `npm i -g tillbooks@beta && till up` during the beta, no installer needed. Windows is out of scope (D104): a
 Windows user runs TILL inside an agent runtime (the `.mcpb` extension or `till mcp` in a session),
 with no native installer, jail, or local inference promised.

@@ -216,12 +216,19 @@ test('F9 contacts_anonymise sweeps the trace: the erased identity survives in no
     deps.store.db.prepare('SELECT COUNT(*) AS n FROM agent_call WHERE workspace_id = ? AND args_json LIKE ?').get(workspaceId, '%erika.muster@example.ch%').n >= 1,
   );
 
-  const anon = rest(deps, 'contacts_anonymise', {
+  // D156: the agent seat PROPOSES the erasure (dial family `erase`, ordinary ask); the human approves,
+  // and the approval replays the verb as the human, which is the call that sweeps the trace.
+  const drafted = rest(deps, 'contacts_anonymise', {
     workspaceId,
     contactId: created.contact.id,
     confirmed: true,
     idempotencyKey: 'c-2',
   });
+  assert.equal(drafted.drafted, true, JSON.stringify(drafted));
+  assert.equal(drafted.dialCapability, 'erase');
+  const approved = getAction('approve_drafted_action').run({ ...deps, actor: 'studio' }, { workspaceId, actionId: drafted.actionId });
+  assert.equal(approved.ok, true, JSON.stringify(approved));
+  const anon = approved.result;
   assert.equal(anon.ok, true, JSON.stringify(anon));
   assert.ok(anon.tracePurged.redacted >= 1, 'the erasure reports what it swept in the trace');
 

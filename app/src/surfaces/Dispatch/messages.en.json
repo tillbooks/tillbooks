@@ -1,7 +1,6 @@
 {
   "dispatch": {
     "title": "Dispatch",
-    "lede": "Saved message texts for invoices, quotes and reminders, and the log of what left this workspace. Sending itself (channels, confirmations, recipients) stays with the documents, unchanged.",
     "loading": "Loading dispatch …",
     "tab": {
       "texts": "Message texts",
@@ -15,14 +14,18 @@
     "texts": {
       "subject": "Subject",
       "body": "Message body",
+      "standard": "Default",
+      "reset": "Reset to default",
+      "resetDone": "Default text restored.",
       "localeTabs": "Language",
       "variables": "Variables",
+      "variablesInfo": "About the variables",
       "variablesHint": "Insert by click or keyboard; every variable is validated against the valid set when you save.",
-      "defaultInUse": "No custom text saved for this language yet: the built-in default text applies.",
       "empty": "No custom message texts yet.",
       "save": "Save",
       "saved": "Message text saved.",
       "preview": "Preview",
+      "previewInfo": "About the preview",
       "previewHint": "The preview shows the resolved text with sample values. It refreshes on switching and saving.",
       "previewDefault": "Built-in default text",
       "previewSaved": "Custom text"

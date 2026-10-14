@@ -94,10 +94,33 @@ async function creditorPanel(): Promise<HTMLElement> {
   return (await screen.findByRole('region', { name: 'Firmenangaben' })) as HTMLElement;
 }
 
-/** Open the QR-bill address disclosure on the loaded panel (closed by default while no address is stored). */
+/**
+ * Open the QR-bill issuer disclosure on the loaded panel. D152: it is closed on load unless the
+ * issuer name really differs from the Firmenname, and closed its toggle reads as the one-line summary
+ * ("Rechnungssteller: wie Firmenname · ..."), open as the heading, so the name is matched by its start.
+ */
+function issuerToggle(panel: HTMLElement): HTMLElement {
+  return within(panel).getByRole('button', { name: /^Rechnungssteller/ });
+}
+
 async function openAddress(panel: HTMLElement): Promise<void> {
-  const toggle = within(panel).getByRole('button', { name: 'Rechnungssteller (QR-Rechnung)' });
+  const toggle = issuerToggle(panel);
   if (toggle.getAttribute('aria-expanded') !== 'true') await userEvent.click(toggle);
+}
+
+/**
+ * The page's ONE Speichern (D152 rule 3). It sits in the surface header's action slot, outside both
+ * panels, and submits the one form they share; `getByRole` throws if a second one ever comes back.
+ */
+function saveButton(): HTMLElement {
+  return screen.getByRole('button', { name: 'Speichern' });
+}
+
+/** The header's action slot, where the save's one-line state ("Gespeichert", "Nicht gespeichert: ...") is said. */
+function headerActions(): HTMLElement {
+  const slot = document.querySelector('.surface-header-actions');
+  if (slot === null) throw new Error('no header action slot');
+  return slot as HTMLElement;
 }
 
 /** Open the "Weitere Angaben" disclosure (UID, MWST-Nr, currency, fiscal year). */
@@ -225,7 +248,8 @@ describe('CompanyProfile: five states', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Firmenprofil' })).toBeInTheDocument();
     expect(screen.getByLabelText('Firmenname')).toHaveValue('Muster Grafik');
     expect(screen.getByLabelText('IBAN für deine Rechnungen')).toHaveValue('CH44 3199 9123 0008 8901 2');
-    // F-09: the read-once facts sit behind "Weitere Angaben"; the stored address opens its own disclosure.
+    // F-09: the read-once facts sit behind "Weitere Angaben". The fixture's issuer name ("Muster Grafik
+    // GmbH") differs from the Firmenname ("Muster Grafik"), so the issuer block is open on load.
     expect(screen.getByLabelText('Strasse')).toHaveValue('Bahnhofstrasse');
     await openMore(panel);
     expect(screen.getByLabelText('UID')).toHaveValue('CHE-123.456.789');
@@ -270,9 +294,10 @@ describe('CompanyProfile: the accent budget', () => {
     await settledWorkspacesPanel();
     const primaries = container.querySelectorAll('.btn--primary');
     expect(primaries).toHaveLength(1);
-    // The three panel saves are co-equal writes; only the company panel carries the accent, and the
-    // create-workspace action is not on this branch at all.
+    // The page's one Speichern carries it, in the header's action slot; the create-workspace action is
+    // not on this branch at all.
     expect(primaries[0]).toHaveTextContent('Speichern');
+    expect(primaries[0]?.closest('.surface-header-actions')).not.toBeNull();
   });
 });
 
@@ -381,10 +406,13 @@ describe('CompanyProfile: saves', () => {
     renderSurface(client, 'ws_test');
 
     const panel = (await screen.findByRole('region', { name: 'Firmenangaben' })) as HTMLElement;
-    await userEvent.click(within(panel).getByRole('button', { name: 'Speichern' }));
+    const nameField = within(panel).getByLabelText('Firmenname');
+    await userEvent.clear(nameField);
+    await userEvent.type(nameField, 'Muster Grafik Studio');
+    await userEvent.click(saveButton());
 
-    expect(await within(panel).findByText('Gespeichert')).toBeInTheDocument();
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 'ws_test', name: 'Muster Grafik', legalForm: 'gmbh' }));
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 'ws_test', name: 'Muster Grafik Studio', legalForm: 'gmbh' }));
   });
 
   it('F-09: ONE save on a fresh workspace writes the four verbs with the Swiss defaults pre-set', async () => {
@@ -418,12 +446,15 @@ describe('CompanyProfile: saves', () => {
     expect(within(panel).getByLabelText('Rechtsform')).toHaveTextContent('Aktiengesellschaft (AG)');
     expect(within(panel).getByLabelText('MWST-Methode')).toHaveTextContent('MWST-pflichtig, effektive Methode');
     expect(within(panel).getByLabelText('MWST-Abrechnungsart')).toHaveTextContent('Vereinbart (Soll)');
-    // The address is a deferral the panel says out loud, never a gate.
-    expect(within(panel).getByText(/Die Adresse brauchst du erst/)).toBeInTheDocument();
+    // The address is a deferral, never a gate. D152 rule 4: the sentence that says so is behind the
+    // issuer block's (i) now, as its description, and the closed line says the address is missing.
+    const issuerInfo = within(panel).getByRole('button', { name: 'Mehr zu Rechnungssteller' });
+    expect(issuerInfo).toHaveAccessibleDescription(/Die Adresse brauchst du erst/);
+    expect(issuerToggle(panel)).toHaveTextContent('Rechnungssteller: wie Firmenname · Adresse fehlt noch');
 
     await userEvent.type(within(panel).getByLabelText('IBAN für deine Rechnungen'), PLAIN_IBAN);
-    await userEvent.click(within(panel).getByRole('button', { name: 'Speichern' }));
-    expect(await within(panel).findByText('Gespeichert')).toBeInTheDocument();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
 
     const verbs = calls.map((c) => c.verb);
     expect(verbs).toEqual(['update_company_profile', 'vat_configure', 'vat_seed_defaults', 'set_creditor_profile']);
@@ -457,8 +488,8 @@ describe('CompanyProfile: saves', () => {
     await userEvent.type(within(panel).getByLabelText('PLZ'), '8002');
     await userEvent.type(within(panel).getByLabelText('Ort'), 'Zürich');
     await userEvent.type(within(panel).getByLabelText('IBAN für deine Rechnungen'), PLAIN_IBAN);
-    await userEvent.click(within(panel).getByRole('button', { name: 'Speichern' }));
-    expect(await within(panel).findByText('Gespeichert')).toBeInTheDocument();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({
         iban: PLAIN_IBAN,
@@ -487,10 +518,10 @@ describe('CompanyProfile: saves', () => {
     await userEvent.type(within(panel).getByLabelText('PLZ'), '8002');
     await userEvent.type(within(panel).getByLabelText('Ort'), 'Zürich');
     // IBAN deliberately left blank.
-    await userEvent.click(within(panel).getByRole('button', { name: 'Speichern' }));
+    await userEvent.click(saveButton());
 
     // The save is NOT refused (a '' iban would be `invalid_iban`), and the payload carries no iban key.
-    expect(await within(panel).findByText('Gespeichert')).toBeInTheDocument();
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
     expect(save).toHaveBeenCalledOnce();
     const sent = save.mock.calls[0][0];
     expect(sent).not.toHaveProperty('iban');
@@ -507,8 +538,8 @@ describe('CompanyProfile: saves', () => {
     const field = within(panel).getByLabelText('IBAN für deine Rechnungen');
     await userEvent.clear(field);
     await userEvent.type(field, PLAIN_IBAN);
-    await userEvent.click(within(panel).getByRole('button', { name: 'Speichern' }));
-    expect(await within(panel).findByText('Gespeichert')).toBeInTheDocument();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ iban: PLAIN_IBAN }));
   });
 
@@ -525,8 +556,8 @@ describe('CompanyProfile: saves', () => {
     await userEvent.click(within(panel).getByLabelText('MWST-Methode'));
     await userEvent.click(screen.getByRole('option', { name: 'Nicht MWST-pflichtig' }));
     expect(within(panel).queryByLabelText('MWST-Abrechnungsart')).not.toBeInTheDocument();
-    await userEvent.click(within(panel).getByRole('button', { name: 'Speichern' }));
-    expect(await within(panel).findByText('Gespeichert')).toBeInTheDocument();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
     expect(configure).toHaveBeenCalledWith(expect.objectContaining({ method: 'none', registered: false }));
     expect(seed).not.toHaveBeenCalled();
   });
@@ -549,10 +580,16 @@ describe('CompanyProfile: saves', () => {
     renderSurface(client, 'ws_test');
 
     const panel = await creditorPanel();
-    await userEvent.click(within(panel).getByRole('button', { name: 'Speichern' }));
+    // Only a dirty part is written, so the IBAN is changed first.
+    const field = within(panel).getByLabelText('IBAN für deine Rechnungen');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'CH00 1234');
+    await userEvent.click(saveButton());
 
     const alert = await within(panel).findByRole('alert');
     expect(alert).toHaveTextContent('Das ist keine gültige IBAN');
+    // The header names the part that failed; the reason stays at the field.
+    expect(headerActions()).toHaveTextContent('Nicht gespeichert: Rechnungssteller');
     // The old copy told the operator to go and get a QR-IBAN. It must not come back: the field takes
     // either kind, and only a malformed number is refused.
     expect(alert).not.toHaveTextContent('Das ist keine QR-IBAN');
@@ -570,9 +607,9 @@ describe('CompanyProfile: saves', () => {
     const field = within(panel).getByLabelText('IBAN für deine Rechnungen');
     await userEvent.clear(field);
     await userEvent.type(field, PLAIN_IBAN);
-    await userEvent.click(within(panel).getByRole('button', { name: 'Speichern' }));
+    await userEvent.click(saveButton());
 
-    expect(await within(panel).findByText('Gespeichert')).toBeInTheDocument();
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
     expect(within(panel).queryByRole('alert')).toBeNull();
     // Sent as `iban`, the alias `set_creditor_profile` prefers, not the older `qrIban`: the verb has
     // taken any valid IBAN since M-2, and a field named for a constraint that no longer exists is
@@ -594,7 +631,10 @@ describe('CompanyProfile: saves', () => {
       });
       const view = renderSurface(client, 'ws_test');
       const panel = await creditorPanel();
-      await userEvent.click(within(panel).getByRole('button', { name: 'Speichern' }));
+      // Only a dirty part is written: one keystroke in the IBAN makes `set_creditor_profile` run at
+      // all (one, not a whole IBAN: this loop runs seven times and must stay fast under a loaded gate).
+      await userEvent.type(within(panel).getByLabelText('IBAN für deine Rechnungen'), '0');
+      await userEvent.click(saveButton());
       // A refusal on a field inside a closed disclosure opens it: the message is never hidden.
       const alert = await within(panel).findByRole('alert');
 
@@ -620,7 +660,7 @@ describe('CompanyProfile: saves', () => {
     const currency = within(panel).getByLabelText('Basiswährung');
     await userEvent.clear(currency);
     await userEvent.type(currency, 'EUR');
-    await userEvent.click(within(panel).getByRole('button', { name: 'Speichern' }));
+    await userEvent.click(saveButton());
 
     expect(await within(panel).findByText(/lassen sich nicht mehr ändern/)).toBeInTheDocument();
   });
@@ -803,17 +843,352 @@ describe('CompanyProfile: the Arbeitsbereiche panel (D24, variant B)', () => {
 });
 
 describe('CompanyProfile: custom fields (spec 6b)', () => {
-  // The panel must say the CAPABILITY does not exist, not that this workspace happens to have none.
   // `getCompanyProfile` never returns `customFields` (the G-cluster that defines them is Wave 10), so
-  // the panel is empty for every workspace, always. The old copy, "keine eigenen Felder definiert",
-  // read as a state the operator could change and invited a hunt for a button that is not there.
-  it('says custom fields do not exist yet, rather than reporting none defined', async () => {
+  // the panel used to say, on every visit, that the feature did not exist yet: 124px and two
+  // sentences about nothing. D152 rule 2: a panel appears only where it applies, so with no fields
+  // there is no panel at all, and the day the engine sends some, the panel is there.
+  it('renders no custom-fields panel while there are none', async () => {
     const client = makeClient({ get_company_profile: FULL_PROFILE });
     renderSurface(client, 'ws_test');
     // The custom-fields panel is part of the loaded body, so the read has to have answered.
     await loadedProfileBody();
-    expect(
-      screen.getByText('Eigene Felder gibt es noch nicht. Sobald du welche anlegen kannst, erscheinen sie hier.'),
-    ).toBeInTheDocument();
+    await settledWorkspacesPanel();
+    expect(screen.queryByRole('region', { name: 'Eigene Felder' })).toBeNull();
+    expect(screen.queryByText(/Eigene Felder/)).toBeNull();
+  });
+
+  it('renders the panel with its fields once there are some', async () => {
+    const withFields: RestResponse = {
+      status: 200,
+      body: recordedOk({ ...fixture, profile: { ...fixture.profile, customFields: [{ key: 'branche', label: 'Branche', value: 'Grafik' }] } }),
+    };
+    renderSurface(makeClient({ get_company_profile: withFields }), 'ws_test');
+    const panel = (await screen.findByRole('region', { name: 'Eigene Felder' })) as HTMLElement;
+    expect(within(panel).getByText('Branche')).toBeInTheDocument();
+    expect(within(panel).getByText('Grafik')).toBeInTheDocument();
+    await settledWorkspacesPanel();
+  });
+});
+
+describe('CompanyProfile: the cognitive-load rules (D152)', () => {
+  /** The FULL fixture with the issuer name equal to the Firmenname: the demo company's real shape. */
+  const SAME_ISSUER: RestResponse = {
+    status: 200,
+    body: recordedOk({ ...fixture, profile: { ...fixture.profile, creditorName: fixture.profile.name } }),
+  };
+
+  /** Every write the page can issue, each a spy answering ok, plus an empty stored eBill config. */
+  function spiedWrites() {
+    const ok = (_input: Record<string, unknown>) => ({ status: 200, body: { ok: true } }) as RestResponse;
+    return {
+      update_company_profile: vi.fn(ok),
+      set_fiscal_config: vi.fn(ok),
+      vat_configure: vi.fn(ok),
+      vat_seed_defaults: vi.fn(ok),
+      set_creditor_profile: vi.fn(ok),
+      set_ebill_config: vi.fn(ok),
+      get_ebill_config: vi.fn((_input: Record<string, unknown>): RestResponse => ({ status: 200, body: recordedOk({ ok: true, config: null }) })),
+    };
+  }
+
+  /** The eBill field, once its own read has answered (it is disabled until then). */
+  async function ebillField(): Promise<HTMLElement> {
+    const field = screen.getByLabelText('eBill-Biller-ID');
+    await waitFor(() => expect(field).toBeEnabled());
+    return field;
+  }
+
+  it('rule 4: no explainer paragraph at rest; each sentence is the description of an (i)', async () => {
+    const { container } = renderSurface(makeClient({ get_company_profile: FULL_PROFILE }), 'ws_test');
+    await loadedProfileBody();
+    await settledWorkspacesPanel();
+    // The four explanations that used to be paragraphs under their heads.
+    expect(screen.getByRole('button', { name: 'Mehr zu Firmenangaben' })).toHaveAccessibleDescription(
+      'Rechtsform, MWST und die IBAN für deine Rechnungen: einmal angeben, einmal speichern. Basiswährung CHF und Geschäftsjahr ab 01.01. sind voreingestellt.',
+    );
+    expect(screen.getByRole('button', { name: 'Mehr zu Rechnungssteller' })).toHaveAccessibleDescription(
+      'Name und strukturierte Adresse stehen auf der QR-Rechnung. Ohne Name gilt der Firmenname.',
+    );
+    expect(screen.getByRole('button', { name: 'Mehr zu eBill' })).toHaveAccessibleDescription(/zertifizierten Netzwerkpartner/);
+    expect(screen.getByRole('button', { name: 'Mehr zu eBill-Konnektor' })).toHaveAccessibleDescription(/Cloud-Konnektor/);
+    // At rest the connector state is one line, and no explainer paragraph is left on the page: every
+    // multi-sentence text sits inside a tooltip.
+    expect(screen.getByText('Kein eBill-Konnektor konfiguriert')).toBeInTheDocument();
+    expect(container.querySelector('.setup-explainer')).toBeNull();
+    for (const el of container.querySelectorAll('p')) {
+      const sentences = (el.textContent ?? '').match(/[^.!?]{12,}?[.!?](?=\s|$)/g) ?? [];
+      expect(sentences.length, `a paragraph still explains at rest: ${el.textContent}`).toBeLessThan(2);
+    }
+  });
+
+  it('rule 4: the MWST hint on an unconfigured workspace is behind the label’s (i), not under the select', async () => {
+    const unset: RestResponse = {
+      status: 200,
+      body: recordedOk({ ...fixture, profile: { ...fixture.profile, vatMethod: null, vatAccounting: null } }),
+    };
+    const { container } = renderSurface(makeClient({ get_company_profile: unset }), 'ws_test');
+    const panel = await loadedProfileBody();
+    expect(within(panel).getByRole('button', { name: 'Mehr zu MWST-Methode' })).toHaveAccessibleDescription(/Effektiv und vereinbart/);
+    expect(container.querySelector('.form-row > .field-hint')).toBeNull();
+    await settledWorkspacesPanel();
+  });
+
+  it('rule 5: the issuer block is closed on load when its name equals the Firmenname, and says itself in one line', async () => {
+    const { container } = renderSurface(makeClient({ get_company_profile: SAME_ISSUER }), 'ws_test');
+    const panel = await loadedProfileBody();
+    await settledWorkspacesPanel();
+    const toggle = issuerToggle(panel);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveTextContent('Rechnungssteller: wie Firmenname · Bahnhofstrasse 1, 8001 Zürich');
+    expect(within(panel).queryByLabelText('Strasse')).toBeNull();
+    // Nothing on the page is open on load.
+    expect(container.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0);
+  });
+
+  it('rule 5: an empty issuer name is the Firmenname too, so the block stays closed', async () => {
+    const empty: RestResponse = {
+      status: 200,
+      body: recordedOk({ ...fixture, profile: { ...fixture.profile, creditorName: null } }),
+    };
+    renderSurface(makeClient({ get_company_profile: empty }), 'ws_test');
+    const panel = await loadedProfileBody();
+    expect(issuerToggle(panel)).toHaveAttribute('aria-expanded', 'false');
+    expect(issuerToggle(panel)).toHaveTextContent('Rechnungssteller: wie Firmenname');
+    await settledWorkspacesPanel();
+  });
+
+  it('rule 5: an issuer name that really differs opens the block on load, with its heading', async () => {
+    renderSurface(makeClient({ get_company_profile: FULL_PROFILE }), 'ws_test');
+    const panel = await loadedProfileBody();
+    const toggle = issuerToggle(panel);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveTextContent('Rechnungssteller (QR-Rechnung)');
+    expect(within(panel).getByLabelText('Name Rechnungssteller')).toHaveValue('Muster Grafik GmbH');
+    await settledWorkspacesPanel();
+  });
+
+  it('rule 3: exactly one Speichern, in the header, submitting the one form both panels share', async () => {
+    const { container } = renderSurface(makeClient({ get_company_profile: FULL_PROFILE }), 'ws_test');
+    await loadedProfileBody();
+    await settledWorkspacesPanel();
+    const saves = screen.getAllByRole('button', { name: 'Speichern' });
+    expect(saves).toHaveLength(1);
+    const save = saves[0] as HTMLButtonElement;
+    expect(save.closest('.surface-header-actions')).not.toBeNull();
+    expect(save).toHaveAttribute('type', 'submit');
+    const form = save.form;
+    expect(form).not.toBeNull();
+    expect(form?.contains(screen.getByRole('region', { name: 'Firmenangaben' }))).toBe(true);
+    expect(form?.contains(screen.getByRole('region', { name: 'eBill' }))).toBe(true);
+    expect(container.querySelectorAll('form .form-actions')).toHaveLength(0);
+  });
+
+  it('a clean Speichern writes nothing: no part is dirty', async () => {
+    const writes = spiedWrites();
+    renderSurface(makeClient({ get_company_profile: SAME_ISSUER, ...writes }), 'ws_test');
+    await loadedProfileBody();
+    await ebillField();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
+    for (const verb of ['update_company_profile', 'set_fiscal_config', 'vat_configure', 'vat_seed_defaults', 'set_creditor_profile', 'set_ebill_config'] as const) {
+      expect(writes[verb], `${verb} was called on a clean save`).not.toHaveBeenCalled();
+    }
+    await settledWorkspacesPanel();
+  });
+
+  it('writes only the dirty part: a changed eBill-Biller-ID calls set_ebill_config and nothing else', async () => {
+    const writes = spiedWrites();
+    renderSurface(makeClient({ get_company_profile: SAME_ISSUER, ...writes }), 'ws_test');
+    await loadedProfileBody();
+    await userEvent.click(await ebillField());
+    await userEvent.paste('41010560425610173');
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
+    expect(writes.set_ebill_config).toHaveBeenCalledOnce();
+    expect(writes.set_ebill_config).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 'ws_test', billerPid: '41010560425610173' }));
+    expect(writes.update_company_profile).not.toHaveBeenCalled();
+    expect(writes.set_creditor_profile).not.toHaveBeenCalled();
+    await settledWorkspacesPanel();
+  });
+
+  it('a partial failure names the part that failed, keeps its error at the field and keeps only that part dirty', async () => {
+    const writes = spiedWrites();
+    writes.set_ebill_config.mockImplementation(() => ({ status: 422, body: { ok: false, error: 'invalid_biller_pid' } }) as RestResponse);
+    renderSurface(makeClient({ get_company_profile: SAME_ISSUER, ...writes }), 'ws_test');
+    const panel = await loadedProfileBody();
+    const nameField = within(panel).getByLabelText('Firmenname');
+    await userEvent.clear(nameField);
+    await userEvent.type(nameField, 'Muster Grafik Studio');
+    await userEvent.type(await ebillField(), '123');
+    await userEvent.click(saveButton());
+
+    // The header names the part; the reason is at the eBill field.
+    expect(await within(headerActions()).findByText('Nicht gespeichert: eBill')).toBeInTheDocument();
+    const ebillPanel = screen.getByRole('region', { name: 'eBill' });
+    expect(within(ebillPanel).getByRole('alert')).toHaveTextContent('Die eBill-Biller-ID besteht aus 41 gefolgt von 15 Ziffern.');
+    expect(screen.getByLabelText('eBill-Biller-ID')).toHaveAttribute('aria-invalid', 'true');
+    expect(writes.update_company_profile).toHaveBeenCalledOnce();
+
+    // The next Speichern retries exactly the failed part: the name landed and is clean now.
+    writes.set_ebill_config.mockImplementation(() => ({ status: 200, body: { ok: true } }) as RestResponse);
+    await userEvent.clear(screen.getByLabelText('eBill-Biller-ID'));
+    await userEvent.paste('41010560425610173');
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
+    expect(writes.set_ebill_config).toHaveBeenCalledTimes(2);
+    expect(writes.update_company_profile).toHaveBeenCalledOnce();
+    await settledWorkspacesPanel();
+  });
+
+  it('a failed creditor write keeps the IBAN dirty, and the retry sends the same payload', async () => {
+    const writes = spiedWrites();
+    writes.set_creditor_profile.mockImplementationOnce(() => ({ status: 422, body: { ok: false, error: 'iban_not_ch_li' } }) as RestResponse);
+    renderSurface(makeClient({ get_company_profile: SAME_ISSUER, ...writes }), 'ws_test');
+    const panel = await loadedProfileBody();
+    const iban = within(panel).getByLabelText('IBAN für deine Rechnungen');
+    await userEvent.clear(iban);
+    await userEvent.paste(PLAIN_IBAN);
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Nicht gespeichert: Rechnungssteller')).toBeInTheDocument();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
+    expect(writes.set_creditor_profile).toHaveBeenCalledTimes(2);
+    expect(writes.set_creditor_profile.mock.calls[1]?.[0]).toEqual(writes.set_creditor_profile.mock.calls[0]?.[0]);
+    expect(writes.set_creditor_profile.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ iban: PLAIN_IBAN }));
+    await settledWorkspacesPanel();
+  });
+
+  it('the D152 render has no axe violations', async () => {
+    const { container } = renderSurface(makeClient({ get_company_profile: SAME_ISSUER }), 'ws_test');
+    await loadedProfileBody();
+    await settledWorkspacesPanel();
+    const results = await axe(container, {
+      rules: { region: { enabled: false }, 'page-has-heading-one': { enabled: false } },
+    });
+    expect(results).toHaveNoViolations();
+  });
+});
+
+describe('CompanyProfile: change detection and baselines (critic mutants, D152)', () => {
+  /** Each write a spy answering ok unless `failOnce` names it: then its FIRST call refuses. */
+  function writesFailingOnce(failOnce: string | null, profile: RestResponse = FULL_PROFILE) {
+    const calls: string[] = [];
+    const seen = new Set<string>();
+    const route = (verb: string) =>
+      vi.fn((_input: Record<string, unknown>): RestResponse => {
+        calls.push(verb);
+        if (verb === failOnce && !seen.has(verb)) {
+          seen.add(verb);
+          return { status: 422, body: { ok: false, error: 'internal_error' } };
+        }
+        return { status: 200, body: { ok: true } };
+      });
+    const routes = {
+      get_company_profile: profile,
+      get_ebill_config: (): RestResponse => ({ status: 200, body: recordedOk({ ok: true, config: null }) }),
+      update_company_profile: route('update_company_profile'),
+      set_fiscal_config: route('set_fiscal_config'),
+      vat_configure: route('vat_configure'),
+      vat_seed_defaults: route('vat_seed_defaults'),
+      set_creditor_profile: route('set_creditor_profile'),
+      set_ebill_config: route('set_ebill_config'),
+    };
+    return { routes, calls };
+  }
+
+  const count = (calls: string[], verb: string) => calls.filter((c) => c === verb).length;
+
+  it('a fiscal-year-only edit is dirty and writes set_fiscal_config with the new start', async () => {
+    const { routes } = writesFailingOnce(null);
+    renderSurface(makeClient(routes), 'ws_test');
+    const panel = await loadedProfileBody();
+    await openMore(panel);
+    await userEvent.click(within(panel).getByLabelText('Geschäftsjahresbeginn'));
+    await userEvent.click(screen.getByRole('option', { name: 'April' }));
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
+    expect(routes.set_fiscal_config).toHaveBeenCalledOnce();
+    expect(routes.set_fiscal_config).toHaveBeenCalledWith(expect.objectContaining({ baseCurrency: 'CHF', fiscalYearStart: '04-01' }));
+    expect(routes.update_company_profile).not.toHaveBeenCalled();
+    await settledWorkspacesPanel();
+  });
+
+  it('a failed identity write keeps its baseline: the next Speichern sends it again', async () => {
+    const { routes, calls } = writesFailingOnce('update_company_profile');
+    renderSurface(makeClient(routes), 'ws_test');
+    const panel = await loadedProfileBody();
+    const nameField = within(panel).getByLabelText('Firmenname');
+    await userEvent.clear(nameField);
+    await userEvent.paste('Muster Grafik Studio');
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Nicht gespeichert: Firmenangaben')).toBeInTheDocument();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
+    expect(count(calls, 'update_company_profile')).toBe(2);
+    await settledWorkspacesPanel();
+  });
+
+  it('a failed fiscal write keeps its baseline: the next Speichern sends it again', async () => {
+    const { routes, calls } = writesFailingOnce('set_fiscal_config');
+    renderSurface(makeClient(routes), 'ws_test');
+    const panel = await loadedProfileBody();
+    await openMore(panel);
+    const currency = within(panel).getByLabelText('Basiswährung');
+    await userEvent.clear(currency);
+    await userEvent.paste('EUR');
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Nicht gespeichert: Geschäftsjahr und Währung')).toBeInTheDocument();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
+    expect(count(calls, 'set_fiscal_config')).toBe(2);
+    await settledWorkspacesPanel();
+  });
+
+  it('a failed eBill write keeps the stored value: the next Speichern sends it again, unedited', async () => {
+    const { routes, calls } = writesFailingOnce('set_ebill_config');
+    renderSurface(makeClient(routes), 'ws_test');
+    await loadedProfileBody();
+    const field = screen.getByLabelText('eBill-Biller-ID');
+    await waitFor(() => expect(field).toBeEnabled());
+    await userEvent.click(field);
+    await userEvent.paste('41010560425610173');
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Nicht gespeichert: eBill')).toBeInTheDocument();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
+    expect(count(calls, 'set_ebill_config')).toBe(2);
+    await settledWorkspacesPanel();
+  });
+
+  it('a failed vat_configure keeps MWST dirty: the next Speichern configures again, then seeds', async () => {
+    const unset: RestResponse = {
+      status: 200,
+      body: recordedOk({ ...fixture, profile: { ...fixture.profile, vatMethod: null, vatAccounting: null } }),
+    };
+    const { routes, calls } = writesFailingOnce('vat_configure', unset);
+    renderSurface(makeClient(routes), 'ws_test');
+    await loadedProfileBody();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Nicht gespeichert: MWST')).toBeInTheDocument();
+    // The seed never runs on a method that was not configured.
+    expect(calls).toEqual(['vat_configure']);
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Gespeichert')).toBeInTheDocument();
+    expect(calls).toEqual(['vat_configure', 'vat_configure', 'vat_seed_defaults']);
+    await settledWorkspacesPanel();
+  });
+
+  it('a failed seed is said as a failed MWST part, never as saved', async () => {
+    const unset: RestResponse = {
+      status: 200,
+      body: recordedOk({ ...fixture, profile: { ...fixture.profile, vatMethod: null, vatAccounting: null } }),
+    };
+    const { routes } = writesFailingOnce('vat_seed_defaults', unset);
+    renderSurface(makeClient(routes), 'ws_test');
+    await loadedProfileBody();
+    await userEvent.click(saveButton());
+    expect(await within(headerActions()).findByText('Nicht gespeichert: MWST')).toBeInTheDocument();
+    expect(within(headerActions()).queryByText('Gespeichert')).toBeNull();
+    await settledWorkspacesPanel();
   });
 });

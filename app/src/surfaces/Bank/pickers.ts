@@ -18,7 +18,7 @@ import type { ComboboxGroup, ComboboxOption } from '../../components/AccountComb
 import type { BankInboxLine, DraftTarget, LineVorschlag } from './model';
 import { accountDraft, draftTargetOf, isCredit, targetKey } from './model';
 import type { Lookups } from './lookups';
-import { targetParts } from './lookups';
+import { targetParts, taxCodeFor, vatPickerShows } from './lookups';
 
 type T = (key: string, params?: Record<string, string | number>) => string;
 
@@ -146,8 +146,8 @@ export function resolvePick(
     return { kind: 'target', target: { kind: 'open_item', documentId: ref, remainder: null }, source: 'edited', chainVat: false };
   }
   if (prefix === 'acc') {
-    const account = l.chartById.get(ref);
-    return { kind: 'target', target: accountDraft(line, ref, account?.vatCodeDefault ?? ''), source: 'edited', chainVat: true };
+    const taxCode = taxCodeFor(l, ref, '');
+    return { kind: 'target', target: accountDraft(line, ref, taxCode), source: 'edited', chainVat: vatPickerShows(l, { accountId: ref, taxCode }) };
   }
   return { kind: 'none' };
 }

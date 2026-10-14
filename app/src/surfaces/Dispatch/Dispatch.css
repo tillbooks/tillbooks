@@ -13,7 +13,6 @@
   gap: var(--t-space-2);
 }
 
-.dispatch-lede,
 .dispatch-muted {
   margin: 0;
   font-size: var(--t-font-body);
@@ -130,4 +129,18 @@
   gap: var(--t-space-1);
   font-size: var(--t-font-body);
   line-height: var(--t-lh-body);
+}
+
+/* A field's label row: the label, then its one-word state ("Standard") or an (i), on one line. The
+   (i) is a 32px ghost icon button; the negative block margin keeps it from growing the row. */
+.dispatch-field-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: 0;
+}
+
+.dispatch-info {
+  margin-block: calc(-1 * var(--t-space-0-5));
+  color: var(--t-text-dim);
 }

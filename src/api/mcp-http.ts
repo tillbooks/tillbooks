@@ -24,12 +24,19 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 import { buildMcpServer } from './mcp.js';
 import { rejectNonLocal } from './local-guard.js';
-import { resolveServedActor, type ServedIdentity } from './session.js';
+import {
+  checkStudioKey,
+  resolveServedActor,
+  resolveSessionActor,
+  STUDIO_CLIENT_NAME,
+  type ServedIdentity,
+  type StudioKeyCheck,
+} from './session.js';
 import { extractSubject, type ServedModeConfig } from './served-mode.js';
 import type { ApiDeps } from './registry.js';
 
 // Re-exported so a caller mounting the HTTP face has the session vocabulary (D13) in one import.
-export { resolveSessionActor, STUDIO_CLIENT_NAME, AGENT_CLIENT_NAME } from './session.js';
+export { resolveSessionActor, STUDIO_CLIENT_NAME, AGENT_CLIENT_NAME, STUDIO_KEY_HEADER } from './session.js';
 
 /** A mounted MCP HTTP endpoint: one handler, N live sessions. */
 export interface McpHttpHandler {
@@ -50,6 +57,13 @@ export interface McpHttpOptions {
    * header is never read and D13 resolution applies, byte-for-byte as before.
    */
   servedMode?: ServedModeConfig;
+  /**
+   * The per-launch Studio key of the host that serves the Studio (`till up`, the dev bridge). A session
+   * opened with it is the human `studio` seat; a session opened without it is the governed `agent`
+   * seat, whatever client name it declares; a session opened with any OTHER key is refused. Absent
+   * (`till serve`, which serves no Studio) means no request can hold the Studio seat on this host.
+   */
+  studioKey?: string;
 }
 
 /** One live MCP session: its transport plus, in served mode, the subject it was opened for. */
@@ -57,25 +71,90 @@ interface McpSession {
   transport: StreamableHTTPServerTransport;
   /** M01: the proxy-attested subject this session was opened for; undefined in local mode. */
   subject?: string;
+  /** True when the session was opened with the Studio key, so every later request must carry it too. */
+  studio?: boolean;
+}
+
+/** The refusal for a request that presented a Studio key this host did not mint (or not any more). */
+const STUDIO_KEY_INVALID = {
+  ok: false,
+  error: 'studio_key_invalid',
+  message:
+    'This request carries a Studio key this TILL did not issue. TILL mints a new key on every start: open the Studio through the link till up printed.',
+} as const;
+
+/** The refusal for a local session that declares the Studio's name but carries no key. */
+const STUDIO_KEY_REQUIRED = {
+  ok: false,
+  error: 'studio_key_required',
+  message:
+    'The Studio needs the key from the link till up printed (it ends in #k=). An agent connects under its own name.',
+} as const;
+
+/** The most an `initialize` body may be before it is refused unread (it is a few hundred bytes). */
+const MAX_INIT_BODY_BYTES = 1024 * 1024;
+
+/** Read and parse a JSON request body, bounded. */
+function readJsonBody(
+  req: IncomingMessage,
+): Promise<{ ok: true; value: unknown } | { ok: false; status: number; message: string }> {
+  return new Promise((resolvePromise) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let over = false;
+    req.on('data', (c: Buffer) => {
+      if (over) return;
+      total += c.length;
+      if (total > MAX_INIT_BODY_BYTES) {
+        over = true;
+        resolvePromise({ ok: false, status: 413, message: 'Request body too large' });
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on('end', () => {
+      if (over) return;
+      try {
+        resolvePromise({ ok: true, value: JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown });
+      } catch {
+        resolvePromise({ ok: false, status: 400, message: 'Parse error' });
+      }
+    });
+    req.on('error', () => resolvePromise({ ok: false, status: 400, message: 'Request aborted' }));
+  });
+}
+
+/** Does this JSON-RPC body (one message or a batch) `initialize` under the Studio's client name? */
+function declaresStudioName(body: unknown): boolean {
+  const messages = Array.isArray(body) ? body : [body];
+  return messages.some((m) => {
+    const msg = m as { method?: unknown; params?: { clientInfo?: { name?: unknown } } } | null;
+    return msg !== null && typeof msg === 'object' && msg.method === 'initialize' && msg.params?.clientInfo?.name === STUDIO_CLIENT_NAME;
+  });
 }
 
 /**
  * Build an MCP-over-HTTP handler over the shared registry. `deps.actor` is NOT consulted for the
- * seat: every MCP session is seated by the rule in `session.ts` (a client name in the closed map
- * keeps its seat, anything else is `agent`), on this host and on every other one (F-08).
+ * seat, and neither is the client's declared name: every local MCP session is seated by the rule in
+ * `session.ts` (the per-launch Studio key seats `studio`, anything else is `agent`), on this host and
+ * on every other one. The seat is PINNED at session open (`buildMcpServer`'s `pinnedActor`), so the
+ * name a client declares at `initialize` is never consulted for it.
  */
 export function createMcpHttpHandler(deps: ApiDeps, opts: McpHttpOptions = {}): McpHttpHandler {
   const sessions = new Map<string, McpSession>();
   const servedMode = opts.servedMode;
+  const studioKey = opts.studioKey;
 
   async function openSession(
     req: IncomingMessage,
     res: ServerResponse,
     parsedBody: unknown,
     served: ServedIdentity | undefined,
+    key: StudioKeyCheck,
   ): Promise<void> {
     const session: McpSession = { transport: undefined as unknown as StreamableHTTPServerTransport };
     if (served !== undefined) session.subject = served.subject;
+    if (key === 'valid') session.studio = true;
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       enableJsonResponse: true,
@@ -95,7 +174,12 @@ export function createMcpHttpHandler(deps: ApiDeps, opts: McpHttpOptions = {}): 
     // life of that session. The cast is a tsconfig artefact, not a doubt about the transport: this repo
     // runs `exactOptionalPropertyTypes`, and the SDK declares `onclose` through a getter/setter pair
     // whose getter can return undefined, which that flag reads as incompatible with the `Transport` port.
-    await buildMcpServer(deps, served !== undefined ? { servedIdentity: served } : {}).connect(
+    //
+    // THE SEAT IS PINNED HERE, from the Studio key the request carried, and never left to the name the
+    // client declares at `initialize` (critic probe P6). A served identity still wins over the pin
+    // inside `buildMcpServer`, exactly as before.
+    const pinnedActor = resolveSessionActor(undefined, key);
+    await buildMcpServer(deps, served !== undefined ? { servedIdentity: served, pinnedActor } : { pinnedActor }).connect(
       transport as unknown as Transport,
     );
     await transport.handleRequest(req, res, parsedBody);
@@ -145,10 +229,33 @@ export function createMcpHttpHandler(deps: ApiDeps, opts: McpHttpOptions = {}): 
       const served = servedIdentityFor(req, res);
       if (served === 'refused') return;
 
+      // The Studio key, checked on EVERY request in constant time (`session.ts`). A key this host did
+      // not mint is refused outright rather than demoted: it is either a Studio tab left over from an
+      // earlier start (which must re-open the printed link, not silently become an agent) or a guess.
+      const key = checkStudioKey(req.headers, studioKey);
+      if (key === 'invalid') {
+        res.writeHead(401, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(STUDIO_KEY_INVALID));
+        return;
+      }
+
       const header = req.headers['mcp-session-id'];
       const sessionId = Array.isArray(header) ? header[0] : header;
       const existing = sessionId === undefined ? undefined : sessions.get(sessionId);
       if (existing !== undefined) {
+        // A Studio session stays bound to the key: a request on it WITHOUT the key is not the Studio,
+        // however it learned the session id, and is refused rather than served under the human seat.
+        if (existing.studio === true && key !== 'valid') {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              ok: false,
+              error: 'studio_key_required',
+              message: 'This MCP session belongs to the Studio: every request on it must carry the Studio key.',
+            }),
+          );
+          return;
+        }
         // M01: a session belongs to ONE authenticated subject. The proxy strips and resets the subject
         // on every request, so a request on this session carrying a DIFFERENT subject is a reused
         // session id, never a legitimate identity switch: refuse rather than serve it under the pinned
@@ -169,7 +276,31 @@ export function createMcpHttpHandler(deps: ApiDeps, opts: McpHttpOptions = {}): 
       }
       // No session yet (or an id we do not know): this must be an `initialize`. The transport itself
       // rejects anything else with the protocol's own 400/404, so no hand-rolled check is needed.
-      await openSession(req, res, parsedBody, served ?? undefined);
+      //
+      // A LOCAL session opened WITHOUT the key that declares the Studio's own name is REFUSED rather
+      // than seated as the agent (critic R3-B2). The name never grants the Studio seat; here it can
+      // only lose one: a Studio tab that has no key (opened without the printed link, or holding the
+      // key of an earlier start) is told so (`studio_key_required`) and shows the person how to get
+      // back in, instead of quietly running the person's clicks through the agent dial. In served mode
+      // the proxy-attested subject is the identity and the key plays no part, so this does not apply.
+      let body = parsedBody;
+      if (key === 'absent' && served === null && req.method === 'POST') {
+        if (body === undefined) {
+          const read = await readJsonBody(req);
+          if (!read.ok) {
+            res.writeHead(read.status, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32700, message: read.message }, id: null }));
+            return;
+          }
+          body = read.value;
+        }
+        if (declaresStudioName(body)) {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(STUDIO_KEY_REQUIRED));
+          return;
+        }
+      }
+      await openSession(req, res, body, served ?? undefined, key);
     },
 
     sessionCount: () => sessions.size,

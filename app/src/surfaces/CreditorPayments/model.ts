@@ -82,7 +82,8 @@ export function payableNow(item: PayableItem): boolean {
 }
 
 /**
- * F-03 (J3.4): the bills due by `dueBy` (ISO date), pre-selected for the batch. A batch is one
+ * F-03 (J3.4): the bills due by `dueBy` (ISO date), SUGGESTED for the batch (D152 rule 5: the
+ * surface names them on a suggestion line and ticks them only when the person takes it). A batch is one
  * currency: the selection takes the BASE currency when any due bill is in it (the books' own
  * currency is the batch a Swiss KMU runs first), else the currency of the earliest-due payable
  * bill, and every payable bill in that currency due by the date; the rest stay unticked and the

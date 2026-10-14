@@ -50,7 +50,9 @@
     "emptyHint": "Der KMU-Kontenrahmen kommt mit dem Arbeitsbereich, eigene Konten legst du hier an.",
     "noMatch": "Kein Konto passt zur Suche.",
     "noMatchHint": "Passe den Suchbegriff an oder zeige archivierte Konten.",
-    "clearSearch": "Suche zurücksetzen"
+    "clearSearch": "Suche zurücksetzen",
+    "statementIsVoucher": "Beleg = Kontoauszug",
+    "statementIsVoucherHint": "Für Bankspesen und Zinsen: Der Kontoauszug ist der Beleg. Bankzeilen, die nur auf solche Konten gebucht sind, zählen nicht als «ohne Beleg»."
   },
   "costCenter": {
     "title": "Kostenstellen",

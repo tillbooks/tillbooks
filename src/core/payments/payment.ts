@@ -63,6 +63,7 @@ import type { ResolvedAccount, AccountRole } from './accounts.js';
 // instead, and a NEW payment is refused a tombstone outright rather than minting a reference that
 // could then never be corrected.
 import { resolveContactRef } from '../sales/contact.js';
+import { lineSupplyDate } from '../sales/supplyDate.js';
 // G00's saved-view seam. A leaf import: the customization module knows nothing about payments.
 import { applySavedView } from '../customization/views.js';
 // A17's ONE settlement-status rule, imported rather than restated. `purchase/enums.ts` is a pure leaf
@@ -229,6 +230,8 @@ interface DocRow {
   total_minor: number;
   issue_date: string | null;
   due_date: string | null;
+  /** D164: the document-level Leistungsdatum (null: the issue date). */
+  supply_date: string | null;
   posted_entry_id: string | null;
   /** A13: the invoice a credit note offsets; null on every other row. D78 reads it to find which
    *  invoice a credit-note allocation (a refund payout) may have re-opened or re-settled. */
@@ -613,7 +616,7 @@ function readDocRow(ctx: WorkspaceContext, id: string): DocRow | undefined {
   return ctx.store.db
     .prepare(
       `SELECT id, type, number, status, contact_id, currency, subtotal_minor, tax_minor, total_minor,
-              issue_date, due_date, posted_entry_id, credited_document_id
+              issue_date, due_date, supply_date, posted_entry_id, credited_document_id
          FROM document WHERE workspace_id = ? AND id = ?`,
     )
     .get(ctx.workspaceId, id) as DocRow | undefined;
@@ -1020,7 +1023,8 @@ function skontoVatFor(
     });
   }
   const taxCode = lines[0]?.tax_code ?? null;
-  const supplyDate = lines[0]?.supply_date ?? doc.issue_date ?? null;
+  // D164: the date the document's line posted at, by the one rule, else the issue date.
+  const supplyDate = (lines[0] !== undefined ? lineSupplyDate(lines[0], doc) : null) ?? doc.issue_date ?? null;
   if (taxCode === null || taxCode === 'none') {
     return { taxMinor: 0, taxCode: null, supplyDate: null, vatRole: null };
   }

@@ -32,7 +32,7 @@ import {
   disconnectBankChannel,
   setBankSyncSchedule,
 } from '../../dist/core/banking/ebics/index.js';
-import { compactReference } from '../../dist/core/banking/pain001.js';
+import { frozenPmtInfId, frozenEndToEndId } from './frozen-refs-support.mjs';
 import { makeContext } from '../../dist/core/context.js';
 import { mockBank, container, chain } from './ebics-support.mjs';
 
@@ -206,14 +206,14 @@ test('the exact amount + currency gate is MANDATORY; ranking adds value-date/ref
 test('the batch join proposes the A18 batch on PmtInfId+total, and BLOCKS a total mismatch', () => {
   const t = setup();
   const acc = mkBankAccount(t.ctx, t.acc);
-  // A generated A18 batch over one 1000.00 bill: ctrl_sum = 100000 Rappen, PmtInfId = compactReference('P', batchId).
+  // A generated A18 batch over one 1000.00 bill: ctrl_sum = 100000 Rappen, PmtInfId = the value frozen on payment_batch.pmt_inf_id.
   const vendor = must(createContact(t.ctx, { partyRole: 'vendor', name: 'Lieferant', idempotencyKey: 'bv' }), 'vendor').contact.id;
   const bill = must(createVendorBill(t.ctx, { vendorId: vendor, billDate: '2026-06-01', amountMinor: 100000, expenseAccountId: t.acc('6500'), idempotencyKey: 'bbill' }), 'bill');
   must(postVendorBill(t.ctx, { vendorBillId: bill.vendorBillId, idempotencyKey: 'bpost' }), 'post');
   must(setCreditorBankProfile(t.ctx, { vendorId: vendor, iban: PLAIN_IBAN, idempotencyKey: 'bcbp' }), 'cbp');
   const batch = must(createPaymentBatch(t.ctx, { bankAccountId: acc, itemIds: [bill.vendorBillId], executionDate: '2026-07-10', idempotencyKey: 'bbatch' }), 'batch');
   must(generatePain001(t.ctx, { batchId: batch.batchId, idempotencyKey: 'bgen' }), 'gen');
-  const pmtInfId = compactReference('P', batch.batchId);
+  const pmtInfId = frozenPmtInfId(t, batch.batchId);
 
   // The single batch debit arrives with matching PmtInfId + total.
   const stmt = must(importCamt(t.ctx, { bankAccountId: acc, xml: camtDebit('STMT-B', '1000.00', { pmtInfId }), idempotencyKey: 'imp-b' }), 'import');

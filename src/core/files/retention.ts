@@ -77,8 +77,14 @@ export const OR_958F_YEARS = 10;
  * account, a chart account, a cost centre and an automation rule are not accounting vouchers, and
  * locking a CV attached to a contact for ten years would be the revDSG erasure duty defeated by a rule
  * that no statute asked for.
+ *
+ * `bank_txn` JOINED ON 28.09.2026 (D142, A39 §11): a Beleg attached to a bank line in `/bank` is the
+ * voucher of the booking the line's decision posted, so it is retained exactly like one filed on that
+ * entry. It is posted evidence only while the line has a live `booked` or `matched` decision (see
+ * `ACCOUNTING_POSTED_CLAUSES`); an open or ignored line derives nothing, and a reopened line lowers
+ * nothing (the recorded floor is sealed).
  */
-export const ACCOUNTING_ENTITY_KINDS: readonly string[] = ['document', 'payment', 'journal_entry'];
+export const ACCOUNTING_ENTITY_KINDS: readonly string[] = ['document', 'payment', 'journal_entry', 'bank_txn'];
 
 export function isAccountingEntityKind(kind: unknown): boolean {
   return typeof kind === 'string' && ACCOUNTING_ENTITY_KINDS.includes(kind);
@@ -102,6 +108,24 @@ export const ACCOUNTING_DATE_COLUMNS: ReadonlyMap<string, string> = new Map([
   ['document', 'issue_date'],
   ['payment', 'date'],
   ['journal_entry', 'date'],
+  ['bank_txn', 'booking_date'],
+]);
+
+/**
+ * A SECOND date a kind's floor may be counted from, when the record's own column does not settle the
+ * financial year alone (D142). A bank line's Beleg evidences the ENTRY its decision posted, and a line
+ * matched to an entry of the next year (a line of 30.12 matched to an entry dated 02.01) belongs to that
+ * year's books too: the anchor is the LATER of the line's booking date and the dates of the entries its
+ * live decision claims, so the ten years never run from the earlier year. Each query takes
+ * (workspace_id, entity_id) and answers one column `d`.
+ */
+export const ACCOUNTING_DATE_ALSO: ReadonlyMap<string, string> = new Map([
+  [
+    'bank_txn',
+    `SELECT MAX(e.date) AS d FROM bank_line_claim c
+       JOIN journal_entry e ON e.workspace_id = c.workspace_id AND e.id = c.entry_id
+      WHERE c.workspace_id = ? AND c.bank_txn_id = ? AND c.released_at IS NULL`,
+  ],
 ]);
 
 /**
@@ -135,6 +159,14 @@ export const ACCOUNTING_POSTED_CLAUSES: ReadonlyMap<string, string> = new Map([
   ['document', 'posted_entry_id IS NOT NULL'],
   ['payment', '1 = 1'],
   ['journal_entry', "status = 'posted'"],
+  // D142: a bank line is posted evidence while its live decision booked or matched it (an ignore, and a
+  // line reopened to open, are not). Correlated on the outer `bank_txn` row.
+  [
+    'bank_txn',
+    `EXISTS (SELECT 1 FROM bank_line_decision d
+              WHERE d.workspace_id = bank_txn.workspace_id AND d.bank_txn_id = bank_txn.id
+                AND d.superseded_at IS NULL AND d.state IN ('booked', 'matched'))`,
+  ],
 ]);
 
 /**
@@ -187,7 +219,11 @@ export function accountingRecordDate(
     .prepare(`SELECT ${column} AS d FROM ${def.table} WHERE workspace_id = ? AND ${def.idColumn} = ?`)
     .get(ctx.workspaceId, entityId) as { d: string | null } | undefined;
   const value = row?.d;
-  return typeof value === 'string' && ISO_DAY_RE.test(value) ? value : null;
+  const own = typeof value === 'string' && ISO_DAY_RE.test(value) ? value : null;
+  const also = ACCOUNTING_DATE_ALSO.get(entityKind);
+  if (also === undefined) return own;
+  const extra = (ctx.store.db.prepare(also).get(ctx.workspaceId, entityId) as { d: string | null } | undefined)?.d;
+  return later(own, typeof extra === 'string' && ISO_DAY_RE.test(extra) ? extra : null);
 }
 
 function fiscalYearStartOf(ctx: WorkspaceContext): string {

@@ -9,14 +9,14 @@
  * carries an idempotency key.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { I18nProvider } from '../../i18n';
-import { WorkspaceProvider } from '../../app/workspace';
+import { WorkspaceProvider, useWorkspace } from '../../app/workspace';
 import GoodsReceipt from './index';
 import de from './messages.de-CH.json';
 
@@ -117,12 +117,12 @@ const baseCanned = (): Canned => ({
   serial_list: ok({ serials: [] }),
 });
 
-function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Record<string, unknown> }>) {
+function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Record<string, unknown> }>, path = '/goods-receipts') {
   return render(
     <TillClientProvider client={new TillClient(fakeTransport(canned, asked))}>
       <I18nProvider>
         <WorkspaceProvider initialId="ws_test">
-          <MemoryRouter>
+          <MemoryRouter initialEntries={[path]}>
             <GoodsReceipt />
           </MemoryRouter>
         </WorkspaceProvider>
@@ -131,10 +131,15 @@ function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Re
   );
 }
 
+/** D152 rule 5: a receipt opens by the person's act. Click its row, as the person would. */
+async function openReceipt(name: RegExp = /GR-2026-0001/) {
+  await userEvent.click(await screen.findByRole('row', { name }));
+}
+
 describe('GoodsReceipt, the receipt document surface', () => {
   it('renders a receipt with its status badge, its line and the receipt value', async () => {
     renderSurface(baseCanned());
-    expect(await screen.findByRole('row', { name: /GR-2026-0001/ })).toBeInTheDocument();
+    await openReceipt();
     await waitFor(() => expect(screen.getByText('Rohstoff')).toBeInTheDocument());
     // Status is glyph AND label, never colour alone.
     expect(screen.getAllByText(new RegExp(de.goodsReceipt.status.draft)).length).toBeGreaterThan(0);
@@ -156,7 +161,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     canned.goods_receipt_post = ok(DETAIL({ status: 'posted' }));
     renderSurface(canned, asked);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     const post = await screen.findByRole('button', { name: de.goodsReceipt.post });
     await waitFor(() => expect(post).not.toBeDisabled());
     await userEvent.click(post);
@@ -193,7 +198,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     );
     renderSurface(canned);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     await waitFor(() => expect(screen.getByRole('button', { name: de.goodsReceipt.post })).toBeDisabled());
     expect(await screen.findByText(de.goodsReceipt.errors.qty_exceeds_open)).toBeInTheDocument();
   });
@@ -203,7 +208,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     canned.goods_receipt_post = reject('period_locked', { period: '2026', kind: 'hard', reason: 'year_close' });
     renderSurface(canned);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     const post = await screen.findByRole('button', { name: de.goodsReceipt.post });
     await waitFor(() => expect(post).not.toBeDisabled());
     await userEvent.click(post);
@@ -217,7 +222,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     canned.goods_receipt_get = ok(DETAIL({ status: 'posted' }, [LINE({ movementId: 'stockmv_1' })]));
     renderSurface(canned);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     await waitFor(() => expect(screen.queryByRole('button', { name: de.goodsReceipt.post })).not.toBeInTheDocument());
     expect(screen.queryByRole('button', { name: de.goodsReceipt.addLine })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: de.goodsReceipt.cancel })).not.toBeInTheDocument();
@@ -238,7 +243,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     canned.goods_receipt_reject_lines = ok(DETAIL({ status: 'posted' }, [LINE({ inspectionStatus: 'rejected' })]));
     renderSurface(canned, asked);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     expect(await screen.findByText(de.goodsReceipt.holdTitle)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: de.goodsReceipt.reject })).toBeDisabled();
 
@@ -257,7 +262,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     canned.goods_receipt_upsert_lines = ok(DETAIL());
     renderSurface(canned, asked);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     await userEvent.click(await screen.findByRole('button', { name: de.goodsReceipt.addLine }));
     await screen.findByRole('dialog', { name: de.goodsReceipt.form.lineTitle });
 
@@ -283,7 +288,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     );
     renderSurface(canned);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     // On the list row, where a buyer scans.
     expect(await screen.findByText(new RegExp(`${de.goodsReceipt.overReceipt.badge}.*4`))).toBeInTheDocument();
     // On the line, with the quantity interpolated. Awaited: the detail read lands after the list
@@ -302,7 +307,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     canned.goods_receipt_upsert_lines = ok(DETAIL());
     renderSurface(canned, asked);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     await userEvent.click(await screen.findByRole('button', { name: de.goodsReceipt.addLine }));
     await screen.findByRole('dialog', { name: de.goodsReceipt.form.lineTitle });
 
@@ -328,7 +333,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     canned.goods_receipt_upsert_lines = ok(DETAIL());
     renderSurface(canned, asked);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     await userEvent.click(await screen.findByRole('button', { name: de.goodsReceipt.addLine }));
     await screen.findByRole('dialog', { name: de.goodsReceipt.form.lineTitle });
 
@@ -372,7 +377,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     });
     renderSurface(canned, asked);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     await userEvent.click(await screen.findByRole('button', { name: de.goodsReceipt.addLine }));
     await screen.findByRole('dialog', { name: de.goodsReceipt.form.lineTitle });
 
@@ -391,7 +396,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     const canned = baseCanned();
     canned.list_items = ok({ items: [{ id: 'it_1', name: 'Beratung', trackStock: false }] });
     renderSurface(canned);
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     await userEvent.click(await screen.findByRole('button', { name: de.goodsReceipt.addLine }));
     await screen.findByRole('dialog', { name: de.goodsReceipt.form.lineTitle });
     expect(screen.queryByLabelText(de.goodsReceipt.form.newLot)).not.toBeInTheDocument();
@@ -405,7 +410,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     canned.goods_receipt_preview = ok(PREVIEW({ postable: false, issues: ['period_locked'] }));
     renderSurface(canned);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     await waitFor(() => expect(screen.getByRole('button', { name: de.goodsReceipt.post })).toBeDisabled());
     expect(await screen.findByText(new RegExp(de.goodsReceipt.errors.period_locked))).toBeInTheDocument();
   });
@@ -426,7 +431,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     };
     renderSurface(canned, asked);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     await userEvent.click(await screen.findByRole('button', { name: de.goodsReceipt.addLine }));
     await screen.findByRole('dialog', { name: de.goodsReceipt.form.lineTitle });
     await userEvent.type(await screen.findByLabelText(de.goodsReceipt.form.newLot), 'CH-2026-09');
@@ -459,7 +464,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     };
     renderSurface(canned, asked);
 
-    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await openReceipt();
     await userEvent.click(await screen.findByRole('button', { name: de.goodsReceipt.addLine }));
     await screen.findByRole('dialog', { name: de.goodsReceipt.form.lineTitle });
     await userEvent.type(await screen.findByLabelText(de.goodsReceipt.form.newSerial), 'SN-NEW');
@@ -487,5 +492,194 @@ describe('GoodsReceipt, the receipt document surface', () => {
     canned.goods_receipt_list = ok({ goodsReceipts: [] });
     renderSurface(canned);
     expect(await screen.findByText(de.goodsReceipt.empty.title)).toBeInTheDocument();
+  });
+});
+
+describe('GoodsReceipt, a list never opens itself (D152 rule 5)', () => {
+  const twoReceipts = (): Canned => {
+    const canned = baseCanned();
+    canned.goods_receipt_list = ok({ goodsReceipts: [ROW(), ROW({ id: 'gr_2', number: 'GR-2026-0002' })] });
+    canned.goods_receipt_get = (input) =>
+      ok(DETAIL(input.grId === 'gr_2' ? { id: 'gr_2', number: 'GR-2026-0002' } : {}));
+    return canned;
+  };
+
+  it('selects nothing on load: no current row, no detail, no Buchen and no verwerfen, the list takes the width', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const { container } = renderSurface(twoReceipts(), asked);
+    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    await screen.findByRole('row', { name: /GR-2026-0002/ });
+    expect(container.querySelector('[aria-current="true"]')).toBeNull();
+    expect(screen.queryByRole('region', { name: de.goodsReceipt.detailLabel })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.goodsReceipt.post })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.goodsReceipt.cancel })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.goodsReceipt.addLine })).not.toBeInTheDocument();
+    expect(container.querySelector('.gr-split--solo')).not.toBeNull();
+    // Nothing was read for a receipt nobody opened.
+    expect(asked.some((a) => a.action === 'goods_receipt_get' || a.action === 'goods_receipt_preview')).toBe(false);
+  });
+
+  it('opens the receipt a deep link names (?focus=), and only that one', async () => {
+    renderSurface(twoReceipts(), undefined, '/goods-receipts?focus=gr_2');
+    const row = await screen.findByRole('row', { name: /GR-2026-0002/ });
+    await waitFor(() => expect(row).toHaveAttribute('aria-current', 'true'));
+    expect(await screen.findByRole('heading', { name: 'GR-2026-0002' })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /GR-2026-0001/ })).not.toHaveAttribute('aria-current');
+  });
+
+  it('a click opens the receipt with the same actions, a second click closes it, and Enter reopens it', async () => {
+    const { container } = renderSurface(twoReceipts());
+    await openReceipt();
+    const row = screen.getByRole('row', { name: /GR-2026-0001/ });
+    expect(row).toHaveAttribute('aria-current', 'true');
+    expect(await screen.findByRole('button', { name: de.goodsReceipt.post })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: de.goodsReceipt.cancel })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: de.goodsReceipt.addLine })).toBeInTheDocument();
+    expect(container.querySelector('.gr-split--solo')).toBeNull();
+
+    await userEvent.click(row);
+    await waitFor(() => expect(screen.queryByRole('button', { name: de.goodsReceipt.post })).not.toBeInTheDocument());
+    expect(row).not.toHaveAttribute('aria-current');
+
+    row.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(await screen.findByRole('button', { name: de.goodsReceipt.post })).toBeInTheDocument();
+  });
+});
+
+describe('GoodsReceipt, a workspace switch leaves the old workspace behind (critic round 2)', () => {
+  it('closes the open receipt and an open create drawer, so no draft names the old workspace order', async () => {
+    let switchTo: (id: string) => void = () => undefined;
+    function Switcher() {
+      const { setWorkspaceId } = useWorkspace();
+      switchTo = (id: string) => setWorkspaceId(id);
+      return null;
+    }
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    render(
+      <TillClientProvider client={new TillClient(fakeTransport(baseCanned(), asked))}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_a">
+            <MemoryRouter initialEntries={['/goods-receipts?focus=gr_1']}>
+              <Switcher />
+              <GoodsReceipt />
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    expect(await screen.findByRole('button', { name: de.goodsReceipt.post })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: de.goodsReceipt.new }));
+    await screen.findByRole('dialog');
+    act(() => switchTo('ws_b'));
+    await waitFor(() => expect(asked.some((a) => a.action === 'goods_receipt_list' && a.input.workspaceId === 'ws_b')).toBe(true));
+    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.goodsReceipt.post })).not.toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /GR-2026-0001/ })).not.toHaveAttribute('aria-current');
+    expect(asked.some((a) => a.input.workspaceId === 'ws_b' && a.action === 'goods_receipt_get')).toBe(false);
+  });
+});
+
+describe('GoodsReceipt, a write in flight across a workspace switch (critic round 3 prep)', () => {
+  it('Buchen answered after the switch speaks nowhere and re-reads nothing in the new workspace', async () => {
+    let switchTo: (id: string) => void = () => undefined;
+    function Switcher() {
+      const { setWorkspaceId } = useWorkspace();
+      switchTo = (id: string) => setWorkspaceId(id);
+      return null;
+    }
+    let answer: (r: RestResponse) => void = () => undefined;
+    const pending = new Promise<RestResponse>((r) => {
+      answer = r;
+    });
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const canned = baseCanned();
+    canned.goods_receipt_post = (() => pending) as unknown as CannedHandler;
+    render(
+      <TillClientProvider client={new TillClient(fakeTransport(canned, asked))}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_a">
+            <MemoryRouter initialEntries={['/goods-receipts?focus=gr_1']}>
+              <Switcher />
+              <GoodsReceipt />
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    const post = await screen.findByRole('button', { name: de.goodsReceipt.post });
+    await waitFor(() => expect(post).not.toBeDisabled());
+    await userEvent.click(post);
+    await waitFor(() => expect(asked.some((a) => a.action === 'goods_receipt_post')).toBe(true));
+    // The post went out under ws_a, with its own receipt id: the engine call itself is unchanged.
+    expect(asked.find((a) => a.action === 'goods_receipt_post')?.input).toMatchObject({ workspaceId: 'ws_a', grId: 'gr_1' });
+
+    act(() => switchTo('ws_b'));
+    await waitFor(() => expect(asked.some((a) => a.action === 'goods_receipt_list' && a.input.workspaceId === 'ws_b')).toBe(true));
+    await screen.findByRole('row', { name: /GR-2026-0001/ });
+    const before = asked.length;
+    await act(async () => {
+      answer(reject('period_locked', { period: '2026', kind: 'hard', reason: 'year_close' }));
+      await pending;
+    });
+    // Nothing was re-read because of ws_a's answer.
+    expect(asked.slice(before)).toEqual([]);
+    // And ws_a's refusal is not told under ws_b, not even in the receipt the person opens next.
+    await userEvent.click(screen.getByRole('row', { name: /GR-2026-0001/ }));
+    expect(await screen.findByRole('button', { name: de.goodsReceipt.post })).toBeInTheDocument();
+    expect(screen.queryByText(de.goodsReceipt.errors.period_locked)).not.toBeInTheDocument();
+  });
+});
+
+describe('GoodsReceipt, a line submit spanning a workspace switch completes where it was made (critic round 3)', () => {
+  it('the add still goes out under ws_a after the lot, and its refusal never shows under ws_b', async () => {
+    let switchTo: (id: string) => void = () => undefined;
+    function Switcher() {
+      const { setWorkspaceId } = useWorkspace();
+      switchTo = (id: string) => setWorkspaceId(id);
+      return null;
+    }
+    let mint: (r: RestResponse) => void = () => undefined;
+    const minting = new Promise<RestResponse>((r) => {
+      mint = r;
+    });
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const canned = baseCanned();
+    canned.lot_create = (() => minting) as unknown as CannedHandler;
+    canned.goods_receipt_upsert_lines = reject('qty_exceeds_open', { open: 6 });
+    render(
+      <TillClientProvider client={new TillClient(fakeTransport(canned, asked))}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_a">
+            <MemoryRouter initialEntries={['/goods-receipts?focus=gr_1']}>
+              <Switcher />
+              <GoodsReceipt />
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: de.goodsReceipt.addLine }));
+    await screen.findByRole('dialog', { name: de.goodsReceipt.form.lineTitle });
+    await userEvent.type(await screen.findByLabelText(de.goodsReceipt.form.newLot), 'CH-2026-09');
+    await userEvent.click(screen.getByRole('button', { name: de.goodsReceipt.save }));
+    await waitFor(() => expect(asked.some((a) => a.action === 'lot_create')).toBe(true));
+
+    act(() => switchTo('ws_b'));
+    await waitFor(() => expect(asked.some((a) => a.action === 'goods_receipt_list' && a.input.workspaceId === 'ws_b')).toBe(true));
+    await act(async () => {
+      mint(ok({ lot: { id: 'lot_new', number: 'CH-2026-09' } }));
+      await minting;
+    });
+    await waitFor(() => expect(asked.some((a) => a.action === 'goods_receipt_upsert_lines')).toBe(true));
+    const add = asked.find((a) => a.action === 'goods_receipt_upsert_lines')?.input as Record<string, unknown>;
+    expect(add.workspaceId).toBe('ws_a');
+    expect((add.ops as Array<Record<string, unknown>>)[0]?.lotId).toBe('lot_new');
+    // Under ws_b: no drawer, no banner, not even in the receipt the person opens next.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('row', { name: /GR-2026-0001/ }));
+    expect(await screen.findByRole('button', { name: de.goodsReceipt.post })).toBeInTheDocument();
+    expect(screen.queryByText(de.goodsReceipt.errors.qty_exceeds_open)).not.toBeInTheDocument();
   });
 });

@@ -29,7 +29,7 @@ import { freshDeps, mintWorkspace } from '../api/support.mjs';
 import { seedOpeningBalanceAccount } from './support.mjs';
 import { buildQrrReference } from '../../dist/core/payments/reference.js';
 import { postEntry } from '../../dist/core/ledger/index.js';
-import { compactReference } from '../../dist/core/banking/pain001.js';
+import { frozenPmtInfId, frozenEndToEndId } from './frozen-refs-support.mjs';
 import { assertClaimInvariantHolds, trackClaimInvariant, world, camt, importLines, postedBill, issueInvoice, must, refused, balanceOf, rowCounts, MAIN_IBAN, SAVINGS_IBAN } from './bank-inbox-support.mjs';
 import { legClaimViolations } from './bank-inbox-invariants.mjs';
 
@@ -125,7 +125,7 @@ test('A39-2 p2: a run paid by hand whose payment already backs another line is r
   const pay = t.store.db.prepare('SELECT p.journal_entry_id AS e FROM payment_batch_item i JOIN payment p ON p.id = i.posted_payment_id WHERE i.batch_id = ? ORDER BY i.rowid').all(batch.batchId);
   const { lines } = importLines(t, { statementId: 'S', openingMinor: 200000, entries: [
     { ref: 'ONE', amountMinor: 60000, cd: 'DBIT', date: '2026-07-22' },
-    { ref: 'RUN', amountMinor: 100000, cd: 'DBIT', date: '2026-07-22', pmtInfId: compactReference('P', batch.batchId) },
+    { ref: 'RUN', amountMinor: 100000, cd: 'DBIT', date: '2026-07-22', pmtInfId: frozenPmtInfId(t, batch.batchId) },
   ] });
   must(bookBankLine(t.ctx, { bankTxnId: lines.ONE, target: { kind: 'existing_entry', entryId: pay[0].e }, idempotencyKey: 'one' }));
   const p = lineOf(t, lines.RUN, 'open').proposal;
@@ -289,8 +289,17 @@ test('A39-4 p8 (L2): the agent importing with the QR dial on settles nothing and
   const g = (name, input) => runGoverned(agent, getAction(name), { workspaceId: t.workspaceId, ...input });
   must(setQrAutoApply(t.ctx, { autoApply: true, idempotencyKey: 'aa' }));
   const inv = issueInvoice(t.ctx, { contactId: t.customerId, key: 'ag' });
+  const xml = camt({ statementId: 'AG-1', entries: [{ ref: 'Q', amountMinor: 108100, cd: 'CRDT', qrr: buildQrrReference(inv.number) }] });
+  // D161: the agent's import is itself governed under pay, so at the default ask it is a Vorschlag that
+  // imports nothing. With pay GRANTED (a person's act), the import runs, and it still settles nothing
+  // and drafts no apply: the stronger form of the claim, since a granted pay would let an apply run.
+  const proposed = must(g('import_camt', { bankAccountId: t.bankAccountId, xml, idempotencyKey: 'agent-imp-ask' }), 'the agent proposes the import');
+  assert.equal(proposed.drafted, true, JSON.stringify(proposed));
+  assert.equal(proposed.dialCapability, 'pay');
+  must(getAction('set_agent_dial').run({ store: t.store, clock: t.clock, ids: t.ids, actor: 'studio' }, { workspaceId: t.workspaceId, capability: 'pay', level: 'auto', idempotencyKey: 'grant-pay' }), 'a person grants pay');
   const before = rowCounts(t.store, t.workspaceId);
-  must(g('import_camt', { bankAccountId: t.bankAccountId, xml: camt({ statementId: 'AG-1', entries: [{ ref: 'Q', amountMinor: 108100, cd: 'CRDT', qrr: buildQrrReference(inv.number) }] }), idempotencyKey: 'agent-imp' }), 'the agent may import');
+  const imported = must(g('import_camt', { bankAccountId: t.bankAccountId, xml, idempotencyKey: 'agent-imp' }), 'the agent may import');
+  assert.equal(imported.drafted, undefined, 'pay granted: the import runs');
   const after = rowCounts(t.store, t.workspaceId);
   assert.equal(after.payments, before.payments, 'no settlement at import');
   assert.equal(after.drafts, before.drafts, 'no apply drafted either');

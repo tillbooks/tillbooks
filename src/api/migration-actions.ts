@@ -32,11 +32,12 @@ import {
   abandonPlan,
   closePlan,
 } from '../core/migration/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface MigrationActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -78,14 +79,14 @@ export function migrationActions(h: MigrationActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'migration_create_plan',
-      'write',
+      'write:correctable:internal',
       'Create a Datenübernahme plan for a source system as at an Übernahmestichtag. A FUTURE Stichtag is accepted: the plan is prepared ahead of its date (scope, map, trial load, check), the plan view carries cutoverPending, and only migration_commit_step and go_productive refuse cutover_in_future until the date arrives. The plan is a scoped, resumable, auditable object, not an import.',
       ctxSchema({ sourceSystem: STR, cutoverDate: STR, localePack: STR, idempotencyKey: STR }, ['sourceSystem', 'cutoverDate', 'idempotencyKey']),
       (ctx, input) => createPlan(ctx, as(input)),
     ),
     ctxAction(
       'migration_set_scope',
-      'write',
+      'write:correctable:internal',
       'Scope a plan per data class, one step per included class. Defaults come from discovery; a class outside first scope is returned in unavailable[] with its owning spec named, never silently absent. Excluding a class removes its step, so it can never import by accident.',
       ctxSchema({ planId: STR, classes: CLASSES, idempotencyKey: STR }, ['planId', 'classes', 'idempotencyKey']),
       (ctx, input) => setScope(ctx, as(input)),
@@ -113,28 +114,28 @@ export function migrationActions(h: MigrationActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'migration_trial_load_step',
-      'write',
+      'write:correctable:internal',
       'Trial-load a step into the plan\'s Testmandant (G12), through the same code path the live commit uses, differing only in target workspace. Records the row-level outcomes and writes nothing to the live books. Idempotent on its key.',
       ctxSchema({ planId: STR, stepId: STR, idempotencyKey: STR }, ['planId', 'stepId', 'idempotencyKey']),
       (ctx, input) => trialLoadStep(ctx, as(input)),
     ),
     ctxAction(
       'migration_commit_step',
-      'write',
+      'write:correctable:books',
       'Commit a step into the live books, behind the six-condition gate (checked, no failed/not_asserted control, no unresolved conflict, an approval bound to the check hash for a money-path class, commit_migration held, and a G04 backup on record). A migrated document posts nothing: a money-path class establishes opening balances through A04\'s single entry. Idempotent: a double-commit posts once.',
       ctxSchema({ planId: STR, stepId: STR, idempotencyKey: STR }, ['planId', 'stepId', 'idempotencyKey']),
       (ctx, input) => commitStep(ctx, as(input)),
     ),
     ctxAction(
       'migration_record_approval',
-      'write',
+      'write:correctable:statutory',
       'Bind a human approval to a check result: a row for exactly (stepId, checkHash). Every return of the step to the mapped state voids it, so an agent cannot commit the import after a human approved a different result.',
       ctxSchema({ planId: STR, stepId: STR, checkHash: STR, idempotencyKey: STR }, ['planId', 'stepId', 'checkHash', 'idempotencyKey']),
       (ctx, input) => recordApproval(ctx, as(input)),
     ),
     ctxAction(
       'migration_rollback_step',
-      'write',
+      'write:correctable:books',
       'Reverse a committed step through A02 reversing entries and archive master rows through their owning verbs. Never a delete: posted entries are append-only. The step returns to the mapped state and the approval is voided. After any commit this verb requires commit_migration.',
       ctxSchema({ planId: STR, stepId: STR, confirmed: BOOL, idempotencyKey: STR }, ['planId', 'stepId', 'idempotencyKey']),
       (ctx, input) => rollbackStep(ctx, as(input)),
@@ -148,14 +149,14 @@ export function migrationActions(h: MigrationActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'migration_abandon_plan',
-      'write',
-      'Close a plan and discard its Testmandant. Belege for any step that reached live are retained (OR 958f), so abandoning never deletes the evidence of what was committed. After any commit this verb requires commit_migration.',
+      'write:final:erase',
+      'Close a plan as abandoned and delete its Testmandant for good, through the same guarded path as discard_testmandant, and only the Testmandant these books created: a copy of the books whose plan still points at the original\'s Testmandant drops its own link and deletes nothing, and a Testmandant that already went productive is never deleted. testmandantDiscarded is true only when a workspace was deleted. Belege for any step that reached live are retained (OR 958f), so abandoning never deletes the evidence of what was committed. After any commit this verb requires commit_migration.',
       ctxSchema({ planId: STR, confirmed: BOOL, idempotencyKey: STR }, ['planId', 'idempotencyKey']),
       (ctx, input) => abandonPlan(ctx, as(input)),
     ),
     ctxAction(
       'migration_close_plan',
-      'write',
+      'write:final:statutory',
       'Close a finished Datenübernahme, moving it from live to closed (the state the machine declared but nothing could reach). Legal only from live; refuses, naming the first blocker, while any step is non-terminal or any G11 control is failed. A close is the human judgment that the übernahme is finished, so it needs a confirmation and is denylisted from automation. Idempotent; writes no domain row and posts nothing (it stamps the plan only).',
       ctxSchema({ planId: STR, confirmed: BOOL, idempotencyKey: STR }, ['planId', 'idempotencyKey']),
       (ctx, input) => closePlan(ctx, as(input)),

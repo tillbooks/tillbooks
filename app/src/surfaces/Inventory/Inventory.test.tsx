@@ -1,5 +1,5 @@
 /**
- * D01, the Inventory (Lager) surface. The suite proves the five states and the design-law
+ * D01, the Inventory (Lagerbestand) surface. The suite proves the five states and the design-law
  * remediations from the D46 UX pass, not just "the page renders":
  *
  *   - loading  the skeleton is a load in flight, PROVEN with `watchReads` against `stock_on_hand`
@@ -99,7 +99,7 @@ function renderSurface(
   return render(<CapabilitiesContext.Provider value={capabilities}>{tree}</CapabilitiesContext.Provider>);
 }
 
-describe('Inventory (Lager), the five states and the UX-pass remediations', () => {
+describe('Inventory (Lagerbestand), the five states and the UX-pass remediations', () => {
   it('LOADING: the skeleton is a read in flight, not a default over an unwatched read', async () => {
     const transport = watchReads(neverSettles);
     renderSurface(transport);

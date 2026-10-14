@@ -1,7 +1,7 @@
 {
   "name": "@tillbooks/app",
   "private": true,
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-beta.1",
   "type": "module",
   "description": "TILL Studio: the human oversight GUI. F1 foundation: shell, client, i18n, five-state primitives.",
   "scripts": {
@@ -15,7 +15,7 @@
     "@dnd-kit/core": "6.3.1",
     "@dnd-kit/sortable": "10.0.0",
     "@dnd-kit/utilities": "3.2.2",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3"
@@ -27,11 +27,11 @@
     "@types/jest-axe": "^3.5.9",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
+    "@vitejs/plugin-react": "^6.1.2",
     "jest-axe": "^11.0.0",
-    "jsdom": "^30.0.1",
+    "jsdom": "^30.1.2",
     "typescript": "^5.7.2",
-    "vite": "^8.2.2",
-    "vitest": "^2.1.8"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
   }
 }

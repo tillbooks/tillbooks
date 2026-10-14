@@ -23,11 +23,12 @@ import {
   inventoryStocktakeGet,
   inventoryStocktakeList,
 } from '../core/inventory/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface StocktakeActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -62,7 +63,7 @@ export function stocktakeActions(h: StocktakeActionHelpers): readonly ActionDef[
   return [
     ctxAction(
       'inventory_stocktake_create',
-      'write',
+      'write:correctable:internal',
       "Open a cycle-count / stocktake session that FREEZES a book-quantity snapshot from the J02 movement ledger. type is 'full' (an OR 958c Abs. 2 Inventur frozen at a balance-sheet date) or 'cycle' (an ongoing scope count without a full freeze; default 'full'). freezeAt is the ISO date the book quantities are snapshotted as-of (default today); book_qty per line is SUM(stock_movement.qty) WHERE moved_at <= freezeAt, bit-identical to inventory_balance asOf. Scope with any of warehouseId, locationIds[], itemIds[] (a foreign id is not_found, §H-TENANT); includeZeroQty forces net-zero groups into the count. blindCount hides book_qty until review. varianceQtyThreshold / variancePctThreshold (integer, default 0) classify a counted line as material: a non-zero variance exceeding either enters review_required and blocks commit until approved. Idempotent under idempotencyKey.",
       ctxSchema(
         {
@@ -85,7 +86,7 @@ export function stocktakeActions(h: StocktakeActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'inventory_stocktake_count',
-      'write',
+      'write:reversible:internal',
       'Record counted quantities for one or more lines of an open session. Each line names itemId + locationId (+ optional lotId / serialId) and countedQty (integer thousandths, may be 0 for an explicit empty bin). Last write wins while the session is open. A line with zero variance auto-approves; a material variance (over threshold) becomes review_required; else counted. A blind session still hides book_qty in the response until review. A line not in the session is not_found; a non-open session is stocktake_not_open.',
       ctxSchema(
         {
@@ -106,7 +107,7 @@ export function stocktakeActions(h: StocktakeActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'inventory_stocktake_approve_lines',
-      'write',
+      'write:reversible:statutory',
       "Approve review-required (or counted) lines so they may be committed. lineIds is an explicit array of line ids or the string 'all_review_required'. An uncounted line cannot be approved (uncounted_or_unapproved_lines). A non-open session is stocktake_not_open. Idempotent under idempotencyKey.",
       ctxSchema(
         {
@@ -120,7 +121,7 @@ export function stocktakeActions(h: StocktakeActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'inventory_stocktake_request_recount',
-      'write',
+      'write:reversible:internal',
       'Send lines back to pending, clearing their counted quantity so they must be recounted. lineIds is the array of line ids. A non-open session is stocktake_not_open. Idempotent under idempotencyKey.',
       ctxSchema(
         {
@@ -135,14 +136,14 @@ export function stocktakeActions(h: StocktakeActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'inventory_stocktake_commit',
-      'write',
+      'write:final:statutory',
       "Commit a reviewed session: for every line with a non-zero variance (counted - book) mint ONE J02 inventory_move (movement_type adjustment, signed qty, dated at freezeAt, ref_kind stocktake_session) and record it on the line, then mark the session committed, all atomically. No quantity is written directly; on-hand is the SUM over the minted movements. Blocked while any line is pending or review_required (uncounted_or_unapproved_lines). Refused if the freeze date falls in a locked or sealed period (period_locked). Idempotent under idempotencyKey (a replay returns the original movement ids, posting nothing); a committed session re-committed under a NEW key is already_committed. A committed session is corrected by a compensating inventory_move, never an edit.",
       ctxSchema({ sessionId: STR, idempotencyKey: STR }, ['sessionId', 'idempotencyKey']),
       (ctx, input) => inventoryStocktakeCommit(ctx, as(input)),
     ),
     ctxAction(
       'inventory_stocktake_cancel',
-      'write',
+      'write:correctable:internal',
       'Cancel an open or review session. No movements are written; the frozen snapshot is retained for audit but never re-used. A committed session cannot be cancelled (already_committed). Idempotent under idempotencyKey.',
       ctxSchema({ sessionId: STR, reason: STR, idempotencyKey: STR }, ['sessionId', 'idempotencyKey']),
       (ctx, input) => inventoryStocktakeCancel(ctx, as(input)),

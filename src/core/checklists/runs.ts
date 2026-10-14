@@ -27,15 +27,16 @@
  *
  * SIGN-OFFS ARE APPEND-ONLY (G20's discipline): a second attestation while one is live is refused
  * `already_attested`; a reopen voids (never deletes) the live sign-off; a re-signed hash-bound
- * sign-off voids the stale one with `hash_changed`. The actor is RECORDED, not refused: the owner
- * closes alone (D127) and an agent acting on the owner's behalf is named in words on the row and in
- * the audit log.
+ * sign-off voids the stale one with `hash_changed`. The actor is RECORDED: the owner closes alone
+ * (D127) and the row and the audit log name who acted. A HUMAN-owned item refuses a governed seat
+ * `needs_a_person` (critic N3 on claude/rmap-land): the agent proposes it, a person records it.
  */
 
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { AGENT_ACTOR, SERVED_MEMBER_ACTOR_PREFIX } from '../access/actors.js';
+import { isGovernedSeat } from '../access/capability.js';
 import { computeFxRevaluation } from '../fx/index.js';
 import { methodsGoverning } from '../vat/index.js';
 import { checklistTemplate, CHECKLIST_TEMPLATE_IDS } from './canon/index.js';
@@ -45,9 +46,9 @@ import { evaluateCheck, type CheckResult } from './checks.js';
 import { readMemoOf, verbEvidenceOf, verbInputValueOf, pointerIsEmpty, type ReadMemo, type VerbEvidence } from './anchor.js';
 import { evaluateProbe, type ProbeResult } from './probes.js';
 import { evaluateValidation, type ValidationResult } from './validations.js';
-import { fiscalYearOf } from '../ledger/index.js';
+import { fiscalYearOf, hardCloseYear } from '../ledger/index.js';
 import { automationRuleIdOfKey } from '../automation/fire.js';
-import { fiscalYearBounds, fiscalYearStartOf, resolveChecklistPeriod, type ChecklistPeriod } from './periods.js';
+import { booksStartOf, fiscalYearBounds, periodPredatesBooks, fiscalYearStartOf, resolveChecklistPeriod, yearSealedOf, type ChecklistPeriod } from './periods.js';
 import {
   prerequisitesOf,
   type ChecklistChoiceOption,
@@ -673,6 +674,97 @@ function yearCloseRunOverLastMonth(ctx: WorkspaceContext, month: ChecklistPeriod
     .get(ctx.workspaceId, YEAR_CLOSE_TEMPLATE_ID, fy.label) as { id: string; period_label: string } | undefined;
 }
 
+/**
+ * The rule that fired this start, when the call came through the G01 fire path: read off the derived
+ * idempotency key (`auto:<ruleId>:<digest>`) and verified against THIS workspace's rules, so a key
+ * naming a rule the workspace does not carry is neither provenance nor an auto-start.
+ */
+function firingRuleOf(ctx: WorkspaceContext, key: string): string | undefined {
+  const ruleId = automationRuleIdOfKey(key);
+  if (ruleId === undefined) return undefined;
+  const held = ctx.store.db.prepare('SELECT 1 AS one FROM automation_rule WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, ruleId);
+  return held !== undefined ? ruleId : undefined;
+}
+
+/** The year run's seal row (canon `year_sealed`, verb `close_year`). */
+const SEAL_ITEM_ID = 'year_sealed';
+
+/** `close_year`'s wire input: the A03 pair, plus the run whose seal row this call is (G22 §10.12). */
+export interface CloseYearInput {
+  year?: unknown;
+  idempotencyKey?: unknown;
+  runId?: unknown;
+}
+
+/**
+ * THE `close_year` VERB (A03 US-A03.3 behind the G22 §10.12 guard; D152, owner decision "Engine guard
+ * + fail-closed UI", 04.10.2026; rebuilt after critic round 3).
+ *
+ * The seal stays on `close_year`, which is NOT_AUTOMATABLE and dialed `close-period` BY NAME, so no
+ * input shape can move it to a looser dial or past the automation denylist. This function only decides
+ * WHETHER the A03 close may run, and then runs exactly `hardCloseYear`:
+ *
+ *  - Without `runId`: refused `year_close_in_progress` (`yearRunId`, `fiscalYear`, the shape
+ *    `checklist_start` uses) while an OPEN `year_close` run exists for the year in this workspace. The
+ *    guided run owns its year: its seal row is where the year is sealed, behind the sign-off, the soft
+ *    lock, the GV and the blocking validations.
+ *  - With `runId`: the call IS that run's seal row, and it runs only when the run exists in this
+ *    workspace (`not_found` otherwise, §H-TENANT: another workspace's run is not found), is not
+ *    abandoned (`run_abandoned`), is a `year_close` run (`run_not_year_close`) for exactly this year
+ *    (`run_year_mismatch`), and its `year_sealed` row is unblocked (`prerequisite_open`, naming the
+ *    blocking row).
+ *
+ * The order keeps every earlier guarantee: the `manage_periods` gate first (nothing about a run is
+ * revealed to a caller who may not seal), then the input shape, then the replay of a key that already
+ * sealed (it returns its stored result whatever has happened since), then a sealed year answers
+ * `year_already_closed` (through `hardCloseYear`'s own check), and only then the run rules. SQLite is
+ * synchronous here, so nothing can start a run between this check and the close.
+ */
+export function closeYearGuarded(ctx: WorkspaceContext, input: CloseYearInput): Result {
+  const capable = ctx.capabilities.assert('manage_periods');
+  if (!capable.ok) return capable;
+  if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
+    return err('invalid_input', { field: 'idempotencyKey' });
+  }
+  if (input.runId !== undefined && (typeof input.runId !== 'string' || input.runId.length === 0)) {
+    return err('invalid_input', { field: 'runId' });
+  }
+  const yearNum = Number(input.year);
+  if (!Number.isInteger(yearNum) || yearNum < 1000 || yearNum > 9998) {
+    return err('invalid_year', { year: input.year });
+  }
+  const year = String(yearNum);
+  const key = input.idempotencyKey;
+  const close = (): Result => hardCloseYear(ctx, { year, idempotencyKey: key });
+
+  const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, key, 'close_year');
+  if (replayed !== undefined) return replayed;
+  if (yearSealedOf(ctx, year)) return close();
+
+  if (input.runId === undefined) {
+    const open = ctx.store.db
+      .prepare(
+        `SELECT id FROM checklist_run
+          WHERE workspace_id = ? AND template_id = ? AND period_label = ? AND status = 'open'
+          ORDER BY created_at ASC LIMIT 1`,
+      )
+      .get(ctx.workspaceId, YEAR_CLOSE_TEMPLATE_ID, year) as { id: string } | undefined;
+    if (open !== undefined) return err('year_close_in_progress', { year, fiscalYear: year, yearRunId: open.id });
+    return close();
+  }
+
+  const run = loadRun(ctx, input.runId);
+  if (run === undefined) return err('not_found', { runId: input.runId });
+  if (run.status === 'abandoned') return err('run_abandoned', { runId: run.id, reason: run.abandon_reason });
+  if (run.template_id !== YEAR_CLOSE_TEMPLATE_ID) return err('run_not_year_close', { runId: run.id, templateId: run.template_id });
+  const runYear = verbInputValueOf('year', periodOf(run));
+  if (runYear !== year) return err('run_year_mismatch', { runId: run.id, runYear, year });
+  const seal = deriveRun(ctx, run).items.find((i) => i.itemId === SEAL_ITEM_ID);
+  if (seal === undefined) return err('not_found', { runId: run.id, itemId: SEAL_ITEM_ID });
+  if (seal.blockedBy !== null) return err('prerequisite_open', { runId: run.id, itemId: SEAL_ITEM_ID, prerequisiteItemId: seal.blockedBy });
+  return close();
+}
+
 export function checklistStart(ctx: WorkspaceContext, input: ChecklistStartInput): Result {
   const guard = reqStr(input.templateId, 'templateId') ?? reqStr(input.idempotencyKey, 'idempotencyKey');
   if (guard) return guard;
@@ -693,6 +785,30 @@ export function checklistStart(ctx: WorkspaceContext, input: ChecklistStartInput
     return ok({ created: false, ...deriveRun(ctx, existing) });
   }
 
+  // Beta launch P0.4a (spec §10.8 amendment): an AUTO-start, a rule firing with no period named, never
+  // opens a period that predates these books (`booksStartOf`: the Stichtag or the day the workspace was
+  // created, pulled earlier by the first posted entry, so hand back-posting keeps its reminder). Without it a company created on 30.09 met four overdue August
+  // close items on day 0. The answer is `ok` with `started:false`, not a refusal: the rule did its job
+  // (there is nothing to start yet), so the Verlauf keeps an ok row rather than a daily failure. A hand
+  // start names its period and is never bounded.
+  const periodNamed = typeof input.period === 'string' && input.period.length > 0;
+  const firingRule = periodNamed ? undefined : firingRuleOf(ctx, key);
+  if (firingRule !== undefined) {
+    const booksStart = booksStartOf(ctx);
+    if (periodPredatesBooks(match.periodEnd, booksStart)) {
+      return ok({
+        created: false,
+        started: false,
+        skipped: 'before_books_start',
+        templateId: template.templateId,
+        period: match.label,
+        periodEnd: match.periodEnd,
+        booksStart: booksStart.date,
+        booksStartSource: booksStart.source,
+      });
+    }
+  }
+
   // Spec §10.6: the last fiscal month of a year that carries a live `year_close` run is not started
   // (the year's item 4 covers the months and item 19 is the December lock). The auto-start rule
   // makes this same call, so its silence and this refusal are one mechanism; a December run that
@@ -711,11 +827,7 @@ export function checklistStart(ctx: WorkspaceContext, input: ChecklistStartInput
     // reads that they started a run they did not. The fire path derives its idempotency key from the
     // rule id (`auto:<ruleId>:<digest>`), and that key is the smallest seam there is: no column, no
     // change to the fire path. A key naming a rule this workspace does not carry is not provenance.
-    const ruleId = automationRuleIdOfKey(key);
-    const startedByRule =
-      ruleId !== undefined &&
-      ctx.store.db.prepare('SELECT 1 AS one FROM automation_rule WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, ruleId) !== undefined;
-    const createdBy = startedByRule ? ruleId : ctx.actor;
+    const createdBy = firingRuleOf(ctx, key) ?? ctx.actor;
     ctx.store.db
       .prepare(
         `INSERT INTO checklist_run (id, workspace_id, template_id, period_label, period_start, period_end, status, created_by, created_key, created_at)
@@ -890,6 +1002,15 @@ export function checklistItemComplete(ctx: WorkspaceContext, input: ChecklistIte
   const view = deriveRun(ctx, run);
   const item = itemOf(view, input.itemId as string);
   if (item === undefined) return err('not_found', { runId: run.id, itemId: input.itemId });
+  // Critic N3 (claude/rmap-land, coordinator ruling): an item the template gives to a HUMAN owner (the
+  // G22 sign-offs `abstimmung_reviewed`, `settlement_booked`, a `validation_acknowledged`, every other
+  // human step) is recorded by a person. A governed seat (the agent, a plugin call, an agent member) is
+  // refused `needs_a_person` before anything is read or written; it may still PROPOSE the step through a
+  // dial-governed Vorschlag, which a person approves and which replays as that person. Agent- and
+  // system-owned items stay free.
+  if (item.ownerKind === 'human' && isGovernedSeat(ctx.store, ctx.actor)) {
+    return err('capability_forbidden', { reason: 'needs_a_person', runId: run.id, itemId: item.itemId, ownerKind: item.ownerKind });
+  }
   const fullTemplate = templateOf(run);
   const template = fullTemplate.items.find((i) => i.itemId === item.itemId) as ChecklistTemplateItem;
   const evidence = (input.evidence ?? {}) as { kind?: unknown; ref?: unknown; reason?: unknown };

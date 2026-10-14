@@ -119,9 +119,27 @@
   color: var(--t-text-dim);
 }
 
-.sync-posture {
-  margin: 0;
-  max-width: 60ch;
+/* The dial and its (i) on one line; the posture sentence opens below, anchored to the trigger's
+   RIGHT edge because the dial sits at the panel's right edge (D152 rule 4). */
+.sync-dial-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.sync-posture-info {
+  display: inline-flex;
+}
+
+.sync-posture-trigger {
+  color: var(--t-text-dim);
+}
+
+.sync-posture-info .tooltip {
+  left: auto;
+  right: 0;
+  transform: none;
+  max-width: min(22rem, calc(100vw - 2 * var(--t-space-2)));
 }
 
 /* The machine values: plain label + raw value in the code surface, tabular so `headSeq` never
@@ -248,8 +266,26 @@
   border-bottom: 1px solid var(--t-border);
 }
 
-.hosting-model {
+/* The heading line carries the D106 (i) right after the title (D152 rule 4). */
+.hosting-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.hosting-head .diag-subtitle {
   margin: 0;
+}
+
+.hosting-info-trigger {
+  color: var(--t-text-dim);
+}
+
+/* The card opens below and anchors to the trigger's left edge, at a reading measure. */
+.hosting-info .tooltip {
+  left: 0;
+  transform: none;
+  max-width: min(24rem, calc(100vw - 2 * var(--t-space-2)));
 }
 
 .hosting-rungs {

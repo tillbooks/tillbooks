@@ -7,7 +7,7 @@
  * `manage_checklists`). A refusal on either read means "no run": the strip then renders exactly as it
  * did before G22, which is the honest state for a workspace without checklists or without the right.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
@@ -37,35 +37,57 @@ export interface ChecklistRunState {
   completeExport: () => Promise<void>;
 }
 
+/**
+ * NO ANSWER LANDS ON A PERIOD IT WAS NOT ASKED FOR (critic F3 of the D152 pass). Since the journey
+ * line moves to step 4 off `exportedAt`, a slow `checklist_list` for Q2 that answered after the
+ * operator had switched to Q1 put Q1 on step 4 and the filing button into its header. Two guards:
+ *
+ *  - every reload takes a request token, and an answer whose token is no longer the latest is
+ *    dropped after each await, so only the read for the period on screen may write;
+ *  - the run is stored with the workspace and period it belongs to and read back only while they
+ *    are the ones on screen, so the render between a switch and the new read already shows no run
+ *    (the effect of clearing it at the start of the reload, without blanking the SAME period's strip
+ *    while `completeExport` re-reads it).
+ */
 export function useChecklistRun(workspaceId: string | null, periodStart: string | null, canManage: boolean): ChecklistRunState {
   const client = useClient();
-  const [run, setRun] = useState<JourneyRun | null>(null);
+  const key = `${workspaceId ?? ''}/${periodStart ?? ''}`;
+  const [stored, setStored] = useState<{ key: string; run: JourneyRun | null }>({ key: '', run: null });
+  const latest = useRef(0);
+  const run = stored.key === key ? stored.run : null;
 
   const reload = useCallback(async () => {
+    const token = (latest.current += 1);
+    const forKey = `${workspaceId ?? ''}/${periodStart ?? ''}`;
+    const settle = (next: JourneyRun | null) => {
+      if (token === latest.current) setStored({ key: forKey, run: next });
+    };
     if (workspaceId === null || periodStart === null || periodStart === '') {
-      setRun(null);
+      settle(null);
       return;
     }
     const listed = await client.call('checklist_list', { workspaceId, templateId: TEMPLATE_ID });
+    if (token !== latest.current) return;
     if (isErr(listed.body)) {
-      setRun(null);
+      settle(null);
       return;
     }
     const runs = Array.isArray(listed.body.runs) ? (listed.body.runs as RunRow[]) : [];
     const match = runs.find((r) => r.periodStart === periodStart && r.status !== 'abandoned');
     if (match === undefined) {
-      setRun(null);
+      settle(null);
       return;
     }
     const got = await client.call('checklist_get', { workspaceId, runId: match.runId });
+    if (token !== latest.current) return;
     if (isErr(got.body)) {
-      setRun(null);
+      settle(null);
       return;
     }
     const items = Array.isArray(got.body.items) ? (got.body.items as ItemRow[]) : [];
     const exported = items.find((i) => i.itemId === EXPORT_ITEM_ID);
     const attested = items.find((i) => i.itemId === ATTEST_ITEM_ID);
-    setRun({
+    settle({
       runId: match.runId,
       exportedAt: exported?.status === 'done' && typeof exported.completedAt === 'string' ? exported.completedAt.slice(0, 10) : null,
       attestedAt: attested?.status === 'done' && attested.signoff !== null ? attested.signoff.evidenceRef : null,

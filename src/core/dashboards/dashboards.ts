@@ -24,6 +24,10 @@
  *    A07, F00 recomputes nothing).
  *  - **stock_value**: D01 `valuationReport` at the range end, following the last posted run's
  *    method (the books' method) and defaulting to `weighted_avg`.
+ *  - **bank_inbox** (D142, the Übersicht's Bankeingang band): A39 `bankInboxAttention`, the SAME
+ *    per-line definitions `list_bank_inbox` carries (`attention`, `needsReceipt`) counted over every
+ *    open line, per Bankkonto; the fetch line from A36 `getBankChannelStatus` (the last fetch, a
+ *    fetch running now, the daily automatic fetch). Current, not ranged: a work queue has no window.
  *
  * §H-TENANT: every fanned-out source verb already filters on `workspace_id`, and the optional G00
  * saved-view lookup resolves through `listSavedViews`, which is itself workspace- and actor-fenced.
@@ -51,7 +55,9 @@ import { computeVatReturn, listVatPeriods } from '../vat/index.js';
 import { timeList } from '../time/index.js';
 import { costingPlList } from '../costing/index.js';
 import { valuationReport } from '../stock/index.js';
-import { listBankAccounts } from '../banking/index.js';
+import { listBankAccounts, bankInboxAttention } from '../banking/index.js';
+import { seesVorschlaege, waitingOf } from '../banking/attentionProviders.js';
+import { getBankChannelStatus, readStatementGaps } from '../banking/ebics/index.js';
 import { listSavedViews } from '../customization/index.js';
 import { DASHBOARD_TILES, TILE_REGISTRY, tileDef } from './tiles.js';
 import type { DashboardTileDef } from './tiles.js';
@@ -355,6 +361,110 @@ function stockValueTile(ctx: WorkspaceContext, def: DashboardTileDef, _from: str
   };
 }
 
+/** One EBICS channel as the band reads it off `bank_channel_status` (the fields it words). */
+interface FeedChannel {
+  connectionId: string;
+  channelKind?: string;
+  state: string;
+  lastSyncAt: string | null;
+  syncInProgress?: boolean;
+  syncStartedAt?: string | null;
+  keystore?: { state?: string; persistent?: boolean };
+  accounts?: { bankAccountId: string; lastNumberJump?: unknown; statementGaps?: unknown[] }[];
+  pendingStatements?: unknown[];
+  autoSync?: {
+    mode: string;
+    atTime: string;
+    nextAt: string | null;
+    lastAuto: { finishedAt: string; ok: boolean; code: string; retryable: boolean; attempt: number; detail: unknown } | null;
+    /** D142 critic R3-2: false when nobody set the schedule, so only the owner seat is tried. */
+    setterKnown?: boolean;
+    /** D143 critic LB-1: who set the schedule (none, owner, agent, person); it words `auto_sync_no_actor`. */
+    scheduleSetter?: 'none' | 'owner' | 'agent' | 'person';
+  };
+  /** D143: the bank's short name for the band's mark, and the daily activation check. */
+  bankName?: string;
+  activation?: { checking: boolean; lastCheckAt: string | null; lastAttemptAt?: string | null; nextCheckAt: string | null; bankReady: boolean; lastOutcome: string | null };
+}
+
+/**
+ * D142: the Bankeingang band. The figures are the inbox's own (`bankInboxAttention`), the fetch line the
+ * channel status's own; nothing is recounted here. Zero accounts is the zero state, never an error.
+ */
+function bankInboxTile(ctx: WorkspaceContext, def: DashboardTileDef, _from: string, _to: string): Tile {
+  const listed = listBankAccounts(ctx, {});
+  if (!listed.ok) return degraded(def, listed.error);
+  const rows = listed.bankAccounts as { id: string; name: string; currency: string }[];
+  const counts = bankInboxAttention(ctx);
+  const accounts = rows.map((row) => {
+    const c = counts.byAccount.get(row.id);
+    return {
+      bankAccountId: row.id,
+      name: row.name,
+      currency: row.currency,
+      open: c?.open ?? 0,
+      needs: c?.needs ?? 0,
+      sure: c?.sure ?? 0,
+      noReceipt: c?.noReceipt ?? 0,
+      inMinor: c?.inMinor ?? 0,
+      outMinor: c?.outMinor ?? 0,
+    };
+  });
+  const status = getBankChannelStatus(ctx, {});
+  const channels = (status.ok ? (status.channels as FeedChannel[]) : []).filter(
+    (c) => (c.channelKind ?? 'ebics') === 'ebics' && c.state !== 'retired',
+  );
+  const lastSyncAt = channels.map((c) => c.lastSyncAt).filter((v): v is string => typeof v === 'string').sort().pop() ?? null;
+  const daily = channels.filter((c) => c.state === 'active' && c.autoSync?.mode === 'daily');
+  const nextAutoSyncAt = daily.map((c) => c.autoSync?.nextAt).filter((v): v is string => typeof v === 'string').sort()[0] ?? null;
+  const lastAutoOutcome =
+    channels
+      .map((c) => (c.autoSync?.lastAuto ? { connectionId: c.connectionId, ...c.autoSync.lastAuto } : null))
+      .filter((v): v is NonNullable<typeof v> => v !== null)
+      .sort((a, b) => a.finishedAt.localeCompare(b.finishedAt))
+      .pop() ?? null;
+  return {
+    tile: def.tile,
+    ok: true,
+    glyph: def.glyph,
+    currency: baseCurrencyOf(ctx),
+    open: counts.total.open,
+    needs: counts.total.needs,
+    // Critic LOW 5: the band's headline is the hub's `bank_lines_waiting` number, by the same rule, and
+    // the lines a pending Vorschlag names are their own figure (counted by `agent_action`).
+    waiting: waitingOf(counts.total, seesVorschlaege(ctx)),
+    vorschlag: seesVorschlaege(ctx) ? counts.total.vorschlag : 0,
+    sure: counts.total.sure,
+    learned: counts.total.learned,
+    noReceipt: counts.total.noReceipt,
+    accounts,
+    lastSyncAt,
+    syncInProgress: channels.some((c) => c.syncInProgress === true),
+    autoMode: daily.length > 0 ? 'daily' : channels.some((c) => c.state === 'active') ? 'off' : null,
+    autoAt: daily[0]?.autoSync?.atTime ?? null,
+    nextAutoSyncAt,
+    lastAutoOutcome,
+    // A36 §4.7 (D150): every open statement gap of every Bankkonto, fed or imported by hand.
+    statementGaps: readStatementGaps(ctx),
+    channels: channels.map((c) => ({
+      connectionId: c.connectionId,
+      state: c.state,
+      lastSyncAt: c.lastSyncAt,
+      syncInProgress: c.syncInProgress === true,
+      keystoreState: c.keystore?.state ?? 'ready',
+      keystorePersistent: c.keystore?.persistent === true,
+      pendingStatements: Array.isArray(c.pendingStatements) ? c.pendingStatements.length : 0,
+      numberJumps: (c.accounts ?? []).filter((a) => a.lastNumberJump !== null && a.lastNumberJump !== undefined).map((a) => ({ bankAccountId: a.bankAccountId, jump: a.lastNumberJump })),
+      // A36 §4.7 (D150): the durable gaps of the channel's accounts (the jump notice above stays for older readers).
+      statementGaps: (c.accounts ?? []).flatMap((a) => (Array.isArray(a.statementGaps) ? a.statementGaps : [])),
+      autoSync: c.autoSync ?? null,
+      bankName: c.bankName ?? null,
+      activation: c.activation ?? null,
+    })),
+    drill: drillOf(ctx, def, { status: 'open' }),
+  };
+}
+
 const COMPUTE: Record<string, (ctx: WorkspaceContext, def: DashboardTileDef, from: string, to: string) => Tile> = {
   revenue: revenueTile,
   cash: cashTile,
@@ -364,6 +474,7 @@ const COMPUTE: Record<string, (ctx: WorkspaceContext, def: DashboardTileDef, fro
   project_margin: projectMarginTile,
   mwst_due: mwstDueTile,
   stock_value: stockValueTile,
+  bank_inbox: bankInboxTile,
 };
 
 // ------------------------------------------------------------------------------------------------

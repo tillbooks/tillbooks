@@ -386,6 +386,21 @@ test('F03: a vendor grant idempotency key cannot collide with a customer grant u
   assert.equal(listed.grants.length, 1);
 });
 
+test('F03 D157: a vendor grant is live when granted (owner decision 2): sent_at stamped at mint, status active, its token reads at once', () => {
+  const w = world();
+  const v = vendor(w, 'Lieferant GmbH');
+  const g = grant(w, v);
+  const row = w.deps.store.db.prepare('SELECT kind, sent_at, minted_draft FROM portal_grant WHERE id = ?').get(g.grantId);
+  assert.deepEqual({ ...row }, { kind: 'vendor', sent_at: g.grant.createdAt, minted_draft: 1 });
+  assert.equal(g.grant.status, 'active');
+  assert.equal(w.must('vendor_portal_pos', { grantToken: g.tokenOnce }).ok, true);
+  assert.equal(w.must('vendor_portal_grants_list', { contactId: v }).grants[0].status, 'active');
+  // A customer DRAFT token is no vendor token: the kind fence and the draft rule both deny it.
+  const cust = customer(w, 'Kunde AG');
+  const draft = w.must('portal_grant_create', { contactId: cust, scopes: [{ kind: 'all_invoices' }], expiresAt: '2027-01-31', idempotencyKey: k('cg') });
+  assert.equal(w.raw('vendor_portal_pos', { grantToken: draft.tokenOnce }).error, 'grant_invalid');
+});
+
 test('F03: an expired/revoked/foreign token denies as grant_invalid, indistinguishably', () => {
   const w = world();
   const v = vendor(w, 'Lieferant GmbH');

@@ -57,8 +57,8 @@
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
-import { setOpeningBalances } from './openingBalances.js';
-import type { OpeningLineInput } from './openingBalances.js';
+import { setOpeningBalances, prevalidateOpeningBalances } from './openingBalances.js';
+import type { OpeningLineInput, SetOpeningBalancesInput } from './openingBalances.js';
 
 /** The column roles an import needs. `balance` is the single-signed-column alternative to debit/credit. */
 export interface ImportMapping {
@@ -266,6 +266,37 @@ function mappedAccountId(ctx: WorkspaceContext, account: string): string | undef
  * Ziff. 2) rather than being handed a verdict.
  */
 export function importMigration(ctx: WorkspaceContext, input: ImportMigrationInput): Result {
+  const plan = planImport(ctx, input);
+  if (!(plan instanceof ImportPlan)) return plan;
+  const posted = setOpeningBalances(ctx, plan.opening);
+  if (!posted.ok) return posted;
+  return ok({ ...posted, dryRun: false, format: plan.format, mapping: plan.mapping });
+}
+
+/**
+ * D158: the import's own validation with nothing written, for the transport seam to run BEFORE it
+ * drafts an agent's `import_opening_balances`. It is the import's checks (format, rows, mapping,
+ * duplicates, unmapped accounts) followed by the opening position's (`prevalidateOpeningBalances`, the
+ * same plan `setOpeningBalances` posts from), so an unbalanced or unmapped file is refused with the
+ * exact Result a direct call gets. Undefined means the import would post, or would replay its key.
+ */
+export function prevalidateImportMigration(ctx: WorkspaceContext, input: ImportMigrationInput): Result | undefined {
+  const plan = planImport(ctx, { ...input, dryRun: false });
+  if (!(plan instanceof ImportPlan)) return plan.ok ? undefined : plan;
+  return prevalidateOpeningBalances(ctx, plan.opening);
+}
+
+/** What a non-dry import hands to `setOpeningBalances`, once every import check has passed. */
+class ImportPlan {
+  constructor(
+    readonly format: string,
+    readonly mapping: ImportMapping,
+    readonly opening: SetOpeningBalancesInput,
+  ) {}
+}
+
+/** Every import check, in order, reading and never writing: a refusal, the preview, or the plan. */
+function planImport(ctx: WorkspaceContext, input: ImportMigrationInput): Result | ImportPlan {
   const format = input.format ?? 'csv';
   const preset = FORMAT_PRESETS[format];
   if (preset === undefined) {
@@ -363,13 +394,11 @@ export function importMigration(ctx: WorkspaceContext, input: ImportMigrationInp
     creditMinor: r.creditMinor,
   }));
 
-  const posted = setOpeningBalances(ctx, {
+  return new ImportPlan(format, mapping, {
     lines,
     idempotencyKey: input.idempotencyKey as string,
     ...(input.asOf !== undefined ? { asOf: input.asOf } : {}),
     ...(input.differenceAccount !== undefined ? { differenceAccount: input.differenceAccount } : {}),
     ...(input.reference !== undefined ? { reference: input.reference } : {}),
   });
-  if (!posted.ok) return posted;
-  return ok({ ...posted, dryRun: false, format, mapping });
 }

@@ -386,7 +386,7 @@ export function FeedbackDialog({
   return createPortal(
     <div className="fb-overlay" role="presentation" onClick={onClose}>
       <div
-        className="fb-dialog panel"
+        className="fb-dialog panel motion-reveal--center"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -394,13 +394,14 @@ export function FeedbackDialog({
         ref={dialogRef}
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id={titleId} className="fb-title">
+        <h2 id={titleId} className="fb-title" data-motion-item="1">
           {t('feedback.title')}
         </h2>
 
         {outcome === null ? (
           <form
             className="fb-body"
+            data-motion-item="2"
             onSubmit={(event) => {
               event.preventDefault();
               void submit();

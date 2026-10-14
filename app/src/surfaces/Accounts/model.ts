@@ -48,6 +48,8 @@ export interface Account {
   archived?: boolean;
   /** Whether the account carries postings. Drives Archive (true) vs. Delete (false). */
   inUse?: boolean;
+  /** D142 amendment: "Beleg = Kontoauszug", the bank statement is this account's voucher (effective value). */
+  statementIsVoucher?: boolean;
 }
 
 export interface CostCenter {

@@ -26,11 +26,12 @@ import {
   requisitionList,
   requisitionMyPendingApprovals,
 } from '../core/procurement/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface RequisitionActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -62,7 +63,7 @@ export function requisitionActions(h: RequisitionActionHelpers): readonly Action
   return [
     ctxAction(
       'requisition_upsert',
-      'write',
+      'write:correctable:internal',
       'Create or edit a DRAFT requisition (the controlled internal-demand document that opens the procure-to-pay chain). requesterId defaults to the caller; neededBy (ISO date) and urgency (normal | high | critical) are the header; each line carries an optional itemId (else a required description), qtyMilli (> 0, integer milli-units where 1000 = one whole unit), an optional uom, estimatedUnitCostRappen (>= 0), and an optional preferredSupplierId. The header total is the exact integer sum of the line estimates. Editing is refused once the requisition has left draft (invalid_transition). Posts nothing and emits no outward artifact.',
       ctxSchema(
         {
@@ -83,35 +84,35 @@ export function requisitionActions(h: RequisitionActionHelpers): readonly Action
     ),
     ctxAction(
       'requisition_submit',
-      'write',
+      'write:correctable:internal',
       'Submit a draft for approval. The policy evaluator decides the required approvers: a zero-estimate requisition auto-approves (status approved) and any positive estimate becomes pending_approval with an open approval task. Submit of an already-pending or terminal document is invalid_transition; a line-less draft is invalid_line.',
       ctxSchema({ requisitionId: STR, idempotencyKey: STR }, ['requisitionId', 'idempotencyKey']),
       (ctx, input) => requisitionSubmit(ctx, as(input)),
     ),
     ctxAction(
       'requisition_approve',
-      'write',
+      'write:correctable:internal',
       'Approve a pending requisition. Completes the named approval task (or the sole open one when taskId is omitted) and, once every required step is satisfied, moves the requisition to approved. Appends an immutable approval event.',
       ctxSchema({ requisitionId: STR, taskId: STR, comment: STR, idempotencyKey: STR }, ['requisitionId', 'idempotencyKey']),
       (ctx, input) => requisitionApprove(ctx, as(input)),
     ),
     ctxAction(
       'requisition_reject',
-      'write',
+      'write:correctable:internal',
       'Reject a pending requisition with a reason. Status becomes rejected (terminal), all open approval tasks are closed, and an immutable approval event records the decision.',
       ctxSchema({ requisitionId: STR, taskId: STR, reason: STR, idempotencyKey: STR }, ['requisitionId', 'reason', 'idempotencyKey']),
       (ctx, input) => requisitionReject(ctx, as(input)),
     ),
     ctxAction(
       'requisition_return',
-      'write',
+      'write:correctable:internal',
       'Return a pending requisition to the requester for revision, with a reason. Status returns to draft, open tasks are cancelled, and the requester can edit and re-submit; the prior approval events stay queryable.',
       ctxSchema({ requisitionId: STR, taskId: STR, reason: STR, idempotencyKey: STR }, ['requisitionId', 'reason', 'idempotencyKey']),
       (ctx, input) => requisitionReturn(ctx, as(input)),
     ),
     ctxAction(
       'requisition_convert_to_po',
-      'write',
+      'write:correctable:outbound',
       'Convert selected open quantities of an approved (or partially converted) requisition into a D02 purchase order. lines is a list of { lineId, qtyMilli } where each qtyMilli is a positive whole-unit multiple (1000 = one unit) and must not exceed the line open quantity (over_conversion). supplierContactId overrides the lines preferred supplier (required when the selection has none in common). createAs is draft | sent. The requisition becomes partially_converted while any open quantity remains, else converted, with an immutable conversion link back to the PO.',
       ctxSchema(
         { requisitionId: STR, lines: ARR, supplierContactId: STR, createAs: STR, idempotencyKey: STR },
@@ -121,14 +122,14 @@ export function requisitionActions(h: RequisitionActionHelpers): readonly Action
     ),
     ctxAction(
       'requisition_cancel',
-      'write',
+      'write:correctable:internal',
       'Cancel a draft, pending or approved requisition that has no conversion yet (status cancelled). A requisition that already has any conversion is has_conversions and must be closed instead.',
       ctxSchema({ requisitionId: STR, reason: STR, idempotencyKey: STR }, ['requisitionId', 'idempotencyKey']),
       (ctx, input) => requisitionCancel(ctx, as(input)),
     ),
     ctxAction(
       'requisition_close',
-      'write',
+      'write:correctable:internal',
       'Close a converted or partially-converted requisition (status closed): the demand is settled and no further conversion follows.',
       ctxSchema({ requisitionId: STR, idempotencyKey: STR }, ['requisitionId', 'idempotencyKey']),
       (ctx, input) => requisitionClose(ctx, as(input)),

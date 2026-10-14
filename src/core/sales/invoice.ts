@@ -25,9 +25,9 @@ import type { Result } from '../result.js';
 import { postEntry, statesConversionBasis } from '../ledger/postEntry.js';
 import { resolveFxRate, baseCurrencyOf } from '../fx/rates.js';
 import { allocateBase, RATE_ONE } from '../fx/rateMath.js';
-import { reverseEntry } from '../ledger/reverseEntry.js';
+import { reverseOwnedEntry, DOCUMENT_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
 import { buildVatLines, computeLineTax } from '../vat/applyVat.js';
-import { transitionDocument, getDocument, assertTransition } from './document.js';
+import { transitionDocument, getDocument, assertTransition, lineSupplyDate } from './document.js';
 import type { DocumentRow, DocumentPoster, DocumentStatus } from './document.js';
 import { isValidIban, isQrIban } from '../setup/iban.js';
 import {
@@ -216,7 +216,7 @@ export function buildInvoicePosting(ctx: WorkspaceContext, doc: DocumentRow): Re
       // settles it is the Leistungsdatum. So the refusal stands and is simply made legible here,
       // before anything is posted. A02 keeps the last word: this is a better message in front of its
       // gate, not a second opinion about the rate.
-      const ambiguous = supplyDateAmbiguity(ctx, line, netMinor, entryDate);
+      const ambiguous = supplyDateAmbiguity(ctx, { ...line, supply_date: lineSupplyDate(line, doc) }, netMinor, entryDate);
       if (ambiguous !== null) return ambiguous;
       const vatLines = buildVatLines(ctx, {
         counterAccount: debtor,
@@ -225,7 +225,7 @@ export function buildInvoicePosting(ctx: WorkspaceContext, doc: DocumentRow): Re
         amountIsGross: false,
         taxCode: line.tax_code,
         direction: 'output',
-        supplyDate: line.supply_date ?? null,
+        supplyDate: lineSupplyDate(line, doc), // D164: line ?? document ?? issue date, the ONE rule
       });
       journalLines.push(...vatLines);
       // The line's gross is its debtor leg (the ONE debit buildVatLines books against 1100); the
@@ -589,10 +589,10 @@ export const invoicePoster: DocumentPoster = {
   onIssue: (ctx, doc) => buildInvoicePosting(ctx, doc),
   onCancel: (ctx, doc) => {
     if (doc.posted_entry_id === null) return ok({});
-    const reversed = reverseEntry(ctx, {
+    const reversed = reverseOwnedEntry(ctx, {
       entryId: doc.posted_entry_id,
       idempotencyKey: `doc-cancel-${doc.id}`,
-    });
+    }, DOCUMENT_REVERSAL_OWNER);
     if (!reversed.ok) return reversed;
     return ok({ reversalEntryId: reversed.reversalId });
   },
@@ -675,6 +675,7 @@ function swicoVatDetails(
   lines: DocumentLineRow[],
   totalMinor: number,
   taxMinor: number,
+  document: { supply_date?: string | null } = {},
 ): string | null {
   const byRate = new Map<number, number>();
   for (const line of lines) {
@@ -682,7 +683,8 @@ function swicoVatDetails(
       amountMinor: lineGross(line),
       amountIsGross: false,
       taxCode: line.tax_code,
-      supplyDate: line.supply_date ?? null,
+      // D164: the same date the posting priced this line at.
+      supplyDate: lineSupplyDate(line, document),
     });
     // A line whose VAT will not resolve leaves a hole in the reconciliation, so nothing is statable.
     if (!computed.ok) return null;
@@ -768,6 +770,7 @@ export function buildQrBill(ctx: WorkspaceContext, invoiceId: string): Result {
     contactId: string | null;
     issueDate: string | null;
     dueDate: string | null;
+    supplyDate?: string | null;
   };
   if (document.type !== 'invoice') return err('not_an_invoice', { documentId: invoiceId });
 
@@ -846,7 +849,7 @@ export function buildQrBill(ctx: WorkspaceContext, invoiceId: string): Result {
           invoiceDate: voucherDate,
           vatNumber: ws.mwst_no,
           // The /32/ tag reconciles to `Amt` and to the posted VAT, or it is omitted entirely.
-          vatRatePercent: swicoVatDetails(ctx, lines, document.totalMinor, document.taxMinor),
+          vatRatePercent: swicoVatDetails(ctx, lines, document.totalMinor, document.taxMinor, { supply_date: document.supplyDate ?? null }),
           paymentConditions: swicoPaymentConditions(document.issueDate, document.dueDate),
         })
       : null;
@@ -904,6 +907,18 @@ export function pdfEscape(text: string): string {
  */
 const QR_GRAPHIC_X_PT = 20 * PT_PER_MM;
 const QR_GRAPHIC_Y_PT = 15 * PT_PER_MM;
+
+/**
+ * The line the invoice PDF prints when the Swiss QR Code IS drawn (critic phase0-installable r1). It
+ * used to read "Swiss QR-bill: payment part enclosed", which claims more than the page carries: this
+ * renderer draws the Swiss QR Code alone (the symbol in the lower left), not the SIX payment part
+ * with its receipt, scissors line and text blocks. So the line says what is there and what is not.
+ * English for an `en` template locale, de-CH otherwise (the built-in default, like "Rechnung").
+ */
+export const QR_CODE_DRAWN_LINE: Readonly<Record<'de-CH' | 'en', string>> = {
+  'de-CH': 'Swiss QR Code zum Bezahlen unten links (ohne Zahlteil und Empfangsschein)',
+  en: 'Swiss QR Code for payment, lower left (no payment part or receipt)',
+};
 
 /** What the PDF renderer resolved about the payment part: the drawn graphic, or the reason there is none. */
 interface QrGraphicOutcome {
@@ -1019,6 +1034,19 @@ export function renderInvoicePdf(
 
   const qr = resolveQrGraphic(ctx, invoiceId);
 
+  // G05: the template SEAM. Resolution reads the snapshot frozen at issue (or the preview
+  // override), and contributes ONLY footer text lines and the locale they resolved to. It runs
+  // strictly AFTER `resolveQrGraphic` and touches neither `qr.payload` nor `qr.ops`: there is no code
+  // path from a template to the Swiss QR payload, and `test/customization/document-templates.test.mjs`
+  // asserts the byte-identity rather than trusting this comment.
+  const tpl = resolveRenderTemplate(ctx, {
+    documentKind: 'invoice',
+    table: 'document',
+    rowId: invoiceId,
+    ...(opts?.templateId !== undefined ? { templateId: opts.templateId } : {}),
+    contactId: document.contactId,
+  });
+
   const amount = (document.totalMinor / 100).toFixed(2);
   // The printed reason is the reason the ENGINE gave. It used to be hardcoded to "kein IBAN
   // konfiguriert" for every `buildQrBill` failure, which put a false explanation on a real invoice:
@@ -1029,22 +1057,9 @@ export function renderInvoicePdf(
     `Rechnung ${document.number}`,
     `Betrag: ${document.currency} ${amount}`,
     qr.unavailable === null
-      ? 'Swiss QR-bill: payment part enclosed'
+      ? QR_CODE_DRAWN_LINE[tpl.locale === 'en' ? 'en' : 'de-CH']
       : `QR-bill: not available (${qr.unavailable.detail})`,
   ];
-
-  // G05: the template SEAM. Resolution reads the snapshot frozen at issue (or the preview
-  // override), and contributes ONLY footer text lines in the resolved locale. It runs strictly
-  // AFTER `resolveQrGraphic` and touches neither `qr.payload` nor `qr.ops`: there is no code path
-  // from a template to the Swiss QR payload, and `test/customization/document-templates.test.mjs`
-  // asserts the byte-identity rather than trusting this comment.
-  const tpl = resolveRenderTemplate(ctx, {
-    documentKind: 'invoice',
-    table: 'document',
-    rowId: invoiceId,
-    ...(opts?.templateId !== undefined ? { templateId: opts.templateId } : {}),
-    contactId: document.contactId,
-  });
 
   const text = bodyLines
     .map((line, i) => `BT /F1 12 Tf 60 ${760 - i * 20} Td (${pdfEscape(line)}) Tj ET`)
@@ -1187,22 +1202,26 @@ function readSendAttempt(ctx: WorkspaceContext, scopedKey: string): SendAttempt 
 
 /** Write or advance the attempt record in its OWN committed transaction, outside the send's unit. */
 function writeSendAttempt(ctx: WorkspaceContext, scopedKey: string, attempt: SendAttempt): void {
+  // The scope through the store (K1): inside a composite's `innerWrite` the attempt record must sit
+  // where `readSendAttempt`'s `recallIdempotent` looks for it, never in the bare public scope.
+  const scope = ctx.store.idempotencyScope(SEND_ATTEMPT_VERB);
   ctx.store.tx(() => {
     ctx.store.db
       .prepare('DELETE FROM idempotency WHERE workspace_id = ? AND verb = ? AND key = ?')
-      .run(ctx.workspaceId, SEND_ATTEMPT_VERB, scopedKey);
+      .run(ctx.workspaceId, scope, scopedKey);
     ctx.store.db
       .prepare('INSERT INTO idempotency (workspace_id, key, verb, result_json, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run(ctx.workspaceId, scopedKey, SEND_ATTEMPT_VERB, JSON.stringify(attempt), ctx.clock.now());
+      .run(ctx.workspaceId, scopedKey, scope, JSON.stringify(attempt), ctx.clock.now());
   });
 }
 
 /** Clear the attempt record: only ever after a transport said, definitively, that nothing was sent. */
 function clearSendAttempt(ctx: WorkspaceContext, scopedKey: string): void {
+  const scope = ctx.store.idempotencyScope(SEND_ATTEMPT_VERB);
   ctx.store.tx(() => {
     ctx.store.db
       .prepare('DELETE FROM idempotency WHERE workspace_id = ? AND verb = ? AND key = ?')
-      .run(ctx.workspaceId, SEND_ATTEMPT_VERB, scopedKey);
+      .run(ctx.workspaceId, scope, scopedKey);
   });
 }
 

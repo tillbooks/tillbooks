@@ -50,6 +50,7 @@ import eur from './vat-currency-eur.fixture.json';
  * the engine is the mechanism behind the defect family that shipped `1000 undefined` to a browser.
  */
 import listAccountsFixture from '../Accounts/list-accounts.fixture.json';
+import { composeEngine } from '../../../test-support/composeEngine';
 
 /** An account row from the recording, by its number. Throws rather than rendering `undefined`. */
 function account(number: string) {
@@ -71,7 +72,12 @@ const ok = (data: Record<string, unknown> = {}): RestResponse => ({ status: 200,
  */
 async function pickTaxCode(trigger: HTMLElement, code: string) {
   await userEvent.click(trigger);
-  const option = screen.getAllByRole('option').find((o) => o.getAttribute('data-value') === code);
+  const options = await screen.findAllByRole('option');
+  // The shared Select marks its options with `data-value`; the journal's typeable MWST picker
+  // (TaxCodeCombobox) shows the code in its own chip. Either one carries the code.
+  const option = options.find(
+    (o) => o.getAttribute('data-value') === code || o.querySelector('.combobox__code')?.textContent === code,
+  );
   if (option === undefined) throw new Error(`the tax code list offers no ${code}`);
   await userEvent.click(option);
 }
@@ -268,28 +274,39 @@ const drawerCanned = (baseCurrency: string): Canned => ({
   vat_codes: ok({ taxCodes: TAX_CODES }),
   list_cost_centers: ok({ costCenters: [] }),
   get_company_profile: ok({ profile: { creditorIban: null, baseCurrency } }),
-  vat_preview: VAT_PREVIEW,
+  // The composer asks the REAL engine (D152 amendment); its caption is denominated in the base currency.
+  compose_entry: composeEngine(),
 });
 
 describe('EntryDrawer hands the VAT controls the WORKSPACE base currency (A11-G2)', () => {
+  /**
+   * The A1 composer's manual path (a line on 2200 turns the derivation off), where the tagged revenue
+   * line is its net base and the shared `LineVatReadout` reads that net's tax and gross. The pinned
+   * preview is the net 1'500.00 line, so the readout carries the fixture's figures verbatim.
+   */
   async function openDrawerWithATaxedLine(baseCurrency: string) {
     const rendered = renderJournal(drawerCanned(baseCurrency));
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Split' }));
     // F-03 (J3.7): the account field is a typeable combobox; pick by typing the number, then Enter.
-    const accountField = await within(dialog).findByLabelText('Account 1');
-    await userEvent.clear(accountField);
-    await userEvent.type(accountField, BUERO.number);
-    await userEvent.keyboard('{Enter}');
+    const pick = async (label: string, number: string) => {
+      const field = await within(dialog).findByLabelText(label);
+      await userEvent.clear(field);
+      await userEvent.type(field, number);
+      await userEvent.keyboard('{Enter}');
+    };
+    await pick('Account 1', BUERO.number);
     await userEvent.type(within(dialog).getByLabelText('Credit 1'), '1500.00');
-    await pickTaxCode(within(dialog).getByLabelText('Tax code 1'), 'UST81');
+    await pick('Account 2', account('2200').number);
+    await pickTaxCode(within(dialog).getByRole('button', { name: /^VAT 1(,|$)/ }), 'UST81');
     return { ...rendered, dialog };
   }
 
   it('labels the drawer VAT in CHF when the books are kept in francs', async () => {
     const { dialog } = await openDrawerWithATaxedLine('CHF');
     expect(await within(dialog).findByText(/VAT CHF 121\.50/)).toBeInTheDocument();
-    expect(within(dialog).getAllByText('CHF 121.50')).toHaveLength(2);
+    expect(within(dialog).getByText(/Gross CHF 1'621\.50/)).toBeInTheDocument();
   });
 
   it('labels it EUR when the books are kept in EUR, which no hardcoded CHF can satisfy', async () => {
@@ -298,8 +315,8 @@ describe('EntryDrawer hands the VAT controls the WORKSPACE base currency (A11-G2
     // (a required prop fed a constant) cannot pass, which is the point of asserting it at all.
     const { dialog } = await openDrawerWithATaxedLine('EUR');
     expect(await within(dialog).findByText(/VAT EUR 121\.50/)).toBeInTheDocument();
-    expect(within(dialog).getAllByText('EUR 121.50')).toHaveLength(2);
-    expect(within(dialog).queryByText('CHF 121.50')).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/Gross EUR 1'621\.50/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/CHF 121\.50/)).not.toBeInTheDocument();
   });
 
   it('reads the base currency in flight rather than assuming one, before any figure appears', async () => {

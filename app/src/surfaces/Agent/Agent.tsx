@@ -18,7 +18,7 @@
  *    `list_agent_sessions`): the runtime mode and endpoint, a copy-paste client config, and the
  *    recently connected clients.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useT, useI18n, formatDate } from '../../i18n';
@@ -34,7 +34,9 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Tabs, type TabItem } from '../../components/Tabs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { CopyButton } from '../../components/CopyButton';
+import { ActionFeedback } from '../../components/ActionFeedback';
 import { MCP_ENDPOINT } from '../../lib/mcp-transport';
+import { connectSnippet, studioVersion } from './connectSnippet';
 import { TurnList } from './TurnList';
 import { VorschlagCard } from './VorschlagCard';
 import {
@@ -50,6 +52,8 @@ import {
   parseTrust,
   type AgentSessionDetail,
   type AgentSessionRow,
+  DECIDED_MESSAGE,
+  VORSCHLAG_STALE,
   type DraftedAction,
   type TrustRow,
   type TrustSummary,
@@ -229,6 +233,18 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
   const [error, setError] = useState<Err | undefined>(undefined);
   const [actions, setActions] = useState<DraftedAction[]>([]);
   const [busy, setBusy] = useState(false);
+  // The Commit moment (D122 D-I) for a decision: the card leaves the queue with the re-read (no exit
+  // animation on a list item), so the acknowledgement lands on the banner that names the outcome, as
+  // the bank inbox does for the same two verbs. The `id` re-mounts it, so each approval lands again.
+  const [decided, setDecided] = useState<{ id: number; kind: 'approved' | 'rejected' | 'stale' } | null>(null);
+  const decidedSeq = useRef(0);
+
+  // A decision belongs to the workspace it was made in: a switch drops its banner, and an answer that
+  // lands after the switch is discarded (§H-TENANT in the DOM, as the dock does). The ref is the
+  // workspace on screen NOW; the closure of an in-flight `decide` still holds the one it began under.
+  const activeWs = useRef(workspaceId);
+  activeWs.current = workspaceId;
+  useEffect(() => setDecided(null), [workspaceId]);
 
   const load = useCallback(async () => {
     if (workspaceId === null) return;
@@ -255,14 +271,26 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
       reason?: string,
     ) => {
       if (workspaceId === null || busy) return;
+      const ws = workspaceId;
       setBusy(true);
-      await client.call(verb, {
-        workspaceId,
+      setDecided(null);
+      const res = await client.call(verb, {
+        workspaceId: ws,
         actionId,
         ...(allowFuture ? { allowFuture: true } : {}),
         ...(reason !== undefined ? { reason } : {}),
       });
       setBusy(false);
+      // A switch overtook the answer: neither its banner nor a re-read of the OLD queue may paint the
+      // workspace now on screen (that one's own load already ran on the switch).
+      if (activeWs.current !== ws) return;
+      if (!isErr(res.body)) {
+        setDecided({ id: ++decidedSeq.current, kind: verb === 'approve_drafted_action' ? 'approved' : 'rejected' });
+      } else if (res.body.error === VORSCHLAG_STALE) {
+        // N1: the record changed after the proposal; nothing ran and the row is void. Say so, since
+        // the card leaves the queue with the re-read below.
+        setDecided({ id: ++decidedSeq.current, kind: 'stale' });
+      }
       void load();
     },
     [busy, client, load, workspaceId],
@@ -272,13 +300,27 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
   if (state === 'error') return <ErrorBanner error={error} context="read" onRetry={() => void load()} />;
   // The empty state is checked against the SAME list the success state renders (design §3f). K-33:
   // a proposal only ever comes from a connected agent, so the way forward is the connection.
+  const ack: ReactNode =
+    decided === null ? null : (
+      <ActionFeedback
+        key={decided.id}
+        tone={decided.kind === 'approved' ? 'success' : decided.kind === 'stale' ? 'warn' : 'info'}
+        message={t(DECIDED_MESSAGE[decided.kind])}
+        landed={decided.kind === 'approved'}
+        onDismiss={() => setDecided(null)}
+        dismissLabel={t('agent.card.ackDismiss')}
+      />
+    );
   if (actions.length === 0) {
     return (
-      <EmptyState
-        title={t('agent.queue.empty')}
-        hint={t('agent.queue.emptyHint')}
-        action={onConnect !== undefined ? { label: t('agent.archive.empty.action'), onClick: onConnect } : undefined}
-      />
+      <>
+        {ack}
+        <EmptyState
+          title={t('agent.queue.empty')}
+          hint={t('agent.queue.emptyHint')}
+          action={onConnect !== undefined ? { label: t('agent.archive.empty.action'), onClick: onConnect } : undefined}
+        />
+      </>
     );
   }
 
@@ -294,11 +336,19 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
     />
   );
 
-  if (actions.length <= QUEUE_GROUP_THRESHOLD) return <div className="agent-queue">{actions.map(card)}</div>;
+  if (actions.length <= QUEUE_GROUP_THRESHOLD) {
+    return (
+      <div className="agent-queue">
+        {ack}
+        {actions.map(card)}
+      </div>
+    );
+  }
   const geld = actions.filter((a) => (GELD_CAPABILITIES as readonly string[]).includes(a.dialCapability ?? ''));
   const system = actions.filter((a) => !(GELD_CAPABILITIES as readonly string[]).includes(a.dialCapability ?? ''));
   return (
     <div className="agent-queue">
+      {ack}
       <h2 className="agent-group-head">{t('agent.queue.group.geld')}</h2>
       {geld.map(card)}
       <h2 className="agent-group-head">{t('agent.queue.group.system')}</h2>
@@ -568,6 +618,8 @@ interface ConnStatus {
   mode: string;
   host: string | null;
   port: number | null;
+  /** The ledger file this process opened (P0.5a): the path the generated config pins the agent to. */
+  dbPath: string | null;
 }
 
 /**
@@ -611,11 +663,12 @@ function Verbindung() {
       const res = await client.call('delivery_status');
       if (!live) return;
       if (!isErr(res.body)) {
-        const body = res.body as unknown as { mode?: unknown; host?: unknown; port?: unknown };
+        const body = res.body as unknown as { mode?: unknown; host?: unknown; port?: unknown; dbPath?: unknown };
         setStatus({
           mode: typeof body.mode === 'string' ? body.mode : '',
           host: typeof body.host === 'string' ? body.host : null,
           port: typeof body.port === 'number' ? body.port : null,
+          dbPath: typeof body.dbPath === 'string' ? body.dbPath : null,
         });
       }
     })();
@@ -651,18 +704,11 @@ function Verbindung() {
     };
   }, [client, workspaceId]);
 
-  // The copy-paste stdio entry: a client (Claude Desktop, Cursor) starts TILL with `till mcp`. The
-  // exact string is what lands on the clipboard; pretty-printed so it pastes cleanly into a config.
-  const stdioConfig = [
-    '{',
-    '  "mcpServers": {',
-    '    "till": {',
-    '      "command": "till",',
-    '      "args": ["mcp"]',
-    '    }',
-    '  }',
-    '}',
-  ].join('\n');
+  // P0.5a: the copy-paste stdio entry is GENERATED from this running instance: the docs' form
+  // (`tillbooks`, `npx -y ... mcp`), pinned to this build, with `TILL_DB_PATH` set to the ledger this
+  // process opened, so the agent cannot open a different book than the one on this screen. The exact
+  // string is what lands on the clipboard.
+  const snippet = connectSnippet({ dbPath: status?.dbPath ?? null, version: studioVersion() });
   const httpUrl =
     status !== null && status.host !== null && status.port !== null
       ? `http://${status.host}:${status.port}${MCP_ENDPOINT}`
@@ -698,13 +744,25 @@ function Verbindung() {
 
       <section className="agent-connect-section">
         <h2 className="agent-group-head">{t('agent.connect.config.heading')}</h2>
-        <p className="agent-connect-hint">{t('agent.connect.config.hint')}</p>
-        <div className="agent-connect-config">
-          <pre className="agent-connect-code">
-            <code>{stdioConfig}</code>
-          </pre>
-          <CopyButton value={stdioConfig} label={t('agent.connect.config.copy')} />
-        </div>
+        {snippet.kind === 'memory' ? (
+          <p className="agent-connect-hint">{t('agent.connect.config.memory')}</p>
+        ) : (
+          <>
+            <p className="agent-connect-hint">{t('agent.connect.config.hint')}</p>
+            <div className="agent-connect-config">
+              <pre className="agent-connect-code">
+                <code>{snippet.json}</code>
+              </pre>
+              <CopyButton value={snippet.json} label={t('agent.connect.config.copy')} />
+            </div>
+            {snippet.dbPath !== null && (
+              <p className="agent-connect-hint">
+                {t('agent.connect.config.samePath')} <code className="agent-connect-url">{snippet.dbPath}</code>
+              </p>
+            )}
+            <p className="agent-connect-hint">{t('agent.connect.config.approve')}</p>
+          </>
+        )}
       </section>
 
       <section className="agent-connect-section">

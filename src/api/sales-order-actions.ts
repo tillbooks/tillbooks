@@ -31,11 +31,12 @@ import {
   issueDeliveryNote,
   renderDeliveryNote,
 } from '../core/sales/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface SalesOrderActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,
@@ -85,7 +86,7 @@ export function salesOrderActions(h: SalesOrderActionHelpers): readonly ActionDe
   return [
     ctxAction(
       'sales_order_create',
-      'write',
+      'write:correctable:internal',
       'Lege einen Auftrag an: a sales order on a C00 contact with D00 item lines. Each item line is priced once through D00 (contact list, segment list, item base) and its tax code resolved once through the item A05 default, then both are snapshotted as literals on the so_line (the freeze, H-VAT-TRACE). POSTS NOTHING and touches no stock: a sales order is a confirmed demand, not a document. A EUR order snapshots the CHF/txn fx_rate for the H-FX trace. An order with zero lines is a legal draft (confirm refuses an empty order); a foreign contact/item id is refused (invalid_reference / unknown_item).',
       ctxSchema(
         {
@@ -104,35 +105,35 @@ export function salesOrderActions(h: SalesOrderActionHelpers): readonly ActionDe
     ),
     ctxAction(
       'sales_order_from_quote',
-      'write',
+      'write:correctable:internal',
       'Wandle eine angenommene Offerte in einen Auftrag um: reads the accepted C02 quote and copies its FROZEN lines (item, qty, price, tax_code travel unchanged, the VAT trace) into a new draft order linked by quote_id. Idempotent and single-order: converting the same quote twice returns the FIRST order, never a second. A non-accepted quote is refused (quote_not_accepted).',
       ctxSchema({ quoteId: STR, idempotencyKey: STR }, ['quoteId']),
       (ctx, input) => salesOrderFromQuote(ctx, as(input)),
     ),
     ctxAction(
       'sales_order_confirm',
-      'write',
+      'write:final:internal',
       'Bestätige einen Auftrag (draft -> confirmed): snapshots stock allocation. Every non-stock (service, free-text) line is auto-delivered on confirmation with NO stock movement, which is what makes it invoiceable without a delivery note; a stock line gets backorder_qty = max(0, ordered - D01 on-hand). A pure-service order advances straight to delivered, a mixed order to partially_delivered, an all-stock order stays confirmed. An empty order is refused (no_lines); a non-draft order is refused (invalid_transition).',
       ctxSchema({ salesOrderId: STR, idempotencyKey: STR }, ['salesOrderId']),
       (ctx, input) => confirmSalesOrder(ctx, as(input)),
     ),
     ctxAction(
       'sales_order_cancel',
-      'write',
+      'write:correctable:internal',
       'Storniere einen Auftrag (draft|confirmed -> cancelled): keeps open-order lists honest. An order with any ISSUED delivery note is refused with has_deliveries, because shipped goods come back only through an explicit D01 return movement, never by erasing the order (H-AUDIT).',
       ctxSchema({ salesOrderId: STR, idempotencyKey: STR }, ['salesOrderId']),
       (ctx, input) => cancelSalesOrder(ctx, as(input)),
     ),
     ctxAction(
       'sales_order_invoice',
-      'write',
+      'write:correctable:internal',
       'Erstelle eine Rechnung aus einem Auftrag (P8, lands as an A11 DRAFT): collects the delivered-but-uninvoiced qty (including confirm-time auto-delivered service lines) and delegates to A10 createDocument (type invoice). D03 mints NO journal entry and stores no totals: A11 -> A02 own the posting at issue (P3). Each invoiced portion is one so_line_invoice link row, so a line invoiced across two partial invoices carries two rows; the invoiceable remainder is pre-checked, so a fully-invoiced line writes ZERO rows and returns nothing_to_invoice. NO DOUBLE-BILLING.',
       ctxSchema({ salesOrderId: STR, actor: STR, idempotencyKey: STR }, ['salesOrderId']),
       (ctx, input) => salesOrderInvoice(ctx, as(input)),
     ),
     ctxAction(
       'delivery_note_create',
-      'write',
+      'write:correctable:internal',
       'Erstelle einen Lieferschein: drafts a delivery note for a confirmed order`s stock-tracked lines from one D01 location. With no explicit lines it defaults to each line`s undelivered qty; an explicit line may ship less (a partial). Issues nothing and moves no stock. Over-delivery (qty over the outstanding remainder) is refused with over_delivery naming the outstanding qty; a zero/fractional qty is refused (invalid_qty).',
       ctxSchema(
         { salesOrderId: STR, locationId: STR, lines: DN_LINES, idempotencyKey: STR },
@@ -142,14 +143,14 @@ export function salesOrderActions(h: SalesOrderActionHelpers): readonly ActionDe
     ),
     ctxAction(
       'delivery_note_issue',
-      'write',
+      'write:final:statutory',
       'Liefere aus (P8, stock leaves the shelf): issues a drafted delivery note. Mints ONE D01 issue movement per line through stock.move (OP2, D03 never writes stock_movement itself), stores each stock_movement_id, raises delivered_qty and advances the order (partially_delivered / delivered). Atomic and idempotent: over-delivery and insufficient stock are pre-checked (a refusal writes zero rows), a D01 refusal rolls the whole note back, and a retry re-issues nothing. carries actor for the audit trail.',
       ctxSchema({ deliveryNoteId: STR, actor: STR, idempotencyKey: STR }, ['deliveryNoteId']),
       (ctx, input) => issueDeliveryNote(ctx, as(input)),
     ),
     ctxAction(
       'delivery_note_render',
-      'write',
+      'write:final:derived',
       'Drucke / lade den Lieferschein (local artifact, OP4): renders the Lieferschein PDF for an ISSUED note, files it in E00 (entity_kind delivery_note) and locks OR 958f retention off the shipment date. The PDF carries NO VAT statement (a delivery note is a Beleg, not a taxable document; MWST arises on the A11 invoice). Idempotent: a re-render returns the existing E00 document, one Beleg per note. A draft note is refused (not_issued). The OSS core renders and files, then STOPS; emailing it is cloud-tier.',
       ctxSchema({ deliveryNoteId: STR, idempotencyKey: STR }, ['deliveryNoteId']),
       (ctx, input) => renderDeliveryNote(ctx, as(input)),

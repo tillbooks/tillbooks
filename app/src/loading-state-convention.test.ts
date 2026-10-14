@@ -299,6 +299,18 @@ function exemptionReason(block: Block): string | null {
  */
 const EXEMPTIONS: { file: string; title: string; reason: string }[] = [
   {
+    file: 'surfaces/Uebersicht/BankBand.test.tsx',
+    title: 'RUNNING: a fetch under way keeps the page usable and the button says it is running',
+    reason:
+      "aria-busy here is the fetch button's RUNNING state carried by the answered bank_inbox tile (syncInProgress), not a loading affordance; the hover card it asserts can only exist after dashboard_tile really answered.",
+  },
+  {
+    file: 'surfaces/Uebersicht/BankBand.test.tsx',
+    title: 'JETZT ABRUFEN while another fetch runs: the refusal in words on the mark and announced, never a silent join',
+    reason:
+      'the role=status here is the fetch RESULT live region, not a loading affordance; the refusal it asserts can only exist after dashboard_tile and bank_sync really answered.',
+  },
+  {
     file: 'surfaces/Migration/Migration.test.tsx',
     title: 'renders the shared no-workspace state, not a permanent skeleton, when no workspace is selected',
     reason:

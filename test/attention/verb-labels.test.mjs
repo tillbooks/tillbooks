@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 import { DIAL_CAPABILITY_FOR_ACTION, CONSEQUENCE_FOR_ACTION } from '../../dist/core/agent/index.js';
+import { CONSEQUENCE_ENTRY_FOR_ACTION } from '../../dist/core/agent/dialMap.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const readJson = (rel) => JSON.parse(readFileSync(path.join(ROOT, rel), 'utf8'));
@@ -42,6 +43,9 @@ for (const locale of ['de-CH', 'en']) {
 test('every dial-governed verb carries an engine consequence sentence (the D118 C4 source the hub resolves)', () => {
   const missing = Object.keys(DIAL_CAPABILITY_FOR_ACTION).filter((verb) => typeof CONSEQUENCE_FOR_ACTION[verb] !== 'string');
   assert.deepEqual(missing, []);
+  // D156: and in BOTH locales, from the one engine catalogue (the Studio catalogues carry no copy).
+  const noGerman = Object.keys(DIAL_CAPABILITY_FOR_ACTION).filter((verb) => typeof CONSEQUENCE_ENTRY_FOR_ACTION[verb]?.['de-CH'] !== 'string');
+  assert.deepEqual(noGerman, []);
 });
 
 test('de-CH verb labels use real umlauts and never a sharp s', () => {

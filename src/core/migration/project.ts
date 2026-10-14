@@ -22,7 +22,8 @@ import { createHash } from 'node:crypto';
 import type { WorkspaceContext } from '../context.js';
 import type { Result } from '../result.js';
 import { err, ok } from '../result.js';
-import { AGENT_ACTOR } from '../access/actors.js';
+import { isGovernedSeat } from '../access/capability.js';
+import type { SqliteStore } from '../store/sqlite-store.js';
 import { applySavedView } from '../customization/views.js';
 import {
   MWST_METHODS,
@@ -91,9 +92,17 @@ export function isSignoffKind(v: unknown): v is SignoffKind {
   return typeof v === 'string' && (SIGNOFF_KINDS as readonly string[]).includes(v);
 }
 
-/** A human principal is any actor that is not the automated agent seat and not the system seat. */
-export function actorIsHuman(actor: unknown): boolean {
-  return typeof actor === 'string' && actor !== AGENT_ACTOR && actor !== 'system';
+/**
+ * A human principal is any actor that is not a GOVERNED seat and not the system seat.
+ *
+ * The governed-seat test is the ONE rule the dial, the trace and every other human-only check read
+ * (`isGovernedSeat`, `capability.ts`): the local `agent` actor, OR a served member whose `user` row is
+ * of kind `agent`. Until D156 this compared the actor string with `agent` alone, so a served agent
+ * member (`member:<user_id>`) read as human and recorded G20 sign-offs (the F-08 defect `isAgentSeat`
+ * had, one module over).
+ */
+export function actorIsHuman(store: SqliteStore, actor: unknown): boolean {
+  return typeof actor === 'string' && actor.length > 0 && actor !== 'system' && !isGovernedSeat(store, actor);
 }
 
 // --- Row types ----------------------------------------------------------------------------------
@@ -607,7 +616,7 @@ export function projectRecordSignoff(
 
   // THE HUMAN-ONLY REFUSAL (P8, spec law): every kind is a human act. A sign-off is not draftable: an
   // agent (or the system seat) is refused rather than staged, whatever capability it holds.
-  if (!actorIsHuman(ctx.actor)) {
+  if (!actorIsHuman(ctx.store, ctx.actor)) {
     return err('signoff_needs_human', { kind: input.kind, actor: ctx.actor });
   }
 

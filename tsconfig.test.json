@@ -68,5 +68,7 @@
     "checkJs": false,
     "noImplicitAny": false
   },
-  "include": ["test/**/*.mjs"]
+  // D159: `test/types/` holds TypeScript NEGATIVE type tests (`@ts-expect-error` that must be used),
+  // judged here so `npm run typecheck` fails the moment a refused shape starts compiling.
+  "include": ["test/**/*.mjs", "test/types/**/*.ts"]
 }

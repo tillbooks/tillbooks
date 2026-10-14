@@ -29,16 +29,16 @@ export function ConfirmDialog({ message, confirmLabel, cancelLabel, onConfirm, o
   return (
     <div className="acc-confirm-overlay" role="presentation" onClick={onCancel}>
       <div
-        className="acc-confirm panel"
+        className="acc-confirm panel motion-reveal--center"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(event) => event.stopPropagation()}
       >
-        <p id={titleId} className="acc-confirm-message">
+        <p id={titleId} className="acc-confirm-message" data-motion-item="1">
           {message}
         </p>
-        <div className="acc-confirm-foot">
+        <div className="acc-confirm-foot" data-motion-item="2">
           <button type="button" className="btn btn--secondary" onClick={onCancel}>
             {cancelLabel ?? t('account.cancel')}
           </button>

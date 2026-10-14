@@ -41,8 +41,8 @@ import type { Result, Err } from '../result.js';
  * with a string index signature, which the shaped interfaces below deliberately do not have.
  */
 type Computed$<T> = { readonly ok: true; readonly value: T } | Err;
-import { postEntry } from '../ledger/postEntry.js';
-import { reverseEntry } from '../ledger/reverseEntry.js';
+import { postEntryInternalChecked } from '../ledger/innerPosting.js';
+import { reverseOwnedEntry, INVENTORY_VALUATION_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
 import { inventoryValuationPreview, resolveMethodAt } from './valuationPolicy.js';
 import { normaliseMethod, VALUATION_METHODS } from './valuation.js';
 import type { ValuationMethod } from './valuation.js';
@@ -667,13 +667,13 @@ export function inventoryValuationPost(ctx: WorkspaceContext, input: ValuationPo
 
       let journalEntryId: string | null = null;
       if (plan.lines.length > 0) {
-        const posted = postEntry(ctx, {
+        const posted = postEntryInternalChecked(ctx, {
           date: run.as_of,
           source: RUN_SOURCE,
           description: 'Bestandesbewertung (Inventar -> Hauptbuch)',
           lines: plan.lines,
           idempotencyKey: `${input.idempotencyKey}-post`,
-        });
+        }, 'inventory_valuation_post_internal');
         if (!posted.ok) throw new PostFailure(posted);
         journalEntryId = posted.entryId;
       }
@@ -740,7 +740,7 @@ export function inventoryValuationReverse(ctx: WorkspaceContext, input: Valuatio
 
       let reversingId: string | null = null;
       if (fresh.journal_entry_id !== null) {
-        const reversed = reverseEntry(ctx, {
+        const reversed = reverseOwnedEntry(ctx, {
           entryId: fresh.journal_entry_id,
           // Dated at the run's cut-off, not today: the delta of every later run is measured against
           // the GL balance AS OF a cut-off, so a future-dated reversal would leave the GL at that
@@ -749,7 +749,7 @@ export function inventoryValuationReverse(ctx: WorkspaceContext, input: Valuatio
           date: fresh.as_of,
           idempotencyKey: `${input.idempotencyKey}-rev`,
           description: 'Bestandesbewertung Storno',
-        });
+        }, INVENTORY_VALUATION_REVERSAL_OWNER);
         if (!reversed.ok) throw new PostFailure(reversed);
         reversingId = reversed.reversalId;
       }
@@ -864,13 +864,13 @@ export function inventoryValuationOpening(ctx: WorkspaceContext, input: Valuatio
       const plan = buildJournalPlan(ctx, runLines, asOf, changeAccountId);
       let journalEntryId: string | null = null;
       if (plan.lines.length > 0) {
-        const posted = postEntry(ctx, {
+        const posted = postEntryInternalChecked(ctx, {
           date: asOf,
           source: RUN_SOURCE,
           description: 'Eröffnungsbewertung Inventar',
           lines: plan.lines,
           idempotencyKey: `${input.idempotencyKey}-post`,
-        });
+        }, 'inventory_valuation_opening_internal');
         if (!posted.ok) throw new PostFailure(posted);
         journalEntryId = posted.entryId;
       }

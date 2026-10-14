@@ -32,11 +32,12 @@ import {
   postFxRevaluation,
   reverseFxRevaluation,
 } from '../core/fx/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -51,7 +52,7 @@ export function fxActions(h: ActionHelpers): ActionDef[] {
   return [
     ctxAction(
       'record_exchange_rate',
-      'write',
+      'write:correctable:books',
       "Record a foreign-currency rate (§H-FX). `rate` is a DECIMAL STRING and is the price of one unit of `baseCurrency` in the workspace base currency, so EUR/CHF 0.9412 means 1 EUR = 0.9412 CHF. `asOf` is the date the rate is valid FOR. `method` names the admissible MWSTV Art. 45 basis (daily | monthly_avg | bank | group). Recording the same rate twice is one row; a different rate under the same date and source is refused, because it may already have priced a posted entry.",
       ctxSchema(
         {
@@ -84,7 +85,7 @@ export function fxActions(h: ActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'set_fx_method',
-      'write',
+      'write:reversible:statutory',
       "Elect the MWSTV Art. 45 conversion basis for a Steuerperiode: `daily` (Tageskurs, Devisenkurs Verkauf), `monthly_avg` (Monatsmittelkurs) or `group` (Konzernumrechnungskurs, group members only). `taxPeriod` is a calendar year (MWSTG Art. 34 Abs. 2) and defaults to the current one. The election carries forward until it is changed. Art. 45 Abs. 5 binds it for at least one Steuerperiode, so it may only be written while that period, and every period after it, still holds no posted foreign-currency entry. `bank` (Abs. 3bis) is not electable: it is the mandated fallback for currencies the ESTV publishes no rate for and stays admissible under every election.",
       ctxSchema({ method: STR, taxPeriod: STR }, ['method']),
       (ctx, input) => setFxMethod(ctx, input as never),
@@ -105,7 +106,7 @@ export function fxActions(h: ActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'import_exchange_rates',
-      'write',
+      'write:correctable:books',
       "Import a published BAZG rate payload into the rate store as `source='rate_api'`. `payload` is the response body from the endpoint `describe_rate_feed` names, verbatim. The payload identifies its own series; pass `series` to have a mis-paired payload refused rather than mis-dated. Daily rates are stored on each date in the payload's validity window (not on the determination date), monthly averages once on the first of their month, and per-unit quotations (100, 1000, 10000) are scaled. A published rate TILL cannot hold exactly at twelve decimal places is reported rather than rounded; the whole BAZG daily series is within that (its deepest is nine places).",
       ctxSchema(
         { payload: STR, series: STR, currencies: { type: 'array' }, idempotencyKey: STR },
@@ -122,14 +123,14 @@ export function fxActions(h: ActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'post_fx_revaluation',
-      'write',
+      'write:correctable:books',
       "Post the period-end UNREALISED currency gain/loss as a balanced entry (source `fx`) plus its next-period reversal, atomically. The unrealised difference books to account 6949 against each revalued position, and the entry auto-reverses on the first day of the next period so the REALISED figure at settlement (A14/A18) is never double-counted. Idempotent per `periodEnd`: a re-post with the same key replays, a different key returns `already_posted`, a zero-diff period posts nothing. Refuses `needs_rate` when any open FC position lacks a closing rate, and `period_locked` for a locked target period (A03).",
       ctxSchema({ periodEnd: STR, idempotencyKey: STR }, ['periodEnd', 'idempotencyKey']),
       (ctx, input) => postFxRevaluation(ctx, input as never),
     ),
     ctxAction(
       'fx_revaluation_reverse',
-      'write',
+      'write:final:books',
       "Revert a posted FX revaluation run (D129 Q2): books the mirror of the revaluation entry dated the period end (`source` `fx`) plus its own next-day reversal, atomically, so every position and account 6949 net to zero on both dates and nothing is edited. `runId` is the run `post_fx_revaluation` returned. Refuses `not_posted` for a run that posted nothing, `already_reversed`, `later_run_exists` naming the later period end whose run still stands (revert newest first), and `period_locked` for a locked period. Idempotent on `idempotencyKey`.",
       ctxSchema({ runId: STR, idempotencyKey: STR }, ['runId', 'idempotencyKey']),
       (ctx, input) => reverseFxRevaluation(ctx, input as never),

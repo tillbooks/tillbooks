@@ -34,6 +34,7 @@
 import type { Err, Ok, OkFields, Result } from '../../../src/core/result';
 
 import { mcpTransport } from './mcp-transport';
+import { guardStudioKey, studioKeyHeaders } from './studio-key';
 import type { ActionPayloads } from './payloads';
 
 export type { Err, Ok, OkFields, Result };
@@ -76,12 +77,13 @@ export function isErr<T extends OkFields>(body: Result<T>): body is Err {
  * a thrown exception, so callers always get a readable state.
  */
 export function fetchTransport(baseUrl = ''): Transport {
-  return async (action, input) => {
+  const post = async (action: string, input: Record<string, unknown>): Promise<RestResponse> => {
     let response: Response;
     try {
       response = await fetch(`${baseUrl}/api/${action}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        // The Studio key is the seat (`./studio-key`): without it the REST bridge refuses the call.
+        headers: { 'content-type': 'application/json', ...studioKeyHeaders() },
         body: JSON.stringify(input ?? {}),
       });
     } catch (cause) {
@@ -101,6 +103,8 @@ export function fetchTransport(baseUrl = ''): Transport {
       };
     }
   };
+  // A refused key (none, or one from an earlier start) puts the notice up once and stops the requests.
+  return guardStudioKey(post);
 }
 
 /** A thin, testable client over a `Transport`. */

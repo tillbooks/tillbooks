@@ -1,13 +1,13 @@
 {
   "nav": {
-    "procurementAnalytics": "Auswertungen"
+    "procurementAnalytics": "Einkaufsauswertung"
   },
   "procurement": {
     "analytics": {
-      "title": "Einkaufs-Auswertungen",
+      "title": "Einkaufsauswertung",
       "subtitle": "Offene Verpflichtungen, Abgleich-Ausnahmen, Ausgaben, Lieferanten-Scorecards und GR/IR-Abgrenzung, aus einem strukturierten Aufruf.",
       "reportsLabel": "Standard-Auswertungen",
-      "noWorkspace": "Wähle einen Mandanten, um die Einkaufs-Auswertungen zu sehen.",
+      "noWorkspace": "Wähle einen Mandanten, um die Einkaufsauswertung zu sehen.",
       "emptyTitle": "Nichts anzuzeigen",
       "emptyHint": "Keine passende Einkaufsaktivität für diese Auswertung und diesen Filter.",
       "from": "Von",
@@ -71,7 +71,7 @@
   },
   "help": {
     "ProcurementAnalytics": {
-      "title": "Einkaufs-Auswertungen",
+      "title": "Einkaufsauswertung",
       "body": "Auswertungen über deinen Einkauf, jede eine reine Abfrage aus der Engine: offene Bestellwerte, Abgleich-Ausnahmen, Ausgaben, Lieferantenbewertungen, die Anforderungs-Pipeline, das Verrechnungskonto zwischen Wareneingang und Rechnung, Landkosten-Abweichungen, Durchlaufzeiten und Auffälligkeiten.\n\nLinks wählst du den Bericht, rechts grenzt du den Zeitraum ein und liest die Summen und die Vorschau. Berechnet wird hier nichts: Die Seite zeigt, was die Engine liefert.",
       "concepts": [],
       "docsPath": "introduction"

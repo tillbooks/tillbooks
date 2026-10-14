@@ -436,7 +436,7 @@ describe('EbicsChannelPanel: A36 the feed and the bank-key review', () => {
     await waitFor(() => expect(calls.some((c) => c.action === 'bank_channel_connect' && c.input.confirmBankKeys === true)).toBe(true));
     const pinned = calls.find((c) => c.action === 'bank_channel_connect' && c.input.confirmBankKeys === true);
     expect(pinned?.input.expectedBankKeyHashes).toEqual(BANK_HASHES);
-    await waitFor(() => expect(screen.getByText('Bank keys confirmed. The channel is active.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Bank keys confirmed')).toBeInTheDocument());
   });
 
   it('KEY REVIEW: a set that changed since the review is a hard stop that pins nothing', async () => {
@@ -568,5 +568,48 @@ describe('EbicsChannelPanel: A37 managed (bLink) rail', () => {
     });
     // The tier-off cloud_tier code renders the honest OP4 explainer, never a stack trace.
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/optional tier your owner enables/i));
+  });
+});
+
+describe('A36 §4.7 (D150): the durable statement gap on the channel card', () => {
+  it('names the gap and its explanation instead of the jump notice, and "Close the gap" opens the repair', async () => {
+    const gap = {
+      gapId: 'bst_1:bst_4',
+      bankAccountId: 'ba_1',
+      source: 'book',
+      after: { statementRowId: 'bst_1', documentId: null, number: 211, year: 2026, fromDate: '2026-07-14', toDate: '2026-07-14' },
+      before: { statementRowId: 'bst_4', documentId: null, number: 214, year: 2026, fromDate: '2026-07-19', toDate: '2026-07-19' },
+      missing: [{ year: 2026, from: 212, to: 213 }],
+      oldYearTailUnknown: false,
+      missingDates: { from: '2026-07-15', to: '2026-07-18' },
+      chains: false,
+      differenceMinor: 50000,
+      currency: 'CHF',
+      refused: [],
+      confirmable: false,
+    };
+    const jump = { after: { number: 211, year: 2026 }, statement: { number: 214, year: 2026 }, skipped: [{ year: 2026, from: 212, to: 213 }] };
+    const channel = { ...ACTIVE_CHANNEL, accounts: [{ ...ACTIVE_CHANNEL.accounts[0], lastNumberJump: jump, statementGaps: [gap] }] };
+    const transport: Transport = async (action) => (action === 'bank_channel_status' ? ok({ channels: [channel] }) : { status: 404, body: { ok: false, error: 'x' } });
+    const repairs: [string, string][] = [];
+    render(
+      <MemoryRouter>
+        <I18nProvider initialLocale="en">
+          <WorkspaceProvider initialId="ws_test">
+            <TillClientProvider client={new TillClient(transport)}>
+              <CapabilitiesContext.Provider value={caps([CAP.pay])}>
+                <EbicsChannelPanel accounts={ACCOUNTS} onRepairGap={(a, g) => repairs.push([a, g])} />
+              </CapabilitiesContext.Provider>
+            </TillClientProvider>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Statements 212–213 are missing (15.07.2026 to 18.07.2026)')).toBeInTheDocument();
+    expect(screen.getByText(/The missing statements hold CHF 500\.00 that is not in the books yet\./)).toBeInTheDocument();
+    // The durable gap replaces the transient jump notice.
+    expect(screen.queryByText(/came after statement/)).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Close the gap' }));
+    expect(repairs).toEqual([['ba_1', 'bst_1:bst_4']]);
   });
 });

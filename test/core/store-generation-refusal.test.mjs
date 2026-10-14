@@ -1092,7 +1092,7 @@ test('F6: the writers that bypassed store.tx refuse a moved-on book and write no
     // The key-less paths ran a raw `db.transaction`, which no generation check saw.
     assert.throws(() => mergeContacts(ctx, { sourceId, targetId }), (e) => assertRefusal(e, path));
     assert.equal(b.prepare('SELECT merged_into_id FROM contact WHERE id = ?').get(sourceId).merged_into_id, null, 'no merge landed');
-    assert.throws(() => anonymiseContact(ctx, { contactId: targetId }), (e) => assertRefusal(e, path));
+    assert.throws(() => anonymiseContact(ctx, { contactId: targetId, idempotencyKey: 'gen-anon' }), (e) => assertRefusal(e, path));
     assert.equal(b.prepare('SELECT name FROM contact WHERE id = ?').get(targetId).name, 'Original AG', 'no anonymisation landed');
     assert.throws(() => importContacts(ctx, { rows: [{ partyRole: 'customer', name: 'Import Beispiel GmbH' }] }), (e) => assertRefusal(e, path));
     assert.equal(count('SELECT COUNT(*) AS n FROM contact'), contactsBefore, 'no contact was imported');

@@ -54,6 +54,7 @@ import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useCapabilities, CAP } from '../../lib/capabilities';
 import { useT, useTStrict, formatDate } from '../../i18n';
+import { useConsequence } from '../../lib/approval-tiers';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { Modal } from '../../components/Modal';
@@ -137,6 +138,8 @@ const GROUP_ORDER: readonly RegistryEntry['group'][] = ['reading', 'money', 'com
 export function Members() {
   const t = useT();
   const tStrict = useTStrict();
+  // D156: the engine's one consequence for the revoke, the sentence an approver of the same write reads.
+  const revokeConsequence = useConsequence('revoke_member');
   const client = useClient();
   const workspaceId = useWorkspaceId();
   const caps = useCapabilities();
@@ -423,7 +426,7 @@ export function Members() {
         <p id={revokeBodyId} className="members-revoke-body">
           {revokeTarget !== null && t('members.revokeConfirm.body', { name: personLabel(revokeTarget, t) })}
         </p>
-        <p className="members-revoke-consequence">{t('agent.consequenceVerb.revoke_member')}</p>
+        <p className="members-revoke-consequence">{revokeConsequence}</p>
       </Modal>
       {state.kind === 'loading' && <Skeleton rows={4} height={40} />}
 

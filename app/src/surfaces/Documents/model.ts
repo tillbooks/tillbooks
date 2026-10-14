@@ -151,6 +151,9 @@ interface DocumentCore {
   taxMinor: number;
   totalMinor: number;
   issueDate: string | null;
+  /** D164: the document-level Leistungsdatum, the Studio's "Datum" once a person stated it; null means
+   *  the issue date. A line's own `supplyDate` wins (`effectiveSupplyDate`). */
+  supplyDate?: string | null;
   dueDate: string | null;
   /**
    * The address this invoice was really emailed to, or null. Written ONLY after a transmission the
@@ -170,6 +173,35 @@ export interface HistoryEntry {
   toStatus: string;
   actor: string | null;
   at: string;
+}
+
+// --- The line date model: "Datum unless stated" (owner), with provenance by STRUCTURE (D164) -------
+//
+// A line's Leistungsdatum is stated or it is not, and WHERE a date is stored says which; nothing reads
+// a date's value to guess where it came from (critic round 4: a value cannot tell a stamp from a
+// statement). The document carries the "Datum" as its own `supplyDate` (D164), set only when a person
+// states it; a line carries a `supplyDate` only when it was stated for that line (an agent or MCP
+// caller, the person through the line's own control, or `createCreditNote`'s pin). The editor never
+// writes the Datum into a line. A date the old editor stamped on a line is indistinguishable from a
+// statement, so every stored line date is shown as one, with a way back to the Datum: nothing is ever
+// dropped silently.
+
+/** The ISO day of an ISO date or timestamp, or null. */
+function isoDay(value: string | null | undefined): string | null {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
+}
+
+/**
+ * THE one rule for the date a line is priced at, the Studio twin of the engine's `lineSupplyDate`
+ * (src/core/sales/supplyDate.ts): the line's own date, else the document's, else the issue date. The
+ * editor's preview, its answer signature and its save, and the issued detail, all read it here.
+ */
+export function effectiveSupplyDate(
+  line: { supplyDate?: string | null },
+  document: { supplyDate?: string | null },
+  issueDate: string | null,
+): string | null {
+  return isoDay(line.supplyDate) ?? isoDay(document.supplyDate) ?? isoDay(issueDate);
 }
 
 /** The i18n key segment for a type: `credit_note` -> `creditNote`. */

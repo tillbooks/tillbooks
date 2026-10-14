@@ -22,7 +22,8 @@ import type { Result } from '../result.js';
 import { CURRENCIES } from '../setup/enums.js';
 import { baseCurrencyOf } from '../fx/rates.js';
 import { applySavedView } from '../customization/views.js';
-import { firstDisallowedQrChar } from './qrbill.js';
+import { firstDisallowedQrChar, qrAddressValueIssues } from './qrbill.js';
+import { PAYMENT_TERMS_MAX_DAYS, isPaymentTermsDays } from '../setup/paymentTerms.js';
 
 /** The ESTV UID/MWST format an auditor checks verbatim (spec §6b, fixed). */
 const VAT_NUMBER_RE = /^CHE-\d{3}\.\d{3}\.\d{3} MWST$/;
@@ -60,7 +61,11 @@ export interface CreateContactInput {
   vatNumber?: string;
   email?: string;
   defaultCurrency?: string;
-  paymentTermsDays?: number;
+  /**
+   * The contact's own Zahlungsfrist in days. ABSENT (or null) stores null: no terms of its own, so a
+   * document falls due after the workspace default (D163). 0 is an explicit "due immediately".
+   */
+  paymentTermsDays?: number | null;
   description?: string;
   idempotencyKey?: string;
   // C00 CRM extension fields.
@@ -79,7 +84,8 @@ export interface ContactPatch {
   vatNumber?: string;
   email?: string;
   defaultCurrency?: string;
-  paymentTermsDays?: number;
+  /** Absent leaves the terms as stored; null clears them back to the workspace default (D163); 0 is "due immediately". */
+  paymentTermsDays?: number | null;
   // C00 CRM extension fields.
   kind?: string;
   companyContactId?: string | null;
@@ -102,7 +108,8 @@ export interface ContactRow {
   vat_number: string | null;
   email: string | null;
   default_currency: string;
-  payment_terms_days: number;
+  /** D163: null = no terms of its own (the workspace default applies), 0 = due immediately. */
+  payment_terms_days: number | null;
   archived: number;
   created_at: string;
   kind: string;
@@ -304,12 +311,45 @@ function validateContactCharset(input: {
   );
 }
 
+/** The contact input's own name for each QR address element, so a refusal names the field typed. */
+const CONTACT_FIELD_OF: Readonly<Record<string, string>> = {
+  name: 'name',
+  street: 'address.street',
+  buildingNo: 'address.houseNo',
+  postalCode: 'address.zip',
+  town: 'address.city',
+  country: 'address.country',
+};
+
+/**
+ * The QR-bill's value rules over a contact's address, from the ONE chokepoint `validateQrBill` uses
+ * (`qrAddressValueIssues`, critic phase0-installable r1, P0.4e-6): the address IS the Ultimate Debtor
+ * block, so a country that is not ISO alpha-2 (`invalid_country`) or an element over its IG maximum
+ * (`field_too_long`) is refused where it is typed. Only the elements present are judged: a contact may
+ * keep a partial address, it just gets no payment part until it is complete. The contact NAME is the
+ * debtor name (IG maximum 70) and is judged too (critic r2, R2-2b). Both `create_contact` (and so
+ * `import_contacts`, which refuses the whole file on the first bad row) and `update_contact` run it.
+ */
+function validateContactQrValues(input: { name?: string | undefined; address?: ContactAddress | undefined }): Result | null {
+  const address = input.address ?? undefined;
+  const issue = qrAddressValueIssues({
+    name: input.name,
+    ...(address !== undefined && address !== null
+      ? { street: address.street, buildingNo: address.houseNo, postalCode: address.zip, town: address.city, country: address.country }
+      : {}),
+  })[0];
+  if (issue === undefined) return null;
+  const field = CONTACT_FIELD_OF[issue.field] ?? issue.field;
+  if (issue.reason === 'not_iso_3166') return err('invalid_country', { field, country: address?.country, expected: 'ISO 3166-1 alpha-2, e.g. CH' });
+  return err('field_too_long', { field, max: issue.max });
+}
+
 /** Validate the scalar contact fields shared by create and update. Returns the first rejection. */
 function validateContactFields(input: {
   name?: string | undefined;
   vatNumber?: string | null | undefined;
   defaultCurrency?: string | undefined;
-  paymentTermsDays?: number | undefined;
+  paymentTermsDays?: number | null | undefined;
   kind?: string | undefined;
   lang?: string | null | undefined;
 }): Result | null {
@@ -322,11 +362,19 @@ function validateContactFields(input: {
   if (input.defaultCurrency !== undefined && !CURRENCIES.has(input.defaultCurrency)) {
     return err('invalid_currency', { defaultCurrency: input.defaultCurrency });
   }
+  // null is a value here (D163: "no terms of its own"), so only a number is range-checked: a whole
+  // number of days from 0 to 365, the same bound as the workspace default (critic M1).
   if (
     input.paymentTermsDays !== undefined &&
-    (!Number.isInteger(input.paymentTermsDays) || input.paymentTermsDays < 0)
+    input.paymentTermsDays !== null &&
+    !isPaymentTermsDays(input.paymentTermsDays)
   ) {
-    return err('invalid_input', { field: 'paymentTermsDays' });
+    return err('invalid_payment_terms_days', {
+      field: 'paymentTermsDays',
+      paymentTermsDays: input.paymentTermsDays,
+      min: 0,
+      max: PAYMENT_TERMS_MAX_DAYS,
+    });
   }
   if (input.kind !== undefined && !CONTACT_KIND_SET.has(input.kind)) {
     return err('invalid_contact_kind', { kind: input.kind, allowed: [...CONTACT_KINDS] });
@@ -489,6 +537,10 @@ export function createContact(ctx: WorkspaceContext, input: CreateContactInput):
   // character in behind the structured path.
   const illegal = validateContactCharset({ name, ...(address !== undefined ? { address } : {}), email: input.email });
   if (illegal) return illegal;
+  // The QR-bill's value rules, on the RESOLVED values too (critic r2, R2-2): a customer created with a
+  // country or a length the payment part refuses used to issue silently without one.
+  const outOfRule = validateContactQrValues({ name, ...(address !== undefined ? { address } : {}) });
+  if (outOfRule) return outOfRule;
 
   const kind = input.kind ?? 'company';
   // A person may name an employer; a company never does (US-C00.1). The employer must itself be a
@@ -529,7 +581,9 @@ export function createContact(ctx: WorkspaceContext, input: CreateContactInput):
         // stamped into a EUR book here is wrong once now and wrong again on every invoice afterwards.
         // The column's own `DEFAULT 'CHF'` never applies (this statement always names the column).
         input.defaultCurrency ?? baseCurrencyOf(ctx),
-        paymentTermsDays ?? 0,
+        // D163: no terms given stores NULL ("the workspace default applies"), never 0, which is the
+        // explicit "due immediately". Until generation 10 this wrote 0 for both.
+        paymentTermsDays ?? null,
         ctx.clock.now(),
         kind,
         input.companyContactId ?? null,
@@ -576,6 +630,8 @@ export function updateContact(
   if (invalid) return invalid;
   const illegal = validateContactCharset(patch);
   if (illegal) return illegal;
+  const outOfRule = validateContactQrValues({ name: patch.name, address: patch.address });
+  if (outOfRule) return outOfRule;
 
   const nextKind = patch.kind ?? existing.kind;
   // A company that employs people cannot become a person: `validateEmployer` checked the employer's

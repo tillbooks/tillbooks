@@ -70,7 +70,7 @@ test('every accounting entity kind is a kind the shared registry really knows', 
   for (const kind of ACCOUNTING_ENTITY_KINDS) {
     assert.ok(ENTITY_KIND_IDS.includes(kind), `${kind} is not a registered entity kind`);
   }
-  assert.deepEqual([...ACCOUNTING_ENTITY_KINDS], ['document', 'payment', 'journal_entry']);
+  assert.deepEqual([...ACCOUNTING_ENTITY_KINDS], ['document', 'payment', 'journal_entry', 'bank_txn']);
 });
 
 test('master data is deliberately NOT an accounting kind', () => {

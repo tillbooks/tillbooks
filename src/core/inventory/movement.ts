@@ -24,6 +24,8 @@
  *      never reach 2. "Already held" is J01's own rule (see `serialAlreadyInStock` below), and the
  *      negative-stock opt-out does not lift it: that policy is about aggregate quantity, not a
  *      licence to hold one physical unit twice.
+ *  (h) PERIOD LOCK (§H-PERIOD, D160.5): a movement dated into a locked or sealed period is refused
+ *      with `period_locked` before any row is written; a replay of an earlier key still answers.
  *
  * THE PARTIAL-WRITE TRAP (money-path). `ctx.store.tx` COMMITS a `{ok:false}` returned from inside it,
  * so every guard that could reject runs BEFORE the first INSERT: inside the transaction the negative
@@ -569,9 +571,43 @@ export function inventoryMove(ctx: WorkspaceContext, input: InventoryMoveInput):
     if (trackingErr !== undefined) return trackingErr;
   }
 
+  // What a replay must BE to count as one (K1, 04.10.2026). `stock_movement.idempotency_key` is the
+  // replay identity, and composites (inventory adjustments, landed cost, stocktake, goods receipt)
+  // mint movements under keys DERIVED from their own key or from a row id. A movement written first
+  // under such a key through the public `inventory_move` / `stock_move` verbs (another item, another
+  // quantity) used to be handed back here as the composite's own. A key reused for a DIFFERENT
+  // movement is now refused by name; only the same movement replays.
+  const replayOrConflict = (found: InventoryMovement): Result =>
+    sameMovement(found, {
+      itemId: item.id,
+      locationId: location.id,
+      lotId,
+      serialId,
+      qty,
+      movementType,
+      costAmountMinor,
+      refMovementId,
+      sourceDocumentType: input.sourceDocumentType ?? null,
+      sourceDocumentId: input.sourceDocumentId ?? null,
+    })
+      ? ok(replayResult(ctx, found))
+      : err('idempotency_key_conflict', {
+          idempotencyKey: key,
+          movementId: found.id,
+          reason: 'this key already recorded a different movement; a retry must repeat the same movement',
+        });
+
   // §H-IDEMPOTENT fast path: a replay returns the original, never a second row.
   const replay = movementByKey(ctx, key);
-  if (replay !== undefined) return ok(replayResult(ctx, replay));
+  if (replay !== undefined) return replayOrConflict(replay);
+
+  // §H-PERIOD (D160.5): on-hand as of a closed date is the Bestandesnachweis (OR 958c), so no movement
+  // is minted into a locked or sealed period. The same guard and the same structured `period_locked`
+  // refusal as `stock_move`, the J04 commit, the J05 adjustment, the I02 receipt and the I03 landed
+  // cost (each of which already asserts it before calling here). AFTER the replay (a move made while
+  // the period was open still answers its original row), BEFORE any insert (a refusal mints nothing).
+  const periodOpen = ctx.periods.assertOpen(effectiveDate);
+  if (!periodOpen.ok) return periodOpen;
 
   const raw: RawMovement = {
     itemId: item.id,
@@ -595,7 +631,7 @@ export function inventoryMove(ctx: WorkspaceContext, input: InventoryMoveInput):
     return ctx.store.tx(() => {
       // Re-check under the transaction (the race the fast path cannot see).
       const raced = movementByKey(ctx, key);
-      if (raced !== undefined) return ok(replayResult(ctx, raced));
+      if (raced !== undefined) return replayOrConflict(raced);
       // A serial is a unit of one: an INBOUND for a unit already held is refused before any write,
       // so SUM(qty) for one serial can never reach 2 (invariant g). This sits AFTER the replay
       // checks on purpose: a replay is the original movement, not a second receipt.
@@ -629,9 +665,39 @@ export function inventoryMove(ctx: WorkspaceContext, input: InventoryMoveInput):
   } catch (e) {
     // A lost idempotency race trips the unique (workspace, key) index; replay the winner's row.
     const winner = movementByKey(ctx, key);
-    if (winner !== undefined) return ok(replayResult(ctx, winner));
+    if (winner !== undefined) return replayOrConflict(winner);
     throw e;
   }
+}
+
+/** K1: is the movement a key already holds the movement this call asked for (its identity, not its id)? */
+function sameMovement(
+  found: InventoryMovement,
+  asked: {
+    itemId: string;
+    locationId: string;
+    lotId: string | null;
+    serialId: string | null;
+    qty: number;
+    movementType: string;
+    costAmountMinor: number | null;
+    refMovementId: string | null;
+    sourceDocumentType: string | null;
+    sourceDocumentId: string | null;
+  },
+): boolean {
+  return (
+    found.itemId === asked.itemId &&
+    found.locationId === asked.locationId &&
+    (found.lotId ?? null) === asked.lotId &&
+    (found.serialId ?? null) === asked.serialId &&
+    found.qty === asked.qty &&
+    found.movementType === asked.movementType &&
+    (found.costAmountMinor ?? null) === (asked.costAmountMinor ?? null) &&
+    (found.refMovementId ?? null) === asked.refMovementId &&
+    (found.sourceDocumentType ?? null) === asked.sourceDocumentType &&
+    (found.sourceDocumentId ?? null) === asked.sourceDocumentId
+  );
 }
 
 function replayResult(ctx: WorkspaceContext, movement: InventoryMovement): Record<string, unknown> {
@@ -827,6 +893,10 @@ export function inventoryTransfer(ctx: WorkspaceContext, input: InventoryTransfe
   if (replayOut !== undefined && replayOut.transferGroupId !== null) {
     return ok(transferResult(ctx, movementsByTransferGroup(ctx, replayOut.transferGroupId)));
   }
+
+  // §H-PERIOD (D160.5): the same guard as `inventoryMove`, before either leg is written.
+  const periodOpen = ctx.periods.assertOpen(effectiveDate);
+  if (!periodOpen.ok) return periodOpen;
 
   const groupId = ctx.ids.next('xfer');
   const shared = {

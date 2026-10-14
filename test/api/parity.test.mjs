@@ -50,7 +50,11 @@ test('MCP and REST produce identical Results across a representative write flow'
   // ceremony, identical on both faces): the parity claim is about the faces, not about the dial.
   // F1: a dial grant is a HUMAN act, so it runs as the studio seat on each face (identically), and
   // the parity flow below then exercises the granted agent seat.
-  for (const [name, key] of [['post', 'dial-post'], ['issue', 'dial-issue'], ['send', 'dial-send']]) {
+  // `pay` joins because `set_creditor_profile` naming an IBAN is governed at the pay tier (critic
+  // phase0-installable r1, P0.4e-5b): the creditor IBAN decides where every QR-bill is paid.
+  // D161: `vat_configure` is governed under the vat-file strong default (an MWST election decides
+  // what a return computes), so the flow grants vat-file too, explicitly and as the human.
+  for (const [name, key] of [['post', 'dial-post'], ['issue', 'dial-issue'], ['send', 'dial-send'], ['pay', 'dial-pay'], ['vat-file', 'dial-vat']]) {
     const gm = viaMcp({ ...mcp, actor: 'studio' }, 'set_agent_dial', { workspaceId, capability: name, level: 'auto', idempotencyKey: key });
     const gr = viaRest({ ...rest, actor: 'studio' }, 'set_agent_dial', { workspaceId, capability: name, level: 'auto', idempotencyKey: key });
     assert.deepEqual(gm, gr, `grant parity mismatch for ${name}`);
@@ -135,6 +139,37 @@ test('MCP and REST produce identical Results across a representative write flow'
   });
   assert.equal(badDate.ok, false);
   assert.equal(badDate.error, 'invalid_date');
+
+  // D152 amendment, `compose_entry`: the composer's read, through both faces. An intent line (a gross sale
+  // on 3400 with UST81) expands to the exact post_entry lines with the gate's verdict; the same lines then
+  // post identically, and the posted entry decomposes back to that intent on both faces.
+  const revenue = accId(mcp.store, '3400');
+  const composed = step('compose_entry', {
+    workspaceId,
+    mode: 'expand',
+    date: '2026-03-02',
+    lines: [
+      { account: revenue, side: 'credit', amount: 108100, gross: true, taxCode: 'UST81' },
+      { account: cash, side: 'debit', amount: 108100, gross: true },
+    ],
+  });
+  assert.equal(composed.ok, true);
+  assert.deepEqual(composed.verdict, { ok: true });
+  assert.equal(composed.lines[0].taxBase, 100000);
+  assert.equal(composed.lines[0].taxAmount, 8100);
+  const composedPost = step('post_entry', { workspaceId, date: '2026-03-02', source: 'manual', idempotencyKey: 'post-composed', lines: composed.lines });
+  assert.equal(composedPost.ok, true);
+  const decomposed = step('compose_entry', { workspaceId, mode: 'decompose', entryId: composedPost.entryId });
+  assert.equal(decomposed.roundTrips, true);
+  // A refused composition is the same verdict on both faces (here an unknown code on an intent line).
+  const refused = step('compose_entry', {
+    workspaceId,
+    mode: 'expand',
+    date: '2026-03-02',
+    lines: [{ account: revenue, side: 'credit', amount: 100, gross: true, taxCode: 'NOPE' }],
+  });
+  assert.equal(refused.ok, true);
+  assert.equal(refused.verdict.error, 'unknown_tax_code');
 
   const con = step('create_contact', { workspaceId, partyRole: 'customer', name: 'Kunde AG', idempotencyKey: 'con-1' });
   step('archive_contact', { workspaceId, contactId: con.contact.id });

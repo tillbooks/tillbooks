@@ -166,7 +166,10 @@ function itemLine(item: ChecklistItemView, run: ChecklistRunView, workspaceId: s
       ].join('');
       return `${head}: post through ${item.verb ?? ''} per period under that verb's own gate; the row flips by derivation when the probe ${item.probe ?? ''} finds every filed period settled. Nobody completes it by hand.${parts}${reverse}${probe}`;
     }
-    const input = `{workspaceId: "${workspaceId}", ${item.verbInput ?? 'period'}: "${item.verbInputValue ?? run.periodLabel}", idempotencyKey}`;
+    // The year run's seal (G22 §10.12, D152): close_year refuses year_close_in_progress over an open run
+    // unless the call names the run, so the seal row's call carries its runId.
+    const runArg = item.itemId === 'year_sealed' ? `, runId: "${run.runId}"` : '';
+    const input = `{workspaceId: "${workspaceId}", ${item.verbInput ?? 'period'}: "${item.verbInputValue ?? run.periodLabel}"${runArg}, idempotencyKey}`;
     return `${head}: post through ${item.verb ?? ''} ${input} under that verb's own gate; the row flips by derivation when the probe ${item.probe ?? ''} finds the artefact. Nobody completes it by hand.${reverse}${probe}`;
   }
   if (item.evidenceKind === 'validation') {
@@ -221,7 +224,10 @@ export function renderChecklistPromptText(input: RenderPromptInput): { text: str
   const lines: string[] = [];
   lines.push(`"${template.label}" checklist for ${run.periodLabel} (${run.periodStart} to ${run.periodEnd}), run ${run.runId}, status ${run.status}.`);
   if (run.status === 'abandoned') {
-    lines.push(`This run was abandoned (${run.abandonReason ?? 'no reason recorded'}). Start a new run with checklist_start if the period still needs one.`);
+    // D158: a run is unique per template and period (`checklist_run_one_per_period`), and
+    // `checklist_start` hands this abandoned run back for its period, so no new run can be started for
+    // it. Telling the agent to start one sent it into a call that returns the same abandoned run.
+    lines.push(`This run was abandoned (${run.abandonReason ?? 'no reason recorded'}). It cannot be resumed, and checklist_start for ${run.periodLabel} returns this same run, so this checklist gets no new run for that period. A run for another period is started as usual.`);
   } else if (open.length === 0) {
     lines.push('Every item is done, skipped or excluded. Nothing is open.');
   } else {

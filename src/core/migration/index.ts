@@ -121,9 +121,10 @@ export {
   diffTestmandantToLive,
   goProductive,
   discardTestmandant,
+  discardOrphanTestmandant,
   hardDeleteWorkspace,
 } from './testmandant.js';
-export type { WorkspaceKind } from './testmandant.js';
+export type { WorkspaceKind, DiscardOrphanTestmandantInput } from './testmandant.js';
 
 // --- G13 GL archive -----------------------------------------------------------------------------
 export {

@@ -20,11 +20,12 @@
 import type { ActionDef, ActionInput, ApiDeps, JsonSchema } from './registry.js';
 import type { Result } from '../core/result.js';
 import { listConcepts, getConcept } from '../core/guidance/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface GuidanceActionHelpers {
   depsAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (deps: ApiDeps, input: ActionInput) => Result,

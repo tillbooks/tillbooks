@@ -14,6 +14,7 @@ import { I18nProvider } from '../../i18n';
 import { ReverseDialog } from './ReverseDialog';
 import type { Payment } from './model';
 import getPayment from './get-payment.fixture.json';
+import { consequenceSentence } from '../../lib/approval-tiers';
 
 const PAYMENT = getPayment.payment as unknown as Payment;
 
@@ -30,9 +31,9 @@ describe('ReverseDialog', () => {
     cleanup();
     renderDialog();
     const dialog = screen.getByRole('alertdialog');
-    // The line is the same catalogue string the record/allocate confirm and the Vorschlag card show
-    // for a `pay`-governed write, resolved via the verb rather than re-authored here.
-    const line = within(dialog).getByText('Bucht eine Zahlung und gleicht offene Posten aus.');
+    // The line is the engine's own sentence for reverse_payment (D156), the one the Vorschlag card shows
+    // for the same write, resolved via the verb rather than re-authored here.
+    const line = within(dialog).getByText(consequenceSentence('reverse_payment', 'de-CH') as string);
     expect(line.closest('.consequence-line')?.getAttribute('data-verb')).toBe('reverse_payment');
   });
 

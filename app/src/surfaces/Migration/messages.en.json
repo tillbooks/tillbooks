@@ -80,7 +80,7 @@
       "prepared": "{identity}: prepared, productive from {date}",
       "selectorLabel": "Plan",
       "abandon": "Abandon the migration",
-      "abandonConfirm": "Abandon the migration? The Testmandant is discarded. Belege for steps already committed are retained."
+      "abandonConfirm": "Abandon the migration? The Testmandant these books created is deleted for good while it is still a trial (only that one); one that went productive is your books and stays. Belege for steps already committed are retained."
     },
     "source": {
       "adapter": "Format",
@@ -147,7 +147,9 @@
       "confirmLabel": "Type the company name to go productive",
       "irreversible": "This cannot be undone. The Testmandant can no longer be discarded afterwards.",
       "discard": "Discard the Testmandant",
-      "discardConfirm": "Discard the Testmandant for real? The throwaway workspace is deleted. Belege from steps that already went live are kept.",
+      "discardConfirm": "Discard the Testmandant for real? The throwaway workspace these books created is deleted; a copy never deletes the original's. Belege from steps that already went live are kept.",
+      "unlinkedOnly": "This copy no longer points at the original's Testmandant; the original keeps it.",
+      "alreadyGone": "The Testmandant was already gone; this plan no longer points at it.",
       "more": "More",
       "wentLive": "This workspace is now your real books.",
       "err": {
@@ -157,6 +159,7 @@
         "liveWorkspaceExists": "A live workspace already exists for this UID. Run the migration against it instead.",
         "confirmMismatch": "The name does not match the company's legal name.",
         "notATestmandant": "This is not a Testmandant.",
+        "notOwned": "This copy does not own the Testmandant. Only the books that created it can take it live.",
         "planAlreadyLive": "This plan is already live.",
         "generic": "That did not work. Try again."
       }
@@ -387,6 +390,8 @@
     "error": "The implementation project could not be loaded",
     "empty": "An implementation project holds the phases, decisions, sign-offs and the parallel run above the migration plan, so they survive the people who made them.",
     "continueWithout": "Continue without a project",
+    "skipped": "No implementation project. Carry on below with your export files.",
+    "createAnyway": "Create a project after all",
     "next": "Next step",
     "needsManage": "Needs the \"manage implementation\" right",
     "create": "Create implementation project",

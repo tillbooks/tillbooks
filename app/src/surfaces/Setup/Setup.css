@@ -26,6 +26,38 @@
   margin: 0;
 }
 
+/* D152: the profile and eBill panels are ONE form, submitted by the header's one Speichern. The form
+   keeps the surface's panel rhythm, so wrapping the two panels moves nothing. */
+.setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* A panel heading with its (i) beside it: the explanation that sat under the heading as a paragraph
+   is now one hover or one focus away (D152 rule 4). The 32px trigger takes its extra height out of
+   the row, the way the help trigger does, so the heading row does not grow. */
+.setup-panel-head,
+.setup-disclosure-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.setup-info {
+  display: inline-flex;
+}
+
+.setup-info-trigger {
+  margin-block: calc(-1 * var(--t-space-0-5));
+  color: var(--t-text-dim);
+}
+
+/* The explanations are sentences, so the bubble is a reading width rather than the shared 240px. */
+.setup-info .tooltip {
+  max-width: 320px;
+}
+
 /* The labelled form field, its actions row, and the control paint all come from the shared
    `.form-stack` / `.form-row` / `.form-actions` primitives in global.css. Only the address legend
    needs matching here, because it labels a fieldset rather than a row. */
@@ -82,6 +114,13 @@
   color: var(--t-text-dim);
 }
 
+/* The closed issuer block's one line ("Rechnungssteller: wie Firmenname · Strasse 1, PLZ Ort"). A
+   fact at rest, so regular weight; the open block's heading keeps the disclosure's 500. */
+.setup-disclosure-summary {
+  font-weight: 400;
+  text-align: left;
+}
+
 .setup-inline-link {
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
@@ -96,6 +135,23 @@
 }
 
 .setup-explainer {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* The eBill panel's two quiet lines: the partner-list link, and the connector state with its (i). */
+.setup-link-line {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.setup-state-line {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
   margin: 0;
   color: var(--t-text-dim);
   font-size: var(--t-font-md);

@@ -53,7 +53,8 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { requireString, requireDate } from '../ledger/inputGuards.js';
-import { postEntry, FX_SOURCE } from '../ledger/postEntry.js';
+import { FX_SOURCE } from '../ledger/postEntry.js';
+import { postEntryInternalChecked } from '../ledger/innerPosting.js';
 import type { LineInput } from '../ledger/postEntry.js';
 import { reverseOwnedEntry } from '../ledger/reverseEntry.js';
 import { baseCurrencyOf, resolveFxRate } from './rates.js';
@@ -384,13 +385,13 @@ export function postFxRevaluation(ctx: WorkspaceContext, input: PostFxRevaluatio
   // so the books never carry a revaluation without the reversal that backs it out.
   return runGuarded(() =>
     ctx.store.tx(() => {
-      const posted = postEntry(ctx, {
+      const posted = postEntryInternalChecked(ctx, {
         date: input.periodEnd,
         source: FX_SOURCE,
         idempotencyKey: `fxreval:${input.periodEnd}`,
         description: `FX-Neubewertung per ${input.periodEnd}`,
         lines,
-      });
+      }, 'post_fx_revaluation_internal');
       // The throw is the ONLY abort that rolls the tx back: a plain `return posted` would COMMIT the
       // partial writes (and memoise the failure under `fxreval:${periodEnd}`), leaving an orphan.
       if (!posted.ok) throw new FxRevalAbort(posted);
@@ -542,13 +543,13 @@ export function reverseFxRevaluation(ctx: WorkspaceContext, input: ReverseFxReva
 
   return runGuarded(() =>
     ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, 'fx_revaluation_reverse', () => {
-      const storno = postEntry(ctx, {
+      const storno = postEntryInternalChecked(ctx, {
         date: run.period_end,
         source: FX_SOURCE,
         idempotencyKey: `fxreval-storno:${run.id}:${input.idempotencyKey}`,
         description: `Storno FX-Neubewertung per ${run.period_end}`,
         lines: mirror,
-      });
+      }, 'fx_revaluation_reverse_internal');
       if (!storno.ok) throw new FxRevalAbort(storno);
 
       const stornoReversal = reverseOwnedEntry(

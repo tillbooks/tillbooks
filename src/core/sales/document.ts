@@ -17,9 +17,12 @@
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
-import { reverseEntry } from '../ledger/reverseEntry.js';
+import { reverseOwnedEntry, DOCUMENT_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
 import { statesConversionBasis } from '../ledger/postEntry.js';
 import { baseCurrencyOf } from '../fx/rates.js';
+import { isValidRateDate } from '../vat/rateEras.js';
+// D164: the one line-date rule, re-exported so the posters reach it through the module they already import.
+export { lineSupplyDate } from './supplyDate.js';
 import { ROLE_ACCOUNT_NUMBER } from '../payments/accounts.js';
 // D78: A14 owns the ONE settlement-status derivation, and the credit-note transitions call it
 // rather than restate it. A leaf-safe import: `payment.ts` imports nothing from `sales/`.
@@ -31,6 +34,7 @@ import { freezeRenderedTemplate } from '../customization/documentTemplates.js';
 // The LEAF module, never the files barrel: the barrel pulls `node:crypto` in through the upload
 // hash, and the posting paths' runtime closure is held browser-pure by `studio-sees-payloads.test.mjs`.
 import { deriveStatutoryOnPost } from '../files/postedFloor.js';
+import { dueDateFor } from '../setup/paymentTerms.js';
 
 // --- The two fixed §H-ENUM value lists this spec owns (spec §4) --------------------------------
 
@@ -170,10 +174,10 @@ function reversingPoster(): DocumentPoster {
     onIssue: (_ctx, doc) => err('posting_delegate_unregistered', { type: doc.type }),
     onCancel: (ctx, doc) => {
       if (doc.posted_entry_id === null) return ok({});
-      const reversed = reverseEntry(ctx, {
+      const reversed = reverseOwnedEntry(ctx, {
         entryId: doc.posted_entry_id,
         idempotencyKey: `doc-cancel-${doc.id}`,
-      });
+      }, DOCUMENT_REVERSAL_OWNER);
       if (!reversed.ok) return reversed;
       return ok({ reversalEntryId: reversed.reversalId });
     },
@@ -220,6 +224,9 @@ export interface DocumentRow {
   total_minor: number;
   issue_date: string | null;
   due_date: string | null;
+  /** D164: the document-level Leistungsdatum (the Studio's "Datum"); NULL means the issue date. A
+   *  line's own date wins: `lineSupplyDate` in ./supplyDate.ts is the one rule. */
+  supply_date: string | null;
   /** A11's column: who an invoice was emailed to. Null until a REAL transmission (GAP A). */
   sent_to_email: string | null;
   /** A13's column: the invoice a Gutschrift credits. NULL for every other type, and for a
@@ -289,6 +296,8 @@ export interface CreateDocumentInput {
   contactId?: string | null;
   lines?: DocumentLineInput[];
   currency?: string;
+  /** D164: the document-level Leistungsdatum, ISO day; absent or null means the issue date. */
+  supplyDate?: string | null;
   dueDate?: string | null;
   notes?: string | null;
   idempotencyKey?: string;
@@ -298,6 +307,8 @@ export interface UpdateDocumentPatch {
   contactId?: string | null;
   lines?: DocumentLineInput[];
   currency?: string;
+  /** D164: the document-level Leistungsdatum; null clears it back to the issue date. */
+  supplyDate?: string | null;
   dueDate?: string | null;
   notes?: string | null;
 }
@@ -418,6 +429,8 @@ function mapDocument(row: DocumentRow, baseCurrency: string) {
     taxMinor: row.tax_minor,
     totalMinor: row.total_minor,
     issueDate: row.issue_date,
+    // D164: the document-level Leistungsdatum, null when none was stated (the issue date applies).
+    supplyDate: row.supply_date ?? null,
     dueDate: row.due_date,
     // GAP A: A11 stores WHO an invoice was emailed to and the read model never exposed it, so M16's
     // "Versendet an kunde@example.ch" was unreachable after a reload. It is written ONLY after a
@@ -528,6 +541,17 @@ function negativeLineRejection(field: 'unitPriceMinor' | 'quantityMilli', positi
     reason:
       'a position cannot be negative: discounts are not implemented yet, so reduce the unit price or remove the position instead',
   });
+}
+
+/**
+ * D164: a document-level Leistungsdatum is held to the rule a line's date meets where it is priced
+ * (`computeLineTax`'s `isValidRateDate`), but at WRITE time: a malformed date is a structured
+ * `invalid_date` here, never a stored string that fails only at issue.
+ */
+function validateSupplyDate(value: unknown): Result | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || !isValidRateDate(value)) return err('invalid_date', { field: 'supplyDate', supplyDate: String(value) });
+  return null;
 }
 
 function validateLines(lines: DocumentLineInput[] | undefined): Result | null {
@@ -719,6 +743,8 @@ export function createDocument(ctx: WorkspaceContext, input: CreateDocumentInput
   if (!isDocumentType(input.type)) return err('invalid_type', { type: input.type });
   const linesErr = validateLines(input.lines);
   if (linesErr) return linesErr;
+  const dateErr = validateSupplyDate(input.supplyDate);
+  if (dateErr) return dateErr;
   const refErr = validateReferences(ctx, input.contactId, input.lines);
   if (refErr) return refErr;
 
@@ -730,8 +756,8 @@ export function createDocument(ctx: WorkspaceContext, input: CreateDocumentInput
       .prepare(
         `INSERT INTO document
            (id, workspace_id, type, number, status, contact_id, currency, source_document_id, posted_entry_id,
-            subtotal_minor, tax_minor, total_minor, issue_date, due_date, notes, created_at)
-         VALUES (?, ?, ?, NULL, 'draft', ?, ?, NULL, NULL, 0, 0, 0, NULL, ?, ?, ?)`,
+            subtotal_minor, tax_minor, total_minor, issue_date, due_date, notes, supply_date, created_at)
+         VALUES (?, ?, ?, NULL, 'draft', ?, ?, NULL, NULL, 0, 0, 0, NULL, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -753,6 +779,7 @@ export function createDocument(ctx: WorkspaceContext, input: CreateDocumentInput
         input.currency ?? baseCurrencyOf(ctx),
         input.dueDate ?? null,
         input.notes ?? null,
+        input.supplyDate ?? null,
         at,
       );
     const subtotal = writeLines(ctx, id, lines);
@@ -791,7 +818,9 @@ export function updateDocument(
   // too. `notes` and `dueDate` stay patchable: they do not touch the derivation. A credit-note
   // draft with no FK (the generic-verb shape) stays freely editable; it can never post.
   if (existing.type === 'credit_note' && existing.credited_document_id !== null) {
-    for (const field of ['lines', 'currency', 'contactId'] as const) {
+    // D164: the document-level Leistungsdatum too. Every derived line carries its own pinned date,
+    // so a document-level date would price nothing; accepting it would store a statement that lies.
+    for (const field of ['lines', 'currency', 'contactId', 'supplyDate'] as const) {
       if (patch[field] !== undefined) {
         return err('credit_note_lines_derived', {
           documentId: input.documentId,
@@ -805,6 +834,8 @@ export function updateDocument(
   }
   const linesErr = validateLines(patch.lines);
   if (linesErr) return linesErr;
+  const dateErr = validateSupplyDate(patch.supplyDate);
+  if (dateErr) return dateErr;
   const refErr = validateReferences(ctx, patch.contactId, patch.lines);
   if (refErr) return refErr;
 
@@ -822,6 +853,10 @@ export function updateDocument(
     if (patch.dueDate !== undefined) {
       sets.push('due_date = ?');
       params.push(patch.dueDate);
+    }
+    if (patch.supplyDate !== undefined) {
+      sets.push('supply_date = ?');
+      params.push(patch.supplyDate);
     }
     if (patch.notes !== undefined) {
       sets.push('notes = ?');
@@ -848,6 +883,18 @@ export function updateDocument(
   // ones, so a failure in between must roll back or the draft is left with no lines and a stale
   // (lying) total.
   return ctx.store.tx(run);
+}
+
+/**
+ * D163 (owner pick 04.10.2026): the due date a document carries once issued. An INVOICE issued without
+ * a stored due date gets the one the engine derives (`core/setup/paymentTerms.ts`): the issue date
+ * stamped in the same statement plus the customer's own terms, else the workspace default, else 0
+ * days. A stored due date is the person's (or the agent's) and is kept. Quotes, orders and credit notes
+ * carry no payment due date and are returned as they were.
+ */
+function issueDueDate(ctx: WorkspaceContext, doc: DocumentRow, issueDate: string): string | null {
+  if (doc.type !== 'invoice' || (doc.due_date !== null && doc.due_date !== '')) return doc.due_date;
+  return dueDateFor(ctx, { contactId: doc.contact_id, documentDate: issueDate });
 }
 
 export function transitionDocument(
@@ -955,16 +1002,18 @@ export function transitionDocument(
     if (to === 'issued') {
       const at = ctx.clock.now();
       const year = at.slice(0, 4);
+      const issueDate = at.slice(0, 10);
+      const dueDate = issueDueDate(ctx, doc, issueDate);
       const number = nextNumber(ctx, doc.type, year);
       const poster = posterFor(doc.type);
-      const issued = poster.onIssue(ctx, { ...doc, number });
+      const issued = poster.onIssue(ctx, { ...doc, number, due_date: dueDate });
       if (!issued.ok) throw new TransitionAbort(issued);
       const postedEntryId = typeof issued.postedEntryId === 'string' ? issued.postedEntryId : null;
       ctx.store.db
         .prepare(
-          "UPDATE document SET status = 'issued', number = ?, issue_date = ?, posted_entry_id = ? WHERE workspace_id = ? AND id = ?",
+          "UPDATE document SET status = 'issued', number = ?, issue_date = ?, due_date = ?, posted_entry_id = ? WHERE workspace_id = ? AND id = ?",
         )
-        .run(number, at.slice(0, 10), postedEntryId, ctx.workspaceId, doc.id);
+        .run(number, issueDate, dueDate, postedEntryId, ctx.workspaceId, doc.id);
       recordHistory(ctx, doc.id, doc.status, 'issued');
       // G05: freeze the workspace's default template (id + content snapshot) onto the document, in
       // the SAME transaction the number crystallises in, because the two are the same promise: what
@@ -1061,8 +1110,8 @@ export function convertDocument(
       .prepare(
         `INSERT INTO document
            (id, workspace_id, type, number, status, contact_id, currency, source_document_id, posted_entry_id,
-            subtotal_minor, tax_minor, total_minor, issue_date, due_date, notes, created_at)
-         VALUES (?, ?, ?, NULL, 'draft', ?, ?, ?, NULL, 0, 0, 0, NULL, ?, ?, ?)`,
+            subtotal_minor, tax_minor, total_minor, issue_date, due_date, notes, supply_date, created_at)
+         VALUES (?, ?, ?, NULL, 'draft', ?, ?, ?, NULL, 0, 0, 0, NULL, ?, ?, ?, ?)`,
       )
       .run(
         targetId,
@@ -1073,6 +1122,9 @@ export function convertDocument(
         source.id,
         source.due_date,
         source.notes,
+        // D164: the document-level Leistungsdatum travels with the lines' own dates: a statement
+        // made on the source is a statement about the same supply.
+        source.supply_date ?? null,
         at,
       );
     const cloned: DocumentLineInput[] = lines.map((l) => ({

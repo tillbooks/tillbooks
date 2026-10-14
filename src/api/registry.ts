@@ -13,7 +13,7 @@
  */
 
 import type { OkFields, Result } from '../core/result.js';
-import { err } from '../core/result.js';
+import { ok, err } from '../core/result.js';
 import type { SqliteStore } from '../core/store/sqlite-store.js';
 import { isBusyError } from '../core/store/sqlite-store.js';
 import { SchemaNewerThanRuntimeError, SCHEMA_NEWER_THAN_RUNTIME, refusalFields } from '../core/store/generation.js';
@@ -30,6 +30,7 @@ import type {
 } from '../core/context.js';
 import type { DiagnosticsPort } from '../core/ports.js';
 import { makeContext } from '../core/context.js';
+import { closeYearGuarded } from '../core/checklists/index.js';
 
 import {
   ledgerPorts,
@@ -41,7 +42,6 @@ import {
   listJournal,
   softCloseMonth,
   reopenMonth,
-  hardCloseYear,
   lockPeriod,
   unlockPeriod,
   getAuditLog,
@@ -177,6 +177,7 @@ import { hrActions } from './hr-actions.js';
 import { mailActions } from './mail-actions.js';
 import { voiceActions } from './voice-actions.js';
 import { draftActions } from './draft-actions.js';
+import { composeActions } from './compose-actions.js';
 import { egressActions } from './egress-actions.js';
 import { dunningActions } from './dunning-actions.js';
 import { recurringActions } from './recurring-actions.js';
@@ -184,11 +185,19 @@ import { qrMatchActions } from './qr-match-actions.js';
 import { camtActions } from './camt-actions.js';
 import { bankInboxActions } from './bank-inbox-actions.js';
 import { pain001Actions } from './pain001-actions.js';
+import { getPaymentBatch } from '../core/banking/pain001.js';
+import { liquidityActions } from './liquidity-actions.js';
 import { workspaceActions } from './workspace-actions.js';
 import { reviewActions } from './review-actions.js';
 import { agentActions } from './agent-actions.js';
 import { agentOversightActions } from './agent-oversight-actions.js';
 import { CONSEQUENCE_FOR_ACTION } from '../core/agent/index.js';
+// Imported from the module, not the barrel: the registry's own boundary check, not a verb's engine.
+import { dialCapabilitiesForVerb } from '../core/agent/dialMap.js';
+import { REVERSIBILITY_LEVELS } from '../core/agent/consequences.js';
+import { CONSEQUENCE_TAGS } from '../core/agent/consequenceTag.js';
+import { wayBackProblems } from '../core/agent/wayBack.js';
+import type { ActionKind, ConsequenceTag, Reversibility } from './actionKind.js';
 import { dataActions } from './data-actions.js';
 import type { CatalogAction } from '../core/data/index.js';
 import { assertEveryActionIsGated, capabilityPort, requiredCapabilitiesFor } from '../core/access/index.js';
@@ -214,7 +223,7 @@ import {
   listItems,
   createDocument,
   updateDocument,
-  transitionDocument,
+  transitionDocumentVerb,
   convertDocument,
   getDocument,
   listDocuments,
@@ -259,6 +268,20 @@ export interface ApiDeps {
   ebicsTransport?: EbicsTransportPort | undefined;
   /** A33's key custody seam. Absent means the core's in-process `defaultEbicsKeystore`. */
   ebicsKeystore?: EbicsKeystorePort | undefined;
+  /**
+   * D142: the host's off-thread runner for `bank_sync`. `till up` wires one that runs the whole verb in a
+   * `worker_threads` worker on its own SQLite connection (`bank-sync-offload.ts`), so the process keeps
+   * answering while the bank wire waits. Absent (stdio MCP, the suites, `till serve`) the verb runs in
+   * process, exactly as before. Only doors that can await use it (`runAsync`, `runGovernedAsync`).
+   */
+  bankSyncRunner?: ((deps: ApiDeps, input: ActionInput) => Promise<Result>) | undefined;
+  /**
+   * D143 critic F1: the same off-thread runner for the scheduler's daily activation check (an HPB-only
+   * probe, `checkBankActivation`), so no tick blocks the process on the wire. Not a verb and not
+   * reachable from any door: only `scheduler.ts` calls it, with `{workspaceId, connectionId, now}`, and it
+   * answers `ok({report})`. Absent (the suites, an in-memory book) the probe runs in process.
+   */
+  bankActivationRunner?: ((deps: ApiDeps, input: ActionInput) => Promise<Result>) | undefined;
   /** A37's managed connectivity relay (OP4, owner-gated). Absent means the cloud tier is off: managed actions degrade to cloud_tier. */
   managedChannel?: ManagedChannelPort | undefined;
   /**
@@ -325,8 +348,25 @@ export interface JsonSchema {
 export interface ActionDef<N extends string = string, T extends OkFields = OkFields> {
   /** snake_case tool name, e.g. `post_entry`. Stable: this IS the §H-ENUM tool identity. */
   name: N;
-  /** `read` tools carry `readOnlyHint` on MCP; `write` tools do not. */
+  /**
+   * `read` tools carry `readOnlyHint` on MCP; `write` tools do not. Always the plain split: a
+   * registration's `write:<class>` lands here as `write` and its class on `reversibility`.
+   */
   kind: 'read' | 'write';
+  /**
+   * D159: how far this write can be undone (`reversible`, `correctable`, `final`), declared on its
+   * registration line as `write:<class>:<tag>` and split off by `ctxAction` / `depsAction`. Set on every
+   * write (the load assert `assertEveryWriteIsClassified` refuses a write without it), absent on a read.
+   * The MCP adapter derives `destructiveHint` and `_meta['tillbooks/reversibility']` from it.
+   */
+  reversibility?: Reversibility;
+  /**
+   * D160: what this write touches, the closed consequence tag (`books`, `statutory`, `outbound`, `access`,
+   * `erase`, or one of the exemption reasons), declared as the third part of `write:<class>:<tag>`. Set on
+   * every write, absent on a read. Named `consequenceTag` because `consequence` is already the A35 sentence
+   * below, read by the catalog and the MCP description.
+   */
+  consequenceTag?: ConsequenceTag;
   /** One-line human description surfaced as the MCP tool description. */
   summary: string;
   /**
@@ -340,6 +380,36 @@ export interface ActionDef<N extends string = string, T extends OkFields = OkFie
   inputSchema: JsonSchema;
   /** The SINGLE invocation of the underlying verb. Both MCP and REST call exactly this. */
   run(deps: ApiDeps, input: ActionInput): Result<T>;
+  /**
+   * D142: the same verb for a door that can AWAIT (the MCP handler, the REST face, the scheduler). Set
+   * only on a verb whose host may run it off the main thread (`bank_sync`); every other verb has none
+   * and the awaiting doors fall back to `run`. It never changes what the verb answers, only where it runs.
+   */
+  runAsync?(deps: ApiDeps, input: ActionInput): Promise<Result<T>>;
+  /**
+   * D158: the verb's own validation, with nothing written. The transport seam (`agent-gate.ts`) runs
+   * it for a dial-governed call BEFORE it drafts, so an input the verb would refuse is refused with the
+   * verb's own Result, drafted or direct, on every face, instead of queuing a Vorschlag the approval
+   * replay can only fail. Undefined means "the verb would accept it" (or would replay its key); set
+   * only through `withPrevalidate`, on a verb whose validation can run without writing.
+   */
+  prevalidate?(deps: ApiDeps, input: ActionInput): Result | undefined;
+}
+
+/**
+ * D158: attach a verb's pure pre-draft validation (`ActionDef.prevalidate`). The check receives the
+ * same wired context the verb itself gets and runs inside the same throw guard, so an exception in it
+ * is a structured Result like any other; an ok answer counts as "accepted".
+ */
+export function withPrevalidate<D extends ActionDef>(
+  def: D,
+  check: (ctx: WorkspaceContext, input: ActionInput) => Result | undefined,
+): D {
+  def.prevalidate = (deps, input) => {
+    const outcome = guarded(def.name, () => check(ctxOf(deps, input), input) ?? ok({}), deps);
+    return outcome.ok ? undefined : outcome;
+  };
+  return def;
 }
 
 /**
@@ -531,6 +601,30 @@ export function actionInputTypeMismatch(schema: JsonSchema, input: ActionInput):
   return typeMismatch(schema, input);
 }
 
+/**
+ * D156 critic F1: the first schema-required field that is absent, null, or a blank string where the
+ * schema declares a string; undefined when every required field is there. The transport seam refuses
+ * a dial-governable call with such a gap (it can be neither drafted nor run past the dial), and the
+ * registry face refuses the same call with the same answer, so every face agrees (conformance rule 7).
+ *
+ * D161: the empty string is missing whatever the declared shape, a union (`anyOf`) included:
+ * `inventory_stocktake_approve_lines` takes `lineIds` as a list OR the string `all_review_required`,
+ * and `lineIds: ''` was drafted as a Vorschlag the approval could only fail. An EMPTY LIST is left to
+ * the verb on purpose: treating it as missing here would answer `invalid_input` before A24 for every
+ * governed list verb (`post_entry` with `lines: []` from a viewer must stay `permission_denied`,
+ * test/access/permission-boundary.test.mjs), and the verbs refuse an empty selection themselves.
+ */
+export function actionInputRequiredGap(schema: JsonSchema, input: ActionInput): string | undefined {
+  for (const field of schema.required) {
+    const value = input[field];
+    if (value === undefined || value === null) return field;
+    if (value === '') return field;
+    const declared = (schema.properties[field] as { type?: unknown } | undefined)?.type;
+    if (declared === 'string' && typeof value !== 'string') return field;
+  }
+  return undefined;
+}
+
 function typeMismatch(schema: JsonSchema, input: ActionInput): string | undefined {
   for (const [field, spec] of Object.entries(schema.properties)) {
     const value = input[field];
@@ -587,6 +681,37 @@ function assertActionCapability(
 }
 
 /**
+ * D159/D160: split a registration kind into the `ActionDef` fields. `read` passes through with no class;
+ * `write:<class>:<tag>` becomes `kind: 'write'` plus `reversibility` and `consequenceTag`. Anything else
+ * THROWS, naming the verb, at module load: a bare `write`, a class with no tag, an unknown class or tag.
+ * The type already refuses each of those literals; this is the belt for a cast or a plain-JS caller.
+ */
+export function splitActionKind(
+  name: string,
+  declared: ActionKind,
+): { kind: 'read' } | { kind: 'write'; reversibility: Reversibility; consequenceTag: ConsequenceTag } {
+  const raw: unknown = declared;
+  if (raw === 'read') return { kind: 'read' };
+  if (typeof raw === 'string') {
+    const parts = raw.split(':');
+    if (parts.length === 3 && parts[0] === 'write') {
+      const level = REVERSIBILITY_LEVELS.find((l) => l === parts[1]);
+      const tag = CONSEQUENCE_TAGS.find((t) => t === parts[2]);
+      if (level !== undefined && tag !== undefined) return { kind: 'write', reversibility: level, consequenceTag: tag };
+    }
+  }
+  throw new Error(
+    `Action '${name}' is registered with the malformed kind ${JSON.stringify(raw)}: expected 'read' or 'write:<class>:<tag>', ` +
+      `the class one of ${REVERSIBILITY_LEVELS.join(', ')} and the tag one of ${CONSEQUENCE_TAGS.join(', ')} (D159/D160).`,
+  );
+}
+
+/** The `ActionDef` fields a registration kind yields: a read carries neither a class nor a tag key. */
+function kindFields(name: string, declared: ActionKind): Pick<ActionDef, 'kind' | 'reversibility' | 'consequenceTag'> {
+  return splitActionKind(name, declared);
+}
+
+/**
  * A ctx-based action: validates the tenant, checks the capability, then builds the context and calls
  * the verb, all inside the throw guard. A missing/blank `workspaceId` is `invalid_input`; a
  * well-formed but nonexistent one is `workspace_not_found` (never a silent `ok` on a typo'd tenant,
@@ -594,7 +719,7 @@ function assertActionCapability(
  */
 function ctxAction<N extends string, T extends OkFields = OkFields>(
   name: N,
-  kind: 'read' | 'write',
+  declaredKind: ActionKind,
   summary: string,
   inputSchema: JsonSchema,
   // The THIRD parameter exists for G01 and is ignored by every other call site. A verb that FIRES
@@ -605,9 +730,11 @@ function ctxAction<N extends string, T extends OkFields = OkFields>(
   // in this file, or in any of the six action-group modules, changed.
   call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result<T>,
 ): ActionDef<N, T> {
+  const fields = kindFields(name, declaredKind);
+  const kind = fields.kind;
   return {
     name,
-    kind,
+    ...fields,
     summary,
     inputSchema,
     run: (deps, input) =>
@@ -628,6 +755,14 @@ function ctxAction<N extends string, T extends OkFields = OkFields>(
         // `core/store/sqlite-store.ts`), and `guarded` reads the marker once more after the verb, so
         // a read that straddles a newer TILL's migration is refused as well (critic R3-2).
         deps.store.assertGenerationKnown();
+        // D156 critic F1: a write the agent dial can govern refuses a schema-required gap HERE, on
+        // every face and for every actor, before A24, exactly where the transport seam refuses it for a
+        // governed seat. Its schema says the field is required; the verb behind it no longer gets to
+        // treat it as optional (an unkeyed `contacts_anonymise` erased with no Vorschlag).
+        if (kind === 'write' && dialCapabilitiesForVerb(name).length > 0) {
+          const gap = actionInputRequiredGap(inputSchema, input);
+          if (gap !== undefined) return err('invalid_input', { field: gap }) as Result<T>;
+        }
         // The `as Result<T>` is the same widening every rejection path here performs: an `Err` is a
         // `Result<T>` for every T, and this branch only ever returns one.
         const denied = assertActionCapability(name, deps, input, workspaceId);
@@ -642,7 +777,10 @@ function ctxAction<N extends string, T extends OkFields = OkFields>(
           return err('workspace_archived', { workspaceId });
         }
         const outcome = call(ctxOf(deps, input), input, deps);
-        if (kind === 'write' && outcome.ok) emitAutomationEvents(deps, name, input, outcome);
+        if (kind === 'write' && outcome.ok) {
+          emitAutomationEvents(deps, name, input, outcome);
+          emitDelegatedEvents(deps, name, input, outcome);
+        }
         return outcome;
       }, deps, true),
   };
@@ -664,6 +802,64 @@ function ctxAction<N extends string, T extends OkFields = OkFields>(
  * port and swallowed: an automation defect must not be able to turn a good post into a failed one.
  * Nothing is logged when no rule matches, which is the overwhelmingly common case.
  */
+/**
+ * A40 (critic M7): a verb that creates another capability's objects through that capability's own
+ * engine function (not through its verb) publishes that capability's events for each object, so a rule
+ * on `payment_batch.created` sees a run drafted from a payment proposal exactly as it sees one made on
+ * the Zahlungslauf tab. The event is A18's own row (`emittedBy: 'create_payment_batch'`, resolved from
+ * `result.batchId`), so no event is invented and nothing in G01 changes; the dispatch's UNIQUE occurrence
+ * key makes an idempotent replay of the drafting call publish nothing twice.
+ *
+ * THE PAYLOAD IS A18's OWN SHAPE (critic R2-L1): the input `create_payment_batch` was called with
+ * (`workspaceId`, `bankAccountId`, `itemIds`, `executionDate`, `idempotencyKey`, each batch entry of the
+ * draft carries them) and A18's own result `{ batchId, batch }`, the batch echo read back through A18's
+ * `getPaymentBatch` in the same synchronous call, so a rule on `input.executionDate` or on
+ * `result.batch.*` fires for a drafted run exactly as for one made on the Zahlungslauf tab.
+ */
+const DELEGATED_EMISSIONS: Readonly<
+  Record<
+    string,
+    (deps: ApiDeps, input: ActionInput, outcome: OkFields) => readonly { name: string; input: ActionInput; outcome: OkFields }[]
+  >
+> = {
+  liquidity_plan_draft_batches: (deps, input, outcome) => {
+    const ctx = ctxOf(deps, input);
+    const out: { name: string; input: ActionInput; outcome: OkFields }[] = [];
+    const batches = Array.isArray(outcome.batches) ? (outcome.batches as Record<string, unknown>[]) : [];
+    for (const b of batches) {
+      if (typeof b.batchId !== 'string') continue;
+      const read = getPaymentBatch(ctx, { batchId: b.batchId });
+      if (!read.ok) continue;
+      out.push({
+        name: 'create_payment_batch',
+        input: {
+          workspaceId: input.workspaceId,
+          bankAccountId: input.bankAccountId,
+          itemIds: b.itemIds,
+          executionDate: b.executionDate,
+          idempotencyKey: b.batchIdempotencyKey,
+        },
+        outcome: { ok: true, batchId: b.batchId, batch: read.batch },
+      });
+    }
+    return out;
+  },
+};
+
+function emitDelegatedEvents(deps: ApiDeps, name: string, input: ActionInput, outcome: OkFields): void {
+  const delegate = DELEGATED_EMISSIONS[name];
+  if (delegate === undefined) return;
+  let events: readonly { name: string; input: ActionInput; outcome: OkFields }[];
+  try {
+    events = delegate(deps, input, outcome);
+  } catch (e) {
+    // Like every automation defect, a failure to build the payload never changes the verb's result.
+    deps.diagnostics?.record({ kind: 'verb_error', at: new Date().toISOString(), code: 'automation_dispatch_failed', action: name, error: e });
+    return;
+  }
+  for (const e of events) emitAutomationEvents(deps, e.name, e.input, e.outcome);
+}
+
 function emitAutomationEvents(
   deps: ApiDeps,
   name: string,
@@ -761,14 +957,16 @@ function firingPostedBankLeg(before: number, after: number): boolean {
 /** A deps-based action (pre-workspace setup): `run` calls the verb with the raw deps, throw-guarded. */
 function depsAction<N extends string, T extends OkFields = OkFields>(
   name: N,
-  kind: 'read' | 'write',
+  declaredKind: ActionKind,
   summary: string,
   inputSchema: JsonSchema,
   call: (deps: ApiDeps, input: ActionInput) => Result<T>,
 ): ActionDef<N, T> {
+  const fields = kindFields(name, declaredKind);
+  const kind = fields.kind;
   return {
     name,
-    kind,
+    ...fields,
     summary,
     inputSchema,
     run: (deps, input) =>
@@ -868,10 +1066,19 @@ const CREDIT_NOTE_LINES = {
   },
 } as const;
 
+/**
+ * D164: the document-level Leistungsdatum (the Studio's "Datum"), an ISO day. A line's own
+ * `supplyDate` wins; absent or null means the issue date (`lineSupplyDate`, the one rule).
+ */
+const DOC_SUPPLY_DATE = {
+  type: 'string',
+  description: "Document-level Leistungsdatum (ISO YYYY-MM-DD). A line's own supplyDate wins; absent (or null on update) means the issue date.",
+} as const;
+
 /** The draft-only patch update_document accepts (a posted document is immutable, §H-AUDIT). */
 const DOC_PATCH = {
   type: 'object',
-  properties: { contactId: STR, lines: DOC_LINES, currency: STR, dueDate: STR, notes: STR },
+  properties: { contactId: STR, lines: DOC_LINES, currency: STR, supplyDate: DOC_SUPPLY_DATE, dueDate: STR, notes: STR },
 } as const;
 
 const CREDITOR_ADDRESS = {
@@ -948,7 +1155,7 @@ const a14PaymentActions = paymentActions({ ctxAction, ctxSchema, STR, INT });
  */
 const postEntryAction = ctxAction(
   'post_entry',
-  'write',
+  'write:correctable:books',
   'Post a balanced double-entry journal entry (business sources only; reversal/close are separate tools).',
   ctxSchema(
     { entryId: STR, date: STR, ref: STR, description: STR, lines: LINES, source: STR, idempotencyKey: STR },
@@ -984,15 +1191,15 @@ const postEntryAction = ctxAction(
  */
 const reverseEntryAction = ctxAction(
   'reverse_entry',
-  'write',
-  'Reverse a posted entry by posting its faithful mirror (OR 957a). Refuses `owned_by` on an entry a capability minted with a row of its own (an MWST-Saldierung, an Abgrenzung, a Rückstellung, a payment, a bank-line booking, and their mirrors): reverse those through the owning verb the refusal names (`vat_settlement_reverse`, `accrual_reverse`, `provision_reverse`, `provision_release_reverse`, `reverse_payment`, `reopen_bank_line`) so the row moves with the entry. An entry a bank line holds (booked or matched on it) always refuses `owned_by reopen_bank_line` with that line\'s `bankTxnId`.',
+  'write:correctable:books',
+  'Reverse a posted entry by posting its faithful mirror (OR 957a). Refuses `owned_by` on an entry a capability minted with a row of its own (an MWST-Saldierung, an Abgrenzung, a Rückstellung, a payment, a bank-line booking, a vendor bill, an issued invoice or credit note, a depreciation run, an inventory valuation run, and their mirrors): reverse those through the owning verb the refusal names (`vat_settlement_reverse`, `accrual_reverse`, `provision_reverse`, `provision_release_reverse`, `reverse_payment`, `reopen_bank_line`, `void_vendor_bill`, `transition_document` to cancelled, `asset_depreciation_run_reverse`, `inventory_valuation_reverse`) so the row moves with the entry. An entry a bank line holds (booked or matched on it) always refuses `owned_by reopen_bank_line` with that line\'s `bankTxnId`.',
   ctxSchema({ entryId: STR, date: STR, description: STR, idempotencyKey: STR }, ['entryId', 'idempotencyKey']),
   (ctx, input) => reverseEntry(ctx, as(input)),
 );
 
 const saveDraftAction = ctxAction(
   'save_draft',
-  'write',
+  'write:reversible:internal',
   'Create or update a draft journal entry (no money effect until posted).',
   ctxSchema(
     { entryId: STR, date: STR, ref: STR, description: STR, lines: LINES, idempotencyKey: STR },
@@ -1112,38 +1319,38 @@ export const ACTIONS: readonly ActionDef[] = [
   // A00, company & fiscal setup.
   depsAction(
     'create_workspace',
-    'write',
-    'Mint a new workspace (tenant) with its KMU chart of accounts.',
+    'write:correctable:pre-workspace',
+    'Mint a new workspace (tenant) with its KMU chart of accounts. A new workspace starts with a 30-day default Zahlungsfrist (defaultPaymentTermsDays, 0 to 365; null for none).',
     depsSchema(
-      { name: STR, baseCurrency: STR, fiscalYearStart: STR, legalForm: STR, idempotencyKey: STR },
+      { name: STR, baseCurrency: STR, fiscalYearStart: STR, legalForm: STR, defaultPaymentTermsDays: INT, idempotencyKey: STR },
       ['name'],
     ),
     (deps, input) => createWorkspace(deps, as(input)),
   ),
   depsAction(
     'bootstrap_workspace',
-    'write',
+    'write:correctable:pre-workspace',
     'One-call agent setup: parse a short description into a workspace and VAT config.',
     depsSchema({ description: STR, name: STR, idempotencyKey: STR }, ['description', 'idempotencyKey']),
     (deps, input) => bootstrapWorkspace(deps, as(input)),
   ),
   ctxAction(
     'set_fiscal_config',
-    'write',
+    'write:reversible:internal',
     'Set legal form, base currency, or fiscal year start (currency/year lock once the ledger is non-empty).',
     ctxSchema({ legalForm: STR, baseCurrency: STR, fiscalYearStart: STR }),
     (ctx, input) => setFiscalConfig(ctx, as(input)),
   ),
   ctxAction(
     'set_vat_method',
-    'write',
+    'write:reversible:statutory',
     'Set the VAT method (effektiv/saldo) and accounting timing (soll/ist).',
     ctxSchema({ vatMethod: STR, vatAccounting: STR }, ['vatMethod', 'vatAccounting']),
     (ctx, input) => setVatMethod(ctx, as(input)),
   ),
   ctxAction(
     'set_creditor_profile',
-    'write',
+    'write:reversible:books',
     'Set the QR-bill creditor: IBAN (a QR-IBAN gives a QRR reference, a plain IBAN gives SCOR), optional name (defaults to the company name) and optional structured address. The IBAN saves without the address; the address is needed before the first QR-bill renders (buildQrBill answers needs_creditor_address until then). A partial address is refused (needs_structured_address).',
     ctxSchema({ creditorName: STR, address: CREDITOR_ADDRESS, qrIban: STR, iban: STR }, []),
     (ctx, input) => setCreditorProfile(ctx, as(input)),
@@ -1157,16 +1364,16 @@ export const ACTIONS: readonly ActionDef[] = [
   ),
   ctxAction(
     'update_company_profile',
-    'write',
-    'Update company identity fields (name, legal form, UID, MWST number).',
-    ctxSchema({ name: STR, legalForm: STR, uid: STR, mwstNo: STR }),
+    'write:reversible:internal',
+    'Update company identity fields (name, legal form, UID, MWST number) and the workspace default Zahlungsfrist (defaultPaymentTermsDays, 0 to 365 days; null clears it). A document whose customer or supplier has no terms of its own falls due that many days after its date.',
+    ctxSchema({ name: STR, legalForm: STR, uid: STR, mwstNo: STR, defaultPaymentTermsDays: INT }),
     (ctx, input) => updateCompanyProfile(ctx, as(input)),
   ),
 
   // A01, chart of accounts & cost centres.
   ctxAction(
     'create_account',
-    'write',
+    'write:reversible:internal',
     'Create a ledger account.',
     ctxSchema(
       { number: STR, name: STR, type: STR, vatCodeDefault: STR, costCenterAllowed: BOOL, idempotencyKey: STR },
@@ -1176,28 +1383,28 @@ export const ACTIONS: readonly ActionDef[] = [
   ),
   ctxAction(
     'update_account',
-    'write',
-    'Rename an account or change its VAT default / cost-centre flag (number and type are frozen).',
-    ctxSchema({ accountId: STR, name: STR, vatCodeDefault: STR, costCenterAllowed: BOOL }, ['accountId']),
+    'write:reversible:internal',
+    'Rename an account or change its VAT default, its cost-centre flag, or statementIsVoucher ("Beleg = Kontoauszug": the bank statement is the voucher, so a bank line booked to such accounts alone is not counted as missing a Beleg; on by default for 6900 Finanzaufwand). Number and type are frozen.',
+    ctxSchema({ accountId: STR, name: STR, vatCodeDefault: STR, costCenterAllowed: BOOL, statementIsVoucher: BOOL }, ['accountId']),
     (ctx, input) => updateAccount(ctx, as(input)),
   ),
   ctxAction(
     'archive_account',
-    'write',
+    'write:reversible:internal',
     'Archive an account (soft; the account keeps its postings).',
     ctxSchema({ accountId: STR }, ['accountId']),
     (ctx, input) => archiveAccount(ctx, as(input)),
   ),
   ctxAction(
     'unarchive_account',
-    'write',
+    'write:reversible:internal',
     'Reactivate a soft-archived account (idempotent).',
     ctxSchema({ accountId: STR }, ['accountId']),
     (ctx, input) => unarchiveAccount(ctx, as(input)),
   ),
   ctxAction(
     'delete_account',
-    'write',
+    'write:final:erase',
     'Hard-delete an account that never carried a posting.',
     ctxSchema({ accountId: STR, idempotencyKey: STR }, ['accountId']),
     (ctx, input) => deleteAccount(ctx, as(input)),
@@ -1211,28 +1418,28 @@ export const ACTIONS: readonly ActionDef[] = [
   ),
   ctxAction(
     'create_cost_center',
-    'write',
+    'write:reversible:internal',
     'Create a cost centre (Kostenstelle).',
     ctxSchema({ code: STR, name: STR, idempotencyKey: STR }, ['code', 'name']),
     (ctx, input) => createCostCenter(ctx, as(input)),
   ),
   ctxAction(
     'archive_cost_center',
-    'write',
+    'write:reversible:internal',
     'Archive a cost centre (soft).',
     ctxSchema({ costCenterId: STR }, ['costCenterId']),
     (ctx, input) => archiveCostCenter(ctx, as(input)),
   ),
   ctxAction(
     'unarchive_cost_center',
-    'write',
+    'write:reversible:internal',
     'Reactivate a soft-archived cost centre (idempotent).',
     ctxSchema({ costCenterId: STR }, ['costCenterId']),
     (ctx, input) => unarchiveCostCenter(ctx, as(input)),
   ),
   ctxAction(
     'delete_cost_center',
-    'write',
+    'write:final:erase',
     'Hard-delete a cost centre that no posted line references.',
     ctxSchema({ costCenterId: STR }, ['costCenterId']),
     (ctx, input) => deleteCostCenter(ctx, as(input)),
@@ -1255,46 +1462,51 @@ export const ACTIONS: readonly ActionDef[] = [
   saveDraftAction,
   ctxAction(
     'delete_draft',
-    'write',
+    'write:final:erase',
     'Delete a draft journal entry (never a posted one).',
     ctxSchema({ entryId: STR, idempotencyKey: STR }, ['entryId', 'idempotencyKey']),
     (ctx, input) => deleteDraft(ctx, as(input)),
   ),
   getEntryAction,
   listJournalAction,
+  // D152 amendment: `compose_entry`, the composer's one read. It expands intent into the exact post_entry
+  // lines through the same pre-write steps postEntry runs, and decomposes stored lines back into intent,
+  // so no surface does VAT math of its own. Defined in `./compose-actions.ts`, spread in as one line.
+  ...composeActions({ ctxAction, ctxSchema, STR, INT, BOOL, LINES }),
 
   // A03, period locks, close, and the audit trail.
   ctxAction(
     'close_month',
-    'write',
+    'write:reversible:statutory',
     'Soft-close a month (reversible guardrail).',
     ctxSchema({ period: STR, idempotencyKey: STR }, ['period', 'idempotencyKey']),
     (ctx, input) => softCloseMonth(ctx, as(input)),
   ),
   ctxAction(
     'reopen_month',
-    'write',
+    'write:reversible:statutory',
     'Reopen a soft-closed month (a hard-sealed month refuses).',
     ctxSchema({ period: STR, idempotencyKey: STR }, ['period', 'idempotencyKey']),
     (ctx, input) => reopenMonth(ctx, as(input)),
   ),
   ctxAction(
     'close_year',
-    'write',
-    'Hard-close a fiscal year: sweep the P&L into equity and seal the year.',
-    ctxSchema({ year: STR, idempotencyKey: STR }, ['year', 'idempotencyKey']),
-    (ctx, input) => hardCloseYear(ctx, as(input)),
+    'write:final:statutory',
+    'Hard-close a fiscal year: sweep the P&L into equity and seal the year. Refuses year_already_closed on a sealed year. While an open year_close checklist run exists for the year, a call WITHOUT runId refuses year_close_in_progress (naming yearRunId): the run seals the year from its seal row, which calls close_year WITH its runId. A call with runId runs only for an open year_close run of this workspace for exactly this year whose year_sealed row is unblocked (not_found, run_abandoned, run_not_year_close, run_year_mismatch, prerequisite_open otherwise).',
+    ctxSchema({ year: STR, idempotencyKey: STR, runId: STR }, ['year', 'idempotencyKey']),
+    // The G22 §10.12 guard, then exactly the A03 close (`closeYearGuarded` in the checklist engine).
+    (ctx, input) => closeYearGuarded(ctx, as(input)),
   ),
   ctxAction(
     'lock_period',
-    'write',
-    'Lock a month or year, soft or hard.',
+    'write:reversible:statutory',
+    'Lock a month or year, soft or hard, with an optional reason. The seal reasons (vat_filed, year_close) are reserved and refused with reserved_lock_reason: a filed MWST period is sealed by vat_mark_filed and a fiscal year by close_year, never by a lock.',
     ctxSchema({ period: STR, kind: STR, reason: STR, idempotencyKey: STR }, ['period', 'kind', 'idempotencyKey']),
     (ctx, input) => lockPeriod(ctx, as(input)),
   ),
   ctxAction(
     'unlock_period',
-    'write',
+    'write:reversible:statutory',
     'Unlock a period (a filing/year seal refuses).',
     ctxSchema({ period: STR, idempotencyKey: STR }, ['period', 'idempotencyKey']),
     (ctx, input) => unlockPeriod(ctx, as(input)),
@@ -1311,14 +1523,14 @@ export const ACTIONS: readonly ActionDef[] = [
   // A05, MWST configuration and tax codes.
   ctxAction(
     'vat_seed_defaults',
-    'write',
+    'write:correctable:internal',
     'Seed the default Swiss tax-code set (idempotent).',
     ctxSchema(),
     (ctx) => seedTaxCodes(ctx),
   ),
   ctxAction(
     'vat_configure',
-    'write',
+    'write:correctable:statutory',
     'Configure VAT: method, timing, registration, VAT number, and the ESTV Bewilligung (asOf picks the statutory rate era). A filer holding several Saldosteuersätze maps each Tätigkeit to its Ertragskonten with saldoActivities, which is how MWSTV Art. 84 Abs. 3 books the Erträge separately per rate. Changing an approval that already governs posted turnover must say which it is: saldoGrant for a new ESTV Bewilligung from a given day, saldoCorrection to rewrite the open one.',
     ctxSchema(
       {
@@ -1377,7 +1589,7 @@ export const ACTIONS: readonly ActionDef[] = [
   ),
   ctxAction(
     'vat_saldo_declaration_basis',
-    'write',
+    'write:reversible:statutory',
     'Elect, or withdraw, the MWSTV Art. 88 Abs. 6 simplification for one Steuerperiode: `highest_rate` declares the whole taxable turnover at the highest approved Saldosteuersatz on one Ziffer, `per_activity` restores the Abs. 1 split per Tätigkeit. It is voluntary and usually raises the tax due, so the engine never applies it on its own.',
     ctxSchema({ taxPeriod: STR, basis: STR, idempotencyKey: STR }, ['taxPeriod', 'basis', 'idempotencyKey']),
     (ctx, input) => setSaldoDeclarationBasis(ctx, as(input)),
@@ -1391,7 +1603,7 @@ export const ACTIONS: readonly ActionDef[] = [
   ),
   ctxAction(
     'vat_code_upsert',
-    'write',
+    'write:correctable:internal',
     'Add or edit a tax code at the single tax enumeration point.',
     ctxSchema(
       { code: STR, kind: STR, rateBp: INT, formLine: STR, label: STR, validFrom: STR, idempotencyKey: STR },
@@ -1401,21 +1613,21 @@ export const ACTIONS: readonly ActionDef[] = [
   ),
   ctxAction(
     'vat_code_deactivate',
-    'write',
+    'write:reversible:internal',
     'Archive a tax code (never deletes; a posted line always resolves its code).',
     ctxSchema({ code: STR }, ['code']),
     (ctx, input) => deactivateTaxCode(ctx, as(input)),
   ),
   ctxAction(
     'vat_code_reactivate',
-    'write',
+    'write:reversible:internal',
     'Reactivate an archived tax code, so it appears again on new documents. The exact mirror of vat_code_deactivate; posted lines never depended on the flag.',
     ctxSchema({ code: STR }, ['code']),
     (ctx, input) => reactivateTaxCode(ctx, as(input)),
   ),
   ctxAction(
     'account_set_tax_default',
-    'write',
+    'write:reversible:internal',
     "Set (or clear) an account's default tax code.",
     ctxSchema({ accountId: STR, taxCode: STR }, ['accountId']),
     (ctx, input) => setAccountTaxDefault(ctx, as(input)),
@@ -1521,8 +1733,8 @@ export const ACTIONS: readonly ActionDef[] = [
   ),
   ctxAction(
     'vat_mark_filed',
-    'write',
-    'Record that a VAT period was filed with the ESTV, applying the A03 hard lock to its months. Transmits nothing.',
+    'write:final:statutory',
+    'Record that a VAT period was filed with the ESTV, applying the A03 hard lock (reason vat_filed) to its months in one transaction: a month under a soft or an ordinary hard lock is upgraded to the seal, every month is read back, and the filing refuses filing_seal_not_held (and rolls back) unless each month holds the seal. Transmits nothing.',
     ctxSchema(
       {
         period: {
@@ -1540,28 +1752,28 @@ export const ACTIONS: readonly ActionDef[] = [
   // A09, contacts & items (invoicing-lite master data).
   ctxAction(
     'create_contact',
-    'write',
-    'Create a customer/vendor contact.',
+    'write:correctable:internal',
+    'Create a customer/vendor contact. paymentTermsDays is its own Zahlungsfrist in days: omit it and its documents fall due after the workspace default (update_company_profile), 0 means due immediately.',
     ctxSchema({ ...CONTACT_FIELDS, description: STR, idempotencyKey: STR }, ['partyRole']),
     (ctx, input) => createContact(ctx, as(input)),
   ),
   ctxAction(
     'update_contact',
-    'write',
-    'Update a contact from a patch.',
+    'write:reversible:internal',
+    'Update a contact from a patch. patch.paymentTermsDays null clears its own Zahlungsfrist back to the workspace default; 0 means due immediately.',
     ctxSchema({ contactId: STR, patch: { type: 'object', properties: CONTACT_FIELDS } }, ['contactId', 'patch']),
     (ctx, input) => updateContact(ctx, as(input)),
   ),
   ctxAction(
     'archive_contact',
-    'write',
+    'write:reversible:internal',
     'Archive a contact (soft).',
     ctxSchema({ contactId: STR }, ['contactId']),
     (ctx, input) => archiveContact(ctx, as(input)),
   ),
   ctxAction(
     'unarchive_contact',
-    'write',
+    'write:reversible:internal',
     'Reactivate a soft-archived contact (idempotent).',
     ctxSchema({ contactId: STR }, ['contactId']),
     (ctx, input) => unarchiveContact(ctx, as(input)),
@@ -1582,28 +1794,28 @@ export const ACTIONS: readonly ActionDef[] = [
   ),
   ctxAction(
     'create_item',
-    'write',
+    'write:reversible:internal',
     'Create an invoicing item (a reusable line default).',
     ctxSchema({ ...ITEM_FIELDS, idempotencyKey: STR }, ['name', 'defaultUnitPriceMinor']),
     (ctx, input) => createItem(ctx, as(input)),
   ),
   ctxAction(
     'update_item',
-    'write',
+    'write:reversible:internal',
     'Update an item from a patch.',
     ctxSchema({ itemId: STR, patch: { type: 'object', properties: ITEM_FIELDS } }, ['itemId', 'patch']),
     (ctx, input) => updateItem(ctx, as(input)),
   ),
   ctxAction(
     'archive_item',
-    'write',
+    'write:reversible:internal',
     'Archive an item (soft).',
     ctxSchema({ itemId: STR }, ['itemId']),
     (ctx, input) => archiveItem(ctx, as(input)),
   ),
   ctxAction(
     'unarchive_item',
-    'write',
+    'write:reversible:internal',
     'Reactivate a soft-archived item (idempotent).',
     ctxSchema({ itemId: STR }, ['itemId']),
     (ctx, input) => unarchiveItem(ctx, as(input)),
@@ -1632,31 +1844,32 @@ export const ACTIONS: readonly ActionDef[] = [
   // on issue is delegated to A11/A13 through the engine's poster seam.
   ctxAction(
     'create_document',
-    'write',
+    'write:reversible:internal',
     'Create a document draft (quote, order, invoice, or credit note) with positions.',
     ctxSchema(
-      { type: STR, contactId: STR, lines: DOC_LINES, currency: STR, dueDate: STR, notes: STR, idempotencyKey: STR },
+      { type: STR, contactId: STR, lines: DOC_LINES, currency: STR, supplyDate: DOC_SUPPLY_DATE, dueDate: STR, notes: STR, idempotencyKey: STR },
       ['type'],
     ),
     (ctx, input) => createDocument(ctx, as(input)),
   ),
   ctxAction(
     'update_document',
-    'write',
+    'write:reversible:internal',
     'Patch a draft document (draft-only; an issued document is immutable and corrected by reversal).',
     ctxSchema({ documentId: STR, patch: DOC_PATCH, idempotencyKey: STR }, ['documentId', 'patch']),
     (ctx, input) => updateDocument(ctx, as(input)),
   ),
   ctxAction(
     'transition_document',
-    'write',
-    'Advance a document (issue, send, accept, decline, confirm, cancel); issuing an invoice posts via the delegate.',
+    'write:correctable:books',
+    'Advance a document (issue, send, accept, decline, confirm, cancel); issuing an invoice posts via the delegate. Accepting a quote is quotes_accept: an expired quote refuses quote_expired, the acceptance is stamped, and the customer link is spent.',
     ctxSchema({ documentId: STR, to: STR, idempotencyKey: STR }, ['documentId', 'to']),
-    (ctx, input) => transitionDocument(ctx, as(input)),
+    // A quote's `accepted` edge is `acceptQuote` (expiry, accepted_by, token spend): critic B1.
+    (ctx, input) => transitionDocumentVerb(ctx, as(input)),
   ),
   ctxAction(
     'convert_document',
-    'write',
+    'write:correctable:internal',
     'Convert an accepted quote to an order or invoice (or a confirmed order to an invoice), linking the source.',
     ctxSchema({ documentId: STR, toType: STR, idempotencyKey: STR }, ['documentId', 'toType']),
     (ctx, input) => convertDocument(ctx, as(input)),
@@ -1685,14 +1898,14 @@ export const ACTIONS: readonly ActionDef[] = [
   // list is append-only.
   ctxAction(
     'issue_invoice',
-    'write',
+    'write:correctable:books',
     'Issue a draft invoice: assign the gap-free number, post the balanced VAT entry (A10 onIssue delegate), and attach the QR-bill summary.',
     ctxSchema({ invoiceId: STR, idempotencyKey: STR }, ['invoiceId']),
     (ctx, input) => issueInvoice(ctx, as(input)),
   ),
   ctxAction(
     'send_invoice',
-    'write',
+    'write:final:outbound',
     'Send an issued invoice by email (renders + attaches the PDF, transitions to sent). Outbound step is P8-gated: pass confirmed=true or enable the workspace dial.',
     ctxSchema({ invoiceId: STR, email: STR, confirmed: BOOL, idempotencyKey: STR }, ['invoiceId']),
     (ctx, input) => sendInvoice(ctx, as(input)),
@@ -1705,7 +1918,7 @@ export const ACTIONS: readonly ActionDef[] = [
   // A10's shared transition_document. Placed beside its capability rather than at the bottom.
   ctxAction(
     'create_credit_note',
-    'write',
+    'write:reversible:internal',
     'Draft a Gutschrift against an issued invoice: full, selected positions (reduced quantities), or a net amount apportioned over the remaining line nets. Always a draft; issuing is a separate, confirmed step (P8).',
     ctxSchema(
       { fromInvoiceId: STR, mode: STR, lines: CREDIT_NOTE_LINES, amountMinor: INT, reason: STR, idempotencyKey: STR },
@@ -1715,7 +1928,7 @@ export const ACTIONS: readonly ActionDef[] = [
   ),
   ctxAction(
     'issue_credit_note',
-    'write',
+    'write:correctable:books',
     'Issue a drafted Gutschrift: assign the gap-free G-number and post the mirror entry (debit revenue and output VAT, credit 1100 Debitoren) dated today, closing against the invoice per rate class (D67/D71).',
     ctxSchema({ creditNoteId: STR, idempotencyKey: STR }, ['creditNoteId', 'idempotencyKey']),
     (ctx, input) => issueCreditNote(ctx, as(input)),
@@ -1772,7 +1985,7 @@ export const ACTIONS: readonly ActionDef[] = [
   ...reportActions({ ctxAction, ctxSchema, STR }),
   // A04, opening balances: the position every statement above it is measured from. Defined in
   // `./opening-actions.ts` and spread in as one line, the same shape §H-FX and A14 established.
-  ...openingActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  ...openingActions({ ctxAction, ctxSchema, STR, INT, BOOL, withPrevalidate }),
 
   // G08, feedback and diagnostics. Same one-line spread the FX and payment verbs use, for the same
   // reason: this list is append-only and several agents append to it at once.
@@ -1914,6 +2127,11 @@ export const ACTIONS: readonly ActionDef[] = [
   // note atop `core/banking/pain001.ts`).
   ...pain001Actions({ ctxAction, ctxSchema, STR, INT, BOOL }),
 
+  // A40, payment timing: the liquidity forecast over the scheduled flows and the Skonto-versus-floor
+  // pay-date proposal. Nine verbs (four writes, five reads), spread in as one line. Nothing posts or
+  // pays; the draft step reaches A18's createPaymentBatch and nothing else.
+  ...liquidityActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
   // A23, multi-client workspaces (Treuhänder onboarding and archive). `list_workspaces` (D12) moved
   // here from its inline registration; `depsAction`/`depsSchema` ride along because listing and
   // onboarding are pre-workspace, the `accept_invite`/`create_workspace` shape. Spread in as one
@@ -1979,7 +2197,7 @@ export const ACTIONS: readonly ActionDef[] = [
   // the G09 one), with the type-to-confirm checked engine-side; `discard_testmandant` on
   // `manage_import`. Both `go_productive` and `discard_testmandant` are denylisted from automation.
   // Defined in `./migration-testmandant-actions.ts` and spread in as one line, the sibling shape.
-  ...migrationTestmandantActions({ ctxAction, ctxSchema, STR }),
+  ...migrationTestmandantActions({ ctxAction, depsAction, ctxSchema, depsSchema, STR }),
 
   // G03, onboarding & migration. The first-run on-ramp OVER the family above, never a second door:
   // the wizard resume pointer (two ctx verbs, bookkeeping and never a gate), the pre-workspace
@@ -2358,6 +2576,44 @@ function buildCatalogActions(): CatalogAction[] {
     inputSchema: a.inputSchema,
     capabilities: requiredCapabilitiesFor(a.name, {}),
   }));
+}
+
+/**
+ * D159/D160: the writes that do not carry both a reversibility class and a consequence tag. Every write
+ * registered through `ctxAction` / `depsAction` has both by construction (the kind type requires them and
+ * `splitActionKind` throws otherwise); this catches an `ActionDef` assembled any other way.
+ */
+export function listUnclassifiedWrites(actions: readonly ActionDef[] = ACTIONS): string[] {
+  return actions
+    .filter((a) => a.kind === 'write' && (a.reversibility === undefined || a.consequenceTag === undefined))
+    .map((a) => a.name);
+}
+
+/**
+ * D159.3: no write without a class and a tag, asserted once at load over `actions`; it throws, naming every
+ * offender. A read must carry neither. Exported so the suite can prove it bites on a hand-built action.
+ */
+export function assertEveryWriteIsClassified(actions: readonly ActionDef[]): void {
+  const unclassified = listUnclassifiedWrites(actions);
+  const taggedReads = actions
+    .filter((a) => a.kind === 'read' && (a.reversibility !== undefined || a.consequenceTag !== undefined))
+    .map((a) => a.name);
+  const problems = [
+    ...unclassified.map((n) => `${n}: a write without its reversibility class and consequence tag ('write:<class>:<tag>')`),
+    ...taggedReads.map((n) => `${n}: a read carries no reversibility class or consequence tag`),
+  ];
+  if (problems.length > 0) throw new Error(`Unclassified actions (D159/D160):\n  ${problems.join('\n  ')}`);
+}
+
+assertEveryWriteIsClassified(ACTIONS);
+
+/**
+ * D159: the way-back map (`src/core/agent/wayBack.ts`) names only registered writes, at load, the
+ * `CONSEQUENCE_FOR_ACTION` shape above: a renamed verb throws here rather than leaving a dead entry.
+ */
+{
+  const problems = wayBackProblems(ACTIONS);
+  if (problems.length > 0) throw new Error(`WAY_BACK is inconsistent with the registry (D159):\n  ${problems.join('\n  ')}`);
 }
 
 /**

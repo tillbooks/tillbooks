@@ -16,13 +16,14 @@ export type { DunningLevelConfig, DunningRunStatus, SetDunningConfigInput } from
 
 export {
   proposeDunningRun,
+  discardDunningRun,
   issueDunningRun,
   sendDunningRun,
   interestNoteMinor,
   dunningEmailSubject,
   DUNNING_SOURCE,
 } from './run.js';
-export type { ProposeDunningRunInput, IssueDunningRunInput, SendDunningRunInput } from './run.js';
+export type { ProposeDunningRunInput, DiscardDunningRunInput, IssueDunningRunInput, SendDunningRunInput } from './run.js';
 
 export { renderDunningPdf, letterTitle } from './pdf.js';
 export type { RenderDunningPdfInput } from './pdf.js';

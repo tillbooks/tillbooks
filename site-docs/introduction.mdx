@@ -1,28 +1,67 @@
 ---
 title: "Introduction"
-description: "TILL is a free, open-source, local-first Swiss accounting app that an agent can actually use."
+description: "TILL is the agent-first ERP for Swiss SMEs: open source, on your own computer, and every function is an MCP tool your AI agent can call."
 ---
 
-TILL (Trusted Independent Ledger Library) is Swiss accounting software you own. It is MIT licensed,
-it runs on your machine, and your books live in a single SQLite file you can copy, back up, and read
-without asking anyone's permission.
+TILL (Trusted Independent Ledger Library) is the agent-first ERP for Swiss small businesses. It is
+open source under MIT and costs nothing. It runs on your own computer or on a server you host yourself, and your
+books live in a single SQLite file you can copy, back up and read without asking anyone's permission.
 
-It is built agent-first. The MCP server is a real interface, not an AI feature bolted onto a GUI, so
-an agent can post entries, draft invoices, and prepare the MWST-Abrechnung directly. The Studio GUI
-exists so a human can oversee that work.
+It covers accounting and MWST, invoices with the QR-bill, supplier bills and payment files, bank
+statements, contacts, products and stock, projects and time tracking, documents and fixed assets.
+One install can hold several companies.
+
+Every function is exposed as an MCP tool, so your AI agent works through the same actions as the
+Studio, the app you work in, and the Studio shows you what the agent did. It works with Claude
+Desktop, Cursor and other MCP clients that can start a local stdio server. By default, the agent
+waits for your OK before it books anything, moves your money, grants access or deletes your data
+for good: it drafts, and you approve. For each of those areas you decide whether it may act on its
+own. Much of what you can change back, such as drafts and contact details, runs without asking, and
+every call the agent makes is recorded. The dial covers agents that connect to TILL. An agent that
+can drive your browser or run commands on your computer can act as you: give your agent TILL, not
+your browser or your shell.
 
 ## Status
 
-Pre-alpha. The capability specs are written and the ledger core is in progress. Nothing here is
-ready for real books yet.
+TILL is in public beta, version 1.0.0-beta.1. Nomadik GmbH, the company behind TILL, keeps its own
+books in it. If you move your books to TILL, keep your old system running until the figures match:
+the parallel run in the migration area compares them to the Rappen. The
+[quickstart](/quickstart) gets you to a running Studio.
 
 ## What TILL is built for
 
 Switzerland, specifically:
 
 - Swiss QR-bill (QR-Rechnung) with the structured-address standard
-- MWST at 8.1%, 3.8% and 2.6%, and the MWST-Abrechnung
+- MWST at 8.1%, 3.8% and 2.6%, the effective and the Saldosteuersatz method, and the
+  MWST-Abrechnung with its eCH-0217 file for the ESTV ePortal
 - Kontenrahmen KMU, seeded out of the box
-- ISO 20022 (camt/pain) banking
+- ISO 20022 banking: camt.053 statements in, pain.001 payment files out
+- German (de-CH) and English
+
+## What the beta does not do yet
+
+- No payroll. TILL exports your employee data for your payroll provider and posts the wage journal
+  you bring back. Pay slips, AHV and Swissdec stay with the provider.
+- No MWST filing. TILL prepares the MWST-Abrechnung and writes the eCH-0217 file. You upload it and
+  file in the ESTV ePortal yourself. See [MWST](/swiss/mwst).
+- No MWST on received consideration (vereinnahmte Entgelte). TILL computes the Abrechnung on agreed
+  consideration (vereinbarte Entgelte) and refuses a period set up the other way.
+- No email sending yet. TILL makes the PDF of an invoice, quote or reminder, and you send it from
+  your own mail program. Sending through your own mail account is planned for a later beta release.
+- German (de-CH) and English only. No French or Italian yet.
+- No mobile app, and no Windows app. We do not test on Windows; the documented route there is
+  [running TILL inside an agent](/mcp/run-inside-agent).
+- No direct bank connection in this release. The EBICS client is built and has been tested with
+  ZKB's test platform, but the module that connects it to the bank is not published yet (it will
+  be, under MIT).
+  Until then you download camt.053 statements from your eBanking and import them. Payments are
+  always a pain.001 file that you upload and release in your eBanking.
+- On your own computer, backups run when you start them, not on a schedule. Keep a copy somewhere
+  other than the computer the books are on. (The [self-hosting recipe](/self-hosting/under-an-hour)
+  replicates the book continuously.)
+- Several people in one book only on a server you host yourself (see
+  [self-hosting](/self-hosting/under-an-hour)). The local app is for one computer.
+- No eBill sending, e-signature or online customer portal.
 
 TILL is an independent clean-room project. It is not affiliated with bexio AG.

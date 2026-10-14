@@ -29,11 +29,12 @@ import {
   inventoryReconciliationReport,
   inventoryReconciliationCheck,
 } from '../core/inventory/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ValuationRunActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -68,7 +69,7 @@ export function valuationRunActions(h: ValuationRunActionHelpers): readonly Acti
   return [
     ctxAction(
       'inventory_valuation_create',
-      'write',
+      'write:correctable:derived',
       'Create a DRAFT inventory valuation run for a cut-off (asOf ISO date, or period YYYY-MM for the period end) and return it with its proposed adjusting journal for review. Computes the FULL inventory valuation through the J03 engine (each item under the method in force on that date), writes one immutable line per (item, location) that carries a quantity or a value, and stores the run total. Posts NO journal: that is inventory_valuation_post. netRealisableValues maps itemId to the OR 960c per-unit Veraeusserungswert less costs to come; where it is below cost the J03 clamp writes the line down and marks it. inventoryAccountId / changeAccountId override the default 1200 / 4200 control accounts. A run always values the complete position (a filtered run cannot hold the sub-ledger = GL identity; use inventory_valuation_report for a filtered view). A cut-off in a soft- or hard-closed period is refused with period_locked before anything is written. Idempotent: a replay of the key returns the same draft and recomputes nothing.',
       ctxSchema(
         {
@@ -87,21 +88,21 @@ export function valuationRunActions(h: ValuationRunActionHelpers): readonly Acti
     ),
     ctxAction(
       'inventory_valuation_post',
-      'write',
+      'write:correctable:books',
       'Post a reviewed DRAFT run so the balance-sheet inventory figure is updated in one atomic, auditable step. In one transaction it re-checks the cut-off period is open and the draft is not stale (the movement ledger has not changed since it was calculated, else stale_draft), computes the delta between the sub-ledger valuation and the current GL balance of each control account, posts ONE balanced A02 entry (source inventory_valuation, Dr/Cr inventory control vs the change account) for that delta, and marks the run posted with its journal reference. After the post the OP11 identity holds: GL inventory control balance equals the sub-ledger valuation at the cut-off. All posting is through A02 postEntry and no second path exists. Idempotent on rows: a replay returns the posted run and mints no second journal. A zero delta posts nothing yet records the baseline.',
       ctxSchema({ runId: STR, changeAccountId: STR, idempotencyKey: STR }, ['runId', 'idempotencyKey']),
       (ctx, input) => inventoryValuationPost(ctx, as(input)),
     ),
     ctxAction(
       'inventory_valuation_reverse',
-      'write',
+      'write:correctable:books',
       'Reverse a posted valuation run. Posts the exact A02 mirror of the run journal via reverseEntry (which moves the GL back by the delta and restores the baseline every later run measures against), marks the original run reversed and records the reversing journal. The original run and its journal are never mutated: a correction is a reverse plus a fresh run. A reason is required. Idempotent: a replay returns the already-reversed run and posts no second compensation. A run that posted no journal (zero delta) is marked reversed with nothing to reverse.',
       ctxSchema({ runId: STR, reason: STR, idempotencyKey: STR }, ['runId', 'reason', 'idempotencyKey']),
       (ctx, input) => inventoryValuationReverse(ctx, as(input)),
     ),
     ctxAction(
       'inventory_valuation_opening',
-      'write',
+      'write:correctable:books',
       'Record an OPENING inventory valuation for a migration or a new workspace so the sub-ledger = GL identity holds from day one. The caller states the known item values directly (lines of itemId, optional locationId, qty and valueRappen), and the verb posts the opening delta against the current GL through A02 exactly as an ordinary run does, writing a posted run in one step (no draft review: an opening baseline is a stated figure, not a computed one). inventoryAccountId / changeAccountId override the default 1200 / 4200. A cut-off in a locked period is refused before any write. Idempotent on the key.',
       ctxSchema(
         {

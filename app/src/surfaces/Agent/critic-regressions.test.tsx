@@ -82,6 +82,41 @@ describe('CP1-CP3: the Vorschlag card as an oversight control', () => {
     expect(terms).not.toContain('source');
     expect(terms).toContain('Datum');
   });
+
+  // Critic phase0-installable r2 (UX, LOW): a vendor IBAN draft named its vendor by contact id under a
+  // humanized "Vendor id", and the IBAN under "Iban". The card now shows the vendor's NAME the engine
+  // resolved (the id stays as the tooltip) under real labels.
+  it('a vendor IBAN draft names the vendor and labels the IBAN, never the raw contact id', () => {
+    const vendorIban: DraftedAction = {
+      ...postDraft,
+      actionId: 'aa_v',
+      dialCapability: 'pay',
+      actionTool: 'set_creditor_bank_profile',
+      payload: { workspaceId: 'ws_test', vendorId: 'ct_77', iban: 'CH5604835012345678009', idempotencyKey: 'kv' },
+      payloadLabels: { vendorId: 'Lieferant AG' },
+    };
+    wrap(<VorschlagCard action={vendorIban} accent onApprove={() => undefined} onReject={() => undefined} />);
+    const rows = [...document.querySelectorAll('.vorschlag-readback-row')].map((row) => ({
+      term: row.querySelector('dt')?.textContent,
+      value: row.querySelector('dd')?.textContent,
+      title: row.querySelector('dd')?.getAttribute('title'),
+    }));
+    expect(rows).toContainEqual({ term: 'Lieferant', value: 'Lieferant AG', title: 'ct_77' });
+    expect(rows).toContainEqual({ term: 'IBAN', value: 'CH5604835012345678009', title: null });
+    expect(document.querySelector('.vorschlag-readback')?.textContent ?? '').not.toContain('ct_77');
+  });
+
+  it('a contact id the engine could not name still shows the raw id, never a guess', () => {
+    const unnamed: DraftedAction = {
+      ...postDraft,
+      actionId: 'aa_u',
+      dialCapability: 'pay',
+      actionTool: 'set_creditor_bank_profile',
+      payload: { workspaceId: 'ws_test', vendorId: 'ct_99', iban: 'CH5604835012345678009', idempotencyKey: 'ku' },
+    };
+    wrap(<VorschlagCard action={unnamed} accent onApprove={() => undefined} onReject={() => undefined} />);
+    expect(document.querySelector('.vorschlag-readback')?.textContent ?? '').toContain('ct_99');
+  });
 });
 
 describe('CP4-CP5: the partial-turn sentence claims only what executed', () => {

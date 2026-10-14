@@ -413,7 +413,8 @@ export const SCENARIOS = {
     address: { street: 'Bahnhofstrasse', buildingNo: '1', zip: '8001', town: 'Zürich', country: 'CH' },
   }),
 
-  update_company_profile: (fx) => ({ workspaceId: fx.workspaceId, legalForm: 'ag' }),
+  // D163: the workspace default Zahlungsfrist rides the same absolute set, so the scenario drives it too.
+  update_company_profile: (fx) => ({ workspaceId: fx.workspaceId, legalForm: 'ag', defaultPaymentTermsDays: 30 }),
 
   // --- A01, accounts and cost centres ----------------------------------------------------------
   create_account: (fx) => ({
@@ -612,7 +613,7 @@ export const SCENARIOS = {
 
   update_contact: (fx) => {
     const c = fx.call('create_contact', { partyRole: 'customer', name: 'Patch AG', idempotencyKey: 'uc-seed' });
-    return { workspaceId: fx.workspaceId, contactId: c.contact.id, patch: { email: 'buchhaltung@example.ch' } };
+    return { workspaceId: fx.workspaceId, contactId: c.contact.id, patch: { email: 'buchhaltung@example.ch', paymentTermsDays: 0 } };
   },
 
   archive_contact: (fx) => {
@@ -2229,6 +2230,14 @@ export const SCENARIOS = {
     return { workspaceId: fx.workspaceId, idempotencyKey: 'pdr-1' };
   },
 
+  // D161.3: a proposed run is discarded whole and its day freed; the keyed replay answers the stored
+  // result and touches nothing.
+  discard_dunning_run: (fx) => {
+    seedOverdueInvoice(fx, 'ddr');
+    const proposed = fx.call('propose_dunning_run', { idempotencyKey: 'ddr-propose' });
+    return { workspaceId: fx.workspaceId, runId: proposed.runId, idempotencyKey: 'ddr-1' };
+  },
+
   issue_dunning_run: (fx) => {
     seedOverdueInvoice(fx, 'idr');
     const proposed = fx.call('propose_dunning_run', { idempotencyKey: 'idr-propose' });
@@ -2367,6 +2376,24 @@ export const SCENARIOS = {
     };
   },
 
+  // A36 §4.7 (D150): two day-end statements dropped in REVERSE number order, one file each: the pass
+  // sorts them, imports both, and the replay of the call key writes nothing (each statement also has
+  // its own content key, so even a new call key would import nothing twice).
+  import_camt_files: (fx) => {
+    const bankAccountId = bankAccount(fx, 'icf');
+    const iban = fx.call('get_bank_account', { bankAccountId }).bankAccount.iban;
+    const day = (seqNb, date, minor) => dayEndXml({ statementId: `ICF-${seqNb}`, seqNb, iban, date, openingMinor: minor, closingMinor: minor });
+    return {
+      workspaceId: fx.workspaceId,
+      bankAccountId,
+      files: [
+        { name: 'tag-2.xml', xml: day('2', '2026-03-03', 50000) },
+        { name: 'tag-1.xml', xml: day('1', '2026-03-02', 50000) },
+      ],
+      idempotencyKey: 'icf-1',
+    };
+  },
+
   confirm_match: (fx) => {
     const vendorBillId = postedVendorBill(fx, 'cm');
     const bankAccountId = bankAccount(fx, 'cm');
@@ -2475,6 +2502,17 @@ export const SCENARIOS = {
     return { workspaceId: fx.workspaceId, bankTxnId: line.bankTxnId, reason: 'auf das falsche Konto gebucht', idempotencyKey: 'rbl-1' };
   },
 
+  // D144 (A39 §12): the model rung's write over the REAL seams: the registered stub adapter with its
+  // deterministic decide (measured calibration, de and fr declared), a chosen model, and an imported
+  // line no reference and no history places. It records ONE model_decision row; its replay records
+  // none (and a second key would find the same input `unchanged`). It posts nothing.
+  suggest_bank_lines: (fx) => {
+    registerRuntime(stubAdapter(), stubManifest());
+    fx.call('runtime_select', { modelRef: 'stub-4b-q4', source: 'catalog', idempotencyKey: 'sbl-sel' });
+    const line = importedLine(fx, 'sbl', 8450, 'DBIT');
+    return { workspaceId: fx.workspaceId, bankTxnIds: [line.bankTxnId], idempotencyKey: 'sbl-1' };
+  },
+
   set_bank_sync_schedule: (fx) => {
     const bankAccountId = bankAccount(fx, 'sbss');
     const c = fx.call('bank_channel_connect', {
@@ -2483,8 +2521,9 @@ export const SCENARIOS = {
       confirm: true,
       idempotencyKey: 'sbss-conn',
     });
-    // The unlink path (no ruleId): a valid write that stores a null pointer, idempotent on replay.
-    return { workspaceId: fx.workspaceId, connectionId: c.connectionId, idempotencyKey: 'sbss-1' };
+    // D142: the daily automatic fetch set to 07:30 (no ruleId, so it also clears an older build's rule
+    // pointer): a valid write, idempotent on replay.
+    return { workspaceId: fx.workspaceId, connectionId: c.connectionId, mode: 'daily', atTime: '07:30', idempotencyKey: 'sbss-1' };
   },
 
   // --- A07, the MWST-Abrechnung ----------------------------------------------------------------
@@ -2813,6 +2852,18 @@ export const SCENARIOS = {
     subject: 'Rechnung {{invoice_number}} von {{company_name}}',
     body: 'Guten Tag {{contact_name}}\n\nIm Anhang die Rechnung {{invoice_number}} über {{amount_total}}, zahlbar bis {{due_date}}.\n\nFreundliche Grüsse\n{{company_name}}',
   }),
+  // The inverse: a REAL saved slot is written first, so the first call deletes a row and the gate's
+  // double-call then exercises the idempotent half (an unsaved slot answers ok, unchanged, and
+  // touches nothing).
+  dispatch_text_reset: (fx) => {
+    fx.call('dispatch_text_upsert', {
+      documentKind: 'quote',
+      locale: 'fr-CH',
+      subject: 'Offre {{quote_number}}',
+      body: 'Bonjour {{contact_name}}',
+    });
+    return { workspaceId: fx.workspaceId, documentKind: 'quote', locale: 'fr-CH' };
+  },
 
   // --- G06, notifications & inbox ----------------------------------------------------------------
   // The recipient is ALWAYS the fixture actor (`agent`): the queue verbs are self-scoped
@@ -3224,6 +3275,39 @@ export const SCENARIOS = {
     return { workspaceId: fx.workspaceId, batchId, idempotencyKey: 'dpb-1' };
   },
 
+  // --- A40, payment timing ---------------------------------------------------------------------
+  // None of the four posts: a Skonto term and a planned flow are sidecar rows, a proposal is one plan
+  // row plus its lines (UNIQUE on the inputs hash, so a re-run on the same books adds no row under any
+  // key), and drafting calls A18's createPaymentBatch once per date (a draft run, no journal row).
+  liquidity_skonto_set: (fx) => {
+    const { vendorId } = payableBillReady(fx, 'lss');
+    return { workspaceId: fx.workspaceId, vendorId, rateBp: 200, days: 10, idempotencyKey: 'lss-1' };
+  },
+
+  liquidity_flow_set: (fx) => ({
+    workspaceId: fx.workspaceId,
+    label: 'Miete Büro',
+    direction: 'out',
+    amountMinor: 300000,
+    currency: 'CHF',
+    firstDate: '2026-08-01',
+    recurrence: 'monthly',
+    idempotencyKey: 'lfs-1',
+  }),
+
+  liquidity_plan_propose: (fx) => {
+    liquidityWorld(fx, 'lpp');
+    return { workspaceId: fx.workspaceId, floorMinor: 1000000, idempotencyKey: 'lpp-1' };
+  },
+
+  // The money assertion: a re-run instead of a replay would draft a SECOND A18 run for the same bill
+  // (A18's already_batched would then refuse, so the replay is what keeps the call idempotent).
+  liquidity_plan_draft_batches: (fx) => {
+    const { bankAccountId } = liquidityWorld(fx, 'lpd');
+    const plan = fx.call('liquidity_plan_propose', { floorMinor: 1000000, idempotencyKey: 'lpd-plan' });
+    return { workspaceId: fx.workspaceId, planId: plan.planId, bankAccountId, idempotencyKey: 'lpd-1' };
+  },
+
   // --- A33, EBICS bank channel -----------------------------------------------------------------
   // No EBICS transport is wired in the conformance context, so every A33 write returns its honest
   // OSS-core outcome (ok:true): connect generates keys + files the INI letter locally (keys_generated),
@@ -3519,7 +3603,8 @@ export const SCENARIOS = {
   // `tokenOnce`): `portal_resolve` STAMPS `last_resolved_at` and appends the revDSG access-trail row on
   // every read-through (a write, not a read: it records that the token was seen), and
   // `portal_quote_accept` drives C02's real accept through the token. The extra `workspaceId` `fx.call`
-  // binds is harmless: the depsAction reads the token, never the tenant.
+  // binds is harmless: the depsAction reads the token, never the tenant. D157: a draft opens nothing,
+  // so the two token scenarios SEND the grant (confirmed) before they resolve or accept through it.
   portal_grant_create: (fx) => {
     const c = fx.call('create_contact', { partyRole: 'customer', name: 'Portal AG', idempotencyKey: 'pgc-contact' });
     return {
@@ -3563,6 +3648,7 @@ export const SCENARIOS = {
       expiresAt: '2027-01-31',
       idempotencyKey: 'pres-grant',
     });
+    fx.call('portal_grant_send', { grantId: g.grantId, confirmed: true, idempotencyKey: 'pres-send' });
     // Token-authenticated, pre-workspace: the grant binds the tenant, so no workspaceId is passed. The
     // double-call gate re-runs this write (it carries no key) and skips the audit tables; the frozen
     // clock stamps the same last_resolved_at both times, so the business row does not move.
@@ -3579,6 +3665,7 @@ export const SCENARIOS = {
       expiresAt: '2027-01-31',
       idempotencyKey: 'pqa-grant',
     });
+    fx.call('portal_grant_send', { grantId: g.grantId, confirmed: true, idempotencyKey: 'pqa-send-grant' });
     return { token: g.tokenOnce, quoteId: q.document.id, idempotencyKey: 'pqa-1' };
   },
 
@@ -3720,6 +3807,25 @@ export const SCENARIOS = {
     const asked = fx.call('agent_ask', { workspaceId: fx.workspaceId, text: 'Wie hoch ist der Umsatz?', idempotencyKey: 'apd-seed' });
     fx.deps.actor = 'studio';
     return { workspaceId: fx.workspaceId, sessionId: asked.sessionId, idempotencyKey: 'apd-1' };
+  },
+
+  // A36 §4.7 (D150): the confirmation that a CHAINED statement gap holds nothing. A real gap in the
+  // books (statements 1 and 3 imported by hand, 3 opening on 1's close): the confirm appends ONE ack row
+  // and its replay none. The withdrawal appends one more row beside it, never touching the confirm.
+  // PLACED HERE, after the A35 block, on purpose: the confirmation is a person's act, so these run as
+  // the Studio seat (`chainedGapAccount` sets it), and the shared restore worlds
+  // (`test/data/restore-worlds.mjs`) drive every scenario in this order in ONE fixture, where the seat
+  // is already the Studio's from `set_agent_dial` on. Earlier, the switch would change the seat of
+  // every scenario between here and there.
+  confirm_statement_gap: (fx) => {
+    const gap = chainedGapAccount(fx, 'csg');
+    return { workspaceId: fx.workspaceId, ...gap, reason: 'Tag ohne Buchungen', confirmed: true, idempotencyKey: 'csg-1' };
+  },
+
+  revoke_statement_gap_confirmation: (fx) => {
+    const gap = chainedGapAccount(fx, 'rsg');
+    fx.call('confirm_statement_gap', { ...gap, reason: 'Tag ohne Buchungen', confirmed: true, idempotencyKey: 'rsg-confirm' });
+    return { workspaceId: fx.workspaceId, ...gap, reason: 'doch eine Buchung gefunden', confirmed: true, idempotencyKey: 'rsg-1' };
   },
 
   // --- G10, migration maps ---------------------------------------------------------------------
@@ -3869,6 +3975,9 @@ export const SCENARIOS = {
     };
   },
 
+  // D156 Q6: dial-governed under `go-live`. This scenario drives the registry face, where the verb
+  // runs; over the transport an agent seat's call drafts and the approval replays as the human
+  // (test/agent/dial-covers-irreversible.test.mjs drives that face from this same scenario).
   migration_record_approval: (fx) => {
     const { planId, stepId } = seedG09Step(fx, 'mra', 'opening_balances');
     fx.call('migration_trial_load_step', { planId, stepId, idempotencyKey: 'mra-trial' });
@@ -4139,6 +4248,20 @@ export const SCENARIOS = {
     }).planId;
     fx.call('migration_create_testmandant', { planId, idempotencyKey: 'dst-t' });
     return { workspaceId: fx.workspaceId, planId, confirmed: true, idempotencyKey: 'dst-1' };
+  },
+
+  // The orphan exit: a sandbox no plan links any more (the shape an env_copy of the sandbox alone
+  // leaves), discarded by naming it. Its plan's link is cleared the way a sweep clears it.
+  discard_orphan_testmandant: (fx) => {
+    const planId = fx.call('migration_create_plan', {
+      sourceSystem: 'csv',
+      cutoverDate: '2020-01-01',
+      localePack: 'ch',
+      idempotencyKey: 'dot-plan',
+    }).planId;
+    const sandbox = fx.call('migration_create_testmandant', { planId, idempotencyKey: 'dot-t' }).workspaceId;
+    fx.deps.store.db.prepare('UPDATE migration_plan SET testmandant_workspace_id = NULL WHERE id = ?').run(planId);
+    return { workspaceId: sandbox, confirmed: true, idempotencyKey: 'dot-1' };
   },
 
   // --- E02, HR-lite (employees, absences, expense claims) --------------------------------------
@@ -4653,6 +4776,9 @@ export const SCENARIOS = {
 
   requisition_approve: (fx) => {
     const id = requisitionSeed(fx, 'rqa').id;
+    // D161.2: the agent seat raised it, and a governed seat never approves its own requisition, so the
+    // approver is a person (the set_agent_dial precedent: the scenario runs its fixture as studio).
+    fx.deps.actor = 'studio';
     return { workspaceId: fx.workspaceId, requisitionId: id, comment: 'ok', idempotencyKey: 'rqa-app' };
   },
 
@@ -4680,7 +4806,7 @@ export const SCENARIOS = {
 
   requisition_convert_to_po: (fx) => {
     const seeded = requisitionSeed(fx, 'rqc');
-    fx.call('requisition_approve', { requisitionId: seeded.id, idempotencyKey: 'rqc-app' });
+    approveRequisitionAsPerson(fx, seeded.id, 'rqc-app');
     const detail = fx.call('requisition_get', { requisitionId: seeded.id }).requisition;
     return {
       workspaceId: fx.workspaceId,
@@ -4702,7 +4828,7 @@ export const SCENARIOS = {
 
   requisition_close: (fx) => {
     const seeded = requisitionSeed(fx, 'rqcl');
-    fx.call('requisition_approve', { requisitionId: seeded.id, idempotencyKey: 'rqcl-app' });
+    approveRequisitionAsPerson(fx, seeded.id, 'rqcl-app');
     const detail = fx.call('requisition_get', { requisitionId: seeded.id }).requisition;
     fx.call('requisition_convert_to_po', {
       requisitionId: seeded.id,
@@ -5313,6 +5439,11 @@ function maintenanceAssetSeed(fx, prefix) {
   return asset.asset.id;
 }
 
+/** D161.2: the agent seat raised the seeded requisition, so a person approves it. */
+function approveRequisitionAsPerson(fx, requisitionId, idempotencyKey) {
+  return getAction('requisition_approve').run({ ...fx.deps, actor: 'studio' }, { workspaceId: fx.workspaceId, requisitionId, idempotencyKey });
+}
+
 function requisitionSeed(fx, prefix) {
   const vendor = fx.call('create_contact', { partyRole: 'vendor', name: 'Lieferant GmbH', idempotencyKey: `${prefix}-v` }).contact.id;
   const r = fx.call('requisition_upsert', {
@@ -5576,6 +5707,43 @@ function camtFixtureXml({ statementId, seqNb = '1', iban, entryRef, amountMinor,
 </Ntry></Stmt></BkToCstmrStmt></Document>`;
 }
 
+/** A day-end camt.053 with no entries: number, day and the two balances (A36 §4.7 scenarios). */
+function dayEndXml({ statementId, seqNb, iban, date, openingMinor, closingMinor }) {
+  const amt = (m) => (m / 100).toFixed(2);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+<BkToCstmrStmt><GrpHdr><MsgId>${statementId}-msg</MsgId><CreDtTm>${date}T22:00:00</CreDtTm></GrpHdr>
+<Stmt><Id>${statementId}</Id><ElctrncSeqNb>${seqNb}</ElctrncSeqNb>
+<FrToDt><FrDtTm>${date}T00:00:00</FrDtTm><ToDtTm>${date}T23:59:59</ToDtTm></FrToDt>
+<Acct><Id><IBAN>${iban}</IBAN></Id></Acct>
+<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">${amt(openingMinor)}</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">${amt(closingMinor)}</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+</Stmt></BkToCstmrStmt></Document>`;
+}
+
+/**
+ * A36 §4.7: a Bankkonto whose books hold day-end statements 1 and 3, the second opening exactly on the
+ * first's close, so the hole at 2 CHAINS and may be confirmed. Returns the confirm verbs' fixed input.
+ */
+function chainedGapAccount(fx, seed) {
+  // The confirmation is a PERSON's act: the engine refuses a governed seat (`human_only`), and the harness
+  // default seat is the agent, so these scenarios run as the local Studio seat, the person at the button.
+  fx.deps.actor = 'studio';
+  const bankAccountId = bankAccount(fx, seed);
+  const iban = fx.call('get_bank_account', { bankAccountId }).bankAccount.iban;
+  const first = fx.call('import_camt', {
+    bankAccountId,
+    xml: dayEndXml({ statementId: `${seed}-S1`, seqNb: '1', iban, date: '2026-03-02', openingMinor: 100000, closingMinor: 100000 }),
+    idempotencyKey: `${seed}-s1`,
+  });
+  const third = fx.call('import_camt', {
+    bankAccountId,
+    xml: dayEndXml({ statementId: `${seed}-S3`, seqNb: '3', iban, date: '2026-03-04', openingMinor: 100000, closingMinor: 100000 }),
+    idempotencyKey: `${seed}-s3`,
+  });
+  return { bankAccountId, afterStatementId: first.statementId, beforeStatementId: third.statementId };
+}
+
 /**
  * A39: one bank line brought in by a REAL camt import on a fresh Bankkonto (the published SIX sample
  * IBAN the register takes), so every inbox scenario decides a line that exists exactly as a statement
@@ -5636,6 +5804,26 @@ function batchReady(fx, seed) {
     idempotencyKey: `${seed}-batch`,
   });
   return { batchId: created.batchId, bankAccountId, billId, vendorId };
+}
+
+/**
+ * A40's shared world: CHF 50'000 on a registered Bankkonto (posted against 2800), and one posted open
+ * bill (due 31.3., so overdue at the fixture clock and payable today) whose vendor's IBAN is on file.
+ */
+function liquidityWorld(fx, seed) {
+  const { billId, vendorId } = payableBillReady(fx, seed);
+  const bankAccountId = bankAccount(fx, seed);
+  fx.call('set_creditor_bank_profile', { vendorId, iban: 'CH93 0076 2011 6238 5295 7', idempotencyKey: `${seed}-cbp` });
+  fx.call('post_entry', {
+    date: '2026-07-01',
+    source: 'manual',
+    idempotencyKey: `${seed}-capital`,
+    lines: [
+      { account: fx.accId('1020'), debit: 5000000 },
+      { account: fx.accId('2800'), credit: 5000000 },
+    ],
+  });
+  return { billId, vendorId, bankAccountId };
 }
 
 /**
@@ -5763,6 +5951,53 @@ function costingSeed(fx, prefix) {
 }
 
 export const READ_SCENARIOS = {
+  // --- A02, compose_entry (D152 amendment; critic R4-E3): BOTH modes, on a book that holds a draft and a
+  // posted entry. A scenario may answer several inputs; the runner drives every one of them between ONE
+  // snapshot and the next, so a compose_entry that touched a single row (the critic's mutation UPDATEd
+  // every draft on each call) fails here. The posted entry carries the same VAT booking, so `decompose`
+  // reads a real trace off each status.
+  compose_entry: (fx) => {
+    fx.call('vat_configure', { method: 'effektiv', timing: 'soll', registered: true, idempotencyKey: 'cmp-vat' });
+    const lines = [
+      { account: fx.accId('6500'), debit: 9963, taxCode: 'VST-M', taxBase: 9963, taxAmount: 807 },
+      { account: fx.accId('1170'), debit: 807 },
+      { account: fx.accId('1020'), credit: 10770 },
+    ];
+    const draft = fx.call('save_draft', { date: '2026-03-02', lines, idempotencyKey: 'cmp-draft' });
+    const posted = fx.call('post_entry', { date: '2026-03-02', source: 'manual', lines, idempotencyKey: 'cmp-post' });
+    return [
+      {
+        workspaceId: fx.workspaceId,
+        mode: 'expand',
+        date: '2026-03-02',
+        entryId: draft.entryId,
+        lines: [
+          { account: fx.accId('6500'), side: 'debit', amount: 10770, gross: true, taxCode: 'VST-M' },
+          { account: fx.accId('1020'), side: 'credit', amount: 10770, gross: true },
+        ],
+      },
+      { workspaceId: fx.workspaceId, mode: 'decompose', entryId: draft.entryId },
+      { workspaceId: fx.workspaceId, mode: 'decompose', entryId: posted.entryId },
+    ];
+  },
+  // --- A40, payment timing: three pure reads over a really-proposed plan ------------------------
+  // The forecast recomputes every flow on each call and stores nothing (P5); the plan reads are
+  // SELECTs over payment_plan / payment_plan_line. The snapshot proves each writes nothing.
+  liquidity_forecast: (fx) => {
+    liquidityWorld(fx, 'lqf');
+    const plan = fx.call('liquidity_plan_propose', { floorMinor: 1000000, idempotencyKey: 'lqf-plan' });
+    return { workspaceId: fx.workspaceId, planId: plan.planId, granularity: 'week' };
+  },
+  liquidity_plan_get: (fx) => {
+    liquidityWorld(fx, 'lqg');
+    const plan = fx.call('liquidity_plan_propose', { floorMinor: 1000000, idempotencyKey: 'lqg-plan' });
+    return { workspaceId: fx.workspaceId, planId: plan.planId };
+  },
+  liquidity_plan_list: (fx) => {
+    liquidityWorld(fx, 'lql');
+    fx.call('liquidity_plan_propose', { floorMinor: 1000000, idempotencyKey: 'lql-plan' });
+    return { workspaceId: fx.workspaceId };
+  },
   // --- A20, camt reconciliation: the statement list is a pure read over bank_statement/bank_txn ----
   // One import first, so the read answers with a real statement and its open-line count rather than
   // the empty-workspace path; the snapshot proves the read itself writes nothing.
@@ -6975,8 +7210,14 @@ function seedForecastWorld(fx, prefix) {
  * settlement), each a derivation from the ledger and A07's return, writing nothing.
  * A39 (the lean bank inbox) makes it ONE HUNDRED AND TWENTY-ONE (+1): `list_bank_inbox` over a booked
  * and an open line, a pure SELECT; the whole-database snapshot proves it writes nothing.
+ * A40 (payment timing) makes it ONE HUNDRED AND TWENTY-FOUR (+3): `liquidity_forecast` (weekly, with a
+ * plan overlaid), `liquidity_plan_get` and `liquidity_plan_list` over a really-proposed plan; the
+ * forecast recomputes and stores nothing, and the snapshot proves all three inert.
+ * D152's amendment makes it ONE HUNDRED AND TWENTY-FIVE (+1): `compose_entry`, both modes (`expand` of
+ * an intent onto a draft, `decompose` of a draft and of a posted entry) in a book holding both, driven
+ * between one snapshot and the next (critic R4-E3).
  */
-export const READ_SCENARIO_FLOOR = 121;
+export const READ_SCENARIO_FLOOR = 125;
 
 /**
  * THE ONE BLESSED READ-VERB WRITER (D96), and nothing else.
@@ -7028,6 +7269,8 @@ export const IDEMPOTENCY_KEY_EXEMPT = Object.freeze({
   set_fiscal_config: 'Sets fields to absolute values. Re-applying the same config is the same config.',
   dispatch_text_upsert:
     'Asserts the absolute state of one (documentKind, locale) text slot: a second delivery re-asserts the same subject/body and cannot accumulate, and a value-identical upsert is a FULL no-op that touches nothing, updated_at included (G05 section 10.4).',
+  dispatch_text_reset:
+    'Asserts the absolute state "this (documentKind, locale) slot has no saved text": a second delivery finds the slot already unsaved, answers ok with unchanged:true and touches nothing (G05 section 10.4).',
   advance_onboarding_step:
     'Sets the wizard resume pointer (path, step) to absolute values, one row per workspace. A replay re-asserts the same pointer; nothing accumulates and nothing downstream gates on it (G03 section 4).',
   advance_move_step:

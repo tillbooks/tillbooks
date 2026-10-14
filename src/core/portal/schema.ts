@@ -21,6 +21,17 @@
  * is NEVER deleted: revocation stamps `revoked_at` (§H-AUDIT spirit, the grant history is the revDSG
  * access trail). `sent_at` records the P8 hand-over (draft -> active); expiry is computed, never a
  * bespoke state machine.
+ *
+ * `minted_draft` (D157) is an ENGINE-WRITTEN marker no caller can set: every grant minted since D157
+ * carries 1, and a grant that carries 1 opens nothing until `sent_at` is stamped. Its DEFAULT 0 is
+ * what every row written before D157 reads (here for a fresh book, through `ADDITIVE_COLUMNS` for an
+ * existing one, and through the DDL default for a restored old snapshot, whose `loadTable` inserts only
+ * the snapshot's own columns), so a pre-D157 grant stays live until its own expiry (owner decision 1).
+ * A RESTORE is the exception (D161.2): every restored grant that is not revoked lands a draft again
+ * (`portalGrantsAwaitHandover` in `data/portability.ts`), because a backup cannot know of a revocation
+ * made after it.
+ * The default FAILS OPEN, which is why `test/portal/grant-liveness.test.mjs` requires every
+ * insert into this table under `src/` to name the column. A shape-only change: no generation bump.
  */
 
 export const PORTAL_SCHEMA_SQL = `
@@ -34,6 +45,7 @@ CREATE TABLE IF NOT EXISTS portal_grant (
   expires_at          TEXT NOT NULL,
   sent_at             TEXT,
   revoked_at          TEXT,
+  minted_draft        INTEGER NOT NULL DEFAULT 0,
   last_resolved_at    TEXT,
   local_artifact_json TEXT NOT NULL,
   created_by          TEXT NOT NULL,

@@ -15,6 +15,7 @@
     "taxMinor": 0,
     "totalMinor": 150000,
     "issueDate": "2026-07-16",
+    "supplyDate": null,
     "dueDate": null,
     "sentToEmail": null,
     "notes": null,

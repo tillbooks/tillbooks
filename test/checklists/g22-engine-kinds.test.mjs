@@ -838,20 +838,22 @@ test('auto-start: the seed inserts the two rules once, a disabled rule is never 
   const disabled = w.deps.store.db.prepare('SELECT enabled FROM automation_rule WHERE workspace_id = ? AND id = ?').get(w.wid, monthRuleId);
   assert.equal(disabled.enabled, 0, 'the seed never re-enables a rule the owner disabled');
 
-  // The tick: the vat_period rule fires checklist_start with no period, which picks 2026-Q2 and is
+  // The tick: the vat_period rule fires checklist_start with no period, which picks 2026-Q3 and is
   // idempotent on the natural key, so a second day starts nothing new. The tick refuses an `asOf`
-  // ahead of the clock, so the clock walks forward one day per tick.
-  let today = '2026-07-16T03:00:00.000Z';
+  // ahead of the clock, so the clock walks forward one day per tick. (The world is created on 16.07.,
+  // so Q2 ended before these books began and the beta-launch P0.4a bound skips it: the first period
+  // the rule may start is Q3, on its first tick in October.)
+  let today = '2026-10-02T03:00:00.000Z';
   w.deps.clock = { now: () => today };
   const runsOf = () => must(w.call('checklist_list', { templateId: 'vat_period' }), 'list').runs;
   assert.equal(runsOf().length, 0);
   must(w.call('run_due_automations', { asOf: today }), 'tick 1');
   const afterFirst = runsOf();
   assert.equal(afterFirst.length, 1);
-  assert.equal(afterFirst[0].periodLabel, '2026-Q2');
-  today = '2026-07-17T03:00:00.000Z';
+  assert.equal(afterFirst[0].periodLabel, '2026-Q3');
+  today = '2026-10-03T03:00:00.000Z';
   must(w.call('run_due_automations', { asOf: today }), 'tick 2');
-  today = '2026-07-18T03:00:00.000Z';
+  today = '2026-10-04T03:00:00.000Z';
   must(w.call('run_due_automations', { asOf: today }), 'tick 3');
   assert.equal(runsOf().length, 1, 'three ticks, one run');
   const fired = w.deps.store.db

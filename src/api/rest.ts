@@ -11,7 +11,7 @@
 
 import type { Result } from '../core/result.js';
 import { getAction } from './registry.js';
-import { runGoverned } from './agent-gate.js';
+import { runGoverned, runGovernedAsync } from './agent-gate.js';
 import type { ApiDeps } from './registry.js';
 
 export interface RestResponse {
@@ -32,6 +32,20 @@ export function handleRest(actionName: string, input: Record<string, unknown>, d
   // the agent seat it records the call and routes a dial-governed write. REST has no connection, so
   // no transport key rides along and the recorder's idle-gap session rule applies.
   const result = runGoverned(deps, action, input ?? {});
+  return { status: result.ok ? 200 : 422, body: result };
+}
+
+/**
+ * D142: the same dispatch for a host that can await (the local HTTP face). Identical to `handleRest` for
+ * every verb except one the host runs off the main thread (`bank_sync` under `till up`), whose answer
+ * arrives when the worker finishes while the process keeps serving other requests.
+ */
+export async function handleRestAsync(actionName: string, input: Record<string, unknown>, deps: ApiDeps): Promise<RestResponse> {
+  const action = getAction(actionName);
+  if (action === undefined) {
+    return { status: 404, body: { ok: false, error: 'unknown_action', action: actionName } };
+  }
+  const result = await runGovernedAsync(deps, action, input ?? {});
   return { status: result.ok ? 200 : 422, body: result };
 }
 

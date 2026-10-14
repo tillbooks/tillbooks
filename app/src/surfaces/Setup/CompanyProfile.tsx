@@ -15,6 +15,13 @@
  *    three panels with three saves and the IBAN refused to save without the address; J1.1 measured
  *    26 clicks and 112 keystrokes on that face against an ideal of 9 and 60.
  *
+ * D152 (the cognitive-load pass on this face): ONE Speichern for the whole page, in the surface
+ * header's action slot, writing only the dirty parts (the profile panel and the eBill panel each
+ * expose a `save`); the panel explainers sit behind an (i); the QR-bill issuer block is closed on load
+ * unless its name really differs from the Firmenname; the custom-fields panel exists only once there
+ * are fields. Measured at 1280x800: 2 explainers in the viewport to 0, two Speichern to one, one block
+ * open on load to none.
+ *
  * All five states render: loading (Skeleton), empty (no workspace), error (a real engine `Err` with a
  * retry), success (the profile form), and permission-denied (the padlock panel, A24 RBAC is a
  * permissive stub today but the branch is built and tested).
@@ -23,7 +30,7 @@
  * period-aligned change (nav `vat`), so this surface configures VAT only ONCE, while none is stored.
  * Every visible string comes from an i18n key; no money figure appears on this form.
  */
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent, type ReactNode, type Ref } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
@@ -33,7 +40,8 @@ import { useT, useI18n, type I18n } from '../../i18n';
 import { Skeleton, EmptyState, ErrorBanner, PermissionDenied, refusalText } from '../../components/states';
 import { Select } from '../../components/Select';
 import { useCan, CAP } from '../../lib/capabilities';
-import { AlertGlyph, LockGlyph } from '../../components/states/glyphs';
+import { AlertGlyph, InfoGlyph, LockGlyph } from '../../components/states/glyphs';
+import { Tooltip } from '../../components/Tooltip';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { ChevronDownGlyph, ChevronRightGlyph } from '../../components/icons';
@@ -75,15 +83,20 @@ interface Profile {
   creditorIban?: string;
   /**
    * NOT engine-backed yet: `getCompanyProfile` does not return this, so it is always empty. The
-   * capability that defines custom fields is the G-cluster (Wave 10). The panel's copy says the
-   * feature does not exist rather than "none are defined", which would invite a hunt for a button
-   * that is not there. Do not read an empty panel as "the workspace has none".
+   * capability that defines custom fields is the G-cluster (Wave 10). D152 rule 2: the panel renders
+   * only once there are fields to show, so today it is absent rather than a panel announcing that the
+   * feature does not exist (it used to, and cost 124px and two sentences on every visit).
    * This is the same shape as the `ledgerLocked` defect fixed on 2026-07-20: a field the Studio
-   * declared and the engine never sent. Kept deliberately, with the honesty in the copy.
+   * declared and the engine never sent. Kept deliberately, so the panel appears the day it is sent.
    */
   customFields?: CustomField[];
   /** True once a posted entry exists: the engine then locks currency + fiscal-year (§H-FX). */
   ledgerLocked?: boolean;
+  /**
+   * D163: the workspace default Zahlungsfrist in days (0 to 365), or null when none is set. A document
+   * whose customer or supplier has no terms of its own falls due this many days after its date.
+   */
+  defaultPaymentTermsDays?: number | null;
 }
 
 /** The three legal forms the §H-ENUM fixes for A00. A relabel or extra value would misclassify duty. */
@@ -100,6 +113,11 @@ const LEGAL_FORMS = ['einzelfirma', 'gmbh', 'ag'] as const;
 const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
+
+/** A stored Standard-Zahlungsfrist as the field shows it: its digits, or blank when none is set. */
+function termsText(days: number | null | undefined): string {
+  return typeof days === 'number' && Number.isSafeInteger(days) && days >= 0 ? String(days) : '';
+}
 
 /** Split a stored `MM-DD` into its parts, falling back to 01-01 on anything malformed. */
 function splitMonthDay(value: string): { month: number; day: number } {
@@ -292,25 +310,35 @@ function CreateWorkspace() {
 // Loaded profile: the persistent settings panel.
 // ---------------------------------------------------------------------------------------------
 
-/** Inline saved / saving / error status for one save group. Glyph plus text, never colour alone. */
-function SaveStatus({ saving, saved, error }: { saving: boolean; saved: boolean; error: Err | null }) {
+/**
+ * The parts of the page the ONE Speichern writes (D152 rule 3: one action, one place). Each part is
+ * written through the verb that owns it, and only when it is dirty; a part that fails is named in the
+ * header's one-line summary and stays dirty, so the next Speichern retries exactly that part.
+ */
+type PartKey = 'identity' | 'uid' | 'mwstNo' | 'fiscal' | 'vat' | 'creditor' | 'ebill' | 'terms';
+
+/** What a panel hands the page's one save: write your dirty facts, answer with the parts that failed. */
+interface PartHandle {
+  save: () => Promise<PartKey[]>;
+}
+
+/** The page save's state, shown beside the one Speichern in the surface header. */
+type SaveState = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved' } | { kind: 'failed'; parts: PartKey[] };
+
+/**
+ * The one-line save state beside Speichern. Glyph plus text, never colour alone. A failure names the
+ * PART that failed ("Nicht gespeichert: eBill"); the reason sits at the field, where it can be fixed.
+ */
+function SaveSummary({ state }: { state: SaveState }) {
   const t = useT();
-  if (error !== null) {
-    return (
-      <p className="status-line status-error" role="alert">
-        <AlertGlyph className="status-glyph status-glyph-error" size={16} />
-        {fieldErrMessage(t, error)}
-      </p>
-    );
-  }
-  if (saving) {
+  if (state.kind === 'saving') {
     return (
       <p className="status-line" role="status">
         {t('company.saving')}
       </p>
     );
   }
-  if (saved) {
+  if (state.kind === 'saved') {
     return (
       <p className="status-line status-ok" role="status">
         <CheckCircleGlyph className="status-glyph status-glyph-ok" size={16} />
@@ -318,43 +346,45 @@ function SaveStatus({ saving, saved, error }: { saving: boolean; saved: boolean;
       </p>
     );
   }
+  if (state.kind === 'failed') {
+    return (
+      <p className="status-line status-error" role="status">
+        <AlertGlyph className="status-glyph status-glyph-error" size={16} />
+        {t('company.notSaved', { parts: state.parts.map((p) => t(`company.parts.${p}`)).join(', ') })}
+      </p>
+    );
+  }
   return null;
 }
 
-/** Drive one write verb, tracking saving / saved / error for its panel. */
-function useSaver(action: string) {
-  const client = useClient();
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<Err | null>(null);
-
-  const save = useCallback(
-    async (input: Record<string, unknown>): Promise<boolean> => {
-      setSaving(true);
-      setSaved(false);
-      setError(null);
-      const resp: RestResponse = await client.call(action, input);
-      setSaving(false);
-      if (isErr(resp.body)) {
-        setError(resp.body);
-        return false;
-      }
-      setSaved(true);
-      return true;
-    },
-    [client, action],
+/**
+ * D152 rule 4, words on demand: the (i) beside a heading or a label, whose real tooltip holds the
+ * explanation that used to sit under it as a paragraph. The shared `Tooltip` (aria-describedby,
+ * hover and focus, Escape) around an icon button, the same (i) the composer's consequence uses.
+ */
+function InfoTip({ topic, children }: { topic: string; children: ReactNode }) {
+  const t = useT();
+  return (
+    <span className="setup-info">
+      <Tooltip content={children} placement="bottom">
+        <button type="button" className="btn btn--ghost btn--icon btn--sm setup-info-trigger" aria-label={t('company.infoLabel', { topic })}>
+          <InfoGlyph size={16} />
+        </button>
+      </Tooltip>
+    </span>
   );
-
-  return { save, saving, saved, error };
 }
 
-function Panel({ title, children }: { title: string; children: ReactNode }) {
+function Panel({ title, info, children }: { title: string; info?: ReactNode; children: ReactNode }) {
   const headingId = useId();
   return (
     <section className="panel setup-panel" aria-labelledby={headingId}>
-      <h2 id={headingId} className="setup-panel-title">
-        {title}
-      </h2>
+      <div className="setup-panel-head">
+        <h2 id={headingId} className="setup-panel-title">
+          {title}
+        </h2>
+        {info !== undefined && <InfoTip topic={title}>{info}</InfoTip>}
+      </div>
       {children}
     </section>
   );
@@ -379,7 +409,7 @@ export function legalFormFromName(name: string): (typeof LEGAL_FORMS)[number] {
 const VAT_CHOICES = ['effektiv', 'saldo', 'none'] as const;
 
 type FirstHourError =
-  | { field: 'name' | 'uid' | 'mwstNo' | 'legalForm' | 'fiscal' | 'vat' | 'iban' | 'address' | 'creditorName' | 'generic'; err: Err };
+  | { field: 'name' | 'uid' | 'mwstNo' | 'legalForm' | 'fiscal' | 'vat' | 'iban' | 'address' | 'creditorName' | 'terms' | 'generic'; err: Err };
 
 /**
  * Map one refusal onto the field that caused it. `set_creditor_profile`'s half is the shared
@@ -388,8 +418,9 @@ type FirstHourError =
  */
 function fieldFor(verb: string, err: Err): FirstHourError {
   if (verb === 'set_creditor_profile') {
-    if (err.error === 'invalid_iban') return { field: 'iban', err };
-    if (err.error === 'needs_structured_address' || err.error === 'illegal_character') return { field: 'address', err };
+    if (err.error === 'invalid_iban' || err.error === 'iban_not_ch_li') return { field: 'iban', err };
+    if (err.error === 'needs_structured_address' || err.error === 'illegal_character' || err.error === 'invalid_country') return { field: 'address', err };
+    if (err.error === 'field_too_long') return { field: (err as { field?: unknown }).field === 'creditorName' ? 'creditorName' : 'address', err };
     if (err.error === 'invalid_name') return { field: 'creditorName', err };
     return { field: 'generic', err };
   }
@@ -398,6 +429,7 @@ function fieldFor(verb: string, err: Err): FirstHourError {
     if (err.error === 'invalid_uid') return { field: 'uid', err };
     if (err.error === 'invalid_mwst_no') return { field: 'mwstNo', err };
     if (err.error === 'invalid_legal_form') return { field: 'legalForm', err };
+    if (err.error === 'invalid_payment_terms_days') return { field: 'terms', err };
     return { field: 'generic', err };
   }
   if (verb === 'set_fiscal_config') return { field: 'fiscal', err };
@@ -409,33 +441,83 @@ const IDENTITY_ERR_KEY: Record<string, string> = {
   invalid_uid: 'company.err.invalidUid',
   invalid_mwst_no: 'company.err.invalidMwstNo',
   invalid_legal_form: 'company.err.invalidLegalForm',
+  invalid_payment_terms_days: 'company.err.invalidPaymentTermsDays',
 };
 
+/** The Studio's own refusal for a terms value that is not a whole number of days (never sent: `Number` would make it NaN). */
+const TERMS_NOT_DAYS: Err = { ok: false, error: 'invalid_payment_terms_days' };
+
+/** The terms field as typed: blank (no default) or digits only. */
+const TERMS_RE = /^\d+$/;
+
+/**
+ * The Studio's own refusal for a stored value cleared to blank. The engine reads an omitted UID,
+ * MWST-Nr, IBAN or issuer name as "keep what is stored" (`companyProfile.ts`), and refuses an
+ * explicit blank, so no verb can remove one: sending the save would report "Gespeichert" while the
+ * old value stays. The part is refused here instead, stays dirty, and the field says the way out.
+ */
+const CANNOT_CLEAR: Err = { ok: false, error: 'studio_cannot_clear' };
+
 function firstHourErrMessage(t: I18n['t'], e: FirstHourError): string {
+  if (e.err.error === CANNOT_CLEAR.error) return t(`company.err.cannotClear.${e.field}`);
   if (e.field === 'vat') return t('company.err.vatFailed');
   const key = FIELD_ERR_KEY[e.err.error] ?? IDENTITY_ERR_KEY[e.err.error];
   return key !== undefined ? t(key) : refusalText(t, e.err);
+}
+
+/** The stored facts the first-hour panel's fields are compared against to decide what is dirty. */
+interface Baseline {
+  name: string;
+  legalForm: string;
+  uid: string;
+  mwstNo: string;
+  baseCurrency: string;
+  fiscalYearStart: string;
+  iban: string;
+  creditorName: string;
+  street: string;
+  buildingNo: string;
+  zip: string;
+  town: string;
+  country: string;
+  /** D163: the Standard-Zahlungsfrist as the field shows it: digits, or blank for none. */
+  terms: string;
 }
 
 /**
  * THE ONE PROFILE PANEL. Before F-09 the same facts lived in three panels with three saves (the
  * legal form in the fiscal panel, the MWST method on `/vat` only, the IBAN in a creditor panel that
  * refused to save without five address fields), and J1.1 measured 26 clicks and 112 keystrokes
- * against an ideal of 9 and 60. Now: name, legal form, MWST method and IBAN on one panel, one save,
- * with the Swiss defaults pre-set (the legal form from the name, MWST effektiv on agreed
- * consideration, registered) and everything read-once behind two disclosures.
+ * against an ideal of 9 and 60. Now: name, legal form, MWST method and IBAN on one panel, with the
+ * Swiss defaults pre-set (the legal form from the name, MWST effektiv on agreed consideration,
+ * registered) and everything read-once behind two disclosures.
  *
- * ONE SAVE, FOUR VERBS. The panel writes through the verbs that own each fact, never a composite:
- * `update_company_profile` (name, legal form, UID, MWST-Nr), `set_fiscal_config` (currency and
- * fiscal year, only when they changed: the §H-FX lock refuses a change after the first posting),
- * `vat_configure` + `vat_seed_defaults` (only while no method is stored: a later change is the
- * period-aligned change `/vat` owns) and `set_creditor_profile` (IBAN, name, and the address when
- * it was given). Each refusal lands on its field; the status line reports the whole save.
+ * ONE SAVE FOR THE PAGE (D152 rule 3). The panel holds no button of its own: the surface header's one
+ * Speichern calls `save` through the ref, and the panel writes through the verbs that own each fact,
+ * never a composite, and only for the parts that are DIRTY (the field differs from what the engine
+ * stores): `update_company_profile` (name, legal form, UID, MWST-Nr), `set_fiscal_config` (currency
+ * and fiscal year: the §H-FX lock refuses a change after the first posting), `vat_configure` +
+ * `vat_seed_defaults` (only while no method is stored: a later change is the period-aligned change
+ * `/vat` owns) and `set_creditor_profile` (IBAN, name, and the address when it was given). A legal form
+ * guessed from the name and the pre-set MWST choice are dirty until saved, because the engine does not
+ * hold them yet. Each refusal lands on its field; a part that failed keeps its old baseline, so it
+ * stays dirty and the next Speichern retries it.
  *
  * THE ADDRESS IS A DEFERRAL, NOT A GATE. The engine stores the IBAN without it (F-09) and the
- * QR-bill asks for it when the first bill renders, so the panel says exactly that under the IBAN.
+ * QR-bill asks for it when the first bill renders. The QR-bill issuer block is closed on load unless
+ * its name really differs from the Firmenname (D152 rule 5); closed, it says itself in one line.
  */
-function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string; profile: Profile; onSaved: () => void }) {
+function FirstHourPanel({
+  workspaceId,
+  profile,
+  onSaved,
+  ref,
+}: {
+  workspaceId: string;
+  profile: Profile;
+  onSaved: () => void;
+  ref: Ref<PartHandle>;
+}) {
   const t = useT();
   const client = useClient();
   const { locale } = useI18n();
@@ -446,7 +528,6 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
     vatTiming: useId(),
     iban: useId(),
     ibanHint: useId(),
-    ibanNote: useId(),
     creditorName: useId(),
     street: useId(),
     buildingNo: useId(),
@@ -457,10 +538,31 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
     mwstNo: useId(),
     currency: useId(),
     fyStart: useId(),
+    terms: useId(),
     lockNote: useId(),
     addressRegion: useId(),
     moreRegion: useId(),
   };
+
+  const address = profile.creditorAddress ?? {};
+  // What the engine stores. A part is dirty while its fields differ from this; a part that saved moves
+  // its slice of the baseline to what was sent, a part that failed keeps the old one.
+  const [baseline, setBaseline] = useState<Baseline>(() => ({
+    name: profile.name ?? '',
+    legalForm: profile.legalForm ?? '',
+    uid: profile.uid ?? '',
+    mwstNo: profile.mwstNo ?? '',
+    baseCurrency: profile.baseCurrency ?? 'CHF',
+    fiscalYearStart: profile.fiscalYearStart ?? '01-01',
+    iban: profile.creditorIban ?? '',
+    creditorName: profile.creditorName ?? '',
+    street: address.street ?? '',
+    buildingNo: address.buildingNo ?? '',
+    zip: address.zip ?? '',
+    town: address.town ?? '',
+    country: address.country ?? 'CH',
+    terms: termsText(profile.defaultPaymentTermsDays),
+  }));
 
   const [name, setName] = useState(profile.name ?? '');
   const [legalForm, setLegalForm] = useState<string>(profile.legalForm ?? legalFormFromName(profile.name ?? ''));
@@ -469,11 +571,25 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
   const vatUnset = profile.vatMethod == null;
   const [vatChoice, setVatChoice] = useState<(typeof VAT_CHOICES)[number]>('effektiv');
   const [vatTiming, setVatTiming] = useState<'soll' | 'ist'>('soll');
+  const [vatDone, setVatDone] = useState(false);
+  /**
+   * Set when `vat_configure` landed and the default code set still has to be seeded; cleared only
+   * when `vat_seed_defaults` lands. It outlives the re-read that flips `vatUnset` (the method is
+   * stored by then), so a failed seed stays dirty and the next Speichern retries the SEED alone,
+   * never re-sending `vat_configure`.
+   */
+  const [seedPending, setSeedPending] = useState(false);
   const [iban, setIban] = useState(profile.creditorIban ?? '');
   const [hintOpen, setHintOpen] = useState(false);
-  const address = profile.creditorAddress ?? {};
   const hasStoredAddress = Boolean(address.street && address.buildingNo && address.zip && address.town && address.country);
-  const [addressOpen, setAddressOpen] = useState(hasStoredAddress);
+  /**
+   * D152 rule 5: the issuer block opens on load only when it says something the Firmenname does not.
+   * An empty issuer name prints the Firmenname on the QR-bill, and an equal one is the same fact typed
+   * twice, so both stay closed behind their one-line summary. A stored address alone does not open
+   * it: the summary line already shows it.
+   */
+  const storedCreditorName = (profile.creditorName ?? '').trim();
+  const [addressOpen, setAddressOpen] = useState(storedCreditorName !== '' && storedCreditorName !== (profile.name ?? '').trim());
   const [creditorName, setCreditorName] = useState(profile.creditorName ?? '');
   const [street, setStreet] = useState(address.street ?? '');
   const [buildingNo, setBuildingNo] = useState(address.buildingNo ?? '');
@@ -485,6 +601,9 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
   const [mwstNo, setMwstNo] = useState(profile.mwstNo ?? '');
   const [baseCurrency, setBaseCurrency] = useState(profile.baseCurrency ?? 'CHF');
   const [fiscalYearStart, setFiscalYearStart] = useState(profile.fiscalYearStart ?? '01-01');
+  // D163: the Standard-Zahlungsfrist, its own part of the one save (`update_company_profile` with
+  // `defaultPaymentTermsDays` alone), so a refused value never holds back the company name.
+  const [terms, setTerms] = useState(termsText(profile.defaultPaymentTermsDays));
   const { month: fyMonth, day: fyDay } = splitMonthDay(fiscalYearStart);
   /**
    * Recombine the two selects into the ISO `MM-DD` the engine stores. The day is clamped to the new
@@ -494,8 +613,6 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
   const setMonthDay = (month: number, day: number) =>
     setFiscalYearStart(`${pad2(month)}-${pad2(Math.min(day, DAYS_IN_MONTH[month - 1]))}`);
 
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [errors, setErrors] = useState<FirstHourError[]>([]);
 
   /**
@@ -509,10 +626,9 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
   const lockNoteId = locked ? ids.lockNote : undefined;
 
   // THE PADLOCKS (A24, F5): the identity, fiscal and creditor writes are `manage_settings`; the MWST
-  // capture is `manage_vat_config`. Without the first the save affordance is absent (and the submit
-  // handler guards the Enter key); without the second the MWST choice is not offered at all, so a
-  // control never shows and then refuses.
-  const canManageSettings = useCan(CAP.manageSettings);
+  // capture is `manage_vat_config`. Without the first the save affordance is absent (and the save
+  // guards the Enter key); without the second the MWST choice is not offered at all, so a control
+  // never shows and then refuses.
   const canManageVat = useCan(CAP.manageVatConfig);
   const offerVat = vatUnset && canManageVat;
 
@@ -520,50 +636,117 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
   const addressTouched = [street, buildingNo, zip, town].some((v) => v.trim().length > 0);
   const addressMissing = !hasStoredAddress && !addressTouched;
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (!canManageSettings || saving) return;
-    setSaving(true);
-    setSaved(false);
+  const identityDirty = name !== baseline.name || legalForm !== baseline.legalForm || uid !== baseline.uid || mwstNo !== baseline.mwstNo;
+  const fiscalDirty = !locked && (baseCurrency !== baseline.baseCurrency || fiscalYearStart !== baseline.fiscalYearStart);
+  const vatDirty = canManageVat && ((offerVat && !vatDone) || seedPending);
+  const termsDirty = terms.trim() !== baseline.terms;
+  const creditorDirty =
+    iban !== baseline.iban ||
+    creditorName !== baseline.creditorName ||
+    street !== baseline.street ||
+    buildingNo !== baseline.buildingNo ||
+    zip !== baseline.zip ||
+    town !== baseline.town ||
+    country !== baseline.country;
+
+  async function save(): Promise<PartKey[]> {
     const failures: FirstHourError[] = [];
+    const failed: PartKey[] = [];
+    let next = baseline;
+    let landed = false;
     const run = async (verb: string, input: Record<string, unknown>): Promise<boolean> => {
       const resp: RestResponse = await client.call(verb, input);
       if (isErr(resp.body)) {
         failures.push(fieldFor(verb, resp.body));
         return false;
       }
+      landed = true;
       return true;
     };
 
     // A blank UID or MWST-Nr is "not given", never an empty identifier: the engine format-checks
     // whatever it is handed and refuses `invalid_uid` on '' (measured on the first flow run, where the
     // legal form silently never landed because the whole verb was refused).
-    await run('update_company_profile', {
-      workspaceId,
-      name,
-      legalForm,
-      ...(uid.trim().length > 0 ? { uid: uid.trim() } : {}),
-      ...(mwstNo.trim().length > 0 ? { mwstNo: mwstNo.trim() } : {}),
-    });
-    if (!locked && (baseCurrency !== (profile.baseCurrency ?? 'CHF') || fiscalYearStart !== (profile.fiscalYearStart ?? '01-01'))) {
-      await run('set_fiscal_config', { workspaceId, baseCurrency, fiscalYearStart });
+    // A stored value cleared to blank cannot be removed through these verbs (an omitted key keeps
+    // the stored one), so its part is refused here, stays dirty, and the field says so.
+    type Clearable = [FirstHourError['field'], string, string];
+    const clearedFields = (pairs: Clearable[]) =>
+      pairs.filter(([, draft, stored]) => stored.trim().length > 0 && draft.trim().length === 0).map(([field]) => field);
+    const refuse = (fields: FirstHourError['field'][]) => fields.forEach((field) => failures.push({ field, err: CANNOT_CLEAR }));
+    const identityCleared = clearedFields([['uid', uid, baseline.uid], ['mwstNo', mwstNo, baseline.mwstNo]]);
+    const creditorCleared = clearedFields([['iban', iban, baseline.iban], ['creditorName', creditorName, baseline.creditorName]]);
+
+    // A cleared UID or MWST-Nr holds back only ITSELF: it is refused and named as its own part
+    // ("Nicht gespeichert: UID"), while the rest of the identity (a rename, the legal form) is still
+    // written. The payload omits a blank key anyway, so the engine keeps the stored value, and the
+    // cleared field's baseline stays put, so it stays dirty until it is filled again.
+    refuse(identityCleared);
+    for (const field of identityCleared) failed.push(field === 'uid' ? 'uid' : 'mwstNo');
+    const uidHeld = identityCleared.includes('uid');
+    const mwstNoHeld = identityCleared.includes('mwstNo');
+    const identityRest =
+      name !== baseline.name || legalForm !== baseline.legalForm || (!uidHeld && uid !== baseline.uid) || (!mwstNoHeld && mwstNo !== baseline.mwstNo);
+    if (identityDirty && identityRest) {
+      const ok = await run('update_company_profile', {
+        workspaceId,
+        name,
+        legalForm,
+        ...(uid.trim().length > 0 ? { uid: uid.trim() } : {}),
+        ...(mwstNo.trim().length > 0 ? { mwstNo: mwstNo.trim() } : {}),
+      });
+      if (ok) next = { ...next, name, legalForm, uid: uidHeld ? baseline.uid : uid, mwstNo: mwstNoHeld ? baseline.mwstNo : mwstNo };
+      else failed.push('identity');
     }
-    if (offerVat) {
+    if (fiscalDirty) {
+      if (await run('set_fiscal_config', { workspaceId, baseCurrency, fiscalYearStart })) next = { ...next, baseCurrency, fiscalYearStart };
+      else failed.push('fiscal');
+    }
+    if (vatDirty) {
       // The same two acts `/vat`'s "MWST aktivieren" performs (US-A05.1): configure, then seed the
       // default Swiss code set once. Not MWST-registered is `method:'none'`, decided, no codes.
-      const registered = vatChoice !== 'none';
-      const configured = await run('vat_configure', {
-        workspaceId,
-        method: vatChoice,
-        timing: registered ? vatTiming : 'soll',
-        registered,
-        idempotencyKey: `profile-vat-${workspaceId}-${vatChoice}-${vatTiming}`,
-      });
-      if (configured && registered) await run('vat_seed_defaults', { workspaceId, idempotencyKey: `profile-vat-seed-${workspaceId}` });
+      // A retry after a failed seed re-sends the seed only: the method is already stored.
+      let vatOk = true;
+      let seedNeeded = seedPending;
+      if (offerVat && !vatDone) {
+        const registered = vatChoice !== 'none';
+        const configured = await run('vat_configure', {
+          workspaceId,
+          method: vatChoice,
+          timing: registered ? vatTiming : 'soll',
+          registered,
+          idempotencyKey: `profile-vat-${workspaceId}-${vatChoice}-${vatTiming}`,
+        });
+        if (configured) {
+          setVatDone(true);
+          seedNeeded = registered;
+        } else vatOk = false;
+      }
+      if (vatOk && seedNeeded) {
+        const seeded = await run('vat_seed_defaults', { workspaceId, idempotencyKey: `profile-vat-seed-${workspaceId}` });
+        setSeedPending(!seeded);
+        if (!seeded) vatOk = false;
+      }
+      if (!vatOk) failed.push('vat');
     }
-    const creditorTouched = iban.trim().length > 0 || addressTouched || creditorName.trim().length > 0 || profile.creditorIban != null;
-    if (creditorTouched) {
-      await run('set_creditor_profile', {
+    if (termsDirty) {
+      // Blank clears the default (null); digits are sent as a number and range-checked by the engine
+      // (0 to 365). Anything else is refused here, before a NaN could reach the wire as null and clear
+      // the stored default behind a "Gespeichert".
+      const typed = terms.trim();
+      if (typed !== '' && !TERMS_RE.test(typed)) {
+        failures.push({ field: 'terms', err: TERMS_NOT_DAYS });
+        failed.push('terms');
+      } else if (await run('update_company_profile', { workspaceId, defaultPaymentTermsDays: typed === '' ? null : Number(typed) })) {
+        next = { ...next, terms: typed };
+      } else {
+        failed.push('terms');
+      }
+    }
+    if (creditorDirty && creditorCleared.length > 0) {
+      refuse(creditorCleared);
+      failed.push('creditor');
+    } else if (creditorDirty) {
+      const ok = await run('set_creditor_profile', {
         workspaceId,
         ...(creditorName.trim().length > 0 ? { creditorName: creditorName.trim() } : {}),
         address: { street, buildingNo, zip, town, country: addressTouched ? country : '' },
@@ -573,19 +756,23 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
         // creditorName above and the uid / mwstNo on `update_company_profile` do.
         ...(iban.trim().length > 0 ? { iban: iban.trim() } : {}),
       });
+      if (ok) next = { ...next, iban, creditorName, street, buildingNo, zip, town, country };
+      else failed.push('creditor');
     }
 
-    setSaving(false);
     setErrors(failures);
+    setBaseline(next);
     // A refusal on a field inside a closed disclosure opens it: the message is never out of sight
     // (DESIGN.md: an error says what happened and where; a hidden field error is a dead end).
     if (failures.some((f) => f.field === 'address' || f.field === 'creditorName')) setAddressOpen(true);
-    if (failures.some((f) => f.field === 'uid' || f.field === 'mwstNo' || f.field === 'fiscal')) setMoreOpen(true);
-    if (failures.length === 0) {
-      setSaved(true);
-      onSaved();
-    }
+    if (failures.some((f) => f.field === 'uid' || f.field === 'mwstNo' || f.field === 'fiscal' || f.field === 'terms')) setMoreOpen(true);
+    // Re-read the facts behind the form (the stored MWST method, the address) once anything landed,
+    // even on a partial failure: what did land is then shown as stored.
+    if (landed) onSaved();
+    return failed;
   }
+
+  useImperativeHandle(ref, () => ({ save }));
 
   const generic = errorFor('generic') ?? errorFor('fiscal') ?? errorFor('vat') ?? errorFor('legalForm');
   const fieldError = (field: FirstHourError['field'], id: string): ReactNode => {
@@ -599,10 +786,30 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
     );
   };
 
+  /**
+   * The issuer block's closed line: who the QR-bill names and where, from what the engine STORES
+   * (the profile, re-read after every save), never from a draft: a draft can claim "wie Firmenname"
+   * for a value the engine never took. "wie Firmenname" when the stored issuer name is empty (the
+   * engine then prints the Firmenname) or the same as the stored Firmenname. A country other than CH
+   * is named, because it is printed on the bill.
+   */
+  const creditorSummary = (() => {
+    const storedIssuer = (profile.creditorName ?? '').trim();
+    const who = storedIssuer === '' || storedIssuer === (profile.name ?? '').trim() ? t('company.creditorSummary.sameName') : storedIssuer;
+    const stored = profile.creditorAddress ?? {};
+    const parts = [stored.street, stored.buildingNo, stored.zip, stored.town].map((v) => (v ?? '').trim());
+    const land = (stored.country ?? '').trim().toUpperCase();
+    const where = parts.every((v) => v.length > 0)
+      ? `${parts[0]} ${parts[1]}, ${parts[2]} ${parts[3]}${land !== '' && land !== 'CH' ? `, ${land}` : ''}`
+      : parts.some((v) => v.length > 0)
+        ? t('company.creditorSummary.incompleteAddress')
+        : t('company.creditorSummary.noAddress');
+    return t('company.creditorSummary.line', { name: who, address: where });
+  })();
+
   return (
-    <Panel title={t('company.sections.profile')}>
-      <p className="setup-explainer">{t('company.firstHour.lead')}</p>
-      <form className="form-stack" onSubmit={onSubmit} noValidate>
+    <Panel title={t('company.sections.profile')} info={t('company.firstHour.lead')}>
+      <div className="form-stack">
         <div className="form-row">
           <label htmlFor={ids.name}>{t('setup.name')}</label>
           <input
@@ -628,7 +835,10 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
 
         {offerVat ? (
           <div className="form-row">
-            <label htmlFor={ids.vat}>{t('company.vatMethod.label')}</label>
+            <span className="field-label-row">
+              <label htmlFor={ids.vat}>{t('company.vatMethod.label')}</label>
+              <InfoTip topic={t('company.vatMethod.label')}>{t('company.firstHour.vatHint')}</InfoTip>
+            </span>
             <Select
               id={ids.vat}
               value={vatChoice}
@@ -651,7 +861,6 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
                 />
               </div>
             )}
-            <p className="field-hint">{t('company.firstHour.vatHint')}</p>
           </div>
         ) : (
           <div className="form-row">
@@ -689,7 +898,7 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
                30000-31999 range, which read as a demand for a QR-IBAN the field does not make. */
             placeholder="CH00 0000 0000 0000 0000 0"
             aria-invalid={errorFor('iban') !== undefined || undefined}
-            aria-describedby={[hintOpen ? ids.ibanHint : null, addressMissing ? ids.ibanNote : null, errorFor('iban') !== undefined ? `${ids.iban}-err` : null].filter(Boolean).join(' ') || undefined}
+            aria-describedby={[hintOpen ? ids.ibanHint : null, errorFor('iban') !== undefined ? `${ids.iban}-err` : null].filter(Boolean).join(' ') || undefined}
           />
           {hintOpen && (
             <p id={ids.ibanHint} className="field-hint">
@@ -697,31 +906,31 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
             </p>
           )}
           {fieldError('iban', ids.iban)}
-          {addressMissing && (
-            <p id={ids.ibanNote} className="field-hint">
-              {t('company.firstHour.addressLater')}
-            </p>
-          )}
         </div>
 
-        {/* The QR-bill address, disclosed: needed before the first invoice renders, never before the
-            IBAN saves. Open by default only when an address is already stored. */}
+        {/* The QR-bill issuer, disclosed: needed before the first invoice renders, never before the
+            IBAN saves. Closed it is one line ("Rechnungssteller: wie Firmenname · Strasse 1, PLZ Ort");
+            its explanation, and the deferral while no address is stored, sit behind the (i). */}
         <section className="setup-disclosure" aria-labelledby={ids.addressRegion}>
-          <h3 className="setup-disclosure-title">
-            <button
-              type="button"
-              id={ids.addressRegion}
-              className="setup-disclosure-toggle"
-              aria-expanded={addressOpen}
-              onClick={() => setAddressOpen((v) => !v)}
-            >
-              <DisclosureChevron open={addressOpen} />
-              {t('company.sections.creditor')}
-            </button>
-          </h3>
+          <div className="setup-disclosure-head">
+            <h3 className="setup-disclosure-title">
+              <button
+                type="button"
+                id={ids.addressRegion}
+                className="setup-disclosure-toggle"
+                aria-expanded={addressOpen}
+                onClick={() => setAddressOpen((v) => !v)}
+              >
+                <DisclosureChevron open={addressOpen} />
+                {addressOpen ? t('company.sections.creditor') : <span className="setup-disclosure-summary">{creditorSummary}</span>}
+              </button>
+            </h3>
+            <InfoTip topic={t('company.parts.creditor')}>
+              {addressMissing ? `${t('company.firstHour.addressLead')} ${t('company.firstHour.addressLater')}` : t('company.firstHour.addressLead')}
+            </InfoTip>
+          </div>
           {addressOpen && (
             <div className="form-stack">
-              <p className="field-hint">{t('company.firstHour.addressLead')}</p>
               <div className="form-row">
                 <label htmlFor={ids.creditorName}>{t('company.creditorName')}</label>
                 <input
@@ -731,6 +940,7 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
                   onChange={(e) => setCreditorName(e.target.value)}
                   placeholder={name}
                   aria-invalid={errorFor('creditorName') !== undefined || undefined}
+                  aria-describedby={errorFor('creditorName') !== undefined ? `${ids.creditorName}-err` : undefined}
                 />
                 {fieldError('creditorName', ids.creditorName)}
               </div>
@@ -788,6 +998,7 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
                   onChange={(e) => setUid(e.target.value)}
                   placeholder="CHE-000.000.000"
                   aria-invalid={errorFor('uid') !== undefined || undefined}
+                  aria-describedby={errorFor('uid') !== undefined ? `${ids.uid}-err` : undefined}
                 />
                 {fieldError('uid', ids.uid)}
               </div>
@@ -800,8 +1011,26 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
                   onChange={(e) => setMwstNo(e.target.value)}
                   placeholder="CHE-000.000.000 MWST"
                   aria-invalid={errorFor('mwstNo') !== undefined || undefined}
+                  aria-describedby={errorFor('mwstNo') !== undefined ? `${ids.mwstNo}-err` : undefined}
                 />
                 {fieldError('mwstNo', ids.mwstNo)}
+              </div>
+              <div className="form-row">
+                <span className="field-label-row">
+                  <label htmlFor={ids.terms}>{t('company.terms.label')}</label>
+                  <InfoTip topic={t('company.terms.label')}>{t('company.terms.info')}</InfoTip>
+                </span>
+                <input
+                  className="field t-num"
+                  id={ids.terms}
+                  inputMode="numeric"
+                  value={terms}
+                  onChange={(e) => setTerms(e.target.value)}
+                  placeholder={t('company.terms.placeholder')}
+                  aria-invalid={errorFor('terms') !== undefined || undefined}
+                  aria-describedby={errorFor('terms') !== undefined ? `${ids.terms}-err` : undefined}
+                />
+                {fieldError('terms', ids.terms)}
               </div>
               <div className="form-row">
                 <label htmlFor={ids.currency}>{t('company.baseCurrency')}</label>
@@ -856,45 +1085,35 @@ function FirstHourPanel({ workspaceId, profile, onSaved }: { workspaceId: string
           )}
         </section>
 
-        <div className="form-actions">
-          <SaveStatus saving={saving} saved={saved} error={generic !== undefined && generic.field !== 'fiscal' ? generic.err : null} />
-          {generic?.field === 'fiscal' && !moreOpen && (
-            <p className="status-line status-error" role="alert">
-              <AlertGlyph className="status-glyph status-glyph-error" size={16} />
-              {firstHourErrMessage(t, generic)}
-            </p>
-          )}
-          {errors.length > 0 && generic === undefined && (
-            <p className="status-line status-error" role="status">
-              {t('company.firstHour.fixFields')}
-            </p>
-          )}
-          {canManageSettings && (
-            <button type="submit" className="btn btn--primary" disabled={saving}>
-              {t('company.save')}
-            </button>
-          )}
-        </div>
-      </form>
+        {/* A refusal with no field of its own (an unknown code, the MWST capture, a legal form the
+            engine does not know, a fiscal refusal while its disclosure is closed) is said here, at the
+            foot of the part it belongs to. The header line names the part; this says why. */}
+        {generic !== undefined && (generic.field !== 'fiscal' || !moreOpen) && (
+          <p className="status-line status-error" role="alert">
+            <AlertGlyph className="status-glyph status-glyph-error" size={16} />
+            {firstHourErrMessage(t, generic)}
+          </p>
+        )}
+      </div>
     </Panel>
   );
 }
 
 /**
- * A32, the eBill section (spec §6). The Biller-ID field with inline validation, the honest enrollment
- * explainer (enrollment happens with a certified network partner, NOT in TILL: there is no "enroll"
- * button because there is nothing local it could truthfully do), and the connector state as a
- * read-only fact. The field write is `set_ebill_config` (`manage_settings`), so the save affordance
- * follows the same F5 padlock as every other setting on this surface.
+ * A32, the eBill section (spec §6). The Biller-ID field with inline validation, the enrollment
+ * explainer behind the (i) (enrollment happens with a certified network partner, NOT in TILL: there
+ * is no "enroll" button because there is nothing local it could truthfully do), and the connector
+ * state as a one-line read-only fact. The field write is `set_ebill_config` (`manage_settings`); it
+ * has no button of its own: the page's one Speichern writes it, and only when the ID changed.
  */
-function EbillConfig({ workspaceId }: { workspaceId: string }) {
+function EbillConfig({ workspaceId, ref }: { workspaceId: string; ref: Ref<PartHandle> }) {
   const t = useT();
   const client = useClient();
   const ids = { pid: useId(), hint: useId() };
   const [billerPid, setBillerPid] = useState('');
+  const [stored, setStored] = useState('');
   const [loaded, setLoaded] = useState(false);
-  const { save, saving, saved, error } = useSaver('set_ebill_config');
-  const canManageSettings = useCan(CAP.manageSettings);
+  const [error, setError] = useState<Err | null>(null);
   const invalidPid = error?.error === 'invalid_biller_pid';
 
   useEffect(() => {
@@ -904,7 +1123,10 @@ function EbillConfig({ workspaceId }: { workspaceId: string }) {
       if (!live) return;
       if (!isErr(body)) {
         const config = (body as Record<string, unknown>).config as { billerPid?: string } | null;
-        if (config?.billerPid) setBillerPid(config.billerPid);
+        if (config?.billerPid) {
+          setBillerPid(config.billerPid);
+          setStored(config.billerPid);
+        }
       }
       setLoaded(true);
     }
@@ -914,21 +1136,29 @@ function EbillConfig({ workspaceId }: { workspaceId: string }) {
     };
   }, [client, workspaceId]);
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (!canManageSettings) return;
-    await save({ workspaceId, billerPid });
-  }
+  useImperativeHandle(ref, () => ({
+    save: async (): Promise<PartKey[]> => {
+      // Not loaded yet, or unchanged: nothing of this part is dirty, so nothing is written.
+      if (!loaded || billerPid === stored) return [];
+      const resp: RestResponse = await client.call('set_ebill_config', { workspaceId, billerPid });
+      if (isErr(resp.body)) {
+        setError(resp.body);
+        return ['ebill'];
+      }
+      setError(null);
+      setStored(billerPid);
+      return [];
+    },
+  }));
 
   return (
-    <Panel title={t('ebillConfig.title')}>
-      <p className="setup-explainer">{t('ebillConfig.enrollmentExplainer')}</p>
-      <p className="setup-explainer">
+    <Panel title={t('ebillConfig.title')} info={t('ebillConfig.enrollmentExplainer')}>
+      <p className="setup-link-line">
         <a className="link-inline" href="https://www.ebill.ch/en/home/business/network-partners-at-a-glance.html" target="_blank" rel="noopener noreferrer">
           {t('ebillConfig.partnerListLink')}
         </a>
       </p>
-      <form className="form-stack" onSubmit={onSubmit} noValidate>
+      <div className="form-stack">
         <div className="form-row">
           <label htmlFor={ids.pid}>{t('ebillConfig.billerPid')}</label>
           <input
@@ -947,16 +1177,17 @@ function EbillConfig({ workspaceId }: { workspaceId: string }) {
             </p>
           )}
         </div>
-        <p className="setup-explainer setup-connector-state">{t('ebillConfig.connectorAbsent')}</p>
-        <div className="form-actions">
-          <SaveStatus saving={saving} saved={saved} error={invalidPid ? null : error} />
-          {canManageSettings && (
-            <button type="submit" className="btn btn--secondary" disabled={saving || !loaded}>
-              {t('company.save')}
-            </button>
-          )}
-        </div>
-      </form>
+        <p className="setup-state-line">
+          <span>{t('ebillConfig.connectorAbsent')}</span>
+          <InfoTip topic={t('ebillConfig.connectorTopic')}>{t('ebillConfig.connectorAbsentDetail')}</InfoTip>
+        </p>
+        {error !== null && !invalidPid && (
+          <p className="status-line status-error" role="alert">
+            <AlertGlyph className="status-glyph status-glyph-error" size={16} />
+            {fieldErrMessage(t, error)}
+          </p>
+        )}
+      </div>
     </Panel>
   );
 }
@@ -1002,28 +1233,29 @@ function VatSummary({ profile }: { profile: Profile }) {
   );
 }
 
-/** Custom fields defined on `entity_kind='workspace'` (spec §6b). Absent (not erroring) when none. */
+/**
+ * Custom fields defined on `entity_kind='workspace'` (spec §6b). D152 rule 2: the panel exists only
+ * when there are fields to show. With none it renders nothing at all, rather than a panel saying the
+ * feature is not there yet.
+ */
 function CustomFields({ profile }: { profile: Profile }) {
   const t = useT();
   const fields = profile.customFields ?? [];
   const headingId = useId();
+  if (fields.length === 0) return null;
   return (
     <section className="panel setup-panel" aria-labelledby={headingId}>
       <h2 id={headingId} className="setup-panel-title">
         {t('company.customFields.title')}
       </h2>
-      {fields.length === 0 ? (
-        <p className="field-hint">{t('company.customFields.empty')}</p>
-      ) : (
-        <dl className="setup-custom-fields">
-          {fields.map((f) => (
-            <div key={f.key} className="setup-custom-field-row">
-              <dt>{f.label}</dt>
-              <dd>{f.value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      <dl className="setup-custom-fields">
+        {fields.map((f) => (
+          <div key={f.key} className="setup-custom-field-row">
+            <dt>{f.label}</dt>
+            <dd>{f.value}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }
@@ -1061,11 +1293,48 @@ function WorkspacesSection({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-function ProfileBody({ workspaceId, profile, onSaved }: { workspaceId: string; profile: Profile; onSaved: () => void }) {
+/**
+ * The loaded body. The first-hour panel and the eBill panel are ONE form: the surface header's one
+ * Speichern submits it (by the `form` attribute, so the button can sit in the sticky header where the
+ * design law puts the primary action), and the submit asks each part to write what is dirty. The
+ * Arbeitsbereiche block stays outside the form, because it carries the create form of its own.
+ */
+function ProfileBody({
+  workspaceId,
+  profile,
+  onSaved,
+  formId,
+  onSaveState,
+}: {
+  workspaceId: string;
+  profile: Profile;
+  onSaved: () => void;
+  formId: string;
+  onSaveState: (state: SaveState) => void;
+}) {
+  const canManageSettings = useCan(CAP.manageSettings);
+  const firstHour = useRef<PartHandle | null>(null);
+  const ebill = useRef<PartHandle | null>(null);
+  const inFlight = useRef(false);
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    // The padlock guards the Enter key too: without `manage_settings` there is no Speichern, and a
+    // field's implicit submit must not write either.
+    if (!canManageSettings || inFlight.current) return;
+    inFlight.current = true;
+    onSaveState({ kind: 'saving' });
+    const failed = [...((await firstHour.current?.save()) ?? []), ...((await ebill.current?.save()) ?? [])];
+    inFlight.current = false;
+    onSaveState(failed.length === 0 ? { kind: 'saved' } : { kind: 'failed', parts: failed });
+  }
+
   return (
     <>
-      <FirstHourPanel workspaceId={workspaceId} profile={profile} onSaved={onSaved} />
-      <EbillConfig workspaceId={workspaceId} />
+      <form id={formId} className="setup-form" onSubmit={onSubmit} noValidate>
+        <FirstHourPanel ref={firstHour} workspaceId={workspaceId} profile={profile} onSaved={onSaved} />
+        <EbillConfig ref={ebill} workspaceId={workspaceId} />
+      </form>
       <CustomFields profile={profile} />
       <WorkspacesSection workspaceId={workspaceId} />
     </>
@@ -1082,10 +1351,13 @@ function ProfileLoader({ workspaceId }: { workspaceId: string }) {
   const client = useClient();
   const t = useT();
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  const [saveState, setSaveState] = useState<SaveState>({ kind: 'idle' });
+  const formId = useId();
+  const canManageSettings = useCan(CAP.manageSettings);
 
   /**
    * `quiet` re-reads the profile WITHOUT passing through the loading state: after a save the panel
-   * keeps its instance (its "Gespeichert" line and the operator's cursor stay put) while the facts
+   * keeps its instance (the header's "Gespeichert" line and the operator's cursor stay put) while the facts
    * behind it (the stored MWST method, the address) refresh. The first read and a retry still show
    * the skeleton, because there is nothing on screen yet to keep.
    */
@@ -1123,16 +1395,33 @@ function ProfileLoader({ workspaceId }: { workspaceId: string }) {
     );
   }
   // Loading and ready share one persistent section + heading, so the h1 node never detaches on the
-  // load -> ready swap (only the body below it changes).
+  // load -> ready swap (only the body below it changes). The page's ONE Speichern sits in the header's
+  // action slot (DESIGN.md "Primary action where the eye expects"), sticky with it, and appears once
+  // there is a form to submit; without `manage_settings` it is absent, never shown and then refused.
+  const actions =
+    state.kind === 'ready' && canManageSettings ? (
+      <>
+        <SaveSummary state={saveState} />
+        <button type="submit" form={formId} className="btn btn--primary" disabled={saveState.kind === 'saving'}>
+          {t('company.save')}
+        </button>
+      </>
+    ) : undefined;
   return (
     <section className="setup-surface" aria-labelledby="company-title">
-      <SurfaceHeader title={t('company.title')} titleId="company-title" help={<SurfaceHelp surface="Setup" />} />
+      <SurfaceHeader title={t('company.title')} titleId="company-title" help={<SurfaceHelp surface="Setup" />} actions={actions} />
       {state.kind === 'loading' ? (
         <div className="panel setup-panel">
           <Skeleton rows={6} height={24} />
         </div>
       ) : (
-        <ProfileBody workspaceId={workspaceId} profile={state.profile} onSaved={() => void load(true)} />
+        <ProfileBody
+          workspaceId={workspaceId}
+          profile={state.profile}
+          onSaved={() => void load(true)}
+          formId={formId}
+          onSaveState={setSaveState}
+        />
       )}
     </section>
   );

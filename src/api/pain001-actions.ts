@@ -34,11 +34,12 @@ import {
   markBatchPaid,
   discardPaymentBatch,
 } from '../core/banking/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface Pain001ActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -61,7 +62,7 @@ export function pain001Actions(h: Pain001ActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'set_creditor_bank_profile',
-      'write',
+      'write:reversible:books',
       "Set (or correct) the IBAN a vendor is paid at. A17's vendor bill carries no IBAN of its own; this is where a creditor's bank details live so create_payment_batch can build a pain.001 instruction. Validates the IBAN (A19's validateIban) and derives whether it is a QR-IBAN, which decides whether the bill's own vendorReference must be a QRR (a QR-IBAN never accepts free-text remittance). This alters who a future payment reaches: it is on the automation denylist (D65 leg f), mirroring update_bank_account and set_creditor_profile.",
       ctxSchema({ vendorId: STR, iban: STR, idempotencyKey: STR }, ['vendorId', 'iban', 'idempotencyKey']),
       (ctx, input) => setCreditorBankProfile(ctx, as(input)),
@@ -75,7 +76,7 @@ export function pain001Actions(h: Pain001ActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'create_payment_batch',
-      'write',
+      'write:correctable:books',
       'Draft a payment batch from open A17 bills: validates the debtor account (A19, must not be a QR-IBAN, which is receive-only), that every bill is posted and open, that every bill shares one currency (CHF or EUR; a mixed selection is refused with mixed_currency), that every vendor has a creditor_bank_profile, and that a QR-IBAN vendor has a valid QRR reference on the bill. Snapshots each item so a later generate_pain001 is byte-reproducible even if the vendor profile changes afterward. Posts nothing.',
       ctxSchema(
         { bankAccountId: STR, itemIds: { type: 'array', items: STR }, executionDate: STR, idempotencyKey: STR },
@@ -85,7 +86,7 @@ export function pain001Actions(h: Pain001ActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'generate_pain001',
-      'write',
+      'write:correctable:books',
       "Build (or rebuild) the batch's pain.001.001.09 XML, validate it, and flip the batch from draft to generated on first success; regenerating an already-generated batch reproduces byte-identical output (nothing about it changes after creation). Only a valid file is ever returned. NEVER transmits: always answers transmitted:false, with reason 'upload_in_ebanking' when an EBICS channel routes the batch's debtor account (the channel downloads statements only: the owner uploads the file in the bank's eBanking and releases it there, and the statement brings the debit) or 'no_channel' otherwise (the file-download path is then the floor).",
       ctxSchema({ batchId: STR, idempotencyKey: STR }, ['batchId', 'idempotencyKey']),
       (ctx, input) => generatePain001(ctx, as(input)),
@@ -106,7 +107,7 @@ export function pain001Actions(h: Pain001ActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'mark_batch_paid',
-      'write',
+      'write:correctable:books',
       "Confirm the bank executed a generated batch: posts one outgoing payment per item through A14's recordPayment (debit 2000 Kreditoren / credit the debtor bank account), each settling its own vendor bill, atomically for the whole batch. Requires confirmation:true, because marking paid must reflect a genuine bank confirmation, never a side effect. Idempotent per batch: a re-confirm under the same key replays the same result and never double-pays.",
       ctxSchema(
         { batchId: STR, confirmation: BOOL, valueDate: STR, idempotencyKey: STR, bankTxnId: STR },
@@ -116,7 +117,7 @@ export function pain001Actions(h: Pain001ActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'discard_payment_batch',
-      'write',
+      'write:correctable:books',
       "Abandon a batch that must not be paid, moving it to the terminal 'discarded' status so its bills become payable again. A draft batch discards freely; a generated batch has already produced a pain.001 file, so discarding it requires confirmation:true. A paid batch cannot be discarded (already_paid) and a discarded one is already terminal (already_discarded). Deletes no row (append-only); this is the recovery path for a batch drafted against a mistyped IBAN or one whose generate step failed, without it the only forward move was to book a payment that was never made. Posts nothing.",
       ctxSchema({ batchId: STR, confirmation: BOOL, idempotencyKey: STR }, ['batchId', 'idempotencyKey']),
       (ctx, input) => discardPaymentBatch(ctx, as(input)),

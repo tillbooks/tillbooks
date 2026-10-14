@@ -193,10 +193,14 @@ test('G11: a waiver without a reason is refused (empty string included), and a w
   const checked = check(deps, wid, planId, stepId, 'wv-check');
   const failing = checked.controls.find((c) => c.status === 'failed');
 
-  // No reason, and a blank reason, are the SAME refusal: a silent waiver is a deleted control.
+  // No reason, and a blank reason, are both refused: a silent waiver is a deleted control. Since D161
+  // the waiver is dial-governed (go-live), so the registry face answers an ABSENT schema-required
+  // field first, with the code every governed verb gives it (conformance rule 7); a blank one reaches
+  // the verb, which names the rule.
   const missing = call(deps, 'migration_waive_control', { workspaceId: wid, controlId: failing.controlId, idempotencyKey: 'wv-w0', reason: undefined });
   assert.equal(missing.ok, false);
-  assert.equal(missing.error, 'waiver_needs_reason');
+  assert.equal(missing.error, 'invalid_input');
+  assert.equal(missing.field, 'reason');
   const blank = call(deps, 'migration_waive_control', { workspaceId: wid, controlId: failing.controlId, reason: '   ', idempotencyKey: 'wv-w1' });
   assert.equal(blank.ok, false);
   assert.equal(blank.error, 'waiver_needs_reason');

@@ -2,11 +2,21 @@
 
 TILL is accounting software. Read this before you point it at real books.
 
-## TILL is pre-alpha. Do not keep real books in it yet
+## TILL is a public beta. Run it next to your old system first
 
-The capability specs are written and the ledger core is in progress. Nothing here is finished, and
-the file format is not stable. If you run TILL against your real accounts today, expect to lose the
-data and redo the work. Use it to explore, not to file.
+TILL is in public beta (version 1.0.0-beta.1). Nomadik GmbH, the company behind TILL, keeps its own
+books in it. A beta still has defects nobody has met yet, and yours may be the first set of books to
+run into one.
+
+So if you move real books to TILL, keep your current system running until TILL's figures match it:
+the trial balance, the open items and the MWST figures. The parallel run in TILL's migration area is
+built for this check. You enter your old system's figures, and TILL compares its own to the Rappen.
+Switch over once they agree, not before.
+
+Back up before every upgrade, and keep the backup somewhere other than the computer the books are
+on. TILL takes a backup only when you ask for one. A newer TILL upgrades the books an older one wrote,
+and an older TILL then refuses them, so going back to an older version needs a backup from before
+the upgrade.
 
 ## TILL is not tax advice, and not an accountant
 

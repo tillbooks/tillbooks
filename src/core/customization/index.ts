@@ -81,11 +81,12 @@ export {
   MAX_DISPATCH_SUBJECT_LENGTH,
   MAX_DISPATCH_BODY_LENGTH,
   dispatchTextUpsert,
+  dispatchTextReset,
   dispatchPreview,
   listDispatches,
   recordDispatch,
   resolveDispatchText,
   renderDispatchTemplate,
 } from './dispatch.js';
-export type { DispatchTextUpsertInput, DispatchPreviewInput, RecordDispatchInput } from './dispatch.js';
+export type { DispatchTextUpsertInput, DispatchTextResetInput, DispatchPreviewInput, RecordDispatchInput } from './dispatch.js';
 export { DISPATCH_SCHEMA_SQL } from './dispatchSchema.js';

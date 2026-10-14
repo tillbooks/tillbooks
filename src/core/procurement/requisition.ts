@@ -26,6 +26,7 @@ import type { Result } from '../result.js';
 import { poUpsert, poSend } from '../purchase/purchaseOrders.js';
 import type { PoUpsertInput, PoSendInput, PoLineInput } from '../purchase/purchaseOrders.js';
 import { applySavedView } from '../customization/views.js';
+import { isGovernedSeat } from '../access/capability.js';
 
 // --- Controlled enums (§H-ENUM) ----------------------------------------------------------------
 
@@ -599,11 +600,32 @@ function cancelOpenTasks(ctx: WorkspaceContext, requisitionId: string): void {
     .run(ctx.clock.now(), ctx.workspaceId, requisitionId);
 }
 
+/**
+ * Did `actor` raise this requisition: create it, stand as its requester, or submit it (in any cycle)?
+ * The trail reads the approval events, which are insert-only, so a return-and-resubmit cannot wash a
+ * submitter out of it.
+ */
+function raisedBy(ctx: WorkspaceContext, req: RequisitionRow, actor: string): boolean {
+  if (req.created_by === actor || req.requester_id === actor) return true;
+  const submitted = ctx.store.db
+    .prepare("SELECT 1 AS hit FROM requisition_approval_event WHERE workspace_id = ? AND requisition_id = ? AND decision = 'submitted' AND actor_id = ? LIMIT 1")
+    .get(ctx.workspaceId, req.id, actor);
+  return submitted !== undefined;
+}
+
 export function requisitionApprove(ctx: WorkspaceContext, input: RequisitionDecisionInput): Result {
   const run = (): Result => {
     const req = readRequisition(ctx, input.requisitionId as string);
     if (req === undefined) return err('not_found', { requisitionId: input.requisitionId });
     if (req.status !== 'pending_approval') return err('invalid_transition', { requisitionId: req.id, from: req.status });
+    // D161.2, SEPARATION OF DUTIES FOR THE MACHINE: a governed seat (the agent, a served agent member,
+    // a plugin's call) never approves a requisition it raised, so "who asked" and "who authorised" are
+    // never the same machine. A person approving their own request stays allowed: the I00 spec supports
+    // segregation "by role checks" and names a requester who is a self-approver (US-I00.2), which is
+    // how a one-person company runs.
+    if (isGovernedSeat(ctx.store, ctx.actor) && raisedBy(ctx, req, ctx.actor)) {
+      return err('self_approval', { requisitionId: req.id });
+    }
     const open = readOpenTasks(ctx, req.id);
     if (open.length === 0) return err('invalid_transition', { requisitionId: req.id, reason: 'no_open_task' });
 
@@ -738,15 +760,28 @@ export function requisitionConvertToPo(ctx: WorkspaceContext, input: Requisition
       sourceDocumentType: 'requisition',
       sourceDocumentId: req.id,
     };
-    if (input.idempotencyKey) poInput.idempotencyKey = `${input.idempotencyKey}:po`;
-    const poResult = poUpsert(ctx, poInput);
+    // K1: the PO and send keys are DERIVED from the conversion's own, so D02 runs in this composite's
+    // own idempotency scope: a `po_upsert` (or `po_send`) made first under `K:po` used to be replayed
+    // here and recorded as this requisition's PO.
+    const callerKey = input.idempotencyKey;
+    const poResult = ctx.store.innerWrite('requisition_convert_to_po', () =>
+      poUpsert(ctx, { ...poInput, ...(callerKey ? { idempotencyKey: `${callerKey}:po` } : {}) }),
+    );
     if (!poResult.ok) return poResult;
     const purchaseOrderId = (poResult as unknown as { poId: string }).poId;
+    // ...and the PO is READ BACK as this requisition's own: its I01 provenance names this requisition.
+    const poRow = ctx.store.db
+      .prepare('SELECT source_document_type, source_document_id FROM purchase_order WHERE workspace_id = ? AND id = ?')
+      .get(ctx.workspaceId, purchaseOrderId) as { source_document_type: string | null; source_document_id: string | null } | undefined;
+    if (poRow === undefined || poRow.source_document_type !== 'requisition' || poRow.source_document_id !== req.id) {
+      return err('inner_write_not_own', { composite: 'requisition_convert_to_po', inner: 'po_upsert', purchaseOrderId, requisitionId: req.id });
+    }
 
     if (createAs === 'sent') {
       const sendInput: PoSendInput = { poId: purchaseOrderId };
-      if (input.idempotencyKey) sendInput.idempotencyKey = `${input.idempotencyKey}:send`;
-      const sent = poSend(ctx, sendInput);
+      const sent = ctx.store.innerWrite('requisition_convert_to_po', () =>
+        poSend(ctx, { ...sendInput, ...(callerKey ? { idempotencyKey: `${callerKey}:send` } : {}) }),
+      );
       if (!sent.ok) return sent;
     }
 

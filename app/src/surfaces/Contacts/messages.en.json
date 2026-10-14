@@ -15,6 +15,12 @@
     "defaultCurrency": "Default currency",
     "paymentTerms": "Payment terms",
     "paymentTermsUnit": "days",
+    "paymentTermsStandard": "Standard ({days} days)",
+    "paymentTermsStandardImmediate": "Standard (immediate)",
+    "paymentTermsStandardUnknown": "Standard",
+    "paymentTermsImmediate": "immediate",
+    "paymentTermsInfo": "Where the payment terms come from",
+    "paymentTermsHelp": "Leave empty: the standard payment terms from the company profile apply. 0 means due immediately, on the invoice date.",
     "description": "Note",
     "partyRole": "Role",
     "role": {
@@ -91,7 +97,8 @@
     },
     "error": {
       "employerMustBeCompany": "The employer must be a company contact.",
-      "nameRequired": "The name is missing."
+      "nameRequired": "The name is missing.",
+      "paymentTerms": "Payment terms are a whole number of days, from 0 to 365. 0 means immediate, empty means standard."
     },
     "finance": {
       "hint": "Open items and payments live on the financial surfaces: Receivables, Payments and Documents."
@@ -192,7 +199,8 @@
       "warning": "This clears the name, email, address and every activity text. Posted documents are retained (OR 958f). This cannot be undone.",
       "confirmWord": "ANONYMISE",
       "typeLabel": "Type {word} to confirm",
-      "typeHint": "Type {word} exactly to enable the button."
+      "typeHint": "Type {word} exactly to enable the button.",
+      "inOpenPaymentBatch": "This contact is still in a draft payment batch (execution date {dates}). Discard the draft under Creditor payments, or generate and pay it out, then anonymise again. Nothing was changed."
     },
     "import": {
       "paste": "Paste CSV content",
@@ -213,6 +221,7 @@
     },
     "action": {
       "create": "Grant access",
+      "activate": "Activate link",
       "send": "Send link",
       "revoke": "Revoke",
       "share_entity": "Share in portal"
@@ -224,6 +233,7 @@
     "status": {
       "active": "Active",
       "draft": "Draft",
+      "draftHint": "Opens nothing until you activate it.",
       "revoked": "Revoked",
       "expired": "Expired",
       "local": "Local only"
@@ -235,7 +245,8 @@
     "link": {
       "once": "The link is shown only once.",
       "copy": "Copy",
-      "copyLabel": "Copy link"
+      "copyLabel": "Copy link",
+      "draftNote": "This link opens nothing until you activate it in the list below."
     },
     "empty": "No portal grants yet.",
     "empty_scopes": "Nothing to share yet.",
@@ -253,6 +264,7 @@
     "action": {
       "grant": "Grant portal access",
       "revoke": "Revoke access",
+      "activate": "Activate link",
       "remittance": "Create remittance advice"
     },
     "field": {
@@ -262,7 +274,8 @@
       "active": "Active",
       "draft": "Draft",
       "revoked": "Revoked",
-      "expired": "Expired"
+      "expired": "Expired",
+      "draftHint": "Restored from a backup: opens nothing until you hand it over again."
     },
     "poStatus": {
       "sent": "Sent",

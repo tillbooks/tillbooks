@@ -33,11 +33,12 @@ import {
   COSTING_COMPONENTS,
   COSTING_BASES,
 } from '../core/costing/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface CostingActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,

@@ -15,9 +15,21 @@
     "vendor": "Vendor",
     "billDate": "Bill date",
     "dueDate": "Due",
-    "vendorReference": "Vendor's invoice number",
+    "due": {
+      "info": "Where the due date comes from",
+      "fromTerms": "From the vendor's payment terms: {days} days from the bill date.",
+      "noTerms": "Neither the vendor nor the company profile sets payment terms, so the bill is due on its bill date.",
+      "blankFromTerms": "Left empty: due on {date} from the payment terms.",
+      "blankBillDate": "Left empty: due on {date}, the bill date.",
+      "immediate": "The vendor asks for immediate payment, so the bill is due on its bill date.",
+      "fromDefault": "The vendor has no payment terms of its own, so the standard terms from the company profile apply: {days} days from the bill date.",
+      "defaultImmediate": "The vendor has no payment terms of its own and the standard terms in the company profile are immediate: due on the bill date.",
+      "blankFromDefault": "Left empty: due on {date} from the standard terms."
+    },
+    "vendorReference": "Invoice number",
     "net": "Net",
     "gross": "Gross",
+    "amount": "Amount",
     "vat": "MWST",
     "amountIs": "The amount is",
     "vatCode": "Input VAT",
@@ -29,6 +41,9 @@
     "noCostCenter": "None",
     "project": "Project",
     "noProject": "None",
+    "addCostCenter": "Cost centre",
+    "addProject": "Project",
+    "addReceipt": "Receipt",
     "receipt": "Receipt (reference)",
     "post": "Post",
     "saveDraft": "Save as draft",
@@ -47,6 +62,7 @@
     "rowActionsFor": "Actions for {row}",
     "column": {
       "reference": "Number",
+      "billDate": "Date",
       "gross": "Gross",
       "open": "Open",
       "status": "Status"
@@ -59,13 +75,15 @@
       "void": "Void"
     },
     "frozen": {
-      "posted": "This bill is posted. Posted entries are never overwritten: correct it with a reversing entry. You can still add the receipt reference.",
-      "void": "This bill is void. Its reversing entry is in the journal."
+      "draft": "Draft: Post books exactly these details.",
+      "posted": "Posted: only the receipt can still be added.",
+      "void": "Void, its reversing entry is in the journal.",
+      "info": "Why the bill is locked",
+      "postedWhy": "Posted entries are never overwritten: correct the bill with a reversing entry."
     },
     "preview": {
-      "title": "What gets posted",
-      "none": "Enter an amount and TILL shows the split here.",
-      "saldo": "Under the Saldosteuersatz method the input VAT is already inside the rate (MWSTG Art. 37), so the whole amount is booked as cost and nothing is reclaimed separately."
+      "saldo": "Under the Saldosteuersatz method the input VAT is already inside the rate (MWSTG Art. 37), so the whole amount is booked as cost and nothing is reclaimed separately.",
+      "saldoInfo": "Why there is no input VAT"
     },
     "needsVendor": {
       "body": "You have not recorded a vendor yet.",
@@ -77,6 +95,8 @@
       "vendorById": "Vendor {id}"
     },
     "reconciliation": {
+      "short": "Differs from account 2000: {difference}",
+      "info": "What the difference means",
       "mismatch": "The list and account 2000 Kreditoren differ by {difference}: list {list}, account {ledger}.",
       "hint": "TILL derives both independently. A difference means something reached 2000 that did not come from a vendor bill."
     },
@@ -108,7 +128,11 @@
       "permissionDenied": {
         "write": "You do not hold the Post capability.",
         "read": "You do not hold the capability to read the books."
-      }
+      },
+      "alreadyCaptured": "This bill is already captured."
+    },
+    "conflict": {
+      "open": "Open"
     }
   },
   "help": {

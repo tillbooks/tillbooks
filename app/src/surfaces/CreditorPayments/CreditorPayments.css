@@ -42,6 +42,19 @@
   color: var(--t-text-dim);
 }
 
+/* D152 rule 5: the due bills are a suggestion the person takes, never pre-ticked boxes. One quiet
+   line above the list: the sentence in dim ink, the one act beside it. */
+.pay-cp-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
 /* f2: the visible denied-reason note beside a disabled money-path control (a disabled button's title
    is carried neither to a hover nor to assistive tech). */
 .pay-cp-denied-note {
@@ -151,4 +164,217 @@
   margin: 0;
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
+}
+
+/* --- A40, Zahlungsplanung --------------------------------------------------------------------------
+ * The chart is the one drawing on the surface: the balance WITH the proposal is the solid ink line,
+ * without it a dashed dim line, the floor a dashed warn line whose label says what it is. The lowest
+ * point is a hollow ring, named in text in the legend. No accent anywhere on the chart (DESIGN.md:
+ * the accent marks focus, selection and the one primary). */
+
+.pay-plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.pay-plan-question {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--t-space-2);
+  padding: var(--t-space-3);
+}
+
+.pay-plan-chart {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.pay-plan-chart-svg {
+  display: block;
+  height: 200px;
+}
+
+.pay-plan-chart-grid {
+  stroke: var(--t-border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.pay-plan-chart-floor {
+  stroke: var(--t-warn);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.pay-plan-chart-line {
+  fill: none;
+  stroke: var(--t-text);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.pay-plan-chart-base {
+  fill: none;
+  stroke: var(--t-text-dim);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.pay-plan-chart-low {
+  fill: var(--t-bg-elev);
+  stroke: var(--t-text);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.pay-plan-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.pay-plan-legend::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  margin-right: var(--t-space-1);
+  vertical-align: middle;
+  border-top: 2px solid var(--t-text);
+}
+
+.pay-plan-legend--base::before {
+  border-top: 2px dashed var(--t-text-dim);
+}
+
+.pay-plan-legend--floor::before {
+  border-top: 2px dashed var(--t-warn);
+}
+
+.pay-plan-legend--low::before {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--t-text);
+  border-radius: var(--t-radius-full);
+}
+
+.pay-plan-legend--low.is-below {
+  color: var(--t-text);
+}
+
+.pay-plan-chart-table summary {
+  cursor: pointer;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.pay-plan-result,
+.pay-plan-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-3);
+}
+
+.pay-plan-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.pay-plan-subtitle {
+  margin: var(--t-space-2) 0 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.pay-plan-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-4);
+  margin: 0;
+}
+
+.pay-plan-figures dt {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.pay-plan-figures dd {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.pay-plan-note,
+.pay-plan-warn {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.pay-plan-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.pay-plan-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+/* M8: the owner-decided stop when the schedule itself breaches the floor: the sentence and two choices. */
+.pay-plan-breach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-3);
+}
+
+.pay-plan-breach-text {
+  margin: 0;
+}
+
+/* R2-H1: what the lower action delivers, said before the person presses it. */
+.pay-plan-breach-note {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.pay-plan-breach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+/* M9: the assumptions under the chart, one short line each, dim ink. */
+.pay-plan-assumptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.pay-plan-assumption-list {
+  margin: 0;
+  padding-left: var(--t-space-4);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
 }

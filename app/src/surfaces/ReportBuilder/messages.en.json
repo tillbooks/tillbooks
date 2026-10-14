@@ -1,10 +1,10 @@
 {
   "nav": {
-    "reportBuilder": "Reports"
+    "reportBuilder": "Report builder"
   },
   "reportBuilder": {
-    "route": { "title": "Reports" },
-    "tab": { "title": "Reports" },
+    "route": { "title": "Report builder" },
+    "tab": { "title": "Report builder" },
     "denied": "You do not have permission to view reports.",
     "empty": "No reports yet.",
     "emptyHint": "A report pulls data from one source and runs as CSV or PDF.",
@@ -62,7 +62,7 @@
   },
   "help": {
     "ReportBuilder": {
-      "title": "Reports",
+      "title": "Report builder",
       "body": "Your own reports over your data: you pick a source, columns, filters and sorting, and save the whole as a report. A run appends its outcome with a row count to the history; the download is what the run produced. Schedules with delivery are a cloud feature and are labelled as such.",
       "concepts": [],
       "docsPath": "introduction"

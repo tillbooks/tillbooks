@@ -16,11 +16,12 @@ import type { ActionDef, ActionInput, ApiDeps, JsonSchema } from './registry.js'
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
 import { listAgentSessions, getAgentSession, agentTrustSummary } from '../core/agent/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface AgentOversightActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,

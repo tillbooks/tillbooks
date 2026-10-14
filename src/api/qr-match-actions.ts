@@ -30,11 +30,12 @@ import {
   listUnmatchedIncoming,
   setQrAutoApply,
 } from '../core/banking/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface QrMatchActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -51,7 +52,7 @@ export function qrMatchActions(h: QrMatchActionHelpers): ActionDef[] {
   return [
     ctxAction(
       'record_incoming_credit',
-      'write',
+      'write:correctable:books',
       `Register an incoming bank credit in the Abgleich queue and score it against the open invoices: manual entry today, and the seam A20's camt import will feed later. bankAccountId is the A19 Bankkonto the money landed on (needs_bank_account if unregistered), amountMinor is integer Rappen, valueDate the credit's value date, reference whatever the advice carries (a QRR or Creditor Reference is validated; free text falls to the heuristic lane). Writes the queue row and NOTHING else: no posting, no ledger effect. A bankTxnId already registered returns the existing row (a re-imported statement duplicates nothing), and a repeat call under the same idempotencyKey replays byte-identically.`,
       ctxSchema(
         {
@@ -77,7 +78,7 @@ export function qrMatchActions(h: QrMatchActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'apply_qr_match',
-      'write',
+      'write:correctable:books',
       `Settle an invoice from a queued credit, delegating the posting to A14 record_payment (source 'qr'): debit Bank, credit Debitoren, document status and Ist-VAT stamp included, A21 posts nothing itself. Every figure is NET of linked credit notes: a payer holding a Gutschrift owes the principal, and paying it exactly settles in full. mode defaults to 'partial' (allocates up to the open amount, parks any surplus as Guthaben, never writes off); mode 'full' additionally writes off a SHORT credit's residual, and only within the A14 one-click write-off threshold (default CHF 1.00): a larger residual refuses with write_off_above_threshold naming the amount (type a deliberate larger Ausbuchung through record_payment). A foreign-currency credit refuses with currency_mismatch. P8: pass confirmed=true, or the auto-apply dial must be ON with a LIVE 'high' score for exactly this invoice. NOT automatable (D77): a stored rule may never make this judgment. Idempotent per credit AND per decision: the same invoice+mode replays, a different mode refuses honestly as already_applied.`,
       ctxSchema(
         { creditId: STR, invoiceId: STR, mode: STR, confirmed: BOOL, idempotencyKey: STR },
@@ -87,7 +88,7 @@ export function qrMatchActions(h: QrMatchActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'override_qr_match',
-      'write',
+      'write:correctable:books',
       `The manual decision on any queue row, applied included (US-A21.4). Name the correct invoiceId to re-point (an applied row is first corrected by an A14 reversing payment, §H-AUDIT, then re-applied to the named invoice), or an action: 'unmatch' returns the row to open (reversing first when applied), 'dismiss' marks it as not a customer payment (book it via journal entry instead). Overriding an APPLIED row always requires confirmed=true: it moves money, and the auto-apply dial never covers an override. NOT automatable (D77): reversing a settlement and re-pointing money between debtors is a judgment no stored rule may make. The row keeps the reversal chain and the audit stamp: who overrode what, and when.`,
       ctxSchema(
         { creditId: STR, invoiceId: STR, action: STR, confirmed: BOOL, idempotencyKey: STR },
@@ -104,7 +105,7 @@ export function qrMatchActions(h: QrMatchActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'set_qr_auto_apply',
-      'write',
+      'write:reversible:access',
       `Switch the workspace's auto-apply dial for QR matching (P8, default OFF). ON means apply_qr_match may settle WITHOUT a per-call confirmation when, and only when, the live score is 'high' (exact reference, exact amount) for exactly the invoice being applied; every 'medium' and every override still waits for confirmed=true. This verb is deliberately not automatable (D65): a rule that could switch the unattended-money dial on would bypass the human approval the dial exists to record. A repeat call under the same idempotencyKey writes nothing.`,
       ctxSchema({ autoApply: BOOL, idempotencyKey: STR }, ['autoApply', 'idempotencyKey']),
       (ctx, input) => setQrAutoApply(ctx, input as never),

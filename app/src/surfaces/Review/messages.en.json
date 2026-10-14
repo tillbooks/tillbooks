@@ -8,7 +8,6 @@
   },
   "review": {
     "title": "Review",
-    "subtitle": "Comment on, flag and approve a period's posted entries, then lock it once it is clean.",
     "permission": "Reviewing the books needs the Fiduciary role. Ask a workspace owner to grant it.",
     "coverage": "Coverage",
     "lockPeriod": "Lock period",
@@ -27,7 +26,9 @@
     "empty": "No movements in this period",
     "emptyHint": "Nothing was posted here, so there is nothing to review yet.",
     "allApproved": "Nothing to review, everything is approved. You can lock the period or move on to export.",
+    "allApprovedNoLock": "Nothing to review, everything is approved. You can move on to export.",
     "noAmount": "No amount",
+    "row": "{date}, {text}, {status}",
     "comment": "Comment",
     "flag": "Flag",
     "approve": "Approve",
@@ -58,10 +59,9 @@
       "yearLabel": "Year"
     },
     "lock": {
-      "locked": "Locked",
-      "alreadyLocked": "This period is already locked.",
       "needsManagePeriods": "Locking a period needs the manage periods right.",
-      "notClean": "Every entry has to be approved and none flagged before you can lock.",
+      "notClean": "You can lock once every entry is approved and none is flagged.",
+      "info": "When you can lock",
       "confirmTitle": "Lock {period}?",
       "confirmBody": "This covers the entries from {from} to {to}.",
       "failed": "The period could not be locked. Try again.",
@@ -97,7 +97,7 @@
   "help": {
     "Review": {
       "title": "Review",
-      "body": "Go through a period's posted entries: comment on anything you want to query, flag what looks wrong, and approve what you have checked.\n\nThe line at the top counts what is done and what is left. The lock button stays off until every entry is approved and nothing is flagged.\n\nA comment or a flag never changes a booked entry. A correction is a reversal in a later period.",
+      "body": "Go through a period's posted entries: comment on anything you want to query, flag what looks wrong, and approve what you have checked. A row's three actions appear once you select the row, point at it, or reach it with the Tab key.\n\nThe line at the top counts what is done and what is left. Lock period appears there once every entry is approved and nothing is flagged; the (i) beside the counts says what is still missing.\n\nA comment or a flag never changes a booked entry. A correction is a reversal in a later period.",
       "concepts": [
         "steuerperiode"
       ]

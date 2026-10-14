@@ -734,7 +734,10 @@ export function transmitManagedBatch(
   if (!regen.ok) return regen;
   const payloadBase64 = (regen as unknown as { xmlBase64: string }).xmlBase64;
   const payloadSha256 = sha256Hex(Buffer.from(payloadBase64, 'base64'));
-  const msgId = (regen as unknown as { batch?: { msgId?: string } }).batch?.msgId ?? batch.msg_id ?? `${batchId}-msg`;
+  // The MsgId the file carries, frozen on the batch (A18 F9). `msg_name` is what a pain.002 folds back
+  // on (`OrgnlMsgId`), so it is never derived from the batch id; a regenerated file always carries one.
+  const msgId = (regen as unknown as { batch?: { msgId?: string | null } }).batch?.msgId ?? batch.msg_id;
+  if (msgId === null) return err('references_not_frozen', { batchId, missing: ['msg_id'] });
   const orderRef = `${conn.id}-pss-${batchId}`;
 
   // 2) INTENT BEFORE SUBMIT: append the intent row and COMMIT, before any relay I/O (spec §4).

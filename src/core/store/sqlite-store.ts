@@ -42,6 +42,46 @@ import { existsSync as pathExists } from 'node:fs';
 export const DEFAULT_BUSY_TIMEOUT_MS = 5000;
 
 /**
+ * The separator of an INNER idempotency scope (`SqliteStore.innerWrite`): `wage_journal_post>post_entry`.
+ * No verb name carries it, and `idempotencyScope` refuses one that does, so only `innerWrite` can put
+ * it into a scope and no public verb can address an inner record.
+ */
+export const INNER_SCOPE_SEPARATOR = '>';
+
+/** A composite's scope name: a verb-shaped identifier, never the separator. */
+const INNER_SCOPE_NAME = /^[a-z][a-z0-9_]*$/;
+
+/**
+ * The composites whose NON-posting inner writes run under `innerWrite` (K1, 04.10.2026). A closed
+ * literal union, as `InternalPostScope` is for postings (`postEntryInternal`): the scope is a code-level
+ * argument from this set, never an input field, so no caller can name a public verb's scope here. A
+ * composite whose inner write is a POSTING uses `postEntryInternal` instead.
+ */
+export const INNER_WRITE_COMPOSITES = [
+  'payroll_handoff_export',
+  'import_exchange_rates',
+  'liquidity_plan_draft_batches',
+  'capture_commit',
+  'bootstrap_workspace',
+  'create_demo_workspace',
+  'draft_generate',
+  'draft_regenerate',
+  'override_qr_match',
+  'requisition_convert_to_po',
+  'migration_commit_step',
+  'go_productive',
+  'agent_review_seam',
+  'book_bank_line',
+  'reopen_bank_line',
+  'deals_to_quote',
+  'env_copy',
+  'migration_discover_source',
+  'portal_quote_accept',
+  'transition_document',
+] as const;
+export type InnerWriteComposite = (typeof INNER_WRITE_COMPOSITES)[number];
+
+/**
  * Is this a lock-contention failure, as opposed to a real fault?
  *
  * It matters because the two want opposite responses: contention is worth retrying in a moment, and
@@ -928,6 +968,69 @@ export class SqliteStore {
   }
 
   /**
+   * The composites whose inner writes are running right now, outermost first (`innerWrite`).
+   * Empty outside any composite, which is every call a wire input can make on its own.
+   */
+  private readonly innerScopePath: string[] = [];
+
+  /**
+   * §H-IDEMPOTENT-INNER (K1, 04.10.2026): run the INNER WRITES of a composite verb in an idempotency
+   * scope no public verb can write.
+   *
+   * THE DEFECT IT CLOSES. A composite (`close_year`, `wage_journal_post`, `capture_commit`, ...) calls
+   * an inner write (`postEntry`, `createVendorBill`, `createPaymentBatch`, ...) with a key it derives
+   * from its own, e.g. `${key}:wjp`. The inner write memoises under its own verb name (`post_entry`),
+   * which is ALSO the scope of the public verb of that name. So anyone able to call `post_entry` with
+   * the key `K:wjp` before the composite runs had their write replayed in place of the composite's,
+   * and the composite answered ok over it: a wage journal "posted" as a CHF 1.00 manual entry, a year
+   * sealed with its P&L never swept. A derived key is a guessable key; the realistic actor is an agent
+   * seat that drafts the composite under its own key and writes under the derived one meanwhile.
+   *
+   * THE MECHANISM. Every idempotency record `fn` reads or writes (through `recallIdempotent` and
+   * `rememberIdempotent`, at any depth) is held under `<composite>>` + the inner verb, e.g.
+   * `wage_journal_post>post_entry`. The separator `>` can enter a scope ONLY here: a verb name that
+   * carries it is refused at both entry points, so no public verb, no engine verb and no wire input can
+   * address an inner record. Nesting composes (`a>b>post_entry`). The composite's OWN record is written
+   * outside `innerWrite` and is unchanged, so replaying a completed composite works exactly as before.
+   *
+   * WHAT IT DOES NOT COVER, said so it is not assumed: a domain table that holds the raw key unique
+   * (`vendor_bill`, `payment_batch`, `expense_claim`, `payment`) still sees a squatted key, and the
+   * inner write then REFUSES `idempotency_key_conflict` rather than replaying: a squat becomes a
+   * refusal, never wrong money. And the composite still reads its inner result back (the owning
+   * module's check, e.g. `postEntryInternalChecked`), because a scope is a defence and a read-back is the proof.
+   *
+   * SYNCHRONOUS ONLY. The path is dynamic state on this store; an async `fn` would leave it before its
+   * awaited half ran, so a thenable result is refused loudly rather than half-scoped.
+   */
+  innerWrite<T>(composite: InnerWriteComposite, fn: () => T): T {
+    if (!INNER_SCOPE_NAME.test(composite)) {
+      throw new Error(`innerWrite: composite scope name must match ${INNER_SCOPE_NAME}: ${JSON.stringify(composite)}`);
+    }
+    this.innerScopePath.push(composite);
+    try {
+      const result = fn();
+      if (result !== null && typeof result === 'object' && typeof (result as { then?: unknown }).then === 'function') {
+        throw new Error(`innerWrite(${composite}): the inner write returned a promise; inner writes are synchronous`);
+      }
+      return result;
+    } finally {
+      this.innerScopePath.pop();
+    }
+  }
+
+  /**
+   * The scope the idempotency record of `verb` is held under at this moment: `verb` itself outside
+   * any composite, `<composite>>…>verb` inside `innerWrite`. Every reader and writer of the
+   * `idempotency` table goes through this (the two methods below, and `send_invoice`'s attempt record).
+   */
+  idempotencyScope(verb: string): string {
+    if (verb.includes(INNER_SCOPE_SEPARATOR)) {
+      throw new Error(`idempotency verb ${JSON.stringify(verb)} carries the inner-scope separator; only innerWrite may add it`);
+    }
+    return this.innerScopePath.length === 0 ? verb : [...this.innerScopePath, verb].join(INNER_SCOPE_SEPARATOR);
+  }
+
+  /**
    * §H-IDEMPOTENT. Runs `compute` once for a given `(workspaceId, key)` and stores its result; a
    * later call with the same key skips `compute` and replays the stored result. The compute and the
    * bookkeeping row commit together, so a crash mid-write leaves neither.
@@ -939,7 +1042,7 @@ export class SqliteStore {
   recallIdempotent<T>(workspaceId: string, key: string, verb: string): T | undefined {
     const row = this.db
       .prepare('SELECT result_json FROM idempotency WHERE workspace_id = ? AND verb = ? AND key = ?')
-      .get(workspaceId, verb, key) as { result_json: string } | undefined;
+      .get(workspaceId, this.idempotencyScope(verb), key) as { result_json: string } | undefined;
     return row === undefined ? undefined : (JSON.parse(row.result_json) as T);
   }
 
@@ -948,13 +1051,16 @@ export class SqliteStore {
     if (existing !== undefined) {
       return existing;
     }
+    // The scope is resolved BEFORE `compute` runs: the path cannot change under a synchronous compute,
+    // but the record is filed under the scope the recall above looked in, whatever compute does.
+    const scope = this.idempotencyScope(verb);
     return this.tx(() => {
       const result = compute();
       this.db
         .prepare(
           'INSERT INTO idempotency (workspace_id, key, verb, result_json, created_at) VALUES (?, ?, ?, ?, ?)',
         )
-        .run(workspaceId, key, verb, JSON.stringify(result), this.clock.now());
+        .run(workspaceId, key, scope, JSON.stringify(result), this.clock.now());
       return result;
     });
   }

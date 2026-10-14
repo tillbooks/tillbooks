@@ -40,6 +40,7 @@ interface LineRow {
   tax_code: string | null;
   tax_base_minor: number | null;
   tax_amount_minor: number | null;
+  supply_date: string | null;
 }
 
 /**
@@ -80,6 +81,12 @@ export type JournalLineView = {
   readonly taxCode: string | null;
   readonly taxBase: number | null;
   readonly taxAmount: number | null;
+  /**
+   * The Leistungsdatum the line's VAT was priced at (F2), or null when it is the entry date. A reader
+   * that composes the line again (the Studio reopening a draft, C10) needs it to re-price at the SAME
+   * supply-date rate the trace froze, rather than at the entry date's.
+   */
+  readonly supplyDate: string | null;
 };
 
 /**
@@ -242,6 +249,7 @@ function mapLine(row: LineRow, baseCurrency: string): JournalLineView {
     taxCode: row.tax_code,
     taxBase: row.tax_base_minor,
     taxAmount: row.tax_amount_minor,
+    supplyDate: row.supply_date ?? null,
   };
 }
 

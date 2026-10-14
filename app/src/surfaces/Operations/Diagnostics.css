@@ -13,6 +13,18 @@
   max-width: 720px;
 }
 
+/* The header slot Data & Backup portals "Jetzt sichern" into: no box of its own (D152). */
+.operations-header-action {
+  display: contents;
+}
+
+/* An in-page jump (the location links, the exit link, "Jetzt sichern" from the header) lands its
+   heading BELOW the sticky surface header, not under it. */
+.operations-stack [id$='-title'],
+.operations-stack #sync-exit {
+  scroll-margin-top: calc(var(--surface-header-height, 0px) + var(--t-space-2));
+}
+
 /* Prose blocks cap at the ~72-character measure the design law sets for reading text. */
 .diag-prose {
   margin: 0;

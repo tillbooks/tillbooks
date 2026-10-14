@@ -98,6 +98,7 @@ export function FirstRun() {
   const [adoptPath, setAdoptPath] = useState('');
   const [busy, setBusy] = useState<null | 'create' | 'restore' | 'demo'>(null);
   const [error, setError] = useState<string | null>(null);
+  const [portalNotice, setPortalNotice] = useState<string | null>(null);
   /** K-14: how many workspaces this device already carries. Zero until the list read lands; a
    *  failed read stays zero on purpose, because the unprovisioned render is the honest fallback. */
   const [existingCount, setExistingCount] = useState(0);
@@ -259,6 +260,13 @@ export function FirstRun() {
     const id = (response.body as { workspaceId?: string }).workspaceId;
     if (typeof id === 'string') {
       setWorkspaceId(id);
+      // D161.2 (critic F2): restored portal links wait for a new hand-over. Say so before leaving,
+      // so nobody learns it from a customer whose link stopped working.
+      const waiting = (response.body as { portalLinksAwaitingHandover?: number }).portalLinksAwaitingHandover ?? 0;
+      if (waiting > 0) {
+        setPortalNotice(t(`data.restore.portalLinks.${waiting === 1 ? 'one' : 'other'}`, { count: String(waiting) }));
+        return;
+      }
       navigate(landing, { replace: true });
     }
   }
@@ -318,6 +326,14 @@ export function FirstRun() {
 
       {/* A refused write names its remedy in the one shared banner (K-35), never a hand-drawn box. */}
       {error !== null && <ErrorBanner message={error} />}
+      {portalNotice !== null && (
+        <div className="firstrun-restore-notice" role="status">
+          <p>{portalNotice}</p>
+          <button type="button" className="btn btn--primary" onClick={() => navigate(landing, { replace: true })}>
+            {t('data.restore.continue')}
+          </button>
+        </div>
+      )}
 
       <div className="firstrun-doors">
         {/* Door 1: create. */}

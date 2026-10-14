@@ -63,6 +63,8 @@ const BASE: Handlers = {
   review_status: ok({ period: '2026-08', total: 0, approved: 0, flagged: 0, open: 0, entries: [] }),
   get_company_profile: ok({ profile: CHF_PROFILE }),
   close_year: ok(fixture.yearClose),
+  // The open year_close runs (D152, fail closed): answered, and none, so the direct seal is offered.
+  checklist_list: ok({ runs: [] }),
 };
 
 function renderPeriods(handlers: Handlers = {}) {
@@ -87,13 +89,18 @@ function renderPeriods(handlers: Handlers = {}) {
   return { ...utils, transport };
 }
 
-/** Drive the confirm-gated year close for the fixture's fiscal year. */
+/**
+ * Drive the confirm-gated year close for the fixture's fiscal year. Since D152 (owner, 04.10.2026)
+ * the direct seal sits behind the header overflow ("Close directly …"): the picker and the confirm
+ * are one alert dialog, and the confirm appears once the year is chosen.
+ */
 async function closeTheYear() {
   await screen.findByText(/No period closed yet/);
-  await userEvent.click(screen.getByRole('combobox', { name: 'Year' }));
-  await userEvent.click(screen.getByRole('option', { name: fixture.entry.date.slice(0, 4) }));
-  await userEvent.click(screen.getByRole('button', { name: 'Run year-end close' }));
+  await userEvent.click(screen.getByRole('button', { name: 'More actions' }));
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Close directly …' }));
   const confirm = await screen.findByRole('alertdialog');
+  await userEvent.click(within(confirm).getByRole('combobox', { name: 'Year' }));
+  await userEvent.click(screen.getByRole('option', { name: fixture.entry.date.slice(0, 4) }));
   await userEvent.click(within(confirm).getByRole('button', { name: 'Run year-end close' }));
 }
 

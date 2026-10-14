@@ -29,6 +29,9 @@ import { BANK_LINE_STATES, LINE_STATE_EXPR, LINE_STATE_JOINS, readActiveLink, si
 import type { BankLineState, BankTxnDetailRow, BankTxnRow } from './bankLines.js';
 import { proposalContext, proposeForLine } from './bankProposals.js';
 import type { BankLineProposal } from './bankProposals.js';
+import type { BookBankLineTarget } from './bankLines.js';
+import { IS_HEAD } from '../files/head.js';
+import { STATEMENT_IS_VOUCHER_SQL } from '../accounts/accounts.js';
 
 // --- Views ---------------------------------------------------------------------------------------
 
@@ -66,7 +69,185 @@ export type BankInboxLine = {
   decision: BankInboxDecision | null;
   /** Only for an `open` line. */
   proposal: BankLineProposal | null;
+  /**
+   * D142 (A39 §11): how an OPEN line stands for the person, the one definition the Studio's facets and
+   * the Übersicht band share (`attentionOf`). Null on a decided line.
+   */
+  attention: BankLineAttention | null;
+  /** D142: current file versions linked to the line, plus those linked to the entry its decision booked. */
+  receiptCount: number;
+  /** D142: booked to accounts (`targetKind: 'accounts'`) and no receipt anywhere: the "Ohne Beleg" facet. */
+  needsReceipt: boolean;
 };
+
+// --- D142: the attention facets and the receipts (A39 §11) --------------------------------------------
+
+/** How an open line stands for the person (§H-ENUM, single point; mirrored by the Studio). */
+export const BANK_LINE_ATTENTIONS = ['needs', 'sure', 'learned'] as const;
+export type BankLineAttention = (typeof BANK_LINE_ATTENTIONS)[number];
+
+/** The bank-line verbs a pending agent Vorschlag can carry. */
+const LINE_VERBS = ['book_bank_line', 'ignore_bank_line', 'reopen_bank_line'] as const;
+
+/** The lines a PENDING agent Vorschlag names (A35's queue): a person decides those, never the pick bar. */
+export function vorschlagLineIds(ctx: WorkspaceContext): Set<string> {
+  const rows = ctx.store.db
+    .prepare(
+      `SELECT payload_json FROM agent_action
+        WHERE workspace_id = ? AND status = 'pending' AND action_tool IN (${LINE_VERBS.map(() => '?').join(', ')})`,
+    )
+    .all(ctx.workspaceId, ...LINE_VERBS) as { payload_json: string }[];
+  const ids = new Set<string>();
+  for (const r of rows) {
+    try {
+      const payload = JSON.parse(r.payload_json) as { bankTxnId?: unknown };
+      if (typeof payload.bankTxnId === 'string' && payload.bankTxnId.length > 0) ids.add(payload.bankTxnId);
+    } catch {
+      // An unreadable payload names no line.
+    }
+  }
+  return ids;
+}
+
+/**
+ * Can the proposal's target be booked exactly as it stands? The engine twin of the Studio's `isBookable`:
+ * an accounts booking needs at least one leg, an account and a non-zero amount on every leg, and legs
+ * summing to the line; an accepted difference needs its reason (critic A39-12).
+ */
+export function isProposalBookable(absAmountMinor: number, target: BookBankLineTarget | null): boolean {
+  if (target === null) return false;
+  if (target.kind === 'existing_entry') return target.acceptDifference !== true || (target.differenceReason ?? '').trim() !== '';
+  if (target.kind !== 'accounts') return true;
+  if (target.legs.length === 0 || target.legs.some((l) => l.accountId === '' || l.amountMinor === 0)) return false;
+  return target.legs.reduce((sum, l) => sum + l.amountMinor, 0) === absAmountMinor;
+}
+
+/**
+ * THE ONE DEFINITION of "needs you" and "sure" (A39 §11): `sure` when the proposal is `sure`, bookable as
+ * it stands and no pending Vorschlag names the line (what "Alle sicheren buchen" may send); `learned` when
+ * the proposal is `learned` and no Vorschlag names it; `needs` for everything else.
+ */
+export function attentionOf(proposal: BankLineProposal | null, absAmountMinor: number, hasVorschlag: boolean): BankLineAttention {
+  if (hasVorschlag || proposal === null) return 'needs';
+  if (proposal.certainty === 'sure') return isProposalBookable(absAmountMinor, proposal.target) ? 'sure' : 'needs';
+  if (proposal.certainty === 'learned') return 'learned';
+  return 'needs';
+}
+
+/**
+ * D142 amendment (owner, 28.09.2026): SQL, true when every leg of the booking entry `entryExpr` other than
+ * the line's Bankkonto leg sits on an account whose voucher is the bank statement ("Beleg = Kontoauszug").
+ * Such a line needs no Beleg of its own; a split with one unflagged leg still does. Tenant-bound through
+ * the entry and the account.
+ */
+export function STATEMENT_COVERS_SQL(entryExpr: string, bankAccountExpr: string, wsExpr: string): string {
+  return `(${entryExpr} IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM journal_line sjl
+        JOIN journal_entry sje ON sje.id = sjl.entry_id AND sje.workspace_id = ${wsExpr}
+        JOIN account sa ON sa.id = sjl.account_id AND sa.workspace_id = ${wsExpr}
+        JOIN bank_account sba ON sba.workspace_id = ${wsExpr} AND sba.id = ${bankAccountExpr}
+       WHERE sjl.entry_id = ${entryExpr} AND sjl.account_id != sba.ledger_account_id
+         AND NOT ${STATEMENT_IS_VOUCHER_SQL('sa')}))`;
+}
+
+/** Current file versions linked to the line, plus those linked to the journal entry its decision booked. */
+const RECEIPTS_SQL = `SELECT COUNT(*) AS n FROM stored_file f
+   WHERE f.workspace_id = ? AND ${IS_HEAD('f')}
+     AND ((f.entity_kind = 'bank_txn' AND f.entity_id = ?)
+       OR (? IS NOT NULL AND f.entity_kind = 'journal_entry' AND f.entity_id = ?))`;
+
+/** Per Bankkonto (and in total): what the Übersicht band counts, from the inbox's own definitions. */
+export interface BankInboxAttentionCounts {
+  open: number;
+  needs: number;
+  sure: number;
+  learned: number;
+  noReceipt: number;
+  /** The open lines' money in and money out, each a positive sum in the account's currency. */
+  inMinor: number;
+  outMinor: number;
+  /**
+   * D150: of the `needs` lines, those a pending Vorschlag already names. The hub counts those in
+   * `agent_action`, so `bank_lines_waiting` subtracts them and no line is counted twice.
+   */
+  vorschlag: number;
+  /** D150: the earliest booking (else value) date among the `needs` lines not named by a Vorschlag, or null. */
+  oldestWaiting: string | null;
+}
+
+/**
+ * D142: the band's counts, by the SAME rules the inbox lines carry (`attentionOf`, `needsReceipt`), over
+ * EVERY open line rather than a page, per Bankkonto and in total. `bankAccountId` narrows to one account.
+ */
+export function bankInboxAttention(
+  ctx: WorkspaceContext,
+  input: { bankAccountId?: string } = {},
+): { total: BankInboxAttentionCounts; byAccount: Map<string, BankInboxAttentionCounts> } {
+  const zero = (): BankInboxAttentionCounts => ({ open: 0, needs: 0, sure: 0, learned: 0, noReceipt: 0, inMinor: 0, outMinor: 0, vorschlag: 0, oldestWaiting: null });
+  const total = zero();
+  const byAccount = new Map<string, BankInboxAttentionCounts>();
+  const bucket = (id: string): BankInboxAttentionCounts => {
+    let b = byAccount.get(id);
+    if (b === undefined) {
+      b = zero();
+      byAccount.set(id, b);
+    }
+    return b;
+  };
+  const scope = input.bankAccountId !== undefined ? 'AND t.bank_account_id = ?' : '';
+  const params = input.bankAccountId !== undefined ? [ctx.workspaceId, input.bankAccountId] : [ctx.workspaceId];
+  const open = ctx.store.db
+    .prepare(
+      `SELECT t.*, d2.counterparty_name, d2.counterparty_iban, d2.remittance_text, d2.end_to_end_id
+         FROM bank_txn t ${LINE_STATE_JOINS('t')}
+         LEFT JOIN bank_txn_detail d2 ON d2.workspace_id = t.workspace_id AND d2.bank_txn_id = t.id
+        WHERE t.workspace_id = ? ${scope} AND ${LINE_STATE_EXPR('t')} = 'open'`,
+    )
+    .all(...params) as (BankTxnRow & BankTxnDetailRow)[];
+  if (open.length > 0) {
+    const pc = proposalContext(ctx);
+    const named = vorschlagLineIds(ctx);
+    for (const r of open) {
+      const detail: BankTxnDetailRow = {
+        counterparty_name: r.counterparty_name,
+        counterparty_iban: r.counterparty_iban,
+        remittance_text: r.remittance_text,
+        end_to_end_id: r.end_to_end_id,
+      };
+      const hasVorschlag = named.has(r.id);
+      const attention = attentionOf(proposeForLine(ctx, pc, r, detail), Math.abs(r.amount_minor), hasVorschlag);
+      const lineDate = r.booking_date ?? r.value_date ?? null;
+      for (const b of [total, bucket(r.bank_account_id)]) {
+        b.open += 1;
+        b[attention] += 1;
+        if (attention === 'needs' && hasVorschlag) b.vorschlag += 1;
+        if (attention === 'needs' && !hasVorschlag && lineDate !== null && (b.oldestWaiting === null || lineDate < b.oldestWaiting)) b.oldestWaiting = lineDate;
+        if (r.credit_debit === 'CRDT') b.inMinor += r.amount_minor;
+        else b.outMinor += r.amount_minor;
+      }
+    }
+  }
+  const missing = ctx.store.db
+    .prepare(
+      `SELECT t.bank_account_id AS a, COUNT(*) AS n
+         FROM bank_txn t
+         JOIN bank_line_decision d ON d.workspace_id = t.workspace_id AND d.bank_txn_id = t.id AND d.superseded_at IS NULL
+        WHERE t.workspace_id = ? ${scope} AND d.state = 'booked' AND d.target_kind = 'accounts'
+          AND NOT ${STATEMENT_COVERS_SQL('d.entry_id', 't.bank_account_id', 't.workspace_id')}
+          AND NOT EXISTS (
+            SELECT 1 FROM stored_file f
+             WHERE f.workspace_id = t.workspace_id
+               AND ((f.entity_kind = 'bank_txn' AND f.entity_id = t.id)
+                 OR (d.entry_id IS NOT NULL AND f.entity_kind = 'journal_entry' AND f.entity_id = d.entry_id)))
+        GROUP BY t.bank_account_id`,
+    )
+    .all(...params) as { a: string; n: number }[];
+  for (const m of missing) {
+    total.noReceipt += m.n;
+    bucket(m.a).noReceipt += m.n;
+  }
+  return { total, byAccount };
+}
 
 /** The balance line of ONE Bankkonto at its latest statement (spec L4): three numbers and their gap. */
 export type BankAccountBalance = {
@@ -343,6 +524,11 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
   const nextCursor = rows.length > limit && last !== undefined ? encodeCursor(last.sort_date, last.rid) : null;
 
   const pc = page.some((r) => r.line_state === 'open') ? proposalContext(ctx) : null;
+  const named = pc !== null ? vorschlagLineIds(ctx) : new Set<string>();
+  const receiptsOf = ctx.store.db.prepare(RECEIPTS_SQL);
+  const statementCovers = ctx.store.db.prepare(
+    `SELECT ${STATEMENT_COVERS_SQL('@entry', '@bank', '@ws')} AS covered`,
+  );
   const decisions = new Map<string, BankInboxDecision>();
   for (const r of page) {
     if (r.line_state === 'open') continue;
@@ -364,12 +550,16 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
   }
 
   const lines: BankInboxLine[] = page.map((r) => {
+    const decision = decisions.get(r.id);
     const detail: BankTxnDetailRow = {
       counterparty_name: r.counterparty_name,
       counterparty_iban: r.counterparty_iban,
       remittance_text: r.remittance_text,
       end_to_end_id: r.end_to_end_id,
     };
+    const proposal = r.line_state === 'open' && pc !== null ? proposeForLine(ctx, pc, r, detail) : null;
+    const entryId = decision?.entryId ?? null;
+    const receiptCount = (receiptsOf.get(ctx.workspaceId, r.id, entryId, entryId) as { n: number }).n;
     return {
       bankTxnId: r.id,
       bankAccountId: r.bank_account_id,
@@ -390,8 +580,15 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
       },
       entryRef: r.entry_ref,
       creditId: r.credit_id,
-      decision: decisions.get(r.id) ?? null,
-      proposal: r.line_state === 'open' && pc !== null ? proposeForLine(ctx, pc, r, detail) : null,
+      decision: decision ?? null,
+      proposal,
+      attention: r.line_state === 'open' ? attentionOf(proposal, Math.abs(r.amount_minor), named.has(r.id)) : null,
+      receiptCount,
+      needsReceipt:
+        r.line_state === 'booked' &&
+        decision?.targetKind === 'accounts' &&
+        receiptCount === 0 &&
+        (statementCovers.get({ entry: entryId, bank: r.bank_account_id, ws: ctx.workspaceId }) as { covered: number }).covered !== 1,
     };
   });
 

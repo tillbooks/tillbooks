@@ -2,7 +2,8 @@
  * F02, the Portal-Zugang panel on the contact detail (spec §6/§8 component test).
  *
  * Proves all FIVE states (loading, empty, error, success, permission-denied), the one-time-link
- * affordance that appears exactly once after a create, the glyph+label statuses (never colour-only),
+ * affordance that appears exactly once after a create, the D157 draft row (it says it opens nothing,
+ * and "Link freischalten" sends `confirmed:true`), the glyph+label statuses (never colour-only),
  * and the A24 padlock: create/revoke render only with `portal.manage`, and without it the panel is
  * READ-ONLY (the list still reads on `read_master_data`), never shown-then-rejected.
  *
@@ -39,7 +40,10 @@ const CONTACTS = [
 const ok = (data: Record<string, unknown> = {}): RestResponse => ({ status: 200, body: { ok: true, ...data } });
 
 /** A transport with the base contact reads plus a per-test `portal_grant_list` behaviour. */
-function transportWith(portalList: () => Promise<RestResponse> | RestResponse): Transport {
+function transportWith(
+  portalList: () => Promise<RestResponse> | RestResponse,
+  onSend?: (input: Record<string, unknown>) => void,
+): Transport {
   return async (action, input) => {
     if (action === 'list_contacts') return ok({ contacts: CONTACTS });
     if (action === 'get_company_profile') return ok({ profile: { baseCurrency: 'CHF' } });
@@ -51,6 +55,10 @@ function transportWith(portalList: () => Promise<RestResponse> | RestResponse): 
       return ok({ grantId: 'g1', grant: { id: 'g1', status: 'draft', expiresAt: '2026-10-01', scopes: [], hosted: false }, localLink: '/portal?token=SECRET-ONE-TIME', clamped: false });
     }
     if (action === 'portal_grant_revoke') return ok({ grantId: (input as { grantId: string }).grantId });
+    if (action === 'portal_grant_send') {
+      onSend?.(input as Record<string, unknown>);
+      return ok({ grantId: (input as { grantId: string }).grantId, sent: false, reason: 'cloud_tier' });
+    }
     return { status: 404, body: { ok: false, error: 'unknown_action' } };
   };
 }
@@ -129,6 +137,44 @@ describe('F02 Portal-Zugang panel', () => {
     // The one-time link surfaces with its copy affordance (aria-label, keyboard-reachable).
     expect(await screen.findByText('Der Link wird nur einmal angezeigt.')).toBeTruthy();
     expect(screen.getByLabelText('Link kopieren')).toBeTruthy();
+    // D157: the link handed out is a draft, and the panel says so where it hands it out.
+    expect(screen.getByText('Dieser Link öffnet nichts, bis du ihn unten in der Liste freischaltest.')).toBeTruthy();
+  });
+
+  it('DRAFT (D157): a draft row says it opens nothing and offers "Link freischalten", which sends confirmed and shows it active', async () => {
+    let status: 'draft' | 'active' = 'draft';
+    const sends: Record<string, unknown>[] = [];
+    const list = () => ok({ grants: [{ id: 'g1', status, expiresAt: '2026-10-01', scopes: [{ kind: 'all_invoices' }], hosted: false }] });
+    renderWith(
+      transportWith(list, (input) => {
+        sends.push(input);
+        status = 'active';
+      }),
+      [CAP.portalManage, CAP.readMasterData],
+    );
+    await openPortalTab();
+    // The status is honest in a word and a sentence: a draft, and what that means.
+    expect(await screen.findByText('Entwurf')).toBeTruthy();
+    expect(screen.getByText('Öffnet nichts, bis du ihn freischaltest.')).toBeTruthy();
+    // The engine's own consequence sentence for the send (one catalogue, D156) sits beside the action.
+    expect(screen.getByText(/Schaltet den Portal-Link der Kundschaft frei/)).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Link freischalten' }));
+    // The operator's click IS the confirmation: grantId and confirmed:true, under a fresh key.
+    expect(sends).toHaveLength(1);
+    expect(sends[0]).toMatchObject({ workspaceId: 'ws_test', grantId: 'g1', confirmed: true });
+    expect(typeof sends[0]!.idempotencyKey).toBe('string');
+    // The list reloads and the row is now active, with no activate action left.
+    expect(await screen.findByText('Aktiv')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Link freischalten' })).toBeNull();
+    expect(screen.queryByText('Öffnet nichts, bis du ihn freischaltest.')).toBeNull();
+  });
+
+  it('ACTIVE: an active row carries no activate action', async () => {
+    const grants = [{ id: 'g1', status: 'active', expiresAt: '2026-10-01', scopes: [], hosted: false }];
+    renderWith(transportWith(() => ok({ grants })), [CAP.portalManage, CAP.readMasterData]);
+    await openPortalTab();
+    expect(await screen.findByText('Aktiv')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Link freischalten' })).toBeNull();
   });
 
   it('PERMISSION-DENIED: without portal.manage the panel is read-only (no create, no revoke), list still reads', async () => {
@@ -141,5 +187,13 @@ describe('F02 Portal-Zugang panel', () => {
     expect(screen.queryByRole('button', { name: 'Zugang freigeben' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Widerrufen' })).toBeNull();
     expect(screen.queryByLabelText('Gültig bis')).toBeNull();
+  });
+
+  it('PERMISSION-DENIED: without portal.manage a draft row shows its state but no activate action', async () => {
+    const grants = [{ id: 'g1', status: 'draft', expiresAt: '2026-10-01', scopes: [], hosted: false }];
+    renderWith(transportWith(() => ok({ grants })), [CAP.readMasterData]);
+    await openPortalTab();
+    expect(await screen.findByText('Entwurf')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Link freischalten' })).toBeNull();
   });
 });

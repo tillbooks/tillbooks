@@ -159,3 +159,46 @@ describe('TestmandantPanel discard (f10)', () => {
     });
   });
 });
+
+describe('TestmandantPanel on a COPY of the books (one plan owns a Testmandant, 11.10.2026)', () => {
+  it('a discard that only dropped the copy\'s link says so, instead of claiming a deletion', async () => {
+    let discarded = false;
+    render(
+      tree({
+        migration_get_testmandant: () => (discarded ? ok({ none: true }) : ok({ workspaceId: 'ws_trial', kind: 'sandbox' })),
+        discard_testmandant: () => {
+          discarded = true;
+          return ok({ unlinkedOnly: true, discardedWorkspaceId: null, planId: 'migplan_1' });
+        },
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: de.migration.testmandant.discard }));
+    await screen.findByText(de.migration.testmandant.discardConfirm);
+    const danger = screen.getAllByRole('button', { name: de.migration.testmandant.discard }).find((b) => b.className.includes('btn--danger'));
+    fireEvent.click(danger as HTMLElement);
+    const notice = await screen.findByText(de.migration.testmandant.unlinkedOnly);
+    // Announced as a live region on the empty state the panel lands on (the link is gone).
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(screen.getByText(de.migration.testmandant.empty.title)).toBeTruthy();
+  });
+
+  it('names testmandant_not_owned when a copy tries to go productive', async () => {
+    render(
+      <TillClientProvider client={new TillClient(fakeTransport({
+        migration_get_testmandant: ok({ workspaceId: 'ws_trial', kind: 'sandbox' }),
+        get_company_profile: ok({ profile: { name: 'ACME AG' } }),
+        go_productive: { status: 409, body: { ok: false, error: 'testmandant_not_owned', planId: 'migplan_1' } },
+      }))}>
+        <I18nProvider>
+          <MemoryRouter>
+            <TestmandantPanel workspaceId="ws_1" planId="migplan_1" planState="trial" checkClean onChanged={() => {}} />
+          </MemoryRouter>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    const input = await screen.findByLabelText(de.migration.testmandant.confirmLabel);
+    fireEvent.change(input, { target: { value: 'ACME AG' } });
+    fireEvent.click(screen.getByRole('button', { name: de.migration.testmandant.goProductive }));
+    expect(await screen.findByText(de.migration.testmandant.err.notOwned)).toBeTruthy();
+  });
+});

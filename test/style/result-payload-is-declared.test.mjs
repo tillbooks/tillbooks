@@ -71,6 +71,9 @@ const PILOT = {
  */
 const CONVERTED = [
   PILOT,
+  // The year close's internal door (A03, D153): the same `PostEntryOk` as the pilot, so the same
+  // field the close reads back (`entryId`) and the same near-miss a consumer would reach for.
+  { module: './dist/core/ledger/postEntry.js', verb: 'postEntryInternal', field: 'entryId', absent: 'journalEntryId' },
   // A38. The accrual post answers BOTH ids of the pair, and the Studio reads `reversalEntryId` for
   // the "Rückbuchung am" line; `reversalId` is the name `reverseEntry` uses one call down, which is
   // exactly the neighbour a consumer would reach for. The Storno answers the MIRROR pair's ids, so
@@ -100,6 +103,11 @@ const CONVERTED = [
   // The OWNED reversal (A38, critic finding 2026-09-09): the entry point `vat_settlement_reverse`
   // reaches the mirror through, answering the same `reversalId` as `reverseEntry` and never `entryId`.
   { module: './dist/core/ledger/reverseEntry.js', verb: 'reverseOwnedEntry', field: 'reversalId', absent: 'entryId' },
+  // K1 (04.10.2026): the checked posting door and the internal reversal door composites use for their
+  // sub-entries (`postEntryInternal` itself is listed above). Same payloads as the public doors they
+  // mirror, so a composite reads `entryId` / `reversalId` and never the other door's name.
+  { module: './dist/core/ledger/innerPosting.js', verb: 'postEntryInternalChecked', field: 'entryId', absent: 'reversalId' },
+  { module: './dist/core/ledger/reverseEntry.js', verb: 'reverseEntryInternal', field: 'reversalId', absent: 'entryId' },
   { module: './dist/core/ledger/draft.js', verb: 'saveDraft', field: 'entryId', absent: 'draftId' },
   // G22's engine-side prompt renderer answers `text` (and the open item ids), never a `runId` the
   // way `checklist_get` does: the MCP handler reads `text`, and a rename there is exactly the
@@ -111,6 +119,11 @@ const CONVERTED = [
   { module: './dist/core/checklists/periods.js', verb: 'resolveChecklistPeriod', field: 'periodStart', absent: 'start' },
   { module: './dist/core/ledger/reads.js', verb: 'getEntry', field: 'entry', absent: 'journalEntry' },
   { module: './dist/core/ledger/reads.js', verb: 'listJournal', field: 'entries', absent: 'rows' },
+  // D152 amendment, `compose_entry`: the composer posts `lines` verbatim and gates Buchen on `verdict`, and
+  // reopens a draft by `roundTrips`; `result` and `roundTrip` are the near names a consumer would reach for.
+  { module: './dist/core/ledger/compose.js', verb: 'composeEntry', field: 'mode', absent: 'kind' },
+  { module: './dist/core/ledger/compose.js', verb: 'expandEntry', field: 'verdict', absent: 'result' },
+  { module: './dist/core/ledger/compose.js', verb: 'decomposeEntry', field: 'roundTrips', absent: 'roundTrip' },
   // A38's MWST-Saldierung model (D129 leg 2): the ONE function the preview returns and the post writes,
   // so its shape is the contract between the two faces. `lines` is what the poster books; `entries` is
   // the read a caller writes when it mistakes the model for a journal listing.
@@ -301,6 +314,11 @@ const CONVERTED = [
     field: 'move',
     absent: 'moveState',
   },
+  // D144. `decide` answers the pinned `modelSha256` (never `sha256`, the manifest row's own field
+  // name one type over); `suggestBankLines` answers `belowFloor` beside `suggested`, and `rejected` is
+  // the word a reader of "below the floor" reaches for.
+  { module: './dist/core/voice/decide.js', verb: 'decide', field: 'modelSha256', absent: 'sha256' },
+  { module: './dist/core/banking/bankModelSuggest.js', verb: 'suggestBankLines', field: 'belowFloor', absent: 'rejected' },
 ];
 
 /**
@@ -317,7 +335,10 @@ const UNDECLARED = { module: './dist/core/ledger/draft.js', verb: 'deleteDraft' 
 /** The floor for declared payloads. Raise it, deliberately, with each verb converted. */
 // 49 until A39 went lean (2026-09-26): seven declared verbs were CUT from the registry with the spec
 // (§4.6), not converted back to an open Result, so the floor follows the verbs that still exist.
-const DECLARED_FLOOR = 42;
+// 44 since D144 (2026-09-30): `decide` and `suggestBankLines` declare their payloads.
+// 48 since D153 (cl-periods): the year close's internal door `postEntryInternal`.
+// 50 since K1 (2026-10-04): `postEntryInternalChecked` and `reverseEntryInternal` declare their payloads.
+const DECLARED_FLOOR = 50;
 
 /**
  * The resolved compiler options of `tsconfig.test.json`, read through TypeScript's own JSONC parser

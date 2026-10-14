@@ -569,6 +569,11 @@ export interface DeleteInput {
  * Refused with `retention_locked` while any run is retention-linked into E00 (E00 owns the lock).
  * Retained E00 documents are untouched: E00 owns them. */
 export function reportsDelete(ctx: WorkspaceContext, input: DeleteInput): Result {
+  // D156 critic F1: the schema REQUIRES the key, so the engine does too. With it optional, a call
+  // without one ran unkeyed (and, from a governed seat, fell past the dial's draft screen).
+  if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
+    return err('invalid_input', { field: 'idempotencyKey' });
+  }
   const replay = recall(ctx, input.idempotencyKey, 'reports_delete');
   if (replay !== undefined) return replay;
 

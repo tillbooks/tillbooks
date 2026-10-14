@@ -24,6 +24,12 @@
  *
  * The A22 FX line is reported exactly as the engine reports it: `not_available` renders as "nicht
  * geprüft", dim, with no link, rather than being dropped and read as "nothing to do".
+ *
+ * A LINE AT ZERO IS NOT SHOWN (D152 rule 2, cognitive-load pass B3). "0 Unverbuchte Entwürfe" is a
+ * line about nothing, so a line whose count is exactly 0 is left out of the list. Only a COUNTED zero
+ * goes: a line with no count (the MWST preview, a read that did not answer, the FX line the engine
+ * cannot check) stays, because its absence would read as "nothing to do" when nothing was counted.
+ * The summary above the list still counts the attention lines, and a zero is never one of them.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -65,6 +71,11 @@ export function monthBounds(period: string): { from: string; to: string } {
   const month = Number(period.slice(5, 7));
   const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
   return { from: `${period}-01`, to: `${period}-${String(last).padStart(2, '0')}` };
+}
+
+/** A line is shown unless it counted something and the count is 0 (see the file docblock). */
+export function isShown(line: ChecklistLine): boolean {
+  return line.count !== 0;
 }
 
 function asItems(body: unknown): EngineItem[] {
@@ -227,27 +238,29 @@ export function MonthChecklist({ workspaceId, period, locked }: MonthChecklistPr
               ? t('period.checklist.clear')
               : t('period.checklist.attention', { count: String(state.attention) })}
           </p>
-          <ul className="period-checklist-lines">
-            {state.lines.map((line) => (
-              <li key={line.key} className={`period-checklist-line period-checklist-line--${line.status}`} data-line={line.key}>
-                <span className="period-checklist-count" aria-hidden={line.count === null}>
-                  {line.count === null ? '' : line.count}
-                </span>
-                {line.to !== null ? (
-                  <Link className="period-checklist-link link-inline" to={line.to}>
-                    {t(`period.checklist.line.${line.key}`)}
-                  </Link>
-                ) : (
-                  <span className="period-checklist-label">{t(`period.checklist.line.${line.key}`)}</span>
-                )}
-                <span className="period-checklist-detail">
-                  {line.status === 'not_available'
-                    ? t('period.checklist.notAvailable')
-                    : (line.detail ?? (line.count === null && line.status === 'info' ? t('period.checklist.noCount') : ''))}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {state.lines.some(isShown) && (
+            <ul className="period-checklist-lines">
+              {state.lines.filter(isShown).map((line) => (
+                <li key={line.key} className={`period-checklist-line period-checklist-line--${line.status}`} data-line={line.key}>
+                  <span className="period-checklist-count" aria-hidden={line.count === null}>
+                    {line.count === null ? '' : line.count}
+                  </span>
+                  {line.to !== null ? (
+                    <Link className="period-checklist-link link-inline" to={line.to}>
+                      {t(`period.checklist.line.${line.key}`)}
+                    </Link>
+                  ) : (
+                    <span className="period-checklist-label">{t(`period.checklist.line.${line.key}`)}</span>
+                  )}
+                  <span className="period-checklist-detail">
+                    {line.status === 'not_available'
+                      ? t('period.checklist.notAvailable')
+                      : (line.detail ?? (line.count === null && line.status === 'info' ? t('period.checklist.noCount') : ''))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
     </section>

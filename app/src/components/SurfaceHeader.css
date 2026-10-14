@@ -10,13 +10,35 @@
      carries the page ground so scrolled content does not show through, and the padding follows the
      density row token so the header tightens with the global toggle. The header measures its own
      rendered height and publishes it as --surface-header-height on the scroll region (see
-     SurfaceHeader.tsx), so the sticky DataTable thead can pin just below it (S1). */
+     SurfaceHeader.tsx), so the sticky DataTable thead can pin just below it (S1).
+     P6: `top: 0` resolves at main's PADDING edge, --main-pad-top below the scroll edge. The strip
+     above it is covered by main's sticky mask (`.frame > main::before` in global.css), so the header
+     pins flush under an opaque band and nothing scrolls visibly above it. The header itself does not
+     move: its resting box is exactly where it always was. */
   position: sticky;
   top: 0;
   z-index: var(--t-z-sticky);
   background: var(--t-bg);
   padding-block: var(--t-row-pad-y) var(--t-space-2);
   margin-bottom: var(--t-space-2);
+}
+
+/* The scrolled-state hairline. No border at rest (the hairline is earned, not issued); once content
+   has scrolled under the pinned header, SurfaceHeader.tsx stamps `data-stuck` and one --t-border
+   hairline marks the edge content passes under. It is drawn by a pseudo-element on the header's own
+   bottom edge, not by a border, so stamping it changes no box and nothing below moves. */
+.surface-header::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 1px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.surface-header[data-stuck]::after {
+  background: var(--t-border);
 }
 
 .surface-header-titles {
@@ -53,4 +75,27 @@
   align-items: center;
   gap: var(--t-space-1);
   flex: 0 0 auto;
+}
+
+/* Phone width. The actions slot never shrinks (flex: 0 0 auto), so on a narrow viewport it took the
+   row and crushed the shrinkable title under its own controls: on Bankkonten at 400px the
+   "Archivierte anzeigen" label painted over "Bankkonten" and the primary ran past the gutter. At
+   480px and below the header wraps instead: the title row first, the actions on their own
+   full-width row beneath, wrapping again if they still do not fit, primary kept at the right edge.
+   The ResizeObserver in SurfaceHeader.tsx picks up the taller header, so the sticky thead follows. */
+@media (max-width: 480px) {
+  .surface-header {
+    flex-wrap: wrap;
+  }
+
+  .surface-header-titles {
+    flex: 1 1 100%;
+  }
+
+  .surface-header-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+  }
 }

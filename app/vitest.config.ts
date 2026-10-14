@@ -27,8 +27,8 @@ export default defineConfig({
     // (AccountDrawer's "SETTLED open drawer", Dunning's policy editor) then time out or run axe on a
     // half-rendered DOM and flake, even though the code is correct. Cap the pool so a settle-heavy
     // test keeps enough headroom; on this 8-core box 4 workers is still real parallelism. Pairs with
-    // the raised timeouts above. See the kaizen note on gate flakes under load.
+    // the raised timeouts above. See the kaizen note on gate flakes under load. (vitest 4 removed
+    // `minWorkers`; `maxWorkers` alone caps the pool.)
     maxWorkers: 4,
-    minWorkers: 1,
   },
 });

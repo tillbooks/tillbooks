@@ -20,18 +20,18 @@
  * that gets a colour makes that colour the background and dulls the real warning.
  */
 
+/* 16px between blocks, not 24 (D152): the list is the content, and every block above it is one line. */
 .oi {
   display: flex;
   flex-direction: column;
-  gap: var(--t-space-3);
+  gap: var(--t-space-2);
 }
 
 /* The tab panel: the filters, the bands and the list, on the same rhythm as the surface. */
 .oi-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--t-space-3);
-  padding-top: var(--t-space-2);
+  gap: var(--t-space-2);
 }
 
 /*
@@ -40,8 +40,10 @@
  */
 .oi-summary {
   display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--t-space-2);
+  row-gap: var(--t-space-0-5);
 }
 
 .oi-total {
@@ -64,13 +66,19 @@
 }
 
 .oi-reconciled {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--t-space-1);
   margin: 0;
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
   color: var(--t-text-dim);
+}
+
+/* Under a filter the mark carries the WORKSPACE figure, so it takes its own line rather than sitting
+   beside a filtered total it never validated. */
+.oi-reconciled--own-line {
+  flex-basis: 100%;
 }
 
 .oi-reconciled-glyph {
@@ -132,100 +140,31 @@
   flex: none;
 }
 
-/* --- the tiles ---------------------------------------------------------------------------------- */
+/* --- the aging chips (D152: the shared FilterChips, one row) ------------------------------------ */
 
 .oi-tile-group {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--t-space-1);
 }
 
-/* K-27: the tiles' label with its help trigger directly beside it: 12px/500 dim (K-23). */
-.oi-tile-head {
+/* The loading shape: four pills at the chip's own height, so nothing moves when the data lands. */
+.oi-chips-pending {
   display: flex;
-  align-items: center;
-  gap: var(--t-space-0-5);
+  gap: var(--t-space-1);
 }
 
-.oi-tile-heading {
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  font-weight: 500;
-  color: var(--t-text-dim);
-}
-
-.oi-tiles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--t-space-2);
-  flex: 1;
-}
-
-/* A tile is an interactive panel: the elevated ground and the control shadow, no hairline (K-09). A
-   transparent edge is the focus cue's landing place (K-10). */
-.oi-tile {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-  align-items: flex-start;
-  min-width: 160px;
-  /* 44px minimum tap target, comfortably exceeded by the three stacked lines. */
-  min-height: 44px;
-  font: inherit;
-  text-align: left;
-  padding: var(--t-space-2);
-  background: var(--t-bg-elev);
-  border: 1px solid transparent;
-  border-radius: var(--t-radius-md);
-  box-shadow: var(--t-shadow-control);
-  cursor: pointer;
-  transition:
-    background-color var(--t-motion-hover) var(--t-ease-out),
-    border-color var(--t-motion-hover) var(--t-ease-out);
-}
-
-.oi-tile:hover {
+.oi-chip-skeleton {
+  width: 160px;
+  height: 24px;
+  border-radius: var(--t-radius-full);
   background: var(--t-bg-soft);
 }
 
-/* Selected, and it is the same treatment the selected tab uses: one vocabulary, not two. */
-.oi-tile--on,
-.oi-tile--on:hover {
-  background: var(--t-accent-soft);
-}
-
-.oi-tile-label {
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}
-
-.oi-tile-amount {
-  font-size: var(--t-font-lg);
-  line-height: var(--t-lh-lg);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
+/* A row is one line (D152): the customer name and the overdue words never wrap. */
+.oi-nowrap {
   white-space: nowrap;
-}
-
-/* The count carries meaning (how many items in the bucket), so it is dim, never faint: dim clears
-   AA against both the default tile ground and the selected tile's --t-accent-soft fill. */
-.oi-tile-count {
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  color: var(--t-text-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.oi-tile--skeleton {
-  height: 84px;
-  background: var(--t-bg-soft);
-  box-shadow: none;
-  cursor: default;
-}
-
-.oi-tile-reset {
-  align-self: center;
 }
 
 /* --- the tables --------------------------------------------------------------------------------- */
@@ -300,7 +239,7 @@
   display: inline-flex;
   align-items: baseline;
   gap: var(--t-space-1);
-  flex-wrap: wrap;
+  white-space: nowrap;
 }
 
 /* The Mahnstufe: a quiet word at the caption step, never a chip; colour never carries the meaning. */
@@ -324,6 +263,13 @@
   line-height: var(--t-lh-sm);
   color: var(--t-text-dim);
   white-space: nowrap;
+}
+
+/* The fee's figure takes its own line under "davon Mahngebühr" (D152): on one line the note set the
+   Offen column 70px wider than its figures and pushed the table past the frame, so every row paid for
+   the one that carries a fee. */
+.oi-fee-amount {
+  display: block;
 }
 
 /* --- the customer tab and its expansion --------------------------------------------------------- */
@@ -400,49 +346,63 @@
   color: var(--t-text-dim);
 }
 
-/* --- the mismatch band, the one coloured thing on the surface ----------------------------------- */
+/* --- the mismatch line, the one coloured thing on the surface (D152) ----------------------------- */
 
+/* One line: the red is the glyph and the words, never a box or a tinted ground (after the Bank's
+   TrustLine). The (i) and the chevron are quiet icon buttons at the line's own height. */
 .oi-mismatch {
-  display: flex;
-  gap: var(--t-space-2);
-  padding: var(--t-space-2);
-  border: 1px solid var(--t-danger);
-  border-radius: var(--t-radius-md);
-  background: var(--t-bg-elev);
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-danger);
 }
 
 .oi-mismatch-glyph {
   flex: none;
-  color: var(--t-danger);
-  margin-top: var(--t-space-0-5);
 }
 
-.oi-mismatch-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-}
-
+/* The words may break on a phone; the figure never does (it is `.t-money`). */
 .oi-mismatch-title {
-  margin: 0;
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-.oi-mismatch-detail {
-  margin: 0;
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
+/* The 32px targets (the D116 dense floor) overhang the 20px line rather than growing it. */
+.oi-mismatch .btn--icon {
+  margin-block: calc(var(--t-space-0-5) * -1.5);
   color: var(--t-text-dim);
-  font-variant-numeric: tabular-nums;
 }
 
-.oi-mismatch-actions {
+/* The explanation card is two sentences: wider than the 240px default so it reads in three lines. */
+.oi-mismatch-info .tooltip {
+  max-width: 360px;
+}
+
+.oi-mismatch-chevron {
+  transition: transform var(--t-motion-pill) var(--t-ease-out);
+}
+
+.oi-mismatch-toggle--on .oi-mismatch-chevron {
+  transform: rotate(90deg);
+}
+
+/* What the chevron opens: the causes and the door to the Journal, on their own line under the total. */
+.oi-mismatch-more {
+  flex-basis: 100%;
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--t-space-1);
-  align-items: center;
+  padding-top: var(--t-space-1);
+}
+
+.oi-mismatch-more[hidden] {
+  display: none;
 }
 
 .oi-mismatch-causes {
@@ -531,9 +491,4 @@
 .oi-figure dd > .t-money,
 .oi-mismatch .t-money {
   font-size: inherit;
-}
-
-/* The tile figure keeps its own step above the table type. */
-.oi-tile .oi-tile-amount {
-  font-size: var(--t-font-lg);
 }

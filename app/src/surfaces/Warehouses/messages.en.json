@@ -9,7 +9,6 @@
     "newWarehouse": "New warehouse",
     "listLabel": "Warehouses",
     "detailLabel": "Selected warehouse",
-    "selectHint": "Select a warehouse to see its locations.",
     "default": "Default",
     "archived": "Archived",
     "makeDefault": "Make default",

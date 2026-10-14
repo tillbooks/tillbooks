@@ -356,9 +356,15 @@ test('X5: a cadence edit that re-anchors ONTO a settled period converges instead
 
 // --- X6: due_stamped, the exact edit that flips it -----------------------------------------------
 
-test('X6: only the due-date VALUE decides the re-assert; an unrelated patch does not protect it', () => {
+test('X6: an unrelated edit of the waiting draft holds it for a human (D141); the machine stamp is not re-asserted onto it', () => {
+  // Until 28.09.2026 this pinned that a notes patch left the draft auto-issuable with its stamp
+  // re-asserted. D141 (the non-author critics' F2 and R2) changed the premise: the tick auto-issues a
+  // waiting draft only while it is identical to what the tick created (bar the due date), because an
+  // ungoverned `update_document` could otherwise retarget what is issued unattended. An edited draft is
+  // `draft_diverged`, left for a human, and the tick writes nothing onto it. The VALUE rule for the due
+  // date itself stays pinned by X6b (a re-typed identical date is still re-asserted).
   const { deps, workspaceId, contactId } = sellerWorkspace('x6');
-  const created = schedule(deps, workspaceId, contactId, 'x6');
+  schedule(deps, workspaceId, contactId, 'x6');
   assert.equal(call(deps, 'close_month', { workspaceId, period: '2026-07', idempotencyKey: 'x6-close' }).ok, true);
   const documentId = call(deps, 'run_due_recurring', { workspaceId, asOf: '2026-07-16' }).results[0].documentId;
   assert.equal(
@@ -366,17 +372,18 @@ test('X6: only the due-date VALUE decides the re-assert; an unrelated patch does
     '2026-07-26',
   );
 
-  // A patch that touches something ELSE leaves the machine stamp in place, so the re-assert fires.
   assert.equal(
     call(deps, 'update_document', { workspaceId, documentId, patch: { notes: 'Bitte bis Ende Monat' }, idempotencyKey: 'x6-notes' }).ok,
     true,
   );
   const later = { ...deps, clock: fixedClock('2026-08-27T00:00:00.000Z') };
   assert.equal(call(later, 'reopen_month', { workspaceId, period: '2026-07', idempotencyKey: 'x6-open' }).ok, true);
-  assert.equal(call(later, 'run_due_recurring', { workspaceId }).results[0].outcome, 'issued');
+  const tick = call(later, 'run_due_recurring', { workspaceId }).results[0];
+  assert.equal(tick.outcome, 'failed', JSON.stringify(tick));
+  assert.equal(tick.error, 'draft_diverged');
   assert.deepEqual(
-    deps.store.db.prepare('SELECT issue_date, due_date FROM document WHERE id = ?').get(documentId),
-    { issue_date: '2026-08-27', due_date: '2026-09-06' },
+    { ...deps.store.db.prepare('SELECT status, issue_date, due_date FROM document WHERE id = ?').get(documentId) },
+    { status: 'draft', issue_date: null, due_date: '2026-07-26' },
   );
 });
 
@@ -404,13 +411,14 @@ test('X6b (RECORDED, spec 4b): re-typing the SAME date the machine stamped is in
   );
 });
 
-test('X6c: the crash-window fallback re-derives the stamp from the document, and still protects a human date', () => {
+test('X6c: a waiting draft whose run rows are gone is unverifiable and held for a human; its negotiated date survives', () => {
+  // Until 28.09.2026 the crash-window fallback re-derived the stamp and auto-issued. D141 (critic R2):
+  // with no run row naming the draft there is no recorded fingerprint, so the tick cannot tell its own
+  // draft from one a caller squatted or edited, and fails CLOSED: `draft_diverged`, nothing written.
   const { deps, workspaceId, contactId } = sellerWorkspace('x6c');
   const created = schedule(deps, workspaceId, contactId, 'x6c');
   assert.equal(call(deps, 'close_month', { workspaceId, period: '2026-07', idempotencyKey: 'x6c-close' }).ok, true);
   const documentId = call(deps, 'run_due_recurring', { workspaceId, asOf: '2026-07-16' }).results[0].documentId;
-  // The crash window: the run row that recorded due_stamped is gone, so the fallback must derive it
-  // from the document's own creation day.
   deps.store.db.prepare('DELETE FROM recurring_run_log WHERE schedule_id = ?').run(created.id);
   assert.equal(
     call(deps, 'update_document', { workspaceId, documentId, patch: { dueDate: '2026-12-31' }, idempotencyKey: 'x6c-neg' }).ok,
@@ -418,11 +426,11 @@ test('X6c: the crash-window fallback re-derives the stamp from the document, and
   );
   const later = { ...deps, clock: fixedClock('2026-08-27T00:00:00.000Z') };
   call(later, 'reopen_month', { workspaceId, period: '2026-07', idempotencyKey: 'x6c-open' });
-  assert.equal(call(later, 'run_due_recurring', { workspaceId }).results[0].outcome, 'issued');
-  // The negotiated date survives even with no recorded stamp to compare against.
+  const tick = call(later, 'run_due_recurring', { workspaceId }).results[0];
+  assert.equal(tick.error, 'draft_diverged', JSON.stringify(tick));
   assert.deepEqual(
-    deps.store.db.prepare('SELECT issue_date, due_date FROM document WHERE id = ?').get(documentId),
-    { issue_date: '2026-08-27', due_date: '2026-12-31' },
+    { ...deps.store.db.prepare('SELECT status, due_date FROM document WHERE id = ?').get(documentId) },
+    { status: 'draft', due_date: '2026-12-31' },
   );
 });
 

@@ -64,9 +64,9 @@ const focusItem = (el: HTMLElement): void => {
   });
 };
 
-/** The collapsible HEADER treeitem for a group/parent name. Some labels name BOTH a header and its
- *  landing leaf (e.g. "Lager" is the parent and its /inventory leaf, "Berichte" the group and its
- *  /reports leaf), so once expanded a plain getByRole is ambiguous. The header is the one node with
+/** The collapsible HEADER treeitem for a group/parent name. A heading may share its label with the
+ *  leaf it lands on (e.g. the "Projekte" group and its /projects leaf; `nav-labels.test.ts` allows only
+ *  that), so once expanded a plain getByRole can be ambiguous. The header is the one node with
  *  aria-expanded, and that is what this picks. */
 const header = (name: string): HTMLElement => {
   const match = screen.getAllByRole('treeitem', { name }).find((el) => el.hasAttribute('aria-expanded'));
@@ -155,10 +155,12 @@ describe('deep-link auto-expand', () => {
   it('opens the ancestor chain so a deep-linked leaf is visible without a stored preference', () => {
     renderTree('/inventory-alerts');
     expect(screen.getByRole('treeitem', { name: 'Stammdaten' })).toHaveAttribute('aria-expanded', 'true');
-    // "Lager" names both the parent and its landing leaf (/inventory); the parent is the one that
-    // carries aria-expanded. Both being open is what makes the deep-linked alert row visible.
-    const lagerParent = screen.getAllByRole('treeitem', { name: 'Lager' }).find((el) => el.hasAttribute('aria-expanded'));
-    expect(lagerParent).toHaveAttribute('aria-expanded', 'true');
+    // The Lager parent names no leaf since D152 (its landing leaf is "Lagerbestand", the warehouses
+    // leaf "Lagerorte"), so it is the one treeitem with that name. Both being open is what makes the
+    // deep-linked alert row visible.
+    expect(screen.getByRole('treeitem', { name: 'Lager' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('treeitem', { name: 'Lagerbestand' })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: 'Lagerorte' })).toBeInTheDocument();
     const lager = screen.getByRole('group', { name: 'Lager' });
     expect(within(lager).getByRole('treeitem', { name: 'Bestand & Alarme' })).toHaveAttribute(
       'aria-current',

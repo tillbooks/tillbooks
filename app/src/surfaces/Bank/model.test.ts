@@ -1,14 +1,13 @@
 /**
  * A2, the bank inbox: the pure half of the surface. The balance line's arithmetic (L4), the Soll/Haben
- * preview an accounts booking shows BEFORE it posts, the row's draft (proposal, person, agent), and the
+ * preview an accounts booking shows BEFORE it posts (the engine's `compose_entry` answer, read), the row's draft (proposal, person, agent), and the
  * small formatters the panel leans on. Every figure below is invented for this file.
  */
 import { describe, it, expect } from 'vitest';
 
-import type { BankAccountBalance, BankInboxLine, DraftLeg, LineVorschlag, VatFigures } from './model';
+import type { BankAccountBalance, BankInboxLine, DraftLeg, LineVorschlag } from './model';
 import {
   bookTargetOf,
-  composeAccountsPreview,
   draftFromProposal,
   draftFromVorschlag,
   formatIban,
@@ -17,11 +16,16 @@ import {
   isSureAndUntouched,
   minorToField,
   parseMoneyInput,
-  previewBalances,
   rowCertainty,
   trustIdentityHolds,
   trustView,
+  taxCodeOnChoosing,
+  vatCanApply,
 } from './model';
+import type { ComposeAnswer } from './bankCompose';
+import { bankComposeRequest, captionKinds, composeSignature, previewBalances, previewLinesOf, requestIsTaxed, vatAccountIdsOf, vatSplitOf } from './bankCompose';
+import { composeEngine } from '../../../test-support/composeEngine';
+import listAccountsFixture from '../Accounts/list-accounts.fixture.json';
 
 function balance(over: Partial<BankAccountBalance> = {}): BankAccountBalance {
   return {
@@ -62,12 +66,12 @@ function line(over: Partial<BankInboxLine> = {}): BankInboxLine {
     creditId: null,
     decision: null,
     proposal: null,
+    attention: null,
+    receiptCount: 0,
+    needsReceipt: false,
     ...over,
   };
 }
-
-const FIG_VSTM: VatFigures = { netMinor: 8_316, taxMinor: 674, grossMinor: 8_990, kind: 'input', deductible: true, formLine: '400' };
-const VAT_ACCOUNTS = { input: 'acc_1170', investment: 'acc_1171', output: 'acc_2200' };
 
 describe('the balance line (L4)', () => {
   it('reads bank = books + open lines + difference, straight off the engine', () => {
@@ -106,49 +110,224 @@ describe('the balance line (L4)', () => {
   });
 });
 
-describe('the Soll/Haben preview of an accounts booking', () => {
-  it('splits a paid bill with Vorsteuer into net, Vorsteuer and one bank line, and balances', () => {
-    const legs: DraftLeg[] = [{ accountId: 'acc_6500', amountMinor: 8_990, taxCode: 'VST-M' }];
-    const lines = composeAccountsPreview(-8_990, legs, 'acc_1026', new Map([[0, FIG_VSTM]]), VAT_ACCOUNTS);
-    expect(lines).toEqual([
-      { accountId: 'acc_1026', debit: 0, credit: 8_990 },
-      { accountId: 'acc_6500', debit: 8_316, credit: 0 },
-      { accountId: 'acc_1170', debit: 674, credit: 0 },
-    ]);
-    expect(previewBalances(lines ?? [])).toBe(true);
+/**
+ * The preview is the ENGINE's (D152 amendment, the bank follow-up): every Soll/Haben line and VAT split below is
+ * what `compose_entry` answers for the request `bankComposeRequest` builds, run on the real engine
+ * (`app/test-support/composeEngine.ts`, whose book carries the recorded chart's account ids). The Studio reads
+ * it; it computes no figure. The equality with what `book_bank_line` posts is the node suite
+ * `test/banking/bank-compose-parity.test.mjs`.
+ */
+const engine = composeEngine();
+const chartId = (number: string): string => {
+  const row = listAccountsFixture.accounts.find((a) => a.number === number);
+  if (row === undefined) throw new Error(`the recorded chart has no account ${number}`);
+  return row.id;
+};
+const BANK = chartId('1020');
+const ACC = { a1170: chartId('1170'), a1171: chartId('1171'), a2200: chartId('2200'), a1520: chartId('1520'), a3400: chartId('3400'), a4200: chartId('4200'), a6500: chartId('6500'), a6570: chartId('6570'), a6900: chartId('6900') };
+
+/** The engine's answer for a line of `lineMinor` (signed, money in positive) booked to `legs`. */
+function composed(lineMinor: number, legs: DraftLeg[]): ComposeAnswer {
+  const request = bankComposeRequest(line({ amountMinor: lineMinor }), legs, BANK);
+  if (request === null) throw new Error('no request');
+  const { body } = engine({ workspaceId: 'ws_test', mode: 'expand', date: request.date, lines: request.lines });
+  if (body.ok !== true) throw new Error(`compose_entry refused: ${JSON.stringify(body)}`);
+  return body as unknown as ComposeAnswer;
+}
+const splitOf = (answer: ComposeAnswer) => vatSplitOf(previewLinesOf(answer), BANK, vatAccountIdsOf(answer));
+
+describe('B2: the strip\'s VAT split, read off the engine\'s composition', () => {
+  it('names the tax, its account and the net exactly as the Soll/Haben lines hold them', () => {
+    const answer = composed(-8_990, [{ accountId: ACC.a6500, amountMinor: 8_990, taxCode: 'VST-M' }]);
+    expect(splitOf(answer)).toEqual({ parts: [{ accountId: ACC.a1170, amountMinor: 674 }], netMinor: 8_316 });
+    expect(captionKinds(answer)).toEqual(['input']);
   });
 
-  it('waits for a taxed leg\'s figures rather than guessing them', () => {
-    const legs: DraftLeg[] = [{ accountId: 'acc_6500', amountMinor: 8_990, taxCode: 'VST-M' }];
-    expect(composeAccountsPreview(-8_990, legs, 'acc_1026', new Map(), VAT_ACCOUNTS)).toBeNull();
+  it('F5: a split that runs both ways (120 revenue incl. 8.1 %, less 20 fees) says the tax and NO netto', () => {
+    const answer = composed(10_000, [
+      { accountId: ACC.a3400, amountMinor: 12_000, taxCode: 'UST81' },
+      { accountId: ACC.a6900, amountMinor: -2_000, taxCode: '' },
+    ]);
+    expect(previewBalances(previewLinesOf(answer))).toBe(true);
+    expect(splitOf(answer)).toEqual({ parts: [{ accountId: ACC.a2200, amountMinor: 899 }], netMinor: null });
+  });
+
+  it('F5: a split that runs one way sums its net WITH its side: tax plus net is the line', () => {
+    const answer = composed(-10_000, [
+      { accountId: ACC.a6500, amountMinor: 8_990, taxCode: 'VST-M' },
+      { accountId: ACC.a6900, amountMinor: 1_010, taxCode: '' },
+    ]);
+    const split = splitOf(answer);
+    expect(split).toEqual({ parts: [{ accountId: ACC.a1170, amountMinor: 674 }], netMinor: 9_326 });
+    expect((split?.netMinor ?? 0) + 674).toBe(10_000);
+  });
+
+  it('says nothing for a booking without a VAT line', () => {
+    expect(splitOf(composed(-500, [{ accountId: ACC.a6900, amountMinor: 500, taxCode: '' }]))).toBeNull();
+  });
+
+  it('an Einfuhrsteuer: the payment IS the tax, on the account the engine names (its caption)', () => {
+    const answer = composed(-7_700, [{ accountId: ACC.a4200, amountMinor: 7_700, taxCode: 'IMPORT' }]);
+    expect(captionKinds(answer)).toEqual(['import']);
+    expect(splitOf(answer)).toEqual({ parts: [{ accountId: ACC.a1170, amountMinor: 7_700 }], netMinor: 0 });
+  });
+
+  it('a code the engine cannot price is its refusal, not a figure: nothing is composed', () => {
+    const answer = composed(-8_990, [{ accountId: ACC.a6500, amountMinor: 8_990, taxCode: 'NOPE' }]);
+    expect(answer.composed).toBe(false);
+    expect(answer.lines).toEqual([]);
+  });
+
+  // The composer's predicate table (`Journal/composerPayload.ts isTaxBearing`, C8, owner 01.10.2026), row
+  // for row, plus the one exclusion only the Bank can make: a Bankkonto's own ledger account.
+  const a = (number: string, type: string | null, vatCodeDefault: string | null = null) => ({ id: `acc_${number}`, number, type, vatCodeDefault });
+  const TABLE: [string, ReturnType<typeof a> | undefined, boolean][] = [
+    ['an Erfolgskonto (expense)', a('6500', 'expense'), true],
+    ['an Erfolgskonto (income)', a('3400', 'income'), true],
+    ['Anlagevermögen, lowest (1400 Finanzanlagen)', a('1400', 'asset'), true],
+    ['Anlagevermögen (1520 Büromaschinen, VST-I to 1171)', a('1520', 'asset'), true],
+    ['Anlagevermögen, highest (1799 immaterielle Werte)', a('1799', 'asset'), true],
+    ['Vorräte, lowest (1200 Handelswaren, owner 04.10.2026)', a('1200', 'asset'), true],
+    ['Vorräte with its default code', a('1200', 'asset', 'VST-M'), true],
+    ['Umlaufvermögen (1100 Forderungen)', a('1100', 'asset'), false],
+    ['Umlaufvermögen below the range (1199)', a('1199', 'asset'), false],
+    ['Rechnungsabgrenzung (1300: accruals, a code would invite a second Vorsteuer claim)', a('1300', 'asset'), false],
+    ['Rechnungsabgrenzung with a default code (a pre-fill, never a reason)', a('1399', 'asset', 'VST-M'), false],
+    ['Umlaufvermögen with a default code (a pre-fill, never a reason)', a('1060', 'asset', 'VST-M'), false],
+    ['an asset past the range (1800)', a('1800', 'asset'), false],
+    ['a 15xx number that is not an asset', a('1500', 'liability'), false],
+    ['a liability', a('2000', 'liability'), false],
+    ['equity', a('2800', 'equity'), false],
+    ['an account of unknown type', a('9999', null), false],
+    ['an account of unknown type with a default code', a('6600', null, 'VST-M'), false],
+    ['1170 Vorsteuer Material', a('1170', 'asset', 'VST-M'), false],
+    ['1171 Vorsteuer Investitionen', a('1171', 'asset', 'VST-I'), false],
+    ['2200 Umsatzsteuer', a('2200', 'liability', 'UST-N'), false],
+    ['no account', undefined, false],
+  ];
+  for (const [what, account, expected] of TABLE) {
+    it(`MWST applies to ${what}: ${expected}`, () => {
+      expect(vatCanApply(account)).toBe(expected);
+    });
+  }
+
+  it('never offers MWST on a Bankkonto\'s own ledger account, whatever its type (the Bank\'s extra exclusion)', () => {
+    expect(vatCanApply(a('1520', 'asset'), new Set(['acc_1520']))).toBe(false);
+    expect(vatCanApply(a('6500', 'expense'), new Set(['acc_6500']))).toBe(false);
+    expect(vatCanApply(a('1020', 'asset', 'VST-M'), new Set(['acc_1020']))).toBe(false);
+  });
+
+  it('pre-fills the default code only on an account that qualifies, and clears the code where none applies', () => {
+    expect(taxCodeOnChoosing(a('6500', 'expense', 'VST-M'), '')).toBe('VST-M');
+    expect(taxCodeOnChoosing(a('1520', 'asset', 'VST-I'), '')).toBe('VST-I');
+    expect(taxCodeOnChoosing(a('6500', 'expense'), 'VST-M')).toBe('VST-M');
+    expect(taxCodeOnChoosing(a('1200', 'asset', 'VST-M'), '')).toBe('VST-M');
+    expect(taxCodeOnChoosing(a('1060', 'asset', 'VST-M'), '')).toBe('');
+    expect(taxCodeOnChoosing(a('1300', 'asset', 'VST-M'), '')).toBe('');
+    expect(taxCodeOnChoosing(a('2000', 'liability'), 'VST-M')).toBe('');
+    expect(taxCodeOnChoosing(a('9999', null, 'VST-M'), '')).toBe('');
+    expect(taxCodeOnChoosing(undefined, 'VST-M')).toBe('');
+  });
+
+  it('VST-I on an Anlagekonto books the net to the asset, the tax to 1171 (Ziffer 405) and the gross on the bank', () => {
+    const answer = composed(-216_200, [{ accountId: ACC.a1520, amountMinor: 216_200, taxCode: 'VST-I' }]);
+    expect(previewLinesOf(answer)).toEqual([
+      { accountId: BANK, debit: 0, credit: 216_200 },
+      { accountId: ACC.a1520, debit: 200_000, credit: 0 },
+      { accountId: ACC.a1171, debit: 16_200, credit: 0 },
+    ]);
+  });
+});
+
+describe('the Soll/Haben preview of an accounts booking (the engine\'s lines)', () => {
+  it('splits a paid bill with Vorsteuer into net, Vorsteuer and one bank line, and balances', () => {
+    const lines = previewLinesOf(composed(-8_990, [{ accountId: ACC.a6500, amountMinor: 8_990, taxCode: 'VST-M' }]));
+    expect(lines).toEqual([
+      { accountId: BANK, debit: 0, credit: 8_990 },
+      { accountId: ACC.a6500, debit: 8_316, credit: 0 },
+      { accountId: ACC.a1170, debit: 674, credit: 0 },
+    ]);
+    expect(previewBalances(lines)).toBe(true);
   });
 
   it('merges every bank leg of a split into ONE bank line', () => {
-    const legs: DraftLeg[] = [
-      { accountId: 'acc_6500', amountMinor: 90_000, taxCode: '' },
-      { accountId: 'acc_6570', amountMinor: 30_000, taxCode: '' },
-    ];
-    const lines = composeAccountsPreview(-120_000, legs, 'acc_1026', new Map(), VAT_ACCOUNTS) ?? [];
-    expect(lines.filter((l) => l.accountId === 'acc_1026')).toEqual([{ accountId: 'acc_1026', debit: 0, credit: 120_000 }]);
+    const lines = previewLinesOf(
+      composed(-120_000, [
+        { accountId: ACC.a6500, amountMinor: 90_000, taxCode: '' },
+        { accountId: ACC.a6570, amountMinor: 30_000, taxCode: '' },
+      ]),
+    );
+    expect(lines.filter((l) => l.accountId === BANK)).toEqual([{ accountId: BANK, debit: 0, credit: 120_000 }]);
     expect(previewBalances(lines)).toBe(true);
   });
 
   it('books Vorsteuer on investments to 1171 (ESTV Ziffer 405)', () => {
-    const legs: DraftLeg[] = [{ accountId: 'acc_1520', amountMinor: 120_000, taxCode: 'VST-I' }];
-    const fig: VatFigures = { netMinor: 111_008, taxMinor: 8_992, grossMinor: 120_000, kind: 'input', deductible: true, formLine: '405' };
-    const lines = composeAccountsPreview(-120_000, legs, 'acc_1026', new Map([[0, fig]]), VAT_ACCOUNTS) ?? [];
-    expect(lines.find((l) => l.accountId === 'acc_1171')).toEqual({ accountId: 'acc_1171', debit: 8_992, credit: 0 });
+    const lines = previewLinesOf(composed(-120_000, [{ accountId: ACC.a1520, amountMinor: 120_000, taxCode: 'VST-I' }]));
+    expect(lines.find((l) => l.accountId === ACC.a1171)).toEqual({ accountId: ACC.a1171, debit: 8_992, credit: 0 });
   });
 
   it('credits a sale with Umsatzsteuer on money in', () => {
-    const legs: DraftLeg[] = [{ accountId: 'acc_3400', amountMinor: 10_810, taxCode: 'UST81' }];
-    const fig: VatFigures = { netMinor: 10_000, taxMinor: 810, grossMinor: 10_810, kind: 'output', deductible: false, formLine: '302' };
-    const lines = composeAccountsPreview(10_810, legs, 'acc_1026', new Map([[0, fig]]), VAT_ACCOUNTS) ?? [];
+    const lines = previewLinesOf(composed(10_810, [{ accountId: ACC.a3400, amountMinor: 10_810, taxCode: 'UST81' }]));
     expect(lines).toEqual([
-      { accountId: 'acc_1026', debit: 10_810, credit: 0 },
-      { accountId: 'acc_3400', debit: 0, credit: 10_000 },
-      { accountId: 'acc_2200', debit: 0, credit: 810 },
+      { accountId: BANK, debit: 10_810, credit: 0 },
+      { accountId: ACC.a3400, debit: 0, credit: 10_000 },
+      { accountId: ACC.a2200, debit: 0, credit: 810 },
     ]);
+  });
+});
+
+describe('the compose_entry request a bank line makes (bankComposeRequest)', () => {
+  it('states each leg as an intent line on the side the money puts it, the bank leg plain and first, on the booking date', () => {
+    expect(
+      bankComposeRequest(
+        line({ amountMinor: 10_000 }),
+        [
+          { accountId: ACC.a3400, amountMinor: 12_000, taxCode: 'UST81' },
+          { accountId: ACC.a6900, amountMinor: -2_000, taxCode: '' },
+        ],
+        BANK,
+      ),
+    ).toEqual({
+      date: '2026-09-23',
+      lines: [
+        { account: BANK, debit: 10_000 },
+        { account: ACC.a3400, side: 'credit', amount: 12_000, gross: true, taxCode: 'UST81', supplyDate: '2026-09-23' },
+        { account: ACC.a6900, side: 'debit', amount: 2_000, gross: true },
+      ],
+    });
+  });
+
+  it('asks no zero bank line for legs that cancel out, and reads the reserved code "none" as no VAT (critic mutants M6, M8)', () => {
+    // A half-typed split whose legs net to nothing moves no money on the bank: no `{debit: 0}` line is asked for.
+    expect(
+      bankComposeRequest(
+        line({ amountMinor: -1_000 }),
+        [
+          { accountId: ACC.a6500, amountMinor: 1_000, taxCode: '' },
+          { accountId: ACC.a6900, amountMinor: -1_000, taxCode: '' },
+        ],
+        BANK,
+      )?.lines.filter((l) => l.account === BANK),
+    ).toEqual([]);
+    // 'none' is `book_bank_line`'s "no code": no taxCode, no Leistungsdatum, and not a taxed request (so a
+    // foreign-currency line with it is not held back as VAT).
+    const none = bankComposeRequest(line(), [{ accountId: ACC.a6900, amountMinor: 8_990, taxCode: 'none' }], BANK);
+    expect(none?.lines[1]).toEqual({ account: ACC.a6900, side: 'debit', amount: 8_990, gross: true });
+    expect(none === null ? null : requestIsTaxed(none)).toBe(false);
+  });
+
+  it('asks nothing while a leg has no account or no amount, or the Bankkonto has no ledger account', () => {
+    expect(bankComposeRequest(line(), [{ accountId: '', amountMinor: 8_990, taxCode: '' }], BANK)).toBeNull();
+    expect(bankComposeRequest(line(), [{ accountId: ACC.a6500, amountMinor: 0, taxCode: '' }], BANK)).toBeNull();
+    expect(bankComposeRequest(line(), [{ accountId: ACC.a6500, amountMinor: 8_990, taxCode: '' }], null)).toBeNull();
+  });
+
+  it('keys an answer on everything the request carries', () => {
+    const one = bankComposeRequest(line(), [{ accountId: ACC.a6500, amountMinor: 8_990, taxCode: 'VST-M' }], BANK);
+    const other = bankComposeRequest(line(), [{ accountId: ACC.a6500, amountMinor: 8_990, taxCode: 'VST-I' }], BANK);
+    expect(composeSignature('ws_test', one)).not.toBe(composeSignature('ws_test', other));
+    expect(composeSignature('ws_test', one)).not.toBe(composeSignature('ws_other', one));
+    expect(composeSignature('ws_test', null)).toBe('');
   });
 });
 
@@ -244,5 +423,16 @@ describe('the formatters', () => {
     expect(formatReference('SCOR', 'RF18539007547034')).toBe('RF18 5390 0754 7034');
     expect(formatReference('NON', 'Rechnung 4471')).toBe('Rechnung 4471');
     expect(formatIban('CH5604835012345678009')).toBe('CH56 0483 5012 3456 7800 9');
+  });
+});
+
+describe('modelPercent (D144, critic C5b)', () => {
+  it('floors to a whole percent, absorbs binary noise, and never reads 100', async () => {
+    const { modelPercent } = await import('./lookups');
+    expect(modelPercent(0.8249)).toBe('82');
+    expect(modelPercent(0.29)).toBe('29');
+    expect(modelPercent(0.99996)).toBe('99');
+    expect(modelPercent(1)).toBe('99');
+    expect(modelPercent(null)).toBe('');
   });
 });

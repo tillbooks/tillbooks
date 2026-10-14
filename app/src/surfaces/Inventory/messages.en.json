@@ -1,9 +1,9 @@
 {
   "nav": {
-    "inventory": "Inventory"
+    "inventory": "Stock on hand"
   },
   "stock": {
-    "route": { "title": "Inventory" },
+    "route": { "title": "Stock on hand" },
     "reason": {
       "receipt": "Receipt",
       "issue": "Issue",
@@ -71,8 +71,8 @@
   },
   "help": {
     "Inventory": {
-      "title": "Inventory",
-      "body": "Inventory shows on-hand per item and location and flags low stock. Recording a movement is the one way stock changes; there is no direct overwrite. Valuation computes the period-end stock value and shows the entry before anything is posted. The stocktake counts, shows the difference, and posts it only after your review.",
+      "title": "Stock on hand",
+      "body": "Stock on hand shows the quantity per item and location and flags low stock. Recording a movement is the one way stock changes; there is no direct overwrite. Valuation computes the period-end stock value and shows the entry before anything is posted. The stocktake counts, shows the difference, and posts it only after your review.",
       "concepts": [],
       "docsPath": "introduction"
     }

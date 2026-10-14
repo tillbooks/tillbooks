@@ -520,3 +520,30 @@ test('G05 A24: without manage_document_templates the writes refuse before any ro
   const list = call(deps, 'list_document_templates', { workspaceId });
   assert.equal(list.ok, true, JSON.stringify(list));
 });
+
+test('critic phase0-installable r1: the drawn-code line names the Swiss QR Code, not a payment part, in the template locale', () => {
+  const { deps, workspaceId, contactId } = qrWorkspace('g05-qrline');
+  // The built-in default renders de-CH.
+  const invDe = issueInvoice(deps, workspaceId, contactId, 'g05-qrline', 1);
+  const pdfDe = renderedPdfOf(deps, workspaceId, invDe);
+  assert.equal(pdfDe.hasQrBill, true);
+  assert.ok(pdfBytes(pdfDe).includes('Swiss QR Code zum Bezahlen unten links'));
+  assert.ok(!pdfBytes(pdfDe).includes('payment part enclosed'), 'the page never claims the SIX payment part it does not draw');
+
+  // An `en` template renders the English line.
+  const t = call(deps, 'create_document_template', {
+    workspaceId,
+    documentKind: 'invoice',
+    name: 'English',
+    footerI18n: { en: 'Thank you' },
+    languageMode: 'fixed',
+    fixedLocale: 'en',
+    idempotencyKey: 'g05-qrline-t',
+  });
+  call(deps, 'set_default_document_template', { workspaceId, documentKind: 'invoice', templateId: t.template.templateId, idempotencyKey: 'g05-qrline-def' });
+  const invEn = issueInvoice(deps, workspaceId, contactId, 'g05-qrline', 2);
+  const pdfEn = renderedPdfOf(deps, workspaceId, invEn);
+  assert.equal(pdfEn.templateLocale, 'en');
+  assert.ok(pdfBytes(pdfEn).includes('Swiss QR Code for payment, lower left'));
+  assert.ok(pdfBytes(pdfEn).includes('no payment part or receipt'));
+});

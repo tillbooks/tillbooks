@@ -491,14 +491,96 @@ ul.bank-channel-accounts {
   gap: var(--t-space-2);
 }
 
-/* One card per connection: an inset step off the elevated panel, no border. */
+/* One card per connection: an inset step off the elevated panel, no border. Children keep their
+   natural width (a bare button must never span a 2000 px screen); only the rows that ARE full width
+   stretch. */
 .bank-channel-item {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: var(--t-space-1);
   padding: var(--t-space-2);
   border-radius: var(--t-radius-md);
   background: var(--t-bg-soft);
+}
+
+.bank-channel-item > .bank-channel-head,
+.bank-channel-item > .bank-channel-notice,
+.bank-channel-item > .bank-channel-details,
+.bank-channel-item > .bank-channel-auto,
+.bank-channel-item > .bank-channel-keyreview {
+  align-self: stretch;
+}
+
+/* The section header: the title, and once a channel is live, the quiet overflow for another one. */
+.bank-channel-header {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+/* The card's top row: what the channel is and where the feed stands, the one fetch action opposite.
+   It wraps on a narrow screen, and the button keeps its natural width when it drops below. */
+.bank-channel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--t-space-1) var(--t-space-3);
+}
+
+.bank-channel-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.bank-channel-confirmed {
+  color: var(--t-success);
+  font-weight: 400;
+  margin-left: var(--t-space-1);
+}
+
+/* Settled facts and teardown, closed at rest: the same native disclosure the order log uses. */
+.bank-channel-details {
+  border-top: 1px solid var(--t-border);
+  padding-top: var(--t-space-1);
+  margin-top: var(--t-space-1);
+  font-size: var(--t-font-md);
+}
+
+.bank-channel-details > summary {
+  cursor: pointer;
+  color: var(--t-text);
+}
+
+.bank-channel-details[open] > summary {
+  margin-bottom: var(--t-space-1);
+}
+
+.bank-channel-details > * + * {
+  margin-top: var(--t-space-1);
+}
+
+.bank-channel-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--t-space-0-5) var(--t-space-2);
+  margin: 0;
+  max-width: 80ch;
+  color: var(--t-text-dim);
+}
+
+.bank-channel-facts dt {
+  color: var(--t-text-dim);
+}
+
+.bank-channel-facts dd {
+  margin: 0;
+  color: var(--t-text);
 }
 
 .bank-channel-state {
@@ -591,4 +673,54 @@ ul.bank-channel-accounts {
   display: flex;
   flex-direction: column;
   gap: var(--t-space-0-5);
+}
+
+/* D142: the daily automatic fetch on an active channel card: one summary line at rest, the editor (a
+   checkbox, a Swiss time, one secondary save) behind "Ändern". Nothing here spends the accent. */
+.bank-channel-auto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.bank-channel-auto-summary {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.bank-channel-auto-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+
+.bank-channel-auto-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-1) var(--t-space-2);
+}
+
+.bank-channel-auto-toggle,
+.bank-channel-auto-time {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* A36 §4.7 (D150): a statement gap on the channel card, its explanation and the repair door. */
+.bank-channel-gap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+}
+
+.bank-channel-gap p {
+  margin: 0;
 }

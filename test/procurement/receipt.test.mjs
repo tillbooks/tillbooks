@@ -28,6 +28,7 @@ import { createWorkspace } from '../../dist/core/setup/index.js';
 import { createItem, createContact } from '../../dist/core/sales/index.js';
 import { poUpsert, poSend, poCancel } from '../../dist/core/purchase/purchaseOrders.js';
 import { makePeriodPort, lockPeriod } from '../../dist/core/ledger/index.js';
+import { lockPeriodSealed } from '../../dist/core/ledger/periods.js';
 import {
   inventoryEnsureDefaultLocation,
   itemSetTrackingMode,
@@ -547,7 +548,7 @@ test('I02: an explicit defaultLocationId is used, and a foreign or unknown one i
 
 test('I02 (d): a receipt cannot be created into a locked period', () => {
   const { ctx } = freshCtx();
-  must(lockPeriod(ctx, { period: '2026-03', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'd-lock' }), 'lockPeriod');
+  must(lockPeriodSealed(ctx, { period: '2026-03', reason: 'vat_filed', idempotencyKey: 'd-lock' }), 'lockPeriod');
   const w = sentPo(ctx, { seed: 'd' });
   const refused = goodsReceiptCreate(ctx, {
     poId: w.poId,
@@ -570,7 +571,7 @@ test('I02 (d): a draft created while the period was open cannot be POSTED once t
   // made both dates fail and the assertion could not tell them apart, which is exactly how a sibling
   // capability shipped a back-chargeable sealed year. Only a guard reading the DOCUMENT's own date
   // can make this refusal.
-  must(lockPeriod(ctx, { period: '2026-03', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'd2-lock' }), 'lockPeriod');
+  must(lockPeriodSealed(ctx, { period: '2026-03', reason: 'vat_filed', idempotencyKey: 'd2-lock' }), 'lockPeriod');
   assert.equal(must(goodsReceiptCreate(ctx, { poId: w.poId, receivedAt: '2026-08-11', idempotencyKey: 'd2-probe' }), 'the clock month is OPEN').goodsReceipt.status, 'draft');
 
   const refused = goodsReceiptPost(ctx, { grId: gr.id, idempotencyKey: 'd2-post' });
@@ -597,7 +598,7 @@ test('I02 (d): a held line cannot be ACCEPTED into a sealed period either', () =
   // Acceptance is where the held quantity finally becomes stock, so it is a WRITE into the receipt's
   // own period and owes the same guard the post does. Invariant (d) claims all four verbs assert it;
   // this is the fourth.
-  must(lockPeriod(ctx, { period: '2026-03', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'd4-lock' }), 'lockPeriod');
+  must(lockPeriodSealed(ctx, { period: '2026-03', reason: 'vat_filed', idempotencyKey: 'd4-lock' }), 'lockPeriod');
   const refused = goodsReceiptAcceptLines(ctx, {
     grId: gr.id,
     lineIds: [withLine.lines[0].id],
@@ -616,7 +617,7 @@ test('I02 (d): a sealed period cannot be UN-received either', () => {
   const gr = draft(ctx, w, 'd3');
   addLine(ctx, gr.id, w.poLineId, 4, 'd3');
   must(goodsReceiptPost(ctx, { grId: gr.id, idempotencyKey: 'd3-post' }), 'post');
-  must(lockPeriod(ctx, { period: '2026-03', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'd3-lock' }), 'lockPeriod');
+  must(lockPeriodSealed(ctx, { period: '2026-03', reason: 'vat_filed', idempotencyKey: 'd3-lock' }), 'lockPeriod');
 
   const refused = goodsReceiptReverse(ctx, { grId: gr.id, reason: 'Irrtum', idempotencyKey: 'd3-rev' });
   assert.equal(refused.error, 'period_locked');
@@ -1235,7 +1236,7 @@ test('I02: the preview names period_locked on the DOCUMENT when the receipt mont
   // Clean while the month is open.
   assert.equal(must(goodsReceiptPreview(ctx, { grId: gr.id }), 'preview open').postable, true);
 
-  must(lockPeriod(ctx, { period: '2026-03', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'pl-lock' }), 'lockPeriod');
+  must(lockPeriodSealed(ctx, { period: '2026-03', reason: 'vat_filed', idempotencyKey: 'pl-lock' }), 'lockPeriod');
 
   const preview = must(goodsReceiptPreview(ctx, { grId: gr.id }), 'preview locked');
   // A sealed period is a DOCUMENT-level refusal, not a property of any one line.

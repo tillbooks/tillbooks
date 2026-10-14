@@ -30,11 +30,12 @@ import {
   vendorPortalListRemittances,
   createRemittanceAdvice,
 } from '../core/portal/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface VendorPortalActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -55,7 +56,7 @@ export function vendorPortalActions(h: VendorPortalActionHelpers): readonly Acti
   return [
     ctxAction(
       'vendor_portal_grant',
-      'write',
+      'write:final:outbound',
       'Gib einem Lieferanten Portal-Zugang frei (US-F03.1): mint a scoped, expiring vendor grant over F02\'s shared grant engine (kind=vendor, no second token path). The contact must be a SUPPLIER (party_role vendor|both), else contact_not_found (the same opaque code a missing contact returns, no oracle). scopes default to the vendor set [{kind:"pos.read"},{kind:"remittance.read"}]. The token is CSPRNG >=256-bit; only its SHA-256 hash is stored and the one-time link is returned once (tokenOnce/localLink), never re-derivable. expiresAt in the past is refused (expiry_in_past); longer than the 90-day max is CLAMPED (clamped:true). Posts nothing (OP4: mints the local artifact and stops, hosted:false/reason:cloud_tier). idempotencyKey replays the original grant.',
       ctxSchema(
         {
@@ -71,7 +72,7 @@ export function vendorPortalActions(h: VendorPortalActionHelpers): readonly Acti
     ),
     ctxAction(
       'vendor_portal_revoke',
-      'write',
+      'write:correctable:stop',
       'Widerrufe einen Lieferanten-Portalzugang (US-F03.4): stamps revoked_at so any read of the token now denies as grant_invalid. Fenced to kind=vendor (a non-vendor id returns not_found), so the vendor verb never touches a customer grant. The row is NEVER deleted (the grant history is the revDSG access trail). Revoking an already-revoked grant is a no-op returning the original state.',
       ctxSchema({ grantId: STR, actor: STR, idempotencyKey: STR }, ['grantId']),
       (ctx, input) => vendorPortalRevoke(ctx, as(input)),
@@ -92,7 +93,7 @@ export function vendorPortalActions(h: VendorPortalActionHelpers): readonly Acti
     ),
     ctxAction(
       'vendor_portal_remittance_create',
-      'write',
+      'write:final:outbound',
       'Erstelle ein Zahlungsavis (US-F03.3): SNAPSHOT the A14 payment and its A17 vendor-bill allocations into a remittance_advice + per-bill lines (integer-Rappen values copied verbatim, per-line H-FX txn+base+rate), and file a rendered advice artifact into E00 (artifact_document_id). POSTS NOTHING: A14 already posted the payment (P3 by having no posting at all). The paymentId must be an OUTGOING supplier settlement with >=1 vendor-bill allocation, else payment_not_found (opaque, no cross-supplier oracle). idempotencyKey (scoped by paymentId) replays the same advice; without a key a re-file supersedes the current advice (supersedes_id), never a silent overwrite. Artifact-and-stop (OP4: transmitted:false/reason:cloud_tier).',
       ctxSchema({ paymentId: STR, actor: STR, idempotencyKey: STR }, ['paymentId']),
       (ctx, input) => createRemittanceAdvice(ctx, as(input)),

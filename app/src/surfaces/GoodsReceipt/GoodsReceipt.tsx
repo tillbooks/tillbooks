@@ -1,11 +1,16 @@
 /**
  * I02, Einkauf -> Wareneingänge (`/goods-receipts`): the surface over the goods-receipt document.
  *
- * Left, the receipts with their status, order, supplier, date and value. Right, the selected one:
+ * Left, the receipts with their status, order, supplier, date and value. Right, the opened one:
  * its lines with the quantity, the unit-cost snapshot, the location, the inspection state and the
  * J02 movement each recognised line minted, plus the pure impact preview and the actions the
  * document's state allows. A draft is editable and postable; a posted one is READ-ONLY and can only
  * be reversed or have its held lines accepted / rejected; a reversed or cancelled one is inert.
+ *
+ * A LIST NEVER OPENS ITSELF (D152 rule 5, the /bank B2 pattern). Nothing is selected on load, so
+ * Buchen and "Wareneingang verwerfen" exist only inside a receipt the person opened: a click on its
+ * row, Enter or Space on the focused row, or a deep link (`?focus=<grId>`, the shape a search hit
+ * opens with). Until then the list takes the whole width; a second click on the open row closes it.
  *
  * WHY THERE IS NO DATE FIELD ON THE POST BUTTON. The receipt carries ONE date, set when it is
  * opened, and every stock movement it writes is stamped with it. The engine asserts that period is
@@ -34,7 +39,8 @@
  * the engine is the real gate. Write controls disable behind `manage_master_data`; a click that
  * slips through still surfaces the engine's own `permission_denied`.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -241,7 +247,29 @@ export function GoodsReceipt() {
   const canWrite = can(CAP.manageMasterData);
 
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const focusParam = params.get('focus');
+  // D152 rule 5: nothing is selected on load. Only a deep link selects before the person acts, and a
+  // link that arrives while the surface is mounted (a search hit, the /w/:ws/ handover) opens too.
+  const [selectedId, setSelectedId] = useState<string | null>(focusParam);
+  useEffect(() => {
+    if (focusParam !== null) setSelectedId(focusParam);
+  }, [focusParam]);
+  /**
+   * The person's own choice. It retires the deep link (`?focus=` is dropped, replacing the history
+   * entry), so a row they closed stays closed and following the same link again opens it again.
+   */
+  const choose = useCallback(
+    (id: string | null) => {
+      setSelectedId(id);
+      if (params.has('focus')) {
+        const next = new URLSearchParams(params);
+        next.delete('focus');
+        setParams(next, { replace: true });
+      }
+    },
+    [params, setParams],
+  );
   const [detail, setDetail] = useState<ReceiptDetail | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [openLines, setOpenLines] = useState<OpenPoLine[]>([]);
@@ -275,17 +303,59 @@ export function GoodsReceipt() {
   const [reverseReason, setReverseReason] = useState('');
   const [rejectReason, setRejectReason] = useState('');
 
+  // §H-TENANT (critic round 2): a workspace switch does not remount the surface, so nothing chosen,
+  // read or drafted in the workspace just left may survive into the next one. Reset during render
+  // (React's "adjust state when a prop changes"), so no effect ever runs with the old selection
+  // under the new workspace. The first workspace (null -> id at boot) is not a switch: a deep link
+  // made before it resolved stays.
+  // The workspace on screen NOW, for a read or a write that started under the previous one: its
+  // answer is dropped (a refresh closure from before the switch would otherwise re-read the old
+  // workspace and paint it under the new one).
+  const liveWorkspace = useRef(workspaceId);
+  liveWorkspace.current = workspaceId;
+  const [shownWorkspace, setShownWorkspace] = useState(workspaceId);
+  if (shownWorkspace !== workspaceId) {
+    setShownWorkspace(workspaceId);
+    if (shownWorkspace !== null) {
+      setSelectedId(null);
+      setDetail(null);
+      setPreview(null);
+      setOpenLines([]);
+      setWriteError(null);
+      setCreateDrawer(false);
+      setNewPoId('');
+      setNewNote('');
+      setLineDrawer(false);
+      setLinePoLineId('');
+      setLineQty('');
+      setLineHold(false);
+      setLineLotId('');
+      setLineSerialId('');
+      setLots([]);
+      setSerials([]);
+      setNewLotNumber('');
+      setNewSerialNumber('');
+      setReverseReason('');
+      setRejectReason('');
+    }
+  }
+
   const localError = useCallback(
     (e: Err | null): string | undefined => (e !== null && I02_ERROR_CODES.has(e.error) ? refusalText(t, e, { own: 'goodsReceipt.errors' }) : undefined),
     [t],
   );
 
+  // Every list read is numbered; only the latest may answer, so a read from the workspace just left
+  // (or one a refresh overtook) never lands on screen.
+  const listSeq = useRef(0);
   const loadList = useCallback(async () => {
     if (workspaceId === null) {
       setLoading(false);
       return;
     }
+    if (liveWorkspace.current !== workspaceId) return;
     setLoading(true);
+    const mine = ++listSeq.current;
     setFailed(false);
     setDenied(false);
     const [listRes, poRes, itemRes] = await Promise.all([
@@ -293,6 +363,7 @@ export function GoodsReceipt() {
       client.call('po_list', { workspaceId }),
       client.call('list_items', { workspaceId }),
     ]);
+    if (mine !== listSeq.current || liveWorkspace.current !== workspaceId) return;
     if (isErr(listRes.body)) {
       if (listRes.body.error === 'permission_denied' || listRes.status === 403) setDenied(true);
       else setFailed(true);
@@ -321,17 +392,24 @@ export function GoodsReceipt() {
             // a reversal (D02 has no received -> sent edge, so the status alone does not say).
             .filter((p) => p.status === 'sent' || p.status === 'received'),
     );
-    setSelectedId((prev) => (prev !== null && rows.some((r) => r.id === prev) ? prev : (rows[0]?.id ?? null)));
+    // A receipt that left the list closes; nothing is put in its place (D152 rule 5).
+    setSelectedId((prev) => (prev !== null && rows.some((r) => r.id === prev) ? prev : null));
     setLoading(false);
   }, [client, workspaceId]);
 
+  // Every detail read is numbered; only the LATEST may answer into the pane. A read that a close or a
+  // newer selection overtook is dropped, so the pane never shows one row under another row's pill.
+  const detailSeq = useRef(0);
   const loadDetail = useCallback(
     async (grId: string) => {
       if (workspaceId === null) return;
+      if (liveWorkspace.current !== workspaceId) return;
+      const mine = ++detailSeq.current;
       const [getRes, previewRes] = await Promise.all([
         client.call('goods_receipt_get', { workspaceId, grId }),
         client.call('goods_receipt_preview', { workspaceId, grId }),
       ]);
+      if (mine !== detailSeq.current || liveWorkspace.current !== workspaceId) return;
       const parsed = isErr(getRes.body) ? null : parseDetail(getRes.body);
       setDetail(parsed);
       const previewBody = isErr(previewRes.body) ? null : (previewRes.body as unknown as Preview);
@@ -340,6 +418,7 @@ export function GoodsReceipt() {
       setPreview(previewBody === null ? null : { ...previewBody, issues: previewBody.issues ?? [] });
       if (parsed !== null) {
         const poRes = await client.call('po_get', { workspaceId, poId: parsed.poId });
+        if (mine !== detailSeq.current || liveWorkspace.current !== workspaceId) return;
         setOpenLines(
           isErr(poRes.body)
             ? []
@@ -362,30 +441,36 @@ export function GoodsReceipt() {
   }, [loadList]);
 
   useEffect(() => {
+    // A changed selection never shows the previous receipt while its own read is in flight, and a
+    // close retires any read still on its way.
+    detailSeq.current += 1;
+    setDetail(null);
+    setPreview(null);
+    setOpenLines([]);
     if (selectedId !== null) void loadDetail(selectedId);
-    else {
-      setDetail(null);
-      setPreview(null);
-      setOpenLines([]);
-    }
   }, [selectedId, loadDetail]);
 
   const refresh = useCallback(async () => {
     await loadList();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (selectedId !== null) await loadDetail(selectedId);
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [loadList, loadDetail, selectedId]);
 
   /** One call shape for every write: run it, surface the engine's own rejection, then re-read. */
   const run = useCallback(
     async (tool: string, input: Record<string, unknown>): Promise<boolean> => {
       if (workspaceId === null) return false;
-      setWriteError(null);
+      // A step of an act made before a switch still runs here (submitLine); it touches no banner.
+      if (liveWorkspace.current === workspaceId) setWriteError(null);
       const response = await client.call(tool, { workspaceId, ...input, idempotencyKey: newKey() });
+      if (liveWorkspace.current !== workspaceId) return false; // the answer belongs to the workspace just left
       if (isErr(response.body)) {
         setWriteError(response.body);
         return false;
       }
       await refresh();
+      if (liveWorkspace.current !== workspaceId) return false; // the answer belongs to the workspace just left
       return true;
     },
     [client, workspaceId, refresh],
@@ -453,6 +538,7 @@ export function GoodsReceipt() {
         client.call('lot_list', { workspaceId, itemId }),
         client.call('serial_list', { workspaceId, itemId }),
       ]);
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
       const pick = (body: unknown, key: string): Array<TrackingOption & { status: string; currentLocationId: string | null }> =>
         asArray<Record<string, unknown>>((body as Record<string, unknown>)?.[key])
           .map((r) => ({
@@ -486,6 +572,7 @@ export function GoodsReceipt() {
       note: newNote.trim() === '' ? undefined : newNote.trim(),
       idempotencyKey: newKey(),
     });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (isErr(response.body)) {
       setWriteError(response.body);
       return;
@@ -494,8 +581,9 @@ export function GoodsReceipt() {
     setCreateDrawer(false);
     setNewNote('');
     await loadList();
-    if (created !== null) setSelectedId(created.id);
-  }, [client, workspaceId, newPoId, newDate, newNote, loadList]);
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
+    if (created !== null) choose(created.id);
+  }, [client, workspaceId, newPoId, newDate, newNote, loadList, choose]);
 
   const lineItemId = useMemo(
     () => openLines.find((l) => l.id === linePoLineId)?.itemId ?? null,
@@ -512,6 +600,11 @@ export function GoodsReceipt() {
       return;
     }
     setWriteError(null);
+    // THE SUBMIT IS ONE ACT IN THE WORKSPACE IT WAS MADE IN (critic round 3). Every step already
+    // submitted (mint the lot, mint the serial, add the line) runs to completion under this closure's
+    // workspace, so a switch between the steps never strands a minted lot without its line. Only what
+    // the person would SEE is suppressed after a switch: no banner, no re-read, no drawer change.
+    const here = () => liveWorkspace.current === workspaceId;
 
     // A goods receipt is the normal moment a purchased lot or serial comes into existence, because
     // the supplier's number arrives on the delivery note. Minting it here, before the line is added,
@@ -527,16 +620,18 @@ export function GoodsReceipt() {
         idempotencyKey: newKey(),
       });
       if (isErr(created.body)) {
-        setWriteError(created.body);
+        if (here()) setWriteError(created.body);
         return;
       }
       lotId = str((created.body as { lot?: Record<string, unknown> }).lot?.id);
       // The lot is WRITTEN now, whatever happens to the rest of this submit. Re-read the pickers so a
       // later failure leaves it visible in the dropdown: without this the operator retyped the same
       // number, got `lot_number_taken` ("pick it from the list instead"), and the list was empty.
-      await loadTracking(linePoLineId);
-      setNewLotNumber('');
-      setLineLotId(lotId);
+      if (here()) {
+        await loadTracking(linePoLineId);
+        setNewLotNumber('');
+        setLineLotId(lotId);
+      }
     }
 
     let serialId = lineSerialId;
@@ -550,14 +645,16 @@ export function GoodsReceipt() {
         idempotencyKey: newKey(),
       });
       if (isErr(created.body)) {
-        setWriteError(created.body);
+        if (here()) setWriteError(created.body);
         return;
       }
       serialId = str((created.body as { serial?: Record<string, unknown> }).serial?.id);
       // Same reasoning as the lot above: it exists now, so it has to be reachable now.
-      await loadTracking(linePoLineId);
-      setNewSerialNumber('');
-      setLineSerialId(serialId);
+      if (here()) {
+        await loadTracking(linePoLineId);
+        setNewSerialNumber('');
+        setLineSerialId(serialId);
+      }
     }
 
     const okDone = await run('goods_receipt_upsert_lines', {
@@ -575,6 +672,8 @@ export function GoodsReceipt() {
         },
       ],
     });
+    // The add ran under this act's workspace; after a switch nothing of its outcome is shown.
+    if (!here()) return;
     if (okDone) {
       setLineDrawer(false);
       setLineQty('');
@@ -736,14 +835,14 @@ export function GoodsReceipt() {
       ) : receipts.length === 0 ? (
         <EmptyState title={t('goodsReceipt.empty.title')} hint={t('goodsReceipt.empty.hint')} />
       ) : (
-        <div className="gr-split">
+        <div className={selectedId === null ? 'gr-split gr-split--solo' : 'gr-split'}>
           <section className="gr-pane" aria-label={t('goodsReceipt.listLabel')}>
             <DataTable
               columns={receiptColumns}
               rows={receipts}
               rowKey={(r) => r.id}
               caption={t('goodsReceipt.listLabel')}
-              onRowClick={(r) => setSelectedId(r.id)}
+              onRowClick={(r) => choose(selectedId === r.id ? null : r.id)}
               rowLabel={(r) => `${r.number} ${t(`goodsReceipt.status.${r.status}`)} ${r.poNumber} ${r.supplierName}`}
               // K-24: the open receipt wears the selection pill on every cell, no side bar. An
               // over-delivery says so as a Status word in its row, never as an edge.
@@ -751,10 +850,9 @@ export function GoodsReceipt() {
             />
           </section>
 
+          {selectedId !== null && (
           <section className="gr-pane gr-detail" aria-label={t('goodsReceipt.detailLabel')}>
-            {detail === null ? (
-              <p className="gr-muted">{t('goodsReceipt.selectHint')}</p>
-            ) : (
+            {detail === null ? null : (
               <>
                 <div className="gr-detail-head">
                   <div>
@@ -918,6 +1016,7 @@ export function GoodsReceipt() {
               </>
             )}
           </section>
+          )}
         </div>
       )}
 

@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
@@ -307,6 +307,42 @@ describe('DataTable, the five states', () => {
     const { container } = renderTable({ loading: true });
     expect(container.querySelectorAll('.skeleton')).toHaveLength(5);
     expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  describe('the placeholder-to-rows handover', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function Swap({ loading }: { loading: boolean }) {
+      return (
+        <I18nProvider>
+          <MemoryRouter>
+            <DataTable<Invoice> columns={columns()} rows={ROWS} rowKey={(r) => r.id} caption="Rechnungen" loading={loading} />
+          </MemoryRouter>
+        </I18nProvider>
+      );
+    }
+
+    it('rows that replace placeholder blocks the person saw arrive with the fade-only reveal, which lifts after the reveal beat', () => {
+      vi.useFakeTimers();
+      const { container, rerender } = render(<Swap loading />);
+      // The read outlasts the 200ms delay and the 300ms minimum: the placeholder was on screen.
+      act(() => vi.advanceTimersByTime(600));
+      rerender(<Swap loading={false} />);
+      const wrap = container.querySelector('.data-table-wrap');
+      expect(wrap).toHaveClass('motion-reveal--under');
+      act(() => vi.advanceTimersByTime(250));
+      expect(wrap).not.toHaveClass('motion-reveal--under');
+    });
+
+    it('rows that answer inside the 200ms delay showed no placeholder, so they swap in at once', () => {
+      vi.useFakeTimers();
+      const { container, rerender } = render(<Swap loading />);
+      act(() => vi.advanceTimersByTime(50));
+      rerender(<Swap loading={false} />);
+      expect(container.querySelector('.data-table-wrap')).not.toHaveClass('motion-reveal--under');
+    });
   });
 
   it('EMPTY shows the shared empty state, or a caller-supplied one', () => {

@@ -10,6 +10,12 @@
  * Status and variance are shown as glyph + label, never colour alone (WCAG 2.2 AA); no new colour
  * token (design-canon). A blind session hides the book column until the session reaches review.
  *
+ * A LIST NEVER OPENS ITSELF (D152 rule 5, the /bank B2 pattern). Nothing is selected on load and the
+ * list takes the width; a session opens by a click (or Enter/Space on its focused row) or by a deep
+ * link (`?focus=<sessionId>`), and a second click closes it. A session's actions appear only where
+ * they can act (rule 2): a committed or cancelled session shows none, and "Markierte freigeben"
+ * appears only while lines wait for review.
+ *
  * ## BUILT ON THE SHARED UI PRIMITIVES (D118 B2, 2026-08-24)
  *
  * The variance line grid is the shared `DataTable` (frame overflow, sticky header, density and the
@@ -29,7 +35,8 @@
  * engine is the real gate. Write controls disable behind `manage_master_data`; a click that slips
  * through still surfaces the engine's own `permission_denied`.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -168,7 +175,29 @@ export function CycleCounts() {
   const canWrite = can(CAP.manageMasterData);
 
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const focusParam = params.get('focus');
+  // D152 rule 5: nothing is selected on load. Only a deep link selects before the person acts, and a
+  // link that arrives while the surface is mounted (a search hit, the /w/:ws/ handover) opens too.
+  const [selectedId, setSelectedId] = useState<string | null>(focusParam);
+  useEffect(() => {
+    if (focusParam !== null) setSelectedId(focusParam);
+  }, [focusParam]);
+  /**
+   * The person's own choice. It retires the deep link (`?focus=` is dropped, replacing the history
+   * entry), so a row they closed stays closed and following the same link again opens it again.
+   */
+  const choose = useCallback(
+    (id: string | null) => {
+      setSelectedId(id);
+      if (params.has('focus')) {
+        const next = new URLSearchParams(params);
+        next.delete('focus');
+        setParams(next, { replace: true });
+      }
+    },
+    [params, setParams],
+  );
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   // K-34: the list's own skeleton, never before 200ms and never for less than 300ms once shown.
@@ -186,21 +215,51 @@ export function CycleCounts() {
   // session. Neither write fires until the operator confirms in this dialog.
   const [pendingWrite, setPendingWrite] = useState<PendingWrite | null>(null);
 
+  // §H-TENANT (critic round 2): a workspace switch does not remount the surface, so nothing chosen,
+  // read or drafted in the workspace just left may survive into the next one. Reset during render
+  // (React's "adjust state when a prop changes"), so no effect ever runs with the old selection
+  // under the new workspace. The first workspace (null -> id at boot) is not a switch: a deep link
+  // made before it resolved stays.
+  // The workspace on screen NOW, for a read or a write that started under the previous one: its
+  // answer is dropped (a refresh closure from before the switch would otherwise re-read the old
+  // workspace and paint it under the new one).
+  const liveWorkspace = useRef(workspaceId);
+  liveWorkspace.current = workspaceId;
+  const [shownWorkspace, setShownWorkspace] = useState(workspaceId);
+  if (shownWorkspace !== workspaceId) {
+    setShownWorkspace(workspaceId);
+    if (shownWorkspace !== null) {
+      setSelectedId(null);
+      setDetail(null);
+      setWriteError(null);
+      setCreateDrawer(false);
+      setCreateDraft(emptyCreate());
+      setCountInputs({});
+      setPendingWrite(null);
+    }
+  }
+
   const localError = useCallback(
     (e: Err | null): string | undefined =>
       e !== null && J04_ERROR_CODES.has(e.error) ? refusalText(t, e, { own: 'cycleCounts.errors' }) : undefined,
     [t],
   );
 
+  // Every list read is numbered; only the latest may answer, so a read from the workspace just left
+  // (or one a refresh overtook) never lands on screen.
+  const listSeq = useRef(0);
   const loadList = useCallback(async () => {
     if (workspaceId === null) {
       setLoading(false);
       return;
     }
+    if (liveWorkspace.current !== workspaceId) return;
     setLoading(true);
+    const mine = ++listSeq.current;
     setFailed(false);
     setDenied(false);
     const res = await client.call('inventory_stocktake_list', { workspaceId });
+    if (mine !== listSeq.current || liveWorkspace.current !== workspaceId) return;
     if (isErr(res.body)) {
       if (res.body.error === 'permission_denied' || res.status === 403) setDenied(true);
       else setFailed(true);
@@ -210,15 +269,22 @@ export function CycleCounts() {
     const rows = (res.body as { sessions?: unknown }).sessions;
     const parsed = Array.isArray(rows) ? rows.map(parseSession).filter((s): s is SessionSummary => s !== null) : [];
     setSessions(parsed);
-    setSelectedId((prev) => (prev !== null && parsed.some((s) => s.id === prev) ? prev : (parsed[0]?.id ?? null)));
+    // A session that left the list closes; nothing takes its place (D152 rule 5).
+    setSelectedId((prev) => (prev !== null && parsed.some((s) => s.id === prev) ? prev : null));
     setLoading(false);
   }, [client, workspaceId]);
 
+  // Every detail read is numbered; only the LATEST may answer into the pane. A read that a close or a
+  // newer selection overtook is dropped, so the pane never shows one row under another row's pill.
+  const detailSeq = useRef(0);
   const loadDetail = useCallback(
     async (id: string) => {
       if (workspaceId === null) return;
+      if (liveWorkspace.current !== workspaceId) return;
+      const mine = ++detailSeq.current;
       setDetailLoading(true);
       const res = await client.call('inventory_stocktake_report', { workspaceId, sessionId: id });
+      if (mine !== detailSeq.current || liveWorkspace.current !== workspaceId) return;
       if (isErr(res.body)) {
         setDetail(null);
         setDetailLoading(false);
@@ -247,13 +313,19 @@ export function CycleCounts() {
   }, [loadList]);
 
   useEffect(() => {
+    // A changed selection never shows the previous session while its own read is in flight, and a
+    // close retires any read still on its way.
+    detailSeq.current += 1;
+    setDetail(null);
+    setDetailLoading(false);
     if (selectedId !== null) void loadDetail(selectedId);
-    else setDetail(null);
   }, [selectedId, loadDetail]);
 
   const refresh = useCallback(async () => {
     await loadList();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (selectedId !== null) await loadDetail(selectedId);
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [loadList, loadDetail, selectedId]);
 
   const submitCreate = useCallback(async () => {
@@ -269,6 +341,7 @@ export function CycleCounts() {
       notes: createDraft.notes.trim() === '' ? undefined : createDraft.notes.trim(),
       idempotencyKey: newKey(),
     });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (isErr(res.body)) {
       setWriteError(res.body);
       return;
@@ -277,8 +350,9 @@ export function CycleCounts() {
     setCreateDraft(emptyCreate());
     const id = (res.body as { session?: { id?: string } }).session?.id ?? null;
     await loadList();
-    if (id !== null) setSelectedId(id);
-  }, [client, workspaceId, createDraft, loadList]);
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
+    if (id !== null) choose(id);
+  }, [client, workspaceId, createDraft, loadList, choose]);
 
   const saveCount = useCallback(
     async (line: Line) => {
@@ -296,11 +370,13 @@ export function CycleCounts() {
         lines: [{ itemId: line.itemId, locationId: line.locationId, countedQty: n }],
         idempotencyKey: newKey(),
       });
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
       if (isErr(res.body)) {
         setWriteError(res.body);
         return;
       }
       await refresh();
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     },
     [client, workspaceId, detail, countInputs, refresh],
   );
@@ -314,11 +390,13 @@ export function CycleCounts() {
       lineIds: 'all_review_required',
       idempotencyKey: newKey(),
     });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (isErr(res.body)) {
       setWriteError(res.body);
       return;
     }
     await refresh();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [client, workspaceId, detail, refresh]);
 
   const requestRecount = useCallback(
@@ -331,11 +409,13 @@ export function CycleCounts() {
         lineIds: [line.id],
         idempotencyKey: newKey(),
       });
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
       if (isErr(res.body)) {
         setWriteError(res.body);
         return;
       }
       await refresh();
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     },
     [client, workspaceId, detail, refresh],
   );
@@ -344,22 +424,26 @@ export function CycleCounts() {
     if (workspaceId === null || detail === null) return;
     setWriteError(null);
     const res = await client.call('inventory_stocktake_commit', { workspaceId, sessionId: detail.session.id, idempotencyKey: newKey() });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (isErr(res.body)) {
       setWriteError(res.body);
       return;
     }
     await refresh();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [client, workspaceId, detail, refresh]);
 
   const cancel = useCallback(async () => {
     if (workspaceId === null || detail === null) return;
     setWriteError(null);
     const res = await client.call('inventory_stocktake_cancel', { workspaceId, sessionId: detail.session.id, idempotencyKey: newKey() });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (isErr(res.body)) {
       setWriteError(res.body);
       return;
     }
     await refresh();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [client, workspaceId, detail, refresh]);
 
   // Run the write the confirm dialog was fronting, then close the dialog. The write leaves the
@@ -368,7 +452,9 @@ export function CycleCounts() {
     const write = pendingWrite;
     setPendingWrite(null);
     if (write === 'commit') await commit();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     else if (write === 'cancel') await cancel();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [pendingWrite, commit, cancel]);
 
   // The ONE consequence sentence for the commit confirm (C4). No stocktake verb carries an engine
@@ -504,7 +590,7 @@ export function CycleCounts() {
             : {})}
         />
       ) : (
-        <div className="cc-split">
+        <div className={selected === null ? 'cc-split cc-split--solo' : 'cc-split'}>
           <section className="cc-pane" aria-label={t('cycleCounts.listLabel')}>
             <ul className="cc-list">
               {sessions.map((s) => (
@@ -513,7 +599,7 @@ export function CycleCounts() {
                   <button
                     type="button"
                     className="cc-list-item"
-                    onClick={() => setSelectedId(s.id)}
+                    onClick={() => choose(selectedId === s.id ? null : s.id)}
                     aria-current={s.id === selectedId ? 'true' : undefined}
                   >
                     <span className="cc-li-main">
@@ -529,10 +615,9 @@ export function CycleCounts() {
             </ul>
           </section>
 
+          {selected !== null && (
           <section className="cc-pane cc-detail" aria-label={t('cycleCounts.detailLabel')}>
-            {selected === null || detail === null ? (
-              <p className="cc-muted">{t('cycleCounts.selectHint')}</p>
-            ) : (
+            {detail === null ? null : (
               <>
                 <div className="cc-detail-head">
                   <div>
@@ -544,26 +629,33 @@ export function CycleCounts() {
                       {t('cycleCounts.freeze')}: {formatCalendar(detail.session.freezeAt)} · {t('cycleCounts.progress')}: {detail.session.progressPct}%
                     </p>
                   </div>
+                  {/* D152 rule 2: the session's actions exist only while it is open or in review.
+                      A committed or cancelled session shows none (they used to sit there disabled),
+                      and the approve appears only while lines actually wait for it. */}
+                  {isOpenLike && (
                   <div className="cc-actions">
-                    <button
-                      type="button"
-                      className="btn btn--secondary"
-                      disabled={!canWrite || !isOpenLike || detail.session.reviewRequiredLines === 0}
-                      onClick={() => void approveAll()}
-                    >
-                      {t('cycleCounts.approveAll')}
-                    </button>
+                    {detail.session.reviewRequiredLines > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn--secondary"
+                        disabled={!canWrite}
+                        onClick={() => void approveAll()}
+                      >
+                        {t('cycleCounts.approveAll')}
+                      </button>
+                    )}
                     {/* The commit writes quantity movements and has NO ledger reach
                         (`inventory_stocktake_commit`), so it is not the money tint (K-08, the C2 money
                         critic, F5). The header holds the one primary, so this is secondary; the
                         consequence confirm it opens carries the primary. */}
-                    <button type="button" className="btn btn--secondary" disabled={!canWrite || !isOpenLike} onClick={() => setPendingWrite('commit')}>
+                    <button type="button" className="btn btn--secondary" disabled={!canWrite} onClick={() => setPendingWrite('commit')}>
                       {t('cycleCounts.commit')}
                     </button>
-                    <button type="button" className="btn btn--ghost" disabled={!canWrite || !isOpenLike} onClick={() => setPendingWrite('cancel')}>
+                    <button type="button" className="btn btn--ghost" disabled={!canWrite} onClick={() => setPendingWrite('cancel')}>
                       {t('cycleCounts.cancel')}
                     </button>
                   </div>
+                  )}
                 </div>
 
                 {detail.session.reviewRequiredLines > 0 && (
@@ -596,6 +688,7 @@ export function CycleCounts() {
               </>
             )}
           </section>
+          )}
         </div>
       )}
 

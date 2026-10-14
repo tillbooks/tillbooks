@@ -53,7 +53,8 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { requireString } from '../ledger/inputGuards.js';
-import { postEntry, VAT_SETTLEMENT_SOURCE } from '../ledger/postEntry.js';
+import { VAT_SETTLEMENT_SOURCE } from '../ledger/postEntry.js';
+import { postEntryInternalChecked } from '../ledger/innerPosting.js';
 import type { LineInput } from '../ledger/postEntry.js';
 import { reverseOwnedEntry } from '../ledger/reverseEntry.js';
 import {
@@ -488,7 +489,7 @@ export function vatSettlementPost(ctx: WorkspaceContext, input: VatSettlementPos
 
   return runGuarded(() =>
     ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, 'vat_settlement_post', () => {
-      const posted = postEntry(ctx, {
+      const posted = postEntryInternalChecked(ctx, {
         date: model.periodEnd,
         source: VAT_SETTLEMENT_SOURCE,
         // Keyed on the period AND the caller's key: after a reversal a fresh post is a NEW entry, not a
@@ -496,7 +497,7 @@ export function vatSettlementPost(ctx: WorkspaceContext, input: VatSettlementPos
         idempotencyKey: `vatsettle:${model.periodStart}:${input.idempotencyKey}`,
         description: `MWST-Saldierung ${model.period}`,
         lines,
-      });
+      }, 'vat_settlement_post_internal');
       if (!posted.ok) throw new SettlementAbort(posted);
 
       const settlementId = ctx.ids.next('vatsettle');

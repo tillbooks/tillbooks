@@ -56,6 +56,7 @@ const DOCUMENT_KEYS = [
   'sourceDocumentId',
   'status',
   'subtotalMinor',
+  'supplyDate',
   'targetDocumentId',
   'taxMinor',
   'totalMinor',

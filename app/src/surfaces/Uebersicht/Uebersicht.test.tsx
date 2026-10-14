@@ -17,7 +17,7 @@ import { TillClient, type RestResponse, type Transport } from '../../lib/client'
 import { I18nProvider } from '../../i18n';
 import { WorkspaceProvider } from '../../app/workspace';
 import { neverSettles, watchReads } from '../../test-transport';
-import { Uebersicht, presetRange } from './index';
+import { Uebersicht, presetRange, drillHref } from './index';
 
 type CannedHandler = (input: Record<string, unknown>) => RestResponse;
 type Canned = Record<string, RestResponse | CannedHandler>;
@@ -377,3 +377,79 @@ describe('Uebersicht: round 2 (K-09, K-11, K-12, K-34, K-35)', () => {
   });
 });
 
+
+describe('D142: the Bankeingang band on the wall, and drills that keep their params', () => {
+  const BANK_TILE = {
+    tile: 'bank_inbox',
+    ok: true,
+    glyph: '⇄',
+    currency: 'CHF',
+    open: 5,
+    needs: 2,
+    sure: 3,
+    learned: 0,
+    noReceipt: 1,
+    accounts: [{ bankAccountId: 'ba_1', name: 'Geschäftskonto', currency: 'CHF', open: 5, needs: 2, sure: 3, noReceipt: 1, inMinor: 10_000, outMinor: 5_000 }],
+    lastSyncAt: null,
+    syncInProgress: false,
+    autoMode: null,
+    autoAt: null,
+    nextAutoSyncAt: null,
+    lastAutoOutcome: null,
+    channels: [],
+    drill: { studioRoute: '/bank', mcpTool: 'list_bank_inbox', params: { workspaceId: 'ws_test', status: 'open' } },
+  };
+
+  it('drillHref turns the drill params into a query string and never carries the workspace', () => {
+    expect(drillHref({ studioRoute: '/open-items', mcpTool: 'aging_report', params: { workspaceId: 'ws_test', asOf: '2026-07-31' } })).toBe('/open-items?asOf=2026-07-31');
+    expect(drillHref({ studioRoute: '/bank-accounts', mcpTool: 'list_bank_accounts', params: { workspaceId: 'ws_test' } })).toBe('/bank-accounts');
+    expect(drillHref({ studioRoute: '/reports', mcpTool: 'income_statement', params: { workspaceId: 'ws_test', nested: { a: 1 }, n: 2 } })).toBe('/reports?n=2');
+  });
+
+  it('a tile click lands on its route WITH the drill params (they used to be dropped)', async () => {
+    const canned = happyCanned();
+    canned.dashboard_overview = ok({
+      workspaceId: 'ws_test',
+      tiles: [{ tile: 'ar_aging', ok: true, valueRappen: 12_500_00, currency: 'CHF', asOf: '2026-07-31', glyph: '◧', drill: { studioRoute: '/open-items', mcpTool: 'aging_report', params: { workspaceId: 'ws_test', asOf: '2026-07-31' } }, detail: {} }],
+      omitted: [],
+    });
+    const client = new TillClient(fakeTransport(canned));
+    function Probe() {
+      const location = useLocation();
+      return <div data-testid="where">{`${location.pathname}${location.search}`}</div>;
+    }
+    render(
+      <TillClientProvider client={client}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_test">
+            <MemoryRouter initialEntries={['/overview']}>
+              <Routes>
+                <Route path="*" element={<><Uebersicht /><Probe /></>} />
+              </Routes>
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /Debitoren offen/ }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/open-items?asOf=2026-07-31');
+  });
+
+  it('the bank_inbox tile is the band above the wall, never a ninth tile in the grid', async () => {
+    const canned = happyCanned();
+    canned.dashboard_overview = ok({ workspaceId: 'ws_test', tiles: [...TILES, BANK_TILE], omitted: [] });
+    canned.dashboard_tile = ok({ workspaceId: 'ws_test', tile: BANK_TILE });
+    renderSurface(canned);
+    expect(await screen.findByRole('link', { name: '5 offene Bankbuchungen' })).toHaveAttribute('href', '/bank');
+    // The band and the grid come from two independent reads (`dashboard_tile` for the band,
+    // `dashboard_overview` for the wall), so the band link resolving says nothing about the grid.
+    // Wait for the grid itself instead of reading it in the same tick (flaky under gate load).
+    const grid = await waitFor(() => {
+      const g = document.querySelector('.uebersicht-grid');
+      expect(g).not.toBeNull();
+      return g as HTMLElement;
+    });
+    expect(within(grid).queryByText(/Bank/)).toBeNull();
+    expect(grid.querySelectorAll('li')).toHaveLength(TILES.filter((t) => t.ok).length);
+  });
+});

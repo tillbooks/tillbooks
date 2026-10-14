@@ -76,6 +76,15 @@ function acc(
   return { number, name: de, labels: { de, fr, it, en }, type, costCenterAllowed };
 }
 
+/**
+ * D142 amendment (owner, 28.09.2026): the seeded accounts whose voucher is the bank statement itself
+ * ("Beleg = Kontoauszug"), so a bank line booked to them alone never counts as "ohne Beleg". Read off
+ * the seed below, never guessed: the core ships ONE such account, 6900 Finanzaufwand (bank charges and
+ * interest paid). It has no separate Bankspesen or Zinsertrag account. An owner flags any other
+ * account (their own 6940 Bankspesen, say) on the account itself.
+ */
+export const STATEMENT_VOUCHER_SEED_NUMBERS: readonly string[] = ['6900'];
+
 export const KMU_CORE_SEED: readonly SeedAccount[] = [
   // 1xxx Aktiven. OR Art. 959a Abs. 1: Umlaufvermögen by liquidity, then Anlagevermögen.
   acc('1000', 'asset', false,

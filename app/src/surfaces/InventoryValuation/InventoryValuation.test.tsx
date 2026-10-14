@@ -104,12 +104,12 @@ const baseCanned = (): Canned => ({
   inventory_valuation_preview: ok({ asOf: null, items: [ROW()], totalValueMinor: 84_000, totalWriteDownMinor: 0 }),
 });
 
-function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Record<string, unknown> }>) {
+function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Record<string, unknown> }>, path = '/inventory-valuation') {
   return render(
     <TillClientProvider client={new TillClient(fakeTransport(canned, asked))}>
       <I18nProvider>
         <WorkspaceProvider initialId="ws_test">
-          <MemoryRouter>
+          <MemoryRouter initialEntries={[path]}>
             <InventoryValuation />
           </MemoryRouter>
         </WorkspaceProvider>
@@ -148,14 +148,16 @@ describe('InventoryValuation, the balance-sheet figure and the basis behind it',
       totalWriteDownMinor: 0,
     });
     renderSurface(canned);
-    await screen.findByRole('button', { name: 'Widget' });
+    // D152 rule 5: the item opens by the person's act.
+    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
     await waitFor(() => expect(screen.queryByText(de.invValuation.layers.title)).not.toBeInTheDocument());
   });
 
   it('re-runs the pure preview at the as-of date the operator picks', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     renderSurface(baseCanned(), asked);
-    await screen.findByRole('button', { name: 'Widget' });
+    // D152 rule 5: the item opens by the person's act.
+    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
 
     // A date input is committed in one go by a real picker, and `userEvent.type` on one fires a
     // change per character, so each keystroke would re-run the preview. That is not what a user does
@@ -182,7 +184,8 @@ describe('InventoryValuation, the balance-sheet figure and the basis behind it',
             totalWriteDownMinor: 21_000,
           });
     renderSurface(canned, asked);
-    await screen.findByRole('button', { name: 'Widget' });
+    // D152 rule 5: the item opens by the person's act.
+    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
 
     // One commit, for the same reason: typing "900" a character at a time would fire three previews
     // and assert against whichever one happened to land first.
@@ -199,7 +202,8 @@ describe('InventoryValuation, the balance-sheet figure and the basis behind it',
     const canned = baseCanned();
     canned.inventory_valuation_set_default = ok({ assignment: { id: 'iv_2' } });
     renderSurface(canned, asked);
-    await screen.findByRole('button', { name: 'Widget' });
+    // D152 rule 5: the item opens by the person's act.
+    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
 
     await userEvent.click(screen.getByRole('button', { name: de.invValuation.changeDefault }));
     await screen.findByRole('dialog', { name: de.invValuation.form.defaultTitle });
@@ -221,7 +225,8 @@ describe('InventoryValuation, the balance-sheet figure and the basis behind it',
     const canned = baseCanned();
     canned.inventory_valuation_set_default = reject('period_locked', { period: '2025', kind: 'hard' });
     renderSurface(canned);
-    await screen.findByRole('button', { name: 'Widget' });
+    // D152 rule 5: the item opens by the person's act.
+    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
 
     await userEvent.click(screen.getByRole('button', { name: de.invValuation.changeDefault }));
     await screen.findByRole('dialog', { name: de.invValuation.form.defaultTitle });
@@ -234,7 +239,8 @@ describe('InventoryValuation, the balance-sheet figure and the basis behind it',
     const canned = baseCanned();
     canned.inventory_valuation_method_set_enabled = reject('method_is_default', { method: 'fifo' });
     renderSurface(canned);
-    await screen.findByRole('button', { name: 'Widget' });
+    // D152 rule 5: the item opens by the person's act.
+    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
 
     await userEvent.click(screen.getByLabelText(de.invValuation.enableAria.replace('{method}', de.invValuation.method.fifo)));
     expect(await screen.findByText(de.invValuation.errors.method_is_default)).toBeInTheDocument();
@@ -260,7 +266,8 @@ describe('InventoryValuation, the balance-sheet figure and the basis behind it',
       totalWriteDownMinor: 0,
     });
     renderSurface(canned);
-    await screen.findByRole('button', { name: 'Widget' });
+    // D152 rule 5: the item opens by the person's act.
+    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
 
     expect(await screen.findByText(de.invValuation.basis.allocated)).toBeInTheDocument();
     // The warning names the rows, which is the diagnostic that makes a light figure explicable.
@@ -275,7 +282,8 @@ describe('InventoryValuation, the balance-sheet figure and the basis behind it',
       totalWriteDownMinor: 0,
     });
     renderSurface(canned);
-    await screen.findByRole('button', { name: 'Widget' });
+    // D152 rule 5: the item opens by the person's act.
+    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
     expect(await screen.findByText(de.invValuation.reason.zero_quantity)).toBeInTheDocument();
   });
 
@@ -287,5 +295,40 @@ describe('InventoryValuation, the balance-sheet figure and the basis behind it',
     renderSurface(canned);
     await waitFor(() => expect(screen.queryByRole('button', { name: de.invValuation.changeDefault })).not.toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Widget' })).not.toBeInTheDocument();
+  });
+});
+
+describe('InventoryValuation, a list never opens itself (D152 rule 5)', () => {
+  const two = (): Canned => ({ ...baseCanned(), list_items: ok({ items: [ITEM, { ...ITEM, id: 'it_2', name: 'Gadget' }] }) });
+
+  it('selects nothing on load: no current item, one quiet line, no per-item preview read', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const { container } = renderSurface(two(), asked);
+    await screen.findByRole('button', { name: 'Gadget' });
+    expect(container.querySelector('[aria-current="true"]')).toBeNull();
+    expect(screen.getByText(de.invValuation.selectHint)).toBeInTheDocument();
+    expect(screen.queryByLabelText(de.invValuation.asOf)).not.toBeInTheDocument();
+    // The workspace roll-up is read; no single item's preview is.
+    expect(asked.some((a) => a.action === 'inventory_valuation_preview' && Array.isArray(a.input.itemIds))).toBe(false);
+  });
+
+  it('opens the item a deep link names (?focus=)', async () => {
+    renderSurface(two(), undefined, '/inventory-valuation?focus=it_2');
+    const item = await screen.findByRole('button', { name: 'Gadget' });
+    await waitFor(() => expect(item).toHaveAttribute('aria-current', 'true'));
+    expect(await screen.findByRole('heading', { name: 'Gadget' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Widget' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('a click opens the costing with the same controls, a second click closes it', async () => {
+    renderSurface(two());
+    const widget = await screen.findByRole('button', { name: 'Widget' });
+    await userEvent.click(widget);
+    expect(widget).toHaveAttribute('aria-current', 'true');
+    expect(await screen.findByLabelText(de.invValuation.asOf)).toBeInTheDocument();
+    expect(screen.getByLabelText(de.invValuation.netRealisableValue)).toBeInTheDocument();
+    await userEvent.click(widget);
+    await waitFor(() => expect(screen.getByText(de.invValuation.selectHint)).toBeInTheDocument());
+    expect(widget).not.toHaveAttribute('aria-current');
   });
 });

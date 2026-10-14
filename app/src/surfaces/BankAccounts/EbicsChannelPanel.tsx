@@ -21,8 +21,11 @@ import { useT, formatDate, formatMoney } from '../../i18n';
 import { Skeleton, ErrorBanner, refusalText } from '../../components/states';
 import { Select } from '../../components/Select';
 import { ActionFeedback } from '../../components/ActionFeedback';
-import type { BankAccount } from './model';
+import { OverflowMenu } from '../../components/OverflowMenu';
+import { maskIban, type BankAccount } from './model';
+import { AutoSyncControl, type AutoSyncDto } from './AutoSyncControl';
 import { channelRefusal, jumpsOfSync, numberJumpText, type NumberJump } from './channelWording';
+import { gapExplanation, gapTitle, parseStatementGaps } from '../Bank/statementGaps';
 
 interface OrderDto {
   id: string;
@@ -112,7 +115,14 @@ interface ChannelDto {
   scopes?: string[];
   bankConsentExpiresAt?: string | null;
   state: string;
-  accounts: { bankAccountId: string; iban: string | null; newestStatement?: NewestStatementDto | null; lastNumberJump?: NumberJump | null }[];
+  accounts: {
+    bankAccountId: string;
+    iban: string | null;
+    newestStatement?: NewestStatementDto | null;
+    lastNumberJump?: NumberJump | null;
+    /** A36 §4.7 (D150): the durable gaps of the account; an older engine sends only `lastNumberJump`. */
+    statementGaps?: unknown;
+  }[];
   lastSyncAt: string | null;
   pendingIniLetter?: string | null;
   /** EBICS only (A36): the INI and HIA legs as the order log records them, and a ceremony refusal. */
@@ -127,6 +137,8 @@ interface ChannelDto {
   recentOrders: OrderDto[];
   /** EBICS only. Absent on a managed channel (the managed rail holds no local key material). */
   keystore?: KeystoreDto;
+  /** D142, EBICS only: the daily automatic fetch (mode, time, next run, last automatic run). */
+  autoSync?: AutoSyncDto;
 }
 
 /** A36 §4: the static bank-directory entry the connect wizard's bank picker offers (US-A36.4). */
@@ -181,9 +193,11 @@ function focusablesIn(node: HTMLElement): HTMLElement[] {
 
 export interface EbicsChannelPanelProps {
   accounts: BankAccount[];
+  /** A36 §4.7 (D150): open the repair dialog for one gap ("Lücke schliessen"). */
+  onRepairGap?: (bankAccountId: string, gapId: string) => void;
 }
 
-export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
+export function EbicsChannelPanel({ accounts, onRepairGap }: EbicsChannelPanelProps) {
   const t = useT();
   const client = useClient();
   const workspaceId = useWorkspaceId();
@@ -200,7 +214,8 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
   // confirm stays disabled until it is ticked, and every fresh fetch clears it.
   const [keyReview, setKeyReview] = useState<KeyReview | null>(null);
   const [keysMatch, setKeysMatch] = useState(false);
-  const [keysConfirmed, setKeysConfirmed] = useState(false);
+  // The connection whose bank keys were just confirmed: its status line says so in one word.
+  const [keysConfirmed, setKeysConfirmed] = useState<string | null>(null);
   const [fetched, setFetched] = useState<{ connectionId: string; imported: number; waiting: number; jumps: NumberJump[] } | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [form, setForm] = useState({ url: '', hostId: '', partnerId: '', userId: '', bankAccountId: '' });
@@ -339,7 +354,7 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
       if (workspaceId === null) return;
       setKeyReview({ connectionId, phase: 'loading' });
       setKeysMatch(false);
-      setKeysConfirmed(false);
+      setKeysConfirmed(null);
       setNotice(null);
       const { body } = await client.call('bank_channel_connect', {
         workspaceId,
@@ -392,7 +407,7 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
       }
       setKeyReview(null);
       setKeysMatch(false);
-      setKeysConfirmed(true);
+      setKeysConfirmed(review.connectionId);
       void load();
     },
     [client, workspaceId, load],
@@ -497,28 +512,35 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
     );
   }
 
+  // Once a channel is live the two ways in step back into the header's overflow menu: a connected
+  // account must not read as if something is still left to connect. Retired channels do not count.
+  const hasChannel = channels.some((c) => c.state !== 'retired');
+  const showAddMenu = canPay && hasChannel && !connectOpen && !managedOpen;
+
   return (
     <section className="bank-channel panel" aria-label={t('channel.title')}>
-      <h2 className="bank-channel-title">{t('channel.title')}</h2>
+      <div className="bank-channel-header">
+        <h2 className="bank-channel-title">{t('channel.title')}</h2>
+        {showAddMenu && (
+          <OverflowMenu
+            quiet
+            label={t('channel.addAnother')}
+            items={[
+              { key: 'ebics', label: t('channel.addEbics'), onSelect: () => setConnectOpen(true) },
+              { key: 'blink', label: t('channel.managed.connect'), onSelect: () => setManagedOpen(true) },
+            ]}
+          />
+        )}
+      </div>
 
       {loadError !== null && <ErrorBanner context="read" error={loadError} message={channelRefusal(t, loadError)} onRetry={() => void load()} />}
       {loadError === null && channels.length === 0 && (
         <p className="bank-channel-empty">{t('channel.empty')}</p>
       )}
-      <p className="bank-channel-file-note">{t('channel.filePathNote')}</p>
+      {!hasChannel && <p className="bank-channel-file-note">{t('channel.filePathNote')}</p>}
 
       {notice !== null && (
         <ActionFeedback tone="info" role="alert" className="bank-channel-notice" message={channelRefusal(t, notice)} />
-      )}
-      {keysConfirmed && (
-        <ActionFeedback
-          tone="success"
-          landed
-          className="bank-channel-notice"
-          message={t('channel.keyReview.confirmed')}
-          onDismiss={() => setKeysConfirmed(false)}
-          dismissLabel={t('channel.keyReview.close')}
-        />
       )}
 
       <ul className="bank-channel-list">
@@ -544,35 +566,63 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
           const refusal = c.ceremony?.refusal ?? null;
           return (
           <li key={c.connectionId} className="bank-channel-item">
-            <div className="bank-channel-state">
-              <span aria-hidden="true">{STATE_GLYPH[c.state] ?? '○'} </span>
-              <span>{t(`channel.state.${camel(c.state)}`)}</span>
-              <span className="bank-channel-kind"> · {t('channel.kind.ebics')}</span>
-              <span className="bank-channel-host"> {c.host?.hostId} / {c.host?.partnerId} / {c.host?.userId}</span>
+            <div className="bank-channel-head">
+              <div className="bank-channel-summary">
+                <div className="bank-channel-state">
+                  <span aria-hidden="true">{STATE_GLYPH[c.state] ?? '○'} </span>
+                  <span>{t(`channel.state.${camel(c.state)}`)}</span>
+                  <span className="bank-channel-kind"> · {t('channel.kind.ebics')}</span>
+                  {keysConfirmed === c.connectionId && (
+                    <span className="bank-channel-confirmed" role="status">
+                      <span aria-hidden="true">✓ </span>
+                      {t('channel.keysConfirmedShort')}
+                    </span>
+                  )}
+                </div>
+                <ul className="bank-channel-accounts">
+                  {c.accounts.map((a) => (
+                    <li key={a.bankAccountId}>
+                      <span className="bank-channel-account-iban" title={a.iban ?? undefined}>{a.iban !== null ? maskIban(a.iban) : a.bankAccountId}</span>
+                      {' · '}
+                      {a.newestStatement !== undefined && a.newestStatement !== null ? (
+                        <span className="bank-channel-newest">{newestLine(t, a.newestStatement)}</span>
+                      ) : (
+                        <span className="bank-channel-newest">{t('channel.noStatement')}</span>
+                      )}
+                      {a.statementGaps !== undefined
+                        ? parseStatementGaps(a.statementGaps).map((g) => (
+                            <div key={g.gapId} className="bank-channel-note bank-channel-jump bank-channel-gap">
+                              <p>
+                                <strong>{gapTitle(t, g)}</strong> {gapExplanation(t, g)}
+                              </p>
+                              {canPay && onRepairGap !== undefined && (
+                                <button type="button" className="btn btn--secondary btn--sm" onClick={() => onRepairGap(a.bankAccountId, g.gapId)}>
+                                  {t('attention.act.closeGap')}
+                                </button>
+                              )}
+                            </div>
+                          ))
+                        : a.lastNumberJump !== undefined &&
+                          a.lastNumberJump !== null && <p className="bank-channel-note bank-channel-jump">{numberJumpText(t, a.lastNumberJump)}</p>}
+                    </li>
+                  ))}
+                </ul>
+                {c.lastSyncAt !== null && (
+                  <p className="bank-channel-lastsync" title={c.lastSyncAt}>
+                    {t('channel.lastSync')}: {formatDate(c.lastSyncAt)}
+                  </p>
+                )}
+              </div>
+              {c.state === 'active' && canPay && (
+                <button type="button" className="btn btn--secondary btn--sm bank-channel-sync" disabled={busy} onClick={() => void sync(c.connectionId)}>
+                  {busy ? t('bankInbox.header.fetching') : t('channel.sync')}
+                </button>
+              )}
             </div>
-            <ul className="bank-channel-accounts">
-              {c.accounts.map((a) => (
-                <li key={a.bankAccountId}>
-                  <span className="bank-channel-account-iban">{a.iban ?? a.bankAccountId}</span>
-                  {' · '}
-                  {a.newestStatement !== undefined && a.newestStatement !== null ? (
-                    <span className="bank-channel-newest">{newestLine(t, a.newestStatement)}</span>
-                  ) : (
-                    <span className="bank-channel-newest">{t('channel.noStatement')}</span>
-                  )}
-                  {a.lastNumberJump !== undefined && a.lastNumberJump !== null && (
-                    <p className="bank-channel-note bank-channel-jump">{numberJumpText(t, a.lastNumberJump)}</p>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {c.lastSyncAt !== null && (
-              <p className="bank-channel-lastsync" title={c.lastSyncAt}>
-                {t('channel.lastSync')}: {formatDate(c.lastSyncAt)}
-              </p>
-            )}
 
-            {c.keystore !== undefined && (
+            {/* A keystore that needs the person (locked, unavailable, or memory-only so keys die on a
+                restart) stays in view; a healthy one is only a fact in Details. */}
+            {c.keystore !== undefined && keystoreNeedsAttention(c.keystore) && (
               <KeystoreCard
                 keystore={c.keystore}
                 onUnlock={(opener) => {
@@ -627,11 +677,6 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
               )
             )}
 
-            {c.state === 'active' && canPay && (
-              <button type="button" className="btn btn--secondary btn--sm" disabled={busy} onClick={() => void sync(c.connectionId)}>
-                {busy ? t('bankInbox.header.fetching') : t('channel.sync')}
-              </button>
-            )}
             {fetched !== null && fetched.connectionId === c.connectionId && (
               <ActionFeedback
                 tone={fetched.jumps.length > 0 ? 'warn' : 'success'}
@@ -643,7 +688,9 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
                 dismissLabel={t('channel.keyReview.close')}
               />
             )}
-            {c.state === 'active' && <p className="bank-channel-note">{t('channel.ebankingPickup')}</p>}
+            {c.state === 'active' && workspaceId !== null && (
+              <AutoSyncControl workspaceId={workspaceId} connectionId={c.connectionId} autoSync={c.autoSync} canPay={canPay} onSaved={() => void load()} />
+            )}
 
             {(c.pendingStatements ?? []).length > 0 && (
               <div className="bank-channel-pending">
@@ -658,55 +705,83 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
               </div>
             )}
 
-            {c.recentOrders.length > 0 && (
-              <details className="bank-channel-orderlog">
-                <summary>{t('channel.orderLog')}</summary>
-                <ul>
-                  {c.recentOrders.map((o) => (
-                    <li key={o.id} title={orderRawTitle(o)}>
-                      {orderActionLabel(t, o)} · {orderStatusLabel(t, o.status)} · {formatDate(o.occurredAt)}
-                      {o.bankReason !== null && <span> · {o.bankReason}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
+            {/* Settled facts and the rare teardown controls: one disclosure, closed at rest. An armed
+                disconnect keeps it open so the confirm never hides behind a collapsed summary. */}
+            <details className="bank-channel-details" open={disconnectConfirm?.connectionId === c.connectionId ? true : undefined}>
+              <summary>{t('channel.details')}</summary>
+              <dl className="bank-channel-facts">
+                {c.host !== undefined && (
+                  <>
+                    <dt>{t('channel.detailsBank')}</dt>
+                    <dd className="bank-channel-host">{c.host.hostId} / {c.host.partnerId} / {c.host.userId}</dd>
+                  </>
+                )}
+                {c.keystore !== undefined && !keystoreNeedsAttention(c.keystore) && (
+                  <>
+                    <dt>{t('channel.keystore.title')}</dt>
+                    <dd>
+                      {KNOWN_KEYSTORE_KINDS.has(c.keystore.kind) ? t(`channel.keystore.kind.${c.keystore.kind}`) : c.keystore.kind}
+                    </dd>
+                  </>
+                )}
+                {c.state === 'active' && (
+                  <>
+                    <dt>{t('channel.detailsEbanking')}</dt>
+                    <dd>{t('channel.ebankingPickup')}</dd>
+                  </>
+                )}
+              </dl>
 
-            {canPay && c.state !== 'retired' && (
-              disconnectConfirm?.connectionId === c.connectionId ? (
-                <div className="bank-channel-disconnect-confirm" role="group" aria-label={t(disconnectConfirm.mode === 'block' ? 'channel.disconnectBlock' : 'channel.disconnectRetire')}>
-                  <p className="bank-channel-warn">{t(disconnectConfirm.mode === 'block' ? 'channel.disconnectBlockConfirm' : 'channel.disconnectRetireConfirm')}</p>
+              {c.recentOrders.length > 0 && (
+                <details className="bank-channel-orderlog">
+                  <summary>{t('channel.orderLog')}</summary>
+                  <ul>
+                    {c.recentOrders.map((o) => (
+                      <li key={o.id} title={orderRawTitle(o)}>
+                        {orderActionLabel(t, o)} · {orderStatusLabel(t, o.status)} · {formatDate(o.occurredAt)}
+                        {o.bankReason !== null && <span> · {o.bankReason}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+
+              {canPay && c.state !== 'retired' && (
+                disconnectConfirm?.connectionId === c.connectionId ? (
+                  <div className="bank-channel-disconnect-confirm" role="group" aria-label={t(disconnectConfirm.mode === 'block' ? 'channel.disconnectBlock' : 'channel.disconnectRetire')}>
+                    <p className="bank-channel-warn">{t(disconnectConfirm.mode === 'block' ? 'channel.disconnectBlockConfirm' : 'channel.disconnectRetireConfirm')}</p>
+                    <div className="bank-channel-disconnect">
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        disabled={busy}
+                        onClick={() => {
+                          const mode = disconnectConfirm.mode;
+                          setDisconnectConfirm(null);
+                          void disconnect(c.connectionId, mode);
+                        }}
+                      >
+                        {t('channel.disconnectConfirm')}
+                      </button>
+                      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDisconnectConfirm(null)}>
+                        {t('channel.disconnectCancel')}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                   <div className="bank-channel-disconnect">
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm"
-                      disabled={busy}
-                      onClick={() => {
-                        const mode = disconnectConfirm.mode;
-                        setDisconnectConfirm(null);
-                        void disconnect(c.connectionId, mode);
-                      }}
-                    >
-                      {t('channel.disconnectConfirm')}
-                    </button>
-                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDisconnectConfirm(null)}>
-                      {t('channel.disconnectCancel')}
+                    {c.state !== 'blocked' && (
+                      <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setDisconnectConfirm({ connectionId: c.connectionId, mode: 'block' })}>
+                        {t('channel.disconnectBlock')}
+                      </button>
+                    )}
+                    <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setDisconnectConfirm({ connectionId: c.connectionId, mode: 'retire' })}>
+                      {t('channel.disconnectRetire')}
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="bank-channel-disconnect">
-                  {c.state !== 'blocked' && (
-                    <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setDisconnectConfirm({ connectionId: c.connectionId, mode: 'block' })}>
-                      {t('channel.disconnectBlock')}
-                    </button>
-                  )}
-                  <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setDisconnectConfirm({ connectionId: c.connectionId, mode: 'retire' })}>
-                    {t('channel.disconnectRetire')}
-                  </button>
-                </div>
-              )
-            )}
+                )
+              )}
+            </details>
           </li>
           );
         })}
@@ -715,7 +790,7 @@ export function EbicsChannelPanel({ accounts }: EbicsChannelPanelProps) {
       {/* K-26: one row for the two ways in. The EBICS contract is the lead (secondary, since the
           surface's one primary is "Konto hinzufügen"), the managed bLink path a quiet text link
           beside it, where they used to stack as two equal secondary buttons 16px apart. */}
-      {canPay && (!connectOpen || !managedOpen) && (
+      {canPay && !hasChannel && (!connectOpen || !managedOpen) && (
         <div className="bank-channel-connect-row">
           {!connectOpen && (
             <button type="button" className="btn btn--secondary" onClick={() => setConnectOpen(true)}>
@@ -1081,6 +1156,11 @@ function ManagedChannelCard({
 }
 
 const KNOWN_KEYSTORE_KINDS = new Set(['memory', 'file', 'keychain']);
+
+/** The keystore states that need the person on the card itself (the engine reports `ready` otherwise). */
+function keystoreNeedsAttention(keystore: KeystoreDto): boolean {
+  return keystore.state === 'locked' || keystore.state === 'unavailable' || keystore.kind === 'memory';
+}
 
 /**
  * A36 §5, the keystore health card: kind + state, glyph plus text (never colour alone). `locked`

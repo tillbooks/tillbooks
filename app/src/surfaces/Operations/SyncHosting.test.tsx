@@ -13,7 +13,7 @@
  * Default locale is de-CH (the I18nProvider default), so the copy asserted is the German half.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
@@ -25,9 +25,11 @@ import { WorkspaceProvider } from '../../app/workspace';
 import { CapabilitiesProvider } from '../../lib/CapabilitiesProvider';
 import { SyncHosting } from './SyncHosting';
 import shell from '../../i18n/de-CH.json';
+import ops from './messages.de-CH.json';
 
 // The panel's copy lives in the shell locale (i18n/de-CH.json). Assert against it directly.
 const S = shell.sync;
+const J = ops.journey;
 
 type CannedHandler = (input: Record<string, unknown>) => RestResponse | Promise<RestResponse>;
 type Canned = Record<string, RestResponse | CannedHandler>;
@@ -122,6 +124,21 @@ describe('SyncHosting (M02 Sync & hosting panel)', () => {
     expect(screen.getByText(S.stream.head)).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
     expect(screen.getByText('ep_2026_abc')).toBeInTheDocument();
+  });
+
+  it('POSTURE AT REST (D152): the dial label is the one-line state; the posture sentence sits in the (i) card beside it', async () => {
+    const { container } = render(tree({ get_sync_contract: contractOff() }));
+    const posture = await screen.findByText(S.state.off.body);
+    // In the (i) card, not on the working surface: no paragraph carries it at rest.
+    const card = posture.closest('[role="tooltip"]') as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(card).not.toHaveClass('is-open');
+    expect(container.querySelector('p.sync-posture')).toBeNull();
+    // The (i) sits on the dial's line and names the card as its description.
+    const row = container.querySelector('.sync-dial-row') as HTMLElement;
+    expect(within(row).getByRole('switch')).toBeInTheDocument();
+    const trigger = within(row).getByRole('button', { name: J.publishing.infoLabel });
+    expect(trigger).toHaveAccessibleDescription(S.state.off.body);
   });
 
   it('ON POSTURE never claims connectivity: no "connected" word, only "available"', async () => {

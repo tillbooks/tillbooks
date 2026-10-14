@@ -24,18 +24,19 @@ import {
   setManifestItem,
   getManifest,
 } from '../core/migration/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface MigrationExtractionActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
   ): ActionDef;
   depsAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (deps: ApiDeps, input: ActionInput) => Result,
@@ -74,14 +75,14 @@ export function migrationExtractionActions(h: MigrationExtractionActionHelpers):
     ),
     ctxAction(
       'migration_set_manifest',
-      'write',
+      'write:correctable:internal',
       'Instantiate the export-completeness manifest for a plan from its source-system guide, one item per guide row at status open. Idempotent on its key; an existing manifest is not reset (recorded statuses survive), only sourceAccessUntil is refreshed. sourceAccessUntil is the deletion-clock deadline, a contract fact to verify against your own terms.',
       ctxSchema({ planId: STR, sourceAccessUntil: STR, idempotencyKey: STR }, ['planId', 'idempotencyKey']),
       (ctx, input) => setManifest(ctx, as(input)),
     ),
     ctxAction(
       'migration_set_manifest_item',
-      'write',
+      'write:reversible:internal',
       'Record one manifest item: status (open, exported, not_used, blocked), the E00 fileId(s), a row count, a date range and a note. A cross-workspace fileId refuses (H-TENANT); a date range whose end precedes its start refuses. Idempotent on its key. not_used drops the item from the completeness denominator.',
       ctxSchema(
         { planId: STR, itemId: STR, status: STR, fileIds: STR_LIST, rowCount: INT, dateFrom: STR, dateTo: STR, note: STR, idempotencyKey: STR },

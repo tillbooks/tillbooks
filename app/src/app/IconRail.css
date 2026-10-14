@@ -1,0 +1,31 @@
+/*
+ * The waiting-work count on the collapsed rail's Pendenzen icon: the tree row's `rail-badge`, pinned to
+ * the icon's corner so the 40px button never grows. Neutral ink on the page ground with a hairline,
+ * never the accent (the accent marks focus, selection and the one primary). The number is decoration
+ * for sighted users only: the button's accessible NAME carries it in words ("Pendenzen, 3 offen").
+ */
+.rail-icon-btn {
+  position: relative;
+}
+
+.rail-icon-count {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 1rem;
+  padding: 0 3px;
+  font-size: var(--t-font-xs);
+  line-height: var(--t-lh-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--t-text-dim);
+  background: var(--t-bg);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  pointer-events: none;
+}
+
+/* A count that could not be read: the warning glyph in the warn ink (the glyph carries it too). */
+.rail-icon-count--warn {
+  color: var(--t-warn);
+}

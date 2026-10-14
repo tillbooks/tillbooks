@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS sales_order (
   expected_on   TEXT,
   notes         TEXT,
   actor         TEXT,
+  -- D164: the document-level Leistungsdatum carried from the quote to the invoice (lineSupplyDate).
+  supply_date   TEXT,
   created_at    TEXT NOT NULL
 );
 
@@ -76,6 +78,8 @@ CREATE TABLE IF NOT EXISTS so_line (
   backorder_qty          INTEGER NOT NULL DEFAULT 0,
   invoiced_qty           INTEGER NOT NULL DEFAULT 0,
   sort                   INTEGER NOT NULL,
+  -- D164: the line's own stated Leistungsdatum, carried from the quote line to the invoice line.
+  supply_date            TEXT,
   created_at             TEXT NOT NULL
 );
 

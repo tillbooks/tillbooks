@@ -37,7 +37,7 @@
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
-import { ADAPTERS, bodySha256, writeMailDraft, replaceMailDraft } from '../mail/index.js';
+import { ADAPTERS, bodySha256, writeMailDraft, replaceMailDraft, draftEditedSinceWritten } from '../mail/index.js';
 import type { MailStoreAdapter } from '../mail/index.js';
 import { registeredRuntime, retrieveVoiceExemplars } from '../voice/index.js';
 // A16's per-customer read model (it composes the same open items `list_open_items` reports, plus
@@ -46,6 +46,7 @@ import { customerBalance } from '../debtors/index.js';
 import { listDocuments } from '../sales/index.js';
 import { listProjects } from '../projects/index.js';
 import type { DraftRunStatus } from './enums.js';
+import { isGovernedSeat } from '../access/capability.js';
 
 interface DraftRunRow {
   id: string;
@@ -287,6 +288,8 @@ interface AttemptOptions {
   hint?: string | undefined;
   /** Set on regenerate: the existing mail_draft row to replace instead of writing a second one. */
   replaceDraftId?: string | undefined;
+  /** Set on regenerate (D161.2): replace the draft even though the person edited it. */
+  overwriteEdits?: boolean | undefined;
   idempotencyKey?: string | undefined;
 }
 
@@ -499,8 +502,14 @@ function attemptGeneration(ctx: WorkspaceContext, opts: AttemptOptions): Result 
       ctx.clock.now(),
     );
 
-  const written =
-    opts.replaceDraftId === undefined
+  // K1: the E04 write carries a key DERIVED from this run's own, so it runs in this composite's own
+  // idempotency scope: a `mail_draft_write` made first under `K:w` (any thread, any body) used to be
+  // replayed here and answered as the generated draft. The draft it names is then read back as this
+  // run's own (its `draft_run_id` is this run) before the run reports it.
+  const composite = opts.replaceDraftId === undefined ? 'draft_generate' : 'draft_regenerate';
+  const replaceDraftId = opts.replaceDraftId;
+  const written = ctx.store.innerWrite(composite, () =>
+    replaceDraftId === undefined
       ? writeMailDraft(ctx, {
           threadId: opts.thread.id,
           body,
@@ -508,11 +517,27 @@ function attemptGeneration(ctx: WorkspaceContext, opts: AttemptOptions): Result 
           ...(opts.idempotencyKey === undefined ? {} : { idempotencyKey: `${opts.idempotencyKey}:w` }),
         })
       : replaceMailDraft(ctx, {
-          draftId: opts.replaceDraftId,
+          draftId: replaceDraftId,
           body,
           draftRunId: runId,
+          ...(opts.overwriteEdits === true ? { overwriteEdits: true } : {}),
           ...(opts.idempotencyKey === undefined ? {} : { idempotencyKey: `${opts.idempotencyKey}:w` }),
-        });
+        }),
+  );
+  if (written.ok) {
+    const writtenId = (written as { draftId?: unknown }).draftId;
+    const held = typeof writtenId === 'string'
+      ? (ctx.store.db
+          .prepare('SELECT thread_id, draft_run_id FROM mail_draft WHERE workspace_id = ? AND id = ?')
+          .get(ctx.workspaceId, writtenId) as { thread_id: string; draft_run_id: string | null } | undefined)
+      : undefined;
+    if (held === undefined || held.thread_id !== opts.thread.id || held.draft_run_id !== runId) {
+      ctx.store.db
+        .prepare('UPDATE draft_run SET status = ?, ended_at = ? WHERE workspace_id = ? AND id = ?')
+        .run('failed', ctx.clock.now(), ctx.workspaceId, runId);
+      return err('inner_write_not_own', { composite, inner: replaceDraftId === undefined ? 'mail_draft_write' : 'mail_draft_replace', draftRunId: runId, draftId: typeof writtenId === 'string' ? writtenId : null });
+    }
+  }
   if (!written.ok) {
     ctx.store.db
       .prepare('UPDATE draft_run SET status = ?, ended_at = ? WHERE workspace_id = ? AND id = ?')
@@ -575,6 +600,8 @@ export function generateDraft(ctx: WorkspaceContext, input: GenerateDraftInput):
 export interface RegenerateDraftInput {
   draftRunId: string;
   hint?: string;
+  /** D161.2: replace a draft the person edited since TILL wrote it. Without it that is `draft_edited`. */
+  overwriteEdits?: boolean;
   idempotencyKey?: string;
 }
 
@@ -583,6 +610,13 @@ export interface RegenerateDraftInput {
  * (append-only in spirit: the sequence of attempts stays interpretable) and REPLACING the Drafts
  * message via E04 rather than adding a second one. A draft the user already sent or deleted is
  * `draft_gone` and is NOT re-created: once it is sent, it is theirs.
+ *
+ * D161.2: a draft the person EDITED in their own client and has not sent is theirs too. The message
+ * TILL wrote is hashed on `mail_draft.body_sha256`; when the stored message no longer matches it, the
+ * regenerate refuses `draft_edited` BEFORE the model is asked and before any run row is written, and
+ * replaces it only on the explicit `overwriteEdits: true`. The refusal is never remembered under the
+ * idempotency key, so the same key may carry the explicit choice; a key that already succeeded replays
+ * its result whatever happened to the draft since.
  */
 export function regenerateDraft(ctx: WorkspaceContext, input: RegenerateDraftInput): Result {
   if (typeof input.draftRunId !== 'string' || input.draftRunId.length === 0) {
@@ -590,6 +624,16 @@ export function regenerateDraft(ctx: WorkspaceContext, input: RegenerateDraftInp
   }
   if (input.hint !== undefined && typeof input.hint !== 'string') {
     return err('invalid_input', { field: 'hint' });
+  }
+  if (input.overwriteEdits !== undefined && typeof input.overwriteEdits !== 'boolean') {
+    return err('invalid_input', { field: 'overwriteEdits' });
+  }
+  // Critic N1 round 2 (N-a): replacing a draft the person edited destroys their unsent words, so the
+  // explicit `overwriteEdits: true` is a person's choice. A governed seat (the agent, a plugin call, an
+  // agent member) is refused `needs_a_person` before anything is read or written, the checklist
+  // human-step shape (critic N3); it may still regenerate an UNEDITED draft, which stays free.
+  if (input.overwriteEdits === true && isGovernedSeat(ctx.store, ctx.actor)) {
+    return err('capability_forbidden', { reason: 'needs_a_person', field: 'overwriteEdits' });
   }
   const prior = ctx.store.db
     .prepare('SELECT * FROM draft_run WHERE workspace_id = ? AND id = ?')
@@ -604,14 +648,21 @@ export function regenerateDraft(ctx: WorkspaceContext, input: RegenerateDraftInp
   // The Drafts message this run produced (or, for a retried run, the thread's latest TILL draft).
   const draft = ctx.store.db
     .prepare(
-      `SELECT id, store_ref FROM mail_draft
+      `SELECT id, store_ref, body_sha256 FROM mail_draft
         WHERE workspace_id = ? AND thread_id = ?
         ORDER BY (draft_run_id = ?) DESC, created_at DESC LIMIT 1`,
     )
-    .get(ctx.workspaceId, thread.id, prior.id) as { id: string; store_ref: string } | undefined;
+    .get(ctx.workspaceId, thread.id, prior.id) as { id: string; store_ref: string; body_sha256: string } | undefined;
   if (draft === undefined) return err('draft_gone', { draftRunId: prior.id });
-  if (adapter.readBody(account.store_path, draft.store_ref) === undefined) {
+  const edited = draftEditedSinceWritten(adapter, account.store_path, draft);
+  if (edited === undefined) {
     return err('draft_gone', { draftRunId: prior.id });
+  }
+  const keyed = typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0;
+  if (edited && input.overwriteEdits !== true) {
+    const replayed = keyed ? ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey as string, 'draft_regenerate') : undefined;
+    if (replayed !== undefined) return replayed;
+    return err('draft_edited', { draftRunId: prior.id, draftId: draft.id, overwriteWith: { overwriteEdits: true } });
   }
 
   const opts: AttemptOptions = {
@@ -621,6 +672,7 @@ export function regenerateDraft(ctx: WorkspaceContext, input: RegenerateDraftInp
     profileId: prior.profile_id ?? undefined,
     hint: input.hint,
     replaceDraftId: draft.id,
+    overwriteEdits: input.overwriteEdits === true,
     idempotencyKey: input.idempotencyKey,
   };
   const run = (): Result => attemptGeneration(ctx, opts);

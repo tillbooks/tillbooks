@@ -18,13 +18,17 @@ import { I18nProvider } from '../../i18n';
 import { WorkspaceProvider, useWorkspace } from '../../app/workspace';
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse } from '../../lib/client';
-import { SetupCard, readSetupCardDismissed, setupDoneFrom, workspaceHasData } from './SetupCard';
+import { SetupCard, firstStepsDoneFrom, readSetupCardDismissed, setupDoneFrom, workspaceHasData } from './SetupCard';
 import type { DashboardTileView } from './Uebersicht';
 
-/** The one read the card makes (F-09): `get_company_profile`, answered per test. */
-function makeClient(profile: Record<string, unknown> | null): TillClient {
+/** The two reads the card makes: `get_company_profile` (F-09) and, since P0.4d, the books' own
+ *  first-step facts off `get_onboarding_progress`. Either answers per test; an absent one fails. */
+function makeClient(profile: Record<string, unknown> | null, firstSteps: Record<string, unknown> | null = null): TillClient {
   return new TillClient(async (action): Promise<RestResponse> => {
     if (action === 'get_company_profile' && profile !== null) return { status: 200, body: { ok: true, profile } };
+    if (action === 'get_onboarding_progress' && firstSteps !== null) {
+      return { status: 200, body: { ok: true, progress: null, workspaceKind: 'live', firstSteps } };
+    }
     return { status: 404, body: { ok: false, error: 'unknown_action' } };
   });
 }
@@ -51,9 +55,13 @@ const ESTABLISHED_TILES: DashboardTileView[] = [
   { tile: 'cash', ok: true, valueRappen: 0, currency: 'CHF' },
 ];
 
-function renderCard(tiles: DashboardTileView[], profile: Record<string, unknown> | null = BARE_PROFILE) {
+function renderCard(
+  tiles: DashboardTileView[],
+  profile: Record<string, unknown> | null = BARE_PROFILE,
+  firstSteps: Record<string, unknown> | null = null,
+) {
   return render(
-    <TillClientProvider client={makeClient(profile)}>
+    <TillClientProvider client={makeClient(profile, firstSteps)}>
       <I18nProvider>
         <WorkspaceProvider initialId="ws_test">
           <MemoryRouter initialEntries={['/overview']}>
@@ -113,6 +121,39 @@ describe('SetupCard: the first-hour setup guide', () => {
     expect(setupDoneFrom(ANSWERED_PROFILE)).toEqual({ profile: true, vat: true });
     // The IBAN alone is not a complete profile step; the legal form alone is not either.
     expect(setupDoneFrom({ legalForm: 'gmbh', creditorIban: null, vatMethod: 'none' })).toEqual({ profile: false, vat: true });
+  });
+
+  it('P0.4d: the other steps tick from what the books hold: a customer created inside the first invoice ticks the contact step', async () => {
+    // The first-run audit: Muster AG was created inline in the invoice form and "Ersten Kontakt
+    // anlegen" stayed open. The card now reads the books' own facts, not where the person clicked.
+    renderCard(FRESH_TILES, BARE_PROFILE, { chart: true, contact: true, item: false, invoice: false });
+    const contacts = await screen.findByRole('link', { name: /Ersten Kontakt/ });
+    await waitFor(() => expect(contacts).toHaveAccessibleDescription('erledigt'));
+    expect(screen.getByRole('link', { name: /Kontenplan prüfen/ })).toHaveAccessibleDescription('erledigt');
+    // What the books do not hold stays open, and the profile steps follow the profile alone.
+    expect(screen.getByRole('link', { name: /Ersten Artikel/ })).not.toHaveAccessibleDescription('erledigt');
+    expect(screen.getByRole('link', { name: /Erste Rechnung/ })).not.toHaveAccessibleDescription('erledigt');
+    expect(screen.getByRole('link', { name: /Firmenprofil vervollständigen/ })).not.toHaveAccessibleDescription('erledigt');
+    expect(screen.getAllByText('erledigt')).toHaveLength(2);
+    await act(async () => {});
+  });
+
+  it('P0.4d: both reads merge, in either order, and an issued invoice ticks the last step', async () => {
+    renderCard(FRESH_TILES, ANSWERED_PROFILE, { chart: true, contact: true, item: true, invoice: true });
+    await waitFor(() => expect(screen.getAllByText('erledigt')).toHaveLength(6));
+    expect(screen.getByRole('link', { name: /Erste Rechnung/ })).toHaveAccessibleDescription('erledigt');
+    await act(async () => {});
+  });
+
+  it('P0.4d: a missing or malformed firstSteps answer ticks nothing (unknown is not done)', () => {
+    expect(firstStepsDoneFrom(undefined)).toEqual({ accounts: false, contacts: false, items: false, invoice: false });
+    expect(firstStepsDoneFrom({ chart: 'yes', contact: 1 })).toEqual({ accounts: false, contacts: false, items: false, invoice: false });
+    expect(firstStepsDoneFrom({ chart: true, contact: false, item: true, invoice: false })).toEqual({
+      accounts: true,
+      contacts: false,
+      items: true,
+      invoice: false,
+    });
   });
 
   it('an established workspace (real data) does NOT render the card', async () => {

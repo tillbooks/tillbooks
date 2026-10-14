@@ -30,11 +30,12 @@ import {
   phaseDone,
   projectBudgetActual,
 } from '../core/projects/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ProjectActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -58,7 +59,7 @@ export function projectActions(h: ProjectActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'project_create',
-      'write',
+      'write:reversible:internal',
       'Lege ein Projekt an (create a project master): name, client contact (C00), an editable auto-suggested code (P-0001 upward, unique per workspace), an integer-Rappen budget with budget hours, dates and an optional parent for a sub-project tree. A non-base currency snapshots the base-Rappen budget at the H-FX rate of the creation day (pass fxRate to assert one). Starts in status draft.',
       ctxSchema(
         {
@@ -80,28 +81,28 @@ export function projectActions(h: ProjectActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'project_update',
-      'write',
+      'write:reversible:internal',
       'Patch a project master (name, contact, code, dates, parent, budget). Editable while draft, active or on_hold; a closed project refuses with project_closed. The H-FX base snapshot is re-taken only when currency or budgetMinor change, never silently re-rated.',
       ctxSchema({ projectId: STR, patch: OBJ, idempotencyKey: STR }, ['projectId', 'patch']),
       (ctx, input) => updateProject(ctx, as(input)),
     ),
     ctxAction(
       'project_set_status',
-      'write',
+      'write:correctable:internal',
       'Move a project through its lifecycle: draft to active, active to on_hold and back (Pausieren), active or on_hold to closed (Abschliessen), and the audit-logged reopen closed to active (Wieder öffnen). An illegal pair refuses with invalid_transition; closing runs the registered close guards (B01 adds the open-time guard when it lands).',
       ctxSchema({ projectId: STR, status: STR, idempotencyKey: STR }, ['projectId', 'status']),
       (ctx, input) => setProjectStatus(ctx, as(input)),
     ),
     ctxAction(
       'project_delete',
-      'write',
+      'write:final:erase',
       'Hard-delete a DRAFT project that nothing references (no sub-project, no custom-field value, no linked file); its own draft phases go with it. Anything past draft has history and refuses with not_draft: real projects are closed, never erased (OR 957a spirit).',
       ctxSchema({ projectId: STR, idempotencyKey: STR }, ['projectId']),
       (ctx, input) => deleteProject(ctx, as(input)),
     ),
     ctxAction(
       'project_phase_add',
-      'write',
+      'write:correctable:internal',
       'Add a phase to a project (name, sort, integer-Rappen budget, budget hours, optional milestoneOn date). Refused on a closed project. A phase-budget sum exceeding the project budget answers ok with a phase_budgets_exceed_project warning, never a block: phase budgets are the plan, the project budget is the envelope.',
       ctxSchema(
         { projectId: STR, name: STR, sort: INT, budgetMinor: INT, budgetHours: INT, milestoneOn: STR, idempotencyKey: STR },
@@ -111,14 +112,14 @@ export function projectActions(h: ProjectActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'project_phase_update',
-      'write',
+      'write:reversible:internal',
       'Patch a phase (name, sort, budget, budget hours, milestoneOn). Refused on a closed project; carries the same phase-budget warning as project_phase_add.',
       ctxSchema({ phaseId: STR, patch: OBJ, idempotencyKey: STR }, ['phaseId', 'patch']),
       (ctx, input) => updatePhase(ctx, as(input)),
     ),
     ctxAction(
       'project_phase_done',
-      'write',
+      'write:final:internal',
       'Mark a phase milestone reached (Erledigt): stamps doneAt (default today). A state assertion, so an already-done phase answers ok with alreadyDone true and the recorded date untouched, never a second stamp.',
       ctxSchema({ phaseId: STR, doneAt: STR, idempotencyKey: STR }, ['phaseId']),
       (ctx, input) => phaseDone(ctx, as(input)),

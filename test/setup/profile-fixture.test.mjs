@@ -102,7 +102,10 @@ test('every fixture value matches the engine value in kind, null included', () =
     true,
     'the fixture creditor block no longer round-trips through setCreditorProfile',
   );
-  assert.equal(updateCompanyProfile(ctx, { uid: fixture.uid, mwstNo: fixture.mwstNo }).ok, true);
+  assert.equal(
+    updateCompanyProfile(ctx, { uid: fixture.uid, mwstNo: fixture.mwstNo, defaultPaymentTermsDays: fixture.defaultPaymentTermsDays }).ok,
+    true,
+  );
 
   const { profile: live } = getCompanyProfile(ctx);
   assertKindParity(fixture, live, 'profile');
@@ -120,7 +123,9 @@ test('a fresh workspace answers null for every optional field: null, never absen
   const { profile: live } = getCompanyProfile(ctx);
   const { profile: fixture } = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
 
-  const alwaysPopulated = new Set(['workspaceId', 'name', 'baseCurrency', 'fiscalYearStart', 'createdAt', 'ledgerLocked']);
+  // D163 (owner pick 07.10.2026): a NEW workspace starts with a 30-day Standard-Zahlungsfrist, so it is
+  // populated on a fresh profile (an existing, migrated workspace reads null).
+  const alwaysPopulated = new Set(['workspaceId', 'name', 'baseCurrency', 'fiscalYearStart', 'createdAt', 'ledgerLocked', 'defaultPaymentTermsDays']);
   for (const key of Object.keys(fixture)) {
     assert.equal(key in live, true, `fresh profile omits ${key} instead of sending null`);
     if (!alwaysPopulated.has(key)) {

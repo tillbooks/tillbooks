@@ -17,6 +17,7 @@ import { spawn } from 'node:child_process';
 import { startUp, resolveStudioDir, serveStudio } from '../../dist/api/up.js';
 import { resetDeliveryRuntime } from '../../dist/api/runtime-state.js';
 import { acquireLock } from '../../dist/api/up-lock.js';
+import { studioHeaders, studioKeyFromLink } from './studio-key-support.mjs';
 
 /** A raw HTTP request (fetch forbids spoofing the Host header, which the rebinding test needs). */
 function rawRequest(url, { method = 'GET', headers = {} } = {}) {
@@ -89,9 +90,10 @@ test('till up serves the built Studio at / and falls back to index.html for a cl
 test('till up mounts the REST twin, and delivery_status reports mode=up with the bound port', async () => {
   await withUp(async (up) => {
     const port = Number(new URL(up.url).port);
+    // The REST twin is the Studio's door: the Studio key comes out of the printed link, as in a browser.
     const r = await fetch(`${up.url}/api/delivery_status`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...studioHeaders(studioKeyFromLink(up.studioUrl)) },
       body: '{}',
     });
     assert.equal(r.status, 200);
@@ -157,8 +159,12 @@ test('till up starts even with no Studio built, and says so on a Studio GET', as
     const r = await fetch(`${up.url}/`);
     assert.equal(r.status, 501);
     assert.match(await r.text(), /not built/);
-    // The API face still works with no Studio.
-    const api = await fetch(`${up.url}/api/delivery_status`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    // The API face still works with no Studio (for the holder of the launch's key).
+    const api = await fetch(`${up.url}/api/delivery_status`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...studioHeaders(up.studioKey) },
+      body: '{}',
+    });
     assert.equal((await api.json()).mode, 'up');
   } finally {
     await up.close();

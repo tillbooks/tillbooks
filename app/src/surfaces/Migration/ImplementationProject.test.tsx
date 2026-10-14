@@ -14,14 +14,15 @@
  *
  * Copy is asserted through the catalogue, never as a literal typed here.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { I18nProvider } from '../../i18n';
 import { CapabilitiesContext, type Capabilities } from '../../lib/capabilities';
-import { ImplementationProject } from './ImplementationProject';
+import { ImplementationProject, IMPL_PROJECT_SKIPPED_KEY_PREFIX } from './ImplementationProject';
 import de from './messages.de-CH.json';
 
 const ok = (data: Record<string, unknown> = {}): RestResponse => ({ status: 200, body: { ok: true, ...data } });
@@ -35,11 +36,11 @@ function caps(held: string[]): Capabilities {
   return { whoami: null, can: (c) => held.includes(c), refresh: () => undefined };
 }
 
-function tree(canned: Record<string, RestResponse>, opts: { offer?: boolean; held?: string[] } = {}) {
+function tree(canned: Record<string, RestResponse>, opts: { offer?: boolean; held?: string[]; onContinueWithout?: () => void } = {}) {
   const inner = (
     <TillClientProvider client={new TillClient(fakeTransport(canned))}>
       <I18nProvider>
-        <ImplementationProject workspaceId="ws_1" offerCreateWhenAbsent={opts.offer} />
+        <ImplementationProject workspaceId="ws_1" offerCreateWhenAbsent={opts.offer} onContinueWithout={opts.onContinueWithout} />
       </I18nProvider>
     </TillClientProvider>
   );
@@ -63,6 +64,10 @@ const LOADED = {
 };
 
 describe('ImplementationProject', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it('renders nothing when there is no project and no offer (plan-only pays no project tax)', async () => {
     const { container } = render(tree({ implementation_project_list: ok({ projects: [] }) }));
     // waitFor lets the load effect settle inside act(), then the tree stays empty (no project chrome).
@@ -74,7 +79,48 @@ describe('ImplementationProject', () => {
     render(tree({ implementation_project_list: ok({ projects: [] }) }, { offer: true }));
     expect(await screen.findByText(de.implProject.empty)).toBeTruthy();
     expect(screen.getByRole('button', { name: de.implProject.create })).toBeTruthy();
-    expect(screen.getByText(de.implProject.continueWithout)).toBeTruthy();
+    expect(screen.getByRole('button', { name: de.implProject.continueWithout })).toBeTruthy();
+  });
+
+  // P0.4c: the escape used to be a <p>; clicking it changed nothing on the one screen that decides
+  // whether a bexio switcher migrates at all.
+  it('"Ohne Projekt fortfahren" is a real button that collapses the offer, focuses the next step and remembers the choice', async () => {
+    const onContinueWithout = vi.fn();
+    const user = userEvent.setup();
+    const { unmount } = render(tree({ implementation_project_list: ok({ projects: [] }) }, { offer: true, onContinueWithout }));
+    const button = await screen.findByRole('button', { name: de.implProject.continueWithout });
+    expect(button.tagName).toBe('BUTTON');
+    await user.click(button);
+
+    // The offer is gone (no create form, no explainer), one line says where to go on, and it has focus.
+    expect(screen.queryByRole('button', { name: de.implProject.create })).toBeNull();
+    expect(screen.queryByText(de.implProject.empty)).toBeNull();
+    const line = screen.getByText(de.implProject.skipped);
+    expect(document.activeElement).toBe(line);
+    expect(onContinueWithout).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(`${IMPL_PROJECT_SKIPPED_KEY_PREFIX}ws_1`)).toBe('1');
+    unmount();
+
+    // The next visit remembers it, and the way back restores the offer.
+    render(tree({ implementation_project_list: ok({ projects: [] }) }, { offer: true }));
+    expect(await screen.findByText(de.implProject.skipped)).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: de.implProject.createAnyway }));
+    expect(screen.getByRole('button', { name: de.implProject.create })).toBeTruthy();
+    expect(window.localStorage.getItem(`${IMPL_PROJECT_SKIPPED_KEY_PREFIX}ws_1`)).toBeNull();
+  });
+
+  it('a Studio that cannot store the choice still continues (storage throws)', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    try {
+      const user = userEvent.setup();
+      render(tree({ implementation_project_list: ok({ projects: [] }) }, { offer: true }));
+      await user.click(await screen.findByRole('button', { name: de.implProject.continueWithout }));
+      expect(screen.getByText(de.implProject.skipped)).toBeTruthy();
+    } finally {
+      setItem.mockRestore();
+    }
   });
 
   it('leads with the project: phase strip (Stabilisierung), tasks and a not_asserted parallel period', async () => {

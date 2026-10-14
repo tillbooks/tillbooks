@@ -14,7 +14,7 @@
  * built and tested). Every visible string comes from an i18n key; rates render via the shared
  * formatter, never a hardcoded percentage.
  */
-import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -28,6 +28,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { Select } from '../../components/Select';
+import { Tooltip } from '../../components/Tooltip';
 import { saldoEligibilityOn } from '../../lib/guidance';
 import {
   Skeleton,
@@ -36,7 +37,7 @@ import {
   NoWorkspaceState,
   PermissionDenied,
 } from '../../components/states';
-import { AlertGlyph } from '../../components/states/glyphs';
+import { AlertGlyph, InfoGlyph } from '../../components/states/glyphs';
 import { useCan, CAP } from '../../lib/capabilities';
 import { CheckCircleGlyph } from './glyphs';
 import {
@@ -473,13 +474,24 @@ function ConfigPanel({
   onSavedApproval: () => void;
 }) {
   const t = useT();
-  const { tRich } = useI18n();
   const client = useClient();
-  const ids = { number: useId() };
+  const ids = {
+    number: useId(),
+    methodLabel: useId(),
+    methodBinding: useId(),
+    timingLabel: useId(),
+    timingBinding: useId(),
+    istLimitation: useId(),
+    leaveIst: useId(),
+  };
   // THE PADLOCK (A24, F5): the whole panel saves through `vat_configure` (`manage_vat_config`).
   const canManageVat = useCan(CAP.manageVatConfig);
 
   const [timing, setTiming] = useState<VatTiming>(config.timing);
+  // What the engine holds right now: the loaded election, then whatever a save actually landed. It
+  // decides whether the Ist radio exists (only for a workspace that HAS Ist), never what is sent.
+  const [storedTiming, setStoredTiming] = useState<VatTiming>(config.timing);
+  const eligibility = useSaldoEligibility(workspaceId);
   const [vatNumber, setVatNumber] = useState(config.vatNumber ?? '');
   // The saldo editor holds an ordered list of rate bp (0 = "not chosen yet"), seeded from the config.
   const [rates, setRates] = useState<number[]>(config.saldoRates.map((r) => r.rateBp));
@@ -505,6 +517,8 @@ function ConfigPanel({
    * every workspace whose approval had moved.
    */
   const [branchAsk, setBranchAsk] = useState<Record<string, unknown> | null>(null);
+  /** The confirm before a save moves a STORED Ist to Soll (D153), see onSubmit. */
+  const [confirmLeaveIst, setConfirmLeaveIst] = useState(false);
 
   const chosenRates = useMemo(() => rates.filter((r) => r > 0), [rates]);
   const duplicate = hasDuplicateRate(chosenRates);
@@ -603,6 +617,13 @@ function ConfigPanel({
     }
     setBranchAsk(null);
     setSaved(true);
+    if ((input.timing === 'soll' || input.timing === 'ist') && input.timing !== storedTiming) {
+      setStoredTiming(input.timing);
+      // The eligibility read depends on the stored timing (the engine cannot measure under Ist), and
+      // the panel does not re-read on a plain save, so re-measure: otherwise the Saldo (i) would keep
+      // "konnte nicht geladen werden" after a move off Ist, with no retry offered (critic F2).
+      void eligibility.measure();
+    }
     // The approval history and the mapping genuinely changed, so unlike a plain method/number save
     // this one does re-read: the Bewilligungsverlauf below would otherwise still show yesterday.
     if (method === 'saldo') onSavedApproval();
@@ -613,56 +634,53 @@ function ConfigPanel({
     // The F5 padlock's Enter-key half: the save button below is hidden without `manage_vat_config`.
     if (!canManageVat) return;
     if (duplicate || saldoIncomplete || activitiesInvalid) return;
+    // THE ONE-WAY STEP (D153): leaving a STORED Ist for Soll removes the Ist radio once the save
+    // lands, and the Studio never offers Ist again. That is asked once, before anything is written.
+    if (storedTiming === 'ist' && timing === 'soll') {
+      setConfirmLeaveIst(true);
+      return;
+    }
     await send(buildInput());
   }
 
   return (
     <form className="panel vat-panel form-stack" onSubmit={onSubmit} noValidate>
-      <VatSummary method={method} timing={timing} />
-
       {needsRegistration && (
         <ActionFeedback tone="error" message={t('vat.needsRegistration')} />
       )}
 
       {/*
-        THE STANDING IST CONDITION (G17 row 4.2, the critic-added half): a workspace configured
-        `timing:'ist'` carries a condition that will refuse at the FILING, months after the
-        election. The same message key renders here (the configured state), under the Ist option
-        (election time), and in A07's refusal (VatReturn), so the three can never say different
-        things: `vat.return.istNotImplemented` is ONE key with three renders.
+        THE ELECTION AT REST (D152 rule 4, the owner's pick of 03.10.2026): each option is its label,
+        and its words live behind the (i) beside it. Before D152 every option carried a permanent
+        consequence line (G17 layer 1) and each group its binding facts, 134 words above the register;
+        the sentences, the measured eligibility comparison and the structured MWSTG citations are all
+        still here, unchanged, one hover or focus away. Each radio still names its sentence as its
+        description (aria-describedby on the card), so a screen reader hears it exactly as before.
+        The two value pills that repeated the checked radios are gone (rule 3, one value, one place).
       */}
-      {config.timing === 'ist' && (
-        <ActionFeedback
-          tone="warn"
-          message={
-            <>
-              {t('vat.return.istNotImplemented')}{' '}
-              <cite className="vat-binding-cite">{t('vat.return.istNotImplementedCite')}</cite>
-            </>
-          }
-        />
-      )}
-
-      {/*
-        THE ELECTION, with its guidance layers (G17 §8b): every option carries a PERMANENT
-        consequence line (layer 1, never behind a gesture), the fieldset carries the binding facts
-        with a STRUCTURED citation (what binds is the election, not the option), and the Saldo
-        option carries the measured eligibility comparison. Marked terms live inside the sentences
-        via tRich; the option's accessible name stays the short label (aria-label on the input,
-        consequence joined via aria-describedby).
-      */}
-      <fieldset className="vat-choice">
-        <legend>{t('vat.method.label')}</legend>
-        <div className="vat-options">
+      <div className="vat-choice">
+        <div className="vat-choice-head">
+          <span id={ids.methodLabel} className="vat-choice-label">
+            {t('vat.method.label')}
+          </span>
+          <InfoTip label={t('vat.info.methodBinding')} contentId={ids.methodBinding}>
+            <span>{t('vat.binding.method', { steuerperiode: t('vat.term.steuerperiode') })}</span>
+            <cite className="vat-info-cite">{t('vat.binding.methodCite')}</cite>
+          </InfoTip>
+        </div>
+        <div
+          className="vat-options"
+          role="radiogroup"
+          aria-labelledby={ids.methodLabel}
+          aria-describedby={ids.methodBinding}
+        >
           <ElectionOption
             name="vat-method"
             value="effektiv"
             current={method}
             label={t('vat.method.effektiv')}
             onSelect={() => setMethod('effektiv')}
-            consequence={tRich('vat.consequence.effektiv', {
-              vorsteuer: <ConceptTerm k="vorsteuer" text={t('vat.term.vorsteuer')} />,
-            })}
+            info={t('vat.consequence.effektiv', { vorsteuer: t('vat.term.vorsteuer') })}
           />
           <ElectionOption
             name="vat-method"
@@ -670,59 +688,83 @@ function ConfigPanel({
             current={method}
             label={t('vat.method.saldo')}
             onSelect={() => setMethod('saldo')}
-            consequence={t('vat.consequence.saldo')}
-            extra={<SaldoEligibility workspaceId={workspaceId} />}
+            info={
+              <>
+                <span>{t('vat.consequence.saldo')}</span>
+                <EligibilityCard state={eligibility.state} />
+              </>
+            }
+            note={
+              eligibility.state.kind === 'failed' ? (
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => void eligibility.measure()}>
+                  {t('vat.eligibility.retry')}
+                </button>
+              ) : undefined
+            }
           />
         </div>
-        <p className="vat-binding">
-          <span className="vat-binding-text">
-            {tRich('vat.binding.method', {
-              steuerperiode: <ConceptTerm k="steuerperiode" text={t('vat.term.steuerperiode')} />,
-            })}
-          </span>
-          <cite className="vat-binding-cite">{t('vat.binding.methodCite')}</cite>
-        </p>
-      </fieldset>
+      </div>
 
-      <fieldset className="vat-choice">
-        <legend>{t('vat.timing.label')}</legend>
-        <div className="vat-options">
+      {/*
+        THE TIMING ELECTION, and the one behavioural change of the D152 pass: Ist can no longer be
+        NEWLY chosen here. TILL computes no Ist return (A07 refuses it, `vat.return.istNotImplemented`),
+        so offering it as an ordinary radio invited a choice the product then cannot file. In its
+        place stands the one line "Ist: rechnet TILL noch nicht" with the limitation behind its (i).
+
+        THE STORED STATE IS NEVER REWRITTEN. A workspace that already HAS `timing:'ist'` (set through
+        the engine verb, an agent, or before this pass) still sees its Ist radio, CHECKED, and an
+        untouched save sends `ist` back: the surface never moves a statutory election the person did
+        not move. The Ist radio stays until a save actually lands Soll, so moving to Soll and back
+        before saving is still possible. `storedTiming` tracks what the engine holds, updated only by
+        a successful save (the panel does not re-read on a plain save, see VatConfigured). On such a
+        workspace the Ist line turns into the standing warning (the G17 row 4.2 condition): the
+        MWST-Abrechnung will refuse its periods.
+      */}
+      <div className="vat-choice">
+        <div className="vat-choice-head">
+          <span id={ids.timingLabel} className="vat-choice-label">
+            {t('vat.timing.label')}
+          </span>
+          <InfoTip label={t('vat.info.timingBinding')} contentId={ids.timingBinding}>
+            <span>{t('vat.binding.timing')}</span>
+            <cite className="vat-info-cite">{t('vat.binding.timingCite')}</cite>
+          </InfoTip>
+        </div>
+        <div
+          className="vat-options"
+          role="radiogroup"
+          aria-labelledby={ids.timingLabel}
+          aria-describedby={ids.timingBinding}
+        >
           <ElectionOption
             name="vat-timing"
             value="soll"
             current={timing}
             label={t('vat.timing.soll')}
             onSelect={() => setTiming('soll')}
-            consequence={t('vat.consequence.soll')}
+            info={t('vat.consequence.soll')}
           />
-          <ElectionOption
-            name="vat-timing"
-            value="ist"
-            current={timing}
-            label={t('vat.timing.ist')}
-            onSelect={() => setTiming('ist')}
-            consequence={t('vat.consequence.ist')}
-            // The product-limitation line (its own element, one key with the refusal): the option
-            // stays selectable, because disabling it would force a business lawfully on
-            // vereinnahmte Entgelte to record something untrue about its own tax basis. Rendered
-            // at ELECTION time only: once `timing === 'ist'` is SAVED, the standing banner above
-            // carries the same key, and two copies of one sentence on one screen is the duplicated
-            // copy §4b bans (corpus-critic F8).
-            extra={
-              config.timing === 'ist' ? undefined : (
-                <p className="vat-limitation">
-                  {t('vat.return.istNotImplemented')}{' '}
-                  <cite className="vat-binding-cite">{t('vat.return.istNotImplementedCite')}</cite>
-                </p>
-              )
-            }
-          />
+          {storedTiming === 'ist' && (
+            <ElectionOption
+              name="vat-timing"
+              value="ist"
+              current={timing}
+              label={t('vat.timing.ist')}
+              onSelect={() => setTiming('ist')}
+              info={t('vat.consequence.ist')}
+            />
+          )}
         </div>
-        <p className="vat-binding">
-          <span className="vat-binding-text">{t('vat.binding.timing')}</span>
-          <cite className="vat-binding-cite">{t('vat.binding.timingCite')}</cite>
+        <p className={`vat-ist-line${storedTiming === 'ist' ? ' vat-ist-line--stored' : ''}`}>
+          {storedTiming === 'ist' && <AlertGlyph className="vat-glyph vat-ist-glyph" size={16} />}
+          <span>{t('vat.timing.istUnsupported')}</span>
+          <InfoTip label={t('vat.info.ist')} contentId={ids.istLimitation}>
+            {storedTiming !== 'ist' && <span>{t('vat.consequence.ist')}</span>}
+            <span>{t('vat.return.istNotImplemented')}</span>
+            <cite className="vat-info-cite">{t('vat.return.istNotImplementedCite')}</cite>
+          </InfoTip>
         </p>
-      </fieldset>
+      </div>
 
       <div className="form-row">
         <label htmlFor={ids.number}>{t('vat.vatNumber')}</label>
@@ -805,6 +847,50 @@ function ConfigPanel({
         )}
       </div>
 
+      {confirmLeaveIst && (
+        <Modal
+          open
+          // One-way in the Studio, so a consequential confirm: an alertdialog (no dismiss on a stray
+          // scrim click). Cancel restores Ist as the selection and writes nothing.
+          role={ALERT_DIALOG}
+          title={t('vat.leaveIst.title')}
+          closeLabel={t('vat.leaveIst.close')}
+          describedById={ids.leaveIst}
+          onClose={() => {
+            setConfirmLeaveIst(false);
+            setTiming('ist');
+          }}
+          footer={
+            <>
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => {
+                  setConfirmLeaveIst(false);
+                  setTiming('ist');
+                }}
+              >
+                {t('vat.cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  setConfirmLeaveIst(false);
+                  void send(buildInput());
+                }}
+              >
+                {t('vat.leaveIst.confirm')}
+              </button>
+            </>
+          }
+        >
+          <p id={ids.leaveIst} className="vat-confirm-message">
+            {t('vat.leaveIst.body')}
+          </p>
+        </Modal>
+      )}
+
       {branchAsk !== null && (
         <ApprovalBranchDialog
           openSince={config.saldoValidFrom}
@@ -826,11 +912,35 @@ function ConfigPanel({
 }
 
 /**
- * One option of a binding election: the radio, its short accessible label, its PERMANENT
- * consequence line (G17 layer 1: what this option does to the books, visible with no gesture),
- * and an optional extra layer (the Saldo eligibility comparison, the Ist limitation line). The
- * accessible name stays the short label (aria-label), with the consequence joined through
- * aria-describedby so a screen reader hears it as the description it is.
+ * The (i) of the election (D152 rule 4): the shared Tooltip around an icon button, the pattern the
+ * Betrieb and Einrichtung surfaces use. The card is a real tooltip (hover AND keyboard focus, Esc
+ * dismisses) and is always in the DOM, so `contentId` lets a radio or a group point
+ * `aria-describedby` at the very same words. Plain content only: a tooltip holds no controls.
+ */
+function InfoTip({ label, contentId, children }: { label: string; contentId: string; children: ReactNode }) {
+  return (
+    <span className="vat-info">
+      <Tooltip
+        placement="bottom"
+        content={
+          <span id={contentId} className="vat-info-card">
+            {children}
+          </span>
+        }
+      >
+        <button type="button" className="btn btn--ghost btn--icon btn--sm vat-info-trigger" aria-label={label}>
+          <InfoGlyph size={16} />
+        </button>
+      </Tooltip>
+    </span>
+  );
+}
+
+/**
+ * One option of a binding election, at rest: the radio and its label, then its (i). The option's
+ * sentences (G17's consequence line, and for Saldo the eligibility comparison) are the (i) card, and
+ * the radio names that card as its description, so the accessible name stays the short label and a
+ * screen reader still hears the consequence. `note` is an optional inline extra after the (i).
  */
 function ElectionOption({
   name,
@@ -838,61 +948,60 @@ function ElectionOption({
   current,
   label,
   onSelect,
-  consequence,
-  extra,
+  info,
+  note,
 }: {
   name: string;
   value: string;
   current: string;
   label: string;
   onSelect: () => void;
-  consequence: React.ReactNode;
-  extra?: React.ReactNode;
+  info: ReactNode;
+  note?: ReactNode;
 }) {
+  const t = useT();
   const id = useId();
   return (
-    <label className="vat-option">
-      <input
-        type="radio"
-        name={name}
-        value={value}
-        checked={current === value}
-        onChange={onSelect}
-        aria-label={label}
-        aria-describedby={`${id}-consequence`}
-      />
-      <span className="vat-option-body">
+    <span className="vat-option">
+      <label className="vat-option-main">
+        <input
+          type="radio"
+          name={name}
+          value={value}
+          checked={current === value}
+          onChange={onSelect}
+          aria-describedby={`${id}-info`}
+        />
         <span className="vat-option-label">{label}</span>
-        <span id={`${id}-consequence`} className="vat-option-consequence">
-          {consequence}
-        </span>
-        {extra}
-      </span>
-    </label>
+      </label>
+      <InfoTip label={t('vat.info.option', { option: label })} contentId={`${id}-info`}>
+        {info}
+      </InfoTip>
+      {note}
+    </span>
   );
 }
 
+type EligibilityState =
+  | { kind: 'loading' }
+  | { kind: 'measured'; year: string; turnoverMinor: number }
+  | { kind: 'none' }
+  | { kind: 'unavailable' }
+  | { kind: 'failed' };
+
 /**
- * The Saldo eligibility comparison (G17 §8b): both Art. 37 Abs. 1 limits, era-scoped and
- * INTERPOLATED (never typed: the no-digit rule is what keeps 5'005'000 from surviving 1.1.2024 in
- * copy), beside the measured taxable turnover of the last full year. A COMPARISON, never a
- * verdict: eligibility turns on EXPECTED turnover (ESTV practice, MWST-Info 12) and a tax-due half
- * computed at a rate the ESTV has not granted yet, so TILL states the figures and stops.
+ * The Saldo eligibility read (G17 §8b): the measured taxable turnover of the last full year, beside
+ * both Art. 37 Abs. 1 limits. A COMPARISON, never a verdict: eligibility turns on EXPECTED turnover
+ * (ESTV practice, MWST-Info 12) and a tax-due half computed at a rate the ESTV has not granted yet,
+ * so TILL states the figures and stops.
  *
- * Three honest states for the figure, and no fourth: measured, no-turnover-yet, and failed with a
- * retry. NEVER a fabricated zero, and the limits render regardless: they are constants and a
- * failed read must not take the law down with it.
+ * Three honest states for the figure, and no fourth: measured, no-turnover-yet, and not measured
+ * (a failed read carries a retry; an engine that cannot measure does not). NEVER a fabricated zero. The read is the panel's (it fires on mount, as before D152); the
+ * card below renders it inside the Saldo (i), and the retry, being a control, sits beside the (i).
  */
-function SaldoEligibility({ workspaceId }: { workspaceId: string }) {
-  const t = useT();
-  const { tRich } = useI18n();
+function useSaldoEligibility(workspaceId: string): { state: EligibilityState; measure: () => Promise<void> } {
   const client = useClient();
-  const [state, setState] = useState<
-    | { kind: 'loading' }
-    | { kind: 'measured'; year: string; turnoverMinor: number }
-    | { kind: 'none' }
-    | { kind: 'failed' }
-  >({ kind: 'loading' });
+  const [state, setState] = useState<EligibilityState>({ kind: 'loading' });
 
   const measure = useCallback(async () => {
     setState({ kind: 'loading' });
@@ -905,8 +1014,9 @@ function SaldoEligibility({ workspaceId }: { workspaceId: string }) {
     const measured = body.measured as { turnoverMinor?: number; empty?: boolean } | null;
     if (measured === null || measured === undefined) {
       // The engine could not measure (Ist timing, straddled year, no config): the comparison is
-      // unavailable, the limits stand. Rendered as the failed state with its retry.
-      setState({ kind: 'failed' });
+      // unavailable, the limits stand. Same words as a failed read, but no retry: asking again
+      // cannot change the answer, and a standing retry beside the label would be noise.
+      setState({ kind: 'unavailable' });
       return;
     }
     if (measured.empty === true) {
@@ -924,6 +1034,18 @@ function SaldoEligibility({ workspaceId }: { workspaceId: string }) {
     void measure();
   }, [measure]);
 
+  return { state, measure };
+}
+
+/**
+ * The eligibility comparison as words, for the Saldo (i) card. Both limits are era-scoped and
+ * INTERPOLATED (never typed: the no-digit rule is what keeps 5'005'000 from surviving 1.1.2024 in
+ * copy), and they render regardless of the figure: they are constants and a failed read must not
+ * take the law down with it.
+ */
+function EligibilityCard({ state }: { state: EligibilityState }) {
+  const t = useT();
+  const { tRich } = useI18n();
   const limits = saldoEligibilityOn(new Date().toISOString().slice(0, 10));
   if (limits === null) return null; // unreachable while the clock is past 2023; stated, not assumed.
 
@@ -945,13 +1067,8 @@ function SaldoEligibility({ workspaceId }: { workspaceId: string }) {
         </span>
       )}
       {state.kind === 'none' && <span className="vat-eligibility-figure">{t('vat.eligibility.none')}</span>}
-      {state.kind === 'failed' && (
-        <span className="vat-eligibility-figure">
-          {t('vat.eligibility.failed')}{' '}
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => void measure()}>
-            {t('vat.eligibility.retry')}
-          </button>
-        </span>
+      {(state.kind === 'failed' || state.kind === 'unavailable') && (
+        <span className="vat-eligibility-figure">{t('vat.eligibility.failed')}</span>
       )}
     </span>
   );
@@ -1512,17 +1629,6 @@ function ApprovalHistory({ generations }: { generations: SaldoGeneration[] }) {
         ))}
       </ul>
     </section>
-  );
-}
-
-/** Read-only method + timing badge, kept neutral (never recoloured by accent). */
-function VatSummary({ method, timing }: { method: VatMethod; timing: VatTiming }) {
-  const t = useT();
-  return (
-    <div className="vat-badges">
-      <span className="vat-badge">{`${t('vat.method.label')}: ${t(`vat.method.${method}`)}`}</span>
-      <span className="vat-badge">{`${t('vat.timing.label')}: ${t(`vat.timing.${timing}`)}`}</span>
-    </div>
   );
 }
 

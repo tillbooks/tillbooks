@@ -18,11 +18,12 @@ import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
 import { unbilledPreview, generateInvoice, releaseLines, wipReport } from '../core/billing/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface BillingActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -52,7 +53,7 @@ export function billingActions(h: BillingActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'billing_generate_invoice',
-      'write',
+      'write:correctable:internal',
       'Rechnungsentwurf aus Zeit erstellen (B02): turns the selected approved+billable+unbilled entries (one contact, one currency) into an A11 invoice DRAFT and flips them approved to billed with invoice_line_id set, in one transaction. Delegates to A10 createDocument (P3: no journal entry, no VAT amount, no total minted here; A11 to A02 post at issue). groupBy (entry|phase|project|day) shapes the lines; each line is qty 1 with the group value as its price, so preview equals line equals WIP to the Rappen. Refuses empty_selection, mixed_contacts, currency_mismatch, already_billed (strict, no partial invoice); idempotent on idempotencyKey. Always stops at a draft (P8); gated on A24 billing.generate.',
       ctxSchema(
         {
@@ -69,7 +70,7 @@ export function billingActions(h: BillingActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'billing_release_time',
-      'write',
+      'write:correctable:internal',
       'Zeit aus einem Entwurf freigeben (B02): reverts the entries backing a DRAFT invoice (by invoiceId or lineIds) from billed to approved and clears invoice_line_id, returning them to the unbilled pile and WIP. Called by A11 cancel and directly. Refuses a finalised invoice with invoice_not_draft (corrections there are A11 credit notes); releasing already-released lines is a no-op (idempotent). Gated on A24 billing.generate.',
       ctxSchema(
         { invoiceId: STR, lineIds: { type: 'array', items: STR }, actor: STR, idempotencyKey: STR },

@@ -16,8 +16,8 @@
  * bill" instead of "look at this", which is exactly the inflation DESIGN.md forbids. Tabular figures
  * and `nowrap` come from the shared money cell (DataTable `numeric`, K-18).
  *
- * THE ONE COLOURED THING is the reconciliation mismatch band, which is the only genuinely urgent state
- * on the surface. A passing reconciliation gets no band and no colour at all: an all-clear that gets a
+ * THE ONE COLOURED THING is the reconciliation mismatch line, which is the only genuinely urgent state
+ * on the surface (one line with its (i) since D152, the /open-items pattern). A passing reconciliation gets no band and no colour at all: an all-clear that gets a
  * colour makes that colour the background and dulls the real warning.
  *
  * A VOIDED ROW IS DIM INK AND NOT STRUCK THROUGH. Strike-through on a table row is unreadable at 14px
@@ -53,13 +53,6 @@
   background: var(--t-bg-soft);
 }
 
-.bills-dim {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  margin: 0;
-}
-
 /* --- toolbar and filters ------------------------------------------------------------------------- */
 
 .bills-toolbar {
@@ -78,23 +71,48 @@
   color: var(--t-text-dim);
 }
 
-/* --- the reconciliation band, the one coloured thing on the surface ------------------------------ */
+/* --- the summary line: the open total, and the mismatch beside it (D152) ------------------------ */
 
-.bills-band {
+/* The total and the reconciliation statement share one line, as on the OP-Liste: one status, one place. */
+.bills-summary {
   display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-  padding: var(--t-space-2);
-  border: 1px solid var(--t-danger);
-  border-radius: var(--t-radius-md);
-  background: var(--t-bg-elev);
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--t-space-1) var(--t-space-3);
 }
 
-.bills-band p {
+/* The mismatch is ONE line: the red is the glyph and the words, never a box or a tinted ground (the
+   /open-items pattern). The sentence that explains it sits behind the (i). */
+.bills-mismatch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  align-items: center;
+  gap: var(--t-space-0-5);
   margin: 0;
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-danger);
+}
+
+.bills-mismatch-glyph {
+  flex: none;
+}
+
+.bills-mismatch-title {
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
+}
+
+/* The 32px target (the D116 dense floor) overhangs the 20px line rather than growing it. */
+.bills-mismatch .btn--icon {
+  margin-block: calc(var(--t-space-0-5) * -1.5);
+  color: var(--t-text-dim);
+}
+
+/* The explanation is two sentences: wider than the 240px default so it reads in three lines. */
+.bills-mismatch .tooltip {
+  max-width: 360px;
 }
 
 /* --- the rows (the table frame, sticky header, overflow, opener and alignment are DataTable's) --- */
@@ -103,6 +121,23 @@
    class via `rowClassName`. */
 .bills-row--void {
   color: var(--t-text-dim);
+}
+
+/* A row is ONE line (D152): the Nummer and the Lieferant end in an ellipsis, the whole text in their
+   title, so a long reference no longer stands four lines tall. `width: 0; min-width: 100%` takes the
+   text out of the column's intrinsic width, so the column takes its share of the table and the text
+   clips inside it. */
+.bills-clip {
+  display: block;
+  width: 0;
+  min-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bills-nowrap {
+  white-space: nowrap;
 }
 
 /* The shared Status word, then the overdue note in dim ink: a number of days, never a chip (K-22). */
@@ -127,6 +162,21 @@
   gap: var(--t-space-2);
 }
 
+/* Two short fields side by side (Datum and Nummer, Betrag and Brutto/Netto, MWST and Fällig), so the
+   paper bill reads top to bottom in four rows. One column on a phone. */
+.bill-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--t-space-2);
+  align-items: end;
+}
+
+@media (max-width: 480px) {
+  .bill-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* FLEXIBLE WIDTH, not fixed (P11): a German MWST-code label ("Vorsteuer Investitionen und übriger
    Betriebsaufwand") runs far longer than its English twin, and a fixed column would clip it. The
    controls are the shared `.field` and `Select` (K-15), so they follow the density toggle. */
@@ -134,6 +184,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--t-space-0-5);
+  min-width: 0;
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
   color: var(--t-text-dim);
@@ -143,22 +194,31 @@
   width: 100%;
 }
 
+/* What an empty field will store, said under it (a cleared Fällig). */
+.bill-hint {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* A field label with its (i) beside it. */
+.bill-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* Brutto/Netto sits beside the Betrag at the field's height; the question is the hidden legend. */
 .bill-toggle {
   display: flex;
   align-items: center;
   gap: var(--t-space-2);
-  border: 1px solid var(--t-border);
-  border-radius: var(--t-radius-sm);
-  padding: var(--t-space-1) var(--t-space-2);
+  min-height: var(--t-control-h);
+  margin: 0;
+  border: 0;
+  padding: 0;
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}
-
-.bill-toggle legend {
-  padding: 0 var(--t-space-0-5);
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
 }
 
 .bill-toggle label {
@@ -168,61 +228,77 @@
   color: var(--t-text);
 }
 
-/* --- the posting preview ------------------------------------------------------------------------ */
-
-.bill-preview {
-  border: 1px solid var(--t-border);
-  border-radius: var(--t-radius-md);
-  background: var(--t-bg-soft);
-  padding: var(--t-space-2);
+/* "+ Kostenstelle", "+ Projekt", "+ Beleg": the optional fields, offered only where they apply. */
+.bill-adds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
 }
 
-/* IN FLIGHT THE FIGURES TURN DIM rather than presenting the previous answer as current. Dim ink, not
-   opacity (K-36): an opacity-dimmed figure composited under AA. */
-.bill-preview--pending {
+/* The (i) is a quiet icon button that overhangs the line rather than growing it. */
+.bill-info {
+  margin-block: calc(var(--t-space-0-5) * -1.5);
   color: var(--t-text-dim);
 }
 
-.bill-preview h3 {
-  margin: 0 0 var(--t-space-1);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
+.bill-explain {
+  display: block;
+  max-width: 320px;
 }
+
+/* --- the posting split, one line ---------------------------------------------------------------- */
 
 .bill-split {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--t-space-3);
-  margin: 0;
+  align-items: center;
+  gap: 0 var(--t-space-0-5);
+  min-height: var(--t-lh-md);
+  margin: var(--t-space-2) 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
 }
 
-.bill-split div {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
+.bill-split .t-money {
+  font-size: inherit;
+  color: var(--t-text);
 }
 
-.bill-split dt {
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
+/* IN FLIGHT THE FIGURES TURN DIM rather than presenting the previous answer as current. Dim ink, not
+   opacity (K-36): an opacity-dimmed figure composited under AA. */
+.bill-split--pending .t-money {
   color: var(--t-text-dim);
 }
 
-.bill-split dd {
+/* A capture that already landed: one sentence and the door to that bill. */
+.bill-conflict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+  margin: 0 0 var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-md);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bill-conflict p {
   margin: 0;
-  font-size: var(--t-font-lg);
-  line-height: var(--t-lh-lg);
 }
 
-.bill-num {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+.bill-frozen {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
 }
 
-.bill-note,
 .bill-frozen,
 .bill-cta {
-  margin: var(--t-space-1) 0 0;
+  margin: 0 0 var(--t-space-2);
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
   color: var(--t-text-dim);
@@ -236,17 +312,9 @@
   color: var(--t-text-dim);
 }
 
-/* "Trage einen Betrag ein": a sentence someone reads, so dim, never faint (K-36). */
-.bill-dim {
-  margin: 0;
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}
-
-/* A money figure inside a sentence (the header total, the reconciliation band) is `.t-money` for nowrap and tabular figures,
-   but it keeps the size of the sentence around it rather than the table type size. */
+/* A money figure inside a sentence (the header total, the mismatch line) is `.t-money` for nowrap and
+   tabular figures, but it keeps the size of the sentence around it rather than the table type size. */
 .bills-total .t-money,
-.bills-band .t-money {
+.bills-mismatch .t-money {
   font-size: inherit;
 }

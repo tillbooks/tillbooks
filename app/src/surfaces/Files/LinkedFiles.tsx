@@ -8,7 +8,11 @@
  * half (the target kind's own edit right, D62 / F8) is derived from the kind through the engine's
  * own `editCapabilityForKind` rather than passed in beside it (see the prop's doc).
  *
- * IT IS NOT MOUNTED ANYWHERE YET, and that is a deliberate boundary rather than dead code. The entity
+ * MOUNTED FIRST ON A BANK LINE (D142): `/bank`'s line panel shows it for `bank_txn` as the line's
+ * "Belege", with the bank words (`title`, `attachLabel`), a drop zone (`dropZone`) and a callback so the
+ * inbox recounts the line's receipts (`onChanged`). Every other host still gets the default wording.
+ *
+ * IT WAS NOT MOUNTED ANYWHERE BEFORE THAT, and that was a deliberate boundary rather than dead code. The entity
  * detail views belong to A10/A11 (`surfaces/Documents/`), C00 (`surfaces/Contacts/`) and A14
  * (`surfaces/Payments/`), and mounting a panel inside another capability's surface is exactly the
  * file-ownership collision the loop's rules exist to prevent. The component and its test are what make
@@ -24,6 +28,8 @@ import { EmptyState, ErrorBanner, Skeleton, refusalText } from '../../components
 import { FileDrop } from '../../components/FileDrop';
 import { LockGlyph, MimeGlyph } from './glyphs';
 import { downloadContent, formatBytes, mimeKind, parseFiles, readFileAsUpload, type StoredFile } from './model';
+// Self-contained styles: a host surface (the bank line panel, D142) mounts this without Files.tsx.
+import './Files.css';
 
 export interface LinkedFilesProps {
   workspaceId: string;
@@ -37,9 +43,17 @@ export interface LinkedFilesProps {
    */
   entityKind: EntityKind;
   entityId: string;
+  /** The section's title; defaults to "Dateien". A bank line says "Belege" (D142). */
+  title?: string;
+  /** The attach control's label; defaults to "Mit Datensatz verknüpfen". */
+  attachLabel?: string;
+  /** Offer a drop zone under the list instead of the header button (a bank line's paperclip, D142). */
+  dropZone?: boolean;
+  /** Called after a file was attached, so a host can recount what it shows (the line's receipt count). */
+  onChanged?: () => void;
 }
 
-export function LinkedFiles({ workspaceId, entityKind, entityId }: LinkedFilesProps) {
+export function LinkedFiles({ workspaceId, entityKind, entityId, title, attachLabel, dropZone = false, onChanged }: LinkedFilesProps) {
   const t = useT();
   const client = useClient();
   const { can } = useCapabilities();
@@ -118,8 +132,9 @@ export function LinkedFiles({ workspaceId, entityKind, entityId }: LinkedFilesPr
         return;
       }
       await load();
+      onChanged?.();
     },
-    [client, workspaceId, entityKind, entityId, load],
+    [client, workspaceId, entityKind, entityId, load, onChanged],
   );
 
   /**
@@ -148,21 +163,23 @@ export function LinkedFiles({ workspaceId, entityKind, entityId }: LinkedFilesPr
     <section className="files-linked" aria-labelledby="files-linked-heading">
       <header className="files-linked-head">
         <h3 id="files-linked-heading" className="files-section-title">
-          {t('files.linked.title')}
+          {title ?? t('files.linked.title')}
         </h3>
         {/* The padlock replaces the control, it does not merely disable it: the FileDrawer download
             pattern. A missing right on EITHER half of upload-then-link locks the affordance, because
             offering the picker and refusing after the bytes were chosen is the shown-then-rejected
             shape this Studio avoids. Glyph AND text, never colour alone. */}
         {canAttach ? (
+          dropZone ? null : (
           <FileDrop
             variant="button"
-            label={t('files.action.link')}
+            label={attachLabel ?? t('files.action.link')}
             onFiles={(picked) => {
               const first = picked[0];
               if (first !== undefined) void attach(first);
             }}
           />
+          )
         ) : (
           <span className="files-badge files-download-locked" title={t('files.error.permissionDenied.link')}>
             <LockGlyph size={14} />
@@ -233,6 +250,17 @@ export function LinkedFiles({ workspaceId, entityKind, entityId }: LinkedFilesPr
             </li>
           ))}
         </ul>
+      )}
+      {canAttach && dropZone && (
+        <FileDrop
+          variant="zone"
+          className="files-linked-drop"
+          label={attachLabel ?? t('files.action.link')}
+          onFiles={(picked) => {
+            const first = picked[0];
+            if (first !== undefined) void attach(first);
+          }}
+        />
       )}
     </section>
   );

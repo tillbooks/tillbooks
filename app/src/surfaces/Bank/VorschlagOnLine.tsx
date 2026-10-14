@@ -1,20 +1,30 @@
 /**
  * The agent speaks ON THE LINE, in words (the judge's outcome 8). A Vorschlag the agent drafted for
- * this bank line (`list_drafted_actions`, A35) shows where the line is decided, naming what it would
- * do in the inbox's own vocabulary (the target, the VAT code, the reason), with the SAME consequence
- * sentence the Vorschläge queue shows (C4: `agent.consequence.<capability>`, one source, two faces).
- * "Freigeben" replays the drafted verb as the approver (`approve_drafted_action`); "Ablehnen" takes an
- * optional reason the agent's next session reads. The drafting seat never sees its own approve control
- * (the engine refuses it too, `cannot_self_approve`).
+ * this bank line (`list_drafted_actions`, A35) shows in the line's context strip (B2), naming what it
+ * would do in the inbox's own vocabulary (the target, the VAT code, the reason), with the SAME
+ * consequence sentence the Vorschläge queue shows (C4, D156: the engine's one catalogue, one source,
+ * every face), here as the tooltip of "Freigeben" (`aria-describedby`). "Freigeben" replays the drafted verb
+ * as the approver (`approve_drafted_action`); "Ablehnen" takes an optional reason the agent's next
+ * session reads. The drafting seat never sees its own approve control (the engine refuses it too,
+ * `cannot_self_approve`).
+ *
+ * WHAT YOU APPROVED IS WHAT RUNS (critic N1). When the engine says the record behind the Vorschlag
+ * changed since the proposal (`changedSinceProposal`), "Freigeben" is withheld and the strip says why;
+ * the approval would refuse `vorschlag_stale` and run nothing. Rejecting stays. Frozen figures, when the
+ * drafted verb pins a record, ride on one quiet line under the sentence.
  */
 import { useId, useState } from 'react';
 
 import { useT, formatDate } from '../../i18n';
+import { Tooltip } from '../../components/Tooltip';
+import { useConsequence } from '../../lib/approval-tiers';
 import type { BankInboxLine, LineVorschlag } from './model';
 import { draftTargetOf } from './model';
 import type { Lookups } from './lookups';
 import { targetPhrase, taxPhrase } from './lookups';
 import { AgentGlyph } from './glyphs';
+import { ActionFeedback } from '../../components/ActionFeedback';
+import { figuresLine } from '../Agent/model';
 
 export interface VorschlagOnLineProps {
   line: BankInboxLine;
@@ -55,17 +65,30 @@ export function VorschlagOnLine({ line, vorschlag, lookups, canDecide, isOwn, bu
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
   const capability = vorschlag.dialCapability;
+  // D156: the engine's one consequence for the drafted verb, the sentence the Vorschläge card shows.
+  const consequence = useConsequence(vorschlag.actionTool, capability);
   const date = vorschlag.createdAt.length >= 10 ? formatDate(vorschlag.createdAt.slice(0, 10)) : '';
+  const changed = vorschlag.changedSinceProposal === true;
+  const figures = vorschlag.figures != null ? figuresLine(t, vorschlag.figures) : null;
+
+  const approve = (
+    <button type="button" className="btn btn--secondary btn--sm" disabled={busy} onClick={onApprove}>
+      {busy ? t('bankInbox.row.busy') : t('bankInbox.vorschlag.approve')}
+    </button>
+  );
 
   return (
     <section className="bank-vorschlag" aria-labelledby={`${baseId}-title`}>
-      <p id={`${baseId}-title`} className="bank-vorschlag__kicker">
-        <AgentGlyph size={16} />
-        {t('bankInbox.vorschlag.kicker')}
-        {date !== '' && <span className="bank-vorschlag__date">{t('bankInbox.vorschlag.when', { date })}</span>}
+      <p className="bank-vorschlag__line">
+        <span id={`${baseId}-title`} className="bank-vorschlag__kicker">
+          <AgentGlyph size={16} />
+          {t('bankInbox.vorschlag.kicker')}
+          {date !== '' && <span className="bank-vorschlag__date">{t('bankInbox.vorschlag.when', { date })}</span>}
+        </span>
+        <span className="bank-vorschlag__sentence">{vorschlagSentence(t, lookups, line, vorschlag)}</span>
       </p>
-      <p className="bank-vorschlag__sentence">{vorschlagSentence(t, lookups, line, vorschlag)}</p>
-      {capability !== null && <p className="bank-mode__consequence">{t(`agent.consequence.${capability}`)}</p>}
+      {figures !== null && <p className="bank-mode__note t-money" data-figures="">{figures}</p>}
+      {changed && <ActionFeedback tone="warn" role="note" message={t('agent.card.changed')} />}
       {isOwn ? (
         <p className="bank-mode__note">{t('bankInbox.vorschlag.own')}</p>
       ) : !canDecide ? (
@@ -83,23 +106,21 @@ export function VorschlagOnLine({ line, vorschlag, lookups, canDecide, isOwn, bu
             <textarea id={`${baseId}-reason`} className="field bank-textarea" rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
           </label>
           <div className="bank-mode__actions">
-            <button type="submit" className="btn btn--secondary bank-touch" disabled={busy}>
+            <button type="submit" className="btn btn--secondary btn--sm" disabled={busy}>
               {t('bankInbox.vorschlag.rejectConfirm')}
             </button>
-            <button type="button" className="btn btn--ghost bank-touch" onClick={() => setRejecting(false)}>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRejecting(false)}>
               {t('bankInbox.panel.cancel')}
             </button>
           </div>
         </form>
       ) : (
-        <div className="bank-mode__actions">
-          <button type="button" className="btn btn--secondary bank-touch bank-commit" disabled={busy} onClick={onApprove}>
-            {busy ? t('bankInbox.row.busy') : t('bankInbox.vorschlag.approve')}
-          </button>
-          <button type="button" className="btn btn--ghost bank-touch" disabled={busy} onClick={() => setRejecting(true)}>
+        <span className="bank-vorschlag__actions">
+          {changed ? null : consequence !== null ? <Tooltip content={consequence}>{approve}</Tooltip> : approve}
+          <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setRejecting(true)}>
             {t('bankInbox.vorschlag.reject')}
           </button>
-        </div>
+        </span>
       )}
     </section>
   );

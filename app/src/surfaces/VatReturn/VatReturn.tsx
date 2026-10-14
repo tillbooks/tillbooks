@@ -34,20 +34,23 @@
  * with no Saldosteuersatz (which `set_vat_method` permits and `vat_configure` refuses) answers
  * `vat_periods` with 2026-H1/H2 and then refuses the return with the same code.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
-import { useT, formatDate, formatMoney } from '../../i18n';
+import { useT, formatMoney } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { OverflowMenu } from '../../components/OverflowMenu';
+import { Tooltip } from '../../components/Tooltip';
+import { InfoGlyph } from '../../components/states/glyphs';
 import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton } from '../../components/states';
 import { useCan, CAP } from '../../lib/capabilities';
 import { EntryDrawer } from '../Journal/EntryDrawer';
 import { Abstimmung } from './Abstimmung';
 import { FormLineTable, type DrillEntry, type DrillState } from './FormLineTable';
-import { JourneyStrip } from './JourneyStrip';
+import { JourneyLine } from './JourneyLine';
 import { useChecklistRun } from './useChecklistRun';
 import { MarkFiledDialog } from './MarkFiledDialog';
 import { PeriodPicker } from './PeriodPicker';
@@ -73,7 +76,20 @@ import './VatReturn.css';
 /** The drill-down cap. Twenty rows is a scan; a thousand is a second screen wearing a disclosure. */
 const DRILL_CAP = 20;
 
+/**
+ * ONE WORKSPACE, ONE MOUNT (critic F1 of the D152 pass). Every piece of state below belongs to the
+ * workspace it was read or done in: the selected period, the return, the export outcome, the G22 run,
+ * the open disclosures and dialogs, the settlement panel. A workspace switch therefore remounts the
+ * whole surface rather than resetting fields one by one, so no field can be forgotten: before this, a
+ * Q2 export in one workspace put another workspace that never exported on step 4 with the filing
+ * button in its header, and the export's refusal and cross-check followed the switch as well.
+ */
 export function VatReturn() {
+  const workspaceId = useWorkspaceId();
+  return <VatReturnSurface key={workspaceId ?? ''} />;
+}
+
+function VatReturnSurface() {
   const t = useT();
   const client = useClient();
   const workspaceId = useWorkspaceId();
@@ -123,7 +139,17 @@ export function VatReturn() {
   const year = (selected ?? todayIso()).slice(0, 4);
 
   // --- the period list -------------------------------------------------------------------------
+  /**
+   * Request tokens: only the LATEST read of each kind may write its answer. A slow answer for the
+   * period (or year) the operator has already left would otherwise land on the one now on screen,
+   * and on this surface that means one period's figures under another period's name.
+   */
+  const periodsToken = useRef(0);
+  const returnToken = useRef(0);
+  const drillToken = useRef(0);
+
   const loadPeriods = useCallback(async () => {
+    const token = (periodsToken.current += 1);
     if (workspaceId === null) {
       setPeriodsLoading(false);
       return;
@@ -132,6 +158,7 @@ export function VatReturn() {
     setPeriodsFailed(false);
     setPeriodsRefusal(null);
     const { body, status } = await client.call('vat_periods', { workspaceId, year });
+    if (token !== periodsToken.current) return;
     if (isErr(body)) {
       // BOTH, and they are not redundant. `periodsFailed` stays true so the picker keeps its own
       // scoped error row: without it the menu would fall through to "no periods defined", which is
@@ -181,6 +208,7 @@ export function VatReturn() {
   const period = useMemo(() => periods.find((p) => p.label === selected) ?? null, [periods, selected]);
 
   const loadReturn = useCallback(async () => {
+    const token = (returnToken.current += 1);
     if (workspaceId === null || period === null) {
       setLoading(false);
       return;
@@ -193,6 +221,7 @@ export function VatReturn() {
       periodStart: period.periodStart,
       periodEnd: period.periodEnd,
     });
+    if (token !== returnToken.current) return;
     if (isErr(body)) {
       const known = refusalOf(body, status);
       if (known === null) setFailed(true);
@@ -214,6 +243,7 @@ export function VatReturn() {
   // --- S3, the drill-down ----------------------------------------------------------------------
   const toggleZiffer = useCallback(
     async (code: string) => {
+      const token = (drillToken.current += 1);
       if (expanded === code) {
         setExpanded(null);
         setDrill(null);
@@ -230,6 +260,7 @@ export function VatReturn() {
       const responses = await Promise.all(
         ids.map((entryId) => client.call('get_entry', { workspaceId, entryId })),
       );
+      if (token !== drillToken.current) return;
       const entries: DrillEntry[] = [];
       let anyFailed = false;
       for (const { body } of responses) {
@@ -278,6 +309,13 @@ export function VatReturn() {
     await loadReturn();
   }, [client, loadPeriods, loadReturn, selected, workspaceId]);
 
+  // A failed write belongs to the attempt that failed: a dialog opened afresh starts clean, so
+  // "Die Periode konnte nicht gesperrt werden" never greets a period nobody has tried to file yet.
+  const openFiling = useCallback(() => {
+    setFilingFailed(false);
+    setConfirming(true);
+  }, []);
+
   // --- S7, the export ---------------------------------------------------------------------------
   // Called unconditionally, with the empty string standing in until a workspace and a period exist:
   // the BUTTON is what is conditional, and it renders only once the return has computed.
@@ -297,6 +335,27 @@ export function VatReturn() {
   const bridge = view === null ? null : bridgeOf(view);
   const status = period === null ? null : statusOf(period, todayIso());
   const filed = status === 'filed';
+
+  /**
+   * "ALS EINGEREICHT MARKIEREN" JOINS THE HEADER FROM STEP 4 ON (D152, the owner's pick): once the
+   * export verb has answered with a file for this period (this session), or the G22 run holds the
+   * engine's export evidence or the human's ePortal attestation. Before that the header carries the
+   * export, which is the act that comes first, and nothing that reads like a Submit beside it.
+   *
+   * FILING WITHOUT A TILL EXPORT IS LEGITIMATE, SO IT STAYS REACHABLE. `markVatPeriodFiled` checks no
+   * export at all: it applies A03's `vat_filed` hard lock month by month, and nothing in the engine
+   * ties it to `vat_export_ech0217`. That is right, because the export's own `byHand` refusals send the
+   * filer to the ePortal by hand (a Ziffer eCH-0217 v2.0.0 has no field for, three or more
+   * Saldosteuersätze, a non-CHF book), and a period can be filed on the portal from the paper form
+   * whatever TILL did. So before step 4 the very same action, the same dialog and the same verb, sits
+   * one level down in the header's overflow, and from step 4 on it is the header's secondary button.
+   * Never both: one action, one place. A running period offers it nowhere (it was a disabled button
+   * before): the journey line says the period is still running and its (i) says why.
+   */
+  const exportedForPeriod = exportState.exported || (checklist.run?.exportedAt ?? null) !== null;
+  const attestedForPeriod = (checklist.run?.attestedAt ?? null) !== null;
+  const offerFiling = !filed && view !== null && canFile && status !== 'open';
+  const filingInHeader = offerFiling && (exportedForPeriod || attestedForPeriod);
   const sections = view === null ? [] : renderForm(view);
 
   // Only ever ONE of these is set. The two reads are sequential and the second cannot start until
@@ -313,8 +372,6 @@ export function VatReturn() {
             : t('vat.return.subtitle', {
                 method: t(`vat.return.method.${view.method}`),
                 timing: t(`vat.return.timing.${view.timing}`),
-                from: formatDate(period.periodStart),
-                to: formatDate(period.periodEnd),
               })
         }
         help={<SurfaceHelp surface="VatReturn" />}
@@ -326,6 +383,8 @@ export function VatReturn() {
               failed={periodsFailed}
               selected={selected}
               onSelect={(label) => {
+                // A drill still loading for the period being left must not open under the new one.
+                drillToken.current += 1;
                 setSelected(label);
                 setExpanded(null);
                 setDrill(null);
@@ -334,15 +393,16 @@ export function VatReturn() {
             />
             {/* `.btn--secondary` and NOT `.btn--primary`, per owner decision W3: this applies an
                 irreversible A03 hard lock, and the solid accent fill belongs to the export beside it. */}
-            {!filed && view !== null && canFile && (
-              <button
-                type="button"
-                className="btn btn--secondary btn--sm"
-                disabled={status === 'open'}
-                onClick={() => setConfirming(true)}
-              >
+            {filingInHeader && (
+              <button type="button" className="btn btn--secondary btn--sm" onClick={openFiling}>
                 {t('vat.return.markFiled')}
               </button>
+            )}
+            {offerFiling && !filingInHeader && (
+              <OverflowMenu
+                label={t('vat.return.markFiledMore')}
+                items={[{ key: 'markFiled', label: t('vat.return.markFiled'), onSelect: openFiling }]}
+              />
             )}
             {/* LAST in the row and the one solid `.btn--primary` here (W3). It renders only once the
                 return has computed, because a file can only be built from figures that exist, and it
@@ -353,29 +413,6 @@ export function VatReturn() {
           </>
         }
       />
-
-      {/* The active period, stated large at the top of the body. The picker in the header still
-          switches it; this is the prominence, not a second control. It reads the SAME period the
-          picker selected and carries no figures of its own: only the label, the range and the status
-          word (with the lock glyph on a filed period), all already on screen elsewhere in smaller
-          type. Presentation only. */}
-      {period !== null && (
-        <div className="vr-period">
-          <p className="vr-period-eyebrow">{t('vat.return.activePeriodLabel')}</p>
-          <p className="vr-period-title">{periodTitle(period.label)}</p>
-          <p className="vr-period-meta">
-            <span className="vr-period-range">
-              {formatDate(period.periodStart)} {t('vat.return.rangeTo')} {formatDate(period.periodEnd)}
-            </span>
-            {status !== null && (
-              <span className="vr-period-status">
-                {status === 'filed' && <LockGlyph size={14} />}
-                {t(`vat.return.period.${status}`)}
-              </span>
-            )}
-          </p>
-        </div>
-      )}
 
       {/* The outcome renders in the body rather than under the toolbar: a refusal that names an ESTV
           Ziffer and a next step needs the full measure to be read, not a right-aligned column. */}
@@ -388,29 +425,32 @@ export function VatReturn() {
         onRetry={() => void exportState.run()}
       />
 
-      {status === 'open' && !filed && <p className="lock-note">{t('vat.return.periodNotEnded')}</p>}
-
+      {/* The filed state in one line (D152). A07 persists no return, so the figures below are
+          recomputed, and corrections run through the annual reconciliation: both are the honest
+          disclosure of a real property of the read model, and both sit one (i) away, in words. */}
       {filed && period !== null && (
-        <div className="vr-filed panel" role="note">
+        <p className="vr-filed" role="note">
           <LockGlyph className="vr-filed-glyph" />
-          <div>
-            <p className="vr-filed-title">{t('vat.return.filedBanner', { period: periodTitle(period.label) })}</p>
-            {/* A07 persists no return: the figures below are recomputed. Saying so is not filler,
-                it is the honest disclosure of a real property of the read model. */}
-            <p className="vr-filed-body">{t('vat.return.filedRecomputed')}</p>
-            <p className="vr-filed-body">{t('vat.return.filedCorrection')}</p>
-          </div>
-        </div>
+          <span className="vr-filed-title">{t('vat.return.filedBanner', { period: periodTitle(period.label) })}</span>
+          <span className="vr-filed-info">
+            <Tooltip placement="bottom" content={`${t('vat.return.filedRecomputed')} ${t('vat.return.filedCorrection')}`}>
+              <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('vat.return.filedInfo')}>
+                <InfoGlyph size={16} />
+              </button>
+            </Tooltip>
+          </span>
+        </p>
       )}
 
-      <JourneyStrip
+      <JourneyLine
         computed={view !== null}
         checked={bridge !== null && (bridge.kind === 'match' || bridge.kind === 'notApplicable')}
+        exportedNow={exportState.exported}
         marked={filed}
+        running={status === 'open'}
         run={checklist.run}
         settlement={settlementState}
       />
-      <p className="vr-journey-note">{t('vat.return.exportNote')}</p>
 
       {failed && <ErrorBanner onRetry={() => void loadReturn()} />}
 

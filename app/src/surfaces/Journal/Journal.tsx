@@ -276,6 +276,37 @@ export function Journal() {
     next.delete('new');
     setSearchParams(next, { replace: true });
   }, [openNew, searchParams, setSearchParams]);
+  // `/journal?entry=<id>` (the bank's "Buchung öffnen", Payments): open THAT entry, by id and nothing
+  // else, the way a row click opens it: a posted entry read-only (with Reverse), a draft in the editable
+  // composer (a draft has nothing to reverse; the engine refuses that with `not_posted`). The status is
+  // read first, so the drawer opens once, in the right mode. The param stays while the drawer is open,
+  // so the address names what is on screen, and closing removes it. An id the book does not hold (or a
+  // read that fails) opens the drawer read-only on its error state, never another entry.
+  const entryParam = searchParams.get('entry');
+  useEffect(() => {
+    if (entryParam === null || entryParam === '' || workspaceId === null) return;
+    let live = true;
+    void (async () => {
+      const { body } = await client.call('get_entry', { workspaceId, entryId: entryParam });
+      if (!live) return;
+      const entry = isErr(body) ? null : (body.entry as { status?: unknown } | undefined);
+      const isDraft = entry !== null && entry !== undefined && typeof entry.status === 'string' && entry.status !== 'posted';
+      setDrawer({ mode: isDraft ? 'edit' : 'view', entryId: entryParam });
+    })();
+    return () => {
+      live = false;
+    };
+    // Only a NEW param opens: a row click while one is set opens that row instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryParam, workspaceId]);
+  const closeDrawer = useCallback(() => {
+    setDrawer(null);
+    if (searchParams.has('entry')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('entry');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   // G13: which face of the surface is showing. The archive is a TAB, not a filter value, so the
   // two worlds can never appear in one result set (spec §6 safeguard 4).
   const [view, setView] = useState<'live' | 'archive'>('live');
@@ -555,10 +586,11 @@ export function Journal() {
 
       {drawer !== null && (
         <EntryDrawer
+          key={`${drawer.mode}:${drawer.entryId ?? 'new'}`}
           mode={drawer.mode}
           entryId={drawer.entryId}
           canPost={canPost}
-          onClose={() => setDrawer(null)}
+          onClose={closeDrawer}
           onWritten={(entryId) => {
             setJustWrittenId(entryId ?? null);
             refetch();

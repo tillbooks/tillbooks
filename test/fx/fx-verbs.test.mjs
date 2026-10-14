@@ -36,6 +36,16 @@ const RATE = (workspaceId, over = {}) => ({
   ...over,
 });
 
+/**
+ * D161: `record_exchange_rate` is governed under `customize` (the rate table the books convert with),
+ * so a flow that records a rate as the agent seat grants it first, as a human does in the Studio. The
+ * drafting itself is pinned in `test/agent/dial-covers-d161.test.mjs`.
+ */
+function grantCustomize(deps, workspaceId) {
+  const res = getAction('set_agent_dial').run({ ...deps, actor: 'studio' }, { workspaceId, capability: 'customize', level: 'auto', idempotencyKey: 'fx-grant-customize' });
+  assert.equal(res.ok, true, JSON.stringify(res));
+}
+
 function viaMcp(deps, name, input) {
   const res = callTool(deps, name, input);
   assert.equal(res.content[0].type, 'text');
@@ -65,6 +75,8 @@ test('MCP and REST return the IDENTICAL Result for every §H-FX verb', () => {
   const a = mintWorkspace(mcp).workspaceId;
   const b = mintWorkspace(rest).workspaceId;
   assert.equal(a, b, 'the two deterministic stores mint the same workspace id');
+  grantCustomize(mcp, a);
+  grantCustomize(rest, b);
 
   const step = (name, input) => {
     const m = viaMcp(mcp, name, input);
@@ -96,6 +108,7 @@ test('record_exchange_rate is idempotent on ROWS through the shipped surface', (
   const deps = freshDeps();
   const { workspaceId } = mintWorkspace(deps);
   const rows = () => deps.store.db.prepare('SELECT * FROM exchange_rate ORDER BY id').all();
+  grantCustomize(deps, workspaceId);
 
   const first = handleRest('record_exchange_rate', RATE(workspaceId), deps).body;
   const after = JSON.stringify(rows());
@@ -109,7 +122,8 @@ test('record_exchange_rate is idempotent on ROWS through the shipped surface', (
 test('the read verbs do not write: the whole database is unchanged after calling them', () => {
   const deps = freshDeps();
   const { workspaceId } = mintWorkspace(deps);
-  handleRest('record_exchange_rate', RATE(workspaceId), deps);
+  grantCustomize(deps, workspaceId);
+  assert.equal(handleRest('record_exchange_rate', RATE(workspaceId), deps).body.rate, '0.9412', 'the rate is recorded, so the reads read one');
 
   const snapshot = () => {
     const tables = deps.store.db
@@ -167,7 +181,8 @@ test('garbage in gives a stable code, never a throw and never unexpected_error',
 test('the recorded rate is immediately usable by the posting path, through the surface', () => {
   const deps = freshDeps();
   const { workspaceId, accId } = mintWorkspace(deps);
-  assert.ok(handleRest('record_exchange_rate', RATE(workspaceId), deps).body.ok);
+  grantCustomize(deps, workspaceId);
+  assert.equal(handleRest('record_exchange_rate', RATE(workspaceId), deps).body.rate, '0.9412');
   // A35: the agent seat's post_entry routes through the dial at the transports and every dial ships
   // at ask, so the fixture grants post -> auto first (the D103 ceremony); the drafting path has its
   // own suite in test/agent/.

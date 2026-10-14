@@ -10,7 +10,7 @@
     "methodsTitle": "Valuation methods",
     "listLabel": "Stocked items",
     "detailLabel": "Item valuation",
-    "selectHint": "Pick an item to see its valuation and its cost layers.",
+    "selectHint": "Select an item.",
     "changeDefault": "Change the default method",
     "defaultInForce": "Currently in force: {method}",
     "since": "since {date}",

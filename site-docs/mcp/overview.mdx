@@ -18,7 +18,24 @@ expects to see.
 
 Posting is idempotent, so a retry does not double-count.
 
+## You decide how far the agent goes
+
+By default, an agent waits for your OK before it books anything, moves your money, grants access or
+deletes your data for good. For each of these the approval dial is set to
+"ask": the agent drafts a proposal, and a person approves or
+rejects it in the Studio. A call that leaves out what the proposal needs is refused, not run. You
+can set one area to "auto" when you want the agent to act without asking, and only within the rights
+its seat has been given. Much of what you can change back, such as drafts and contact details, is
+not on the dial and runs within the seat's rights. Every call the agent makes is recorded, reads and
+refusals included.
+
+The dial covers agents that connect to TILL: over MCP, or as an agent member of a workspace. An
+agent that can drive your browser or run commands on your computer can act as you: give your agent
+TILL, not your browser or your shell.
+
+TILL cannot send a payment, for the agent or for anyone else. It writes a pain.001 file that you
+upload and release in your eBanking.
+
 ## Status
 
-Pre-alpha. The tool surface is specified and in progress. This page describes the shape, not a
-shipped API.
+Public beta. The verbs are built and are the same ones the Studio calls.

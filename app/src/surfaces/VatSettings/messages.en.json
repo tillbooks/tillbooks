@@ -21,7 +21,20 @@
     "timing": {
       "label": "Accounting",
       "ist": "Cash (collected)",
-      "soll": "Accrual (agreed)"
+      "soll": "Accrual (agreed)",
+      "istUnsupported": "Cash: not yet calculated by TILL"
+    },
+    "info": {
+      "methodBinding": "When a change of method applies",
+      "timingBinding": "When a change of accounting basis applies",
+      "option": "What {option} means",
+      "ist": "Why TILL does not calculate cash yet"
+    },
+    "leaveIst": {
+      "title": "Switch to accrual?",
+      "body": "After saving you can no longer choose cash here. Continue?",
+      "confirm": "Continue",
+      "close": "Stay on cash"
     },
     "registered": "VAT-registered",
     "registeredHint": "This workspace accounts for VAT.",

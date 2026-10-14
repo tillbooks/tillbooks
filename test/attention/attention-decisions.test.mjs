@@ -409,8 +409,11 @@ test('review_flag: a flagged posting reaches the hub with its reason and reviewe
   const resolve = item.decisionOptions.find((o) => o.id === 'resolve');
   assert.equal(resolve.verb, 'approve_entry');
   assert.equal(resolve.capability, 'review');
-  assert.equal(item.consequenceKey, null, 'approve_entry is not dial-governed: no sentence, none invented');
-  assert.equal(item.consequence, null);
+  // D158: approve_entry is dial-governed under `close-period` (the sign-off a period lock and the filing
+  // exports stand on), so the row carries that family's key and the verb's OWN engine sentence.
+  assert.equal(item.consequenceKey, 'agent.consequence.close-period', 'approve_entry is governed under close-period');
+  assert.equal(item.consequence, CONSEQUENCE_FOR_ACTION.approve_entry);
+  assert.match(item.consequence, /^Signs off this posted entry as checked, in your name; the entry itself does not change\./);
 });
 
 test('review_flag: the reviewer is resolved to a KIND and a NAME (agent seat, Studio seat, a bound member by display name), never a raw id', () => {

@@ -15,6 +15,7 @@ export {
   getMailThread,
   writeMailDraft,
   replaceMailDraft,
+  draftEditedSinceWritten,
   listMailDrafts,
   purgeMailForContact,
 } from './mailstore.js';

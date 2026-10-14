@@ -163,12 +163,80 @@ export function reopenMonth(ctx: WorkspaceContext, input: { period: string; idem
 }
 
 /**
- * Lock a period (`YYYY-MM` or `YYYY`), hard or soft. Used by A07 filing. A hard lock over an existing
- * soft lock UPGRADES it (a filed/year seal must actually seal a month the user had soft-closed); a
- * same-or-weaker request over an existing lock is a no-op. Either way the result reports the ACTUAL
- * resulting state (never a claimed `kind` the row does not hold).
+ * Lock a period (`YYYY-MM` or `YYYY`), hard or soft: the PUBLIC `lock_period` verb. A hard lock over an
+ * existing soft lock UPGRADES it; a same-or-weaker request over an existing lock is a no-op. Either way
+ * the result reports the ACTUAL resulting state (never a claimed `kind` the row does not hold).
+ *
+ * THE SEAL REASONS ARE NOT A CALLER'S TO WRITE (critic R4-1 on cl-periods, D152, 04.10.2026). A hard
+ * lock carrying a `SEALED_LOCK_REASONS` reason IS the seal every reader trusts: `yearSealedOf`,
+ * `hardCloseYear`'s already-closed check, the `seal_on_year` probe, `unlockPeriod`'s
+ * `hard_lock_sealed`, A07's filed-period reads. Stored from a wire input it sealed a year with no P&L
+ * sweep and no G22 run guard, permanently (nothing unlocks a seal), and from an automation rule
+ * unattended. So this verb refuses those reasons with `reserved_lock_reason`; the two acts that
+ * really seal write them through their own paths (`hardCloseYear` directly, A07's filing through
+ * `lockPeriodSealed`), which no registry handler hands a wire input. Ordinary soft and hard locks, with
+ * any other reason, stay exactly as they were, automatable included.
  */
 export function lockPeriod(
+  ctx: WorkspaceContext,
+  input: { period: string; kind: string; reason?: string; idempotencyKey: string },
+): Result {
+  const capable = ctx.capabilities.assert('manage_periods');
+  if (!capable.ok) return capable;
+  if (typeof input.reason === 'string' && SEALED_LOCK_REASONS.has(input.reason)) {
+    return err('reserved_lock_reason', { reason: input.reason, reserved: [...SEALED_LOCK_REASONS] });
+  }
+  return writePeriodLock(ctx, input);
+}
+
+/**
+ * ENGINE-INTERNAL: write a hard lock carrying a seal reason. A07's `vat_mark_filed` is its one caller
+ * (a filed MWST period); the year seal is written by `hardCloseYear` inside its own transaction. Not a
+ * registry verb and never handed a wire input: `lock_period` refuses these reasons.
+ *
+ * A SEAL IS WRITTEN, NEVER ASSUMED (critic R5-1/R5-2 on cl-periods, D152, 04.10.2026). It used to share
+ * `writePeriodLock`, whose same-or-weaker rule turned a seal over an ordinary hard lock (Review's
+ * "Periode sperren", reason null or `treuhaender_review`) into a no-op that still answered ok, and it
+ * shared the `lock_period` idempotency scope, so a public `lock_period` that used the filing's derived
+ * per-month key first was replayed in place of the seal. Now:
+ *  - any existing lock that is not already a seal (soft, or hard with another or no reason) is
+ *    UPGRADED to hard plus the seal reason, the way `hardCloseYear` upserts the year seal; an existing
+ *    seal is left as it stands;
+ *  - the idempotency scope is its own (`lock_period_sealed`), which no public verb writes;
+ *  - the answer is the lock the period ACTUALLY holds after the write, read back from the row.
+ */
+export function lockPeriodSealed(
+  ctx: WorkspaceContext,
+  input: { period: string; reason: 'vat_filed' | 'year_close'; idempotencyKey: string },
+): Result {
+  const capable = ctx.capabilities.assert('manage_periods');
+  if (!capable.ok) return capable;
+  if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
+    return err('invalid_input', { field: 'idempotencyKey' });
+  }
+  if (!MONTH_RE.test(input.period) && !YEAR_RE.test(input.period)) {
+    return err('invalid_period', { period: input.period, expected: 'YYYY-MM or YYYY' });
+  }
+  if (!SEALED_LOCK_REASONS.has(input.reason)) return err('invalid_input', { field: 'reason' });
+
+  return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, SEALED_LOCK_IDEMPOTENCY_SCOPE, () => {
+    const existing = existingLock(ctx, input.period);
+    let upgraded = false;
+    if (existing === undefined) {
+      writeLock(ctx, input.period, 'hard', input.reason);
+    } else if (!(existing.kind === 'hard' && existing.reason !== null && SEALED_LOCK_REASONS.has(existing.reason))) {
+      upgradeLock(ctx, input.period, 'hard', input.reason);
+      upgraded = true;
+    }
+    const held = existingLock(ctx, input.period) as LockRow;
+    return ok({ period: input.period, kind: held.kind, reason: held.reason, ...(upgraded ? { upgraded: true } : {}) });
+  });
+}
+
+/** The idempotency scope of the internal seal writer: its own, so no public verb can pre-claim a key. */
+export const SEALED_LOCK_IDEMPOTENCY_SCOPE = 'lock_period_sealed';
+
+function writePeriodLock(
   ctx: WorkspaceContext,
   input: { period: string; kind: string; reason?: string; idempotencyKey: string },
 ): Result {
@@ -208,6 +276,10 @@ export function unlockPeriod(ctx: WorkspaceContext, input: { period: string; ide
   if (!capable.ok) return capable;
   if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
     return err('invalid_input', { field: 'idempotencyKey' });
+  }
+  // D156 critic F1: the schema requires the period; without one the unlock answered ok on nothing.
+  if (typeof input.period !== 'string' || input.period.length === 0) {
+    return err('invalid_input', { field: 'period' });
   }
 
   // Replay a completed unlock before the state-dependent seal/capability guards (§H-IDEMPOTENT): after a

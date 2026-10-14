@@ -7,7 +7,6 @@
     "noWorkspace": "Pick a workspace to view goods receipts.",
     "listLabel": "Goods receipts",
     "detailLabel": "Receipt detail",
-    "selectHint": "Select a receipt to see its lines and its trail.",
     "new": "New receipt",
     "addLine": "Add line",
     "post": "Post",

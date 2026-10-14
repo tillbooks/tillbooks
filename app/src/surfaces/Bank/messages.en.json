@@ -13,11 +13,13 @@
     "header": {
       "more": "More bank actions",
       "bankAccounts": "Manage bank accounts",
-      "fetchStatements": "Fetch statements",
       "fetching": "Fetching…",
       "lastFetched": "Last fetched: {date}",
       "fetched": "Fetched: {imported} statements imported, {waiting} waiting.",
-      "fetchedNothing": "ZKB has no new statements."
+      "fetchedNothing": "ZKB has no new statements.",
+      "getStatement": "Get statement",
+      "fetchFromBank": "Fetch from the bank",
+      "importFile": "Import a file"
     },
     "bulk": {
       "bookSure": "Book all sure ones ({count})"
@@ -81,15 +83,13 @@
     },
     "search": {
       "label": "Search",
-      "placeholder": "Name, text, reference or amount"
+      "labelLong": "Search name, text, reference or amount"
     },
     "facet": {
       "label": "Filter lines",
-      "all": "All",
       "needs": "Need you",
       "sure": "Sure",
-      "in": "Money in",
-      "out": "Money out"
+      "noReceipt": "No receipt"
     },
     "accounts": {
       "label": "Bank account",
@@ -116,6 +116,7 @@
       "targetLabel": "Book to, {party}",
       "targetPlaceholder": "Book to what?",
       "vatLabel": "VAT, {party}",
+      "vatNamed": "VAT, {party}, {code} {name}",
       "more": "More actions for {party}, {amount}",
       "needsPost": "You lack the right to post.",
       "needsPay": "Settling an invoice or a payment run needs the right to book payments."
@@ -124,7 +125,8 @@
       "split": "Split or book manually",
       "link": "Match an existing entry",
       "agent": "Ask the agent",
-      "ignore": "Ignore"
+      "ignore": "Ignore",
+      "attach": "Attach receipt"
     },
     "certainty": {
       "sure": "Sure",
@@ -204,32 +206,15 @@
       "history": "On {date} you last booked this counterparty to {account}, {vat} ({count} times like this).",
       "withVat": "with {vat}",
       "withoutVat": "without VAT",
-      "no_proposal": "No reference or earlier booking fits. Choose an account or an invoice, or ask the agent.",
+      "no_proposal": "No reference and no earlier booking fit.",
       "payment_batch_item": "The bank reports one payment of a payment run, named by its reference: {amount}.",
       "payment_batch_item_amount_differs": "The reference names one payment of a payment run, but the amount differs: payment {item}, bank {line}. The line cannot be matched to the run this way. Discard the run under Creditor payments, record the executed payments by hand under Payments, and ignore this line as \"Booked elsewhere\".",
       "payment_batch_total_differs_paid": "The bank reports the reference of a payment run, but the amount differs: run {batch}, bank {line}. The run is already marked paid and can no longer be discarded: ignore this line as \"Booked elsewhere\" and reverse under Payments every payment of the run the bank did not carry out.",
       "payment_batch_item_amount_differs_paid": "The reference names one payment of a payment run, but the amount differs: payment {item}, bank {line}. The run is already marked paid and can no longer be discarded: ignore this line as \"Booked elsewhere\" and reverse under Payments every payment of the run the bank did not carry out.",
-      "own_account_transfer_booked_other_month": "The transfer from \"{name}\" is booked there on {date}, in another month than this line. It cannot be matched that way: take the other side back and book each side on its own day through a transit account you add to the chart."
-    },
-    "next": {
-      "agent": "Next step: you approve or reject the agent's proposal.",
-      "pick": "Next step: you choose what to book to.",
-      "match": "Next step: you match; no new entry is made.",
-      "book": "Next step: you confirm with Book."
+      "own_account_transfer_booked_other_month": "The transfer from \"{name}\" is booked there on {date}, in another month than this line. It cannot be matched that way: take the other side back and book each side on its own day through a transit account you add to the chart.",
+      "model_suggested": "An AI model on this device suggests {account}, {percent} % likely ({count} accounts to choose from). Nobody has checked it yet: look before you book."
     },
     "panel": {
-      "label": "Bank line {party}",
-      "emptyLabel": "Bank line",
-      "empty": "Choose a line to see its booking.",
-      "statusLabel": "Proposal and reason",
-      "agentReason": "The agent prepared this line. You review its proposal and approve or reject it.",
-      "editedReason": "You changed the proposal.",
-      "iban": "IBAN",
-      "reference": "Reference",
-      "split": "Split or manual",
-      "notSame": "Not the same payment? Book it new",
-      "backToProposal": "Back to the proposal",
-      "backToLine": "Back to the line",
       "cancel": "Cancel",
       "close": "Close",
       "linkMissing": "This bank line is not in this book."
@@ -241,7 +226,8 @@
       "credit": "Credit",
       "pickFirst": "Choose what to book to first.",
       "computing": "Computing the entry.",
-      "vatFailed": "The VAT could not be computed for this preview. Check the VAT code.",
+      "noRight": "The preview needs the right to read the books and the VAT.",
+      "unavailable": "The preview is not available.",
       "unknownAccount": "Account not found"
     },
     "item": {
@@ -450,29 +436,55 @@
         "other": "{count} lines open, {amount}"
       },
       "asOf": "As of the statement of {date}",
-      "menu": {
-        "label": "Actions for {name}",
-        "import": "Import bank statement"
-      },
       "openTerm": "open lines",
       "differenceTerm": "difference",
       "sentenceDifference": "Bank {bank} equals books {books} plus open lines {open} plus a difference of {difference}.",
-      "differenceHint": "A difference arises when an ignored line is not in the books, an entry on the bank account has no bank line, a difference was accepted at a match, or a line is matched to an entry dated after the statement (until the next statement)."
+      "differenceHint": "A difference arises when an ignored line is not in the books, an entry on the bank account has no bank line, a difference was accepted at a match, or a line is matched to an entry dated after the statement (until the next statement).",
+      "differenceShort": "Difference {amount}",
+      "noDifference": "No difference",
+      "gapMark": "A statement is missing",
+      "cardLabel": "Reconciliation {name}: figures and explanation",
+      "unknownShort": {
+        "no_statement": "No statement yet",
+        "no_balance": "No closing balance",
+        "currency_differs": "Other currency",
+        "inconsistent": "Figures do not add up"
+      },
+      "summary": {
+        "label": "Reconciliation of all bank accounts",
+        "cardLabel": "Reconciliation of all bank accounts: by account",
+        "allBalanced": "All accounts reconciled",
+        "difference": {
+          "one": "{count} account with a difference",
+          "other": "{count} accounts with a difference"
+        },
+        "noStatement": {
+          "one": "{count} without a statement",
+          "other": "{count} without a statement"
+        },
+        "unjudged": {
+          "one": "{count} cannot be judged",
+          "other": "{count} cannot be judged"
+        },
+        "rowLabel": "{name}: {state}. Figures and explanation"
+      }
     },
     "import": {
       "open": "Import bank statement",
       "title": "Import bank statement",
       "lead": "Load the camt.053 file from your e-banking. TILL reads the account from the file.",
       "file": "File",
-      "choose": "Choose file",
-      "drop": "Drop the camt file here",
-      "hint": "camt.053, as XML",
+      "choose": "Choose files",
+      "drop": "Drop camt files here",
+      "hint": "camt.053, as XML, one or more files",
       "account": "Bank account",
       "accountPick": "Choose a bank account",
       "fileMatches": "The file belongs to \"{name}\" ({iban}).",
       "notXml": "That is not an XML file. Download the statement from your e-banking as camt.053.",
       "commit": "Import",
-      "busy": "Importing …"
+      "busy": "Importing …",
+      "commitMany": "Import {count} files",
+      "done": "Done"
     },
     "ack": {
       "dismiss": "Dismiss",
@@ -521,7 +533,18 @@
         "one": "One booking not taken over because it was already there or not booked yet.",
         "other": "{count} bookings not taken over because they were already there or not booked yet."
       },
-      "showNew": "Show only new ones"
+      "showNew": "Show only new ones",
+      "attached": "Receipt attached: {name} to {party}.",
+      "attachedMany": {
+        "one": "{count} receipt attached to {party}.",
+        "other": "{count} receipts attached to {party}."
+      },
+      "attachFailed": "{name} not attached: {reason}",
+      "importedFiles": "{imported} of {total} statements imported.",
+      "importedFilesRefused": {
+        "one": "One statement was not imported; the reason was shown in the window.",
+        "other": "{count} statements were not imported; the reasons were shown in the window."
+      }
     },
     "agent": {
       "question": "How do I book this bank line: {date}, {party}, {amount}?"
@@ -856,6 +879,82 @@
       },
       "feedRule": {
         "body": "This account runs over EBICS: TILL imports a statement only when it follows the statements in the books without a gap. Bank accounts shows which statement in the books is the newest."
+      },
+      "vorschlagStale": {
+        "title": "Not run: this proposal is out of date.",
+        "body": "The record behind it changed after the agent made it. Ask the agent to propose it again."
+      }
+    },
+    "receipts": {
+      "title": "Receipts",
+      "attach": "Attach receipt",
+      "count": {
+        "one": "One receipt attached",
+        "other": "{count} receipts attached"
+      },
+      "missing": "No receipt",
+      "lineGone": "This bank line no longer exists."
+    },
+    "ai": {
+      "tag": "AI",
+      "tagLabel": "Suggested by an AI model, unchecked"
+    },
+    "suggest": {
+      "action": "Suggest accounts",
+      "busy": "The model is working",
+      "hint": "An AI model on this device suggests an account for the lines without a proposal. Nothing leaves the device, and nothing is booked.",
+      "done": "Suggested: {count}. Check each line before you book.",
+      "none": "The model was not sure enough about any line. It only shows suggestions of 50 % or more.",
+      "more": "{count} more lines are waiting: press \"Suggest accounts\" again.",
+      "error": {
+        "needs_local_runtime": "No local model is installed on this device. TILL will not ask a cloud model instead.",
+        "needs_model_selection": "Choose a model under Writing style first.",
+        "needs_decide_model": "The installed model cannot suggest accounts, or its accuracy was never measured.",
+        "unsupported_model_language": "The installed model does not read German and French. Bank lines need both.",
+        "decide_failed": "The model gave no usable answer. Nothing was saved.",
+        "other": "The suggestions could not be computed."
+      }
+    },
+    "direction": {
+      "label": "Direction",
+      "in": "Money in only",
+      "out": "Money out only"
+    },
+    "strip": {
+      "label": "Bank line context",
+      "split": "Split",
+      "link": "Match an existing entry",
+      "agent": "Ask the agent",
+      "ignore": "Ignore",
+      "receipts": {
+        "one": "{count} receipt",
+        "other": "{count} receipts"
+      },
+      "vatSplit": "incl. VAT {tax} on {account} · net {net}",
+      "vatSplitMany": "incl. VAT {tax} · net {net}",
+      "vatOnTop": "plus VAT {parts}",
+      "vatPart": "{tax} on {account}",
+      "vatFailed": "The VAT could not be computed. Check the code.",
+      "model": "AI model {model} on this device: {percent} % likely, measured error {ece} percentage points (ECE). Nobody has checked it yet.",
+      "modelNoEce": "AI model {model} on this device: {percent} % likely, error not measured. Nobody has checked it yet.",
+      "entry": "Entry of {date}: {text}.",
+      "entryDiffers": "The amount differs by {amount}. Reason:",
+      "openEntry": "Open entry",
+      "reason": {
+        "history": "Booked like this last on {date} ({count} times).",
+        "qr_reference_exact": "QR reference and amount match {number} to the cent.",
+        "existing_entry_reference": "Same reference as the entry of {date}: match it, no new entry."
+      },
+      "satz": "{debit} to {credit}",
+      "satzMore": "+{count}",
+      "vatImport": "the payment is the import VAT, on {account}",
+      "vatOnly": "incl. VAT {tax} on {account}",
+      "vatOnlyMany": "incl. VAT {tax}",
+      "reference": "Ref. {value}",
+      "iban": "IBAN {value}",
+      "batchBills": {
+        "one": "{count} bill: {names}",
+        "other": "{count} bills: {names}"
       }
     }
   },
@@ -879,9 +978,113 @@
   "help": {
     "Bank": {
       "title": "Bank",
-      "body": "Every line of your bank statements is here, whatever the account. You decide each one on its own row: book it to an account with VAT, settle an open invoice, match an existing entry, or ignore it with a reason. Above the list, each account reads: bank equals books plus open lines. Whatever does not add up is a difference; a line matched to an entry dated after the latest statement also counts as a difference until the next statement.",
+      "body": "Every line of your bank statements is here, from every account. You decide each one on its own row: book it, settle an open invoice, match it to an existing entry, or ignore it with a reason. Click a line to see, right under it, why TILL proposes it. Above the list stands the difference (one line for several accounts); the (i) shows, per account, bank equals books plus open lines.\n\nThe overview counts \"Need you\" and \"Sure\" the same way. Drop a receipt on its line, before or after booking. Once the line is booked, TILL keeps it for ten years. \"No receipt\" under \"Booked\" shows where one is still missing.",
       "concepts": [],
       "docsPath": "introduction"
+    }
+  },
+  "attention": {
+    "queue": {
+      "bankLinesWaiting": "Bank: lines waiting"
+    },
+    "item": {
+      "bankLinesWaiting": {
+        "title": {
+          "one": "{bank}: 1 bank line is waiting for you",
+          "other": "{bank}: {count} bank lines are waiting for you"
+        }
+      }
+    },
+    "act": {
+      "openBankLines": "Open in the bank inbox"
+    }
+  },
+  "statementGap": {
+    "dateRange": "{from} to {to}",
+    "titleOne": "Statement {range} is missing ({dates})",
+    "titleMany": "Statements {range} are missing ({dates})",
+    "titleOneNoDates": "Statement {range} is missing",
+    "titleManyNoDates": "Statements {range} are missing",
+    "chained": "The balance of statement {after} carries exactly into statement {before}: no money is missing. Numbers {range} are probably days without bookings, or bookings that cancel out.",
+    "unchained": "The missing statements hold {amount} that is not in the books yet.",
+    "pending": "Statement {before} is waiting: the missing statements before it hold {amount} that is not in the books yet.",
+    "yearTurn": "TILL does not know how many statements {year} still had.",
+    "waitingInside": "Statement {waiting} is waiting inside this gap and does not follow on: {amount} is not in the books yet.",
+    "titleUnknown": "Statements may be missing after statement {after} ({dates})",
+    "titleUnknownNoDates": "Statements may be missing after statement {after}",
+    "chainedUnknown": "The balance of statement {after} carries exactly into statement {before}: no money is missing. There were probably no bookings on these days.",
+    "incomplete": "Statement {n} is split across several files and not complete in the books. Whether money is missing, TILL can say once every part is imported.",
+    "titleIncomplete": "Statement {n} is not complete in the books",
+    "titleConflicting": "Statement {n} is in the books twice, with different balances",
+    "conflicting": "The bank delivered statement {n} twice, with different balances. Whether money is missing cannot be said this way: check both copies under Bank.",
+    "confirmationVoid": "The earlier confirmation that nothing is missing no longer holds."
+  },
+  "gapRepair": {
+    "title": "Close the gap",
+    "close": "Close",
+    "loading": "Loading the gap.",
+    "loadError": "The gap could not be loaded. Close this window and try again.",
+    "notFound": "This gap no longer exists: the statements are in the books now.",
+    "leadZkb": "In ZKB e-banking, download the camt.053 statements for {dates} and drop them here. The first and the last day are already in the books: the days before and after do no harm, TILL counts nothing twice. Several files at once are fine, in any order.",
+    "leadOther": "In your bank's e-banking, download the camt.053 statements for {dates} and drop them here. The first and the last day are already in the books: the days before and after do no harm, TILL counts nothing twice. Several files at once are fine, in any order.",
+    "steps": {
+      "zkb": {
+        "1": "Open «Konto & Zahlungen», then «Datentransfer».",
+        "2": "Choose «Datei abholen».",
+        "3": "Choose the format camt.053 and the account {account}.",
+        "4": "Under the data scope choose «Alle erneut abholen», enter {dates} as the period and click «Abholen»."
+      },
+      "other": {
+        "1": "Open the statement download in e-banking, format camt.053.",
+        "2": "Choose the account {account} and the period {dates}.",
+        "3": "Download the files. If your bank asks whether to fetch statements already fetched again: yes."
+      }
+    },
+    "warnZkb": "Do not choose «Alle nicht abgeholten Daten». It marks the days as fetched at ZKB, and TILL's automatic fetch may no longer get them.",
+    "warnOther": "Do not download the statements as «new, not yet fetched» data. The bank then counts them as fetched, and TILL's automatic fetch may no longer get them.",
+    "choose": "Choose files",
+    "drop": "Drop camt.053 files here",
+    "hint": "One or more XML files, also one file holding several days.",
+    "notXml": "That is not an XML file. Download the statements in the camt.053 format.",
+    "denied": "Only someone who may manage payments can import statements and confirm gaps.",
+    "busy": "Importing the statements.",
+    "done": "{imported} of {total} statements imported.",
+    "closed": "The gap is closed: statements {range} are in the books.",
+    "confirmed": "Confirmed: nothing is missing in the gap {range}.",
+    "stillOpen": "Statements {range} are still missing.",
+    "result": {
+      "statement": "Statement {n} of {date}",
+      "imported": {
+        "one": "{which}: imported, 1 booking.",
+        "other": "{which}: imported, {count} bookings."
+      },
+      "already": "{which}: was already in the books.",
+      "refused": "{which}: not imported. {why}"
+    },
+    "refused": {
+      "gap": "It does not follow the statement before it: {amount} is missing in between. Download the days before it too.",
+      "overlap": "The books already hold another statement under this number.",
+      "beforeFeedStart": "It lies before the first statement in the books.",
+      "notDayEnd": "This is not a day-end statement (number or closing balance missing).",
+      "multipage": "The statement is split across several files. TILL does not read those yet.",
+      "split": "The file holds statements of several accounts, or without a number. Download the days one by one.",
+      "otherAccount": "The file belongs to another account.",
+      "camt054": "This is a camt.054, not a statement. Download camt.053.",
+      "unreadable": "The file cannot be read.",
+      "amended": "The bank delivered this statement again with different content. Check it under Bank.",
+      "other": "Code {code}."
+    },
+    "confirmLead": "Were there surely no bookings on these days? Then confirm, with a reason, that nothing is missing in the gap {range}. You can withdraw it later.",
+    "reason": "Reason",
+    "reasonPlaceholder": "e.g. public holidays without bookings",
+    "confirm": "Nothing is missing, confirm",
+    "error": {
+      "generic": "That did not work. Try again.",
+      "gap_not_chained": "There is money in this gap that is not in the books yet. It cannot be confirmed: import the missing statements.",
+      "gap_not_found": "This gap has been closed in the meantime.",
+      "human_only": "A person confirms this, not the agent.",
+      "needs_bank_account": "This bank account no longer exists.",
+      "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on: money is missing from the books. It cannot be confirmed: import the missing statements."
     }
   }
 }

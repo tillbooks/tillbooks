@@ -31,11 +31,12 @@ import {
   getQuote,
   listQuotes,
 } from '../core/sales/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface QuoteActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,
@@ -80,7 +81,7 @@ export function quoteActions(h: QuoteActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'quotes_create',
-      'write',
+      'write:reversible:internal',
       'Lege eine Offerte an: a priced offer on a C00 contact. Each line resolves its price once through D00 (contact list, segment list, item base) and its tax code once through the item A05 default, then snapshots both as literals on the shared document_line row (the freeze). Rides A10 createDocument (type quote), always a draft, and POSTS NOTHING (quote has a no-op poster). valid_until is the OR Art. 3 binding window and must be today or later; deal_id links a C01-seeded quote. Foreign contact/item ids are refused (invalid_reference, H-TENANT).',
       ctxSchema(
         {
@@ -99,49 +100,49 @@ export function quoteActions(h: QuoteActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'quotes_update',
-      'write',
+      'write:reversible:internal',
       'Bearbeite eine Offerte im Entwurf: retitle the contact, re-price lines (re-resolved and re-snapshotted exactly as create), or set validUntil/intro/outro. Draft-only: A10 refuses a patch on an issued or later quote (document_immutable), which is the tax/total freeze at work. A validity in the past is refused (validity_in_past).',
       ctxSchema({ quoteId: STR, patch: QUOTE_PATCH, idempotencyKey: STR }, ['quoteId', 'patch']),
       (ctx, input) => updateQuote(ctx, as(input)),
     ),
     ctxAction(
       'quotes_send',
-      'write',
+      'write:correctable:outbound',
       'Versende eine Offerte (P8 outbound, draft-gated): one atomic write issuing the gap-free O-number (no ledger posting), minting the single-use e-accept token (only its hash is stored), and moving the quote to sent. Returns the local artifact plus transmitted:false / reason:cloud_tier: the OSS core produces the PDF and the accept link and stops; email/portal delivery is the cloud tier (needs_dispatch_module). The G05 send log records one artifact_created row (list_dispatches). A quote with no lines is refused (no_lines); a non-draft quote is refused (illegal_transition). Idempotent: a replay returns the original token and number, never a second of either.',
       ctxSchema({ quoteId: STR, idempotencyKey: STR }, ['quoteId']),
       (ctx, input) => sendQuote(ctx, as(input)),
     ),
     ctxAction(
       'quotes_accept',
-      'write',
+      'write:final:statutory',
       'Nimm eine Offerte an: either by the single-use token (the cloud accept host, the one write reachable without an authenticated actor, scoped to exactly one quote by its H-TENANT token-hash lookup) or by quoteId + actor (the human "Als angenommen markieren"). Refuses acceptance after valid_until (quote_expired, OR Art. 3), stamps accepted_by, invalidates the token (single-use), and moves the quote to accepted. Posts nothing; conversion is a separate step.',
       ctxSchema({ quoteId: STR, token: STR, actor: STR, acceptedBy: STR, idempotencyKey: STR }, []),
       (ctx, input) => acceptQuote(ctx, as(input)),
     ),
     ctxAction(
       'quotes_decline',
-      'write',
+      'write:correctable:internal',
       'Lehne eine Offerte ab (by quoteId or token): moves the quote to declined, persists an optional decline_reason, invalidates the token, and logs the timeline note (OP5). A declined quote can only be superseded by a revision.',
       ctxSchema({ quoteId: STR, token: STR, declineReason: STR, idempotencyKey: STR }, []),
       (ctx, input) => declineQuote(ctx, as(input)),
     ),
     ctxAction(
       'quotes_expire_sweep',
-      'write',
+      'write:correctable:internal',
       'Verfallene Offerten kehren aus der offenen Liste: for every sent quote past its valid_until, transition it to expired so lists and forecasting never count a dead offer. Agent-scheduled; the Studio list triggers the same verb lazily. Returns { expired: N }. A no-op when nothing is past validity.',
       ctxSchema({ idempotencyKey: STR }, []),
       (ctx, input) => sweepExpiredQuotes(ctx, as(input)),
     ),
     ctxAction(
       'quotes_revise',
-      'write',
+      'write:correctable:internal',
       'Revidiere eine gesendete/abgelehnte/abgelaufene Offerte: clones the FROZEN lines byte-for-byte into a new draft (version n+1, supersedes_id at the old row) and retires the old version as superseded, invalidating its token. A draft is edited in place, not versioned (edit_draft_instead); an accepted or converted quote is the binding record and is refused (illegal_transition).',
       ctxSchema({ quoteId: STR, idempotencyKey: STR }, ['quoteId']),
       (ctx, input) => reviseQuote(ctx, as(input)),
     ),
     ctxAction(
       'quotes_convert',
-      'write',
+      'write:correctable:internal',
       'Wandle eine angenommene Offerte um in einen Auftrag (order) oder direkt in eine Rechnung (invoice): a DIRECT 1:1 pass-through to A10 convertDocument, which clones the frozen document_line rows (the VAT trace travels with them) and marks the source converted. C02 posts nothing; revenue is recognised only when A11 later issues the invoice. Idempotent and single-issue: converting an already-converted quote returns the existing target, never a second document. A non-accepted quote is refused (illegal_transition).',
       ctxSchema({ quoteId: STR, to: STR, idempotencyKey: STR }, ['quoteId', 'to']),
       (ctx, input) => convertQuote(ctx, as(input)),

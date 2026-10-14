@@ -4,6 +4,7 @@
  * defensive: a shape the surface cannot read renders as absent, never as a crash or a guessed figure.
  */
 
+import { formatMoney } from '../../i18n';
 import en from './messages.en.json';
 import sharedEn from '../../i18n/en.json';
 
@@ -23,17 +24,6 @@ export const LABELLED_VERBS: ReadonlySet<string> = new Set([
   ...Object.keys((en as VerbCatalogue).agent.verb),
   ...Object.keys((sharedEn as VerbCatalogue).agent.verb),
 ]);
-
-/**
- * The verbs whose consequence sentence is their OWN (`agent.consequenceVerb.*`) rather than their dial
- * family's (`agent.consequence.<capability>`). D123 put the membership verbs under `customize`, whose
- * family sentence describes a field definition; a card that said "changes the record structure" over
- * an invite would be wrong, so these verbs carry their own sentence and the family sentence stays the
- * fallback for every other mapped verb.
- */
-export const CONSEQUENCE_VERBS: ReadonlySet<string> = new Set(
-  Object.keys((en as unknown as { agent: { consequenceVerb: Record<string, string> } }).agent.consequenceVerb),
-);
 
 /** The payload keys the card carries a real de-CH label for (`agent.field.*`, critic F6). */
 export const LABELLED_FIELDS: ReadonlySet<string> = new Set(
@@ -60,16 +50,47 @@ export interface TrustSummary {
   rows: TrustRow[];
 }
 
+/**
+ * Critic N1 (what you approved is what runs): the key figures of the record a Vorschlag acts on, as the
+ * engine froze them when the agent proposed it. Every field may be absent; an absent figure is not
+ * shown, never guessed.
+ */
+export interface VorschlagFigures {
+  number: string | null;
+  /** The record is numbered once issued and has no number yet: the card says it is a draft. */
+  numberPending: boolean;
+  counterparty: string | null;
+  /** Critic round 2 (R2-B1): the email(s) a send goes to, as the person approved them. */
+  recipient: string | null;
+  amountMinor: number | null;
+  /** `net` labels the amount Netto (VAT is added at issue); `amount` labels it Betrag. */
+  amountBasis: 'net' | 'amount' | null;
+  currency: string | null;
+  /** The VAT the act computes at the pinned rate, and the gross beside the net (critic round 2). */
+  taxMinor: number | null;
+  grossMinor: number | null;
+  lineCount: number | null;
+}
+
 export interface DraftedAction {
   actionId: string;
   actor: string;
   dialCapability: string | null;
   actionTool: string;
   payload: Record<string, unknown>;
+  /**
+   * The engine's human names for contact ids in the payload (`vendorId` -> the vendor's name), keyed
+   * by payload key. Empty when there are none; the card then shows the raw id, never a guess.
+   */
+  payloadLabels?: Record<string, string>;
   status: string;
   createdAt: string;
   /** The human's sentence on a rejected proposal (F-08, J5.6), or null. */
   rejectReason: string | null;
+  /** The figures frozen at the proposal (critic N1), or null when the verb names no pinned record. */
+  figures?: VorschlagFigures | null;
+  /** The pinned record changed after the proposal: approving would refuse `vorschlag_stale`. */
+  changedSinceProposal?: boolean;
 }
 
 export interface AgentCall {
@@ -87,7 +108,7 @@ export interface AgentCall {
   durationMs: number;
   at: string;
   agentActionId: string | null;
-  /** Where a drafting call's proposal went (`pending` | `executed` | `rejected`), null on a non-draft. */
+  /** Where a drafting call's proposal went (`pending` | `executed` | `rejected` | `stale`), null on a non-draft. */
   draftStatus: string | null;
   /** The human's reason when the proposal was rejected (F-08, J5.6). */
   rejectReason: string | null;
@@ -124,8 +145,12 @@ export interface AgentSessionRow {
 }
 
 /** The two Vertrauen groups (design §3g): governed by meaning, mirrored by the queue's grouping. */
-export const GELD_CAPABILITIES = ['post', 'issue', 'send', 'dun', 'pay', 'vat-file'] as const;
-export const SYSTEM_CAPABILITIES = ['customize', 'plugin-install', 'close-period', 'go-live'] as const;
+// D161: `stock` joins the Geld group: stock is the balance sheet's inventory, valued and moved beside the
+// money families, though no journal entry is minted by it.
+export const GELD_CAPABILITIES = ['post', 'issue', 'send', 'dun', 'pay', 'vat-file', 'stock'] as const;
+// D156: `erase` and `share` join the System group: neither moves money, and both are about what
+// leaves or what goes for good, which the Vertrauen table must show beside the other governing acts.
+export const SYSTEM_CAPABILITIES = ['customize', 'plugin-install', 'close-period', 'go-live', 'erase', 'share'] as const;
 
 /** The Studio's trace-collapse threshold: one number, used by the dock and the archive alike. */
 export const TRACE_COLLAPSE_THRESHOLD = 4;
@@ -211,12 +236,66 @@ export function parseDrafted(body: unknown): DraftedAction[] {
       dialCapability: typeof a.dialCapability === 'string' ? a.dialCapability : null,
       actionTool: String(a.actionTool ?? ''),
       payload: record(a.payload),
+      payloadLabels: Object.fromEntries(
+        Object.entries(record(a.payloadLabels)).filter((pair): pair is [string, string] => typeof pair[1] === 'string'),
+      ),
       status: String(a.status ?? 'pending'),
       createdAt: String(a.createdAt ?? ''),
       rejectReason: typeof a.rejectReason === 'string' ? a.rejectReason : null,
+      figures: parseFigures(a.figures),
+      changedSinceProposal: a.changedSinceProposal === true,
     };
   });
 }
+
+/** The frozen figures, defensively: a shape the card cannot read is absent, never a guessed figure. */
+export function parseFigures(raw: unknown): VorschlagFigures | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const f = raw as Record<string, unknown>;
+  const text = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  const int = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  return {
+    number: text(f.number),
+    numberPending: f.numberPending === true,
+    counterparty: text(f.counterparty),
+    recipient: text(f.recipient),
+    amountMinor: int(f.amountMinor),
+    amountBasis: f.amountBasis === 'net' || f.amountBasis === 'amount' ? f.amountBasis : null,
+    currency: text(f.currency),
+    taxMinor: int(f.taxMinor),
+    grossMinor: int(f.grossMinor),
+    lineCount: int(f.lineCount),
+  };
+}
+
+/** The frozen figures as one line: "Entwurf, noch ohne Nummer · Muster AG · Netto CHF 1'000.00 · 2 Positionen". */
+export function figuresLine(t: (key: string, params?: Record<string, string | number>) => string, f: VorschlagFigures): string | null {
+  const parts: string[] = [];
+  if (f.number !== null) parts.push(f.number);
+  else if (f.numberPending) parts.push(t('agent.card.figure.draft'));
+  if (f.counterparty !== null) parts.push(f.counterparty);
+  if (f.recipient !== null) parts.push(`${t('agent.card.figure.recipient')} ${f.recipient}`);
+  if (f.amountMinor !== null) {
+    const label = f.amountBasis === 'net' ? t('agent.card.figure.net') : t('agent.field.amount');
+    parts.push(`${label} ${formatMoney(f.amountMinor, f.currency ?? 'CHF')}`);
+  }
+  if (f.taxMinor !== null && f.grossMinor !== null) {
+    parts.push(`${t('agent.card.figure.vat')} ${formatMoney(f.taxMinor, f.currency ?? 'CHF')}`);
+    parts.push(`${t('agent.card.figure.gross')} ${formatMoney(f.grossMinor, f.currency ?? 'CHF')}`);
+  }
+  if (f.lineCount !== null) parts.push(`${f.lineCount} ${t('agent.card.figure.lines')}`);
+  return parts.length === 0 ? null : parts.join(' · ');
+}
+
+/** The approval refusal for a Vorschlag whose record changed after the proposal (critic N1). */
+export const VORSCHLAG_STALE = 'vorschlag_stale';
+
+/** The acknowledgement a decision lands on, per outcome: one map, the dock and the queue alike. */
+export const DECIDED_MESSAGE = {
+  approved: 'agent.card.executed',
+  rejected: 'agent.card.rejected',
+  stale: 'agent.card.stale',
+} as const;
 
 export function parseTrust(body: unknown): TrustSummary | null {
   const b = record(body);

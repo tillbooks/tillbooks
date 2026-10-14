@@ -7,10 +7,12 @@
  * optional id), an optional subtitle, an inline help slot, and an actions slot pinned right.
  *
  * It is sticky at the top of the scrolling main, so the title and the primary action stay in view as
- * a long surface scrolls, and it is density-aware through the shared tokens. It renders regardless of
+ * a long surface scrolls, and it is density-aware through the shared tokens. It pins flush under
+ * main's opaque top-padding mask (global.css), and shows a hairline only once content has scrolled
+ * under it (`data-stuck`). It renders regardless of
  * the surface's state, so the title stops being copy-pasted into every early return.
  */
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import './SurfaceHeader.css';
 
@@ -60,8 +62,40 @@ export function SurfaceHeader({ title, titleId, subtitle, help, actions }: Surfa
     };
   }, []);
 
+  // The scrolled-state hairline (P6). At rest the header carries no border; once it is PINNED and
+  // content has scrolled under it, `data-stuck` turns on one --t-border hairline (SurfaceHeader.css).
+  // Pinned means the header's top sits at the scroll region's padding edge, where `top: 0` holds it,
+  // and the region has scrolled. A banner above the header delays that until the banner has gone, so
+  // the line never appears over content that is still above the header. A passive scroll listener,
+  // coalesced to one read per frame, and nothing for jsdom to trip over: without layout every rect
+  // is zero, so there the attribute follows scrollTop alone.
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const header = headerRef.current;
+    const scroller = header?.closest('main') ?? null;
+    if (header === null || scroller === null) return;
+    const raf = typeof window.requestAnimationFrame === 'function';
+    let frame = 0;
+    const measure = (): void => {
+      frame = 0;
+      const paddingTop = parseFloat(window.getComputedStyle(scroller).paddingTop) || 0;
+      const edge = scroller.getBoundingClientRect().top + scroller.clientTop + paddingTop;
+      setStuck(scroller.scrollTop > 0 && header.getBoundingClientRect().top <= edge + 0.5);
+    };
+    const onScroll = (): void => {
+      if (!raf) measure();
+      else if (frame === 0) frame = window.requestAnimationFrame(measure);
+    };
+    measure();
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
   return (
-    <header ref={headerRef} className="surface-header">
+    <header ref={headerRef} className="surface-header" data-stuck={stuck ? '' : undefined}>
       <div className="surface-header-titles">
         <h1 id={titleId} className="surface-header-title">
           {title}

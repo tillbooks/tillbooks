@@ -301,11 +301,40 @@ function accountByNumber(ctx: WorkspaceContext, number: string): string {
 }
 
 /**
- * Expand one taxable business line into the balanced journal set ready for `postEntry` (never posts).
- * The trace (§H-VAT-TRACE) is stamped on the net base line so A07 reads it once, without double
- * counting. Sigma debit == Sigma credit on every result (asserted by the property test).
+ * The counter of one taxable line: the side and amount `buildVatLines` books against the counter account.
+ * It names no account, because the counter-less builder does not know one: in `buildVatLines` it is the
+ * debtor, creditor, bank or clearing account the caller names, and in `compose_entry` it is whatever the
+ * entry's OTHER lines book (A02 §6, D152 amendment).
  */
-export function buildVatLines(ctx: WorkspaceContext, input: BuildVatLinesInput): VatJournalLine[] {
+export interface VatCounter {
+  side: 'debit' | 'credit';
+  amountMinor: number;
+}
+
+/** One taxable line's own booked set, its counter, and where `buildVatLines` puts that counter. */
+export interface VatLineParts {
+  /**
+   * The line's OWN lines, in `buildVatLines` order with the counter taken out: the base line first (the one
+   * the trace rides; for a deductible import, the 1170/1171 line whose amount IS the assessed tax), then
+   * the VAT legs or the folded tax. A zero-amount VAT leg is kept, exactly as `buildVatLines` keeps it.
+   */
+  own: VatJournalLine[];
+  counter: VatCounter;
+  /** The index `buildVatLines` inserts the counter at, so its order is unchanged byte for byte. */
+  counterAt: number;
+}
+
+/** `buildVatLines`' input without the counter account. */
+export type BuildVatLinePartsInput = Omit<BuildVatLinesInput, 'counterAccount'>;
+
+/**
+ * The COUNTER-LESS builder (D152 amendment, 02.10.2026): one taxable line's own booked set, its counter's
+ * side and amount, and where `buildVatLines` puts the counter. `buildVatLines` is assembled from THIS, so
+ * there is one arrangement of a VAT split in the engine, and `compose_entry` (which has no counter account:
+ * the entry's other lines are the counter) reuses it rather than re-deriving it. Throws exactly what
+ * `buildVatLines` throws (an unpriceable code, a missing VAT account, a direction the kind cannot take).
+ */
+export function buildVatLineParts(ctx: WorkspaceContext, input: BuildVatLinePartsInput): VatLineParts {
   const computed = computeLineTax(ctx, {
     amountMinor: input.amountMinor,
     amountIsGross: input.amountIsGross,
@@ -347,23 +376,22 @@ export function buildVatLines(ctx: WorkspaceContext, input: BuildVatLinesInput):
 
   // Bezugsteuer (Art. 45): the paired output + input legs, plus the net expense booked to its counter.
   if (kind === 'reverse_charge') {
-    const lines: VatJournalLine[] = [];
+    const own: VatJournalLine[] = [];
     // The net expense carries the trace: ONE convention across every kind and every caller (GUI,
     // agent, buildVatLines): the tag rides the BASE line whose booked amount is the tax base, which
     // is exactly what the A02 post-boundary gate recomputes from. (It used to ride the 2200 leg,
     // whose amount is the TAX, unrecoverable back to a base.)
-    lines.push(withCc({ account: input.revenueOrExpenseAccount, debit: net, ...trace }));
-    lines.push(withCc({ account: input.counterAccount, credit: net }));
+    own.push(withCc({ account: input.revenueOrExpenseAccount, debit: net, ...trace }));
     // The owed leg always books to 2200 (Umsatzsteuer).
-    lines.push({ account: accountByNumber(ctx, '2200'), credit: tax });
+    own.push({ account: accountByNumber(ctx, '2200'), credit: tax });
     if (deductible) {
       // Fully deductible: the deduction leg to 1170 cancels the owed leg (a wash).
-      lines.push({ account: inputVatAccount(), debit: tax });
+      own.push({ account: inputVatAccount(), debit: tax });
     } else {
       // Not deductible (saldo / exempt activity): the tax is a real cost, debited to the expense.
-      lines.push(withCc({ account: input.revenueOrExpenseAccount, debit: tax }));
+      own.push(withCc({ account: input.revenueOrExpenseAccount, debit: tax }));
     }
-    return lines;
+    return { own, counter: { side: 'credit', amountMinor: net }, counterAt: 1 };
   }
 
   // Einfuhrsteuer (Art. 50): the assessed Vorsteuer against the counter (bank / customs clearing).
@@ -375,32 +403,102 @@ export function buildVatLines(ctx: WorkspaceContext, input: BuildVatLinesInput):
     const importTaxLine = deductible
       ? { account: inputVatAccount(), debit: tax, ...trace }
       : withCc({ account: input.revenueOrExpenseAccount, debit: tax, ...trace });
-    return [importTaxLine, withCc({ account: input.counterAccount, credit: tax })];
+    return { own: [importTaxLine], counter: { side: 'credit', amountMinor: tax }, counterAt: 1 };
   }
 
   if (input.direction === 'output') {
     // Debtor gross / revenue net (with trace) / output VAT to 2200. Zero-rated and exempt book only
     // the net (tax == 0), with the trace still stamped on the revenue line.
-    const lines: VatJournalLine[] = [
-      withCc({ account: input.counterAccount, debit: gross }),
-      withCc({ account: input.revenueOrExpenseAccount, credit: net, ...trace }),
-    ];
-    if (tax !== 0) lines.push({ account: accountByNumber(ctx, '2200'), credit: tax });
-    return lines;
+    const own: VatJournalLine[] = [withCc({ account: input.revenueOrExpenseAccount, credit: net, ...trace })];
+    if (tax !== 0) own.push({ account: accountByNumber(ctx, '2200'), credit: tax });
+    return { own, counter: { side: 'debit', amountMinor: gross }, counterAt: 0 };
   }
 
   // Input direction (ordinary Vorsteuer). Under a deductible method the net books to the cost account
   // and the tax to 1170/1171; under saldo (or a non-deductible kind) the GROSS folds into the cost
   // account with no input-VAT split (Art. 37).
   if (deductible && tax !== 0) {
-    return [
-      withCc({ account: input.revenueOrExpenseAccount, debit: net, ...trace }),
-      { account: inputVatAccount(), debit: tax },
-      withCc({ account: input.counterAccount, credit: gross }),
-    ];
+    return {
+      own: [
+        withCc({ account: input.revenueOrExpenseAccount, debit: net, ...trace }),
+        { account: inputVatAccount(), debit: tax },
+      ],
+      counter: { side: 'credit', amountMinor: gross },
+      counterAt: 2,
+    };
   }
-  return [
-    withCc({ account: input.revenueOrExpenseAccount, debit: gross, ...trace }),
-    withCc({ account: input.counterAccount, credit: gross }),
-  ];
+  return {
+    own: [withCc({ account: input.revenueOrExpenseAccount, debit: gross, ...trace })],
+    counter: { side: 'credit', amountMinor: gross },
+    counterAt: 1,
+  };
+}
+
+/**
+ * Expand one taxable business line into the balanced journal set ready for `postEntry` (never posts).
+ * The trace (§H-VAT-TRACE) is stamped on the net base line so A07 reads it once, without double
+ * counting. Sigma debit == Sigma credit on every result (asserted by the property test).
+ *
+ * Assembled from `buildVatLineParts` (D152 amendment): the counter is booked on `counterAccount`, with the
+ * line's cost centre, at the index the pre-refactor builder put it. The output is byte-identical to that
+ * builder for every caller, held by `test/vat/build-vat-lines-identity.test.mjs` against a frozen copy.
+ */
+export function buildVatLines(ctx: WorkspaceContext, input: BuildVatLinesInput): VatJournalLine[] {
+  const parts = buildVatLineParts(ctx, input);
+  const cc = input.costCenterId;
+  const bare: VatJournalLine =
+    parts.counter.side === 'debit'
+      ? { account: input.counterAccount, debit: parts.counter.amountMinor }
+      : { account: input.counterAccount, credit: parts.counter.amountMinor };
+  const counter = cc !== undefined ? { ...bare, costCenter: cc } : bare;
+  const lines = [...parts.own];
+  lines.splice(parts.counterAt, 0, counter);
+  return lines;
+}
+
+// --- The rules a line's VAT follows from its KIND (D152 amendment) ----------------------------------
+
+/**
+ * A06 kinds whose NATURAL direction is money arriving: an output code books a sale, and the zero-rated and
+ * exempt codes are sales too. Every other kind (input, Bezugsteuer, Einfuhrsteuer) books money going out.
+ * The same set the A02 gate reads as "naturally on the credit side" when it signs a stamped trace.
+ */
+export const NATURAL_IN_KINDS: ReadonlySet<string> = new Set(['output', 'zero', 'exempt']);
+
+/** What a booked line's VAT follows from its code's kind, before any figure is computed. */
+export interface VatIntentRules {
+  /** The `buildVatLines` direction: a sale (`output`) or a purchase (`input`). */
+  direction: VatDirection;
+  /** The side the BASE line books on when the money runs the natural way (a sale credits, a purchase debits). */
+  naturalSide: 'debit' | 'credit';
+  /**
+   * Bezugsteuer (Art. 45) prices on the base: the foreign supplier charged no Swiss VAT, so the amount
+   * paid or booked IS the base and the tax is owed on top, whatever the line was typed as. Every other kind
+   * prices the amount as entered (gross or net).
+   */
+  pricesOnBase: boolean;
+}
+
+/** The kind's direction, natural side and pricing: one place, read by the bank inbox and `compose_entry`. */
+export function vatIntentRules(kind: string): VatIntentRules {
+  const naturalIn = NATURAL_IN_KINDS.has(kind);
+  return {
+    direction: naturalIn ? 'output' : 'input',
+    naturalSide: naturalIn ? 'credit' : 'debit',
+    pricesOnBase: kind === 'reverse_charge',
+  };
+}
+
+/**
+ * One booked line on its UNNATURAL side (a refund on an input code, a customer refund or credit on an output
+ * code) is the SAME booking mirrored: debit and credit swapped, every other field kept, so the tax is
+ * reduced, never invented. The A02 gate then stamps the trace negated (`reconcileAndStampVat`).
+ */
+export function mirrorVatLine<T extends { debit?: number; credit?: number }>(line: T): T {
+  const { debit, credit, ...rest } = line;
+  return {
+    ...rest,
+    ...(credit !== undefined ? { debit: credit } : {}),
+    ...(debit !== undefined ? { credit: debit } : {}),
+  } as T;
 }

@@ -56,6 +56,10 @@ const REFUSALS = [
   { code: 'invalid_iban', input: { creditorName: 'Nomadik GmbH', address: ADDRESS, qrIban: 'CH93 not an iban' } },
   // The QR injection ingress: a CR+LF in the creditor block would inject a Swiss QR Code element.
   { code: 'illegal_character', input: { creditorName: 'Nomadik\r\nGmbH', address: ADDRESS, qrIban: QR_IBAN } },
+  // The QR-bill's value rules, refused where typed (critic phase0-installable r1, P0.4e-6/7).
+  { code: 'invalid_country', input: { creditorName: 'Nomadik GmbH', address: { ...ADDRESS, country: 'SCHWEIZ' }, qrIban: QR_IBAN } },
+  { code: 'field_too_long', input: { creditorName: 'Nomadik GmbH', address: { ...ADDRESS, town: 'X'.repeat(36) }, qrIban: QR_IBAN } },
+  { code: 'iban_not_ch_li', input: { creditorName: 'Nomadik GmbH', address: ADDRESS, iban: 'DE89370400440532013000' } },
 ];
 
 test('the contract lists a code only if the LIVE engine really emits it', () => {

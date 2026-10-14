@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs';
 import { createLocalHttpRouter } from '../../dist/api/local-http.js';
 import { makeApiDeps } from '../../dist/api/mcp.js';
 import { getAction } from '../../dist/api/registry.js';
+import { mintStudioKey, studioHeaders } from './studio-key-support.mjs';
 
 const EVIL_ORIGIN = 'https://evil.example';
 const EVIL_HOST = 'evil.example';
@@ -38,7 +39,9 @@ const INITIALIZE = JSON.stringify({
  */
 async function withBridge(body) {
   const { deps, store } = makeApiDeps();
-  const router = createLocalHttpRouter(deps, { rest: true });
+  // The Studio key the dev bridge mints at start (critic probe P6): the REST twins need it.
+  const studioKey = mintStudioKey();
+  const router = createLocalHttpRouter(deps, { rest: true, studioKey });
   const http = createServer((req, res) => {
     void router.handle(req, res).then((handled) => {
       if (handled) return;
@@ -49,7 +52,7 @@ async function withBridge(body) {
   await new Promise((resolve) => http.listen(0, '127.0.0.1', resolve));
   const { port } = http.address();
   try {
-    await body({ port, store, deps, router });
+    await body({ port, store, deps, router, studioKey });
   } finally {
     await router.closeAll();
     await new Promise((resolve) => http.close(resolve));
@@ -151,13 +154,23 @@ test('BLOCKER-2: EVERY face the router declares is behind the same guard', async
 });
 
 test('BLOCKER-2: the guard does not break the faces it protects', async () => {
-  await withBridge(async ({ port, store }) => {
-    // An agent or the CLI sends no Origin at all.
-    const cli = await post(port, '/api/create_workspace', { name: 'Acme GmbH', idempotencyKey: 'ok-1' });
+  await withBridge(async ({ port, store, studioKey }) => {
+    // A non-browser client sends no Origin at all: the guard lets it through (the Studio key, not the
+    // guard, then decides the seat).
+    const cli = await post(port, '/api/create_workspace', { name: 'Acme GmbH', idempotencyKey: 'ok-1' }, studioHeaders(studioKey));
     assert.equal(cli.status, 200, `a loopback request must still work, got ${cli.status}`);
     // The Studio speaks from its dev-server origin.
-    const studio = await post(port, '/api/create_workspace', { name: 'Beta AG', idempotencyKey: 'ok-2' }, { origin: 'http://localhost:5173' });
+    const studio = await post(
+      port,
+      '/api/create_workspace',
+      { name: 'Beta AG', idempotencyKey: 'ok-2' },
+      { origin: 'http://localhost:5173', ...studioHeaders(studioKey) },
+    );
     assert.equal(studio.status, 200);
+    assert.equal(countOf(store, 'workspace'), 2);
+    // Past the guard is not past the seat: without the key the REST twin refuses (401, not 403).
+    const keyless = await post(port, '/api/create_workspace', { name: 'Gamma AG', idempotencyKey: 'ok-3' });
+    assert.equal(keyless.status, 401);
     assert.equal(countOf(store, 'workspace'), 2);
     // And the MCP face still initialises.
     const mcp = await post(port, '/mcp', INITIALIZE);

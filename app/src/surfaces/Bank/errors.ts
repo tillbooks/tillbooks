@@ -331,6 +331,9 @@ export function explainRefusal(t: T, e: Err, ctx: RefusalContext): Refusal {
       return make('vorschlagRejected', {}, { kind: 'reload' });
     case 'already_executed':
       return make('vorschlagExecuted', {}, { kind: 'reload' });
+    // Critic N1: the record behind the Vorschlag changed after the proposal; nothing ran.
+    case 'vorschlag_stale':
+      return make('vorschlagStale', {}, { kind: 'reload' });
     case 'entity_not_found':
       return make('notFound', {}, { kind: 'reload' });
     case 'not_found':

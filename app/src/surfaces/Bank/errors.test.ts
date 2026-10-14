@@ -68,6 +68,7 @@ const MAPPED: [string, Record<string, unknown>][] = [
   ['counterparty_merged', { counterpartyId: 'c_1' }],
   ['already_rejected', { actionId: 'act_1' }],
   ['already_executed', { actionId: 'act_1' }],
+  ['vorschlag_stale', { actionId: 'act_1', actionTool: 'book_bank_line' }],
   ['entity_not_found', {}],
   ['invalid_input', { field: 'target' }],
   ['transport_error', {}],

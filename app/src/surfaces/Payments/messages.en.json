@@ -89,7 +89,8 @@
       "istVat": "Of which VAT (cash basis), recognised on {date}: {amount}",
       "fx": "Realised FX difference",
       "fxRate": "Rate {rate} of {date}",
-      "stale": "The preview is being recalculated."
+      "stale": "The preview is being recalculated.",
+      "matching": "Looking for matching items."
     },
     "status": {
       "posted": "Posted",
@@ -147,7 +148,8 @@
       "currency_mismatch": "A payment in {payCur} cannot settle a document in {docCur}.",
       "intent_required": "The payment was sent without an explicit intent, so nothing was posted.",
       "unexpected": "The payment could not be posted.",
-      "ownedByBankLine": "This payment belongs to a bank line. Take the line back under Bank: a payment booked there is reversed with it; one only matched there you reverse here afterwards."
+      "ownedByBankLine": "This payment belongs to a bank line. Take the line back under Bank: a payment booked there is reversed with it; one only matched there you reverse here afterwards.",
+      "nothing_to_allocate": "This payment has no credit left to allocate."
     },
     "errorCta": {
       "needs_bank_account": "Go to setup",
@@ -169,7 +171,8 @@
       "reverseDate": "Reversal date",
       "discard": "Discard what you entered?",
       "discardConfirm": "Discard",
-      "discardKeep": "Keep editing"
+      "discardKeep": "Keep editing",
+      "changed": "The allocation changed while you were confirming. Nothing was posted: check it and post again."
     },
     "openRow": "Open the payment of {date} for {amount}",
     "rowActionsFor": "Actions for the payment of {date} for {amount}",
@@ -184,7 +187,23 @@
       "journalEntry": "View the entry",
       "documentMissing": "Document not found"
     },
-    "showBankLine": "Show the bank line"
+    "showBankLine": "Show the bank line",
+    "prompt": {
+      "start": "Enter an amount or a counterparty, then TILL suggests matching items."
+    },
+    "next": {
+      "amount": "Enter the amount.",
+      "account": "Choose the account the payment went through."
+    },
+    "bankAccountChoose": "Choose account",
+    "preAssigned": "assigned",
+    "preAssignedUndo": "Undo",
+    "preAssignedUndoLabel": "Undo the assignment to {number}",
+    "ambiguous": "{n} items match exactly. Pick the right one.",
+    "noSuggestion": "No item matches exactly.",
+    "showAll": "Show all open items ({n})",
+    "showSuggestions": "Show suggestions only",
+    "pick": "Assign {number}"
   },
   "help": {
     "Payments": {

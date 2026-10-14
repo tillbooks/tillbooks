@@ -29,28 +29,33 @@ import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
 import {
   setOpeningBalances,
+  prevalidateOpeningBalances,
   getOpeningBalances,
   importMigration,
+  prevalidateImportMigration,
   OPENING_CONTRA_ACCOUNT_NUMBER,
 } from '../core/ledger/index.js';
 import type { ImportMigrationInput } from '../core/ledger/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface OpeningActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
   ): ActionDef;
   ctxSchema(props?: Record<string, unknown>, required?: string[]): JsonSchema;
+  /** D158: attach the verb's pure pre-draft validation (`ActionDef.prevalidate`). */
+  withPrevalidate(def: ActionDef, check: (ctx: WorkspaceContext, input: ActionInput) => Result | undefined): ActionDef;
   STR: { readonly type: 'string' };
   INT: { readonly type: 'integer' };
   BOOL: { readonly type: 'boolean' };
 }
 
 export function openingActions(h: OpeningActionHelpers): ActionDef[] {
-  const { ctxAction, ctxSchema, STR, INT, BOOL } = h;
+  const { ctxAction, ctxSchema, withPrevalidate, STR, INT, BOOL } = h;
 
   /** One account's opening position: the account by id or number, and exactly one side in Rappen. */
   const OPENING_LINES = {
@@ -80,9 +85,12 @@ export function openingActions(h: OpeningActionHelpers): ActionDef[] {
   } as const;
 
   return [
-    ctxAction(
+    // D158: dial-governed under `post`. The seam runs the verb's own checks before it drafts, so an
+    // agent's unbalanced set is refused `unbalanced` with the same Result a direct call gets (A04's
+    // REST/MCP parity), and only a set the verb would post becomes a Vorschlag.
+    withPrevalidate(ctxAction(
       'set_opening_balances',
-      'write',
+      'write:correctable:books',
       `Seed the workspace's opening position as ONE balanced, posted, immutable opening entry (Eröffnungsbilanz), each account carrying exactly one side in integer Rappen. Accounts are named by id or by chart number. If the set does not tie out it is REFUSED with the signed Rappen difference and nothing is written: pass differenceAccount (KMU ${OPENING_CONTRA_ACCOUNT_NUMBER} Eröffnungsbilanz is the usual one) to book the delta explicitly, because a difference is never plugged silently. asOf defaults to the fiscal-year start. Once the prior year is closed the position is carried from that close and this verb answers carried_forward. An account that already carries a balance on that date is refused with account_already_has_balance, naming what it holds: seeding on top of it would double-count, and a bank opening balance from set_bank_opening_balance is the usual reason. A posted position has no edit path: correct it with a reversing entry (reverse_entry) and a fresh call under a new key, which this verb accepts once the storno has unwound the old position. reference records the Inventar or Beleg the position is traced to, and get_opening_balances reads it back.`,
       ctxSchema(
         {
@@ -96,7 +104,7 @@ export function openingActions(h: OpeningActionHelpers): ActionDef[] {
         ['lines', 'idempotencyKey'],
       ),
       (ctx, input) => setOpeningBalances(ctx, input as never),
-    ),
+    ), (ctx, input) => prevalidateOpeningBalances(ctx, input as never)),
     ctxAction(
       'preview_opening_import',
       'read',
@@ -104,15 +112,17 @@ export function openingActions(h: OpeningActionHelpers): ActionDef[] {
       ctxSchema(IMPORT_FIELDS, ['rows']),
       (ctx, input) => importMigration(ctx, { ...(input as unknown as ImportMigrationInput), dryRun: true }),
     ),
-    ctxAction(
+    // D158: governed under `post` like the position it books; the seam runs the import's own checks
+    // before it drafts, so an unbalanced or unmapped file is refused with the direct call's Result.
+    withPrevalidate(ctxAction(
       'import_opening_balances',
-      'write',
+      'write:correctable:books',
       'Import already-parsed migration rows as the opening position, posting exactly what preview_opening_import showed. Takes rows as an array of column-value objects, NOT a CSV string: this verb parses no file, and turning an export into rows is the caller\'s step. Refuses with unmapped_account when any row names an account the chart does not have, because importing the rest would post a position that balances only because a row was dropped. A row with no account at all (what a subtotal or Total line looks like) is refused as invalid_row naming that row, rather than blamed on the mapping. format accepts csv or bexio, which select default column names; mapping overrides them field by field for an export with different headers. Retrying the same idempotencyKey returns the existing entry and never a second opening position.',
       ctxSchema({ ...IMPORT_FIELDS, dryRun: BOOL, idempotencyKey: STR }, ['rows', 'idempotencyKey']),
       // `dryRun` is pinned false rather than passed through: a WRITE verb that a flag could turn into
       // a read is a verb whose annotation lies, and `preview_opening_import` already IS that read.
       (ctx, input) => importMigration(ctx, { ...(input as unknown as ImportMigrationInput), dryRun: false }),
-    ),
+    ), (ctx, input) => prevalidateImportMigration(ctx, { ...(input as unknown as ImportMigrationInput), dryRun: false })),
     ctxAction(
       'get_opening_balances',
       'read',

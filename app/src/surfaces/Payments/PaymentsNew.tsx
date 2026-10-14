@@ -13,19 +13,29 @@
  * The money side and the matcher CONTEXT arrive as URL parameters, so a reload reopens the same
  * matcher: `allocate` selects allocation mode against an existing payment's credit (P46), and
  * `amount`/`date`/`reference`/`direction`/`counterparty` seed a new one. Nothing is posted on arrival:
- * a URL is not a statement that money should move.
+ * a URL is not a statement that money should move. `bankAccount=<ledger account id>` names the Konto
+ * the payment came through, when the entry point knows it; it wins over the inferred default.
+ *
+ * THE WERKBANK IS KEYED BY WORKSPACE. A workspace switch does not unmount this route, and every typed
+ * value, the chosen Konto, a pre-assignment undo and every read in flight belong to the workspace they
+ * were made in. Remounting on the switch resets all of it at once, and the unmounted instance drops
+ * any answer that arrives after it (a read, or a write's result), so nothing from the old books lands
+ * on the new ones.
  *
  * The list renders behind the workbench, so closing it leaves the person somewhere real rather than on
  * a blank route.
  */
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { useWorkspaceId } from '../../app/workspace';
 import { Payments } from './Payments';
 import { PaymentAllocator } from './PaymentAllocator';
 
 export function PaymentsNew() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const workspaceId = useWorkspaceId();
+  const remountKey = workspaceId ?? 'none';
 
   const close = () => navigate('/payments');
   // The Commit moment (D122 D-I): the list behind the workbench lands the row just recorded. The id
@@ -41,9 +51,16 @@ export function PaymentsNew() {
     <>
       <Payments />
       {allocateFor !== null ? (
-        <PaymentAllocator mode="allocate" paymentId={allocateFor} onClose={close} onPosted={posted} />
+        <PaymentAllocator
+          key={remountKey}
+          mode="allocate"
+          paymentId={allocateFor}
+          onClose={close}
+          onPosted={posted}
+        />
       ) : (
         <PaymentAllocator
+          key={remountKey}
           mode="record"
           prefill={{
             amount: params.get('amount') ?? undefined,
@@ -51,6 +68,7 @@ export function PaymentsNew() {
             reference: params.get('reference') ?? undefined,
             direction: params.get('direction') ?? undefined,
             counterpartyId: params.get('counterparty') ?? undefined,
+            bankAccountId: params.get('bankAccount') ?? undefined,
           }}
           onClose={close}
           onPosted={posted}

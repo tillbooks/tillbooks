@@ -119,13 +119,18 @@ export function bootstrapWorkspace(deps: SetupDeps, input: BootstrapWorkspaceInp
     // from prose; saldo needs a Saldosteuersatz that a description cannot supply, so it becomes a need
     // rather than a guessed rate.
     if (cfg.registered && cfg.vatMethod === 'effektiv') {
-      const configured = configureVat(ctx, {
-        method: 'effektiv',
-        timing: cfg.vatTiming ?? 'soll',
-        registered: true,
-        ...(cfg.mwstNo !== undefined ? { vatNumber: cfg.mwstNo } : {}),
-        idempotencyKey: `${input.idempotencyKey}:vat`,
-      });
+      // K1: a derived key runs in this composite's own idempotency scope. (The workspace was minted a
+      // few lines above, inside this same transaction, so nobody could have configured it first; the
+      // scope makes that structural rather than a property of the ordering.)
+      const configured = deps.store.innerWrite('bootstrap_workspace', () =>
+        configureVat(ctx, {
+          method: 'effektiv',
+          timing: cfg.vatTiming ?? 'soll',
+          registered: true,
+          ...(cfg.mwstNo !== undefined ? { vatNumber: cfg.mwstNo } : {}),
+          idempotencyKey: `${input.idempotencyKey}:vat`,
+        }),
+      );
       if (configured.ok) {
         applied.push('vatMethod', 'vatTiming', 'registered');
         if (cfg.mwstNo !== undefined) applied.push('mwstNo');

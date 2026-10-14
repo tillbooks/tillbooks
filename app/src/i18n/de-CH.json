@@ -80,7 +80,12 @@
       "source": "Pfad zur Sicherung oder zum Export",
       "confirm": "Diese Sicherung in einem neuen Arbeitsbereich wiederherstellen? Deine bestehenden Arbeitsbereiche bleiben unberührt.",
       "defaultName": "Wiederhergestellter Arbeitsbereich",
-      "close": "Schliessen"
+      "close": "Schliessen",
+      "portalLinks": {
+        "one": "Wiederhergestellt. {count} Portal-Link bleibt zu, bis du ihn wieder freigibst: Öffne beim Kontakt den Portal-Zugang und aktiviere ihn, wenn du ihn noch willst.",
+        "other": "Wiederhergestellt. {count} Portal-Links bleiben zu, bis du sie wieder freigibst: Öffne beim Kontakt den Portal-Zugang und aktiviere jeden, den du noch willst."
+      },
+      "continue": "Weiter"
     },
     "verify": {
       "result": "Gültig. {entries} verbuchte Einträge, ausgeglichen {balance}."
@@ -97,7 +102,14 @@
     "error": {
       "backup_corrupt": "Diese Datei ist beschädigt und kann nicht wiederhergestellt werden. Wähle eine andere Datei.",
       "incompatible_schema_version": "Diese Sicherung stammt aus einer inkompatiblen TILL-Version und kann nicht wiederhergestellt werden.",
-      "restore_invariant_failed": "Die Sicherung hat die Bilanzprüfung nicht bestanden und wurde nicht wiederhergestellt.",
+      "restore_invariant_failed": "Die Sicherung hat eine Konsistenzprüfung nicht bestanden und wurde nicht wiederhergestellt. Es wurde nichts verändert.",
+      "restore_invariant_reason": {
+        "unbalanced_entry": "Die Sicherung enthält eine Buchung, bei der Soll und Haben nicht übereinstimmen. Sie wurde nicht wiederhergestellt, es wurde nichts verändert.",
+        "foreign_reference": "Die Sicherung verweist auf Daten eines anderen Arbeitsbereichs in diesem Buch. Sie wurde nicht wiederhergestellt, es wurde nichts verändert. Prüfe, woher die Datei stammt.",
+        "constraint_violation": "Die Sicherung verletzt eine Regel dieses Buchs, zum Beispiel einen eindeutigen Schlüssel, der hier schon vergeben ist. Sie wurde nicht wiederhergestellt, es wurde nichts verändert.",
+        "ambiguous_reference": "Ein Wert in der Sicherung passt auf mehrere Datensätze, darum kann TILL ihn nicht eindeutig zuordnen. Sie wurde nicht wiederhergestellt, es wurde nichts verändert.",
+        "referential_integrity": "Die Sicherung verweist auf Datensätze, die sie selbst nicht enthält. Sie wurde nicht wiederhergestellt, es wurde nichts verändert."
+      },
       "export_destination_unwritable": "Der Export konnte nicht geschrieben werden. Schaffe Speicherplatz und versuche es erneut.",
       "unrestorable_format": "Ein Export (.tillexport) ist keine Wiederherstellungsquelle. Verwende eine .tillbackup-Datei."
     }
@@ -265,6 +277,8 @@
   "errors": {
     "report_this": "Diesen Fehler melden",
     "invalid_input": "Eine Eingabe war ungültig. Bitte prüfe die Felder und versuche es erneut.",
+    "account_in_use": "Dieses Bankkonto wird verwendet, darum ist diese Änderung nicht möglich: Ein Eröffnungssaldo ist darauf gebucht, oder ein Zahlungslauf im Entwurf oder generiert (noch nicht bezahlt) nennt seine IBAN. Hat sich die IBAN wirklich geändert, verwirf diesen Zahlungslauf oder markiere ihn zuerst als bezahlt. Es wurde nichts geändert.",
+    "creditor_name_missing": "Ein Lieferant hat keinen Namen, und eine Zahlungsdatei kann den Empfänger nicht mit einer internen ID benennen. Gib dem Lieferanten unter Kontakte einen Namen. Steht die Rechnung schon in einem Entwurf eines Zahlungslaufs, verwirf diesen Entwurf zuerst und nimm die Rechnung dann erneut in einen Zahlungslauf. Es wurde nichts geändert.",
     "workspace_not_found": "Der gewählte Arbeitsbereich wurde nicht gefunden.",
     "workspace_archived": "Dieses Hauptbuch ist stillgelegt und schreibgeschützt. Es wurde nichts geändert. Wieder aktivierbar über die Mandatsliste.",
     "unknown_action": "Diese Aktion ist der Anwendung nicht bekannt.",
@@ -291,6 +305,9 @@
     "already_merged": "Dieser Kontakt wurde bereits zusammengeführt.",
     "too_many_tags": "Zu viele Tags an diesem Kontakt. Höchstens 50 sind möglich.",
     "tag_too_long": "Dieses Tag ist zu lang. Höchstens 40 Zeichen sind möglich.",
+    "invalid_country": "Das Land ist der zweistellige Ländercode, den eine QR-Rechnung braucht, zum Beispiel CH. Es wurde nichts geändert.",
+    "field_too_long": "Ein Feld ist länger, als eine QR-Rechnung erlaubt. Kürze es bitte. Es wurde nichts geändert.",
+    "iban_not_ch_li": "Eine QR-Rechnung braucht eine IBAN, die mit CH oder LI beginnt. Es wurde nichts geändert.",
     "occurred_in_future": "Eine Aktivität kann nicht in der Zukunft liegen.",
     "invalid_activity_kind": "Diese Aktivitätsart ist nicht bekannt.",
     "invalid_import_format": "Die Datei konnte nicht gelesen werden. Prüfe die Kopfzeile und die erste fehlerhafte Zeile.",
@@ -502,7 +519,7 @@
       "record_payment": "Zahlung erfassen",
       "allocate_payment": "Zahlung zuordnen",
       "reverse_payment": "Zahlung stornieren",
-      "vat_mark_filed": "MWST als eingereicht markieren",
+      "vat_mark_filed": "MWST-Abrechnung als eingereicht markieren",
       "checklist_item_complete": "Checklisten-Schritt abschliessen",
       "define_field": "Feld anlegen",
       "install_plugin": "Plugin installieren",

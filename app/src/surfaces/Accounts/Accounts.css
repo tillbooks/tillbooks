@@ -174,6 +174,14 @@
   gap: var(--t-space-1);
 }
 
+/* D142 amendment: the one-line explainer under "Beleg = Kontoauszug" (dim ink, never the accent). */
+.acc-hint {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
 /* Accounts' OWN create/edit drawer and its OWN destructive confirms are shared primitives now
    (D118 B2): DetailDrawer and Modal (via AccountConfirm), so the bespoke `.acc-drawer-*` shell and
    the `.acc-confirm-*` overlay Accounts used are gone. AccountConfirm's message sits inside the

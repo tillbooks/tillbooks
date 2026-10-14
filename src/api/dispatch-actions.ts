@@ -3,9 +3,9 @@
  * `documentTemplateActions` precedent), so several agents appending to the append-only registry at
  * once collide over a line rather than a block.
  *
- * One write (`dispatch_text_upsert`, gated on `manage_dispatch_texts`, NATURALLY idempotent: it
- * asserts the absolute state of one `(documentKind, locale)` slot, so no idempotencyKey) and two
- * reads (`readOnlyHint`). Composed verbs only (D22): a text slot, a resolved preview, a filtered
+ * Two writes (`dispatch_text_upsert` and its inverse `dispatch_text_reset`, both gated on
+ * `manage_dispatch_texts`, both NATURALLY idempotent: each asserts the absolute state of one
+ * `(documentKind, locale)` slot, so no idempotencyKey) and two reads (`readOnlyHint`). Composed verbs only (D22): a text slot, a resolved preview, a filtered
  * audit read; no flat CRUD twins (`get_dispatch_text` does not exist, the editor reads the saved
  * slots off `list_dispatches`' `texts` list shape).
  *
@@ -22,12 +22,13 @@
 import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
-import { dispatchTextUpsert, dispatchPreview, listDispatches } from '../core/customization/index.js';
+import { dispatchTextUpsert, dispatchTextReset, dispatchPreview, listDispatches } from '../core/customization/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface DispatchActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -48,10 +49,17 @@ export function dispatchActions(h: DispatchActionHelpers): readonly ActionDef[] 
   return [
     ctxAction(
       'dispatch_text_upsert',
-      'write',
+      'write:reversible:outbound',
       "Speichere den Textbaustein (subject + body) for one document kind (invoice, quote or dunning_run) and locale: the workspace's own outbound message text, with {{variable}} interpolation validated against the kind's registered variable set AT SAVE TIME (an unknown variable is refused with unknown_variable naming the valid set, never a broken mail later). Naturally idempotent: it asserts the absolute state of one (documentKind, locale) slot, and a value-identical re-save writes nothing at all. Sends NOTHING and changes no send behaviour; a missing slot falls back to the built-in default text at preview.",
       ctxSchema({ documentKind: STR, locale: STR, subject: STR, body: STR }, ['documentKind', 'locale', 'subject', 'body']),
       (ctx, input) => dispatchTextUpsert(ctx, as(input)),
+    ),
+    ctxAction(
+      'dispatch_text_reset',
+      'write:reversible:outbound',
+      "Return one Textbaustein slot (documentKind invoice, quote or dunning_run, and locale) to the built-in default text by deleting its saved subject + body; the slot then resolves exactly as one never saved (preview defaulted:true). Naturally idempotent: resetting a slot with no saved text answers ok with unchanged:true and touches nothing. Sends NOTHING, changes no send behaviour and never edits the send log.",
+      ctxSchema({ documentKind: STR, locale: STR }, ['documentKind', 'locale']),
+      (ctx, input) => dispatchTextReset(ctx, as(input)),
     ),
     ctxAction(
       'dispatch_preview',

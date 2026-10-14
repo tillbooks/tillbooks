@@ -14,7 +14,7 @@
  * prints what it was handed even when the two disagree.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { axe } from 'jest-axe';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
@@ -109,7 +109,11 @@ function renderDetail(canned: Canned, initial = '/documents/doc_fx_1') {
  * leaves nothing in flight for the rest of the test to race.
  */
 async function settleInvoiceReads(): Promise<void> {
-  await screen.findByLabelText(VAT_SUMMARY);
+  // Every `vat_preview` has answered: the panel says so itself. Its content (the per-rate summary, or
+  // on a posted document whose previews do not add up to its stored tax, this file's fixed preview
+  // against the pinned arms, the stored figure) is no settle signal, since the stored figure stands
+  // from the first paint.
+  await waitFor(() => expect(document.querySelector('[data-vat-state="settled"]')).not.toBeNull());
   await screen.findByRole('heading', { name: QR_SETTLED });
 }
 

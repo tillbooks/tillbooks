@@ -23,6 +23,15 @@
  * `.field-error` line that names what is missing, and the focus. The two engine refusals that belong
  * to a field (the VAT number, the employer) land on that field the same way; the banner is left for
  * a refusal that belongs to no field. The drawer opens on its first field, never on the close X.
+ *
+ * ## ZAHLUNGSFRIST: EMPTY IS "STANDARD", 0 IS "SOFORT" (D163, 04.10.2026)
+ *
+ * The contact's terms are nullable in the engine: null means "no terms of its own, the workspace
+ * default from the Firmenprofil applies", 0 means "due immediately". An empty field is therefore a
+ * real answer, said in words under it ("Standard (30 Tage)"), and 0 says "sofort". Saving an emptied
+ * field on an existing contact sends `null`, which clears its own terms back to the Standard; a new
+ * contact with an empty field sends nothing and is stored with null. Anything but a whole number of
+ * days is refused at the field before the write.
  */
 import { useEffect, useId, useRef, useState } from 'react';
 
@@ -31,7 +40,8 @@ import { isErr } from '../../lib/client';
 import { useT } from '../../i18n';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { ErrorBanner } from '../../components/states';
-import { AlertGlyph } from '../../components/states/glyphs';
+import { AlertGlyph, InfoGlyph } from '../../components/states/glyphs';
+import { Tooltip } from '../../components/Tooltip';
 import { focusFirstInvalid } from '../../components/useFocusTrap';
 import { Select } from '../../components/Select';
 import type { Err } from '../../lib/client';
@@ -75,9 +85,25 @@ export interface ContactEditorProps {
    * the workspace default would change what its next invoice is billed in, silently.
    */
   baseCurrency: string;
+  /**
+   * D163: the workspace default Zahlungsfrist (`get_company_profile.defaultPaymentTermsDays`) the
+   * empty terms field stands for: a number of days, null when the Firmenprofil sets none (documents
+   * then fall due on their own date), or undefined while it is not known (the read failed or is
+   * still out), in which case the field says "Standard" without inventing a number.
+   */
+  workspaceTermsDays?: number | null | undefined;
   onClose: () => void;
   /** Called after a successful write so the list can reload. */
   onSaved: () => void;
+}
+
+/** A Zahlungsfrist the field may send: empty (Standard) or a whole number of days from 0 to 365. */
+const TERMS_RE = /^\d+$/;
+/** The engine's bound on a contact's terms (`PAYMENT_TERMS_MAX_DAYS`, critic M1). */
+const TERMS_MAX_DAYS = 365;
+
+function termsAcceptable(value: string): boolean {
+  return value === '' || (TERMS_RE.test(value) && Number(value) <= TERMS_MAX_DAYS);
 }
 
 export function ContactEditor({
@@ -86,6 +112,7 @@ export function ContactEditor({
   contact,
   contacts = [],
   baseCurrency,
+  workspaceTermsDays,
   onClose,
   onSaved,
 }: ContactEditorProps) {
@@ -122,6 +149,7 @@ export function ContactEditor({
   const [description, setDescription] = useState(contact?.description ?? '');
 
   const [nameError, setNameError] = useState<string | null>(null);
+  const [termsError, setTermsError] = useState<string | null>(null);
   const [vatError, setVatError] = useState<string | null>(null);
   const [employerError, setEmployerError] = useState<string | null>(null);
   const [formError, setFormError] = useState<Err | null>(null);
@@ -160,7 +188,9 @@ export function ContactEditor({
       vatNumber: vatNumber.trim() === '' ? undefined : vatNumber.trim(),
       email: email.trim() === '' ? undefined : email.trim(),
       defaultCurrency,
-      paymentTermsDays: terms === '' ? undefined : Number(terms),
+      // D163: empty is "Standard". A new contact sends nothing (stored null); an edited one sends null,
+      // which clears its own terms back to the workspace default. 0 is "sofort", sent as 0.
+      paymentTermsDays: terms === '' ? (mode === 'edit' ? null : undefined) : Number(terms),
       description: description.trim() === '' ? undefined : description.trim(),
     };
   }
@@ -170,12 +200,18 @@ export function ContactEditor({
     setEmployerError(null);
     setFormError(null);
     // The one required field is checked here, before the write, so the answer stands at the field.
+    const termsBad = !termsAcceptable(paymentTermsDays.trim());
+    setTermsError(termsBad ? t('contact.error.paymentTerms') : null);
     if (name.trim() === '') {
       setNameError(t('contact.error.nameRequired'));
       setInvalidTick((n) => n + 1);
       return;
     }
     setNameError(null);
+    if (termsBad) {
+      setInvalidTick((n) => n + 1);
+      return;
+    }
     setSaving(true);
 
     if (mode === 'create') {
@@ -216,6 +252,10 @@ export function ContactEditor({
     if (err.error === 'invalid_vat_number') {
       setVatError(t('contact.invalidVatNumber'));
       setInvalidTick((n) => n + 1);
+    } else if (err.error === 'invalid_payment_terms_days') {
+      // The engine's own bound, should the field ever let one through: said at the field.
+      setTermsError(t('contact.error.paymentTerms'));
+      setInvalidTick((n) => n + 1);
     } else if (err.error === 'employer_must_be_company') {
       // Inline on the field that caused it, naming the rule, never a bare toast (spec C00 §6).
       setEmployerError(t('contact.error.employerMustBeCompany'));
@@ -225,6 +265,21 @@ export function ContactEditor({
       setFormError(err);
     }
   }
+
+  /**
+   * What an EMPTY terms field means, in words: the Firmenprofil's Standard-Zahlungsfrist with its days,
+   * "sofort" when the Standard is none or 0 (documents then fall due on their own date), or plain
+   * "Standard" while the workspace default is not known.
+   */
+  const standardTerms =
+    workspaceTermsDays === undefined
+      ? t('contact.paymentTermsStandardUnknown')
+      : workspaceTermsDays === null || workspaceTermsDays === 0
+        ? t('contact.paymentTermsStandardImmediate')
+        : t('contact.paymentTermsStandard', { days: workspaceTermsDays });
+  const termsValue = paymentTermsDays.trim();
+  const termsHint = termsValue === '' ? standardTerms : TERMS_RE.test(termsValue) && Number(termsValue) === 0 ? t('contact.paymentTermsImmediate') : null;
+  const termsInfo = t('contact.paymentTermsHelp');
 
   const footer = (
     <>
@@ -424,18 +479,43 @@ export function ContactEditor({
               </div>
             </div>
             <div className="ct-field">
-              <label className="ct-field-inner">
-                <span className="ct-field-label">
-                  {t('contact.paymentTerms')} ({t('contact.paymentTermsUnit')})
+              <div className="ct-field-inner">
+                <span className="ct-field-inline">
+                  <label htmlFor={`${titleId}-terms`} className="ct-field-label">
+                    {t('contact.paymentTerms')} ({t('contact.paymentTermsUnit')})
+                  </label>
+                  <Tooltip content={termsInfo}>
+                    <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('contact.paymentTermsInfo')}>
+                      <InfoGlyph size={16} />
+                    </button>
+                  </Tooltip>
                 </span>
                 <input
+                  id={`${titleId}-terms`}
                   className="field t-num"
                   inputMode="numeric"
                   min={0}
                   value={paymentTermsDays}
+                  placeholder={standardTerms}
+                  aria-invalid={termsError !== null}
+                  aria-describedby={
+                    termsError !== null ? `${titleId}-terms-err` : termsHint !== null ? `${titleId}-terms-hint` : undefined
+                  }
                   onChange={(event) => setPaymentTermsDays(event.target.value)}
                 />
-              </label>
+              </div>
+              {termsError !== null ? (
+                <p id={`${titleId}-terms-err`} className="field-error" role="alert">
+                  <AlertGlyph size={16} aria-hidden="true" />
+                  {termsError}
+                </p>
+              ) : (
+                termsHint !== null && (
+                  <span id={`${titleId}-terms-hint`} className="ct-field-hint">
+                    {termsHint}
+                  </span>
+                )
+              )}
             </div>
           </div>
 

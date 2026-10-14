@@ -42,7 +42,29 @@ CREATE TABLE IF NOT EXISTS payment_batch (
   status              TEXT NOT NULL,
   ctrl_sum_minor      INTEGER,
   nb_of_txs           INTEGER,
+  -- The pain.001 GrpHdr/MsgId and PmtInf/PmtInfId, FROZEN at batch creation (never re-derived from
+  -- \`id\`, which a G04 restore or an env_copy re-mints: the bank deduplicates on MsgId, SIX IG SPS 2025
+  -- §3.8, so a moved MsgId would let a re-upload pay twice). Unique per workspace and immutable once
+  -- set: generation 9 (\`../store/migrations.ts\`) backfills rows written before and adds the UNIQUE
+  -- indexes and the freeze triggers. Also in ADDITIVE_COLUMNS for a pre-generation-9 file.
   msg_id              TEXT,
+  pmt_inf_id          TEXT,
+  -- The InitgPty/Dbtr Nm the file carries (the company profile's creditor name, else the workspace
+  -- name), frozen at creation for the same reason as cre_dt_tm (F6/D73: what was generated is what
+  -- re-renders). A restore under another workspace name, or a later rename, used to change the bytes of
+  -- a file whose MsgId the bank already holds (critic r1 C2). PII: masked by env_copy's sanitize.
+  debtor_name         TEXT,
+  -- The DbtrAcct/IBAN the file carries (and so its DbtrAgt clearing number, a pure function of it),
+  -- frozen at creation from the debtor bank account (critic r2 R2-1). Read live, an IBAN edit on the
+  -- account let a regenerated file carry the same MsgId with ANOTHER debtor account: at a second bank,
+  -- whose duplicate check never saw that MsgId, the run would execute twice. PII like bank_account.iban:
+  -- masked by env_copy's sanitize. Not a contact's data, so C00's erasure neither clears nor reports it.
+  debtor_iban         TEXT,
+  -- When the batch FIRST produced a file (the draft-to-generated flip), frozen once set (critic r3
+  -- R3-2). "Did a file ever exist" is what the erasure exception and the retained count rest on, so it
+  -- is a stamped fact, never inferred from a column nothing freezes. NULL: discarded as a draft, or a
+  -- draft. Also in ADDITIVE_COLUMNS; generation 9 backfills it.
+  generated_at        TEXT,
   -- The pain.001 GrpHdr/CreDtTm, stamped ONCE at batch creation (F6). Taking it from the wall clock
   -- at generation time made "regenerating a generated batch is byte-identical" false under a moving
   -- clock while MsgId (the bank's 90-day dedup key) stayed fixed: two textually different files
@@ -97,7 +119,22 @@ CREATE TABLE IF NOT EXISTS payment_batch_item (
   reference_kind      TEXT NOT NULL,
   reference_value     TEXT,
   posted_payment_id   TEXT REFERENCES payment(id),
-  created_at          TEXT NOT NULL
+  created_at          TEXT NOT NULL,
+  -- The pain.001 CdtTrfTxInf/PmtId InstrId and EndToEndId, FROZEN when the item is written, for the
+  -- same reason as payment_batch.msg_id (see there). Also in ADDITIVE_COLUMNS for an older file.
+  instr_id            TEXT,
+  end_to_end_id       TEXT,
+  -- The item's POSITION in its batch (1..n), frozen when the item is written: the order of the
+  -- CdtTrfTxInf elements. Row order is not a fact of the book (a G04 backup and restore do not preserve
+  -- rowid order), so without it a restored batch regenerated its transactions in another order: the same
+  -- references, a different file. Also in ADDITIVE_COLUMNS; generation 9 backfills it from rowid order.
+  seq                 INTEGER,
+  -- The Cdtr/Nm the file carries (the vendor's name, a merge tombstone followed to its survivor),
+  -- snapshotted at batch creation exactly like creditor_iban (owner decision D148, 30.09.2026): a later
+  -- rename or a C00 erasure of the vendor no longer changes the bytes of a file whose MsgId the bank
+  -- holds. A sent payment file is a business record (GeBüV, OR 958f), so C00's erasure RETAINS this
+  -- field and names it in its report, as it retains creditor_iban. PII: masked by env_copy's sanitize.
+  creditor_name       TEXT
 );
 
 CREATE INDEX IF NOT EXISTS payment_batch_item_by_batch ON payment_batch_item (workspace_id, batch_id);

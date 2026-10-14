@@ -346,7 +346,7 @@ export function applyFxToLines(
  */
 function applyStatedBases(
   ctx: WorkspaceContext,
-  input: PostEntryInput,
+  input: PostingPreviewInput,
   lines: PreparedLine[],
 ): { ok: true; resolved: ResolvedRate } | { ok: false; error: Err } | null {
   const stated = input.lines.map((l) => l.baseAmountMinor);
@@ -475,7 +475,7 @@ const NATURAL_CREDIT_KINDS: ReadonlySet<string> = new Set(['output', 'zero', 'ex
 
 function reconcileAndStampVat(
   ctx: WorkspaceContext,
-  input: PostEntryInput,
+  input: PostingPreviewInput,
   lines: PreparedLine[],
 ): Err | null {
   for (const line of lines) {
@@ -772,7 +772,7 @@ const BASE_STATING_SOURCES = new Set(['credit_note', 'reversal']);
  * (§6b fixes lock enforcement); the MCP/REST boundary (Phase E) additionally keeps `source='close'` off
  * the agent-facing `post_entry` tool, so only the year-close path reaches it.
  */
-function rejectVatTraceOnClose(input: PostEntryInput): Err | null {
+function rejectVatTraceOnClose(input: PostingPreviewInput): Err | null {
   if (input.source !== 'close') return null;
   for (const line of input.lines) {
     if (line.taxCode !== undefined || line.taxBase !== undefined || line.taxAmount !== undefined) {
@@ -803,7 +803,7 @@ function rejectVatTraceOnClose(input: PostEntryInput): Err | null {
  * Account numbers are resolved through the chart rather than trusted from the caller: a line names an
  * account ID, and the condition is about the account's ROLE (its Kontenrahmen number).
  */
-function rejectSettlementViolations(ctx: WorkspaceContext, input: PostEntryInput): Err | null {
+function rejectSettlementViolations(ctx: WorkspaceContext, input: PostingPreviewInput): Err | null {
   if (input.source !== VAT_SETTLEMENT_SOURCE) return null;
   const numberOf = ctx.store.db.prepare('SELECT number FROM account WHERE workspace_id = ? AND id = ?');
   for (const line of input.lines) {
@@ -828,7 +828,7 @@ function rejectSettlementViolations(ctx: WorkspaceContext, input: PostEntryInput
  * construction (`reversalMirrorsTarget` guarantees that), and it is what lets `vatSettlementReverse`
  * date the Storno inside the filed period so the four accounts net to zero within it.
  */
-function reversesSettlement(ctx: WorkspaceContext, input: PostEntryInput): boolean {
+function reversesSettlement(ctx: WorkspaceContext, input: PostingPreviewInput): boolean {
   if (input.source !== 'reversal' || input.reversesEntryId === undefined) return false;
   const target = ctx.store.db
     .prepare('SELECT source FROM journal_entry WHERE workspace_id = ? AND id = ?')
@@ -1049,12 +1049,56 @@ function writePostedEntry(
   return entryId;
 }
 
-export function postEntry(ctx: WorkspaceContext, input: PostEntryInput): Result<PostEntryOk> {
-  const capable = ctx.capabilities.assert('post');
-  if (!capable.ok) return capable;
+/**
+ * What a posting WOULD store, decided without writing (D152 amendment, 02.10.2026): the prepared lines,
+ * stamped by the VAT gate, and the resolved rate, or the refusal `postEntry` would return.
+ */
+export type PostingPreview =
+  | { ok: true; lines: PreparedLine[]; fx: ResolvedRate }
+  /**
+   * A refusal. `stamped` carries the prepared, gate-stamped lines when the refusal came from the LAST step
+   * (the period check), so a reader can still say what the lines would store once the period opens; it is
+   * absent for every earlier refusal. `postEntry` never reads it.
+   */
+  | { ok: false; error: Err; stamped?: PreparedLine[] };
+
+/** The idempotent replay `postEntry` found under its key, handed back through the shared steps. */
+export interface PostingReplay {
+  ok: 'replayed';
+  result: Result<PostEntryOk>;
+}
+
+/** What a posting preview needs: a `postEntry` input, without the key a write is remembered under. */
+export type PostingPreviewInput = Omit<PostEntryInput, 'idempotencyKey'>;
+
+/**
+ * The PRE-WRITE half of `postEntry`, extracted so a read can ask what a post would do (D152 amendment).
+ *
+ * ONE code path: `postEntry` calls THIS function and then writes, so a preview and the post it leads to
+ * cannot disagree on a line, a stamped trace or a refusal. The steps, in `postEntry`'s own order: the input
+ * guards, the source, the §H-FX shape, the close and settlement carve-out checks, (the idempotent replay,
+ * which only `postEntry` passes in, at exactly the point it always ran), the reversal and promotion targets,
+ * line validation (`validatePostingLines`, sharing `validateLineFields` with `saveDraft`), the base-currency
+ * amounts, the reversal mirror or the B2 VAT gate (`reconcileAndStampVat`), and the period check.
+ *
+ * IT PERFORMS NO WRITE. Every step reads; the prepared lines it returns are its own objects. The `post`
+ * capability and the idempotency-key guard stay in `postEntry`: a preview asserts neither, because it
+ * commits nothing (the read verb that serves it is gated on its own read capability).
+ */
+export function previewPostingLines(ctx: WorkspaceContext, input: PostingPreviewInput): PostingPreview;
+export function previewPostingLines(
+  ctx: WorkspaceContext,
+  input: PostingPreviewInput,
+  replay: () => Result<PostEntryOk> | undefined,
+): PostingPreview | PostingReplay;
+export function previewPostingLines(
+  ctx: WorkspaceContext,
+  input: PostingPreviewInput,
+  replay?: () => Result<PostEntryOk> | undefined,
+): PostingPreview | PostingReplay {
+  const refuse = (error: Err): PostingPreview => ({ ok: false, error });
 
   const guard =
-    requireString(input.idempotencyKey, 'idempotencyKey') ??
     requireDate(input.date, 'date') ??
     optionalId(input.entryId, 'entryId') ??
     optionalId(input.reversesEntryId, 'reversesEntryId') ??
@@ -1062,56 +1106,53 @@ export function postEntry(ctx: WorkspaceContext, input: PostEntryInput): Result<
     optionalText(input.ref, 'ref') ??
     optionalId(input.currency, 'currency') ??
     optionalId(input.fxRate, 'fxRate');
-  if (guard) return guard;
+  if (guard) return refuse(guard);
 
   if (!VALID_SOURCES.has(input.source)) {
-    return err('invalid_source', { source: input.source });
+    return refuse(err('invalid_source', { source: input.source }));
   }
 
   // §H-FX shape guards, BEFORE the lines are looked at: a caller who mistyped the currency should be
   // told THAT, not sent chasing whichever line the line validator happened to reach first.
   if (input.currency !== undefined && !isCurrencyCode(input.currency)) {
-    return err('invalid_input', { field: 'currency' });
+    return refuse(err('invalid_input', { field: 'currency' }));
   }
   if (input.fxRate !== undefined && parseRate(input.fxRate) === null) {
-    return err('invalid_input', { field: 'fxRate' });
+    return refuse(err('invalid_input', { field: 'fxRate' }));
   }
 
   const closeVatErr = rejectVatTraceOnClose(input);
-  if (closeVatErr) return closeVatErr;
+  if (closeVatErr) return refuse(closeVatErr);
 
   const settlementErr = rejectSettlementViolations(ctx, input);
-  if (settlementErr) return settlementErr;
+  if (settlementErr) return refuse(settlementErr);
 
   // Replay a completed post before any state-dependent guard, so retrying a promoted draft returns
-  // the original result instead of `already_posted` (§H-IDEMPOTENT). A reversal's post lives in its
-  // own namespace, so reusing the original post key as the reversal key is not a collision.
-  const scope = input.source === 'reversal' ? 'reverse_entry' : 'post_entry';
-  const replayed = ctx.store.recallIdempotent<Result<PostEntryOk>>(
-    ctx.workspaceId,
-    input.idempotencyKey,
-    scope,
-  );
-  if (replayed !== undefined) return replayed;
+  // the original result instead of `already_posted` (§H-IDEMPOTENT). Only `postEntry` passes this in,
+  // and it runs at exactly the point it always ran.
+  if (replay !== undefined) {
+    const replayed = replay();
+    if (replayed !== undefined) return { ok: 'replayed', result: replayed };
+  }
 
   // `reversesEntryId` marks the reversal slot, and only `source='reversal'` may set it. Validate that
   // the target is a posted entry in this workspace that is not already reversed, so no caller can
   // occupy another entry's reversal slot (which would block its real correction) or trip an FK.
   if (input.reversesEntryId !== undefined) {
     if (input.source !== 'reversal') {
-      return err('invalid_source', { reason: 'reversesEntryId requires source reversal' });
+      return refuse(err('invalid_source', { reason: 'reversesEntryId requires source reversal' }));
     }
     const target = ctx.store.db
       .prepare('SELECT status FROM journal_entry WHERE workspace_id = ? AND id = ?')
       .get(ctx.workspaceId, input.reversesEntryId) as { status: string } | undefined;
-    if (target === undefined) return err('not_found', { entryId: input.reversesEntryId });
-    if (target.status !== 'posted') return err('not_posted', { entryId: input.reversesEntryId });
+    if (target === undefined) return refuse(err('not_found', { entryId: input.reversesEntryId }));
+    if (target.status !== 'posted') return refuse(err('not_posted', { entryId: input.reversesEntryId }));
     const already = ctx.store.db
       .prepare('SELECT id FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ?')
       .get(ctx.workspaceId, input.reversesEntryId) as { id: string } | undefined;
-    if (already !== undefined) return err('already_reversed', { reversalId: already.id });
+    if (already !== undefined) return refuse(err('already_reversed', { reversalId: already.id }));
   } else if (input.source === 'reversal') {
-    return err('invalid_source', { reason: 'reversal requires reversesEntryId' });
+    return refuse(err('invalid_source', { reason: 'reversal requires reversesEntryId' }));
   }
 
   // Promotion is one-way: an entryId may name an existing draft (to post in place) but never a
@@ -1120,21 +1161,21 @@ export function postEntry(ctx: WorkspaceContext, input: PostEntryInput): Result<
     const row = ctx.store.db
       .prepare('SELECT status FROM journal_entry WHERE workspace_id = ? AND id = ?')
       .get(ctx.workspaceId, input.entryId) as { status: string } | undefined;
-    if (row === undefined) return err('not_found', { entryId: input.entryId });
-    if (row.status === 'posted') return err('already_posted', { entryId: input.entryId });
+    if (row === undefined) return refuse(err('not_found', { entryId: input.entryId }));
+    if (row.status === 'posted') return refuse(err('already_posted', { entryId: input.entryId }));
   }
 
   const validated = validatePostingLines(ctx, input.lines);
-  if (!validated.valid) return validated.error;
+  if (!validated.valid) return refuse(validated.error);
 
   // §H-FX. Runs BEFORE the mirror check (which now compares base amounts too) and before the write,
   // so an unresolvable rate rejects with nothing half-done. An entry that STATES its base amounts
   // (A13 §4b.3, the two correction sources only) takes the stated path, which validates the
   // containment rules and writes the stated figures instead of allocating fresh ones.
   const statedFx = applyStatedBases(ctx, input, validated.lines);
-  if (statedFx !== null && !statedFx.ok) return statedFx.error;
+  if (statedFx !== null && !statedFx.ok) return refuse(statedFx.error);
   const fx = statedFx ?? applyFxToLines(ctx, input, validated.lines);
-  if (!fx.ok) return fx.error;
+  if (!fx.ok) return refuse(fx.error);
 
   if (input.source === 'reversal' && input.reversesEntryId !== undefined) {
     // A reversal must also mirror the entry's CURRENCY and RATE. Without this a caller could occupy
@@ -1151,25 +1192,27 @@ export function postEntry(ctx: WorkspaceContext, input: PostEntryInput): Result<
       // different story about what happened.
       const ourRate = isBaseCurrency(fx.resolved) ? null : fx.resolved.rate;
       if (targetLine.currency !== fx.resolved.currency || targetRate !== ourRate) {
-        return err('not_a_mirror', {
-          entryId: input.reversesEntryId,
-          reason: 'a reversal carries the currency and rate of the entry it reverses',
-          targetCurrency: targetLine.currency,
-          targetFxRate: targetRate,
-          currency: fx.resolved.currency,
-          fxRate: ourRate,
-        });
+        return refuse(
+          err('not_a_mirror', {
+            entryId: input.reversesEntryId,
+            reason: 'a reversal carries the currency and rate of the entry it reverses',
+            targetCurrency: targetLine.currency,
+            targetFxRate: targetRate,
+            currency: fx.resolved.currency,
+            fxRate: ourRate,
+          }),
+        );
       }
     }
     if (!reversalMirrorsTarget(ctx, input.reversesEntryId, validated.lines)) {
-      return err('not_a_mirror', { entryId: input.reversesEntryId });
+      return refuse(err('not_a_mirror', { entryId: input.reversesEntryId }));
     }
   } else if (input.source !== 'close') {
     // B2: the engine owns the VAT trace. Validates the codes, recomputes and stamps the canonical
     // base/tax onto the prepared lines, and rejects an entry whose 2200/1170 movements do not
     // reconcile. A reversal is mirror-checked above instead; a close entry carries no trace.
     const vatErr = reconcileAndStampVat(ctx, input, validated.lines);
-    if (vatErr) return vatErr;
+    if (vatErr) return refuse(vatErr);
   }
 
   const periodOpen = ctx.periods.assertOpen(input.date);
@@ -1182,11 +1225,83 @@ export function postEntry(ctx: WorkspaceContext, input: PostEntryInput): Result<
     const isYearSeal = periodOpen.kind === 'hard' && periodOpen.reason === 'year_close';
     const relaxed =
       input.source === 'close' || input.source === VAT_SETTLEMENT_SOURCE || reversesSettlement(ctx, input);
-    if (!relaxed || isYearSeal) return periodOpen;
+    if (!relaxed || isYearSeal) return { ok: false, error: periodOpen, stamped: validated.lines };
   }
 
+  return { ok: true, lines: validated.lines, fx: fx.resolved };
+}
+
+export function postEntry(ctx: WorkspaceContext, input: PostEntryInput): Result<PostEntryOk> {
+  // A reversal's post lives in its own namespace, so reusing the original post key as the reversal key
+  // is not a collision.
+  return postEntryUnder(ctx, input, input.source === 'reversal' ? 'reverse_entry' : 'post_entry');
+}
+
+/**
+ * The idempotency scopes an ENGINE-INTERNAL composite posts its sub-entries under (critic R6-1).
+ *
+ * `close_year` used to post its P&L sweep and its 2979 carry through `postEntry` under
+ * `${key}:pl` / `${key}:carry` in the PUBLIC `post_entry` scope. Any caller of the public verb could
+ * post an ordinary entry under `K:pl` first, and the close then REPLAYED that entry as its sweep:
+ * it answered ok and sealed the year with the P&L never swept, permanently. A scope that no public
+ * verb writes closes that door by construction, exactly as `lockPeriodSealed` got
+ * `lock_period_sealed`. The set is closed (a literal union), so no caller can name `post_entry` here.
+ */
+export const YEAR_CLOSE_POST_SCOPE = 'close_year_internal' as const;
+export type InternalPostScope = typeof YEAR_CLOSE_POST_SCOPE | (typeof K1_INTERNAL_POST_SCOPES)[number];
+
+/**
+ * The other composites that post a sub-entry under a DERIVED key (K1, 04.10.2026): derived from their
+ * own key (`${key}:wjp`, `vatsettle:${periodStart}:${key}`, ...) or from a row a caller can read before
+ * the composite runs (`accrual:${id}`, `dunning-fee-${runId}`, `fxreval:${periodEnd}`, ...). Each was
+ * pre-claimable through the public `post_entry` exactly as `close_year` was. One scope per composite,
+ * named `<verb>_internal`, so a sub-entry's memo says which composite wrote it.
+ */
+export const K1_INTERNAL_POST_SCOPES = [
+  'wage_journal_post_internal',
+  'vat_settlement_post_internal',
+  'set_bank_opening_balance_internal',
+  'set_opening_balances_internal',
+  'accrual_post_internal',
+  'accrual_reverse_internal',
+  'provision_post_internal',
+  'issue_dunning_run_internal',
+  'post_fx_revaluation_internal',
+  'fx_revaluation_reverse_internal',
+  'inventory_valuation_post_internal',
+  'inventory_valuation_opening_internal',
+  'landed_cost_allocate_confirm_internal',
+  'landed_cost_reverse_internal',
+  'asset_depreciation_run_post_internal',
+] as const;
+
+/**
+ * `postEntry` under an engine-internal idempotency scope. NOT on any wire: no action calls it, it is
+ * not re-exported from the ledger barrel, and the public `post_entry` verb can never reach it because
+ * the scope is a parameter, not a field of the (caller-shaped) `PostEntryInput`.
+ */
+export function postEntryInternal(ctx: WorkspaceContext, input: PostEntryInput, scope: InternalPostScope): Result<PostEntryOk> {
+  return postEntryUnder(ctx, input, scope);
+}
+
+function postEntryUnder(ctx: WorkspaceContext, input: PostEntryInput, scope: string): Result<PostEntryOk> {
+  const capable = ctx.capabilities.assert('post');
+  if (!capable.ok) return capable;
+
+  // The key guard stays HERE, first, exactly where it always ran: a preview has no key to guard.
+  const keyGuard = requireString(input.idempotencyKey, 'idempotencyKey');
+  if (keyGuard) return keyGuard;
+
+  // Every other pre-write step, in its own order, through the ONE function a preview also calls.
+  const prepared = previewPostingLines(ctx, input, () =>
+    ctx.store.recallIdempotent<Result<PostEntryOk>>(ctx.workspaceId, input.idempotencyKey, scope),
+  );
+  if (prepared.ok === 'replayed') return prepared.result;
+  if (!prepared.ok) return prepared.error;
+  const { lines, fx } = prepared;
+
   return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, scope, () => {
-    const entryId = writePostedEntry(ctx, input, validated.lines, fx.resolved);
+    const entryId = writePostedEntry(ctx, input, lines, fx);
     // The type argument is the pin: with it, this literal is judged against `PostEntryOk`, so a typo
     // or a dropped field is an error HERE rather than an `undefined` in the Studio.
     return ok<PostEntryOk>({
@@ -1195,9 +1310,7 @@ export function postEntry(ctx: WorkspaceContext, input: PostEntryInput): Result<
       // must be able to say which rate priced it without going back to the database for it. Same
       // predicate as the row write, so what the caller is told and what the books hold agree even at
       // parity, where the rate is 1 and the conversion still happened.
-      ...(statesConversionBasis(fx.resolved)
-        ? { currency: fx.resolved.currency, fxRate: fx.resolved.rate, fxRateAsOf: fx.resolved.rateAsOf }
-        : {}),
+      ...(statesConversionBasis(fx) ? { currency: fx.currency, fxRate: fx.rate, fxRateAsOf: fx.rateAsOf } : {}),
     });
   });
 }

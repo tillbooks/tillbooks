@@ -17,6 +17,8 @@
  * `delivery_status`. See the reconciliation banner in `docs/specs/specs/M00-packaged-local-delivery.md`.
  */
 
+import { TILL_PACKAGE_VERSION } from '../core/version.js';
+
 /** How this process was started. The §H-ENUM enum M00 owns, single-sourced here. */
 export type DeliveryMode = 'up' | 'mcp' | 'serve' | 'agent_session';
 
@@ -26,8 +28,11 @@ export const DELIVERY_MODES: readonly DeliveryMode[] = ['up', 'mcp', 'serve', 'a
 /** The env flag that declares an agent-session runtime. NEVER guessed: only this exact value opts in. */
 export const RUNTIME_MODE_ENV = 'TILL_RUNTIME_MODE';
 
-/** The version string every face reports. Kept beside the mode so the two travel together. */
-export const TILL_VERSION = '0.0.0';
+/**
+ * The version string every face reports: the package's own `package.json` version, read once by
+ * `src/core/version.ts` (the ONE source). It said a hand-typed `0.0.0` on a 1.0.0-beta.1 build.
+ */
+export const TILL_VERSION: string = TILL_PACKAGE_VERSION;
 
 /** The scheduler's observable state (US-M00.4). All three fields are honest when no tick runs. */
 export interface SchedulerStatus {

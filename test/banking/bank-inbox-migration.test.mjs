@@ -138,7 +138,7 @@ test('L1: a generation-7 book with legacy links is adopted ONCE by generation 8,
     const store = new SqliteStore({ location: path, clock: t.clock });
     try {
       assert.equal(store.db.pragma('user_version', { simple: true }), SCHEMA_GENERATION);
-      assert.equal(SCHEMA_GENERATION, 8);
+      assert.ok(SCHEMA_GENERATION >= 8, 'the book passed generation 8, the A39 adoption');
       assert.equal(store.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'bank_txn_link_one_per_txn'").get(), undefined, 'generation 8 dropped develop\'s one-link-ever index');
       const ctx = makeContext(store, { workspaceId: t.workspaceId, actor: 'user_1', clock: t.clock, ids: systemIdGen });
       assert.equal(lineOf(ctx, lines.A).state, 'booked', 'the camt entry A20 created from the line: booked');
@@ -253,7 +253,7 @@ test('L1: a pre-A39 backup (generation 7) is refused by G04 with incompatible_sc
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     writeFileSync(manifestPath, JSON.stringify({ ...manifest, schemaVersion: 7 }));
     const res = refused(restoreBackup(deps, { source: backup.artifactRef, newWorkspaceName: 'Alt AG', confirmed: true }), 'incompatible_schema_version');
-    assert.equal(res.currentSchemaVersion, 8);
+    assert.equal(res.currentSchemaVersion, SCHEMA_GENERATION);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

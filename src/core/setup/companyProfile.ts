@@ -48,9 +48,10 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { isValidIban } from './iban.js';
-import { firstDisallowedQrChar } from '../sales/qrbill.js';
+import { firstDisallowedQrChar, isQrCreditorIban, qrAddressValueIssues } from '../sales/qrbill.js';
 import { LEGAL_FORMS } from './enums.js';
 import { isLedgerLocked } from './ledgerLock.js';
+import { PAYMENT_TERMS_MAX_DAYS, isWorkspaceTermsDays } from './paymentTerms.js';
 
 export interface CreditorAddress {
   street: string;
@@ -127,6 +128,34 @@ function validateCreditorCharset(input: { creditorName: string; address: Credito
   );
 }
 
+/** The creditor input's own name for each QR address element, so a refusal names the field typed. */
+const CREDITOR_FIELD_OF: Readonly<Record<string, string>> = {
+  name: 'creditorName',
+  street: 'address.street',
+  buildingNo: 'address.buildingNo',
+  postalCode: 'address.zip',
+  town: 'address.town',
+  country: 'address.country',
+};
+
+/**
+ * The QR-bill's value rules over the creditor block, from the ONE chokepoint `validateQrBill` uses
+ * (`qrAddressValueIssues`, critic phase0-installable r1, P0.4e-6): a country the payment part would
+ * refuse (`invalid_country`) or an element over its IG maximum (`field_too_long`) is refused where it
+ * is typed, rather than stored and discovered at issue as an invoice with no payment part.
+ */
+function validateCreditorQrValues(input: { creditorName: string; address: CreditorAddress | undefined }): Result | null {
+  const a = input.address;
+  const issue = qrAddressValueIssues({
+    name: input.creditorName,
+    ...(a !== undefined ? { street: a.street, buildingNo: a.buildingNo, postalCode: a.zip, town: a.town, country: a.country } : {}),
+  })[0];
+  if (issue === undefined) return null;
+  const field = CREDITOR_FIELD_OF[issue.field] ?? issue.field;
+  if (issue.reason === 'not_iso_3166') return err('invalid_country', { field, country: a?.country, expected: 'ISO 3166-1 alpha-2, e.g. CH' });
+  return err('field_too_long', { field, max: issue.max });
+}
+
 function isStructuredAddress(address: unknown): address is CreditorAddress {
   if (typeof address !== 'object' || address === null) return false;
   const a = address as Record<string, unknown>;
@@ -173,6 +202,8 @@ export function setCreditorProfile(ctx: WorkspaceContext, input: SetCreditorProf
   // After the fields are known to exist and before anything is written: a refusal must store nothing.
   const illegal = validateCreditorCharset({ creditorName, address: addressGiven ? (input.address as CreditorAddress) : undefined });
   if (illegal !== null) return illegal;
+  const outOfRule = validateCreditorQrValues({ creditorName, address: addressGiven ? (input.address as CreditorAddress) : undefined });
+  if (outOfRule !== null) return outOfRule;
   // An OMITTED IBAN preserves the stored one, mirroring the address preserve below. Without the
   // `row?.creditor_iban` default, a follow-up call that carries only the address wrote `null` here
   // and silently erased the account: the SME configured the way the verb advertised, added the
@@ -183,6 +214,14 @@ export function setCreditorProfile(ctx: WorkspaceContext, input: SetCreditorProf
   // TYPE, not whether it may be stored, and that decision belongs to `buildQrBill`.
   if (iban !== undefined && !isValidIban(iban)) {
     return err('invalid_iban', { iban });
+  }
+  // P0.4e-7 (critic phase0-installable r1): a valid IBAN outside CH/LI can never carry a Swiss QR-bill
+  // (`validateQrBill`'s own rule, `isQrCreditorIban`), so the creditor account refuses it. Judged only
+  // on an IBAN the caller NAMES: a stored one this call merely preserves is not re-litigated, so an
+  // address-only save never fails over an account typed before this rule existed.
+  const namedIban = input.iban ?? input.qrIban;
+  if (namedIban !== undefined && !isQrCreditorIban(namedIban)) {
+    return err('iban_not_ch_li', { iban: namedIban });
   }
   const storedAddress = addressGiven ? JSON.stringify(input.address) : (row?.creditor_address ?? null);
   ctx.store.db
@@ -200,11 +239,18 @@ export interface UpdateCompanyProfileInput {
   legalForm?: string;
   uid?: string;
   mwstNo?: string;
+  /**
+   * D163: the workspace default Zahlungsfrist in days, 0 to 365. Absent keeps what is stored; null
+   * clears it (documents then fall due on their own date unless the counterparty has terms).
+   */
+  defaultPaymentTermsDays?: number | null;
 }
 
 /**
- * Update the company identity fields. `uid` and `mwstNo` are shape-validated against the ESTV formats
- * (offline format check only, no UID-register lookup, §3). Nothing here posts.
+ * Update the company identity fields and the workspace default Zahlungsfrist. `uid` and `mwstNo` are
+ * shape-validated against the ESTV formats (offline format check only, no UID-register lookup, §3).
+ * Every field is validated before anything is written, so a refusal stores nothing. Nothing here posts.
+ * An absolute set: a replay re-asserts the same state, which is why the verb carries no idempotency key.
  */
 export function updateCompanyProfile(ctx: WorkspaceContext, input: UpdateCompanyProfileInput): Result {
   if (input.name !== undefined && input.name.trim().length === 0) return err('invalid_name');
@@ -217,10 +263,22 @@ export function updateCompanyProfile(ctx: WorkspaceContext, input: UpdateCompany
   if (input.mwstNo !== undefined && input.mwstNo !== null && !MWST_NO_RE.test(input.mwstNo)) {
     return err('invalid_mwst_no', { mwstNo: input.mwstNo, expected: 'CHE-###.###.### MWST' });
   }
+  if (
+    input.defaultPaymentTermsDays !== undefined &&
+    input.defaultPaymentTermsDays !== null &&
+    !isWorkspaceTermsDays(input.defaultPaymentTermsDays)
+  ) {
+    return err('invalid_payment_terms_days', {
+      field: 'defaultPaymentTermsDays',
+      defaultPaymentTermsDays: input.defaultPaymentTermsDays,
+      min: 0,
+      max: PAYMENT_TERMS_MAX_DAYS,
+    });
+  }
 
   const sets: string[] = [];
-  const params: (string | null)[] = [];
-  const push = (col: string, value: string | null): void => {
+  const params: (string | number | null)[] = [];
+  const push = (col: string, value: string | number | null): void => {
     sets.push(`${col} = ?`);
     params.push(value);
   };
@@ -228,6 +286,7 @@ export function updateCompanyProfile(ctx: WorkspaceContext, input: UpdateCompany
   if (input.legalForm !== undefined) push('legal_form', input.legalForm);
   if (input.uid !== undefined) push('uid', input.uid);
   if (input.mwstNo !== undefined) push('mwst_no', input.mwstNo);
+  if (input.defaultPaymentTermsDays !== undefined) push('default_payment_terms_days', input.defaultPaymentTermsDays);
   if (sets.length > 0) {
     ctx.store.db.prepare(`UPDATE workspace SET ${sets.join(', ')} WHERE id = ?`).run(...params, ctx.workspaceId);
   }
@@ -248,6 +307,7 @@ interface WorkspaceRow {
   uid: string | null;
   mwst_no: string | null;
   created_at: string;
+  default_payment_terms_days: number | null;
 }
 
 export function getCompanyProfile(ctx: WorkspaceContext): Result {
@@ -282,6 +342,9 @@ export function getCompanyProfile(ctx: WorkspaceContext): Result {
       creditorIban: row.creditor_iban,
       uid: row.uid,
       mwstNo: row.mwst_no,
+      // D163: the workspace default Zahlungsfrist in days, or null when none is set. A document whose
+      // counterparty has no terms of its own falls due this many days after its date.
+      defaultPaymentTermsDays: row.default_payment_terms_days ?? null,
       createdAt: row.created_at,
       // §H-FX: base currency and fiscal-year start freeze once an entry is posted. The read reports
       // it so a client can disable the two controls AT the control, instead of letting the operator

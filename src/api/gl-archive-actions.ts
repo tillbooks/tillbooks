@@ -27,11 +27,12 @@ import {
   archivePeriods,
   archivePurge,
 } from '../core/migration/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface GlArchiveActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -61,7 +62,7 @@ export function glArchiveActions(h: GlArchiveActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'gl_archive_import',
-      'write',
+      'write:correctable:statutory',
       "Import the prior system's journal into the read-only GL archive (GeBüV Art. 10: readable across the system change). Writes gl_archive rows ONLY, posts NOTHING to the live ledger, and never mixes with it: archive rows are outside the TILL Belegkette and say so. Unmapped accounts import with a null target; unbalanced source entries import flagged, never corrected. Idempotent: a re-run replaces the step's rows wholesale.",
       ctxSchema({ planId: STR, stepId: STR, idempotencyKey: STR }, ['planId', 'stepId', 'idempotencyKey']),
       (ctx, input) => archiveImport(ctx, as(input)),
@@ -103,7 +104,7 @@ export function glArchiveActions(h: GlArchiveActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'gl_archive_purge',
-      'write',
+      'write:final:erase',
       "Purge archived periods whose OR 958f ten-year retention has expired, with a recorded reason. Deletes ARCHIVE data only (structurally incapable of touching a live journal row), keeps a purge record where the periods were, and refuses inside the retention window with the date, recording the refusal: that record is the answer a data subject receives. Requires confirmed:true.",
       ctxSchema({ periodFrom: STR, periodTo: STR, reason: STR, confirmed: BOOL, idempotencyKey: STR }, ['periodFrom', 'periodTo', 'reason', 'idempotencyKey']),
       (ctx, input) => archivePurge(ctx, as(input)),

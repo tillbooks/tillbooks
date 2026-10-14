@@ -160,6 +160,10 @@ export function SearchPalette() {
   const [active, setActive] = useState(0);
   const [result, setResult] = useState<{ ok: boolean; verb: VerbCommand; message: string } | null>(null);
   const [running, setRunning] = useState(false);
+  // The Reveal moment (D122 D-I): the palette rises in the middle like a modal, and its first three
+  // rows follow with the stagger. Only the rows the palette OPENS with: a row that mounts because the
+  // person typed appears at once, so typing and the arrows never wait on a fade.
+  const [opening, setOpening] = useState(true);
   // C1: the ask lane's own feedback. A failed `agent_ask` (no runtime, or a transport slip) stays IN
   // the palette rather than opening an empty dock, so the operator sees why nothing happened.
   const [askError, setAskError] = useState<string | null>(null);
@@ -195,6 +199,7 @@ export function SearchPalette() {
       restoreFocusRef.current = document.activeElement as HTMLElement | null;
       // K-04: a caller may open the palette WITH a query (the /search page, a deep link).
       setQ(paletteSeed);
+      setOpening(true);
       inputRef.current?.focus();
     }
   }, [paletteOpen, paletteSeed]);
@@ -510,6 +515,7 @@ export function SearchPalette() {
       <div
         key={row.key}
         id={`palette-row-${index}`}
+        data-motion-item={opening && index < 3 ? String(index + 1) : undefined}
         role="option"
         aria-selected={index === active}
         aria-disabled={row.disabled || undefined}
@@ -564,7 +570,7 @@ export function SearchPalette() {
     <div className="palette-overlay" role="presentation" onClick={close}>
       <div
         ref={dialogRef}
-        className="palette panel"
+        className="palette panel motion-reveal--center"
         role="dialog"
         aria-modal="true"
         aria-label={t('palette.aria')}
@@ -588,7 +594,10 @@ export function SearchPalette() {
           aria-label={t('palette.aria')}
           placeholder={t('palette.aria')}
           value={q}
-          onChange={(event) => setQ(event.target.value)}
+          onChange={(event) => {
+            setOpening(false);
+            setQ(event.target.value);
+          }}
           onKeyDown={onInputKeyDown}
         />
 

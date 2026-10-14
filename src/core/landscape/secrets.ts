@@ -93,6 +93,12 @@ export const SECRET_COLUMNS: readonly SecretColumn[] = [
     strategy: 'null',
     why: 'A per-session agent transport key. Nulled so a copied env carries no live agent-transport credential.',
   },
+  {
+    table: 'model_decision_key',
+    column: 'secret',
+    strategy: 'randomize',
+    why: 'D144 (critic C3): the HMAC key of every model_decision fingerprint. With it, a list of names recomputes a fingerprint and re-identifies the counterparty a pseudonymised copy masked. Randomized (NOT NULL): the copy mints fingerprints under a key the source never used, so neither side can link the other.',
+  },
 ];
 
 /**

@@ -237,22 +237,34 @@ test('J04 (b): the per-line movement key is deterministic and the ledger unique 
     .get(ctx.workspaceId, sessionId);
   assert.equal(mv.idempotency_key, derivedKey, 'the per-line movement key is stk:<session>:<line>, not random');
 
-  // Calling the J02 ledger directly with that SAME deterministic key replays the original movement and
-  // mints NO second row: the stock_movement_idempotency unique index is the row-level dedup underneath.
+  // Calling the J02 ledger directly with that SAME deterministic key and the SAME movement replays the
+  // original and mints NO second row: the stock_movement_idempotency unique index is the row-level
+  // dedup underneath.
   const before = movementRowCount(ctx);
   const replay = must(
     inventoryMove(ctx, {
       itemId,
       locationId,
-      qty: 3,
+      qty: 8,
       movementType: 'adjustment',
       effectiveDate: '2026-04-01',
+      sourceDocumentType: 'stocktake_session',
+      sourceDocumentId: sessionId,
       idempotencyKey: derivedKey,
     }),
     'ledger replay on the derived key',
   );
   assert.equal(movementRowCount(ctx), before, 'the deterministic key dedups at the ledger: no second row');
   assert.equal(replay.movement.id, mv.id, 'the replay returned the ORIGINAL stocktake movement');
+
+  // K1 (04.10.2026): the same key for a DIFFERENT movement is not a replay. It used to hand the
+  // stocktake's movement back as if it were the caller's; it is now refused by name, and still mints
+  // no second row.
+  const other = inventoryMove(ctx, { itemId, locationId, qty: 3, movementType: 'adjustment', effectiveDate: '2026-04-01', idempotencyKey: derivedKey });
+  assert.equal(other.ok, false);
+  assert.equal(other.error, 'idempotency_key_conflict');
+  assert.equal(other.movementId, mv.id);
+  assert.equal(movementRowCount(ctx), before);
 });
 
 // --- (c) §H-TENANT ----------------------------------------------------------------------------------
@@ -366,7 +378,10 @@ test('J04 (e): a negative variance mints a negative adjustment (shrinkage)', () 
 // --- (f) PERIOD LOCK --------------------------------------------------------------------------------
 
 test('J04 (f): commit into a locked period is refused, no movement minted', () => {
-  const periods = { assertOpen: (d) => (d <= '2025-12-31' ? err('period_locked', { period: '2025', kind: 'hard' }) : ok()) };
+  // The year is sealed AFTER the 2025 stock was received and counted: since D160.5 the J02 receipt
+  // itself refuses a sealed period, so the seal has to land between the seed and the commit.
+  let sealed = false;
+  const periods = { assertOpen: (d) => (sealed && d <= '2025-12-31' ? err('period_locked', { period: '2025', kind: 'hard' }) : ok()) };
   const { ctx } = freshCtx('Acme AG', periods);
   const itemId = stockItem(ctx);
   const locationId = locationOf(ctx);
@@ -375,6 +390,7 @@ test('J04 (f): commit into a locked period is refused, no movement minted', () =
   const sessionId = created.session.id;
   must(inventoryStocktakeCount(ctx, { sessionId, lines: [{ itemId, locationId, countedQty: 12 }], idempotencyKey: 'cnt1' }), 'count');
   must(inventoryStocktakeApproveLines(ctx, { sessionId, lineIds: 'all_review_required', idempotencyKey: 'ap1' }), 'approve');
+  sealed = true;
   const before = movementRowCount(ctx);
   const res = inventoryStocktakeCommit(ctx, { sessionId, idempotencyKey: 'cm1' });
   assert.equal(res.ok, false);

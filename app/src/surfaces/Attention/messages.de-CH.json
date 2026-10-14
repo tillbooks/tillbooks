@@ -52,7 +52,13 @@
       "qr_match": "Abgleich",
       "dunning_run": "Mahnwesen",
       "agent_action": "Vorschläge",
-      "review_flag": "Markierungen"
+      "review_flag": "Markierungen",
+      "checklist_items_due": "Checklisten",
+      "bank_keys_review": "Bankschlüssel",
+      "bank_activation": "Bank-Freischaltung",
+      "bank_fetch_failed": "Bankabruf",
+      "bank_statement_gap": "Auszugslücken",
+      "bank_lines_waiting": "Bankbuchungen"
     },
     "collapsedWith": "auch in {queue}",
     "overflow": {
@@ -113,7 +119,8 @@
         "approve_allow": "Vorschlag genehmigt. Diese Art führt der Agent künftig direkt aus.",
         "reject": "Vorschlag abgelehnt. Gebucht wurde nichts.",
         "resolve": "Markierung erledigt, Buchung freigegeben.",
-        "issue": "Mahnlauf ausgestellt."
+        "issue": "Mahnlauf ausgestellt.",
+        "confirm_gap": "Bestätigt: in dieser Lücke fehlt nichts."
       },
       "error": {
         "generic": "Das hat nicht geklappt. Die Zeile bleibt stehen: versuche es noch einmal oder öffne die Seite, zu der sie gehört.",
@@ -124,7 +131,12 @@
         "already_paid": "Diese Rechnung ist bereits beglichen.",
         "currency_mismatch": "Die Währungen stimmen nicht überein: erfasse die Zahlung mit Umrechnung unter Zahlungen.",
         "already_executed": "Dieser Vorschlag wurde inzwischen ausgeführt.",
-        "not_found": "Diese Zeile gibt es nicht mehr. Die Liste wird neu geladen."
+        "not_found": "Diese Zeile gibt es nicht mehr. Die Liste wird neu geladen.",
+        "gap_not_chained": "In dieser Lücke steht Geld, das noch nicht im Buch ist. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge.",
+        "gap_not_found": "Diese Lücke ist inzwischen geschlossen. Die Liste wird neu geladen.",
+        "human_only": "Das bestätigt eine Person, nicht der Agent.",
+        "gap_has_waiting_statement": "In dieser Lücke wartet ein Auszug, der nicht anschliesst. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge.",
+        "vorschlag_stale": "Nicht ausgeführt: Die Daten hinter diesem Vorschlag haben sich geändert, nachdem der Agent ihn gemacht hat. Bitte den Agenten, ihn neu vorzuschlagen."
       }
     }
   },

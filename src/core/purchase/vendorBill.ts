@@ -41,7 +41,7 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { requireString, requireDate, optionalDate, optionalId, optionalText } from '../ledger/inputGuards.js';
 import { postEntry, statesConversionBasis } from '../ledger/postEntry.js';
-import { reverseEntry } from '../ledger/reverseEntry.js';
+import { reverseOwnedEntry, VENDOR_BILL_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
 import { buildVatLines, computeLineTax } from '../vat/applyVat.js';
 import type { VatJournalLine } from '../vat/applyVat.js';
 import { resolveTax } from '../vat/resolveTax.js';
@@ -53,6 +53,7 @@ import { isVendorBillTaxKind, VENDOR_BILL_TAX_KINDS } from './enums.js';
 import type { VendorBillStatus } from './enums.js';
 import { readVendorBillRow, vendorBillEcho, settledOnVendorBill } from './reads.js';
 import type { VendorBillRow } from './reads.js';
+import { dueDateFor } from '../setup/paymentTerms.js';
 
 /** 2000 Kreditoren, from A14's one role map. A17 states no account number of its own. */
 const PAYABLE_ACCOUNT = ROLE_ACCOUNT_NUMBER.payable;
@@ -272,16 +273,14 @@ function guardTaxCodeSide(ctx: WorkspaceContext, taxCode: string | null, supplyD
   return null;
 }
 
-/** The default due date: the vendor's payment terms from the bill date, or the bill date itself. */
+/**
+ * The default due date of a bill recorded without one (D163, owner pick 04.10.2026): the bill date
+ * plus the vendor's own Zahlungsfrist, else the workspace default, else 0 days. The ONE derivation in
+ * `core/setup/paymentTerms.ts`, the same function a sales invoice is issued through; a vendor whose
+ * terms are 0 is due on the bill date even when a workspace default is set.
+ */
 function defaultDueDate(ctx: WorkspaceContext, vendorId: string, billDate: string): string {
-  const row = ctx.store.db
-    .prepare('SELECT payment_terms_days FROM contact WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, vendorId) as { payment_terms_days: number | null } | undefined;
-  const days = row?.payment_terms_days ?? null;
-  if (days === null || !Number.isSafeInteger(days) || days <= 0) return billDate;
-  const at = Date.parse(`${billDate}T00:00:00.000Z`);
-  if (Number.isNaN(at)) return billDate;
-  return new Date(at + days * 86_400_000).toISOString().slice(0, 10);
+  return dueDateFor(ctx, { contactId: vendorId, documentDate: billDate });
 }
 
 /** The computed figures a bill stores, all from A06 and none of them arithmetic of A17's own. */
@@ -981,11 +980,11 @@ export function voidVendorBill(ctx: WorkspaceContext, input: VoidVendorBillInput
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'void_vendor_bill', () => {
       let reversalId: string | null = null;
       if (bill.status === 'posted' && bill.entry_id !== null) {
-        const reversed = reverseEntry(ctx, {
+        const reversed = reverseOwnedEntry(ctx, {
           entryId: bill.entry_id,
           date,
           idempotencyKey: JSON.stringify(['vendor_bill_reversal', bill.id]),
-        });
+        }, VENDOR_BILL_REVERSAL_OWNER);
         if (!reversed.ok) throw new BillAbort(reversed);
         reversalId = reversed.reversalId;
       }

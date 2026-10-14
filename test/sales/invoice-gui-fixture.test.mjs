@@ -42,6 +42,7 @@ function kindOf(value) {
   if (Array.isArray(value)) return 'array';
   return typeof value;
 }
+
 function assertShape(fixture, live, where) {
   assert.deepEqual(keysOf(fixture), keysOf(live), `${where}: key drift`);
   for (const key of Object.keys(live)) {
@@ -92,10 +93,14 @@ function liveWorld({ transport = true } = {}) {
     .prepare(
       `INSERT INTO contact (id, workspace_id, party_role, name, default_currency, payment_terms_days, created_at,
         email, address_street, address_house_no, address_zip, address_city, address_country)
-       VALUES ('ct_1', ?, 'customer','Muster AG','CHF',30,'2026-07-16T00:00:00.000Z',
+       VALUES ('ct_1', ?, 'customer','Muster AG','CHF',0,'2026-07-16T00:00:00.000Z',
         'kunde@example.ch','Musterweg','7','3000','Bern','CH')`,
     )
     .run(workspaceId);
+  // Terms 0 ("due immediately"), where this world had 30 when the golden QR payload was captured.
+  // Then the invoice carried no due date; since D163 the engine stamps one at issue, and 30 days would
+  // add a Swico /40/ tag the golden payload never held. Due on the issue date emits none (S1 MINOR 3).
+  // The golden fixture lives under app/src/surfaces/Documents/, another branch's territory.
   const draft = createDocument(ctx, {
     type: 'invoice',
     contactId: 'ct_1',
@@ -111,6 +116,9 @@ test('the issue-invoice fixture matches the live issueInvoice response, keys and
 
   assert.deepEqual(keysOf(fixture), keysOf(live), 'issue_invoice envelope drifted');
   assertShape(fixture.document, live.document, 'document');
+  // D163: issued on 16.07.2026 to a customer whose terms are 0 (due immediately), so the engine
+  // stamps the issue date itself, never null.
+  assert.equal(live.document.dueDate, '2026-07-16');
   assertShape(fixture.lines[0], live.lines[0], 'lines[0]');
   assertShape(fixture.history[0], live.history[0], 'history[0]');
 

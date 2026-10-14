@@ -34,11 +34,12 @@ import {
   setFieldValue,
   updateSavedView,
 } from '../core/customization/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface CustomizationActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -66,7 +67,7 @@ export function customizationActions(h: CustomizationActionHelpers): readonly Ac
   return [
     ctxAction(
       'define_field',
-      'write',
+      'write:correctable:internal',
       'Define a typed custom field on any registered entity, or patch an existing one by its key. The key may not shadow a column the entity already has, and once any value is stored the type is frozen (changing it would silently corrupt what is already there). A field defined by the agent actor lands as a draft and is invisible until confirm_field releases it.',
       ctxSchema(
         {
@@ -86,14 +87,14 @@ export function customizationActions(h: CustomizationActionHelpers): readonly Ac
     ),
     ctxAction(
       'confirm_field',
-      'write',
+      'write:correctable:internal',
       'Release a draft custom field so every screen and every caller can see it: the human half of draft-by-default. Confirming a field that is already live is a successful no-op.',
       ctxSchema({ fieldDefId: STR, idempotencyKey: STR }, ['fieldDefId']),
       (ctx, input) => confirmField(ctx, input as unknown as { fieldDefId: string; idempotencyKey?: string }),
     ),
     ctxAction(
       'archive_field',
-      'write',
+      'write:correctable:internal',
       'Archive a custom field so it stops being offered as an input. Never a delete: every value already stored survives and stays readable through list_field_values. Returns how many saved views still name the field, so the caller can warn rather than be surprised later.',
       ctxSchema({ fieldDefId: STR, idempotencyKey: STR }, ['fieldDefId']),
       (ctx, input) => archiveField(ctx, input as unknown as { fieldDefId: string; idempotencyKey?: string }),
@@ -108,7 +109,7 @@ export function customizationActions(h: CustomizationActionHelpers): readonly Ac
     ),
     ctxAction(
       'set_field_value',
-      'write',
+      'write:reversible:internal',
       'Set one custom field value on one record, validated against the field type (a money value is an integer Rappen count, a date is ISO-8601, a select value is one of its options). Passing null clears the value. Requires whatever capability editing that entity itself requires, never a G00 capability: a custom field is not a side door.',
       ctxSchema({ entityKind: STR, entityId: STR, fieldKey: STR, value: ANY_VALUE, idempotencyKey: STR }, [
         'entityKind',
@@ -126,7 +127,7 @@ export function customizationActions(h: CustomizationActionHelpers): readonly Ac
     ),
     ctxAction(
       'create_saved_view',
-      'write',
+      'write:reversible:ui-state',
       'Save a named filter, sort, column set and layout over an entity list. The view belongs to the calling session unless shared is true, which publishes it to everyone in the workspace and requires manage_saved_views.',
       ctxSchema(
         {
@@ -146,14 +147,14 @@ export function customizationActions(h: CustomizationActionHelpers): readonly Ac
     ),
     ctxAction(
       'update_saved_view',
-      'write',
+      'write:reversible:ui-state',
       'Patch a saved view. A personal view may only be changed by the session that owns it; a workspace-shared one, and publishing a personal one, require manage_saved_views.',
       ctxSchema({ viewId: STR, patch: OBJ, idempotencyKey: STR }, ['viewId', 'patch']),
       (ctx, input) => updateSavedView(ctx, input as unknown as Parameters<typeof updateSavedView>[1]),
     ),
     ctxAction(
       'delete_saved_view',
-      'write',
+      'write:final:ui-state',
       'Delete a saved view outright. A true delete rather than an archive, because a view mints no state and holds no history; deleting a shared one requires manage_saved_views.',
       ctxSchema({ viewId: STR, idempotencyKey: STR }, ['viewId']),
       (ctx, input) => deleteSavedView(ctx, input as unknown as { viewId: string; idempotencyKey?: string }),

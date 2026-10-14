@@ -25,6 +25,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useCan } from '../../lib/capabilities';
 import { useKeyboard } from '../../app/keyboard';
 import { useIdempotencyKey } from '../../lib/idempotency';
+import { ActionFeedback } from '../../components/ActionFeedback';
 import { TurnList } from './TurnList';
 import { VorschlagCard } from './VorschlagCard';
 import {
@@ -34,6 +35,8 @@ import {
   readDockOpen,
   writeDockOpen,
   type AgentSessionDetail,
+  DECIDED_MESSAGE,
+  VORSCHLAG_STALE,
   type DraftedAction,
 } from './model';
 import './Agent.css';
@@ -58,6 +61,11 @@ export function AgentDock() {
   const [runtimeReady, setRuntimeReady] = useState(false);
   const [composerText, setComposerText] = useState('');
   const [busy, setBusy] = useState(false);
+  // The Commit moment (D122 D-I) for a decision: the card leaves the dock with the re-read (no exit
+  // animation on a list item), so the acknowledgement lands on the banner that names the outcome. The
+  // `id` re-mounts the banner per decision, so a second approval lands again.
+  const [decided, setDecided] = useState<{ id: number; kind: 'approved' | 'rejected' | 'stale' } | null>(null);
+  const decidedSeq = useRef(0);
   const activeWorkspace = useRef<string | null>(workspaceId);
   // One key per QUESTION (the shared idempotency law): an unchanged question re-sent after a lost
   // response is one write; an edited question is a new one.
@@ -96,6 +104,7 @@ export function AgentDock() {
     setHasSessions(false);
     setBusy(false);
     setComposerText('');
+    setDecided(null);
     setOpen(workspaceId !== null && readDockOpen(workspaceId));
     if (workspaceId !== null && canRead) void refresh();
   }, [workspaceId, canRead, refresh]);
@@ -130,9 +139,16 @@ export function AgentDock() {
   const approve = useCallback(
     async (actionId: string, allowFuture: boolean) => {
       if (workspaceId === null || busy) return;
+      const ws = workspaceId;
       setBusy(true);
-      await client.call('approve_drafted_action', { workspaceId, actionId, ...(allowFuture ? { allowFuture: true } : {}) });
+      setDecided(null);
+      const res = await client.call('approve_drafted_action', { workspaceId: ws, actionId, ...(allowFuture ? { allowFuture: true } : {}) });
       setBusy(false);
+      if (activeWorkspace.current === ws) {
+        if (!isErr(res.body)) setDecided({ id: ++decidedSeq.current, kind: 'approved' });
+        // N1: the record changed after the proposal; nothing ran and the card leaves with the refresh.
+        else if (res.body.error === VORSCHLAG_STALE) setDecided({ id: ++decidedSeq.current, kind: 'stale' });
+      }
       void refresh();
     },
     [busy, client, refresh, workspaceId],
@@ -141,9 +157,12 @@ export function AgentDock() {
   const reject = useCallback(
     async (actionId: string, reason?: string) => {
       if (workspaceId === null || busy) return;
+      const ws = workspaceId;
       setBusy(true);
-      await client.call('reject_drafted_action', { workspaceId, actionId, ...(reason !== undefined ? { reason } : {}) });
+      setDecided(null);
+      const res = await client.call('reject_drafted_action', { workspaceId: ws, actionId, ...(reason !== undefined ? { reason } : {}) });
       setBusy(false);
+      if (activeWorkspace.current === ws && !isErr(res.body)) setDecided({ id: ++decidedSeq.current, kind: 'rejected' });
       void refresh();
     },
     [busy, client, refresh, workspaceId],
@@ -206,6 +225,16 @@ export function AgentDock() {
           <p className="agent-dock-empty">{t('agent.dock.empty')}</p>
         ) : (
           <TurnList turns={session.turns} />
+        )}
+        {decided !== null && (
+          <ActionFeedback
+            key={decided.id}
+            tone={decided.kind === 'approved' ? 'success' : decided.kind === 'stale' ? 'warn' : 'info'}
+            message={t(DECIDED_MESSAGE[decided.kind])}
+            landed={decided.kind === 'approved'}
+            onDismiss={() => setDecided(null)}
+            dismissLabel={t('agent.card.ackDismiss')}
+          />
         )}
         {pending.map((action) => (
           <VorschlagCard

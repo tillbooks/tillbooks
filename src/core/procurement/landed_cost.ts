@@ -37,7 +37,7 @@ import type { Result } from '../result.js';
 import { runTx } from '../purchase/poShared.js';
 import { inventoryMove } from '../inventory/movement.js';
 import { itemBookValueMinor } from '../inventory/valuationPolicy.js';
-import { postEntry } from '../ledger/postEntry.js';
+import { postEntryInternalChecked } from '../ledger/innerPosting.js';
 import { getEntry } from '../ledger/reads.js';
 import { allocate, isAllocationMethod, isComponentType } from './landedCostAllocator.js';
 import type { AllocationMethod, AllocatorTarget, AllocationPreview } from './landedCostAllocator.js';
@@ -596,13 +596,13 @@ export function landedCostAllocateConfirm(ctx: WorkspaceContext, input: Allocate
     if (capitalized > 0) journalLines.push({ account: v.inventory_account_id, debit: capitalized });
     if (variance > 0) journalLines.push({ account: v.variance_account_id as string, debit: variance });
     journalLines.push({ account: v.clearing_account_id, credit: posted });
-    const journal = postEntry(ctx, {
+    const journal = postEntryInternalChecked(ctx, {
       date: effectiveDate,
       source: 'landed_cost',
       description: `Landed cost ${v.number}`,
       idempotencyKey: `${v.id}:conf:journal`,
       lines: journalLines,
-    });
+    }, 'landed_cost_allocate_confirm_internal');
     if (!journal.ok) return journal;
     const journalEntryId = journal.entryId;
 
@@ -704,14 +704,14 @@ export function landedCostReverse(ctx: WorkspaceContext, input: ReverseInput): R
     if (capitalized > 0) reverseLines.push({ account: v.inventory_account_id, credit: capitalized });
     if (variance > 0) reverseLines.push({ account: v.variance_account_id as string, credit: variance });
     reverseLines.push({ account: v.clearing_account_id, debit: capitalized + variance });
-    const journal = postEntry(ctx, {
+    const journal = postEntryInternalChecked(ctx, {
       date: effectiveDate,
       source: 'reversal',
       reversesEntryId: v.journal_entry_id,
       description: `Landed cost reversal ${v.number}: ${reason}`,
       idempotencyKey: `${v.id}:rev:journal`,
       lines: reverseLines,
-    });
+    }, 'landed_cost_reverse_internal');
     if (!journal.ok) return journal;
 
     const now = ctx.clock.now();

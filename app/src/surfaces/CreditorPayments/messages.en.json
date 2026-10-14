@@ -5,7 +5,9 @@
   "pay": {
     "title": "Creditor payments",
     "error": {
-      "permission_denied": "You do not have permission to view payment runs."
+      "permission_denied": "You do not have permission to view payment runs.",
+      "batchGone": "The payment run was discarded in the meantime. Click Generate pain.001 again to create a new one.",
+      "alreadyBatched": "This bill is already in another payment run. Untick it and generate again."
     },
     "empty": {
       "title": "Nothing to pay.",
@@ -14,6 +16,11 @@
     },
     "selectBills": "Select bills",
     "selectOne": "Select {vendor}",
+    "suggest": {
+      "one": "Suggestion: 1 payment due by {date}, {total}.",
+      "other": "Suggestion: {n} payments due by {date}, {total}.",
+      "take": "Select the due bills"
+    },
     "column": {
       "vendor": "Vendor",
       "due": "Due",
@@ -71,7 +78,198 @@
     "newBatch": "New payment run",
     "paidOn": "Paid on {date}.",
     "toBillsLink": "Go to vendor bills",
-    "pickAccountInCurrency": "Choose an account in {currency}"
+    "pickAccountInCurrency": "Choose an account in {currency}",
+    "tabs": {
+      "label": "View",
+      "run": "Payment run",
+      "plan": "Payment planning"
+    },
+    "plan": {
+      "denied": "You do not have permission to see liquidity planning.",
+      "empty": {
+        "noBank": "No bank account in this currency.",
+        "noBankHint": "Planning starts from the balance of your bank accounts.",
+        "toBankAccounts": "Add a bank account"
+      },
+      "floor": "Minimum balance ({currency})",
+      "horizon": "Period",
+      "horizonDays": "{days} days",
+      "propose": "Compute proposal",
+      "proposing": "Computing…",
+      "excluded": "{n} items are not included: {reasons}.",
+      "resultTitle": "Payment proposal",
+      "skontoCaptured": "Skonto possible",
+      "lateInterest": "Default interest",
+      "lowest": "Lowest balance",
+      "lowestOn": "{amount} on {date}",
+      "optimal": "Best proposal for this minimum balance (proven).",
+      "heuristic": "Best proposal found, not proven optimal: the search used up its budget. At most {gap} more would be possible.",
+      "heuristicLate": "Days late in total: {days}; no proposal can have fewer than {lower}.",
+      "heuristicLateUnproven": "Days late in total: {days}; whether fewer is possible is not proven.",
+      "dayCount": {
+        "one": "1 day",
+        "other": "{n} days"
+      },
+      "baseBreach": "Even without payments the balance falls to {amount} on {date}, below the minimum. Nothing is paid before then.",
+      "nothingToSchedule": "No open bill needs scheduling in this period.",
+      "draft": "Draft payment runs",
+      "drafting": "Drafting…",
+      "repropose": "Recompute",
+      "draftedNote": "These payment runs are drafts. Nothing has been paid or sent.",
+      "batchLine": "{n} payments, {total}, execution {date}",
+      "generate": "Create pain.001",
+      "notDraftedTitle": "Not taken into a payment run:",
+      "notDrafted": {
+        "skonto_needs_reduced_amount": "Skonto possible: {amount} until {date}; TILL cannot book the deduction yet.",
+        "needs_creditor_iban": "Supplier IBAN missing",
+        "needs_qrr_reference": "QR reference missing",
+        "invalid_reference": "Reference does not match the IBAN",
+        "unsupported_currency": "Currency not supported",
+        "already_batched": "Already in a payment run",
+        "no_longer_open": "No longer open"
+      },
+      "inputsTitle": "What the planning also needs",
+      "skontoTitle": "Skonto terms",
+      "noSkonto": "No Skonto terms recorded yet. TILL never assumes a Skonto you did not record.",
+      "skontoNone": "No Skonto",
+      "skontoVendor": "{rate} % within {days} days",
+      "skontoUntil": "{rate} % until {date}",
+      "addSkonto": "Record Skonto",
+      "flowsTitle": "Planned payments",
+      "noFlows": "No planned payment yet, for example rent or salaries.",
+      "recurrence": {
+        "once": "once on {date}",
+        "monthly": "monthly from {date}",
+        "quarterly": "quarterly from {date}",
+        "yearly": "yearly from {date}"
+      },
+      "recurrenceName": {
+        "once": "Once",
+        "monthly": "Monthly",
+        "quarterly": "Quarterly",
+        "yearly": "Yearly"
+      },
+      "direction": {
+        "in": "Incoming",
+        "out": "Outgoing"
+      },
+      "retireFlow": "End",
+      "retireFlowNamed": "End {label}",
+      "addFlow": "Add planned payment",
+      "needsSettings": "Requires the settings permission",
+      "skontoDialogTitle": "Skonto for {vendor}",
+      "skontoScope": "Applies to",
+      "skontoScopeVendor": "All bills from this supplier",
+      "skontoScopeBill": "This bill only",
+      "skontoRate": "Skonto in %",
+      "skontoDays": "Within days of the bill date",
+      "skontoUntilLabel": "Payment received by",
+      "flowDialogTitle": "Add planned payment",
+      "flowLabel": "Label",
+      "flowDirection": "Direction",
+      "flowAmount": "Amount ({currency})",
+      "flowFirst": "First date",
+      "flowRecurrence": "Repeats",
+      "flowAccount": "Account",
+      "flowAccountNone": "No particular account",
+      "notInHorizon": "After the period",
+      "column": {
+        "vendor": "Supplier",
+        "due": "Due",
+        "skonto": "Skonto",
+        "payDate": "Execution",
+        "amount": "Amount",
+        "reason": "Why"
+      },
+      "reason": {
+        "skonto_captured": "Skonto possible: {skonto}, last day; TILL cannot book the deduction yet",
+        "on_time_latest": "Last day before due",
+        "skonto_forgone_floor": "Skonto skipped: the minimum balance does not allow it",
+        "skonto_forgone_search_limit": "Skonto skipped: search stopped early",
+        "late_floor": "{days} days late because of the minimum balance, default interest {interest}",
+        "deferred_floor": "Not payable in the period, default interest at least {interest}",
+        "not_due_in_horizon": "Due only after the period",
+        "already_overdue": "Already overdue: paid on the first possible day, default interest {interest}",
+        "skonto_remainder": "Open Skonto remainder: TILL cannot write it off yet. Not paid.",
+        "late_floor_one": "1 day late because of the minimum balance, default interest {interest}"
+      },
+      "chart": {
+        "summary": "Balance from {from} to {to}; lowest {lowest} on {date}.",
+        "balance": "Balance",
+        "withPlan": "With proposal",
+        "withoutPlan": "Without proposal",
+        "floor": "Minimum balance {amount}",
+        "lowest": "Lowest {amount} on {date}",
+        "lowestBelow": "Below the minimum: {amount} on {date}",
+        "asTable": "Values as a table",
+        "date": "Date",
+        "in": "In",
+        "out": "Out",
+        "inWithPlan": "In (with proposal)",
+        "outWithPlan": "Out (with proposal)"
+      },
+      "error": {
+        "stale_plan": "The books changed since the proposal. Recompute it.",
+        "currency_mismatch": "The debit account is in a different currency from the proposal.",
+        "nothing_to_draft": "No line of this proposal can be drafted into a payment run.",
+        "already_drafted": "This proposal has already been drafted into payment runs.",
+        "needs_bank_account": "Choose a debit account that can execute payments.",
+        "account_mismatch": "This proposal was computed for another account. Recompute it for the debit account."
+      },
+      "debitsAccount": "The payment runs debit {account}. The minimum balance applies to this account alone.",
+      "debitsAccountShared": "The payment runs debit {account}. The minimum balance applies to this account together with the payments whose account is unknown (see Assumptions).",
+      "accountKind": {
+        "receivable": "customer invoices",
+        "recurring": "recurring invoices",
+        "planned": "planned payments",
+        "payment_run": "payment runs",
+        "vat": "VAT"
+      },
+      "conservative": {
+        "title": "Deducted to be safe",
+        "vat_unattributed": "VAT that cannot be assigned to an exact period: {amount}, deducted on {date} to be safe.",
+        "vat_input_not_settled": "Input VAT not settled ({period}): {amount} deducted on {date} to be safe. Close the VAT period (post the settlement) and the amount drops away.",
+        "vat_return_refused": "VAT {period}: TILL cannot compute this return yet. The tax booked, {amount}, is deducted on {date} to be safe."
+      },
+      "floorBreach": {
+        "message": "Scheduled payments take your balance {shortfall} below the minimum on {date}. Lower the minimum to {suggested} or accept the late payments.",
+        "lower": "Lower the minimum to {suggested}",
+        "accept": "Accept the late payments",
+        "lowerPromise": "At {suggested} every bill is paid by its due date, and one already overdue on the next bank business day.",
+        "overdraws": "Paying every bill by its due date takes your balance to {balance} on {date}, and no earlier Skonto payment makes up for it. That does not work even with no minimum: the only way is to pay some bills late.",
+        "overdrawsBySchedule": "The scheduled payments alone, without a single open bill, take your balance to {balance} on {date}. No payment date changes that, not even a later one: it needs more money on the account or other scheduled payments.",
+        "overdrawsNotFound": "Paying every bill by its due date takes your balance to {balance} on {date}. Within its time budget TILL found no plan without a late payment, even with no minimum; that does not prove there is none."
+      },
+      "assumptions": {
+        "title": "Assumptions",
+        "noHistory": "{n} incoming payments ({amount}) from customers with no payment history: assumed on the due date.",
+        "pooled": "{n} incoming payments ({amount}) dated by the usual payment time of all customers.",
+        "ledger": "Balance of {account} per the books, not per the bank: bank lines not yet booked are missing.",
+        "vat": "VAT: tax booked plus the scheduled recurring invoices; other turnover of the running period is missing.",
+        "lastDay": "Bills sit on the last day on which the payment still arrives on time.",
+        "accountUnknown": "{n} payments with no known account are counted on {account} ({kinds}): in {in}, out {out}."
+      },
+      "uploadBy": "Upload the file by {date} at the latest, or the payment arrives late.",
+      "excludedReason": {
+        "other_currency": "another currency",
+        "no_due_date": "no due date",
+        "overdue_beyond_history": "later than ever before",
+        "overdue_no_history": "overdue with no payment history",
+        "credit_balance": "credit notes",
+        "customer_credit": "customer credits",
+        "skonto_remainder": "open Skonto remainders",
+        "run_item_missing": "unreadable payment-run items",
+        "vat_not_configured": "VAT not set up",
+        "vat_period_not_started": "VAT of a period not yet started (recurring invoices only)",
+        "vat_period_overdue": "overdue VAT period",
+        "vat_unattributed": "VAT on the books that cannot be assigned to a period",
+        "vat_due_beyond_horizon": "VAT of a period due after the forecast window",
+        "unsupported": "VAT return TILL cannot compute yet (cash accounting)",
+        "vat_period_filed_payment_unknown": "filed VAT period whose payment TILL cannot see (net tax rate method)",
+        "other_account": "on another account",
+        "other": "another reason"
+      }
+    }
   },
   "help": {
     "CreditorPayments": {

@@ -6,7 +6,7 @@
  *
  * WHAT THIS MODULE IS. Three thin operator wrappers over F02's shared grant machinery
  * (`vendorPortalGrant`/`vendorPortalRevoke`/`vendorPortalGrantsList`, all `kind='vendor'`, no second
- * token implementation, spec §4), two scoped READ MODELS over D02 and over the advices, and ONE
+ * token implementation, spec §4; the grant is minted by F02's `createVendorGrant`, live at mint, D157), two scoped READ MODELS over D02 and over the advices, and ONE
  * derived-document write (`createRemittanceAdvice`).
  *
  * WHAT THIS MODULE IS NOT. It NEVER posts and NEVER computes money (spec §4/§7, asserted by
@@ -22,7 +22,8 @@
  *      explicit `contactId` (preview path). A grant for supplier X can never read supplier Y's rows.
  *   3. SCOPE: the PO read requires the grant to carry `pos.read`; the advice read requires
  *      `remittance.read`.
- * An expired or revoked token denies as `grant_invalid`, indistinguishably (no oracle, spec §2).
+ * An expired or revoked token (or a grant not yet handed over, which a vendor grant minted since D157
+ * never is) denies as `grant_invalid`, indistinguishably (no oracle, spec §2).
  *
  * TX-ATOMICITY (the C02/D03/F02 bug class). `better-sqlite3`'s transaction rolls back only when the
  * function THROWS: a write-then-return-`{ok:false}` COMMITS the partial write. Every refusal here is
@@ -36,7 +37,7 @@ import { baseCurrencyOf } from '../fx/rates.js';
 import { uploadFile, linkFile } from '../files/index.js';
 import { applySavedView } from '../customization/views.js';
 import {
-  createGrant,
+  createVendorGrant,
   revokeGrant,
   listGrants,
   readGrant,
@@ -68,47 +69,33 @@ export interface VendorPortalGrantInput {
 }
 
 /**
- * Mint a scoped, expiring vendor grant (US-F03.1). A THIN wrapper over F02's `createGrant` with
- * `kind='vendor'` and the vendor scope set (`pos.read`, `remittance.read`) as the default: F03 opens
- * no second grant path (spec §4). The one extra fence F03 adds is that the contact must be a SUPPLIER
- * (`party_role IN ('vendor','both')`), so a customer contact cannot be handed a vendor grant
- * (spec §2 US-F03.1 error: `contact_not_found`, the same opaque code a missing contact returns).
+ * Mint a scoped, expiring vendor grant (US-F03.1). A THIN wrapper over F02's `createVendorGrant`, the
+ * one place the vendor kind is chosen, with the vendor scope set (`pos.read`, `remittance.read`) as the
+ * default: F03 opens no second grant path (spec §4). The SUPPLIER fence (the contact must be
+ * `party_role IN ('vendor','both')`, else the opaque `contact_not_found`) lives in `createVendorGrant`,
+ * beside the kind it guards. D157: the grant is handed over at mint (owner decision 2: a supplier link
+ * is live when it is granted), and no input key, `kind` included, can change its kind or its state.
  */
 export function vendorPortalGrant(ctx: WorkspaceContext, input: VendorPortalGrantInput): Result {
-  if (typeof input.contactId !== 'string' || input.contactId.length === 0) {
-    return err('invalid_input', { field: 'contactId' });
-  }
-  // The SUPPLIER fence, a pre-check before any write. A contact that is not a vendor (or does not
-  // exist) is refused with the single opaque `contact_not_found` (spec §2: no customer/vendor oracle).
-  const contact = ctx.store.db
-    .prepare('SELECT party_role FROM contact WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, input.contactId) as { party_role: string } | undefined;
-  if (contact === undefined || (contact.party_role !== 'vendor' && contact.party_role !== 'both')) {
-    return err('contact_not_found', { contactId: input.contactId });
-  }
-  // Pass the scopes through to F02's `createGrant`, which is the ONE validator (it rejects an unknown
-  // scope kind, so the cast here cannot smuggle a bad value past the enum check).
+  // Pass the scopes through to F02's `createVendorGrant`, which refuses anything outside the vendor
+  // scope set (critic F1), so the cast here cannot smuggle a customer scope onto a live grant.
   const scopes = (
     Array.isArray(input.scopes) && input.scopes.length > 0
       ? input.scopes
       : VENDOR_PORTAL_SCOPE_KINDS.map((kind) => ({ kind }))
   ) as unknown as PortalScope[];
-  // NAMESPACE the idempotency key before it reaches F02's `createGrant`, which memoises under the
-  // FIXED verb `'portal_grant_create'` SHARED with the customer `portal_grant_create` door. A raw key
-  // reused across the two audiences would replay a customer grant for a vendor request (the F02
-  // critic's cross-namespace idempotency finding, one audience over). Prefixing keeps the vendor
-  // keyspace disjoint: a vendor replay still returns the same grant, and it can never collide with a
-  // customer grant's stored result.
+  // NAMESPACE the idempotency key. The vendor door now stores under its own verb
+  // (`vendor_portal_grant`, critic F2) and both doors refuse a stored result of the other kind, so the
+  // prefix is no longer what separates them; it is kept so a replay stored before the split (under the
+  // shared verb with this prefix) still answers the same grant.
   const scopedKey =
     typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0
       ? JSON.stringify(['vendor', input.idempotencyKey])
       : undefined;
-  return createGrant(ctx, {
+  return createVendorGrant(ctx, {
     contactId: input.contactId,
     scopes,
     expiresAt: input.expiresAt,
-    kind: 'vendor',
-    ...(input.actor !== undefined ? { actor: input.actor } : {}),
     ...(scopedKey !== undefined ? { idempotencyKey: scopedKey } : {}),
   });
 }
@@ -169,7 +156,8 @@ function resolveSupplier(
   if (typeof input.grantToken === 'string' && input.grantToken.length > 0) {
     const row = grantByTokenInWorkspace(ctx, input.grantToken, 'vendor');
     if (row === undefined) return GRANT_INVALID();
-    // FENCE 0: an expired or revoked token denies identically (spec §2, no oracle).
+    // FENCE 0: an expired, revoked or undelivered token denies identically (spec §2, no oracle). The
+    // same `isGrantLive` rule the F02 resolver reads (D157), so the two faces cannot disagree.
     if (!isGrantLive(row, today(ctx))) return GRANT_INVALID();
     // FENCE 3 (scope): the grant must carry the scope this read needs.
     if (!grantHasScope(row, requiredScope)) return GRANT_INVALID();

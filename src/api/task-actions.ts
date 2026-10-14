@@ -24,11 +24,12 @@ import {
   listTasks,
   tasksRemindersDue,
 } from '../core/tasks/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface TaskActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -61,7 +62,7 @@ export function taskActions(h: TaskActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'tasks_create',
-      'write',
+      'write:correctable:internal',
       'Lege eine Aufgabe an: a cross-entity to-do with an assignee, an optional due date (dueAt, may be in the past: it lands in the Überfällig bucket), an optional reminder (reminderAt, refused when already past or after the due date), an optional link to any registered record (entityKind/entityId, validated against the OP3 entity registry), and an optional RFC-5545-subset recurrence rule (FREQ=DAILY|WEEKLY|MONTHLY|YEARLY, INTERVAL, BYDAY for weekly, UNTIL or COUNT).',
       ctxSchema(
         {
@@ -81,7 +82,7 @@ export function taskActions(h: TaskActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'tasks_update',
-      'write',
+      'write:correctable:internal',
       'Bearbeite eine Aufgabe from a patch: retitle, reassign, reschedule (patching dueAt clears any snooze: a new deadline supersedes an old Zurückstellen), change the reminder or the recurrence rule, move between open and doing, or reopen a done task (status open; cancelled stays terminal).',
       ctxSchema(
         { taskId: STR, patch: { type: 'object', properties: TASK_PATCH_FIELDS }, idempotencyKey: STR },
@@ -91,21 +92,21 @@ export function taskActions(h: TaskActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'tasks_complete',
-      'write',
+      'write:correctable:internal',
       'Erledige eine Aufgabe: sets done and stamps completedAt; with logActivity true on a contact-linked task, appends one OP5 timeline entry through contacts_log_activity; on a recurring task, mints the next occurrence anchored on the completed due date (never on completion time) and answers spawnedTaskId, or seriesEnded when UNTIL or COUNT closes the series. One idempotency key covers complete, log and spawn together. Allowed for holders of tasks.write and for the task assignee.',
       ctxSchema({ taskId: STR, logActivity: BOOL, idempotencyKey: STR }, ['taskId']),
       (ctx, input) => completeTask(ctx, as(input)),
     ),
     ctxAction(
       'tasks_snooze',
-      'write',
+      'write:reversible:internal',
       'Stelle eine Erinnerung zurück: hides the task from tasks_reminders_due until the given instant. The due date is untouched (snooze hides the reminder, it does not move the deadline), and an instant already past is refused with snooze_in_past.',
       ctxSchema({ taskId: STR, until: STR, idempotencyKey: STR }, ['taskId', 'until']),
       (ctx, input) => snoozeTask(ctx, as(input)),
     ),
     ctxAction(
       'tasks_cancel',
-      'write',
+      'write:correctable:internal',
       'Brich eine Aufgabe ab: the terminal "wird nicht erledigt", distinct from done. No activity is logged and no recurrence occurrence is spawned; a cancelled task returns only through an explicit status filter.',
       ctxSchema({ taskId: STR, idempotencyKey: STR }, ['taskId']),
       (ctx, input) => cancelTask(ctx, as(input)),

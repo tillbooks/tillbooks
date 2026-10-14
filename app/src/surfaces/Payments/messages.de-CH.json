@@ -89,7 +89,8 @@
       "istVat": "Davon MWST (Ist), erfasst am {date}: {amount}",
       "fx": "Realisierte Kursdifferenz",
       "fxRate": "Kurs {rate} vom {date}",
-      "stale": "Die Vorschau wird neu berechnet."
+      "stale": "Die Vorschau wird neu berechnet.",
+      "matching": "Passende Posten werden gesucht."
     },
     "status": {
       "posted": "Gebucht",
@@ -147,7 +148,8 @@
       "currency_mismatch": "Eine Zahlung in {payCur} kann einen Beleg in {docCur} nicht begleichen.",
       "intent_required": "Die Zahlung wurde ohne ausdrückliche Absicht gesendet und darum nicht gebucht.",
       "unexpected": "Die Zahlung konnte nicht gebucht werden.",
-      "ownedByBankLine": "Diese Zahlung gehört zu einer Bankzeile. Hol die Zeile unter Bank zurück: eine dort gebuchte Zahlung wird dabei storniert, eine dort nur abgeglichene stornierst du danach hier."
+      "ownedByBankLine": "Diese Zahlung gehört zu einer Bankzeile. Hol die Zeile unter Bank zurück: eine dort gebuchte Zahlung wird dabei storniert, eine dort nur abgeglichene stornierst du danach hier.",
+      "nothing_to_allocate": "Diese Zahlung hat kein Guthaben mehr, das sich zuweisen liesse."
     },
     "errorCta": {
       "needs_bank_account": "Zur Einrichtung",
@@ -169,7 +171,8 @@
       "reverseDate": "Storno-Datum",
       "discard": "Deine Eingaben verwerfen?",
       "discardConfirm": "Verwerfen",
-      "discardKeep": "Weiter bearbeiten"
+      "discardKeep": "Weiter bearbeiten",
+      "changed": "Die Zuteilung hat sich geändert, während du bestätigt hast. Nichts wurde gebucht: prüf sie und buch dann erneut."
     },
     "openRow": "Zahlung vom {date} über {amount} öffnen",
     "rowActionsFor": "Aktionen für die Zahlung vom {date} über {amount}",
@@ -184,7 +187,23 @@
       "journalEntry": "Buchung ansehen",
       "documentMissing": "Beleg nicht gefunden"
     },
-    "showBankLine": "Bankzeile zeigen"
+    "showBankLine": "Bankzeile zeigen",
+    "prompt": {
+      "start": "Betrag oder Gegenpartei eingeben, dann schlägt TILL passende Posten vor."
+    },
+    "next": {
+      "amount": "Gib den Betrag ein.",
+      "account": "Wähl das Konto, über das die Zahlung lief."
+    },
+    "bankAccountChoose": "Konto wählen",
+    "preAssigned": "zugewiesen",
+    "preAssignedUndo": "Rückgängig",
+    "preAssignedUndoLabel": "Zuweisung an {number} rückgängig machen",
+    "ambiguous": "{n} Posten passen genau. Wähl den richtigen aus.",
+    "noSuggestion": "Kein Posten passt genau.",
+    "showAll": "Alle offenen Posten zeigen ({n})",
+    "showSuggestions": "Nur Vorschläge zeigen",
+    "pick": "{number} zuweisen"
   },
   "help": {
     "Payments": {

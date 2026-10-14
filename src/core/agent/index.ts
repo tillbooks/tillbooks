@@ -15,6 +15,7 @@ export {
   dialCapabilityIsForceAsk,
   readDialLevel,
   effectiveDialLevel,
+  instanceEffectiveDialLevel,
   writeDialLevel,
   getAgentDial,
   setAgentDial,
@@ -33,6 +34,19 @@ export type {
   ListDraftedActionsInput,
   ResolveDraftedActionInput,
 } from './draftedActions.js';
+
+export {
+  PIN_RECORDS,
+  PIN_FOR_VERB,
+  NOT_PINNED,
+  LIVE_READ_TABLES,
+  LIVE_READ_WAIVERS,
+  pinFor,
+  pinnedTablesFor,
+  pinReadShapes,
+  VORSCHLAG_STALE_MESSAGE,
+} from './vorschlagPin.js';
+export type { DepSpec, LiveReadPolicy, NotPinned, NotPinnedReason, PinField, PinRecordKind, VorschlagFigures, VorschlagPin } from './vorschlagPin.js';
 
 export {
   resolveAgentSession,
@@ -59,8 +73,24 @@ export type { AgentTrustSummaryInput, TrustRow } from './trust.js';
 export { agentAsk } from './ask.js';
 export type { AgentAskInput } from './ask.js';
 
-export { DIAL_CAPABILITY_FOR_ACTION, CONSEQUENCE_FOR_ACTION, INPUT_KEYED_DIAL_RULES, dialCapabilityForCall } from './dialMap.js';
+export {
+  DIAL_CAPABILITY_FOR_ACTION,
+  CONSEQUENCE_FOR_ACTION,
+  INPUT_KEYED_DIAL_RULES,
+  DIAL_SEVERITY,
+  NOT_DIAL_GOVERNED,
+  APPROVAL_CONFIRMS_FIELD,
+  APPROVAL_CONFIRM_NOT_SET,
+  INSTANCE_WIDE_DIAL_ACTIONS,
+  dialCapabilityForCall,
+  dialCapabilitiesForCall,
+  dialCapabilitiesForVerb,
+} from './dialMap.js';
 export type { InputKeyedDialRule } from './dialMap.js';
+export { governedDialCapability, strictestDialCapability, readsStoredRule, RULE_FIRING_WRITES, RULE_WRITES_NOT_TIERED } from './ruleTier.js';
+
+export { WAY_BACK, WAY_BACK_SELF, wayBackProblems } from './wayBack.js';
+export type { WayBackAction } from './wayBack.js';
 
 export {
   SESSION_IDLE_MINUTES,

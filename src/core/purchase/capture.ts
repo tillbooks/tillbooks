@@ -16,7 +16,9 @@
  * is A17's separately-dialled `post_vendor_bill`, unchanged.
  *
  * MERGE RULES ARE FIXED (§6b), a configurable merge would let a workspace silently prefer guessed
- * fields over read ones. They live in `applyField` below as one truth table in evaluation order.
+ * fields over read ones. They live in `./billMerge.ts`: `mergeBill` is the one chokepoint every BILL
+ * writer goes through (the bytes' read and a supplied payload, whole), and `applyTypedField` takes a
+ * typed value per key. This module writes no `capture_fields` row itself.
  */
 
 import { createHash } from 'node:crypto';
@@ -24,7 +26,7 @@ import { createHash } from 'node:crypto';
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
-import { uploadFile, getFileContent, linkFile } from '../files/index.js';
+import { uploadFile, getFileContent, linkFile, fileLinkedTo } from '../files/index.js';
 import { createVendorBill, attachReceipt } from './vendorBill.js';
 import { createClaim, upsertLine } from '../hr/index.js';
 import {
@@ -34,11 +36,19 @@ import {
   isCaptureTargetKind,
   CAPTURE_ACCEPTED_MIMES,
   CAPTURE_TARGET_KINDS,
+  isCaptureQrPayloadSource,
+  CAPTURE_QR_DECODER_MAX,
   type CaptureProvenance,
   type CaptureConfidence,
+  type CaptureQrPayloadSource,
 } from './captureEnums.js';
 import { locateSpcPayload, parseSpcPayload, type ParsedField, type ParseNote } from './captureParse.js';
+import { decodeSwissQrBill, type QrDecodeIssue } from './qrbill/decode.js';
+import { decodedBillFields } from './qrbill/fields.js';
+import { billIdentity } from './qrbill/identity.js';
+import { mergeBill, applyTypedField, SUPERSEDED, type Bill } from './billMerge.js';
 import { applySavedView } from '../customization/views.js';
+import { baseCurrencyOf } from '../fx/rates.js';
 
 // --- Rows ---------------------------------------------------------------------------------------
 
@@ -70,6 +80,8 @@ interface FieldRow {
   confidence: string;
   provenance: string;
   superseded: number;
+  /** A31 §0a: the supplied QR payload that wrote this row (an FK G04 restore remaps), else NULL. */
+  qr_payload_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -119,90 +131,6 @@ function fieldValue(row: FieldRow | undefined): unknown {
   }
 }
 
-// --- The merge rules (§4/§6b), the whole truth table in evaluation order -----------------------
-
-const PROVENANCE_RANK: Record<string, number> = { qr: 3, swico: 3, agent: 2, local_model: 1, operator: 4 };
-const CONFIDENCE_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
-
-/**
- * Apply one incoming field under the fixed merge rules. Returns whether anything was written (an
- * identical value is a no-op, which is what makes re-running any pass outcome-idempotent by RULE).
- *
- *  (1) identical (key, value) to the live row is a no-op regardless of source;
- *  (2) an `operator` field is never overwritten by a non-operator source (a later `operator` write
- *      supersedes the earlier one);
- *  (3) otherwise the higher confidence wins and the loser is kept `superseded`;
- *  (4) at equal confidence, the rank order is qr/swico > agent > local_model;
- *  (5) at equal rank AND equal confidence, the NEWER write wins and the older is kept `superseded`.
- *
- * A source with nothing to say for a key writes nothing (this function is only called with a value).
- */
-function applyField(
-  ctx: WorkspaceContext,
-  captureId: string,
-  incoming: { key: string; value: unknown; provenance: CaptureProvenance; confidence: CaptureConfidence },
-): boolean {
-  const existing = liveFieldByKey(ctx, captureId, incoming.key);
-  const at = ctx.clock.now();
-  const serialised = JSON.stringify(incoming.value);
-
-  const insertLive = (superseded: boolean): void => {
-    ctx.store.db
-      .prepare(
-        `INSERT INTO capture_fields (id, workspace_id, capture_id, key, value, confidence, provenance, superseded, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(ctx.ids.next('capf'), ctx.workspaceId, captureId, incoming.key, serialised, incoming.confidence, incoming.provenance, superseded ? 1 : 0, at, at);
-  };
-  const supersede = (id: string): void => {
-    ctx.store.db.prepare('UPDATE capture_fields SET superseded = 1, updated_at = ? WHERE id = ?').run(at, id);
-  };
-
-  if (existing === undefined) {
-    insertLive(false);
-    return true;
-  }
-  // (1) identical value: a no-op, so re-running any pass on unchanged input churns nothing.
-  if (existing.value === serialised) return false;
-  // (2) operator is terminal against a non-operator source; a fresh operator write supersedes.
-  if (existing.provenance === 'operator' && incoming.provenance !== 'operator') return false;
-
-  const incWins = (() => {
-    if (incoming.provenance === 'operator') return true;
-    const c = (CONFIDENCE_RANK[incoming.confidence] ?? 0) - (CONFIDENCE_RANK[existing.confidence] ?? 0);
-    if (c !== 0) return c > 0; // (3) higher confidence wins
-    const r = (PROVENANCE_RANK[incoming.provenance] ?? 0) - (PROVENANCE_RANK[existing.provenance] ?? 0);
-    if (r !== 0) return r > 0; // (4) rank breaks a confidence tie
-    return true; // (5) equal rank and confidence: the newer write wins
-  })();
-
-  if (incWins) {
-    supersede(existing.id);
-    insertLive(false);
-  } else {
-    // The loser is KEPT, as a superseded row: an auditable disagreement, never a silent drop.
-    insertLive(true);
-  }
-  return true;
-}
-
-// --- Vendor matching ----------------------------------------------------------------------------
-
-/**
- * Propose a vendor by matching the Swico `/30/` UID against a C00 contact's `vat_number`, both
- * reduced to the 9-digit numeric UID (spec §2). C00 stores the ESTV form `CHE-###.###.### MWST`, so
- * the 9 digits are formatted back to that canonical shape and matched with a prefix `LIKE`, which
- * reuses C00's own storage format rather than parsing it a second way here.
- */
-function matchVendorByUid(ctx: WorkspaceContext, uidDigits: string): string | null {
-  if (!/^\d{9}$/.test(uidDigits)) return null;
-  const canonical = `CHE-${uidDigits.slice(0, 3)}.${uidDigits.slice(3, 6)}.${uidDigits.slice(6, 9)}`;
-  const row = ctx.store.db
-    .prepare("SELECT id FROM contact WHERE workspace_id = ? AND vat_number LIKE ? AND archived = 0 LIMIT 1")
-    .get(ctx.workspaceId, `${canonical}%`) as { id: string } | undefined;
-  return row?.id ?? null;
-}
-
 // --- Deterministic pass -------------------------------------------------------------------------
 
 /** Decode a stored file's bytes back to text for the SPC-payload search. */
@@ -223,11 +151,13 @@ function deterministicParse(text: string): {
   qrPresent: boolean;
   swicoPresent: boolean;
   swicoUid: string | null;
+  identity: string | null;
 } {
   const payload = locateSpcPayload(text);
-  if (payload === null) return { fields: [], notes: [], qrPresent: false, swicoPresent: false, swicoUid: null };
+  if (payload === null) return { fields: [], notes: [], qrPresent: false, swicoPresent: false, swicoUid: null, identity: null };
   const parsed = parseSpcPayload(payload);
   return {
+    identity: billIdentity(payload),
     fields: parsed.fields,
     notes: parsed.notes,
     qrPresent: parsed.qrPresent,
@@ -236,29 +166,13 @@ function deterministicParse(text: string): {
   };
 }
 
-/**
- * Write the deterministic fields (plus a UID-matched vendor proposal) through the merge rules, and
- * return the accumulated parse notes for the capture row.
- */
-function landDeterministic(
-  ctx: WorkspaceContext,
-  captureId: string,
-  parsed: ReturnType<typeof deterministicParse>,
-): void {
-  for (const f of parsed.fields) {
-    applyField(ctx, captureId, {
-      key: f.key,
-      value: f.value,
-      provenance: f.provenance,
-      confidence: f.confidence,
-    });
-  }
-  if (parsed.swicoUid !== null) {
-    const contactId = matchVendorByUid(ctx, parsed.swicoUid.replace(/\D/g, '').slice(-9));
-    if (contactId !== null) {
-      applyField(ctx, captureId, { key: 'vendor_contact_id', value: contactId, provenance: 'swico', confidence: 'high' });
-    }
-  }
+/** The stored bytes' read as ONE bill for the chokepoint (its UID drives the vendor match there). */
+function bytesBill(parsed: ReturnType<typeof deterministicParse>): Bill {
+  return {
+    fields: parsed.fields.map((f) => ({ key: f.key, value: f.value, confidence: f.confidence, provenance: f.provenance })),
+    uid: parsed.swicoUid,
+    identity: parsed.identity,
+  };
 }
 
 // --- Intake -------------------------------------------------------------------------------------
@@ -350,7 +264,7 @@ export function captureIntake(ctx: WorkspaceContext, input: CaptureIntakeInput):
         at,
         at,
       );
-    landDeterministic(ctx, id, parsed);
+    mergeBill(ctx, id, bytesBill(parsed), { kind: 'bytes' });
     ctx.audit.record({ entityKind: 'capture', entityId: id, action: 'intake', actor: ctx.actor, at });
     return ok({ captureId: id, duplicate: false, ...(discardedTwin !== undefined ? { rescuedFromCaptureId: discardedTwin.id } : {}) });
   };
@@ -368,7 +282,19 @@ export interface CaptureExtractInput {
   captureId: string;
   source: 'qr' | 'local_model' | 'agent' | 'operator';
   fields?: { key: string; value?: unknown; confidence?: string }[];
+  /**
+   * A31 §0a: a Swiss QR Code payload the caller read off the bill (a phone scanner, the Studio's image
+   * decode, a G02 decoder plugin), instead of `fields`. Only with `source` `operator` or `agent`.
+   */
+  qrPayload?: string;
+  /** Which reader produced `qrPayload` (`phone-scanner`, `studio-barcode-detector`, `plugin:<id>`). */
+  decoder?: string;
   idempotencyKey?: string;
+}
+
+/** A label for the reader that decoded a supplied payload: printable ASCII, 1 to 64 characters. */
+function isDecoderLabel(v: unknown): v is string {
+  return typeof v === 'string' && v.length >= 1 && v.length <= CAPTURE_QR_DECODER_MAX && /^[\x21-\x7E][\x20-\x7E]*$/.test(v);
 }
 
 /**
@@ -376,6 +302,13 @@ export interface CaptureExtractInput {
  * fields (validated against CAPTURE_FIELD_KEY); `operator` takes review-pane corrections (landing
  * `operator`/`high`); `local_model` degrades honestly to `needs_local_runtime` (no E05 adapter is
  * wired in the core, spec §3: absent adapter = `needs_local_runtime`, never a cloud fallback).
+ *
+ * `agent` and `operator` may instead supply `qrPayload` (spec §0a): the strict decoder runs first and
+ * a payload breaking any guideline rule writes nothing (`qr_payload_invalid`, every issue listed). A
+ * clean one lands through the SAME merge rules with the supplier's provenance, never `qr`/`swico`
+ * (those mean "read from the stored bytes", and a caller who could land them by supplying a
+ * well-formed payload could launder a guess into the trusted provenance), and one
+ * `capture_qr_payloads` row records the raw payload and the field rows it wrote.
  */
 export function captureExtract(ctx: WorkspaceContext, input: CaptureExtractInput): Result {
   const capture = readCapture(ctx, input.captureId);
@@ -392,10 +325,38 @@ export function captureExtract(ctx: WorkspaceContext, input: CaptureExtractInput
     return err('invalid_input', { field: 'source' });
   }
 
+  // A supplied QR payload (spec §0a item 9) is decoded strictly BEFORE any write: a payload that breaks
+  // any rule of the guideline lands nothing and names every issue (§0a item 11).
+  let supplied: { source: CaptureQrPayloadSource; payload: string; decoder: string | null; warnings: QrDecodeIssue[]; swicoUid: string | null } | null = null;
+  let incoming: { key: string; value: unknown; provenance: CaptureProvenance; confidence: CaptureConfidence }[] = [];
+  if (input.qrPayload !== undefined) {
+    if (!isCaptureQrPayloadSource(input.source)) {
+      return err('invalid_input', { field: 'source', reason: 'qr_payload_needs_operator_or_agent' });
+    }
+    if (input.fields !== undefined) return err('invalid_input', { field: 'fields', reason: 'fields_and_qr_payload' });
+    if (typeof input.qrPayload !== 'string') return err('invalid_input', { field: 'qrPayload' });
+    if (input.decoder !== undefined && !isDecoderLabel(input.decoder)) {
+      return err('invalid_input', { field: 'decoder', max: CAPTURE_QR_DECODER_MAX });
+    }
+    const decoded = decodeSwissQrBill(input.qrPayload);
+    if (!decoded.ok) {
+      return err('qr_payload_invalid', { captureId: capture.id, errors: decoded.errors, warnings: decoded.warnings });
+    }
+    supplied = {
+      source: input.source,
+      payload: input.qrPayload,
+      decoder: input.decoder ?? null,
+      warnings: decoded.warnings,
+      swicoUid: decoded.bill.swico?.uid ?? null,
+    };
+    incoming = decodedBillFields(decoded.bill, input.source);
+  } else if (input.decoder !== undefined) {
+    return err('invalid_input', { field: 'decoder', reason: 'decoder_without_qr_payload' });
+  }
+
   // Validate agent/operator fields BEFORE any write (the tx-commit-on-err trap): a bad key must not
   // land a partial batch. `qr` needs no field input.
-  let incoming: { key: string; value: unknown; provenance: CaptureProvenance; confidence: CaptureConfidence }[] = [];
-  if (input.source === 'agent' || input.source === 'operator') {
+  if (supplied === null && (input.source === 'agent' || input.source === 'operator')) {
     if (!Array.isArray(input.fields)) return err('invalid_input', { field: 'fields' });
     for (const f of input.fields) {
       if (f === null || typeof f !== 'object' || !isCaptureFieldKey((f as { key?: unknown }).key)) {
@@ -415,21 +376,53 @@ export function captureExtract(ctx: WorkspaceContext, input: CaptureExtractInput
     }
   }
 
+  let payloadId: string | null = null;
   const run = (): Result => {
+    // Every bill goes through the ONE chokepoint whole (`billMerge.ts`, critic R3-M1); a typed value
+    // goes per key. Nothing here writes a field row itself.
+    let changed: boolean;
     if (input.source === 'qr') {
       const text = fileText(ctx, capture.document_id);
       if (text === null) throw new CaptureAbort(err('file_unreadable', { captureId: capture.id }));
       const parsed = deterministicParse(text);
-      landDeterministic(ctx, capture.id, parsed);
-      ctx.store.db
-        .prepare('UPDATE captures SET qr_present = ?, swico_present = ?, parse_notes = ?, updated_at = ? WHERE workspace_id = ? AND id = ?')
-        .run(parsed.qrPresent ? 1 : 0, parsed.swicoPresent ? 1 : 0, JSON.stringify(parsed.notes), ctx.clock.now(), ctx.workspaceId, capture.id);
+      changed = mergeBill(ctx, capture.id, bytesBill(parsed), { kind: 'bytes' }).changed;
+      const notes = JSON.stringify(parsed.notes);
+      if (capture.qr_present !== (parsed.qrPresent ? 1 : 0) || capture.swico_present !== (parsed.swicoPresent ? 1 : 0) || capture.parse_notes !== notes) {
+        ctx.store.db
+          .prepare('UPDATE captures SET qr_present = ?, swico_present = ?, parse_notes = ? WHERE workspace_id = ? AND id = ?')
+          .run(parsed.qrPresent ? 1 : 0, parsed.swicoPresent ? 1 : 0, notes, ctx.workspaceId, capture.id);
+        changed = true;
+      }
+    } else if (supplied !== null) {
+      const fields = incoming.map((f) => ({ key: f.key, value: f.value, confidence: f.confidence }));
+      const merged = mergeBill(ctx, capture.id, { fields, uid: supplied.swicoUid, identity: billIdentity(supplied.payload) }, {
+        kind: 'payload',
+        supplier: supplied.source,
+        payload: supplied.payload,
+        decoder: supplied.decoder,
+        warnings: supplied.warnings,
+      });
+      payloadId = merged.payloadId;
+      changed = merged.changed;
     } else {
-      for (const f of incoming) applyField(ctx, capture.id, f);
-      ctx.store.db.prepare('UPDATE captures SET updated_at = ? WHERE workspace_id = ? AND id = ?').run(ctx.clock.now(), ctx.workspaceId, capture.id);
+      changed = false;
+      for (const f of incoming) if (applyTypedField(ctx, capture.id, f)) changed = true;
     }
+    // Re-running on unchanged input is a TRUE no-op: no row, no timestamp, no audit entry.
+    if (!changed) {
+      return ok({
+        captureId: capture.id,
+        fields: liveFields(ctx, capture.id).map(projectField),
+        ...(supplied !== null ? { qrPayload: { id: payloadId, warnings: supplied.warnings } } : {}),
+      });
+    }
+    ctx.store.db.prepare('UPDATE captures SET updated_at = ? WHERE workspace_id = ? AND id = ?').run(ctx.clock.now(), ctx.workspaceId, capture.id);
     ctx.audit.record({ entityKind: 'capture', entityId: capture.id, action: 'extract', actor: ctx.actor, at: ctx.clock.now() });
-    return ok({ captureId: capture.id, fields: liveFields(ctx, capture.id).map(projectField) });
+    return ok({
+      captureId: capture.id,
+      fields: liveFields(ctx, capture.id).map(projectField),
+      ...(supplied !== null ? { qrPayload: { id: payloadId, warnings: supplied.warnings } } : {}),
+    });
   };
 
   const key = typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0 ? input.idempotencyKey : undefined;
@@ -440,6 +433,33 @@ export function captureExtract(ctx: WorkspaceContext, input: CaptureExtractInput
 }
 
 // --- Commit -------------------------------------------------------------------------------------
+
+/**
+ * The currency a commit books the captured amount in (critic R1-H2). Money is `{ minor, currency }`
+ * as ONE value: the minor units mean nothing without the currency they count, so a commit carries the
+ * captured currency into the draft and never lets the target default it. A EUR 100.00 QR-bill that
+ * landed as CHF 100.00 was a wrong amount, and the payable, the pain.001 and the VAT figure followed it.
+ *
+ * Read in order: the amount's own currency, then the capture's `currency` field (an operator who typed
+ * a bare `{ minor }` correction beside a read currency), then the base currency (nothing on the capture
+ * states one, which is the hand-typed case the drafts always had). Two statements that disagree are
+ * refused (`currency_conflict`) rather than one silently winning: which of them is the bill's is a
+ * question for the reviewer. A value that is not an ISO 4217 code shape is refused too, before the
+ * target could store it.
+ */
+function commitCurrency(ctx: WorkspaceContext, captureId: string, amount: { currency?: unknown }, stated: unknown): string {
+  const fromAmount = typeof amount.currency === 'string' ? amount.currency : undefined;
+  const fromField = typeof stated === 'string' ? stated : undefined;
+  if (fromAmount !== undefined && fromField !== undefined && fromAmount !== fromField) {
+    throw new CaptureAbort(err('currency_conflict', { captureId, amountCurrency: fromAmount, currency: fromField }));
+  }
+  const currency = fromAmount ?? fromField ?? baseCurrencyOf(ctx);
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw new CaptureAbort(err('invalid_input', { field: 'currency', captureId, currency }));
+  }
+  return currency;
+}
+
 
 export interface CaptureCommitInput {
   captureId: string;
@@ -502,12 +522,20 @@ export function captureCommit(ctx: WorkspaceContext, input: CaptureCommitInput):
     // Corrections land as operator fields FIRST, so the delegated write reads the corrected values.
     if (Array.isArray(input.corrections)) {
       for (const c of input.corrections) {
-        applyField(ctx, capture.id, { key: (c as { key: string }).key, value: (c as { value: unknown }).value, provenance: 'operator', confidence: 'high' });
+        applyTypedField(ctx, capture.id, { key: (c as { key: string }).key, value: (c as { value: unknown }).value, provenance: 'operator', confidence: 'high' });
       }
     }
     const field = (k: string): unknown => fieldValue(liveFieldByKey(ctx, capture.id, k));
 
     const delegatedKey = `${input.idempotencyKey}:${capture.id}`;
+    // K1: every delegated write carries a key DERIVED from this commit's own, so each runs in the
+    // commit's own idempotency scope (`capture_commit>…`), never in the public scope of the verb it
+    // delegates to: a `create_vendor_bill`, `files_link`, `expense_claim_create` or `expense_line_upsert`
+    // made first under the derived key used to be replayed here and committed as the capture's target.
+    // Each result is then READ BACK as this commit's own before the capture is marked committed. (A
+    // squatted key that a domain table holds unique now refuses `idempotency_key_conflict` instead.)
+    const notOwn = (innerVerb: string, detail: Record<string, unknown>): Result =>
+      err('inner_write_not_own', { composite: 'capture_commit', inner: innerVerb, captureId: capture.id, ...detail });
     let targetId: string;
     if (target.kind === 'vendor_bill') {
       const vendorId = target.vendorId ?? (typeof field('vendor_contact_id') === 'string' ? (field('vendor_contact_id') as string) : undefined);
@@ -517,31 +545,46 @@ export function captureCommit(ctx: WorkspaceContext, input: CaptureCommitInput):
       if (typeof target.expenseAccountId !== 'string' || target.expenseAccountId.length === 0) {
         throw new CaptureAbort(err('needs_account', { field: 'expenseAccountId', captureId: capture.id }));
       }
-      const amount = field('amount') as { minor?: number } | undefined;
+      const amount = field('amount') as { minor?: number; currency?: unknown } | undefined;
       if (amount === undefined || typeof amount.minor !== 'number') {
         throw new CaptureAbort(err('needs_amount', { captureId: capture.id }));
       }
+      const currency = commitCurrency(ctx, capture.id, amount, field('currency'));
       const billDate = target.billDate ?? (typeof field('invoice_date') === 'string' ? (field('invoice_date') as string) : ctx.clock.now().slice(0, 10));
-      const created = createVendorBill(ctx, {
+      const amountMinor = amount.minor;
+      const expenseAccountId = target.expenseAccountId;
+      const created = ctx.store.innerWrite('capture_commit', () => createVendorBill(ctx, {
         vendorId,
         billDate,
         ...(target.dueDate ?? field('due_date') ? { dueDate: (target.dueDate ?? (field('due_date') as string)) } : {}),
-        amountMinor: amount.minor,
+        amountMinor,
+        currency,
         amountIsGross: true,
         ...(target.taxCode !== undefined ? { taxCode: target.taxCode } : typeof field('tax_code') === 'string' ? { taxCode: field('tax_code') as string } : {}),
-        expenseAccountId: target.expenseAccountId,
+        expenseAccountId,
         ...(target.costCenterId ? { costCenterId: target.costCenterId } : {}),
         ...(target.projectId ? { projectId: target.projectId } : {}),
         idempotencyKey: `${delegatedKey}:vb`,
-      });
+      }));
       if (!created.ok) throw new CaptureAbort(created);
       targetId = (created as unknown as { vendorBillId: string }).vendorBillId;
+      const bill = ctx.store.db
+        .prepare('SELECT contact_id, status, idempotency_key FROM vendor_bill WHERE workspace_id = ? AND id = ?')
+        .get(ctx.workspaceId, targetId) as { contact_id: string; status: string; idempotency_key: string } | undefined;
+      if (bill === undefined || bill.status !== 'draft' || bill.contact_id !== vendorId || bill.idempotency_key !== `${delegatedKey}:vb`) {
+        throw new CaptureAbort(notOwn('create_vendor_bill', { vendorBillId: targetId }));
+      }
       // The receipt reference (A17's own pointer) AND the E00 entity link (which derives OR 958f
       // retention) do different jobs; both fire.
-      const attached = attachReceipt(ctx, { vendorBillId: targetId, receiptRef: capture.document_id, idempotencyKey: `${delegatedKey}:ar` });
+      const attached = ctx.store.innerWrite('capture_commit', () => attachReceipt(ctx, { vendorBillId: targetId, receiptRef: capture.document_id, idempotencyKey: `${delegatedKey}:ar` }));
       if (!attached.ok) throw new CaptureAbort(attached);
-      const linked = linkFile(ctx, { fileId: capture.document_id, entityKind: 'vendor_bill', entityId: targetId, idempotencyKey: `${delegatedKey}:lk` });
+      const receiptRef = ctx.store.db.prepare('SELECT receipt_ref FROM vendor_bill WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, targetId) as { receipt_ref: string | null };
+      if (receiptRef.receipt_ref !== capture.document_id) throw new CaptureAbort(notOwn('attach_receipt', { vendorBillId: targetId }));
+      const linked = ctx.store.innerWrite('capture_commit', () => linkFile(ctx, { fileId: capture.document_id, entityKind: 'vendor_bill', entityId: targetId, idempotencyKey: `${delegatedKey}:lk` }));
       if (!linked.ok) throw new CaptureAbort(linked);
+      if (!fileLinkedTo(ctx, capture.document_id, 'vendor_bill', targetId)) {
+        throw new CaptureAbort(notOwn('files_link', { fileId: capture.document_id, vendorBillId: targetId }));
+      }
     } else {
       // expense_line: onto a supplied draft claim, or a fresh one for the target employee.
       let claimId = target.claimId;
@@ -549,30 +592,50 @@ export function captureCommit(ctx: WorkspaceContext, input: CaptureCommitInput):
         if (typeof target.employeeId !== 'string' || target.employeeId.length === 0) {
           throw new CaptureAbort(err('needs_open_claim', { captureId: capture.id }));
         }
-        const claim = createClaim(ctx, { employeeId: target.employeeId, title: 'Belegerfassung', idempotencyKey: `${delegatedKey}:clm` });
+        const employeeId = target.employeeId;
+        const claim = ctx.store.innerWrite('capture_commit', () => createClaim(ctx, { employeeId, title: 'Belegerfassung', idempotencyKey: `${delegatedKey}:clm` }));
         if (!claim.ok) throw new CaptureAbort(claim);
         claimId = (claim as unknown as { claimId: string }).claimId;
+        const held = ctx.store.db
+          .prepare('SELECT employee_id, status, idempotency_key FROM expense_claim WHERE workspace_id = ? AND id = ?')
+          .get(ctx.workspaceId, claimId) as { employee_id: string; status: string; idempotency_key: string } | undefined;
+        if (held === undefined || held.employee_id !== employeeId || held.status !== 'draft' || held.idempotency_key !== `${delegatedKey}:clm`) {
+          throw new CaptureAbort(notOwn('expense_claim_create', { claimId }));
+        }
       }
-      const amount = field('amount') as { minor?: number } | undefined;
+      const amount = field('amount') as { minor?: number; currency?: unknown } | undefined;
       if (amount === undefined || typeof amount.minor !== 'number') {
         throw new CaptureAbort(err('needs_amount', { captureId: capture.id }));
       }
+      // The expense line carries its own currency and converts it ONCE through §H-FX (E02), so a
+      // foreign receipt books its base amount at the rate, never its minor units relabelled as base; an
+      // unresolvable rate is E02's own refusal and rolls the whole commit back.
+      const currency = commitCurrency(ctx, capture.id, amount, field('currency'));
       const expenseDate = target.expenseDate ?? (typeof field('invoice_date') === 'string' ? (field('invoice_date') as string) : ctx.clock.now().slice(0, 10));
-      const line = upsertLine(ctx, {
-        claimId,
+      const lineClaimId = claimId;
+      const lineMinor = amount.minor;
+      const line = ctx.store.innerWrite('capture_commit', () => upsertLine(ctx, {
+        claimId: lineClaimId,
         line: {
           expenseDate,
           category: target.category ?? 'other',
-          amountMinor: amount.minor,
+          amountMinor: lineMinor,
+          currency,
           ...(target.taxCode !== undefined ? { taxCode: target.taxCode } : typeof field('tax_code') === 'string' ? { taxCode: field('tax_code') as string } : {}),
           ...(target.expenseAccountId ? { expenseAccountId: target.expenseAccountId } : {}),
           receiptDocumentId: capture.document_id,
           ...(target.projectId ? { projectId: target.projectId } : {}),
         },
         idempotencyKey: `${delegatedKey}:eln`,
-      });
+      }));
       if (!line.ok) throw new CaptureAbort(line);
       targetId = (line as unknown as { lineId: string }).lineId;
+      const booked = ctx.store.db
+        .prepare('SELECT claim_id, receipt_document_id, idempotency_key FROM expense_line WHERE workspace_id = ? AND id = ?')
+        .get(ctx.workspaceId, targetId) as { claim_id: string; receipt_document_id: string | null; idempotency_key: string | null } | undefined;
+      if (booked === undefined || booked.claim_id !== lineClaimId || booked.receipt_document_id !== capture.document_id || booked.idempotency_key !== `${delegatedKey}:eln`) {
+        throw new CaptureAbort(notOwn('expense_line_upsert', { lineId: targetId, claimId: lineClaimId }));
+      }
     }
 
     const at = ctx.clock.now();
@@ -631,7 +694,11 @@ function projectField(row: FieldRow): Record<string, unknown> {
     value: fieldValue(row),
     confidence: row.confidence,
     provenance: row.provenance,
-    superseded: row.superseded === 1,
+    superseded: row.superseded !== SUPERSEDED.live,
+    // Why a superseded row is history: `discarded_with_bill` is a typed value on a bill key that a
+    // different winning bill reset (owner decision 01.10.2026); the drawer words it. Null otherwise.
+    supersededReason: row.superseded === SUPERSEDED.discardedWithBill ? 'discarded_with_bill' : null,
+    qrPayloadId: row.qr_payload_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -724,6 +791,60 @@ export function getCapture(ctx: WorkspaceContext, input: GetCaptureInput): Resul
   return ok({
     capture: projectCapture(row),
     fields: fields.map(projectField),
+    qrPayloads: qrPayloadsOf(ctx, row.id),
     documentId: row.document_id,
   });
+}
+
+interface QrPayloadRow {
+  id: string;
+  payload: string;
+  sha256: string;
+  source: string;
+  decoder: string | null;
+  warnings: string;
+  created_by: string;
+  created_at: string;
+}
+
+function parseJsonArray(raw: string): unknown[] {
+  try {
+    const v: unknown = JSON.parse(raw);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The supplied-payload evidence of one capture (§0a item 9), oldest first. §H-TENANT scoped. */
+function qrPayloadsOf(ctx: WorkspaceContext, captureId: string): {
+  id: string;
+  payload: string;
+  sha256: string;
+  source: string;
+  decoder: string | null;
+  warnings: unknown[];
+  fieldIds: string[];
+  createdBy: string;
+  createdAt: string;
+}[] {
+  const rows = ctx.store.db
+    .prepare('SELECT * FROM capture_qr_payloads WHERE workspace_id = ? AND capture_id = ? ORDER BY created_at, rowid')
+    .all(ctx.workspaceId, captureId) as QrPayloadRow[];
+  // The field rows a payload wrote are the ones that reference it: one link, stored once, as an FK
+  // that G04's restore remaps (a JSON id list here was lost on every restore, critic F3).
+  const fieldIdsOf = ctx.store.db.prepare(
+    'SELECT id FROM capture_fields WHERE workspace_id = ? AND capture_id = ? AND qr_payload_id = ? ORDER BY created_at, rowid',
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    payload: r.payload,
+    sha256: r.sha256,
+    source: r.source,
+    decoder: r.decoder,
+    warnings: parseJsonArray(r.warnings),
+    fieldIds: (fieldIdsOf.all(ctx.workspaceId, captureId, r.id) as { id: string }[]).map((f) => f.id),
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+  }));
 }

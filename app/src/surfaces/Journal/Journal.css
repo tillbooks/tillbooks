@@ -167,46 +167,191 @@ button.journal-xref:hover {
   gap: var(--t-space-2);
 }
 
-.journal-drawer-meta {
+/* --- The composer, "A1 Buchungssatz" (owner pick 01.10.2026, A02 §6) ----------------------------
+   Datum, Text and the Beleg paperclip on one row; then ONE Buchungssatz row, `Soll an Haben | Betrag |
+   MWST`; under it the quiet ghost buttons and one caption line. Every control sits on `--t-control-h`
+   through `.field`, the account combobox and the picker trigger; every gap is a spacing token. */
+.journal-meta {
+  display: grid;
+  grid-template-columns: minmax(144px, 168px) minmax(0, 1fr) auto;
+  gap: var(--t-space-1);
+  align-items: end;
+}
+
+.journal-meta--two {
+  grid-template-columns: minmax(144px, 168px) minmax(0, 1fr);
+}
+
+.journal-meta .field {
+  width: 100%;
+}
+
+/* The paperclip is an icon button on the field row; the chip that replaces it keeps the same height. */
+.journal-meta-beleg {
+  min-width: 0;
+}
+
+/* The paperclip sits at the row's right end: its tooltip opens from the button's right edge, so the
+   hidden bubble never widens the drawer body into a sideways scroll. */
+.journal-meta-beleg .tooltip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.journal-beleg-button {
+  height: var(--t-control-h);
+  width: var(--t-control-h);
+}
+
+.journal-beleg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  max-width: 240px;
+  height: var(--t-control-h);
+  padding: 0 var(--t-space-0-5) 0 var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.journal-beleg-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journal-beleg-state {
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* The Buchungssatz: the two accounts share what is left, Betrag and MWST keep their measure. */
+.journal-satz-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.journal-satz {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) auto minmax(0, 4fr) 96px minmax(96px, max-content);
+  gap: var(--t-space-1);
+  align-items: end;
+}
+
+.journal-satz .field,
+.journal-satz .picker-trigger {
+  width: 100%;
+}
+
+.journal-satz-an {
+  display: inline-flex;
+  align-items: center;
+  height: var(--t-control-h);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.journal-satz-tax,
+.journal-satz-soll,
+.journal-satz-haben {
+  min-width: 0;
+}
+
+.journal-tax {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.journal-tax-trigger {
+  height: var(--t-control-h);
+}
+
+/* The trigger shows the code; its label is in the accessible name and the tooltip. A trigger with no
+   code ("Ohne MWST") keeps its words. */
+.journal-tax-trigger .picker-trigger__code + .picker-trigger__name {
+  display: none;
+}
+
+.journal-tax .tooltip-wrap,
+.journal-tax-tip {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+/* The MWST trigger sits at the row's right end: its label tooltip opens from the trigger's RIGHT edge
+   toward the row, so a hidden bubble never widens the drawer body into a sideways scroll. */
+.journal-tax .tooltip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+/* Under the row: the quiet ghost buttons left, the one caption line right. */
+.journal-satz-under,
+.journal-grid-foot {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--t-space-2);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
 }
 
-.journal-drawer-meta .journal-field {
-  flex: 1 1 160px;
+.journal-satz-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--t-space-0-5);
 }
 
-.journal-drawer-meta .journal-field--full {
-  flex-basis: 100%;
+.journal-satz-cc,
+.journal-ref {
+  min-width: 176px;
 }
 
-/* --- The composer grid (K-30, D137) -----------------------------------------------------------
-   One line is two rows on one grid: the account (at least 220px, the number and the name), Soll and
-   Haben at 120px each and the remove control on the first; the cost centre under the account and the
-   MWST code under the two amounts on the second. At the 720px drawer the account takes what is left
-   (measured about 360px), so a name reads whole instead of "Kont". Every control is on
-   `--t-control-h` through `.field` and the shared Select. */
-.journal-lines {
-  --journal-line-columns: minmax(220px, 1fr) 120px 120px var(--t-control-h);
+.journal-satz-caption {
+  margin-left: auto;
+}
+
+/* The one quiet line: dim, small, tabular, never a table. */
+.journal-caption {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* --- The grid ("Aufteilen") --------------------------------------------------------------------
+   One row per line, the heads on the SAME grid so each sits over its column 1:1: the account takes
+   what is left, MWST 176px, Soll and Haben 112px each, the overflow one control wide. A caption (the
+   cost centre under the account, the VAT line under the whole row) is a second grid row, never a
+   second control row. */
+.journal-grid {
+  --journal-grid-columns: minmax(0, 1fr) 128px 112px 112px var(--t-control-h);
   display: flex;
   flex-direction: column;
 }
 
-.journal-lines-head,
-.journal-line {
+.journal-grid-head,
+.journal-grid-row {
   display: grid;
-  grid-template-columns: var(--journal-line-columns);
-  grid-template-areas:
-    'account debit credit remove'
-    'cost tax tax .';
+  grid-template-columns: var(--journal-grid-columns);
   column-gap: var(--t-space-1);
-  row-gap: var(--t-space-0-5);
 }
 
-/* The heads, for the eye only (every control names itself): 12px/500 dim, sentence case (K-23), and
-   right-aligned over the two money columns like the figures under them. */
-.journal-lines-head {
+.journal-grid-head {
   padding-bottom: var(--t-space-0-5);
   border-bottom: 1px solid var(--t-border);
   font-size: var(--t-font-sm);
@@ -215,68 +360,43 @@ button.journal-xref:hover {
   color: var(--t-text-dim);
 }
 
-.journal-lines-head-account {
-  grid-area: account;
-}
-
-.journal-lines-head-debit,
-.journal-lines-head-credit {
+.journal-grid-num {
   text-align: right;
 }
 
-.journal-lines-head-debit {
-  grid-area: debit;
-}
-
-.journal-lines-head-credit {
-  grid-area: credit;
-}
-
-.journal-lines-head-cost {
-  grid-area: cost;
-}
-
-.journal-lines-head-tax {
-  grid-area: tax;
-}
-
-.journal-line {
+.journal-grid-row {
+  align-items: start;
+  row-gap: var(--t-space-0-5);
   padding: var(--t-space-1) 0;
   border-bottom: 1px solid var(--t-border);
-  align-items: start;
 }
 
-.journal-line-account {
-  grid-area: account;
-  min-width: 0;
-}
-
-.journal-line-debit {
-  grid-area: debit;
-}
-
-.journal-line-credit {
-  grid-area: credit;
-}
-
-.journal-line-remove {
-  grid-area: remove;
-}
-
-.journal-line-cost {
-  grid-area: cost;
-  min-width: 0;
-}
-
-.journal-line-tax {
-  grid-area: tax;
-  min-width: 0;
-}
-
-.journal-line .field,
-.journal-line .select,
-.journal-line .select-trigger {
+.journal-grid-row .field,
+.journal-grid-row .picker-trigger {
   width: 100%;
+}
+
+.journal-grid-account,
+.journal-grid-tax {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.journal-grid-cc {
+  display: block;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.journal-grid-caption {
+  grid-column: 1 / -1;
+}
+
+.journal-grid-foot {
+  padding-top: var(--t-space-1);
 }
 
 /* A money field right-aligns in tabular figures, like the column it feeds. */
@@ -284,6 +404,95 @@ button.journal-xref:hover {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
+}
+
+/* The last line's self-balancing figure is a placeholder until typed: dim ink (never faint, it carries
+   meaning) in the same tabular figures. */
+.journal-line-amount[data-auto='true']::placeholder {
+  color: var(--t-text-dim);
+  opacity: 1;
+}
+
+/* The grid's balance status in the footer: a check glyph and the word, or the signed difference. */
+.journal-balance {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.journal-balance--ok {
+  color: var(--t-success);
+}
+
+.journal-balance--off {
+  color: var(--t-danger);
+}
+
+.journal-balance .t-money {
+  font-size: inherit;
+}
+
+/* The balance figure a keystroke changed: the Commit moment's tint ALONE (D122 D-I). The shared stamp
+   also lands an element from above; a total that slid in would read as a roll, so the landing is
+   dropped and only the accent-soft ground decays. Background only, so the footer never shifts. */
+.journal-balance[data-just-committed] {
+  border-radius: var(--t-radius-sm);
+  animation: motion-tint var(--t-motion-tint) var(--t-ease-out);
+}
+
+/* A posted entry's header facts, read-only. */
+.journal-view-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+  margin: 0;
+}
+
+.journal-view-meta dt {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+}
+
+.journal-view-meta dd {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.journal-drawer-view-code {
+  white-space: nowrap;
+}
+
+.journal-view-date {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Below the wide drawer the drawer is a full-width sheet: the satz stacks, Soll over Haben. */
+@media (max-width: 767px) {
+  .journal-meta,
+  .journal-meta--two,
+  .journal-satz {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .journal-satz-an {
+    display: none;
+  }
+
+  .journal-grid {
+    --journal-grid-columns: minmax(0, 1fr) 88px 88px var(--t-control-h);
+  }
+
+  .journal-grid-head > :nth-child(2),
+  .journal-grid-tax {
+    grid-column: 1 / -1;
+    order: 1;
+  }
 }
 
 /* The read-only line table of a posted entry, on the row tokens (K-20). */
@@ -311,20 +520,12 @@ button.journal-xref:hover {
   font-weight: 500;
 }
 
-.journal-drawer-view-amount {
+/* Money heads and cells right-align, the head too (it outranks the table's left-aligned head rule). */
+.journal-drawer-lines .journal-drawer-view-amount {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
   white-space: nowrap;
-}
-
-/* Balance summary. */
-.journal-drawer-balance {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--t-space-3);
-  margin: 0;
-  padding: var(--t-space-1) 0;
 }
 
 /* The §H-FX disclosure under a converted entry's lines: one dim sentence, no new column and no
@@ -338,47 +539,16 @@ button.journal-xref:hover {
   font-feature-settings: 'tnum' 1;
 }
 
-.journal-drawer-balance dt {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-}
-
-.journal-drawer-balance dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
-  white-space: nowrap;
-}
-
-.journal-drawer-unbalanced {
-  color: var(--t-danger);
-}
-
-/* The difference inside the unbalanced sentence is `.t-money` (nowrap, tabular) at the size of the
-   sentence around it, not the table size. */
-.journal-drawer-unbalanced .t-money {
-  font-size: inherit;
-}
-
-.journal-drawer-balanced {
-  color: var(--t-success);
-}
-
 /* Footer. It rides inside the shared DetailDrawer foot (`.drawer-foot`), which supplies the top
    border, padding and right alignment. The action row lays its controls out full width (the
-   OverflowMenu at the left, a spacer, the buttons at the right edge), and the composer's C4
-   consequence line sits under it, so what "Buchen" does is read before it is pressed. */
+   OverflowMenu and the grid's balance status at the left, a spacer, the buttons at the right edge,
+   ending in the (i) whose tooltip holds the C4 sentence, so what "Buchen" does is one hover or one
+   Tab away and Buchen itself is described by it. */
 .journal-drawer-foot {
   display: flex;
   flex-direction: column;
   gap: var(--t-space-1);
   width: 100%;
-}
-
-.journal-drawer-foot .consequence-line {
-  margin: 0;
-  justify-content: flex-end;
 }
 
 .journal-drawer-actions {

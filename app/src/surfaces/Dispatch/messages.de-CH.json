@@ -1,7 +1,6 @@
 {
   "dispatch": {
     "title": "Versand",
-    "lede": "Textbausteine für Rechnung, Offerte und Mahnung, und das Protokoll dessen, was diesen Arbeitsbereich verlassen hat. Der Versand selbst (Kanäle, Freigaben, Empfänger) bleibt unverändert bei den jeweiligen Belegen.",
     "loading": "Versand wird geladen …",
     "tab": {
       "texts": "Textbausteine",
@@ -15,14 +14,18 @@
     "texts": {
       "subject": "Betreff",
       "body": "Nachrichtentext",
+      "standard": "Standard",
+      "reset": "Auf Standard zurücksetzen",
+      "resetDone": "Standardtext wiederhergestellt.",
       "localeTabs": "Sprache",
       "variables": "Variablen",
+      "variablesInfo": "Zu den Variablen",
       "variablesHint": "Einfügen per Klick oder Tastatur; beim Speichern wird jede Variable gegen die gültige Liste geprüft.",
-      "defaultInUse": "Noch kein eigener Text für diese Sprache gespeichert: der eingebaute Standardtext wird verwendet.",
       "empty": "Noch keine eigenen Textbausteine.",
       "save": "Speichern",
       "saved": "Textbaustein gespeichert.",
       "preview": "Vorschau",
+      "previewInfo": "Zur Vorschau",
       "previewHint": "Die Vorschau zeigt den aufgelösten Text mit Musterwerten. Sie wird beim Wechseln und Speichern aktualisiert.",
       "previewDefault": "Eingebauter Standardtext",
       "previewSaved": "Eigener Text"

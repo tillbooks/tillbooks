@@ -14,7 +14,6 @@
     "recount": "Neu zählen",
     "freeze": "Stichtag",
     "progress": "Fortschritt",
-    "selectHint": "Wähle eine Session, um zu zählen und zu prüfen.",
     "listLabel": "Inventur-Sessions",
     "detailLabel": "Session-Detail",
     "noLines": "Diese Session hat keine Positionen.",

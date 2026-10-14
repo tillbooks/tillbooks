@@ -104,6 +104,21 @@ describe('HostingJourney (M03 V3, the ladder and the move checklist)', () => {
     expect(text.toLowerCase()).not.toContain('geräte synchronisieren');
   });
 
+  it('D106 AT REST (D152): the model sentence sits in the (i) card on the Hosting heading, and the rung group is described by it', async () => {
+    const { container } = render(tree({ get_move_state: ok({ move: null }) }));
+    const sentence = await screen.findByText(J.hosting.model);
+    // Behind the (i), not a paragraph on the working surface; closed until hover or focus.
+    const card = sentence.closest('[role="tooltip"]') as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(card).not.toHaveClass('is-open');
+    expect(container.querySelector('p.hosting-model')).toBeNull();
+    const head = container.querySelector('.hosting-head') as HTMLElement;
+    expect(head.textContent).toContain(J.hosting.title);
+    expect(head.contains(screen.getByRole('button', { name: J.hosting.modelLabel }))).toBe(true);
+    // A screen reader still hears the model before the first choice (S3.3): the group names it.
+    expect(screen.getByRole('radiogroup', { name: J.hosting.title })).toHaveAccessibleDescription(J.hosting.model);
+  });
+
   it('MANAGED RUNG: renders disabled with the bald-verfügbar reason on the rung, Mehr still opens', async () => {
     render(tree({ get_move_state: ok({ move: null }) }));
     await screen.findByText(J.hosting.model);

@@ -36,13 +36,13 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { postEntry, statesConversionBasis } from '../ledger/postEntry.js';
 import { requireString, optionalText } from '../ledger/inputGuards.js';
-import { reverseEntry } from '../ledger/reverseEntry.js';
+import { reverseOwnedEntry, DOCUMENT_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
 import { baseCurrencyOf } from '../fx/rates.js';
 import { parseRate, convertMinor, RATE_ONE } from '../fx/rateMath.js';
 import { ROLE_ACCOUNT_NUMBER } from '../payments/accounts.js';
 import { computeLineTax } from '../vat/applyVat.js';
 import { apportionNet } from './apportion.js';
-import { createDocument, transitionDocument, getDocument } from './document.js';
+import { createDocument, transitionDocument, getDocument, lineSupplyDate } from './document.js';
 import type { DocumentRow, DocumentPoster, DocumentLineInput } from './document.js';
 // G05: the template seam (layout-only footer lines; see the A11 note on `resolveRenderTemplate`).
 import { resolveRenderTemplate } from '../customization/documentTemplates.js';
@@ -129,7 +129,9 @@ function creditableInvoice(
  * `needs_supply_date` era-ambiguity refusal by construction.
  */
 function pinnedSupplyDate(line: DocumentLineRow, invoice: DocumentRow): string | null {
-  return line.supply_date ?? invoice.issue_date ?? null;
+  // D164: the date the invoice line POSTED at (its own, else the invoice's document-level date, by
+  // the one rule), else the invoice's issue date, which is what a null resolved to at its posting.
+  return lineSupplyDate(line, invoice) ?? invoice.issue_date ?? null;
 }
 
 function cloneLine(line: DocumentLineRow, invoice: DocumentRow, quantityMilli?: number): DocumentLineInput {
@@ -591,11 +593,13 @@ export function buildCreditNotePosting(ctx: WorkspaceContext, doc: DocumentRow):
     const revenue = revenueAccountFor(ctx, line);
     if (revenue === undefined) return err('missing_account', { account: '3200' });
     const netMinor = line.line_total_minor;
+    // D164: one rule for the date (a derived line carries its own, pinned).
+    const supplyDate = lineSupplyDate(line, doc);
     const computed = computeLineTax(ctx, {
       amountMinor: netMinor,
       amountIsGross: false,
       taxCode: line.tax_code,
-      supplyDate: line.supply_date ?? null,
+      supplyDate,
     });
     if (!computed.ok) {
       return err('vat_build_failed', { line: line.position, reason: computed.error });
@@ -622,7 +626,7 @@ export function buildCreditNotePosting(ctx: WorkspaceContext, doc: DocumentRow):
       classKey: kind === 'output' && rateBp > 0 ? `${String(computed.formLine ?? '')}|${rateBp}` : null,
       taxCode: trace.taxCode,
       taxBaseMinor: trace.taxBaseMinor,
-      supplyDate: line.supply_date ?? null,
+      supplyDate,
     });
   }
 
@@ -989,10 +993,10 @@ export const creditNotePoster: DocumentPoster = {
   onIssue: (ctx, doc) => buildCreditNotePosting(ctx, doc),
   onCancel: (ctx, doc) => {
     if (doc.posted_entry_id === null) return ok({});
-    const reversed = reverseEntry(ctx, {
+    const reversed = reverseOwnedEntry(ctx, {
       entryId: doc.posted_entry_id,
       idempotencyKey: `doc-cancel-${doc.id}`,
-    });
+    }, DOCUMENT_REVERSAL_OWNER);
     if (!reversed.ok) return reversed;
     return ok({ reversalEntryId: reversed.reversalId });
   },

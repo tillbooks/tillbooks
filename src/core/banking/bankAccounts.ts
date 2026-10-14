@@ -37,11 +37,20 @@ import { ok, err } from '../result.js';
 import type { Err, Result } from '../result.js';
 import { isValidIban, isQrIban, normalizeIban, QR_IID_MIN, QR_IID_MAX } from '../setup/iban.js';
 import { isCurrencyCode } from '../fx/rateMath.js';
-import { postEntry, applyFxToLines, statesConversionBasis } from '../ledger/postEntry.js';
+import { applyFxToLines, statesConversionBasis } from '../ledger/postEntry.js';
+import { postEntryInternalChecked } from '../ledger/innerPosting.js';
 import type { LineInput } from '../ledger/postEntry.js';
 import { baseCurrencyOf } from '../fx/rates.js';
 import { requireString, optionalId, optionalText, requireDate } from '../ledger/inputGuards.js';
 import { applySavedView } from '../customization/views.js';
+
+/**
+ * The idempotency-key namespace of A19's bank opening entry (`bank-opening:<bankAccountId>:<key>`).
+ * Exported so a reader that must tell the engine's own opening postings from activity can key on it
+ * (G22's `booksStartOf`, critic phase0-installable r2 R2-3), never on `source = 'import'`, which any
+ * `post_entry` caller may choose.
+ */
+export const BANK_OPENING_KEY_PREFIX = 'bank-opening';
 
 /**
  * The reserved QR-IID range, from SIX §1.3.2 above. RE-EXPORTED from `core/setup/iban.ts`, which is
@@ -303,6 +312,16 @@ export function updateBankAccount(ctx: WorkspaceContext, input: UpdateBankAccoun
     // marked QRR-eligible (or the reverse), which is the one way this row can lie to A21.
     isQr = validated.isQrIban === true ? 1 : 0;
     if (iban !== row.iban) {
+      // Critic r2 R2-1: a payment batch still in `draft` or `generated` names this account and froze its
+      // IBAN for its pain.001, a file that may still be uploaded. Changing the IBAN under it would make
+      // the register disagree with that file, so the change is refused, as for a posted opening balance.
+      // A `paid` batch does not lock it (critic r3 R3-4): it renders only from its frozen `debtor_iban`
+      // and refuses to regenerate (`already_paid`), and it cannot be discarded, so a paid run must never
+      // lock an account's IBAN for good. The way out the refusal names: discard or mark paid.
+      const batch = ctx.store.db
+        .prepare("SELECT id FROM payment_batch WHERE workspace_id = ? AND bank_account_id = ? AND status IN ('draft', 'generated') LIMIT 1")
+        .get(ctx.workspaceId, row.id) as { id: string } | undefined;
+      if (batch !== undefined) return err('account_in_use', { field: 'iban', reason: 'payment_batch', batchId: batch.id });
       const clash = ctx.store.db
         .prepare('SELECT id FROM bank_account WHERE workspace_id = ? AND iban = ? AND id <> ?')
         .get(ctx.workspaceId, iban, row.id) as { id: string } | undefined;
@@ -528,16 +547,16 @@ function setBankOpeningBalanceUnderLock(ctx: WorkspaceContext, input: SetBankOpe
   if (!built.ok) return built.result;
   const lines = legsAsLines(built.legs);
 
-  const posted = postEntry(ctx, {
+  const posted = postEntryInternalChecked(ctx, {
     date: input.date,
     description: `Eröffnungsbilanz ${row.name}`,
     ref: row.iban,
     lines,
     source: 'import',
-    idempotencyKey: `bank-opening:${row.id}:${input.idempotencyKey}`,
+    idempotencyKey: `${BANK_OPENING_KEY_PREFIX}:${row.id}:${input.idempotencyKey}`,
     ...(currency !== undefined ? { currency } : {}),
     ...(input.fxRate !== undefined ? { fxRate: input.fxRate } : {}),
-  });
+  }, 'set_bank_opening_balance_internal');
   // Every A02 rejection (`period_locked`, `needs_fx_rate`, a capability denial) rides straight out
   // unchanged. Re-coding it here would give the same condition two names on two surfaces.
   if (!posted.ok) return posted;

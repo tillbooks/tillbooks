@@ -172,13 +172,13 @@ export function comparePositions(a: FeedPosition, b: FeedPosition): number {
   return 0;
 }
 
-interface BookStatement {
+export interface BookStatement {
   row: FeedBookRow;
   position: FeedPosition;
 }
 
 /** The day-end statements among the rows, each with its position: pages and unnumbered rows are skipped. */
-function bookStatements(rows: readonly FeedBookRow[]): BookStatement[] {
+export function bookStatements(rows: readonly FeedBookRow[]): BookStatement[] {
   const out: BookStatement[] = [];
   for (const row of rows) {
     if (row.page_number !== 1 || row.last_page_ind !== 1) continue;
@@ -211,7 +211,7 @@ function sameCurrency(a: string | null, b: string | null): boolean {
 }
 
 /** The skipped numbers between the newest and a later candidate (only the numbers that are knowable). */
-function skippedBetween(newest: FeedPosition, candidate: FeedPosition): FeedSkippedRange[] {
+export function skippedBetween(newest: FeedPosition, candidate: FeedPosition): FeedSkippedRange[] {
   if (candidate.year === newest.year) {
     return candidate.number > newest.number + 1 ? [{ year: newest.year, from: newest.number + 1, to: candidate.number - 1 }] : [];
   }

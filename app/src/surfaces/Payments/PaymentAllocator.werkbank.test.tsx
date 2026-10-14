@@ -39,6 +39,12 @@ import suggestMatches from './suggest-matches.fixture.json';
 import previewPayment from './preview-payment.fixture.json';
 import recordPayment from './record-payment.fixture.json';
 import listAccounts from './list-accounts.fixture.json';
+// Pinned to the live engine by `test/banking/studio-bank-accounts-fixture.test.mjs`; both of its
+// Bankkonten book on acc_2, which is what the Werkbank's Konto defaults to (D152).
+import listBankAccounts from '../BankAccounts/list-bank-accounts.fixture.json';
+// The books' base currency, which the Konto default needs (critic F2): the Setup recording, pinned to the
+// live engine by `test/setup/profile-fixture.test.mjs`.
+import companyProfile from '../Setup/company-profile.fixture.json';
 
 type Canned = Record<string, RestResponse | ((input: Record<string, unknown>) => RestResponse)>;
 
@@ -60,6 +66,8 @@ const HAPPY: Canned = {
   record_payment: ok(recordPayment),
   list_accounts: ok(listAccounts),
   list_contacts: ok({ contacts: [{ id: 'contact_2', name: 'Beispiel GmbH' }] }),
+  list_bank_accounts: ok(listBankAccounts),
+  get_company_profile: ok(companyProfile),
 };
 
 /** Mount the whole Payments route tree at `route`, exactly as the router mounts it (`/payments/*`). */
@@ -155,8 +163,8 @@ describe('the sticky decision column', () => {
     // line beside the confirm must NOT render the same sentence a second time.
     const empties = within(dialog).getAllByText('Noch nichts zugewiesen.');
     expect(empties).toHaveLength(1);
-    // And the confirm is still disabled, because the empty condition holds it (D15/C3).
-    expect(within(dialog).getByRole('button', { name: 'Zahlung buchen' })).toBeDisabled();
+    // And the confirm is ABSENT, not disabled (D152 rule 3): the Betrag that unlocks it is beside it.
+    expect(within(dialog).queryByRole('button', { name: 'Zahlung buchen' })).not.toBeInTheDocument();
   });
 });
 
@@ -181,6 +189,10 @@ describe('the focus trap (the audit AA gap)', () => {
 describe('the roving candidate amount fields', () => {
   it('ArrowDown moves focus from one row amount to the next (one tab stop for the list)', async () => {
     const dialog = await settledMatcher();
+    // Two editable rows: the ranked suggestion, and the second item picked out of the disclosure.
+    await userEvent.type(within(dialog).getByLabelText('Betrag'), '500');
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Alle offenen Posten zeigen (1)' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'R-2026-0003 zuweisen' }));
     const amounts = within(dialog).getAllByLabelText('Zuweisen');
     expect(amounts.length).toBeGreaterThanOrEqual(2);
 
@@ -195,7 +207,7 @@ describe('the roving candidate amount fields', () => {
 
 describe('both empty states name a way out', () => {
   it('nothing open at all points at issuing an invoice', async () => {
-    const dialog = await settledMatcher('/payments/new', {
+    const dialog = await settledMatcher('/payments/new?amount=500.00', {
       ...HAPPY,
       suggest_payment_matches: ok({ ...suggestMatches, openItemCount: 0, candidates: [] }),
     });
@@ -204,7 +216,7 @@ describe('both empty states name a way out', () => {
   });
 
   it('things open but none fits this money offers to widen the search', async () => {
-    const dialog = await settledMatcher('/payments/new', {
+    const dialog = await settledMatcher('/payments/new?amount=500.00', {
       ...HAPPY,
       suggest_payment_matches: ok({ ...suggestMatches, openItemCount: 5, candidates: [] }),
     });

@@ -169,6 +169,17 @@ export {
   proposeForLine,
 } from './bankProposals.js';
 export type { BankLineProposal, BankProposalCertainty, BankProposalReason } from './bankProposals.js';
+export {
+  BANK_INBOX_MODEL_CONSUMER,
+  BANK_INBOX_MODEL_LANGUAGES,
+  MODEL_SUGGEST_MIN_PROBABILITY,
+  MODEL_SUGGEST_TOP_K,
+  bankLineCandidates,
+  bankLineDecisionState,
+  modelCandidateBase,
+} from './bankModelRung.js';
+export { MODEL_SUGGEST_BATCH_MAX, MODEL_SUGGEST_IDS_MAX, MODEL_SUGGEST_SKIP_REASONS, suggestBankLines } from './bankModelSuggest.js';
+export type { SuggestBankLinesInput, SuggestBankLinesOk, SuggestBankLinesDecision } from './bankModelSuggest.js';
 export { invoiceSettlementFigures, planInvoiceSettlement } from './qrMatch.js';
 export {
   BANK_INBOX_STATUS_FILTERS,
@@ -177,6 +188,11 @@ export {
   listBankInbox,
   bankReconciledForPeriod,
   ledgerBalanceInAccountCurrency,
+  BANK_LINE_ATTENTIONS,
+  attentionOf,
+  bankInboxAttention,
+  isProposalBookable,
+  vorschlagLineIds,
 } from './bankInbox.js';
 export type {
   BankInboxLine,
@@ -186,6 +202,8 @@ export type {
   ListBankInboxOk,
   BankReconciledAccount,
   BankReconciledResult,
+  BankLineAttention,
+  BankInboxAttentionCounts,
 } from './bankInbox.js';
 export { BANK_INBOX_SCHEMA_SQL } from './bankInboxSchema.js';
 
@@ -218,3 +236,21 @@ export type {
   DiscardPaymentBatchInput,
 } from './pain001.js';
 export { PAIN001_SCHEMA_SQL } from './pain001Schema.js';
+
+// A36 §4.7 (D150), the hand repair: several camt.053 files, split and imported in number order.
+export { importCamtFiles, IMPORT_CAMT_FILES_MAX } from './importCamtFiles.js';
+export type { ImportCamtFilesInput, CamtFileOutcome } from './importCamtFiles.js';
+export { splitCamt053 } from './camt.js';
+export type { CamtSplitRefusal } from './camt.js';
+
+// A36 §4.7 (D150), the statement gap read model and the confirmation that a chained gap holds nothing.
+export { statementGaps, accountStatementGaps, STATEMENT_GAP_ACK_ACTIONS } from './statementGaps.js';
+export { confirmStatementGap, revokeStatementGapConfirmation } from './statementGapAck.js';
+export type {
+  StatementGap,
+  StatementGapRef,
+  StatementGapRefused,
+  StatementGapWithState,
+  PendingGapStatement,
+} from './statementGaps.js';
+export type { ConfirmStatementGapInput } from './statementGapAck.js';

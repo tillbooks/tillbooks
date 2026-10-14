@@ -1,8 +1,9 @@
 /**
- * F-08 (a): THE SEATING RULE HOLDS ON EVERY HOST. An MCP client whose declared name is not in the
- * closed D13 map is the governed `agent` seat over `/mcp`, whether it connects to `till up`, to
- * `till serve`, or to the Vite dev bridge's router; a `till-studio` client keeps the `studio` seat;
- * and the REST bridge (the Studio's own door) stays `studio`, because the Studio is the human.
+ * F-08 (a): THE SEATING RULE HOLDS ON EVERY HOST. An MCP client without the host's Studio key is the
+ * governed `agent` seat over `/mcp`, whether it connects to `till up`, to `till serve`, or to the Vite
+ * dev bridge's router, and whatever name it declares (critic probe P6 closed the `till-studio` name);
+ * the Studio, holding the key, keeps the `studio` seat; and the REST bridge (the Studio's own door)
+ * is `studio` with the key, because the Studio is the human.
  *
  * WHY THREE HOSTS AND NOT ONE. The rule lives in `src/api/session.ts`, but the DEFECT lived in the
  * hosts: `till up` and the dev bridge passed `actor: 'studio'` (their REST actor) and the MCP face
@@ -36,7 +37,17 @@ import { STUDIO_CLIENT_NAME } from '../../dist/api/session.js';
 import { resetDeliveryRuntime } from '../../dist/api/runtime-state.js';
 import { createWorkspace } from '../../dist/core/setup/index.js';
 import { fixedClock } from '../../dist/core/clock.js';
-import { sequenceIdGen } from '../../dist/core/ids.js';
+import { systemIdGen } from '../../dist/core/ids.js';
+import { studioHeaders, studioKeyFromLink, mintStudioKey } from './studio-key-support.mjs';
+
+/**
+ * Critic R3-B2: a local session that declares the Studio's name WITHOUT the key is refused, never
+ * seated: the name cannot grant the Studio seat, and a Studio tab without its key must say so rather
+ * than quietly act as the agent.
+ */
+async function assertStudioNameWithoutKeyIsRefused(url, label) {
+  await assert.rejects(connect(url, STUDIO_CLIENT_NAME), /studio_key_required/, `${label}: till-studio without the key is refused`);
+}
 
 /** The name Claude Desktop (and every other third-party client) declares: NOT in the closed map. */
 const UNKNOWN_CLIENT = 'claude-desktop';
@@ -53,10 +64,10 @@ async function callVerb(client, name, args) {
 }
 
 /** Seed a workspace through the LOCAL trust boundary (the file holder), so the agent has books to write. */
-function seed(store) {
+function seed(store, label = '') {
   const res = createWorkspace(
-    { store, clock: fixedClock('2026-09-05T08:00:00.000Z'), ids: sequenceIdGen(), actor: 'studio' },
-    { name: 'Seat GmbH', idempotencyKey: 'seat-ws' },
+    { store, clock: fixedClock('2026-09-05T08:00:00.000Z'), ids: systemIdGen, actor: 'studio' },
+    { name: 'Seat GmbH', idempotencyKey: `seat-ws-${label}` },
   );
   assert.equal(res.ok, true, JSON.stringify(res));
   const workspaceId = res.workspaceId;
@@ -91,9 +102,9 @@ function entryCount(store, workspaceId) {
  * The three facts an unknown client's governed write must show on a host: drafted, traced, not posted.
  * `label` names the host in every assertion so a failure says WHICH composition regressed.
  */
-async function assertUnknownClientIsGoverned(url, store, label) {
-  const { workspaceId, accId } = seed(store);
-  const agent = await connect(url, UNKNOWN_CLIENT);
+async function assertUnknownClientIsGoverned(url, store, label, clientName = UNKNOWN_CLIENT) {
+  const { workspaceId, accId } = seed(store, label);
+  const agent = await connect(url, clientName);
   try {
     const me = await callVerb(agent, 'whoami', { workspaceId });
     assert.equal(me.actor, 'agent', `${label}: an unrecognised client is seated as the governed agent`);
@@ -119,9 +130,13 @@ async function assertUnknownClientIsGoverned(url, store, label) {
   return { workspaceId, accId };
 }
 
-/** The other half of the closed map: `till-studio` keeps the human seat and opens no session. */
-async function assertStudioClientKeepsItsSeat(url, store, workspaceId, accId, label) {
-  const studio = await connect(url, STUDIO_CLIENT_NAME);
+/**
+ * The other half: the Studio keeps the human seat and opens no agent session. Since critic probe P6
+ * the seat is the per-launch Studio KEY, not the name, so the Studio connects with the key its host
+ * minted (`studioKey`); `studio-key-seat.test.mjs` proves the name alone no longer seats anyone.
+ */
+async function assertStudioClientKeepsItsSeat(url, store, workspaceId, accId, label, studioKey) {
+  const studio = await connect(url, STUDIO_CLIENT_NAME, studioHeaders(studioKey));
   try {
     const me = await callVerb(studio, 'whoami', { workspaceId });
     assert.equal(me.actor, 'studio', `${label}: the closed map keeps the Studio's seat`);
@@ -145,28 +160,34 @@ test('till up: an unrecognised MCP client (Claude Desktop) is the governed seat;
   assert.equal(up.started, true);
   try {
     const { workspaceId, accId } = await assertUnknownClientIsGoverned(up.url, up.store, 'till up');
-    await assertStudioClientKeepsItsSeat(up.url, up.store, workspaceId, accId, 'till up');
+    // The key comes out of the printed link's fragment, exactly the way the browser gets it.
+    const studioKey = studioKeyFromLink(up.studioUrl);
+    await assertStudioNameWithoutKeyIsRefused(up.url, 'till up');
+    await assertStudioClientKeepsItsSeat(up.url, up.store, workspaceId, accId, 'till up', studioKey);
   } finally {
     await up.close();
   }
 });
 
-test('till serve: an unrecognised MCP client is the governed seat', async () => {
+test('till serve: an unrecognised MCP client is the governed seat, and one naming itself till-studio is refused', async () => {
   const handle = await startHttpServer({ dbPath: ':memory:', port: 0 });
   try {
-    const { workspaceId, accId } = await assertUnknownClientIsGoverned(handle.url, handle.store, 'till serve');
-    await assertStudioClientKeepsItsSeat(handle.url, handle.store, workspaceId, accId, 'till serve');
+    await assertUnknownClientIsGoverned(handle.url, handle.store, 'till serve');
+    // `till serve` serves no Studio and mints no key: the Studio's NAME without a key opens nothing.
+    await assertStudioNameWithoutKeyIsRefused(handle.url, 'till serve');
   } finally {
     await handle.close();
   }
 });
 
-test('the dev bridge composition (REST actor studio, rest:true): /mcp seats the unknown client as agent, /api stays studio', async () => {
-  // EXACTLY what app/dev-api.ts assembles: the shared deps with the REST face's `studio` actor and
-  // both faces mounted. The bridge is a Vite plugin, so its router is driven here over a bare
-  // listener; the composition (and the defect it used to carry) is the deps + options, not Vite.
+test('the dev bridge composition (rest:true + Studio key): /mcp seats the unknown client as agent, /api with the key stays studio', async () => {
+  // What app/dev-api.ts assembles: both faces mounted, with the Studio key it minted at start. The
+  // `studio` deps actor the bridge USED to pass is kept here on purpose: it must not seat anyone. The
+  // bridge is a Vite plugin, so its router is driven here over a bare listener; the composition (and
+  // the defect it used to carry) is the deps + options, not Vite.
   const { deps, store } = makeApiDeps();
-  const router = createLocalHttpRouter({ ...deps, actor: 'studio' }, { rest: true });
+  const studioKey = mintStudioKey();
+  const router = createLocalHttpRouter({ ...deps, actor: 'studio' }, { rest: true, studioKey });
   const server = createServer((req, res) => {
     void router.handle(req, res).then((handled) => {
       if (!handled) {
@@ -179,13 +200,16 @@ test('the dev bridge composition (REST actor studio, rest:true): /mcp seats the 
   const url = `http://127.0.0.1:${server.address().port}`;
   try {
     const { workspaceId, accId } = await assertUnknownClientIsGoverned(url, store, 'dev bridge');
-    await assertStudioClientKeepsItsSeat(url, store, workspaceId, accId, 'dev bridge');
+    await assertStudioClientKeepsItsSeat(url, store, workspaceId, accId, 'dev bridge', studioKey);
+    // The `studio` deps actor seats nobody on /mcp: the Studio's NAME without the key opens nothing.
+    await assertStudioNameWithoutKeyIsRefused(url, 'dev bridge');
 
-    // The REST twin is the Studio's own bridge: it stays the human seat, executes, and opens no session.
+    // The REST twin is the Studio's own bridge: WITH the key it is the human seat, executes, and opens
+    // no session.
     const before = traceRows(store, workspaceId).length;
     const resp = await fetch(`${url}/api/post_entry`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...studioHeaders(studioKey) },
       body: JSON.stringify(postArgs(workspaceId, accId, 'dev-rest')),
     });
     const body = await resp.json();

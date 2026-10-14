@@ -208,7 +208,8 @@ describe('Zeit, the sheet', () => {
   it('shows the honest no-rate hint when no card exists, never a silent zero', async () => {
     renderTime({ ...baseCanned(), rate_card_list: ok({ rateCards: [] }) });
     expect(await screen.findByText(new RegExp(de.time.error.no_rate_defined))).toBeInTheDocument();
-    expect(screen.getByText(de.time.rates.empty)).toBeInTheDocument();
+    // The rate-card list is a second read that can settle after the hint under load, so it is awaited too.
+    expect(await screen.findByText(de.time.rates.empty)).toBeInTheDocument();
   });
 
   it('surfaces a transport failure with a retry that recovers the sheet, never a dead end', async () => {

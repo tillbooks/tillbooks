@@ -376,13 +376,21 @@ test('conformance: a read verb driven on REAL data still writes nothing, and ans
     if (action === undefined || action.kind !== 'read') continue;
 
     const fx = fixture();
-    const input = scenario(fx);
+    // A scenario answers one input, or several (a verb with modes, `compose_entry`): every one is driven
+    // between the same two snapshots, so a write by ANY of them fails the rule.
+    const scenarioInputs = /** @type {Record<string, unknown>[]} */ ([scenario(fx)].flat());
+    const input = scenarioInputs[0];
     // The snapshot is taken AFTER the scenario's own setup writes, so what is compared is the verb
     // under test and not its fixture.
     const beforeObj = snapshotByTable(fx.deps.store);
     const before = JSON.stringify(beforeObj);
     const first = action.run(fx.deps, input);
     c.check(first.ok === true, `${name}: the read scenario's call must succeed, got ${JSON.stringify(first)}`);
+    for (const more of scenarioInputs.slice(1)) {
+      const r = action.run(fx.deps, more);
+      c.check(r.ok === true, `${name}: the read scenario's call must succeed, got ${JSON.stringify(r)}`);
+      c.check(JSON.stringify(action.run(fx.deps, more)) === JSON.stringify(r), `${name}: a read answered differently the second time`);
+    }
 
     const carveout = READ_WRITE_CARVEOUTS[name];
     if (carveout !== undefined) {

@@ -15,17 +15,17 @@ import assert from 'node:assert/strict';
 import {
   postEntry,
   softCloseMonth,
-  lockPeriod,
   assertPeriodOpen,
 } from '../../dist/core/ledger/index.js';
+import { lockPeriodSealed } from '../../dist/core/ledger/periods.js';
 import { setup, entry } from './a03-support.mjs';
 import { errOf, okOf } from '../support/narrow.mjs';
 
 test('assertPeriodOpen surfaces the year_close seal even when the month carries its own hard lock', () => {
   const { store, ctx, workspaceId } = setup();
   // The month carries a filing seal (vat_filed); its fiscal year carries the year_close seal.
-  lockPeriod(ctx, { period: '2026', kind: 'hard', reason: 'year_close', idempotencyKey: 'ly' });
-  lockPeriod(ctx, { period: '2026-12', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'lm' });
+  lockPeriodSealed(ctx, { period: '2026', reason: 'year_close', idempotencyKey: 'ly' });
+  lockPeriodSealed(ctx, { period: '2026-12', reason: 'vat_filed', idempotencyKey: 'lm' });
 
   const refusal = errOf(assertPeriodOpen({ store, workspaceId }, '2026-12-31'), 'assertPeriodOpen into a sealed year');
   assert.equal(refusal.error, 'period_locked');
@@ -37,8 +37,8 @@ test('assertPeriodOpen surfaces the year_close seal even when the month carries 
 test("a source='close' entry is REFUSED into a year-close-sealed year that also carries a month lock", () => {
   const { ctx, byNumber } = setup();
   // Coexisting locks: the year is sealed by year_close, the month by a non-year_close reason.
-  lockPeriod(ctx, { period: '2026', kind: 'hard', reason: 'year_close', idempotencyKey: 'ly' });
-  lockPeriod(ctx, { period: '2026-12', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'lm' });
+  lockPeriodSealed(ctx, { period: '2026', reason: 'year_close', idempotencyKey: 'ly' });
+  lockPeriodSealed(ctx, { period: '2026-12', reason: 'vat_filed', idempotencyKey: 'lm' });
 
   // The close-relaxation lets source='close' post over a soft/filing lock, but NEVER into a year seal.
   const blocked = postEntry(
@@ -52,7 +52,7 @@ test("a source='close' entry is REFUSED into a year-close-sealed year that also 
 
 test('guard: a plain month lock with no year seal still reports its own reason (no false positive)', () => {
   const { store, ctx, workspaceId } = setup();
-  lockPeriod(ctx, { period: '2026-12', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'lm' });
+  lockPeriodSealed(ctx, { period: '2026-12', reason: 'vat_filed', idempotencyKey: 'lm' });
 
   const refusal = errOf(assertPeriodOpen({ store, workspaceId }, '2026-12-31'), 'assertPeriodOpen into a filed month');
   assert.equal(refusal.error, 'period_locked');

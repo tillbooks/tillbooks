@@ -21,6 +21,12 @@
  * capabilities, is enforced at the registry boundary. The type-to-confirm against the legal name is
  * checked HERE, engine-side, so the agent face cannot skip it, and an agent caller is P8 draft-staged.
  *
+ * ONE PLAN OWNS A TESTMANDANT (owner decision 11.10.2026). The link `migration_plan.testmandant_workspace_id`
+ * is written only by the workspace that created the sandbox; a restore clears it and env_copy
+ * re-points it (`trialReset.ts`). `owningPlan` settles books restored before that fix, where a copy's
+ * plan still links the original's sandbox: discard, abandon and promotion act only for the owner, and
+ * a copy may only drop its own link.
+ *
  * §H-TENANT on every query; §H-IDEMPOTENT on all three writes. §H-LEDGER: this file posts NOTHING and
  * touches no journal row; the final G11 re-check is what proves the figures were already right.
  *
@@ -33,13 +39,16 @@
 import type { WorkspaceContext } from '../context.js';
 import type { Result } from '../result.js';
 import { err, ok } from '../result.js';
-import { createWorkspace } from '../setup/workspace.js';
+import { isGovernedSeat, capabilityPort } from '../access/capability.js';
+import { makeContext } from '../context.js';
+import { createWorkspace, type SetupDeps } from '../setup/workspace.js';
 import { appendAuditLog } from '../ledger/auditLog.js';
 import { allowAllCapabilities } from '../ports.js';
 import { listVatPeriods, markVatPeriodFiled } from '../vat/index.js';
 import { runCheck } from './check.js';
 import type { PlanRow, StepRow } from './plan.js';
 import { isCutoverPending, cutoverInFuture } from './stichtag.js';
+import { unlinkPlanTestmandant } from './trialReset.js';
 
 // --- §H-ENUM: the workspace-kind enum, single-sourced here (no CHECK in schema.ts, the §D0 convention) ---
 
@@ -58,6 +67,9 @@ export function isWorkspaceKind(value: unknown): value is WorkspaceKind {
 export function workspaceKindsAreExactlyThree(): boolean {
   return WORKSPACE_KINDS.length === 3 && !WORKSPACE_KIND_SET.has('sandbox_live') && !WORKSPACE_KIND_SET.has('archived');
 }
+
+/** What the ownership resolver and the loaders need: the store, nothing tenant-scoped. */
+type StoreOnly = Pick<WorkspaceContext, 'store'>;
 
 // --- Row types and local §H-TENANT loaders (restated, never imported: see the module note) -------
 
@@ -89,7 +101,7 @@ function loadStepRows(ctx: WorkspaceContext, planId: string): StepRow[] {
 }
 
 /** A workspace row by id, unscoped (the target may be a DIFFERENT workspace than ctx's, e.g. the Testmandant). */
-function loadWorkspace(ctx: WorkspaceContext, workspaceId: string): WorkspaceKindRow | undefined {
+function loadWorkspace(ctx: StoreOnly, workspaceId: string): WorkspaceKindRow | undefined {
   return ctx.store.db
     .prepare('SELECT id, name, legal_form, uid, vat_registered, mwst_no, is_demo, kind, promoted_at FROM workspace WHERE id = ?')
     .get(workspaceId) as WorkspaceKindRow | undefined;
@@ -285,14 +297,27 @@ export function goProductive(
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey as string, 'go_productive');
   if (replayed !== undefined) return replayed;
 
+  // D158 critic round 2: a TERMINAL plan never goes productive. The promotion below writes the plan
+  // `live` unconditionally, so before this guard an abandoned plan whose Testmandant was still a
+  // sandbox flipped back to `live`. `abandoned` and `closed` are the two terminal states (G09 §4).
+  // A closed plan is refused below, after the already-live no-op, so promote-twice stays idempotent.
+  if (plan.status === 'abandoned') return err('plan_abandoned', { planId: plan.id });
+
   if (plan.testmandant_workspace_id === null) return err('not_a_testmandant', { planId: plan.id });
   const testmandant = loadWorkspace(ctx, plan.testmandant_workspace_id);
   if (testmandant === undefined) return err('not_found', { workspaceId: plan.testmandant_workspace_id });
+  // Only the plan that OWNS the Testmandant promotes it (`owningPlan`, owner decision 11.10.2026). A
+  // copy's plan that still links the original's sandbox (a book restored before the fix) is refused
+  // with no write, and it says nothing about the other workspace; the owner is never blocked by a copy.
+  if (owningPlan(ctx, plan) !== 'owner') return err('testmandant_not_owned', { planId: plan.id });
 
   // One-way and idempotent, INDEPENDENT of the key: an already-live workspace is a no-op, never a
   // second promotion (spec §4 "the kind moves sandbox -> live exactly once"). A fresh key on an
   // already-promoted workspace lands here (its own key never stored) and no-ops rather than re-running.
   if (testmandant.kind === 'live') return ok({ workspaceId: testmandant.id, alreadyLive: true });
+  // A closed plan's sandbox would otherwise be promoted and the plan reopened to `live` (code as in
+  // `abandonPlan`).
+  if (plan.status === 'closed') return err('plan_closed', { planId: plan.id });
   // `demo` never promotes (G03 §6b), and no other kind is promotable through this family.
   if (testmandant.kind !== 'sandbox') return err('not_a_testmandant', { workspaceId: testmandant.id, kind: testmandant.kind });
 
@@ -307,7 +332,8 @@ export function goProductive(
   // P8 (spec §2 boundary): an agent invoking this is DRAFT-STAGED until a human confirmation is on
   // record. Passing the exact legal name IS that confirmation (the files.ts `confirmed:true` shape one
   // family over); without it the agent gets `{staged:true}` and a human performs the type-to-confirm.
-  if (ctx.actor === 'agent' && !nameConfirmed) {
+  // The governed-seat rule (`isGovernedSeat`), so a served agent member stages like the local agent.
+  if (isGovernedSeat(ctx.store, ctx.actor) && !nameConfirmed) {
     return ok({ ok: true, staged: true, plan: plan.id, workspaceId: testmandant.id });
   }
   // Checked for EVERY transport: a wrong (or absent) legal name refuses, whoever the caller is (P9).
@@ -433,7 +459,11 @@ function freezeFiledVatPeriods(ctx: WorkspaceContext, liveWorkspaceId: string, s
       // WHOLLY before the Stichtag: every month strictly earlier than the Stichtag's own month.
       if (!p.months.every((m) => m < stichtagMonth)) continue;
       if (p.filed) continue; // already filed: idempotent no-op, not re-sealed, not reported.
-      const r = markVatPeriodFiled(liveCtx, { period: p.label, idempotencyKey: `migfreeze:${liveWorkspaceId}:${p.label}` });
+      // K1: the key is derivable from the workspace and the period label, so the seal runs in this
+      // composite's own idempotency scope, never the public `lock_period` one a caller could pre-claim.
+      const r = ctx.store.innerWrite('go_productive', () =>
+        markVatPeriodFiled(liveCtx, { period: p.label, idempotencyKey: `migfreeze:${liveWorkspaceId}:${p.label}` }),
+      );
       if (r.ok) frozen.push(p.label);
     }
   }
@@ -456,7 +486,111 @@ function companyProfileComplete(ws: WorkspaceKindRow): boolean {
   return true;
 }
 
+// --- Ownership: the one plan a Testmandant belongs to (US-G12.4, owner decision 11.10.2026) ------
+
+/**
+ * What `owningPlan` answers about a plan's linked Testmandant: this plan OWNS it (it may discard,
+ * abandon with it, and promote it), it does NOT (another plan does; this one may only drop its own
+ * link), or it is GONE (the linked workspace no longer exists). There is no fourth, shared, answer.
+ */
+export type TestmandantOwnership = 'owner' | 'not_owner' | 'gone';
+
+/** Every plan, in ANY workspace, that links `sandboxId`: the oldest workspace first, then the oldest plan. */
+function plansLinking(ctx: StoreOnly, sandboxId: string): Array<{ id: string; workspace_id: string }> {
+  // A deliberate read across workspaces, and its whole reach: plan ids and their workspace ids, never
+  // a field of another tenant's plan, and nothing of it is returned to the caller. Settling which
+  // single plan owns a sandbox needs to know which others claim it.
+  return ctx.store.db
+    .prepare(
+      `SELECT p.id, p.workspace_id FROM migration_plan p JOIN workspace w ON w.id = p.workspace_id
+        WHERE p.testmandant_workspace_id = ? ORDER BY w.rowid, p.rowid`,
+    )
+    .all(sandboxId) as Array<{ id: string; workspace_id: string }>;
+}
+
+/**
+ * Does `workspaceId` hold the creation receipt for `sandboxId`: the idempotency row
+ * `migration_create_testmandant` wrote when it minted it? `idempotency` is an OPERATIONAL table a
+ * backup never carries (`data/portability.ts`), so no restored copy can hold one.
+ */
+function holdsCreationReceipt(ctx: StoreOnly, workspaceId: string, sandboxId: string): boolean {
+  const row = ctx.store.db
+    .prepare(
+      `SELECT 1 AS r FROM idempotency
+        WHERE workspace_id = ? AND verb = 'migration_create_testmandant'
+          AND json_valid(result_json) AND json_extract(result_json, '$.createdTestmandantId') = ? LIMIT 1`,
+    )
+    .get(workspaceId, sandboxId) as { r: number } | undefined;
+  return row !== undefined;
+}
+
+/**
+ * THE OWNERSHIP RESOLVER. The link is written by one workspace only (`createTestmandant`), and since
+ * 11.10.2026 a restore clears it and env_copy re-points it (`trialReset.ts`), so a book written from
+ * then on holds at most one plan per Testmandant. Books restored before the fix can hold several, and
+ * they are settled, never shared:
+ *   1. the linked workspace no longer exists: `gone`;
+ *   2. exactly one plan links it: that plan is the owner;
+ *   3. several do: the owner is the linking plan whose workspace holds the creation receipt;
+ *   4. none holds one (a receipt is lost only by hand): the plan of the linking workspace with the
+ *      lowest rowid, the oldest, which a restored copy (a workspace minted later) never is.
+ * Returns `gone` for a plan with no link at all (nothing to own). It reads only the store, so env_copy
+ * can ask it of the source before copying (`landscape/copy.ts`, which carries owner links only).
+ *
+ * LEGACY-ONLY LIMIT: rule 4 trusts rowid order, which a book written by this engine never needs (one
+ * linker at most). An old target filled by mandate-scope env_copy runs before 11.10.2026 can hold copies
+ * in copy order with no receipts; there a copy-of-copy may be resolved as owner. Still never shared.
+ */
+export function owningPlan(
+  ctx: StoreOnly,
+  plan: { id: string; workspace_id: string; testmandant_workspace_id: string | null },
+): TestmandantOwnership {
+  const sandboxId = plan.testmandant_workspace_id;
+  if (sandboxId === null || loadWorkspace(ctx, sandboxId) === undefined) return 'gone';
+  const linking = plansLinking(ctx, sandboxId);
+  let owner = linking[0];
+  if (linking.length > 1) owner = linking.find((p) => holdsCreationReceipt(ctx, p.workspace_id, sandboxId)) ?? owner;
+  return owner !== undefined && owner.id === plan.id && owner.workspace_id === plan.workspace_id ? 'owner' : 'not_owner';
+}
+
+/** How a Testmandant deletion was asked for, recorded in the source workspace's audit row. */
+export type TestmandantDeletionVia = 'discard' | 'abandon';
+
+/**
+ * THE ONE GUARDED PATH THAT DELETES A PLAN'S TESTMANDANT, for `discard_testmandant` and
+ * `migration_abandon_plan` alike. The caller holds the transaction and has run its own checks; this
+ * re-asserts the fence itself, so a caller that skipped one is a wiring defect that THROWS (rolling
+ * the transaction back) rather than deletes: the plan must OWN the Testmandant (`owningPlan`) and its
+ * kind must be `sandbox` (never `live` real books, never a G03 `demo`). Then it hard-deletes the
+ * sandbox, clears the plan's link, and writes ONE audit row in the SOURCE workspace's chain, because
+ * the sandbox's own chain goes with it: entity `migration_plan` and the plan id, the action
+ * `testmandant_deleted_by_<via>`, the actor and the time. The row does not carry the deleted
+ * workspace's id: a foreign workspace id in a row of the source makes every later backup of the
+ * source refuse to restore as a foreign reference. Returns the deleted workspace's id.
+ */
+export function deleteOwnedTestmandant(ctx: WorkspaceContext, plan: PlanRow, via: TestmandantDeletionVia): string {
+  const sandboxId = plan.testmandant_workspace_id;
+  if (sandboxId === null || owningPlan(ctx, plan) !== 'owner') {
+    throw new Error(`deleteOwnedTestmandant: plan ${plan.id} does not own a Testmandant`);
+  }
+  if (loadWorkspace(ctx, sandboxId)?.kind !== 'sandbox') {
+    throw new Error(`deleteOwnedTestmandant: the Testmandant of plan ${plan.id} is not a sandbox`);
+  }
+  hardDeleteWorkspace(ctx, sandboxId);
+  ctx.store.db
+    .prepare('UPDATE migration_plan SET testmandant_workspace_id = NULL WHERE id = ? AND workspace_id = ?')
+    .run(plan.id, ctx.workspaceId);
+  appendAuditLog(
+    { store: ctx.store, workspaceId: ctx.workspaceId, ids: ctx.ids },
+    { entityKind: 'migration_plan', entityId: plan.id, action: `testmandant_deleted_by_${via}`, actor: ctx.actor, at: ctx.clock.now() },
+  );
+  return sandboxId;
+}
+
 // --- discardTestmandant (US-G12.4) ---------------------------------------------------------------
+
+/** A plan in one of these states has left the journey; a discard never moves it back to `planned`. */
+const TERMINAL_PLAN_STATES: ReadonlySet<string> = new Set(['abandoned', 'closed']);
 
 /**
  * Hard-delete a Testmandant and every row under it (US-G12.4), the shape G03's `discardDemoWorkspace`
@@ -464,8 +598,15 @@ function companyProfileComplete(ws: WorkspaceKindRow): boolean {
  * STRUCTURALLY incapable of reaching a live workspace: it refuses unless `kind='sandbox'` (a `demo`
  * discards through G03's verb, and after `goProductive` the kind is `live`, so the same call refuses),
  * and the delete targets ONLY `workspace_id = <the sandbox>`, which can never match a live tenant's
- * rows. The plan survives and returns to `planned` with its trial-load state reset (the maps and
- * declared controls are the operator's work; the Testmandant was always the disposable part).
+ * rows. And it deletes only a Testmandant THIS plan owns (`owningPlan`): a copy's plan that still
+ * links the original's sandbox (a book restored before 11.10.2026) drops its own link and deletes
+ * nothing (`unlinkedOnly`), and a link to a workspace that is already gone is cleared (`alreadyGone`).
+ *
+ * After a delete the plan survives and returns to `planned` with its trial-load state reset (the maps
+ * and declared controls are the operator's work; the Testmandant was always the disposable part). An
+ * `abandoned` or `closed` plan keeps its status: a discard never revives a plan that left the journey.
+ *
+ * A sandbox no plan links any more is discarded by `discardOrphanTestmandant` below, the orphan exit.
  */
 export function discardTestmandant(
   ctx: WorkspaceContext,
@@ -483,11 +624,34 @@ export function discardTestmandant(
   if (replayed !== undefined) return replayed;
 
   if (plan.testmandant_workspace_id === null) return err('not_a_testmandant', { planId: plan.id });
-  const testmandant = loadWorkspace(ctx, plan.testmandant_workspace_id);
+  const linkedId = plan.testmandant_workspace_id;
+  const ownership = owningPlan(ctx, plan);
+
+  // GONE: the linked workspace no longer exists. Clear the dangling link (with the trial reset), and
+  // say so; there is nothing to confirm, because nothing is deleted.
+  if (ownership === 'gone') {
+    return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey as string, 'discard_testmandant', () => {
+      unlinkPlanTestmandant(ctx.store.db, ctx.workspaceId, plan.id, ctx.clock.now(), !TERMINAL_PLAN_STATES.has(plan.status));
+      return ok({ ok: true, alreadyGone: true, discardedWorkspaceId: null, planId: plan.id });
+    });
+  }
+
+  // NOT THE OWNER: another plan owns this Testmandant (the original this book was copied from). The
+  // copy's plan drops its own link, with the trial reset, and deletes nothing, whatever the linked
+  // workspace's kind (nothing is deleted, so the kind fence below has nothing to protect here).
+  if (ownership === 'not_owner') {
+    if (input.confirmed !== true) return err('needs_confirmation', { planId: plan.id });
+    return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey as string, 'discard_testmandant', () => {
+      unlinkPlanTestmandant(ctx.store.db, ctx.workspaceId, plan.id, ctx.clock.now(), !TERMINAL_PLAN_STATES.has(plan.status));
+      return ok({ ok: true, unlinkedOnly: true, discardedWorkspaceId: null, planId: plan.id });
+    });
+  }
+
+  const testmandant = loadWorkspace(ctx, linkedId);
   // THE STRUCTURAL FENCE: discard proceeds ONLY for a `sandbox`. A `demo` (G03's verb) and a `live`
   // (never, through this family) both refuse here, so a live workspace's ledger can never be reached.
   if (testmandant === undefined || testmandant.kind !== 'sandbox') {
-    return err('not_a_testmandant', { workspaceId: plan.testmandant_workspace_id, kind: testmandant?.kind ?? null });
+    return err('not_a_testmandant', { workspaceId: linkedId, kind: testmandant?.kind ?? null });
   }
   if (input.confirmed !== true) return err('needs_confirmation', { workspaceId: testmandant.id });
 
@@ -500,24 +664,74 @@ export function discardTestmandant(
     if (!cap.ok) return cap;
   }
 
-  const targetId = testmandant.id;
   return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey as string, 'discard_testmandant', () => {
-    hardDeleteWorkspace(ctx, targetId);
-    // Unlink and reset the plan: back to `planned`, every non-terminal step to `mapped`, approvals
-    // voided, so the operator can re-run the trial. The plan, maps and declared controls survive.
-    ctx.store.db
-      .prepare("UPDATE migration_plan SET testmandant_workspace_id = NULL, status = 'planned' WHERE id = ? AND workspace_id = ?")
-      .run(plan.id, ctx.workspaceId);
-    const now = ctx.clock.now();
-    for (const step of steps) {
-      if (step.status === 'skipped') continue;
+    const targetId = deleteOwnedTestmandant(ctx, plan, 'discard');
+    // A plan that left the journey (abandoned, closed) keeps its status and its steps as they stood.
+    if (!TERMINAL_PLAN_STATES.has(plan.status)) {
+      // Reset the plan: back to `planned`, every non-terminal step to `mapped`, approvals voided, so
+      // the operator can re-run the trial. The plan, maps and declared controls survive.
       ctx.store.db
-        .prepare("UPDATE migration_step SET status = 'mapped', last_check_id = NULL, committed_at = NULL, updated_at = ? WHERE id = ? AND workspace_id = ?")
-        .run(now, step.id, ctx.workspaceId);
-      ctx.store.db.prepare('DELETE FROM migration_approval WHERE step_id = ? AND workspace_id = ?').run(step.id, ctx.workspaceId);
+        .prepare("UPDATE migration_plan SET status = 'planned' WHERE id = ? AND workspace_id = ?")
+        .run(plan.id, ctx.workspaceId);
+      const now = ctx.clock.now();
+      for (const step of steps) {
+        if (step.status === 'skipped') continue;
+        ctx.store.db
+          .prepare("UPDATE migration_step SET status = 'mapped', last_check_id = NULL, committed_at = NULL, updated_at = ? WHERE id = ? AND workspace_id = ?")
+          .run(now, step.id, ctx.workspaceId);
+        ctx.store.db.prepare('DELETE FROM migration_approval WHERE step_id = ? AND workspace_id = ?').run(step.id, ctx.workspaceId);
+      }
     }
     // OP8: `discardedWorkspaceId` resolves the `migration.testmandant_discarded` occurrence.
     return ok({ ok: true, discardedWorkspaceId: targetId, planId: plan.id });
+  });
+}
+
+// --- discardOrphanTestmandant (US-G12.4, the orphan exit) ------------------------------------------
+
+/** The orphan exit's input: the sandbox itself, named as data (a deps verb, see below). */
+export interface DiscardOrphanTestmandantInput {
+  workspaceId: unknown;
+  confirmed: unknown;
+  idempotencyKey: unknown;
+}
+
+/**
+ * The orphan exit (US-G12.4): hard-delete a sandbox no plan links any more (an env_copy that carried
+ * the Testmandant without its plan). `discard_orphan_testmandant` is a DEPS verb on purpose, shaped
+ * like G03's `discardDemoWorkspace`: its success deletes the very workspace it names, so the shared
+ * boundary's workspace_not_found check would refuse the replay of a completed discard (critic,
+ * 11.10.2026). The boundary's order is restated here: the replay FIRST, then existence, then the A24
+ * gate (`manage_import`, the `discard_testmandant` right, through the same `capabilityPort`), then the
+ * archive refusal, then the fences: the kind must be `sandbox` (`not_a_testmandant`) and no plan in
+ * any workspace may link it (`testmandant_linked`: that plan's own discard is the way). §H-TENANT by
+ * construction: the only workspace it can reach is the one it names and was authorised on.
+ *
+ * The memo lives in the `_system` namespace (the workspace is gone afterwards) under a key scoped to
+ * the workspace (`<workspaceId>:<key>`), so two orphans discarded with the same key never answer each
+ * other's call.
+ */
+export function discardOrphanTestmandant(deps: SetupDeps, input: DiscardOrphanTestmandantInput): Result {
+  const guard = reqStr(input.workspaceId, 'workspaceId') ?? reqStr(input.idempotencyKey, 'idempotencyKey');
+  if (guard) return guard;
+  const workspaceId = input.workspaceId as string;
+  const memoKey = `${workspaceId}:${input.idempotencyKey as string}`;
+  const replayed = deps.store.recallIdempotent<Result>('_system', memoKey, 'discard_orphan_testmandant');
+  if (replayed !== undefined) return replayed;
+
+  const ctx = makeContext(deps.store, { workspaceId, actor: deps.actor ?? 'system', clock: deps.clock, ids: deps.ids });
+  const self = loadWorkspace(ctx, workspaceId);
+  if (self === undefined) return err('workspace_not_found', { workspaceId });
+  const gate = capabilityPort(deps.store, workspaceId, deps.actor ?? 'system', deps.identitySource).assert('manage_import');
+  if (!gate.ok) return gate;
+  const archived = (deps.store.db.prepare('SELECT archived FROM workspace WHERE id = ?').get(workspaceId) as { archived: number }).archived;
+  if (archived === 1) return err('workspace_archived', { workspaceId });
+  if (self.kind !== 'sandbox') return err('not_a_testmandant', { workspaceId, kind: self.kind });
+  if (plansLinking(ctx, workspaceId).length > 0) return err('testmandant_linked', { workspaceId });
+  if (input.confirmed !== true) return err('needs_confirmation', { workspaceId });
+  return deps.store.rememberIdempotent('_system', memoKey, 'discard_orphan_testmandant', () => {
+    hardDeleteWorkspace(ctx, workspaceId);
+    return ok({ ok: true, discardedWorkspaceId: workspaceId });
   });
 }
 

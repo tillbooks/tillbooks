@@ -24,15 +24,17 @@
   flex-direction: column;
 }
 
-/* Action forms (close a month, run the year-end close). */
+/* The close actions: the month form, and the one door to the guided year close beside it (D152
+   rule 3), on one line that wraps on a narrow viewport. */
 .periods-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-end;
   gap: var(--t-space-3);
   padding: var(--t-space-2);
 }
 
-/* The two close forms (a field plus its action) wrap instead of overflowing: on a narrow viewport the
+/* The month form (a field plus its action) wraps instead of overflowing: on a narrow viewport the
    button drops below its field rather than pushing off the edge. `min-width: 0` lets the field column
    shrink to the available width instead of forcing a horizontal scroll. */
 .period-form {
@@ -319,7 +321,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* A38: the accrual and provision editor (the panel, its drawer form, the live lines preview). */
+/* A38: the accrual and provision editor (the panel, its drawer form, the live booking line). */
 .accrual-editor {
   display: flex;
   flex-direction: column;
@@ -340,6 +342,14 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--t-space-1);
+}
+
+/* The empty list: one quiet line under the head (D152 rules 3 and 4). */
+.accrual-empty {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
 }
 
 .accrual-editor-batch {
@@ -379,12 +389,18 @@
   color: var(--t-text-dim);
 }
 
+/* A kind: its radio and name, then its (i). The option keeps the 44px target. */
 .accrual-picker-option {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: var(--t-space-1);
-  align-items: baseline;
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
   min-height: 44px;
+}
+
+.accrual-picker-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
 }
 
 .accrual-picker-name {
@@ -393,11 +409,22 @@
   color: var(--t-text);
 }
 
-.accrual-picker-hint {
-  grid-column: 2;
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
+/* The (i) beside an option or the reason picker: quiet ink, the sentence in its real tooltip. */
+.accrual-hint {
+  display: inline-flex;
   color: var(--t-text-dim);
+}
+
+/* The reason picker and its (i) on one line. */
+.accrual-reason {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.accrual-reason > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .accrual-field-error {
@@ -407,22 +434,23 @@
   color: var(--t-danger);
 }
 
-.accrual-preview {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-2);
-  margin-top: var(--t-space-2);
+/* The booking the draft will carry, in one line under the form (D152 rule 4). */
+.accrual-booking {
+  margin: var(--t-space-2) 0 0;
   padding-top: var(--t-space-2);
   border-top: 1px solid var(--t-border);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
 }
 
-/* The preview and releases tables scroll horizontally in their own container on a narrow viewport,
+/* The releases table scrolls horizontally in its own container on a narrow viewport,
    so a long account name never clips or pushes the modal wider. The table keeps its natural sizing. */
 .accrual-lines-wrap {
   overflow-x: auto;
 }
 
-/* The preview lines, on the row tokens (K-20) with the 12px/500 dim head (K-23). */
+/* The releases lines, on the row tokens (K-20) with the 12px/500 dim head (K-23). */
 .accrual-lines {
   width: 100%;
   border-collapse: collapse;

@@ -29,11 +29,12 @@ import {
   setDefaultDocumentTemplate,
   updateDocumentTemplate,
 } from '../core/customization/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface DocumentTemplateActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -57,7 +58,7 @@ export function documentTemplateActions(h: DocumentTemplateActionHelpers): reado
   return [
     ctxAction(
       'create_document_template',
-      'write',
+      'write:correctable:internal',
       'Create a document template (invoice, credit_note, quote or dunning_run): footer text per locale, render language (fixed or per contact), an ordered set of OPTIONAL non-legal line-item columns, and an E00 logo file linked via entityKind document_template. Always saved as a NON-default draft: going live is a separate set_default_document_template call a human confirms. Presentation only: the Swiss QR-bill payload, VAT figures and legal content are produced by the document itself and pass through byte-identical under every template.',
       ctxSchema(
         {
@@ -76,21 +77,21 @@ export function documentTemplateActions(h: DocumentTemplateActionHelpers): reado
     ),
     ctxAction(
       'update_document_template',
-      'write',
+      'write:correctable:outbound',
       'Update a template (name, footer, language, optional columns, logo). NEVER changes an already-issued document: issue froze the template content onto the document, so a mailed copy and a later reprint always match; only documents issued after the edit pick it up.',
       ctxSchema({ templateId: STR, patch: OBJ, idempotencyKey: STR }, ['templateId', 'patch']),
       (ctx, input) => updateDocumentTemplate(ctx, as(input)),
     ),
     ctxAction(
       'set_default_document_template',
-      'write',
+      'write:correctable:outbound',
       "Make a template THE default for its document kind: the prior default clears in the same atomic write (at most one default per kind), and every document of that kind issued afterwards freezes to it. Wide-effect and reviewable: this changes the workspace's outward face.",
       ctxSchema({ documentKind: STR, templateId: STR, idempotencyKey: STR }, ['documentKind', 'templateId']),
       (ctx, input) => setDefaultDocumentTemplate(ctx, as(input)),
     ),
     ctxAction(
       'archive_document_template',
-      'write',
+      'write:correctable:internal',
       'Soft-archive a template (and clear it as default). NOT destructive: a template frozen onto an already-issued document keeps rendering that document forever; archiving only removes it from the active list and from new defaults.',
       ctxSchema({ templateId: STR, idempotencyKey: STR }, ['templateId']),
       (ctx, input) => archiveDocumentTemplate(ctx, as(input)),

@@ -21,10 +21,11 @@
  *
  * 2. Restore RE-MINTS every surrogate id through one consistent map. Preserving literal ids cannot be
  *    collision-free (a restore into a store that still holds the source, or a second restore of one
- *    backup, collides on a global primary key). Money, timestamps and the audit CONTENT are copied
- *    verbatim; ids, the `reverses_entry_id` chain, blob linkage and the audit `workspace_id`/`entity_id`
- *    are remapped. The audit chain is RE-HASHED under the new workspace id (it is a hash input), reusing
- *    `auditHashRow` so there is one source of truth for the chain hash.
+ *    backup, collides on a global primary key). Money, timestamps and plain text are copied verbatim;
+ *    EVERY value that names a re-minted row follows it through ONE chokepoint (`./idRemap.ts`, spec
+ *    §0c), whatever the column is called and whether the id is the whole value or sits inside JSON.
+ *    The audit chain is VERIFIED at the source and only then re-hashed under the new workspace id (it
+ *    is a hash input), reusing `auditHashRow`; a chain that did not verify is carried broken.
  *
  * 3. The invariant gate runs BEFORE commit and any failure THROWS. Returning `{ok:false}` inside a
  *    `store.tx(...)` would COMMIT the partial write (the tx-commit-on-err trap). So the pre-commit
@@ -40,15 +41,27 @@ import { join } from 'node:path';
 import type { SqliteStore } from '../store/sqlite-store.js';
 import type { Clock } from '../clock.js';
 import type { IdGen } from '../ids.js';
-import { SCHEMA_SQL, SCHEMA_GENERATION } from '../store/schema.js';
-import { applyAdditiveSchema } from '../store/sqlite-store.js';
+import { SCHEMA_GENERATION } from '../store/schema.js';
+import {
+  copySchemaDdl,
+  fingerprintMatches,
+  isEmptyGap,
+  schemaFingerprint,
+  schemaShapeOf,
+  shapeGap,
+  tillTables,
+} from '../store/schemaShape.js';
+import type { SchemaShape } from '../store/schemaShape.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { createWorkspace } from '../setup/workspace.js';
 import type { IdentitySource } from '../access/index.js';
-import { auditCanonicalRow, auditHashRow, AUDIT_GENESIS_PREV } from '../ledger/auditLog.js';
+import { auditCanonicalRow, auditHashRow, appendAuditLog, AUDIT_GENESIS_PREV } from '../ledger/auditLog.js';
+import { resetPublishDial } from '../sync/publishReset.js';
 import { TILL_VERSION } from './catalog.js';
+import { RestoreIdMap, AmbiguousReferenceError, CROSS_WORKSPACE_REFERENCE_COLUMNS, columnKey } from './idRemap.js';
 import { SCHEMA_NEWER_THAN_RUNTIME, bookGenerationOf, newerGenerationRefusal } from '../store/generation.js';
+import { approvalSurvivesRestore, planRowWithoutLink, stepRowWithoutTrial } from '../migration/trialReset.js';
 
 /**
  * What a portability verb is handed. It carries the store and the same `clock`/`ids`/`actor` a
@@ -72,6 +85,15 @@ export interface PortDeps {
    * unchanged.
    */
   identitySource?: IdentitySource | undefined;
+  /**
+   * INTERNAL, env_copy only (`landscape/copy.ts`), never read from MCP or REST input (the api layer
+   * builds `PortDeps` field by field, `src/api/data-actions.ts`). A restore CLEARS
+   * `migration_plan.testmandant_workspace_id` (the plan's Testmandant, a sibling workspace the copy
+   * does not own: `RESTORE_ROW_TRANSFORMS`). An instance copy restores the sibling too and re-points
+   * the link at it afterwards (`remapCopiedWorkspaceIds`), so it keeps the link through the restore
+   * and sweeps whatever it could not re-point itself.
+   */
+  keepSiblingTestmandantLinks?: boolean | undefined;
 }
 
 /** §H-ENUM single sources for the three `backups` enums (the D0 convention: no CHECK in the DDL). */
@@ -128,12 +150,13 @@ interface FkMeta {
   to: string | null;
 }
 
+/**
+ * Every TILL table of a connection, through the ONE chokepoint (`isTillTable` / `tillTables`): a
+ * tool's table inside the file (Litestream's `_litestream_seq` / `_litestream_lock` on the owner's
+ * replicated book) is never snapshotted, exported, wiped, loaded or fenced as if it were the book's.
+ */
 function allTables(db: Database.Database): string[] {
-  return (
-    db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-      .all() as { name: string }[]
-  ).map((r) => r.name);
+  return tillTables(db);
 }
 
 function columnsOf(db: Database.Database, table: string): ColumnMeta[] {
@@ -161,8 +184,10 @@ function surrogatePk(cols: ColumnMeta[]): string | undefined {
 
 /**
  * How a table is fenced to one workspace. Most tables carry `workspace_id` directly. A few do not and
- * are scoped through a foreign key: `journal_line` through its `entry_id` to `journal_entry`, and
- * `migration_map_template` through `created_in_workspace_id` to `workspace`. Scoping journal_line by
+ * are scoped through a foreign key: `journal_line` through its `account_id` to `account` (the first NOT
+ * NULL foreign key to a scoped table in declaration order, which `scopeInfoFor` prefers; its `entry_id`
+ * is held inside the workspace by the restore's foreign-reference gate, `assertReferencesStayInside`),
+ * and `migration_map_template` through `created_in_workspace_id` to `workspace`. Scoping journal_line by
  * `workspace_id` would have SILENTLY DROPPED every posted line from the backup (it has no such column),
  * which is exactly the kind of "looks fine, loses money" defect this whole spec exists to prevent.
  */
@@ -202,6 +227,15 @@ function scopedWhere(db: Database.Database, table: string, wsId: string): { clau
     clause: `"${info.column}" IN (SELECT "${info.refPk}" FROM "${info.refTable}" WHERE ${parent.clause})`,
     params: parent.params,
   };
+}
+
+/**
+ * The WHERE clause + params selecting one workspace's rows of `table`, direct or through its FK chain:
+ * the same scoping backup, restore and wipe use. Exported read-only for the list-free restore gate
+ * (`test/data/restore-chokepoint.test.mjs`), which must scan exactly the rows a restore wrote.
+ */
+export function workspaceRowsWhere(db: Database.Database, table: string, wsId: string): { clause: string; params: unknown[] } {
+  return scopedWhere(db, table, wsId);
 }
 
 /** The workspace-scoped tables a snapshot copies (directly or through an FK), minus identity/operational. */
@@ -254,19 +288,18 @@ interface TableManifest {
 
 /**
  * Copy ONE workspace's rows out of the live database into a fresh SQLite file at `destPath`. The
- * destination gets the SAME schema (so it is a faithful, standalone-queryable copy) and its rows are
- * inserted with foreign keys off and lines before entries, so a posted ledger loads without tripping
- * the immutability trigger. Returns the per-table manifest.
+ * destination gets the live BOOK's own schema (`copySchemaDdl`, spec §0c item 6), not the schema this
+ * runtime's code would create: a book a NEWER TILL has opened carries columns this runtime does not
+ * know, and a snapshot built from this runtime's `SCHEMA_SQL` could not receive them (the copy threw
+ * `no column named ...`, critic A31 R2-M1). Rows are inserted with foreign keys off and lines before
+ * entries, so a posted ledger loads without tripping the immutability trigger. Returns the per-table
+ * manifest and the snapshot's shape.
  */
-function writeScopedSqlite(srcDb: Database.Database, srcWsId: string, destPath: string): TableManifest {
+function writeScopedSqlite(srcDb: Database.Database, srcWsId: string, destPath: string): { tables: TableManifest; shape: SchemaShape } {
   const dest = new Database(destPath);
   try {
     dest.pragma('foreign_keys = OFF');
-    dest.exec(SCHEMA_SQL);
-    // The snapshot must carry the SAME schema the live store runs, not just the base CREATE path:
-    // columns TILL ships only through ADDITIVE_COLUMNS (e.g. G05's `document.rendered_template_id`)
-    // are absent from SCHEMA_SQL, so without this the row copy throws `no column named ...`.
-    applyAdditiveSchema(dest);
+    copySchemaDdl(srcDb, dest);
     dest.pragma(`user_version = ${SCHEMA_GENERATION}`);
     const manifest: TableManifest = {};
 
@@ -282,7 +315,7 @@ function writeScopedSqlite(srcDb: Database.Database, srcWsId: string, destPath: 
       insertRows(dest, table, columnsOf(srcDb, table), rows);
       manifest[table] = { rowCount: rows.length, sha256: sha256Hex(canonicalRows(rows)) };
     }
-    return manifest;
+    return { tables: manifest, shape: schemaShapeOf(dest) };
   } finally {
     dest.close();
   }
@@ -310,6 +343,13 @@ interface ArtifactManifest {
   files: Record<string, { sha256: string; bytes: number }>;
   tables: TableManifest;
   entryCount: number;
+  /**
+   * The SHAPE the artifact was written from (spec §0c item 6): every table and its columns, and the
+   * sha256 of that. Absent on an artifact made before 30.09.2026; `verify_backup` reads the shape of
+   * the snapshot FILE either way, so the manifest copy is the record a listing shows.
+   */
+  schemaShape?: SchemaShape;
+  schemaFingerprint?: string;
 }
 
 function countEntries(tables: TableManifest): number {
@@ -407,6 +447,7 @@ function produceArtifact(deps: PortDeps, workspaceId: string, kind: 'backup' | '
   const finalDir = join(deps.backupDir, `${backupId}${suffix}`);
 
   let tmpDir: string;
+  let published = false;
   try {
     mkdirSync(deps.backupDir, { recursive: true });
     tmpDir = mkdtempSync(join(deps.backupDir, '.tmp-'));
@@ -419,10 +460,15 @@ function produceArtifact(deps: PortDeps, workspaceId: string, kind: 'backup' | '
     let tables: TableManifest;
     let topHash: string;
     let byteSize: number;
+    // An export describes the live book's shape; a backup the shape of the snapshot it wrote (the same
+    // DDL, `copySchemaDdl`).
+    let shape: SchemaShape = schemaShapeOf(deps.store.db);
 
     if (kind === 'backup') {
       const sqlitePath = join(tmpDir, 'data.sqlite');
-      tables = writeScopedSqlite(deps.store.db, workspaceId, sqlitePath);
+      const snapshot = writeScopedSqlite(deps.store.db, workspaceId, sqlitePath);
+      tables = snapshot.tables;
+      shape = snapshot.shape;
       const bytes = readFileSync(sqlitePath);
       // Re-hash what was actually written (spec: catch a disk fault before recording `complete`).
       const written = statSync(sqlitePath).size;
@@ -455,12 +501,15 @@ function produceArtifact(deps: PortDeps, workspaceId: string, kind: 'backup' | '
       files,
       tables,
       entryCount: countEntries(tables),
+      schemaShape: shape,
+      schemaFingerprint: schemaFingerprint(shape),
     };
     writeFileSync(join(tmpDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
     writeFileSync(join(tmpDir, 'FORMAT.md'), formatDoc(kind, manifest));
 
     // Atomic publish: rename the fully-built temp bundle onto the final path.
     renameSync(tmpDir, finalDir);
+    published = true;
 
     deps.store.db
       .prepare(
@@ -518,11 +567,13 @@ function produceArtifact(deps: PortDeps, workspaceId: string, kind: 'backup' | '
   } catch (e) {
     // Clean up the temp bundle; the row was never written, so nothing partial persists. A failure
     // AFTER the rename (the row's INSERT refused, e.g. SQLITE_BUSY_SNAPSHOT because a newer TILL
-    // committed meanwhile, critic R1 F2) must not leave the published bundle either: `finalDir`
-    // carries this call's freshly minted id, so nothing else can own that name.
+    // committed meanwhile, critic R1 F2) must not leave the published bundle either. Only a bundle
+    // THIS call published is removed: when the rename itself failed because `finalDir` already exists
+    // (an id collision, which only a sequence-id test book can produce), that directory is another
+    // artifact's, and deleting it would destroy a backup (found by the cross-runtime measurement).
     try {
       rmSync(tmpDir, { recursive: true, force: true });
-      rmSync(finalDir, { recursive: true, force: true });
+      if (published) rmSync(finalDir, { recursive: true, force: true });
     } catch {
       // best effort
     }
@@ -650,7 +701,7 @@ export function listBackups(
  * EXACT schema-version match (spec §0a.6), and a per-entry balance sanity-check. `source` is a bundle
  * directory path.
  */
-export function verifyBackup(_deps: PortDeps, input: { source: string }): Result {
+export function verifyBackup(deps: PortDeps, input: { source: string }): Result {
   const source = String(input.source ?? '');
   if (source.length === 0 || !existsSync(source)) return err('backup_corrupt', { reason: 'source_missing' });
   const manifestPath = join(source, 'manifest.json');
@@ -683,6 +734,7 @@ export function verifyBackup(_deps: PortDeps, input: { source: string }): Result
   // entry; a jsonl_bundle reports the manifest's entry count without opening a queryable ledger.
   let entryCount = manifest.entryCount;
   let balanceOk = true;
+  let fingerprint: string | undefined;
   if (manifest.format === 'sqlite_snapshot') {
     const sqlitePath = join(source, 'data.sqlite');
     const snap = new Database(sqlitePath, { readonly: true });
@@ -701,6 +753,20 @@ export function verifyBackup(_deps: PortDeps, input: { source: string }): Result
           reason: 'snapshot_generation_mismatch',
         });
       }
+      // The SHAPE, read from the snapshot FILE (spec §0c item 6): every table and column it holds
+      // needs a place in the book a restore would load it into, or the load dies half-way with a raw
+      // SQLITE_ERROR. The generation does not catch this: an additive column does not move it.
+      // TILL's tables only (`isTillTable`): a tool's table the file may carry (a backup taken from a
+      // Litestream book before the chokepoint existed) is not a table this book must hold. Such a
+      // backup's manifest fingerprinted the whole file, tool tables included, and `fingerprintMatches`
+      // accepts that too; what verify REPORTS is the TILL shape's fingerprint, the comparable form.
+      const snapShape = schemaShapeOf(snap);
+      fingerprint = schemaFingerprint(snapShape);
+      if (manifest.schemaFingerprint !== undefined && !fingerprintMatches(manifest.schemaFingerprint, snap)) {
+        return err('backup_corrupt', { reason: 'schema_fingerprint_mismatch' });
+      }
+      const gap = shapeGap(schemaShapeOf(deps.store.db), snapShape);
+      if (!isEmptyGap(gap)) return err(SCHEMA_NEWER_THAN_RUNTIME, shapeNewerRefusal(gap, sqlitePath, manifest, fingerprint, deps.store.db));
       const check = footPostedEntries(snap);
       entryCount = check.entryCount;
       balanceOk = check.balanceOk;
@@ -715,7 +781,42 @@ export function verifyBackup(_deps: PortDeps, input: { source: string }): Result
     entryCount,
     balanceOk,
     format: manifest.format,
+    ...(fingerprint === undefined ? {} : { schemaFingerprint: fingerprint }),
   });
+}
+
+/**
+ * The refusal for a snapshot whose SHAPE this installation cannot hold (spec §0c item 6). It rides the
+ * existing `schema_newer_than_runtime` code on purpose: that is the code every face already names for
+ * "a database file newer than the runtime opening it", the Studio already words it ("update TILL, the
+ * file was not changed"), and the remedy is the same. `reason` tells it apart from a generation
+ * refusal, and the payload names every table and column that has no place here.
+ */
+function shapeNewerRefusal(
+  gap: { tables: readonly string[]; columns: readonly string[] },
+  path: string,
+  manifest: ArtifactManifest,
+  backupFingerprint: string,
+  target: Database.Database,
+): Record<string, unknown> {
+  const missing = [...gap.tables.map((t) => `table ${t}`), ...gap.columns.map((c) => `column ${c}`)];
+  const listed = missing.length > 6 ? `${missing.slice(0, 6).join(', ')} and ${missing.length - 6} more` : missing.join(', ');
+  return {
+    reason: 'schema_shape_newer',
+    bookGeneration: SCHEMA_GENERATION,
+    buildGeneration: SCHEMA_GENERATION,
+    path,
+    partial: false,
+    completed: false,
+    unknownTables: gap.tables,
+    unknownColumns: gap.columns,
+    backupTillVersion: manifest.tillVersion,
+    backupSchemaFingerprint: backupFingerprint,
+    runtimeSchemaFingerprint: schemaFingerprint(schemaShapeOf(target)),
+    message:
+      `This backup was made by a newer TILL: it holds ${listed}, which this TILL does not know. ` +
+      `Update TILL to restore it; a backup taken before that update restores here. The backup was not changed: ${path}`,
+  };
 }
 
 /** Σbase_debit == Σbase_credit per POSTED entry. Returns the count and whether every entry balances. */
@@ -776,13 +877,27 @@ export function restoreBackup(
     return deps.store.tx(doRestore);
   } catch (e) {
     // The pre-commit invariant gate throws to roll the transaction back; translate it OUTSIDE the tx.
-    if (e instanceof RestoreInvariantError) return err('restore_invariant_failed', { reason: e.reason });
+    if (e instanceof RestoreInvariantError) return err('restore_invariant_failed', { ...e.detail, reason: e.reason });
+    // A constraint the load broke (a global UNIQUE natural key the restore did not foresee) rolled the
+    // whole transaction back; say so cleanly instead of escaping as an unexpected error.
+    if (isConstraintError(e)) {
+      return err('restore_invariant_failed', { reason: 'constraint_violation', message: e instanceof Error ? e.message : String(e) });
+    }
     throw e;
   }
 }
 
+/** A SQLite constraint failure (`SQLITE_CONSTRAINT_*`) thrown by the driver. */
+function isConstraintError(e: unknown): boolean {
+  const code = typeof e === 'object' && e !== null ? (e as { code?: unknown }).code : undefined;
+  return typeof code === 'string' && code.startsWith('SQLITE_CONSTRAINT');
+}
+
 class RestoreInvariantError extends Error {
-  constructor(readonly reason: string) {
+  constructor(
+    readonly reason: string,
+    readonly detail: Readonly<Record<string, unknown>> = {},
+  ) {
     super(reason);
     this.name = 'RestoreInvariantError';
   }
@@ -790,9 +905,10 @@ class RestoreInvariantError extends Error {
 
 /**
  * The transactional core of restore. Composes `createWorkspace`, wipes the seeded scaffold, loads the
- * snapshot with every surrogate id re-minted, re-chains the audit log, and runs the invariant gate. It
- * runs inside `store.tx` (via `rememberIdempotent` or directly), so it THROWS on an invariant failure to
- * roll everything back, and never returns `{ok:false}` after a write.
+ * snapshot with every surrogate id re-minted and every reference sent through the id chokepoint
+ * (`./idRemap.ts`, spec §0c), carries the audit chain (verified, then re-sealed), and runs the
+ * invariant gate. It runs inside `store.tx` (via `rememberIdempotent` or directly), so it THROWS on an
+ * invariant failure to roll everything back, and never returns `{ok:false}` after a write.
  */
 function loadIntoNewWorkspace(deps: PortDeps, source: string, newWorkspaceName: string): Result {
   const db = deps.store.db;
@@ -825,42 +941,60 @@ function loadIntoNewWorkspace(deps: PortDeps, source: string, newWorkspaceName: 
     const srcWsId = (snap.prepare('SELECT id FROM "workspace"').get() as { id: string } | undefined)?.id;
     if (srcWsId === undefined) throw new RestoreInvariantError('snapshot_missing_workspace');
 
-    // 4. Pass one: mint a fresh id for every surrogate primary key across every loaded table, plus the
-    //    workspace remap. `combined` is the value-lookup used for the polymorphic audit `entity_id`.
-    const loaded = loadOrder(
-      snapshotTables(snap).filter(
-        (t) => t !== 'audit_log' && t !== 'audit_head' && !RESTORE_EXCLUDED_TABLES.has(t),
-      ),
-    );
+    // 4. Pass one: mint a fresh id for every surrogate primary key across every loaded table and for
+    //    every audit row, into the per-table maps (declared foreign keys resolve through these) AND the
+    //    one chokepoint map every other reference resolves through (spec §0c item 2).
+    const loaded = restoreLoadTables(snap);
     const idMap = new Map<string, Map<string, string>>();
-    const combined = new Map<string, string>([[srcWsId, newWsId]]);
-    for (const table of loaded) {
+    const remap = new RestoreIdMap();
+    remap.add('workspace', srcWsId, newWsId);
+    for (const table of [...loaded, AUDIT_TABLE]) {
       const pk = surrogatePk(columnsOf(snap, table));
       if (pk === undefined) continue;
+      const where = scopedWhere(snap, table, srcWsId);
       const map = new Map<string, string>();
-      const rows = snap.prepare(`SELECT "${pk}" AS id FROM "${table}"`).all() as { id: string }[];
+      const rows = snap.prepare(`SELECT "${pk}" AS id FROM "${table}" WHERE ${where.clause}`).all(...where.params) as { id: string }[];
       for (const r of rows) {
-        const minted = deps.ids.next(table);
-        map.set(r.id, minted);
-        combined.set(r.id, minted);
+        const minted = mintRestoredId(deps.ids, table, String(r.id), srcWsId, newWsId);
+        map.set(String(r.id), minted);
+        remap.add(table, String(r.id), minted);
       }
       idMap.set(table, map);
     }
 
     // 5. Update the new workspace row from the snapshot (keeping the caller's chosen name).
-    updateWorkspaceRow(db, snap, srcWsId, newWsId, newWorkspaceName);
+    updateWorkspaceRow(db, snap, srcWsId, newWsId, remap);
 
-    // 6. Pass two: load every scoped row with ids/FKs/workspace_id remapped.
+    // 6. Pass two: load every scoped row with ids/FKs/workspace_id remapped and every other value sent
+    //    through the chokepoint.
+    const rowCtx: RestoreRowContext = { now: deps.clock.now(), keepSiblingLinks: deps.keepSiblingTestmandantLinks === true };
     for (const table of loaded) {
-      loadTable(db, snap, table, srcWsId, newWsId, idMap, combined);
+      loadTable(db, snap, table, srcWsId, newWsId, idMap, remap, rowCtx);
     }
+    // 6a. D161.2: no portal link comes back live (see `portalGrantsAwaitHandover`). The count rides
+    //     the result (critic F2), so the person learns that links wait for them instead of finding out
+    //     from a customer whose link stopped working.
+    const portalLinksAwaitingHandover = portalGrantsAwaitHandover(db, newWsId, rowCtx.now);
 
-    // 7. Re-chain the audit log under the new workspace identity, and rebuild the head anchor.
-    rechainAudit(db, snap, srcWsId, newWsId, deps.ids, combined);
+    // 6b. The copy never inherits an ON egress dial nor the source's stream epoch (critic R1-M2): the
+    //     same rule env_copy applies to its copies (`sync/publishReset.ts` `resetPublishDial`), here in the
+    //     restore's own transaction. Egress is consent, and a fresh epoch makes the fork a consumer was
+    //     following VISIBLE (`sync/outbox.ts` `remintEpoch`, the seam this restore is named in).
+    resetPublishDial(db, deps.ids, [newWsId]);
+
+    // 7. Carry the audit chain: verify it at the source, re-seal it under the new identity only if it
+    //    verified, carry the break otherwise (spec §0c item 4).
+    const auditChain = carryAuditChain(db, snap, srcWsId, newWsId, idMap.get(AUDIT_TABLE) ?? new Map(), remap);
 
     // 8. The invariant gate, BEFORE commit. Any failure THROWS to roll the whole restore back.
     const fkViolations = db.pragma('foreign_key_check') as unknown[];
     if (fkViolations.length > 0) throw new RestoreInvariantError('referential_integrity');
+    // `foreign_key_check` is satisfied by ANY row with the id, another workspace's included. THE
+    // TENANT FENCE is at the chokepoint (critic R2-M2): every minted-shape value the chokepoint met in
+    // a reference position and left unmapped, whatever column it sits in, must not name a row of
+    // another workspace. The declared-FK check (critic R1-M3) stays behind it as a second line.
+    assertUnmappedStayInside(db, remap, newWsId, srcWsId, loaded);
+    assertReferencesStayInside(db, loaded, newWsId);
     for (const entry of db
       .prepare("SELECT id FROM \"journal_entry\" WHERE workspace_id = ? AND status = 'posted'")
       .all(newWsId) as { id: string }[]) {
@@ -872,36 +1006,313 @@ function loadIntoNewWorkspace(deps: PortDeps, source: string, newWorkspaceName: 
       if (sums.d !== sums.c) throw new RestoreInvariantError('unbalanced_entry');
     }
 
-    return ok({ workspaceId: newWsId });
+    // 9. The restore is itself on record in the copy's chain (critic R1-L1), appended AFTER the carried
+    //    rows through the one append path, so a verified copy still verifies and a broken one stays broken.
+    recordRestoreInChain(deps, newWsId, auditChain);
+
+    return ok({ workspaceId: newWsId, auditChain, portalLinksAwaitingHandover });
+  } catch (e) {
+    // A value the chokepoint cannot resolve without guessing refuses the whole restore (spec §0c).
+    if (e instanceof AmbiguousReferenceError) {
+      throw new RestoreInvariantError('ambiguous_reference');
+    }
+    throw e;
   } finally {
     snap.close();
   }
 }
 
-/** Copy the snapshot's workspace fields onto the freshly-minted workspace row, keeping id + chosen name. */
+/** The audit log: loaded by `carryAuditChain`, never by the generic `loadTable`. */
+const AUDIT_TABLE = 'audit_log';
+
+/**
+ * The foreign-reference gate (critic R1-M3). A declared foreign key the per-table maps do not resolve
+ * falls through the chokepoint and lands VERBATIM, and `PRAGMA foreign_key_check` accepts any row with
+ * that id, including one of ANOTHER workspace of this book. A hand-edited backup (the manifest sha256
+ * is a checksum, not a signature) could so point a restored row into a neighbouring tenant: the probe's
+ * copy held an entry reversing another tenant's posted entry, and that tenant could no longer reverse
+ * its own (the one-reversal index is global).
+ *
+ * So every declared foreign key of every restored table, read from the schema's own metadata (no table
+ * list: a table added later is covered by being restorable at all), must resolve to a row of the NEW
+ * workspace: a reference to `workspace` is the new workspace itself, a reference to a workspace-scoped
+ * table is a row inside the new workspace's scope (direct or through its FK chain, `scopedWhere`). A
+ * reference to a table no workspace owns (a global catalogue) is existence only, which
+ * `foreign_key_check` already holds. A failure refuses the restore, `restore_invariant_failed` with
+ * reason `foreign_reference`, naming the table and column but never the foreign value (§H-TENANT: it
+ * would name another tenant's row).
+ */
+function assertReferencesStayInside(db: Database.Database, tables: readonly string[], newWsId: string): void {
+  for (const table of [...tables, 'workspace']) {
+    const own = table === 'workspace' ? { clause: '"id" = ?', params: [newWsId] as unknown[] } : scopedWhere(db, table, newWsId);
+    for (const fk of foreignKeysOf(db, table)) {
+      const target = referenceScope(db, fk.table, newWsId);
+      if (target === undefined) continue; // a global table: existence is foreign_key_check's
+      const to = fk.to ?? surrogatePk(columnsOf(db, fk.table)) ?? 'id';
+      const outside = db
+        .prepare(
+          `SELECT 1 AS hit FROM "${table}" AS __row WHERE ${own.clause} AND __row."${fk.from}" IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM "${fk.table}" WHERE "${fk.table}"."${to}" = __row."${fk.from}" AND ${target.clause}) LIMIT 1`,
+        )
+        .get(...own.params, ...target.params) as { hit: number } | undefined;
+      if (outside !== undefined) {
+        throw new RestoreInvariantError('foreign_reference', { table, column: fk.from, references: fk.table });
+      }
+    }
+  }
+}
+
+/**
+ * THE TENANT FENCE, at the chokepoint (critic R2-M2). The declared-FK check below reads the schema's
+ * DECLARED keys, and a column that names a row without declaring it (149 such columns at the last
+ * census, `capture_fields.capture_id` among them) crossed the tenant boundary exactly as R1-M3 did: a
+ * hand-edited backup planted a field row on ANOTHER tenant's capture, and that tenant's own extract then
+ * died on the global `capture_fields_live` index. Declaring one more foreign key would close that
+ * instance only.
+ *
+ * So the fence reads what the chokepoint itself saw. Every value `RestoreIdMap.remapValue` met in a
+ * reference position (a whole value, a JSON string, a token of a structured value, a declared FK the
+ * per-table map did not resolve) that has the minted id shape and named no row of the backup is on its
+ * `unmappedReferences` list. Each one that names an existing row OUTSIDE the new workspace refuses the
+ * restore, `restore_invariant_failed` / `foreign_reference`, naming the table and column that held it
+ * and the table it pointed into (never the value: §H-TENANT). "Outside" means a row of another
+ * workspace (`workspace` itself, or any workspace-scoped table, through `scopedWhere`); a row of a table
+ * no workspace owns is not a tenant's, and a value naming nothing is a dangling reference, not a
+ * crossing. Two crossings are legitimate, and each is bounded:
+ *
+ *  - a column naming a SIBLING WORKSPACE, `CROSS_WORKSPACE_REFERENCE_COLUMNS` (G18's test mandate),
+ *    exempt for the `workspace` table only;
+ *  - a reference into a table the restore deliberately does NOT carry (the identity and operational
+ *    tables, spec §0a.8b: a restored workspace is unprovisioned) whose row belongs to the SOURCE
+ *    workspace. Nothing can re-map it, and beside the original it names the source's own row (the
+ *    audit trail's `workspace_member` entities, measured by the gate worlds). A row of a table the
+ *    restore DOES carry is never exempt: every one the backup holds was re-minted, so a value still
+ *    naming one outside the new workspace was put there by hand.
+ *
+ * No table or column is named here: a table added later is fenced by being restorable at all.
+ *
+ * Exported for the fence's volume test (`test/data/restore-tenant-fence.test.mjs`); the restore is its
+ * only production caller.
+ */
+export function assertUnmappedStayInside(
+  db: Database.Database,
+  remap: RestoreIdMap,
+  newWsId: string,
+  srcWsId: string,
+  loaded: readonly string[],
+): void {
+  const refs = remap.unmappedReferences();
+  if (refs.length === 0) return;
+  const carried = new Set(loaded);
+  // THE COST (critic R3-L1): one lookup per table, whatever the volume. The distinct tokens go into a
+  // temp table ONCE, with the minted PREFIX each carries; per table, one query finds which of those
+  // prefixes the table's ids carry at all (a primary-key range probe per prefix), and only tokens of a
+  // carried prefix are joined against the table, once. A token whose prefix no table carries (the
+  // `vbk_` run inside an idempotency key, measured as one per posted entry) costs nothing further. The
+  // old shape ran an `IN` query per table per 400 tokens: 31 s at 100'000 tokens, inside the write lock.
+  const tokens = new Map<string, string>(); // token -> its minted prefix
+  for (const ref of refs) {
+    const prefix = mintedPrefix(ref.token);
+    if (prefix !== undefined) tokens.set(ref.token, prefix);
+  }
+  if (tokens.size === 0) return;
+  const foreign = new Map<string, string>(); // token -> the table holding it outside the new workspace
+  db.exec('CREATE TEMP TABLE IF NOT EXISTS g04_fence_token (g04_token TEXT PRIMARY KEY, g04_prefix TEXT NOT NULL) WITHOUT ROWID');
+  db.exec('CREATE TEMP TABLE IF NOT EXISTS g04_fence_prefix (g04_prefix TEXT PRIMARY KEY, g04_lo TEXT NOT NULL, g04_hi TEXT NOT NULL) WITHOUT ROWID');
+  try {
+    db.exec('DELETE FROM temp.g04_fence_token; DELETE FROM temp.g04_fence_prefix');
+    const putToken = db.prepare('INSERT INTO temp.g04_fence_token (g04_token, g04_prefix) VALUES (?, ?)');
+    const putPrefix = db.prepare('INSERT OR IGNORE INTO temp.g04_fence_prefix (g04_prefix, g04_lo, g04_hi) VALUES (?, ?, ?)');
+    for (const [token, prefix] of tokens) {
+      putToken.run(token, prefix);
+      // Every id of this prefix sorts in [prefix_, prefix`): `_` is 0x5F and the backtick 0x60.
+      putPrefix.run(prefix, `${prefix}_`, `${prefix}\``);
+    }
+    for (const table of ['workspace', ...allTables(db)]) {
+      if (table.startsWith('g04_fence_')) continue;
+      const pk = table === 'workspace' ? 'id' : surrogatePk(columnsOf(db, table));
+      if (pk === undefined) continue;
+      const scope = referenceScope(db, table, newWsId);
+      if (scope === undefined) continue; // a table no workspace owns: not a tenant's row
+      const prefixes = (
+        db
+          .prepare(
+            `SELECT p.g04_prefix AS prefix FROM temp.g04_fence_prefix AS p
+              WHERE EXISTS (SELECT 1 FROM "${table}" WHERE "${pk}" >= p.g04_lo AND "${pk}" < p.g04_hi)`,
+          )
+          .all() as { prefix: string }[]
+      ).map((r) => r.prefix);
+      if (prefixes.length === 0) continue;
+      const marks = prefixes.map(() => '?').join(', ');
+      const join = `FROM temp.g04_fence_token AS k JOIN "${table}" ON "${table}"."${pk}" = k.g04_token WHERE k.g04_prefix IN (${marks})`;
+      const hits = db.prepare(`SELECT k.g04_token AS id ${join}`).all(...prefixes) as { id: string }[];
+      if (hits.length === 0) continue;
+      const within = (clause: { clause: string; params: unknown[] }): Set<string> =>
+        new Set((db.prepare(`SELECT k.g04_token AS id ${join} AND ${clause.clause}`).all(...prefixes, ...clause.params) as { id: string }[]).map((r) => r.id));
+      const inside = within(scope);
+      // A table the restore does not carry: its source-workspace rows are the by-design dangling kind.
+      const sourceSide = table !== 'workspace' && !carried.has(table) ? within(scopedWhere(db, table, srcWsId)) : new Set<string>();
+      for (const hit of hits) {
+        if (inside.has(hit.id) || sourceSide.has(hit.id) || foreign.has(hit.id)) continue;
+        foreign.set(hit.id, table);
+      }
+    }
+  } finally {
+    db.exec('DELETE FROM temp.g04_fence_token; DELETE FROM temp.g04_fence_prefix');
+  }
+  for (const ref of refs) {
+    const into = foreign.get(ref.token);
+    if (into === undefined) continue;
+    if (into === 'workspace' && CROSS_WORKSPACE_REFERENCE_COLUMNS[columnKey(ref.table, ref.column)] !== undefined) continue;
+    throw new RestoreInvariantError('foreign_reference', { table: ref.table, column: ref.column, references: into });
+  }
+}
+
+/** The minted prefix of a minted-shape token (`<prefix>_<suffix>`), the part before its last `_`. */
+function mintedPrefix(token: string): string | undefined {
+  const at = token.lastIndexOf('_');
+  return at > 0 ? token.slice(0, at) : undefined;
+}
+
+/** The rows of `table` that belong to workspace `wsId`, or undefined for a table no workspace owns. */
+function referenceScope(db: Database.Database, table: string, wsId: string): { clause: string; params: unknown[] } | undefined {
+  if (table === 'workspace') return { clause: '"id" = ?', params: [wsId] };
+  if (scopeInfoFor(db, table) === undefined) return undefined;
+  return scopedWhere(db, table, wsId);
+}
+
+/**
+ * Put the restore itself on record in the copy's audit chain (critic R1-L1). Every carried hash is new
+ * (the identity is a hash input), so without this row nothing in the copy says it was re-sealed, or
+ * from which head: an auditor holding the source's externally anchored head (A03, the OP4 archive) could
+ * not tie the copy back to it. The row names the SOURCE anchor it was re-sealed from (the `audit_head`
+ * hash the source stored, which is what an external anchor holds), the verdict, and the source row
+ * count, as one JSON value in `entity_id`; it is `workspace` / `import` in the A03 vocabulary (a
+ * workspace brought in from a backup), so every surface already words it.
+ *
+ * It goes through `appendAuditLog`, the one append path, which chains off the carried head. A verified
+ * copy therefore still verifies; a chain carried broken stays broken (the append cannot mend an earlier
+ * link, and it chains off the carried, mismatching head, so the anchor check fails as before).
+ */
+function recordRestoreInChain(deps: PortDeps, newWsId: string, chain: CarriedAuditChain): void {
+  appendAuditLog(
+    { store: deps.store, workspaceId: newWsId, ids: deps.ids },
+    {
+      entityKind: 'workspace',
+      entityId: JSON.stringify({
+        restoredFrom: {
+          chain: chain.verified ? 'verified' : 'broken',
+          sourceHead: chain.sourceHeadHash,
+          sourceRows: chain.rows,
+          ...(chain.brokenAtRow === undefined ? {} : { brokenAtRow: chain.brokenAtRow }),
+        },
+      }),
+      action: 'import',
+      actor: deps.actor ?? 'system',
+      at: deps.clock.now(),
+    },
+  );
+}
+
+/**
+ * The tables a restore loads through `loadTable`, in load order: every scoped table of the snapshot
+ * but the audit pair (carried by `carryAuditChain`) and the restore-excluded ones. Exported for the
+ * list-free gate, which scans exactly what a restore wrote.
+ */
+export function restoreLoadTables(snap: Database.Database): string[] {
+  return loadOrder(
+    snapshotTables(snap).filter((t) => t !== AUDIT_TABLE && t !== 'audit_head' && !RESTORE_EXCLUDED_TABLES.has(t)),
+  );
+}
+
+/**
+ * N00 `env_copy`: a copied workspace that names ANOTHER workspace of the same source instance.
+ *
+ * A backup holds one workspace, so its restore can only re-map that workspace's own ids: a value naming
+ * a DIFFERENT workspace (G18: `migration_plan.testmandant_workspace_id`, the plan's test mandate) is
+ * cleared by a single restore (`RESTORE_ROW_TRANSFORMS`: beside the original it names the ORIGINAL's
+ * Testmandant), and kept only for env_copy (`PortDeps.keepSiblingTestmandantLinks`). An instance copy restores EVERY workspace, one after the other, so once all of them exist
+ * the copy knows where each source workspace went (`pairs`, source workspace id to target workspace
+ * id) and sends the rows of `scope` through the SAME chokepoint again with exactly those pairs. Found by
+ * the list-free gate over an env_copy target (30.09.2026). The audit chain is not touched (its content
+ * is sealed; a cross-workspace audit entity would need a re-seal, and the gate would name it).
+ * Returns how many cells changed. The caller holds the transaction and any trigger suspension.
+ */
+export function remapCopiedWorkspaceIds(
+  db: Database.Database,
+  pairs: Readonly<Record<string, string>>,
+  scope: readonly string[],
+): number {
+  const remap = new RestoreIdMap();
+  for (const [source, target] of Object.entries(pairs)) remap.add('workspace', source, target);
+  let changed = 0;
+  for (const wsId of scope) {
+    for (const table of restoreLoadTables(db)) {
+      const names = columnsOf(db, table).map((c) => c.name);
+      const where = scopedWhere(db, table, wsId);
+      const rows = db.prepare(`SELECT rowid AS "__rowid", * FROM "${table}" WHERE ${where.clause}`).all(...where.params) as Row[];
+      for (const row of rows) {
+        for (const name of names) {
+          const before = row[name];
+          if (typeof before !== 'string') continue;
+          const after = remap.remapValue(table, name, before);
+          if (after === before) continue;
+          db.prepare(`UPDATE "${table}" SET "${name}" = ? WHERE rowid = ?`).run(after, row['__rowid']);
+          changed += 1;
+        }
+      }
+    }
+  }
+  return changed;
+}
+
+/**
+ * The restored id for one source surrogate id. An id DERIVED from the workspace id (it carries the
+ * workspace id as one of its delimited tokens: `<prefix>:<workspaceId>`, the seeded G22 autostart
+ * rules, `core/checklists/autostart.ts`) is RE-DERIVED under the new workspace id, so it keeps the
+ * meaning the engine reads back out of it (the rule's template, a run's provenance) and stays unique
+ * (the new workspace id is fresh); every other id is freshly minted.
+ */
+function mintRestoredId(ids: IdGen, table: string, sourceId: string, srcWsId: string, newWsId: string): string {
+  const tokens: string[] = sourceId.match(/[A-Za-z0-9_-]+/g) ?? [];
+  if (tokens.length > 1 && tokens.includes(srcWsId)) {
+    return sourceId.replace(/[A-Za-z0-9_-]+/g, (t) => (t === srcWsId ? newWsId : t));
+  }
+  return ids.next(table);
+}
+
+/**
+ * Copy the snapshot's workspace fields onto the freshly-minted workspace row, keeping id + chosen name.
+ * Every copied value passes the chokepoint like any other restored value (a workspace default that
+ * names one of its own rows follows that row).
+ */
 function updateWorkspaceRow(
   db: Database.Database,
   snap: Database.Database,
   srcWsId: string,
   newWsId: string,
-  newWorkspaceName: string,
+  remap: RestoreIdMap,
 ): void {
   const srcRow = snap.prepare('SELECT * FROM "workspace" WHERE id = ?').get(srcWsId) as Row | undefined;
   if (srcRow === undefined) return;
+  // The name stays the caller's choice; everything else (currency, fiscal year, vat config, created_at)
+  // is the source's, so the restored books are configured identically.
   const cols = columnsOf(snap, 'workspace')
     .map((c) => c.name)
     .filter((n) => n !== 'id' && n !== 'name');
   if (cols.length === 0) return;
   db.prepare(`UPDATE "workspace" SET ${cols.map((c) => `"${c}" = ?`).join(', ')} WHERE id = ?`).run(
-    ...cols.map((c) => srcRow[c] ?? null),
+    ...cols.map((c) => remap.remapValue('workspace', c, srcRow[c] ?? null) ?? null),
     newWsId,
   );
-  // The name stays the caller's choice; everything else (currency, fiscal year, vat config, created_at)
-  // is the source's, so the restored books are configured identically.
-  void newWorkspaceName;
 }
 
-/** Insert every row of one scoped table into the live db, remapping ids, FKs and workspace_id. */
+/**
+ * Insert every row of one scoped table into the live db. The tenant key becomes the new workspace, the
+ * primary key and every declared foreign key resolve through their own table's map, and EVERY other
+ * value goes through the one chokepoint (`RestoreIdMap.remapValue`, spec §0c): no column needs to be
+ * named for its references to follow their rows.
+ */
 function loadTable(
   db: Database.Database,
   snap: Database.Database,
@@ -909,7 +1320,8 @@ function loadTable(
   srcWsId: string,
   newWsId: string,
   idMap: Map<string, Map<string, string>>,
-  combined: Map<string, string>,
+  remap: RestoreIdMap,
+  rowCtx: RestoreRowContext,
 ): void {
   const cols = columnsOf(snap, table);
   const pk = surrogatePk(cols);
@@ -922,19 +1334,16 @@ function loadTable(
   const remapValue = (colName: string, value: unknown): unknown => {
     if (value === null || value === undefined) return null;
     if (colName === 'workspace_id') return newWsId;
+    if (colName === pk) return idMap.get(table)?.get(String(value)) ?? value;
     const fk = fks.get(colName);
     if (fk !== undefined) {
       if (fk.table === 'workspace') return newWsId;
-      const map = idMap.get(fk.table);
-      const mapped = map?.get(String(value));
-      return mapped ?? value;
+      const mapped = idMap.get(fk.table)?.get(String(value));
+      if (mapped !== undefined) return mapped;
     }
-    if (colName === pk) return idMap.get(table)?.get(String(value)) ?? value;
-    // A polymorphic entity reference (audit_log/custom-field/stored_file `entity_id`) that names a
-    // remapped surrogate id is remapped through the combined value-map; a natural value (a period
-    // string, a sha256) is not present there and passes through untouched.
-    if (colName === 'entity_id') return combined.get(String(value)) ?? value;
-    return value; // money, timestamps, text, natural keys, content-address sha256: verbatim.
+    // THE CHOKEPOINT: every other value, whatever its column is called (money, timestamps and plain
+    // text come back unchanged; a value naming a re-minted row comes back as the restored id).
+    return remap.remapValue(table, colName, value);
   };
 
   const names = cols.map((c) => c.name);
@@ -942,16 +1351,21 @@ function loadTable(
     `INSERT INTO "${table}" (${names.map((n) => `"${n}"`).join(', ')}) VALUES (${names.map(() => '?').join(', ')})`,
   );
   const transform = RESTORE_ROW_TRANSFORMS[table];
-  for (const row of rows) {
+  const sourceTransform = RESTORE_SOURCE_ROW_TRANSFORMS[table];
+  for (const source of rows) {
+    const row = sourceTransform === undefined ? source : sourceTransform(snap, source, rowCtx);
+    if (row === null) continue; // a row the restore drops (see RESTORE_SOURCE_ROW_TRANSFORMS)
     const values: Row = {};
     for (const n of names) values[n] = remapValue(n, row[n]);
-    const out = transform === undefined ? values : transform(db, values);
+    const out = transform === undefined ? values : transform(db, values, rowCtx);
     stmt.run(...names.map((n) => out[n] ?? null));
   }
 }
 
 /**
- * Per-table adjustments a restored row needs before it lands (the row's ids are already remapped).
+ * Per-table STATE rules a restored row needs before it lands (its references are already remapped by
+ * the chokepoint). These are the only per-table entries left after the chokepoint retired
+ * `RESTORE_NAMED_REFS` (spec §0c item 3), because what they express is not a reference:
  *
  * `ebics_connection` (A36 §4.2): a restored book is older than the bank's view of it, so an `active`
  * connection lands `bank_keys_changed` with its keys and pin KEPT: the reviewed bank-key confirm resumes
@@ -959,9 +1373,43 @@ function loadTable(
  * When the database already holds a live connection for the same subscriber (a restore beside the
  * original, the one-live-per-subscriber index of §4.5), the restored one lands `retired` with its key
  * locator cleared, so it can never feed or destroy the live connection's keys.
+ *
+ * `portal_grant` (F02/F03): `token_hash` is a GLOBAL unique key (a portal link resolves by the token
+ * alone). Restored into an empty book, a grant keeps its hash, so the link the customer or vendor holds
+ * can work on the new machine again once a person hands it over anew (D161.2: it lands a draft, see
+ * `portalGrantsAwaitHandover`). Restored BESIDE the original, the same hash is already live: the
+ * copy used to collide on the UNIQUE constraint and the whole restore died with a raw SQLite error
+ * (found by the list-free gate, 30.09.2026). One link cannot open two workspaces, so the COPY's grant
+ * lands revoked at the restore time, its hash replaced by a marker no token can hash to (a SHA-256 hex
+ * digest never contains a colon); the original's link is untouched and the copy keeps the grant's
+ * history (the revDSG access trail).
  */
-const RESTORE_ROW_TRANSFORMS: Readonly<Record<string, (db: Database.Database, row: Row) => Row>> = {
-  ebics_connection: (db, row) => {
+interface RestoreRowContext {
+  /** The restore's own time (the clock of the restoring runtime). */
+  readonly now: string;
+  /** env_copy only: keep the Testmandant links for its re-point and sweep (`PortDeps`). */
+  readonly keepSiblingLinks: boolean;
+}
+
+const RESTORE_ROW_TRANSFORMS: Readonly<Record<string, (db: Database.Database, row: Row, ctx: RestoreRowContext) => Row>> = {
+  // G12 (owner decision 11.10.2026): a restored plan does not own the Testmandant its link names. Beside
+  // the original that sandbox is the ORIGINAL's, and in an empty book it does not exist. So the link is
+  // cleared, and what only existed because a trial ran is reset with it: `trial` goes back to `planned`
+  // and a `trial_loaded`/`checked` step back to `mapped` (`migration/trialReset.ts`), after ANY restore,
+  // a disaster recovery included. Maps and checks survive; `live`, `closed` and `abandoned` keep their
+  // status. The chokepoint saw the value before this runs, which is why the column stays on
+  // `CROSS_WORKSPACE_REFERENCE_COLUMNS`. env_copy keeps the link and re-points it instead.
+  migration_plan: (_db, row, ctx) => (ctx.keepSiblingLinks ? row : planRowWithoutLink(row)),
+  portal_grant: (db, row, ctx) => {
+    const taken = db.prepare('SELECT 1 AS taken FROM portal_grant WHERE token_hash = ? LIMIT 1').get(row['token_hash']) as
+      | { taken: number }
+      | undefined;
+    if (taken === undefined) return row;
+    return { ...row, token_hash: `restored-copy:${String(row['id'])}`, revoked_at: row['revoked_at'] ?? ctx.now, updated_at: ctx.now };
+  },
+  ebics_connection: (db, input) => {
+    // D142: a restored book never inherits the lease of a sync that was running when it was saved.
+    const row: Row = 'sync_started_at' in input ? { ...input, sync_started_at: null, sync_lease_owner: null } : input;
     if (row['state'] === 'retired') return row;
     const live = db
       .prepare("SELECT 1 AS live FROM ebics_connection WHERE host_id = ? AND partner_id = ? AND user_id_ebics = ? AND state != 'retired' LIMIT 1")
@@ -973,55 +1421,187 @@ const RESTORE_ROW_TRANSFORMS: Readonly<Record<string, (db: Database.Database, ro
 };
 
 /**
- * Re-chain the audit log under the new workspace id. `workspace_id` is a hash input (`auditCanonicalRow`),
- * so the copied hashes are recomputed from `AUDIT_GENESIS_PREV` forward using the SAME `auditHashRow` the
- * live append uses. `entity_id` is remapped for the workspace and journal-entry rows whose ids changed; a
- * period-lock row's entity_id is a period string and passes through. The head anchor is rebuilt to match.
+ * D161.2: a restore never makes a revoked or expired portal link live again. A backup is a picture
+ * of one moment, and a link the owner revoked AFTER it (it leaked, the customer left) is still live in
+ * the picture; nothing the restore can read tells it about the later revocation. Restored into an
+ * empty book (the disaster recovery) the grant kept its token hash and its hand-over, so the revoked
+ * link opened the restored book again.
+ *
+ * So every restored grant that is not revoked lands as a DRAFT again, the D157 liveness rule: the
+ * engine-written marker `minted_draft = 1` and no `sent_at`, so `isLive` is false and the token
+ * resolves to `grant_denied` until a person hands it over again with `portal_grant_send` (governed
+ * under `share`), which refuses a revoked or expired grant. The token hash is kept, so the person may
+ * reopen the very link the customer or supplier already holds. The original hand-over stays on record
+ * in the carried audit chain (its `send` row). A revoked grant keeps its `revoked_at`; an expired one
+ * stays expired (expiry is a date, never a state). This runs AFTER the load, on the target's own
+ * columns, so an old-shaped snapshot that has no `minted_draft` column (its rows read the DDL DEFAULT 0,
+ * live) is covered the same way. Beside the original the copy already lands revoked
+ * (`RESTORE_ROW_TRANSFORMS.portal_grant`), and this leaves it so.
+ *
+ * Returns how many links now wait for a new hand-over; `restore_backup` reports it as
+ * `portalLinksAwaitingHandover` (critic F2: D157.1, nothing breaks silently). It counts the links a
+ * person can hand over again: an expired grant lands a draft like the rest but is not counted, because
+ * the send refuses it and only a new grant gives that customer or supplier access again.
  */
-function rechainAudit(
+function portalGrantsAwaitHandover(db: Database.Database, newWsId: string, now: string): number {
+  const liveInBackup = "workspace_id = ? AND revoked_at IS NULL AND (sent_at IS NOT NULL OR minted_draft = 0)";
+  const awaiting = (
+    db.prepare(`SELECT COUNT(*) AS n FROM portal_grant WHERE ${liveInBackup} AND expires_at >= ?`).get(newWsId, now.slice(0, 10)) as { n: number }
+  ).n;
+  db.prepare(`UPDATE portal_grant SET sent_at = NULL, minted_draft = 1, updated_at = ? WHERE ${liveInBackup}`).run(now, newWsId);
+  return awaiting;
+}
+
+/**
+ * Per-table rules applied to the SOURCE row BEFORE the chokepoint reads it, for a value the restore
+ * drops rather than re-maps, so the tenant fence never records it as a reference.
+ *
+ * `migration_step` (G12, owner decision 11.10.2026): the trial reset that goes with the cleared
+ * Testmandant link (`migration_plan` above). A trial-loaded step's counts name the Testmandant it
+ * wrote into (`trialTarget`); beside the original that is the original's sandbox, a foreign workspace,
+ * and the fence refused the whole restore of any book that had ever trial-loaded. The step drops it
+ * and leaves `trial_loaded`/`checked` for `mapped` (`migration/trialReset.ts`), and the approvals on
+ * such a step are dropped with it. env_copy keeps all three, and re-points or sweeps them afterwards
+ * (the sweep voids the approvals of what it resets).
+ */
+const RESTORE_SOURCE_ROW_TRANSFORMS: Readonly<Record<string, (snap: Database.Database, row: Row, ctx: RestoreRowContext) => Row | null>> = {
+  migration_step: (_snap, row, ctx) => (ctx.keepSiblingLinks ? row : stepRowWithoutTrial(row, ctx.now)),
+  // The approvals on a step the reset returns to `mapped` are voided with it (canon blocker 6, the
+  // `steps.ts` returnToMapped rule): the row is not loaded at all (`null`). Read off the backup's own
+  // step, so the order the tables load in does not matter.
+  migration_approval: (snap, row, ctx) => {
+    if (ctx.keepSiblingLinks) return row;
+    const step = snap.prepare('SELECT status FROM migration_step WHERE id = ?').get(row['step_id']) as { status: string } | undefined;
+    return step === undefined || approvalSurvivesRestore(step.status) ? row : null;
+  },
+};
+
+/** What a restore reports about the audit chain it carried. */
+export interface CarriedAuditChain {
+  /** True when the SOURCE chain verified (every link and the head anchor) and was re-sealed. */
+  readonly verified: boolean;
+  /** Rows carried. */
+  readonly rows: number;
+  /** Zero-based position of the first source row that did not verify, when a link broke. */
+  readonly brokenAtRow?: number;
+  /** The SOURCE chain's stored anchor (`audit_head.head_hash`), or null when the source had none. */
+  readonly sourceHeadHash: string | null;
+}
+
+/**
+ * Carry the audit log into the restored workspace (spec §0c item 4). `workspace_id` and `entity_id`
+ * are hash inputs (`auditCanonicalRow`), so a copy under a new identity must be re-hashed; re-hashing
+ * blindly would also turn a TAMPERED source chain into a clean one. So the source chain is walked
+ * first, exactly as `getAuditLog` walks it (each link, then the `audit_head` count and hash):
+ *
+ *  - VERIFIED at the source: every row is re-hashed from `AUDIT_GENESIS_PREV` with `auditHashRow` (the
+ *    one source of truth for the chain hash) and the head is rebuilt, so the copy verifies.
+ *  - BROKEN at row k: rows before k are re-hashed; rows from k on keep their SOURCE `prev_hash` and
+ *    `hash`, which cannot match the new chain, so the copy breaks at the same row.
+ *  - HEAD mismatched (a truncated or head-tampered log): the source's count, and its head hash where it
+ *    did not match, are carried, so the copy's anchor check fails the same way; a missing head stays
+ *    missing.
+ *
+ * Every text field goes through the chokepoint like any restored value (`entity_id` names a restored
+ * row); the audit ids come from pass one's map, so a reference to an audit row elsewhere follows it.
+ */
+function carryAuditChain(
   db: Database.Database,
   snap: Database.Database,
   srcWsId: string,
   newWsId: string,
-  ids: IdGen,
-  combined: Map<string, string>,
-): void {
+  auditIds: Map<string, string>,
+  remap: RestoreIdMap,
+): CarriedAuditChain {
   const rows = snap
     .prepare(
-      'SELECT id, entity_kind, entity_id, action, actor, at FROM "audit_log" WHERE workspace_id = ? ORDER BY rowid ASC',
+      'SELECT id, entity_kind, entity_id, action, actor, at, prev_hash, hash FROM "audit_log" WHERE workspace_id = ? ORDER BY rowid ASC',
     )
-    .all(srcWsId) as { id: string; entity_kind: string; entity_id: string; action: string; actor: string; at: string }[];
+    .all(srcWsId) as {
+    id: string;
+    entity_kind: string;
+    entity_id: string;
+    action: string;
+    actor: string;
+    at: string;
+    prev_hash: string | null;
+    hash: string;
+  }[];
+  const head = snap.prepare('SELECT row_count, head_hash FROM "audit_head" WHERE workspace_id = ?').get(srcWsId) as
+    | { row_count: number; head_hash: string }
+    | undefined;
+
+  // Walk the SOURCE chain under the SOURCE identity (the getAuditLog walk).
+  let srcPrev = AUDIT_GENESIS_PREV;
+  let brokenAt = -1;
+  for (let i = 0; i < rows.length; i += 1) {
+    const r = rows[i] as (typeof rows)[number];
+    const canonical = auditCanonicalRow({
+      id: r.id,
+      workspaceId: srcWsId,
+      entityKind: r.entity_kind,
+      entityId: r.entity_id,
+      action: r.action,
+      actor: r.actor,
+      at: r.at,
+    });
+    if ((r.prev_hash ?? AUDIT_GENESIS_PREV) !== srcPrev || r.hash !== auditHashRow(srcPrev, canonical)) {
+      brokenAt = i;
+      break;
+    }
+    srcPrev = r.hash;
+  }
+  const headCount = head?.row_count ?? 0;
+  const headHash = head?.head_hash ?? AUDIT_GENESIS_PREV;
+  const headMatches = brokenAt === -1 && headCount === rows.length && headHash === srcPrev;
 
   const insert = db.prepare(
     `INSERT INTO "audit_log" (id, workspace_id, entity_kind, entity_id, action, actor, at, prev_hash, hash)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   let prev = AUDIT_GENESIS_PREV;
-  let count = 0;
-  for (const r of rows) {
-    const newId = ids.next('audit');
-    const entityId = r.entity_kind === 'workspace' ? newWsId : combined.get(r.entity_id) ?? r.entity_id;
-    const canonical = auditCanonicalRow({
+  for (let i = 0; i < rows.length; i += 1) {
+    const r = rows[i] as (typeof rows)[number];
+    const newId = auditIds.get(r.id);
+    if (newId === undefined) throw new RestoreInvariantError('audit_row_unmapped');
+    const text = (column: string, value: string): string => String(remap.remapValue(AUDIT_TABLE, column, value));
+    const content = {
       id: newId,
       workspaceId: newWsId,
-      entityKind: r.entity_kind,
-      entityId,
-      action: r.action,
-      actor: r.actor,
-      at: r.at,
-    });
-    const hash = auditHashRow(prev, canonical);
-    insert.run(newId, newWsId, r.entity_kind, entityId, r.action, r.actor, r.at, count === 0 ? null : prev, hash);
+      entityKind: text('entity_kind', r.entity_kind),
+      entityId: text('entity_id', r.entity_id),
+      action: text('action', r.action),
+      actor: text('actor', r.actor),
+      at: text('at', r.at),
+    };
+    let storedPrev: string | null;
+    let hash: string;
+    if (brokenAt === -1 || i < brokenAt) {
+      storedPrev = i === 0 ? null : prev;
+      hash = auditHashRow(prev, auditCanonicalRow(content));
+    } else {
+      // Carried broken: the source's own link values, which the re-sealed prefix cannot match.
+      storedPrev = r.prev_hash;
+      hash = r.hash;
+    }
+    insert.run(content.id, newWsId, content.entityKind, content.entityId, content.action, content.actor, content.at, storedPrev, hash);
     prev = hash;
-    count += 1;
   }
-  if (count > 0) {
-    db.prepare('INSERT INTO "audit_head" (workspace_id, row_count, head_hash) VALUES (?, ?, ?)').run(
-      newWsId,
-      count,
-      prev,
-    );
+
+  if (head !== undefined) {
+    // A verified chain gets its rebuilt anchor. An anchor that did not match at the source keeps its
+    // count, and its hash wherever that hash was not the chain's real tail, so it mismatches again.
+    const carriedHash = headMatches || (brokenAt === -1 && headHash === srcPrev) ? prev : headHash;
+    const carriedCount = headMatches ? rows.length : headCount;
+    db.prepare('INSERT INTO "audit_head" (workspace_id, row_count, head_hash) VALUES (?, ?, ?)').run(newWsId, carriedCount, carriedHash);
   }
+
+  return {
+    verified: brokenAt === -1 && headMatches,
+    rows: rows.length,
+    ...(brokenAt === -1 ? {} : { brokenAtRow: brokenAt }),
+    sourceHeadHash: head?.head_hash ?? null,
+  };
 }
 
 /**

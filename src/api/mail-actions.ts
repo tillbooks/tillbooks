@@ -26,11 +26,12 @@ import {
   writeMailDraft,
   listMailDrafts,
 } from '../core/mail/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface MailActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -51,7 +52,7 @@ export function mailActions(h: MailActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'mail_connect',
-      'write',
+      'write:final:access',
       'Verbinde einen lokalen Mail-Speicher: point TILL at the store a mail client on this machine already writes (adapter apple_mail reads .emlx, thunderbird reads Maildir and mbox). Takes NO credential and never signs in anywhere: an unreadable path answers needs_mailstore, a readable path that matches no adapter answers unknown_mail_adapter. The same store under the same address stays ONE account.',
       ctxSchema({ adapter: STR, storePath: STR, address: STR, idempotencyKey: STR }, ['adapter', 'storePath', 'address']),
       (ctx, input) => connectMailStore(ctx, as(input)),
@@ -65,7 +66,7 @@ export function mailActions(h: MailActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'mail_reindex',
-      'write',
+      'write:final:erase',
       'Lies den Mail-Speicher neu ein: walk the store and derive the index (threads and messages keyed on Message-ID), storing a locator and a sha256 per message and NEVER a body (OP6 index-never-copy). Senders matching a contact e-mail resolve to that contact; unknown senders stay indexed with none. Messages deleted in the mail client leave the index (the store is the authority); unparseable ones are skipped and counted, never fatal. Answers { indexed, skipped, removed, skippedReasons }.',
       ctxSchema({ accountId: STR, idempotencyKey: STR }, ['accountId']),
       (ctx, input) => reindexMailStore(ctx, as(input)),
@@ -86,7 +87,7 @@ export function mailActions(h: MailActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'mail_draft_write',
-      'write',
+      'write:final:internal',
       'Schreibe einen Entwurf in den Entwurfsordner des Mail-Programms: renders an RFC-5322 reply (From the account address, To the counterpart, In-Reply-To the newest inbound message) into the local Drafts folder and persists locator + hash, not the body. The human reviews and sends it in their own mail app: TILL has no send verb and no SMTP anywhere (P8 by construction). One idempotency key writes exactly ONE Drafts message however often it is called; an unwritable folder answers drafts_not_writable.',
       ctxSchema({ threadId: STR, body: STR, inReplyTo: STR, draftRunId: STR, idempotencyKey: STR }, ['threadId', 'body']),
       (ctx, input) => writeMailDraft(ctx, as(input)),

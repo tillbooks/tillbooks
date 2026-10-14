@@ -27,11 +27,12 @@ import {
   getSignRequest,
   listSignRequests,
 } from '../core/sign/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface SignActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -53,7 +54,7 @@ export function signActions(h: SignActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'sign_requests_create',
-      'write',
+      'write:reversible:internal',
       'Fordere eine Signatur an: creates a draft sign request on an E00 file (fileId, the current head version) for one signer (signerContactId, must carry an email), at a signature level (ses or qes, the ZertES/OR Art. 14 classification), with an optional message and expiry. Writes the provider-agnostic local artifact (OP4); nothing is transmitted. One open request per signer and file (request_already_open); a superseded file version is refused (not_head_version).',
       ctxSchema(
         {
@@ -70,14 +71,14 @@ export function signActions(h: SignActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'sign_requests_send',
-      'write',
+      'write:final:outbound',
       'Sende die Signaturanfrage an den Anbieter: the ONE outbound e-sign verb (draft -> sent). P8 confirm-gated (needs_confirmation without confirmed true, for humans and agents alike), and honest about the OP4 boundary: with no e-sign provider wired (the OSS-core default) it returns needs_provider with the local artifact and the request stays a draft, for the manual wet-ink path via sign_requests_complete.',
       ctxSchema({ signRequestId: STR, confirmed: BOOL, idempotencyKey: STR }, ['signRequestId']),
       (ctx, input) => sendSignRequest(ctx, as(input)),
     ),
     ctxAction(
       'sign_requests_record_event',
-      'write',
+      'write:correctable:internal',
       'Erfasse ein Statusereignis auf einer Signaturanfrage: viewed (sent -> viewed; recording viewed twice is a no-op), declined (sent|viewed -> declined, with optional declinedReason: also the manual "Als abgelehnt markieren" in the drawer), or expired (sent|viewed -> expired, a provider deadline event). Optional evidence is appended to the event trail of the local artifact. Every illegal edge answers invalid_transition.',
       ctxSchema(
         {
@@ -93,7 +94,7 @@ export function signActions(h: SignActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'sign_requests_complete',
-      'write',
+      'write:final:statutory',
       'Markiere als signiert und lege die signierte Fassung ab: verifies originalSha256 against the requested file version (document_hash_mismatch on a swapped file), then delegates to E00 files_new_version so the signed PDF becomes a new version of the SAME file (supersedes_id, retention carried forward per OR 958f). Legal from draft (the manual wet-ink path when no provider is wired), sent and viewed (the provider path). E01 never writes file bytes itself.',
       ctxSchema(
         {
@@ -109,14 +110,14 @@ export function signActions(h: SignActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'sign_requests_withdraw',
-      'write',
+      'write:correctable:stop',
       'Ziehe eine gesendete Signaturanfrage zurück: sent|viewed -> expired with expired_reason withdrawn (no seventh status is minted, §H-ENUM stays six states). A draft is not withdrawn but discarded via sign_requests_delete_draft; a terminal request answers invalid_transition.',
       ctxSchema({ signRequestId: STR, idempotencyKey: STR }, ['signRequestId']),
       (ctx, input) => withdrawSignRequest(ctx, as(input)),
     ),
     ctxAction(
       'sign_requests_delete_draft',
-      'write',
+      'write:final:erase',
       'Verwirf einen Signatur-Entwurf: deletes a draft request that never went anywhere. Only a draft may be deleted (invalid_transition otherwise); sent and later states are withdrawn or completed, never erased, because their event trail is evidence.',
       ctxSchema({ signRequestId: STR, idempotencyKey: STR }, ['signRequestId']),
       (ctx, input) => deleteDraftSignRequest(ctx, as(input)),

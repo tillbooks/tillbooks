@@ -229,6 +229,12 @@
   flex-wrap: wrap;
 }
 
+.mail-draft-edited {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .mail-draft-error {
   margin: 0;
   font-size: var(--t-font-md);

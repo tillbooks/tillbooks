@@ -10,8 +10,13 @@
  * gates, one after another, stopping on the first refusal so the row reports what posted and what
  * did not (design row 6.7). The detail re-reads after every write so the live derivation (a check
  * that flipped, a probe that found its artefact, a stale sign-off) is what the screen shows.
+ *
+ * `?start=<template>[&year=YYYY]` (D152, 04.10.2026) opens the Start dialog on that template, and for
+ * the year close on that year when the dialog offers it: the Periods year-close door lands here with
+ * the year to close instead of on a dialog that defaults to the MWST-Periode. The params are consumed
+ * once and dropped from the URL, so a reload does not reopen the dialog.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
@@ -34,6 +39,7 @@ import {
   parseRun,
   parseRunList,
   periodTitle,
+  TEMPLATE_IDS,
   todayIso,
   VAT_PERIOD_TEMPLATE_ID,
   YEAR_CLOSE_TEMPLATE_ID,
@@ -77,8 +83,10 @@ export function Checklists() {
   const client = useClient();
   const workspaceId = useWorkspaceId();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const runId = searchParams.get('run');
+  const startParam = searchParams.get('start');
+  const yearParam = searchParams.get('year');
   const canManage = useCan(CAP.manageChecklists);
   const canFile = useCan(CAP.vatFile);
   const canPost = useCan(CAP.post);
@@ -89,6 +97,15 @@ export function Checklists() {
   const [starting, setStarting] = useState(false);
   const [vatPeriods, setVatPeriods] = useState<PeriodOption[]>([]);
   const [startRefusal, setStartRefusal] = useState<{ code: string; periods: string[]; runId: string | null } | null>(null);
+  /** What the Start dialog opens on: the template and, where it applies, the period (`?start=`). */
+  const [startPreset, setStartPreset] = useState<{ templateId: TemplateId; period: string | null } | null>(null);
+  /**
+   * The year-close result the seal returned in THIS session, per run: `close_year` answers `result`
+   * with the `baseCurrency` it is denominated in, and the seal row shows exactly that, the figure
+   * the Periods banner shows. The engine's seal probe carries no figure, so after a reload the row
+   * shows the seal without it rather than a figure recomputed from somewhere else.
+   */
+  const [sealResults, setSealResults] = useState<Record<string, { minor: number; currency: string }>>({});
   const [working, setWorking] = useState(false);
   const [refusal, setRefusal] = useState<{ itemId: string | null; code: string; detail: string | null } | null>(null);
 
@@ -139,9 +156,10 @@ export function Checklists() {
     [vatPeriods, today, periodsFor],
   );
 
-  const openStart = async () => {
+  const openStart = async (preset: { templateId: TemplateId; period: string | null } | null = null) => {
     if (workspaceId === null) return;
     setStartRefusal(null);
+    setStartPreset(preset);
     const year = today.slice(0, 4);
     const { body } = await client.call('vat_periods', { workspaceId, year });
     if (isErr(body)) {
@@ -155,6 +173,21 @@ export function Checklists() {
     }
     setStarting(true);
   };
+
+  // `?start=` (see the file docblock): once the list has loaded and the actor may start a run, open
+  // the dialog on the named template (and year), then drop the params. An unknown template, or an
+  // actor without manage_checklists, gets the plain list: the params never invent a control.
+  const consumedStart = useRef(false);
+  useEffect(() => {
+    if (consumedStart.current || startParam === null || runId !== null || list.status !== 'loaded') return;
+    consumedStart.current = true;
+    const templateId = (TEMPLATE_IDS as readonly string[]).includes(startParam) ? (startParam as TemplateId) : null;
+    setSearchParams({}, { replace: true });
+    if (templateId === null || !canManage) return;
+    const period = templateId === YEAR_CLOSE_TEMPLATE_ID && yearParam !== null && /^\d{4}$/.test(yearParam) ? yearParam : null;
+    void openStart({ templateId, period });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startParam, yearParam, runId, list.status, canManage]);
 
   const start = async (templateId: TemplateId, period: string) => {
     if (workspaceId === null) return;
@@ -207,6 +240,12 @@ export function Checklists() {
         return;
       }
       previous = body as Record<string, unknown>;
+      // The seal's answer names its result and the unit it is in (yearClose.ts). Both halves or
+      // neither: a figure under a guessed CHF is the defect the Periods base-currency suite guards.
+      if (call.verb === 'close_year' && typeof previous.result === 'number' && typeof previous.baseCurrency === 'string' && previous.baseCurrency !== '') {
+        const sealed = { minor: previous.result, currency: previous.baseCurrency };
+        setSealResults((r) => ({ ...r, [runId]: sealed }));
+      }
     }
     setWorking(false);
     await loadDetail();
@@ -223,7 +262,7 @@ export function Checklists() {
       help={<SurfaceHelp surface="Checklists" />}
       actions={
         runId === null && canManage && list.status === 'loaded' ? (
-          <button type="button" className="btn btn--primary" onClick={() => void openStart()}>
+          <button type="button" className="btn btn--primary" onClick={() => void openStart(null)}>
             {t('checklists.start.action')}
           </button>
         ) : runId !== null ? (
@@ -258,6 +297,7 @@ export function Checklists() {
             canPeriods={canPeriods}
             working={working}
             currency={currency}
+            sealResult={sealResults[detail.run.runId] ?? null}
             refusal={refusal}
             onComplete={(itemId, evidence: Evidence | null) => void write('checklist_item_complete', itemId, evidence === null ? { itemId } : { itemId, evidence })}
             onSkip={(itemId, reason) => void write('checklist_item_skip', itemId, { itemId, reason })}
@@ -302,7 +342,7 @@ export function Checklists() {
         <EmptyState
           title={t('checklists.empty.title')}
           hint={t('checklists.empty.hint', { year: String(Number(today.slice(0, 4)) - 1) })}
-          {...(canManage ? { action: { label: t('checklists.start.action'), onClick: () => void openStart() } } : {})}
+          {...(canManage ? { action: { label: t('checklists.start.action'), onClick: () => void openStart(null) } } : {})}
         />
       )}
       {list.status === 'loaded' && list.runs.length > 0 && (
@@ -327,6 +367,8 @@ export function Checklists() {
         <StartDialog
           open
           onClose={() => setStarting(false)}
+          initialTemplateId={startPreset?.templateId}
+          initialPeriod={startPreset?.period ?? null}
           periodsFor={periodsFor}
           defaultPeriodFor={defaultPeriodFor}
           refusal={startRefusal?.code ?? null}

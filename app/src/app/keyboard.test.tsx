@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import { I18nProvider } from '../i18n';
 import { KEY_BINDINGS, KeyboardProvider, useKeyboard } from './keyboard';
+import { SURFACE_CATALOG } from './nav';
 import { ShortcutSheet } from './ShortcutSheet';
 
 /** A probe that surfaces the keyboard state and the current route for assertions. */
@@ -73,6 +74,15 @@ describe('the keyboard binding registry', () => {
       expect(sheet.textContent).toContain(b.keysLabel);
     }
   });
+
+  it('the sheet rises in the middle like a modal, its heading and first two groups on the capped stagger', async () => {
+    renderHarness();
+    await userEvent.keyboard('?');
+    const sheet = screen.getByRole('dialog');
+    expect(sheet).toHaveClass('motion-reveal--center');
+    const steps = Array.from(sheet.querySelectorAll('[data-motion-item]'), (el) => el.getAttribute('data-motion-item'));
+    expect(steps).toEqual(['1', '2', '3']);
+  });
 });
 
 describe('the keyboard dispatcher', () => {
@@ -114,5 +124,16 @@ describe('the keyboard dispatcher', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('chord labels name what the chord opens', () => {
+  // A chord is a second door to a rail row, so the shortcut sheet reads the row's own label. `g m`
+  // once borrowed the /vat row's label while opening /mwst (D152 follow-up).
+  it('labels every chord with the rail label of its target path', () => {
+    const labelByPath = new Map(SURFACE_CATALOG.map((s) => [s.path, s.labelKey]));
+    const chords = KEY_BINDINGS.filter((b) => b.chord !== undefined);
+    expect(chords.length).toBeGreaterThan(0);
+    for (const b of chords) expect(b.labelKey, b.id).toBe(labelByPath.get(b.chord?.path ?? ''));
   });
 });

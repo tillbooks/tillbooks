@@ -47,7 +47,8 @@
       "swico": "Billing info (Swico)",
       "local_model": "Local model",
       "agent": "Agent",
-      "operator": "Manual"
+      "operator": "Manual",
+      "viaQr": "from the QR code"
     },
     "confidence": {
       "high": "High",
@@ -59,7 +60,7 @@
       "queueHint": "A document you choose appears here for review.",
       "fields": "No fields recognised.",
       "fieldsHintManual": "Enter the fields manually.",
-      "fieldsHintNoqr": "No QR code was found. Enter the fields manually."
+      "fieldsHintNoqr": "No QR code was found in the file. Paste the text of the QR code below, or enter the fields manually."
     },
     "duplicate": "This file is already in the queue.",
     "field": {
@@ -80,7 +81,9 @@
       "import_vat": "Import VAT",
       "payment_conditions": "Payment conditions",
       "expense_account_id": "Expense account",
-      "tax_code": "Tax code"
+      "tax_code": "Tax code",
+      "vendor_address": "Vendor address",
+      "payment_message": "Message"
     },
     "error": {
       "unsupported_mime": "This file type cannot be captured.",
@@ -90,7 +93,13 @@
       "needs_amount": "No amount was extracted; enter one before committing.",
       "invalid_state": "This capture is already committed or discarded.",
       "no_matching_tax_code": "No configured VAT code matches this rate.",
-      "needs_open_claim": "Pick or create an expense claim before committing."
+      "needs_open_claim": "Pick or create an expense claim before committing.",
+      "currency_conflict": "The amount and the currency on this receipt disagree. Correct the amount or the currency before committing.",
+      "qr_payload_invalid": "This QR code does not follow the QR-bill rules, so no field was filled in:"
+    },
+    "discarded": {
+      "title": "Correction to the previous bill discarded",
+      "hint": "You entered these values for another bill. The bill you read in applies now. Check it before you commit. If you go back to an earlier bill, enter your corrections for it again."
     },
     "pick": {
       "vendor": "Assign supplier",
@@ -108,12 +117,64 @@
       "posted": "Committed and posted.",
       "drafted": "Committed. The posting is waiting for approval.",
       "openBill": "Open the bill"
+    },
+    "qr": {
+      "title": "QR code",
+      "label": "Text of the QR code",
+      "hint": "Scan the QR code on the bill with your phone and paste the text here. TILL checks it against the QR-bill rules before it fills in a field.",
+      "read": "Read in",
+      "found": "The image contains a QR code. Check the text, then read it in.",
+      "done": "Read in. Each field shows where its value came from.",
+      "warningsTitle": "Read in, with notes:",
+      "line": "Line {line}",
+      "issue": {
+        "empty_payload": "The text is empty.",
+        "not_spc": "This is not a QR-bill: the first line must read SPC.",
+        "unsupported_version": "Only version 0200 is supported.",
+        "separator": "The line breaks are mixed or of a kind the QR-bill does not allow.",
+        "element_count": "Lines are missing or extra: a QR-bill has 31 to 34 lines.",
+        "unsupported_coding": "The coding type must be 1.",
+        "payload_too_long": "The text is longer than the 997 characters a QR-bill allows.",
+        "disallowed_character": "It contains a character the QR-bill does not allow.",
+        "field_too_long": "The value is longer than the QR-bill allows.",
+        "blank_only": "The line holds only spaces. An unused line must be empty.",
+        "trailer": "Line 31 must read EPD.",
+        "iban_format": "The IBAN must be 21 letters and digits without spaces.",
+        "iban_country": "Only IBANs from Switzerland (CH) or Liechtenstein (LI) are allowed.",
+        "iban_check_digits": "The check digits of the IBAN are wrong.",
+        "address_type_combined": "Combined addresses (type K) are no longer allowed since November 2025.",
+        "address_type": "The address type must be S (structured).",
+        "address_incomplete": "The address needs a name, postal code, town and country.",
+        "country_code": "The country must be an ISO country code such as CH.",
+        "ultimate_creditor_filled": "The ultimate creditor must stay empty.",
+        "amount_format": "The amount needs a point and exactly two decimals, for example 1081.00.",
+        "amount_range": "The amount must be between 0.01 and 999'999'999.99.",
+        "currency": "Only CHF and EUR are allowed.",
+        "reference_type": "The reference type must be QRR, SCOR or NON.",
+        "qr_iban_requires_qrr": "A QR-IBAN needs a QR reference (QRR).",
+        "qrr_requires_qr_iban": "A QR reference (QRR) needs a QR-IBAN.",
+        "reference_missing": "The reference is missing.",
+        "qrr_format": "A QR reference has exactly 27 digits.",
+        "qrr_check_digit": "The check digit of the QR reference is wrong.",
+        "scor_format": "A creditor reference starts with RF and has 5 to 25 characters.",
+        "scor_check_digit": "The check digits of the creditor reference are wrong.",
+        "non_reference_present": "With the reference type NON the reference must be empty.",
+        "additional_info_too_long": "The message and the billing information together are longer than 140 characters.",
+        "trailing_separator": "A line break at the end was ignored.",
+        "blank_padding": "Spaces at the start or end of a value were removed.",
+        "amount_open": "The bill states no amount. Enter it by hand.",
+        "billing_info_unrecognised": "The billing information is not in the Swico format and was not read.",
+        "swico_value": "A value in the billing information could not be read and was left out.",
+        "eur_qrr_ig_v24": "From 14.11.2026, version 2.4 of the guidelines provides for EUR only with an IBAN and a SCOR reference or no reference. Version 2.3, which allows this bill, stays valid until November 2027.",
+        "notification": "The bill is a notice, not a payment slip: the amount is paid by direct debit or eBill. Enter it by hand.",
+        "country_user_assigned": "XK (Kosovo) is not an ISO 3166-1 code; SIX does not list it. Check the address before you commit."
+      }
     }
   },
   "help": {
     "Capture": {
       "title": "Document capture",
-      "body": "The capture inbox is the review queue for captured documents: the original on one side, the proposed fields on the other. Every field carries its provenance, whether the value was read by machine from the QR-bill or corrected by hand.\n\nCommitting a vendor bill creates it and posts it in one step. The expense account and the input VAT code are pre-filled from the supplier's last bill, and the line above the button says what will post.\n\nAn expense lands as a line on an expense claim.",
+      "body": "The capture inbox is the review queue for captured documents: the original on one side, the proposed fields on the other. Every field carries its provenance, whether the value was read by machine from the QR-bill or corrected by hand.\n\nCommitting a vendor bill creates it and posts it in one step. The expense account and the input VAT code are pre-filled from the supplier's last bill, and the line above the button says what will post.\n\nAn expense lands as a line on an expense claim.\n\nNo QR code found in the file? Scan it with your phone and paste the text under QR code. TILL checks it before it fills anything in.",
       "concepts": [],
       "docsPath": "swiss/qr-bill"
     }

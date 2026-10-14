@@ -52,6 +52,11 @@ export interface VerbMeta {
    * confirm's verb-to-consequence mapping cannot drift from the engine's `DIAL_CAPABILITY_FOR_ACTION`.
    */
   dialCapability: string | null;
+  /**
+   * D156: the engine's ONE consequence for this verb (its own entry, else its dial family's) in both
+   * locales with its reversibility, or null when it carries none. Read through `approval-tiers.ts`.
+   */
+  consequence: { en: string; 'de-CH': string; reversibility: 'reversible' | 'correctable' | 'final' } | null;
 }
 
 interface ExposedEntry {

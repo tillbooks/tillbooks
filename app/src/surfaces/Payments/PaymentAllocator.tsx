@@ -32,6 +32,17 @@
  * replaced could not promise. The candidate amount fields are a single tab stop with ArrowUp/ArrowDown
  * roving between them (the OverflowMenu discipline transplanted to a list), so Tab reaches the decision
  * column in one press rather than after tabbing through every open item.
+ *
+ * IT ASKS ONLY WHAT IT CANNOT INFER (D152, the cognitive-load pass). At rest the Werkbank is the money
+ * and one quiet line: the open items stay out of view until a Betrag or a Gegenpartei gives TILL
+ * something to rank them by. Then only the SUGGESTIONS show (the engine's tiers, and the chosen
+ * Gegenpartei's own items) with their Zuweisen field; every other open item waits behind one
+ * disclosure and is picked with one click. Skonto lives in the editor of a row that carries an
+ * allocation, never on every row at rest. Two defaults are inferred, and both are VISIBLE before
+ * anything posts: the Konto comes from the Bankkonten (`inferBankLedgerAccount`), never from the
+ * chart's first cash account, and the ENGINE's own complete prefill (`enginePreAssignment`) is pre-assigned under a
+ * "zugewiesen" mark with its own undo. Zahlung buchen is absent, not disabled, while the control that
+ * unlocks it sits beside it; the next step is said in its place.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -44,10 +55,16 @@ import { EmptyState, Skeleton } from '../../components/states';
 import { Select } from '../../components/Select';
 import { useFocusTrap } from '../../components/useFocusTrap';
 import { CloseGlyph } from '../../components/icons';
+import { CheckGlyph } from '../../components/states/glyphs';
 import {
   asArray,
+  confirmMayPost,
+  enginePreAssignment,
+  inferBankLedgerAccount,
+  type BankAccountLink,
   type BankAccountOption,
   type Candidate,
+  type Payment,
   type PaymentPreview,
   type PreviewRow,
   type SuggestMatches,
@@ -70,12 +87,28 @@ interface RowInput {
 
 const EMPTY_ROW: RowInput = { amount: '', skonto: '', writeOff: '' };
 
+/** One post as it was shown to the person: the question, the request it sends, and what was pre-assigned. */
+interface PostSnapshot {
+  question: string;
+  verb: 'record_payment' | 'allocate_payment';
+  body: Record<string, unknown>;
+  preAssignedId: string | null;
+}
+
 export interface PaymentAllocatorProps {
   /** `record` mints a new payment; `allocate` spends an existing Guthaben (P13/P46). */
   mode: 'record' | 'allocate';
   paymentId?: string;
   /** Prefill from `/payments/new?amount=...`, the agent-to-human handover (P21) and the entry points. */
-  prefill?: { amount?: string; date?: string; reference?: string; direction?: string; counterpartyId?: string };
+  prefill?: {
+    amount?: string;
+    date?: string;
+    reference?: string;
+    direction?: string;
+    counterpartyId?: string;
+    /** The ledger account the payment came through, when the entry point knows it (it wins over the default). */
+    bankAccountId?: string;
+  };
   onClose: () => void;
   /**
    * Called after the write landed, with the payment's id (the engine's `paymentId`), so the list
@@ -94,20 +127,44 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
   const [amount, setAmount] = useState(prefill?.amount ?? '');
   const [date, setDate] = useState(prefill?.date ?? new Date().toISOString().slice(0, 10));
   const [reference, setReference] = useState(prefill?.reference ?? '');
-  const [bankAccountId, setBankAccountId] = useState('');
+  /**
+   * The Konto a PERSON chose (or the entry point named). Empty means "nobody chose": the Konto then
+   * falls back to the inferred default below, which is derived on every render rather than written
+   * into this state, so a direction change re-derives it and nothing stale is ever posted.
+   */
+  const [chosenAccountId, setChosenAccountId] = useState(prefill?.bankAccountId ?? '');
   const [counterpartyId, setCounterpartyId] = useState(prefill?.counterpartyId ?? '');
 
   const [accounts, setAccounts] = useState<BankAccountOption[]>([]);
+  const [bankLinks, setBankLinks] = useState<BankAccountLink[]>([]);
+  const [baseCurrency, setBaseCurrency] = useState<string | null>(null);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
 
-  const [matches, setMatches] = useState<SuggestMatches | null>(null);
-  const [matchesLoading, setMatchesLoading] = useState(true);
+  /**
+   * The candidates, with the WHOLE question they answer (critic R2-F5): the exact request
+   * `suggest_payment_matches` received, as `previewFor` holds the preview's. A list remembered only by
+   * its direction once pre-assigned an item for a reference the person had since replaced.
+   */
+  const [matches, setMatches] = useState<{ data: SuggestMatches; direction: string; askedFor: string } | null>(null);
+  /** The suggest request the last settled answer (a list OR a refusal) was for. */
+  const [matchesAnsweredFor, setMatchesAnsweredFor] = useState<string | null>(null);
+  const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesError, setMatchesError] = useState<Err | null>(null);
+  /** Monotonic read counters: an answer that a newer read overtook is dropped, never rendered. */
+  const matchesSeq = useRef(0);
+  const previewSeq = useRef(0);
+  /** False once the Werkbank unmounted (a close, or a workspace switch remounting it). */
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const [preview, setPreview] = useState<PaymentPreview | null>(null);
   const [previewError, setPreviewError] = useState<Err | null>(null);
-  const [previewing, setPreviewing] = useState(false);
 
   const [rows, setRows] = useState<Record<string, RowInput>>({});
   /**
@@ -123,35 +180,112 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
   const [onAccount, setOnAccount] = useState('');
   const [showOnAccount, setShowOnAccount] = useState(false);
   const [showLegs, setShowLegs] = useState(false);
+  /** The disclosure holding every open item that is not a suggestion. Closed until the person opens it. */
+  const [showAll, setShowAll] = useState(false);
+  /**
+   * Pre-assignments the person undid, keyed by the QUESTION that produced them (item, Betrag,
+   * Gegenpartei). A changed Betrag or Gegenpartei is a new question and may pre-assign again; the same
+   * one never re-applies behind the person's back.
+   */
+  const [declined, setDeclined] = useState<ReadonlySet<string>>(() => new Set());
   const [confirming, setConfirming] = useState(false);
+  /**
+   * What the person was asked to confirm (critic F3): the whole post, its key, and the pre-assignment
+   * shown at the click. While the dialog is open the derived pre-assignment is FROZEN to this, so a
+   * late candidate answer cannot change behind the dialog what the click will post.
+   */
+  const [confirmSnapshot, setConfirmSnapshot] = useState<PostSnapshot | null>(null);
+  /** Said in place of a post the confirm refused because the question changed under it. */
+  const [confirmNotice, setConfirmNotice] = useState<string | null>(null);
+  /** The preview request the figures on screen answer, so a confirm never posts on another one's plan. */
+  const [previewFor, setPreviewFor] = useState<string | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<Err | null>(null);
 
   const drawerRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * ALLOCATION MODE reads the payment whose Guthaben it spends. Its money side was decided when it was
+   * recorded, so it is READ, never typed: the Betrag is the credit still parked (`onAccountMinor`), and
+   * direction, date, Konto and Gegenpartei are the payment's own. Without this read the Betrag stayed
+   * empty, no preview ever ran, and a parked Guthaben could never be allocated from this Werkbank.
+   */
+  const [guthaben, setGuthaben] = useState<Payment | null>(null);
+  const [guthabenError, setGuthabenError] = useState<Err | null>(null);
+  const [guthabenLoading, setGuthabenLoading] = useState(mode === 'allocate');
+
   const amountMinor = parseAmountToMinor(amount) ?? 0;
-  const currency = preview?.currency ?? 'CHF';
+  const currency = preview?.currency ?? guthaben?.currency ?? 'CHF';
 
   // --- the reads -------------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (mode !== 'allocate' || paymentId === undefined || workspaceId === null) return;
+    let live = true;
+    void (async () => {
+      setGuthabenLoading(true);
+      const response = await client.call('get_payment', { workspaceId, paymentId });
+      if (!live) return;
+      setGuthabenLoading(false);
+      if (isErr(response.body)) {
+        setGuthabenError(response.body);
+        return;
+      }
+      const payment = (response.body as { payment?: Payment }).payment;
+      if (payment === undefined) {
+        setGuthabenError({ ok: false, error: 'not_found', paymentId } as Err);
+        return;
+      }
+      // The engine's own refusals, said before anything is planned rather than after a click.
+      if (payment.status !== 'posted') {
+        setGuthabenError({ ok: false, error: 'already_reversed', paymentId } as Err);
+        return;
+      }
+      if (payment.onAccountMinor <= 0) {
+        setGuthabenError({ ok: false, error: 'nothing_to_allocate', paymentId } as Err);
+        return;
+      }
+      setGuthabenError(null);
+      setGuthaben(payment);
+      setAmount(minorToInput(payment.onAccountMinor));
+      setDirection(payment.direction);
+      setDate(payment.date);
+      setCounterpartyId(payment.counterparty?.id ?? '');
+    })();
+    return () => {
+      live = false;
+    };
+  }, [client, workspaceId, mode, paymentId]);
 
   useEffect(() => {
     if (workspaceId === null) return;
     let live = true;
     void (async () => {
       setAccountsLoading(true);
-      const [accountsResp, contactsResp] = await Promise.all([
+      // The Bankkonten and the base currency feed the Konto DEFAULT only. Either read failing (a
+      // missing capability, a transport error) leaves the picker asking, never falling back to Kasse.
+      const [accountsResp, contactsResp, banksResp, profileResp] = await Promise.all([
         client.call('list_accounts', { workspaceId }),
         client.call('list_contacts', { workspaceId }),
+        client.call('list_bank_accounts', { workspaceId }),
+        client.call('get_company_profile', { workspaceId }),
       ]);
       if (!live) return;
       if (!isErr(accountsResp.body)) {
         // S9 offers bank and cash accounts by NUMBER and NAME, never a raw id. `name` is
         // `list_accounts`' spelling: the payments read model's `label` does not exist on this read.
+        // The ORDER is the chart's, and it is NOT a default: 1000 Kassenbestand sorts first, and
+        // preselecting it booked bank money on the till whenever nobody read the picker.
         const all = asArray<BankAccountOption>(accountsResp.body.accounts);
-        const banklike = all.filter((a) => /^10[0-2]/.test(a.number));
-        setAccounts(banklike);
-        if (banklike.length > 0) setBankAccountId((current) => (current === '' ? banklike[0].id : current));
+        setAccounts(all.filter((a) => /^10[0-2]/.test(a.number)));
+      }
+      if (!isErr(banksResp.body)) {
+        setBankLinks(asArray<BankAccountLink>(banksResp.body.bankAccounts));
+      }
+      if (!isErr(profileResp.body)) {
+        const base = (profileResp.body.profile as { baseCurrency?: unknown } | undefined)?.baseCurrency;
+        setBaseCurrency(typeof base === 'string' && base !== '' ? base : null);
       }
       if (!isErr(contactsResp.body)) {
         setContacts(asArray<{ id: string; name: string }>(contactsResp.body.contacts));
@@ -163,29 +297,66 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
     };
   }, [client, workspaceId]);
 
+  /**
+   * Whether there is anything to rank the open items BY. At rest (no Betrag, no Gegenpartei) the list
+   * is not asked for at all: twenty unranked rows with a field each was the measured load this pass
+   * removes. Allocation mode spends an existing payment, so it always asks.
+   */
+  const asking = mode === 'allocate' || amountMinor > 0 || counterpartyId !== '';
+
+  /** Exactly what `suggest_payment_matches` is asked, and its key: the question a list answers. */
+  const matchesRequest = useMemo(
+    () =>
+      workspaceId === null || !asking
+        ? null
+        : {
+            workspaceId,
+            direction,
+            ...(amountMinor > 0 ? { amountMinor } : {}),
+            ...(reference === '' ? {} : { reference }),
+            ...(counterpartyId === '' ? {} : { counterpartyId }),
+          },
+    [workspaceId, asking, direction, amountMinor, reference, counterpartyId],
+  );
+  const matchesKey = matchesRequest === null ? null : JSON.stringify(matchesRequest);
+
   const loadMatches = useCallback(async () => {
     if (workspaceId === null) return;
+    const seq = ++matchesSeq.current;
+    if (matchesRequest === null || matchesKey === null) {
+      setMatches(null);
+      setMatchesError(null);
+      setMatchesAnsweredFor(null);
+      setMatchesLoading(false);
+      return;
+    }
     setMatchesLoading(true);
     setMatchesError(null);
-    const response = await client.call('suggest_payment_matches', {
-      workspaceId,
-      direction,
-      ...(amountMinor > 0 ? { amountMinor } : {}),
-      ...(reference === '' ? {} : { reference }),
-      ...(counterpartyId === '' ? {} : { counterpartyId }),
-    });
+    const response = await client.call('suggest_payment_matches', matchesRequest);
+    // A newer read overtook this one: its answer is about a question nobody is asking any more.
+    if (seq !== matchesSeq.current || !mounted.current) return;
+    setMatchesAnsweredFor(matchesKey);
     if (isErr(response.body)) {
       setMatchesError(response.body);
       setMatchesLoading(false);
       return;
     }
-    setMatches(response.body as unknown as SuggestMatches);
+    setMatches({ data: response.body as unknown as SuggestMatches, direction: matchesRequest.direction, askedFor: matchesKey });
     setMatchesLoading(false);
-  }, [client, workspaceId, direction, amountMinor, reference, counterpartyId]);
+  }, [client, workspaceId, matchesRequest, matchesKey]);
 
   useEffect(() => {
     void loadMatches();
   }, [loadMatches]);
+
+  /**
+   * The candidate list SHOWN: the last one for this direction, kept on screen while a newer question is
+   * out so the rows do not blink on every keystroke. A list asked for the other direction is never used.
+   * What may PRE-ASSIGN is stricter: only a list answering the current question (`listIsCurrent`).
+   */
+  const current: SuggestMatches | null = matches !== null && matches.direction === direction ? matches.data : null;
+  const listIsCurrent = matches !== null && matches.askedFor === matchesKey;
+  const candidates = useMemo(() => current?.candidates ?? [], [current]);
 
   /**
    * Which KIND each candidate is, read off the engine's own answer.
@@ -198,14 +369,53 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
    */
   const kindByTarget = useMemo(() => {
     const m = new Map<string, string>();
-    for (const c of matches?.candidates ?? []) m.set(c.targetId, c.targetKind);
+    for (const c of candidates) m.set(c.targetId, c.targetKind);
     return m;
-  }, [matches]);
+  }, [candidates]);
 
-  /** The allocations as the wire takes them, built from what the user typed. */
+  /**
+   * The pre-assignment (brief B7, corrected by critic F1). It is the ENGINE's prefill, taken only when
+   * complete and unambiguous (`enginePreAssignment`): the Studio ranks nothing of its own, so a QR
+   * reference naming one invoice can never lose to an amount coincidence on another. The whole Betrag
+   * goes in, exactly the string a person would type into its Zuweisen field, so the wire cannot tell
+   * the two apart. It is DERIVED, never written into `rows`: a Betrag or Gegenpartei that stops
+   * matching takes it away with nothing stale left behind, and a person's own entry on any row (this
+   * one included) always wins. It shows as "zugewiesen" with an undo, so it is never silent. While the
+   * confirm dialog is open it is frozen to what the person saw at the click (critic F3).
+   */
+  const engineAnswer = useMemo(
+    () =>
+      mode === 'record' && asking && listIsCurrent
+        ? enginePreAssignment(candidates, amountMinor, counterpartyId)
+        : { target: null, tied: [] as Candidate[] },
+    [mode, asking, listIsCurrent, candidates, amountMinor, counterpartyId],
+  );
+  const handAssigned = Object.values(rows).some((input) => (parseAmountToMinor(input.amount) ?? 0) > 0);
+  const exactKey = (targetId: string) => `${targetId}|${amountMinor}|${counterpartyId}`;
+  const exactTarget = engineAnswer.target;
+  const livePreAssignedId: string | null =
+    exactTarget !== null &&
+    rows[exactTarget.targetId] === undefined &&
+    !handAssigned &&
+    !declined.has(exactKey(exactTarget.targetId))
+      ? exactTarget.targetId
+      : null;
+  const preAssignedId = confirmSnapshot !== null ? confirmSnapshot.preAssignedId : livePreAssignedId;
+  const ambiguousIds = useMemo(() => new Set(engineAnswer.tied.map((c) => c.targetId)), [engineAnswer]);
+
+  /** What the wire sees: the person's rows, plus the visible pre-assignment when there is one. */
+  const effectiveRows = useMemo<Record<string, RowInput>>(
+    () =>
+      preAssignedId === null
+        ? rows
+        : { ...rows, [preAssignedId]: { ...EMPTY_ROW, amount: minorToInput(amountMinor) } },
+    [rows, preAssignedId, amountMinor],
+  );
+
+  /** The allocations as the wire takes them, built from what the user typed (and the shown pre-assignment). */
   const allocations = useMemo<AllocationRequest[]>(() => {
     const out: AllocationRequest[] = [];
-    for (const [documentId, input] of Object.entries(rows)) {
+    for (const [documentId, input] of Object.entries(effectiveRows)) {
       const minor = parseAmountToMinor(input.amount);
       if (minor === null || minor <= 0) continue;
       const skonto = parseAmountToMinor(input.skonto);
@@ -224,7 +434,25 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
       });
     }
     return out;
-  }, [rows, kindByTarget]);
+  }, [effectiveRows, kindByTarget]);
+
+  /**
+   * The Konto. A person's choice (or the entry point's) wins; otherwise the default inferred from the
+   * Bankkonten, shown in the picker before anything posts; otherwise nothing, and the picker asks.
+   * A chosen id the picker does not offer (a stale URL) is not used.
+   */
+  const inferredAccountId = useMemo(
+    () => inferBankLedgerAccount(accounts, bankLinks, direction, baseCurrency),
+    [accounts, bankLinks, direction, baseCurrency],
+  );
+  const bankAccountId =
+    mode === 'allocate'
+      ? // The account the parked money already landed on. Allocation books nothing, so this is the
+        // payment's own Konto, carried only so the preview plans the same payment the engine replans.
+        (guthaben?.bankAccount.id ?? '')
+      : chosenAccountId !== '' && accounts.some((account) => account.id === chosenAccountId)
+        ? chosenAccountId
+        : (inferredAccountId ?? '');
 
   const onAccountMinor = parseAmountToMinor(onAccount);
 
@@ -235,9 +463,10 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
    */
   const idempotencyKey = useIdempotencyKey(
     mode === 'allocate' && paymentId !== undefined
-      ? ['allocate_payment', paymentId, allocations]
+      ? ['allocate_payment', workspaceId, paymentId, allocations]
       : [
           'record_payment',
+          workspaceId,
           direction,
           date,
           amountMinor,
@@ -249,41 +478,39 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
         ],
   );
 
-  const runPreview = useCallback(async () => {
-    if (workspaceId === null || bankAccountId === '' || amountMinor <= 0) {
-      setPreview(null);
-      setPreviewError(null);
-      return;
-    }
-    setPreviewing(true);
-    const response = await client.call(
-      'preview_payment',
-      previewPaymentRequest({
+  /**
+     * In allocation mode the preview plans the PARKED CREDIT as the payment: the Betrag is
+     * `onAccountMinor`, with the payment's own direction, date, currency, Konto and Gegenpartei.
+     * `allocate_payment` replans the whole payment with `existingAllocatedMinor = amount - credit`,
+     * and `planPayment` uses that figure only to subtract it from the amount, so both plans compute
+     * the same rows, the same remainder and the same blockers. The reference is left out because the
+     * replan carries none. The legs are NOT shown in this mode: allocating moves no money.
+     */
+  const previewRequest = useMemo(() => {
+    if (workspaceId === null || bankAccountId === '' || amountMinor <= 0) return null;
+    const allocating = mode === 'allocate' && guthaben !== null;
+    return previewPaymentRequest({
         workspaceId,
         direction,
         date,
         amountMinor,
         bankAccountId,
         counterpartyId: counterpartyId === '' ? null : counterpartyId,
-        reference: reference === '' ? null : reference,
         allocations,
-        ...(onAccountMinor === null ? {} : { onAccountMinor }),
-      }),
-    );
-    if (isErr(response.body)) {
-      // A REFUSAL of the whole call (needs_fx_rate, needs_bank_account). Distinct from a `blocker`,
-      // which arrives on a successful response and still renders a plan.
-      setPreviewError(response.body);
-      setPreview(null);
-      setPreviewing(false);
-      return;
-    }
-    setPreviewError(null);
-    setPreview(response.body as unknown as PaymentPreview);
-    setPreviewing(false);
+        ...(allocating
+          ? {
+              currency: guthaben.currency,
+              ...(guthaben.counterparty === null ? {} : { counterpartyKind: guthaben.counterparty.kind }),
+            }
+          : {
+              reference: reference === '' ? null : reference,
+              ...(onAccountMinor === null ? {} : { onAccountMinor }),
+            }),
+    });
   }, [
-    client,
     workspaceId,
+    mode,
+    guthaben,
     direction,
     date,
     amountMinor,
@@ -293,6 +520,33 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
     allocations,
     onAccountMinor,
   ]);
+  const previewKey = previewRequest === null ? null : JSON.stringify(previewRequest);
+
+  const runPreview = useCallback(async () => {
+    const seq = ++previewSeq.current;
+    if (previewRequest === null) {
+      setPreview(null);
+      setPreviewError(null);
+      setPreviewFor(null);
+      return;
+    }
+    const response = await client.call('preview_payment', previewRequest);
+    // An answer a newer preview overtook describes figures no longer on screen: dropped, so the confirm
+    // can never be enabled on a plan for a Betrag the person has since changed.
+    if (seq !== previewSeq.current || !mounted.current) return;
+    if (isErr(response.body)) {
+      // A REFUSAL of the whole call (needs_fx_rate, needs_bank_account). Distinct from a `blocker`,
+      // which arrives on a successful response and still renders a plan. It is still an ANSWER to this
+      // request, so it is recorded as one.
+      setPreviewError(response.body);
+      setPreview(null);
+      setPreviewFor(previewKey);
+      return;
+    }
+    setPreviewError(null);
+    setPreview(response.body as unknown as PaymentPreview);
+    setPreviewFor(previewKey);
+  }, [client, previewRequest, previewKey]);
 
   useEffect(() => {
     void runPreview();
@@ -300,37 +554,86 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
 
   // --- the write -------------------------------------------------------------------------------
 
-  const post = useCallback(async () => {
-    if (workspaceId === null) return;
+  /**
+   * The whole post as it would go out now, minus its key: the QUESTION. The confirm compares the one
+   * it was shown against this one (critic F3), and a post sends exactly the question it was shown.
+   */
+  const postQuestion = useMemo(
+    () =>
+      JSON.stringify(
+        mode === 'allocate' && paymentId !== undefined
+          ? ['allocate_payment', workspaceId, paymentId, allocations]
+          : [
+              'record_payment',
+              workspaceId,
+              direction,
+              date,
+              amountMinor,
+              bankAccountId,
+              counterpartyId,
+              reference,
+              allocations,
+              onAccountMinor,
+            ],
+      ),
+    [mode, workspaceId, paymentId, direction, date, amountMinor, bankAccountId, counterpartyId, reference, allocations, onAccountMinor],
+  );
+
+  /** Build the request a snapshot names. The intent is the builder's, never a parameter (P9). */
+  const snapshotNow = useCallback(
+    (): PostSnapshot | null =>
+      workspaceId === null
+        ? null
+        : {
+            question: postQuestion,
+            preAssignedId,
+            verb: mode === 'allocate' ? 'allocate_payment' : 'record_payment',
+            body:
+              mode === 'allocate' && paymentId !== undefined
+                ? allocatePaymentRequest({ workspaceId, paymentId, allocations, idempotencyKey })
+                : recordPaymentRequest({
+                    workspaceId,
+                    direction,
+                    date,
+                    amountMinor,
+                    bankAccountId,
+                    counterpartyId: counterpartyId === '' ? null : counterpartyId,
+                    reference: reference === '' ? null : reference,
+                    allocations,
+                    ...(onAccountMinor === null ? {} : { onAccountMinor }),
+                    idempotencyKey,
+                  }),
+          },
+    [
+      workspaceId,
+      postQuestion,
+      preAssignedId,
+      mode,
+      paymentId,
+      allocations,
+      idempotencyKey,
+      direction,
+      date,
+      amountMinor,
+      bankAccountId,
+      counterpartyId,
+      reference,
+      onAccountMinor,
+    ],
+  );
+
+  const post = useCallback(async (snapshot: PostSnapshot) => {
     setPosting(true);
     setPostError(null);
+    setConfirmNotice(null);
 
-    // The intent is attached by the request builder and is NOT a parameter here. Whether the dialog
-    // was shown cannot reach this call (P9).
-    const body =
-      mode === 'allocate' && paymentId !== undefined
-        ? allocatePaymentRequest({
-            workspaceId,
-            paymentId,
-            allocations,
-            idempotencyKey,
-          })
-        : recordPaymentRequest({
-            workspaceId,
-            direction,
-            date,
-            amountMinor,
-            bankAccountId,
-            counterpartyId: counterpartyId === '' ? null : counterpartyId,
-            reference: reference === '' ? null : reference,
-            allocations,
-            ...(onAccountMinor === null ? {} : { onAccountMinor }),
-            idempotencyKey,
-          });
-
-    const response = await client.call(mode === 'allocate' ? 'allocate_payment' : 'record_payment', body);
+    const response = await client.call(snapshot.verb, snapshot.body);
+    // The Werkbank closed or was remounted for another workspace while the write was out. Whatever the
+    // answer, it belongs to a screen that no longer exists, so nothing here acts on it.
+    if (!mounted.current) return;
     setPosting(false);
     setConfirming(false);
+    setConfirmSnapshot(null);
 
     if (isErr(response.body)) {
       // Every typed value is preserved and focus returns into the workbench, so Escape still closes it
@@ -341,33 +644,11 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
     }
     const answered = (response.body as { paymentId?: unknown }).paymentId;
     onPosted(typeof answered === 'string' ? answered : paymentId);
-  }, [
-    client,
-    workspaceId,
-    mode,
-    paymentId,
-    allocations,
-    direction,
-    date,
-    amountMinor,
-    bankAccountId,
-    counterpartyId,
-    reference,
-    onAccountMinor,
-    idempotencyKey,
-    onPosted,
-  ]);
+  }, [client, paymentId, onPosted]);
 
-  /** The one control that writes. It asks first, unless this operator has said not to (P9). */
-  const submit = useCallback(() => {
-    if (shouldConfirmPost(workspaceId)) {
-      setConfirming(true);
-      return;
-    }
-    void post();
-  }, [workspaceId, post]);
 
-  const dirty = amount !== '' || allocations.length > 0 || reference !== '';
+  // In allocation mode the Betrag is READ from the payment, so only an allocation is the person's work.
+  const dirty = mode === 'allocate' ? allocations.length > 0 : amount !== '' || allocations.length > 0 || reference !== '';
 
   const requestClose = useCallback(() => {
     // S8: one question before typed money is thrown away. A clean workbench closes immediately.
@@ -392,35 +673,134 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
    * go through `paymentErrorMessage`, the SAME path the error panel uses, so the inline reason and the
    * panel are one sentence from one interpolation.
    */
-  const blockedReason: string | null = previewing
-    ? t('payment.preview.stale')
-    : previewError !== null
-      ? paymentErrorMessage(t, previewError, currency)
-      : blocker !== null
-        ? paymentErrorMessage(t, blockerAsErr(blocker), currency)
-        : preview === null
-          ? t('payment.empty.preview')
-          : null;
-  const canPost = blockedReason === null && !posting;
+  /**
+   * THE ONE PREDICATE (critic R2-F5): everything the post depends on has answered the CURRENT question.
+   * Two reads feed a post: the preview (its figures, its blockers) and the candidate list (what is
+   * pre-assigned, and each row's kind). Each answer is keyed by the exact request it answered, and the
+   * post is offered, and the confirm may post, only while BOTH keys equal the current requests. A read
+   * in flight, an answer a newer read overtook, an answer for an older question: all of them are simply
+   * "not answered for this question", so no case needs its own flag. The button (via `canPost`) and
+   * `confirmMayPost` both take this one value.
+   */
+  const previewAnswered = previewKey !== null && previewFor === previewKey;
+  const listAnswered = matchesKey === null || matchesAnsweredFor === matchesKey;
+  const everythingAnswered = previewAnswered && listAnswered;
+  const holding = previewKey !== null && !everythingAnswered;
+  // The held line names what is actually pending, and an ANSWER outranks a wait (critic round 3): a
+  // preview not yet answered for this question says so; once it HAS answered, its refusal or blocker is
+  // the reason, even while the candidate list is still out; only then does a pending list speak.
+  const blockedReason: string | null =
+    previewKey !== null && !previewAnswered
+      ? t('payment.preview.stale')
+      : previewError !== null
+        ? paymentErrorMessage(t, previewError, currency)
+        : blocker !== null
+          ? paymentErrorMessage(t, blockerAsErr(blocker), currency)
+          : !listAnswered
+            ? t('payment.preview.matching')
+            : preview === null
+              ? t('payment.empty.preview')
+              : null;
+  const canPost = everythingAnswered && blockedReason === null && !posting;
 
-  // A14-U3: when the statement pane already states "nothing allocated yet" (preview is null, no
-  // refusal in flight), the separate blocked-reason line under the confirm would render the identical
-  // sentence inches away. The reason belongs once. So it is suppressed for exactly that case; every
-  // other reason (stale, a refusal, a blocker) still shows beside the disabled control.
-  const reasonIsEmptyDuplicate = preview === null && previewError === null && !previewing;
+  /**
+   * The one control that writes. It asks first, unless this operator has said not to (P9). What it
+   * asks about is SNAPSHOTTED at the click, so the confirm can never post anything else.
+   */
+  const submit = useCallback(() => {
+    // The same predicate as the button: a click that lands while a read is out posts nothing, whether
+    // the confirm is shown or suppressed.
+    if (!canPost) return;
+    const snapshot = snapshotNow();
+    if (snapshot === null) return;
+    setConfirmNotice(null);
+    if (shouldConfirmPost(workspaceId)) {
+      setConfirmSnapshot(snapshot);
+      setConfirming(true);
+      return;
+    }
+    void post(snapshot);
+  }, [canPost, workspaceId, snapshotNow, post]);
+
+  /**
+   * Zahlung buchen is ABSENT, not disabled, while what unlocks it sits beside it (D152 rule 3): a
+   * Betrag still to type, a Konto still to choose, a blocker or refusal whose panel already says what
+   * to change. The one exception is a re-preview in flight after a postable plan: the control holds,
+   * disabled with the stale reason, rather than blinking out on every keystroke. Whether the last
+   * SETTLED plan was postable is remembered for exactly that, and for nothing else.
+   */
+  const lastSettledPostable = useRef(false);
+  if (!holding) lastSettledPostable.current = canPost;
+  const showPost = posting || canPost || (holding && lastSettledPostable.current);
+
+  /** The next step, said where the confirm would be, when it is a control in this Werkbank. */
+  const nextStep: string | null =
+    mode !== 'record'
+      ? null
+      : amountMinor <= 0
+        ? // At rest the candidate pane's quiet line already asks for the Betrag; once a Gegenpartei is
+          // set that line is gone, so the step is said here instead.
+          asking
+          ? t('payment.next.amount')
+          : null
+        : bankAccountId === '' && accounts.length > 0
+          ? t('payment.next.account')
+          : null;
+
+  // The reason line under the actions. Beside a HELD confirm it says why it is held (a stale preview);
+  // in place of an absent one it names the next step. A blocker or refusal is not repeated here: its
+  // panel above is the one rendering of that sentence (A14-U3, one reason, once).
+  const reasonLine: string | null = showPost ? (canPost ? null : blockedReason) : nextStep;
 
   /** The statement lines: one per candidate the engine has planned a settlement against. */
   const statementRows: PreviewRow[] = (preview?.rows ?? []).filter(
     (row) => row.paymentAmountMinor > 0 || row.skontoMinor > 0 || row.writeOffMinor > 0,
   );
 
-  // --- roving across the candidate amount fields (one tab stop, ArrowUp/Down between rows) --------
-  const inputTargetIds = useMemo(
-    () => (matches?.candidates ?? []).filter((c) => !c.settled).map((c) => c.targetId),
-    [matches],
-  );
   const [activeInputId, setActiveInputId] = useState<string | null>(null);
   const inputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
+
+  // --- which rows show, and which carry a Zuweisen field ------------------------------------------
+  /**
+   * A SUGGESTION is a row TILL has a reason to put in front of the person: an engine tier (reference,
+   * exact amount and customer, amount within the threshold), a settled item the reference names (shown
+   * so "already booked" is the answer rather than a hunt), or an item of the chosen Gegenpartei. A row
+   * is EDITABLE (it carries its Zuweisen field) when it is a suggestion, carries an entry, or is the
+   * pre-assigned match. Allocation mode keeps every row editable, as it always was.
+   */
+  const isSuggestion = useCallback(
+    (c: Candidate) =>
+      c.kind !== null || c.settled || (counterpartyId !== '' && c.contactId === counterpartyId),
+    [counterpartyId],
+  );
+  const isEditable = useCallback(
+    (c: Candidate) =>
+      mode === 'allocate' || isSuggestion(c) || rows[c.targetId] !== undefined || c.targetId === preAssignedId,
+    [mode, isSuggestion, rows, preAssignedId],
+  );
+  const restCount = candidates.filter((c) => !isEditable(c)).length;
+  const visibleCandidates = showAll ? candidates : candidates.filter(isEditable);
+
+  /** Pick a row that was not suggested: it gets its field, filled with what is left to assign. */
+  const pick = useCallback(
+    (c: Candidate) => {
+      // The engine's remainder when there is a plan, else the Betrag itself. A FILL, not a figure on
+      // screen: it lands in the field, the engine previews it, and the person can change it.
+      const left = preview !== null ? preview.remainderMinor : amountMinor > 0 ? amountMinor : null;
+      const fill = left === null ? c.openMinor : Math.min(c.openMinor, left);
+      setRows((rowsNow) => ({ ...rowsNow, [c.targetId]: { ...EMPTY_ROW, amount: fill > 0 ? minorToInput(fill) : '' } }));
+      setActiveInputId(c.targetId);
+      // Focus lands in the new field once it renders, so the person can correct the fill at once.
+      window.requestAnimationFrame(() => inputRefs.current.get(c.targetId)?.focus());
+    },
+    [preview, amountMinor],
+  );
+
+  // --- roving across the candidate amount fields (one tab stop, ArrowUp/Down between rows) --------
+  const inputTargetIds = useMemo(
+    () => visibleCandidates.filter((c) => !c.settled && isEditable(c)).map((c) => c.targetId),
+    [visibleCandidates, isEditable],
+  );
   const activeInput = activeInputId !== null && inputTargetIds.includes(activeInputId) ? activeInputId : inputTargetIds[0] ?? null;
 
   const moveInput = useCallback(
@@ -443,7 +823,7 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
         className="pay-wb"
         role="dialog"
         aria-modal="true"
-        aria-label={t('payment.record')}
+        aria-label={mode === 'allocate' ? t('payment.allocateCredit.label') : t('payment.record')}
         ref={drawerRef}
         tabIndex={-1}
       >
@@ -487,17 +867,37 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               disabled={mode === 'allocate'}
+              aria-busy={mode === 'allocate' && guthabenLoading ? true : undefined}
             />
           </label>
           <label className="pay-field">
             <span>{t('payment.date')}</span>
-            <input className="field" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            <input
+              className="field"
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              disabled={mode === 'allocate'}
+            />
           </label>
           <div className="pay-field">
             <span>{t('payment.bankAccount')}</span>
             {/* S9. Its empty state is a banner-CTA and NOT an empty select, because an empty
                 dropdown is a dead end that looks like a working control. */}
-            {accountsLoading ? (
+            {mode === 'allocate' ? (
+              // The payment's own Konto, held: the money already landed there.
+              <Select
+                value={guthaben?.bankAccount.id ?? ''}
+                onChange={() => undefined}
+                options={
+                  guthaben === null
+                    ? []
+                    : [{ value: guthaben.bankAccount.id, label: `${guthaben.bankAccount.number} ${guthaben.bankAccount.label}` }]
+                }
+                ariaLabel={t('payment.bankAccount')}
+                disabled
+              />
+            ) : accountsLoading ? (
               <select className="field" disabled aria-busy="true">
                 <option>{''}</option>
               </select>
@@ -509,11 +909,16 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
                 </Link>
               </span>
             ) : (
+              // The default (when TILL could infer one) is the selected value, in view before anything
+              // posts. Several Bankkonten and no way to tell them apart: nothing is preselected and
+              // the placeholder asks.
               <Select
                 value={bankAccountId}
-                onChange={setBankAccountId}
+                onChange={setChosenAccountId}
                 options={accounts.map((account) => ({ value: account.id, label: `${account.number} ${account.name}` }))}
+                placeholder={t('payment.bankAccountChoose')}
                 ariaLabel={t('payment.bankAccount')}
+                required
               />
             )}
           </div>
@@ -527,6 +932,7 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
                 ...contacts.map((contact) => ({ value: contact.id, label: contact.name })),
               ]}
               ariaLabel={t('payment.counterparty.label')}
+              disabled={mode === 'allocate'}
             />
           </div>
           <label className="pay-field pay-field--wide">
@@ -538,9 +944,9 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
             />
             {/* State which reference kind was recognised, so a user who pasted a SCOR is not left
                 wondering whether it was understood. */}
-            {matches?.reference?.kind === 'qrr' && <small className="pay-hint">{t('payment.reference.qrr')}</small>}
-            {matches?.reference?.kind === 'scor' && <small className="pay-hint">{t('payment.reference.scor')}</small>}
-            {matches?.reference?.valid === false && (
+            {current?.reference?.kind === 'qrr' && <small className="pay-hint">{t('payment.reference.qrr')}</small>}
+            {current?.reference?.kind === 'scor' && <small className="pay-hint">{t('payment.reference.scor')}</small>}
+            {current?.reference?.valid === false && (
               <small className="pay-hint pay-hint--bad">{t('payment.error.reference_check_digit')}</small>
             )}
           </label>
@@ -552,23 +958,26 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
           <section className="pay-wb-left" aria-label={t('payment.candidates')}>
             <h3 className="pay-section-title">
               {t('payment.candidates')}
-              {matches !== null && (
+              {asking && current !== null && (
                 // Two numbers, deliberately separate: a ranked list must never read as a filtered one.
                 <span className="pay-count">
                   {t('payment.candidatesCount', {
-                    n: matches.referenceMatchCount,
-                    total: matches.openItemCount,
+                    n: current.referenceMatchCount,
+                    total: current.openItemCount,
                   })}
                 </span>
               )}
             </h3>
 
-            {matchesLoading ? (
+            {!asking ? (
+              // At rest there is nothing to rank by, so no list: the money first, then the matches.
+              <p className="pay-dim pay-cand-prompt">{t('payment.prompt.start')}</p>
+            ) : matchesLoading && current === null ? (
               <Skeleton rows={3} />
             ) : matchesError !== null ? (
               <PaymentError error={matchesError} currency={currency} onRetry={() => void loadMatches()} />
-            ) : matches === null || matches.candidates.length === 0 ? (
-              matches !== null && matches.openItemCount === 0 ? (
+            ) : current === null || current.candidates.length === 0 ? (
+              current !== null && current.openItemCount === 0 ? (
                 // Empty state (a): nothing is open at all. The way out is to issue an invoice.
                 <EmptyState
                   title={t('payment.empty.noOpenItems')}
@@ -585,54 +994,93 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
                 />
               )
             ) : (
-              <table className="pay-cand-table">
-                <thead>
-                  <tr>
-                    <th scope="col">{t('payment.column.document')}</th>
-                    <th scope="col">{t('payment.column.counterparty')}</th>
-                    <th scope="col">{t('payment.column.due')}</th>
-                    <th scope="col" className="pay-num">
-                      {t('payment.openAmount')}
-                    </th>
-                    <th scope="col" className="pay-num">
-                      {t('payment.allocate')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matches.candidates.map((candidate) => (
-                    <CandidateRow
-                      key={candidate.targetId}
-                      candidate={candidate}
-                      input={rows[candidate.targetId] ?? EMPTY_ROW}
-                      thresholdMinor={matches.writeOffThresholdMinor}
-                      previewRow={preview?.rows.find((row) => row.targetId === candidate.targetId) ?? null}
-                      onChange={(next) => setRows((current) => ({ ...current, [candidate.targetId]: next }))}
-                      onRefresh={() => void loadMatches()}
-                      amountTabIndex={candidate.targetId === activeInput ? 0 : -1}
-                      registerAmount={(node) => inputRefs.current.set(candidate.targetId, node)}
-                      onAmountFocus={() => setActiveInputId(candidate.targetId)}
-                      onAmountKeyDown={(event) => {
-                        // ArrowDown / Enter advance to the next row's amount; ArrowUp steps back. The
-                        // candidate table is one tab stop, so Tab reaches the decision column at once.
-                        if (event.key === 'ArrowDown' || event.key === 'Enter') {
-                          event.preventDefault();
-                          moveInput(candidate.targetId, 1);
-                        } else if (event.key === 'ArrowUp') {
-                          event.preventDefault();
-                          moveInput(candidate.targetId, -1);
-                        }
-                      }}
-                    />
-                  ))}
-                </tbody>
-              </table>
+              <>
+                {ambiguousIds.size > 1 && (
+                  // A tie is SHOWN as a tie: nothing is pre-assigned, the tied items are listed first,
+                  // and the person picks.
+                  <p className="pay-hint pay-cand-note" role="status">
+                    {t('payment.ambiguous', { n: ambiguousIds.size })}
+                  </p>
+                )}
+                {visibleCandidates.length === 0 ? (
+                  <p className="pay-dim pay-cand-prompt">{t('payment.noSuggestion')}</p>
+                ) : (
+                  <table className="pay-cand-table">
+                    <colgroup>
+                      <col />
+                      <col className="pay-col-party" />
+                      <col className="pay-col-due" />
+                      <col className="pay-col-open" />
+                      <col className="pay-col-allocate" />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th scope="col">{t('payment.column.document')}</th>
+                        <th scope="col">{t('payment.column.counterparty')}</th>
+                        <th scope="col">{t('payment.column.due')}</th>
+                        <th scope="col" className="pay-num">
+                          {t('payment.openAmount')}
+                        </th>
+                        <th scope="col" className="pay-num">
+                          {t('payment.allocate')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleCandidates.map((candidate) => (
+                        <CandidateRow
+                          key={candidate.targetId}
+                          candidate={candidate}
+                          editable={isEditable(candidate)}
+                          settlementTerms={mode === 'record'}
+                          preAssigned={candidate.targetId === preAssignedId}
+                          onUndoPreAssign={() =>
+                            setDeclined((now) => new Set(now).add(exactKey(candidate.targetId)))
+                          }
+                          onPick={() => pick(candidate)}
+                          input={effectiveRows[candidate.targetId] ?? EMPTY_ROW}
+                          thresholdMinor={current.writeOffThresholdMinor}
+                          previewRow={preview?.rows.find((row) => row.targetId === candidate.targetId) ?? null}
+                          onChange={(next) => setRows((rowsNow) => ({ ...rowsNow, [candidate.targetId]: next }))}
+                          onRefresh={() => void loadMatches()}
+                          amountTabIndex={candidate.targetId === activeInput ? 0 : -1}
+                          registerAmount={(node) => inputRefs.current.set(candidate.targetId, node)}
+                          onAmountFocus={() => setActiveInputId(candidate.targetId)}
+                          onAmountKeyDown={(event) => {
+                            // ArrowDown / Enter advance to the next row's amount; ArrowUp steps back. The
+                            // candidate table is one tab stop, so Tab reaches the decision column at once.
+                            if (event.key === 'ArrowDown' || event.key === 'Enter') {
+                              event.preventDefault();
+                              moveInput(candidate.targetId, 1);
+                            } else if (event.key === 'ArrowUp') {
+                              event.preventDefault();
+                              moveInput(candidate.targetId, -1);
+                            }
+                          }}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {(restCount > 0 || showAll) && (
+                  // Every other open item, behind ONE disclosure the person opens (D152 rule 5).
+                  <button
+                    type="button"
+                    className="btn btn--ghost pay-cand-more"
+                    aria-expanded={showAll}
+                    onClick={() => setShowAll((on) => !on)}
+                  >
+                    {showAll ? t('payment.showSuggestions') : t('payment.showAll', { n: restCount })}
+                  </button>
+                )}
+              </>
             )}
           </section>
 
           {/* RIGHT: the decision column (S5). Sticky: the statement, the legs and the Rest never
               scroll away, and the one write control is always in view. */}
-          <aside className={`pay-wb-right${previewing ? ' pay-wb-right--stale' : ''}`}>
+          <aside className={`pay-wb-right${holding ? ' pay-wb-right--stale' : ''}`}>
+            {guthabenError !== null && <PaymentError error={guthabenError} currency={currency} />}
             {previewError !== null ? (
               // The refusal, rendered as a recoverable state with its own copy and its way out. A
               // `needs_fx_rate` here is a rate to record, not a payment to refuse (P10).
@@ -670,8 +1118,9 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
                   )}
                 </div>
 
-                {/* The posting preview (the legs), only when there is a plan to show. */}
-                {preview !== null && (
+                {/* The posting preview (the legs), only when there is a plan to show, and never in
+                    allocation mode: allocating a parked credit books nothing. */}
+                {preview !== null && mode !== 'allocate' && (
                   <div className="pay-preview">
                     <h3 className="pay-section-title">{t('payment.preview.label')}</h3>
                     <table className="pay-legs">
@@ -731,7 +1180,17 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
               </>
             )}
 
-            {postError !== null && <PaymentError error={postError} currency={currency} onRetry={() => void post()} />}
+            {postError !== null && (
+              <PaymentError
+                error={postError}
+                currency={currency}
+                onRetry={() => {
+                  // A retry is the same question again, under the same key: only while it still holds.
+                  const snapshot = snapshotNow();
+                  if (snapshot !== null && canPost) void post(snapshot);
+                }}
+              />
+            )}
 
             {/* The one write control, always in view. It carries the running remainder beside it. */}
             <div className="pay-remainder">
@@ -757,43 +1216,44 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
                     onChange={(event) => setOnAccount(event.target.value)}
                   />
                 </label>
-              ) : remainderMinor !== null && remainderMinor > 0 ? (
-                <>
-                  {/* Fills the field. It does not post, and it is not a second write control. */}
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    // P12b: a Guthaben belongs to somebody, so the chip is held until the counterparty
-                    // is picked, with the reason beside it rather than behind a rejected post.
-                    disabled={counterpartyId === ''}
-                    onClick={() => {
-                      setOnAccount(minorToInput(remainderMinor));
-                      setShowOnAccount(true);
-                    }}
-                  >
-                    {t('payment.onAccount.label')}
-                  </button>
-                  {counterpartyId === '' && (
-                    <small className="pay-hint">{t('payment.error.needs_counterparty')}</small>
-                  )}
-                </>
+              ) : mode === 'record' && remainderMinor !== null && remainderMinor > 0 && counterpartyId !== '' ? (
+                // Fills the field. It does not post, and it is not a second write control. P12b: a
+                // Guthaben belongs to somebody, so the chip is ABSENT until the Gegenpartei is picked
+                // (D152 rule 3: the Gegenpartei beside it is what unlocks it), and the engine's
+                // `needs_counterparty` blocker above says so in the meantime.
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => {
+                    setOnAccount(minorToInput(remainderMinor));
+                    setShowOnAccount(true);
+                  }}
+                >
+                  {t('payment.onAccount.label')}
+                </button>
               ) : null}
 
               <div className="pay-remainder-actions">
                 <button type="button" className="btn btn--secondary" onClick={requestClose}>
                   {t('payment.cancel')}
                 </button>
-                <button type="button" className="btn btn--primary" onClick={submit} disabled={!canPost}>
-                  {t('payment.post')}
-                </button>
+                {showPost && (
+                  <button type="button" className="btn btn--primary" onClick={submit} disabled={!canPost}>
+                    {t('payment.post')}
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* A disabled confirm ALWAYS says why, inline, next to itself (D15/C3), EXCEPT where the
-                statement pane above already states the identical empty condition (A14-U3). */}
-            {blockedReason !== null && !reasonIsEmptyDuplicate && (
+            {/* A held confirm says why, next to itself (D15/C3); an absent one names the next step. */}
+            {reasonLine !== null && (
               <p className="pay-blocked-reason" role="status">
-                {blockedReason}
+                {reasonLine}
+              </p>
+            )}
+            {confirmNotice !== null && (
+              <p className="pay-blocked-reason" role="status">
+                {confirmNotice}
               </p>
             )}
           </aside>
@@ -802,15 +1262,29 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
 
       {confirming && (
         <PostConfirmDialog
-          amount={formatMoney(amountMinor, currency)}
+          // Allocation moves the part of the credit now assigned (the engine's figure), not the credit.
+          amount={formatMoney(mode === 'allocate' ? (preview?.allocatedMinor ?? 0) : amountMinor, currency)}
           verb={mode === 'allocate' ? 'allocate_payment' : 'record_payment'}
           busy={posting}
           onConfirm={(suppress) => {
             // The preference is recorded, and it changes ONLY whether this dialog appears again.
             if (suppress) setConfirmPostSuppressed(workspaceId, true);
-            void post();
+            // Critic F3: post the snapshot only while it is STILL the question on screen and its plan
+            // is settled and postable. Otherwise nothing posts: the dialog closes, every value stays,
+            // and the person is told the Zuteilung moved under them.
+            const snapshot = confirmSnapshot;
+            if (snapshot === null || !confirmMayPost(snapshot, postQuestion, everythingAnswered, canPost)) {
+              setConfirming(false);
+              setConfirmSnapshot(null);
+              setConfirmNotice(t('payment.confirm.changed'));
+              return;
+            }
+            void post(snapshot);
           }}
-          onCancel={() => setConfirming(false)}
+          onCancel={() => {
+            setConfirming(false);
+            setConfirmSnapshot(null);
+          }}
         />
       )}
 
@@ -857,16 +1331,24 @@ function StatementLines({ row, currency }: { row: PreviewRow; currency: string }
 }
 
 /**
- * One candidate row (S4), now a real table row with `scope="col"` headers above it.
+ * One candidate row (S4), a real table row with `scope="col"` headers above it.
  *
- * The document leads, the reason sits under it dim, the amount input sits in the Zuweisen column, and
- * the Skonto / Ausbuchung disclosures live on a sub-row so a dense list stays scannable. A row that
+ * The document leads on ONE line: a long label ("R-2026-0019 Mahngebühr Stufe 2") is clipped with an
+ * ellipsis and carries its full text as a title, so a row never wraps to four lines. A row NOT
+ * suggested and not picked shows no field at all, only a "Zuweisen" pick (it is in view only once the
+ * person opened "Alle offenen Posten"). An EDITABLE row carries its Zuweisen field, and its sub-row
+ * is that row's editor: the reason word, the pre-assignment mark with its undo, "danach offen", the
+ * Skonto disclosure (only once the row carries an allocation) and the Ausbuchung chip. A row that
  * matches NO tier carries no reason word at all: labelling a CHF 540.00 open against a CHF 1'081.00
- * payment "Betrag ähnlich" would make the confidence vocabulary lie, and the vocabulary being honest
- * is its whole job (§3.2).
+ * payment "Betrag ähnlich" would make the confidence vocabulary lie (§3.2).
  */
 function CandidateRow({
   candidate,
+  editable,
+  settlementTerms,
+  preAssigned,
+  onUndoPreAssign,
+  onPick,
   input,
   thresholdMinor,
   previewRow,
@@ -878,6 +1360,15 @@ function CandidateRow({
   onAmountKeyDown,
 }: {
   candidate: Candidate;
+  editable: boolean;
+  /**
+   * Whether Skonto and Ausbuchung are offered. Not when allocating a parked credit: both carry a
+   * ledger effect and `allocate_payment` posts nothing, so the engine refuses them there.
+   */
+  settlementTerms: boolean;
+  preAssigned: boolean;
+  onUndoPreAssign: () => void;
+  onPick: () => void;
   input: RowInput;
   thresholdMinor: number;
   previewRow: { resultingOpenMinor: number; writeOffOfferedMinor: number } | null;
@@ -895,37 +1386,46 @@ function CandidateRow({
   // the chip is ABSENT rather than disabled, and a larger Ausbuchung stays typeable. Nothing here
   // rounds a booked figure: this is a product setting, not a rounding rule.
   const offered = previewRow?.writeOffOfferedMinor ?? 0;
-  const offerWriteOff = offered > 0 && offered <= thresholdMinor;
+  const offerWriteOff = settlementTerms && offered > 0 && offered <= thresholdMinor;
 
-  // Everything under the main row: the reason word, "danach offen", the Skonto disclosure and the
-  // Ausbuchung chip. Rendered as a sub-row only when there is something to say or do.
+  // Skonto is a settlement term OF an allocation, so its disclosure lives in the editor of a row that
+  // carries one (or already holds a Skonto), never on every row at rest.
+  const allocated = (parseAmountToMinor(input.amount) ?? 0) > 0;
+  const offerSkonto = settlementTerms && (allocated || input.skonto !== '');
+
+  const label = candidate.number ?? (candidate.targetKind === 'vendor_bill' ? t('payment.candidate.vendorBill') : '');
+
+  // The editor sub-row, rendered only when it has something to say or do.
   const hasSubRow =
-    !candidate.settled || candidate.kind !== null || previewRow !== null;
+    candidate.settled ||
+    (editable && (candidate.kind !== null || preAssigned || previewRow !== null || offerSkonto || offerWriteOff));
 
   return (
     <>
       <tr className={candidate.settled ? 'pay-cand-row pay-cand-row--stale' : 'pay-cand-row'}>
-        <td className="pay-cand-doc">
+        <td className="pay-cand-doc pay-clip" title={label}>
           {/* A vendor bill is not a document, so it does not link into `/documents/:id`, which would
               be a dead route. Its label is the SUPPLIER's own invoice number, and A17 assigns none of
               its own, so a bill with no reference shows what it is instead of an empty link. */}
           {candidate.targetKind === 'vendor_bill' ? (
             <Link to={`/bills?bill=${candidate.targetId}`} className="pay-link">
-              {candidate.number ?? t('payment.candidate.vendorBill')}
+              {label}
             </Link>
           ) : candidate.targetKind === 'dunning_fee' ? (
             // A booked Mahngebühr is not a routable document (its target is a `dunning_item` row, and
             // `/documents/:id` would be a dead route). Its label already names the invoice it rides
             // plus the escalation level, e.g. "R-2026-0001 Mahngebühr Stufe 1", so it stands as plain
             // text, exactly as A16's own fee rows carry a word-only chip rather than a link.
-            <span className="pay-cand-fee">{candidate.number}</span>
+            <span className="pay-cand-fee">{label}</span>
           ) : (
             <Link to={`/documents/${candidate.targetId}`} className="pay-link">
-              {candidate.number}
+              {label}
             </Link>
           )}
         </td>
-        <td className="pay-cand-party">{candidate.contactName ?? ''}</td>
+        <td className="pay-cand-party pay-clip" title={candidate.contactName ?? undefined}>
+          {candidate.contactName ?? ''}
+        </td>
         <td className="pay-dim">
           {candidate.dueDate !== null ? formatDate(candidate.dueDate) : ''}
         </td>
@@ -933,7 +1433,7 @@ function CandidateRow({
         <td className="pay-num pay-cand-amount">
           {candidate.settled ? (
             <span className="pay-dim">{t('payment.settledAlready')}</span>
-          ) : (
+          ) : editable ? (
             <input className="field"
               inputMode="decimal"
               aria-label={t('payment.allocate')}
@@ -944,6 +1444,15 @@ function CandidateRow({
               onKeyDown={onAmountKeyDown}
               onChange={(event) => onChange({ ...input, amount: event.target.value })}
             />
+          ) : (
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              aria-label={t('payment.pick', { number: label })}
+              onClick={onPick}
+            >
+              {t('payment.allocate')}
+            </button>
           )}
         </td>
       </tr>
@@ -969,6 +1478,23 @@ function CandidateRow({
               </span>
             ) : (
               <span className="pay-cand-controls">
+                {preAssigned && (
+                  // The pre-assignment is never silent: it says so, and it is undone in one click.
+                  <span className="pay-cand-preassigned">
+                    <span className="pay-cand-preassigned-mark">
+                      {t('payment.preAssigned')} <CheckGlyph size={14} />
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      aria-label={t('payment.preAssignedUndoLabel', { number: label })}
+                      onClick={onUndoPreAssign}
+                    >
+                      {t('payment.preAssignedUndo')}
+                    </button>
+                  </span>
+                )}
+
                 {previewRow !== null && (
                   <span className="pay-dim pay-after">
                     {t('payment.afterwardsOpen')}{' '}
@@ -976,20 +1502,21 @@ function CandidateRow({
                   </span>
                 )}
 
-                {showSkonto ? (
-                  <label className="pay-field pay-field--inline">
-                    <span>{t('payment.skonto')}</span>
-                    <input className="field"
-                      inputMode="decimal"
-                      value={input.skonto}
-                      onChange={(event) => onChange({ ...input, skonto: event.target.value })}
-                    />
-                  </label>
-                ) : (
-                  <button type="button" className="btn btn--ghost" onClick={() => setShowSkonto(true)}>
-                    {`+ ${t('payment.skonto')}`}
-                  </button>
-                )}
+                {offerSkonto &&
+                  (showSkonto || input.skonto !== '' ? (
+                    <label className="pay-field pay-field--inline">
+                      <span>{t('payment.skonto')}</span>
+                      <input className="field"
+                        inputMode="decimal"
+                        value={input.skonto}
+                        onChange={(event) => onChange({ ...input, skonto: event.target.value })}
+                      />
+                    </label>
+                  ) : (
+                    <button type="button" className="btn btn--ghost" onClick={() => setShowSkonto(true)}>
+                      {`+ ${t('payment.skonto')}`}
+                    </button>
+                  ))}
 
                 {offerWriteOff && (
                   <button

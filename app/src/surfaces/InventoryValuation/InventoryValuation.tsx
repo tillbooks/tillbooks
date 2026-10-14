@@ -11,6 +11,10 @@
  *     date, and the OR 960c net-realisable-value field that applies the write-down live.
  *  3. HISTORY. The append-only assignment trail, which is the OR 958c Stetigkeit evidence.
  *
+ * A LIST NEVER OPENS ITSELF (D152 rule 5, the /bank B2 pattern). Nothing is selected on load: the
+ * detail pane holds one quiet line until an item is opened by a click (or Enter/Space on its focused
+ * row) or by a deep link (`?focus=<itemId>`). A second click on the open item closes it again.
+ *
  * NOTHING HERE WRITES A FIGURE. The four reads are pure and the three writes touch policy only; the
  * valuation reaches the books through J06. After a policy write the surface re-reads rather than
  * patching state locally, so what it shows is always what the engine would answer.
@@ -23,7 +27,8 @@
  * the engine is the real gate. Write controls disable behind `manage_master_data`; a click that slips
  * through still surfaces the engine's own `permission_denied`.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -198,7 +203,29 @@ export function InventoryValuation() {
   const [defaultMethod, setDefaultMethod] = useState<string>('');
   const [defaultEffectiveFrom, setDefaultEffectiveFrom] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const focusParam = params.get('focus');
+  // D152 rule 5: nothing is selected on load. Only a deep link selects before the person acts, and a
+  // link that arrives while the surface is mounted (a search hit, the /w/:ws/ handover) opens too.
+  const [selectedId, setSelectedId] = useState<string | null>(focusParam);
+  useEffect(() => {
+    if (focusParam !== null) setSelectedId(focusParam);
+  }, [focusParam]);
+  /**
+   * The person's own choice. It retires the deep link (`?focus=` is dropped, replacing the history
+   * entry), so a row they closed stays closed and following the same link again opens it again.
+   */
+  const choose = useCallback(
+    (id: string | null) => {
+      setSelectedId(id);
+      if (params.has('focus')) {
+        const next = new URLSearchParams(params);
+        next.delete('focus');
+        setParams(next, { replace: true });
+      }
+    },
+    [params, setParams],
+  );
   const [valuation, setValuation] = useState<ValuationRow | null>(null);
   const [totalValueMinor, setTotalValueMinor] = useState(0);
 
@@ -216,6 +243,28 @@ export function InventoryValuation() {
   const [defaultDrawer, setDefaultDrawer] = useState(false);
   const [defaultDraft, setDefaultDraft] = useState({ method: '', effectiveFrom: today(), reason: '', forceRevaluation: false });
 
+  // §H-TENANT (critic round 2): a workspace switch does not remount the surface, so nothing chosen,
+  // read or drafted in the workspace just left may survive into the next one. Reset during render
+  // (React's "adjust state when a prop changes"), so no effect ever runs with the old selection
+  // under the new workspace. The first workspace (null -> id at boot) is not a switch: a deep link
+  // made before it resolved stays.
+  // The workspace on screen NOW, for a read or a write that started under the previous one: its
+  // answer is dropped (a refresh closure from before the switch would otherwise re-read the old
+  // workspace and paint it under the new one).
+  const liveWorkspace = useRef(workspaceId);
+  liveWorkspace.current = workspaceId;
+  const [shownWorkspace, setShownWorkspace] = useState(workspaceId);
+  if (shownWorkspace !== workspaceId) {
+    setShownWorkspace(workspaceId);
+    if (shownWorkspace !== null) {
+      setSelectedId(null);
+      setValuation(null);
+      setNrv('');
+      setWriteError(null);
+      setDefaultDrawer(false);
+    }
+  }
+
   const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
 
   const localError = useCallback(
@@ -223,12 +272,17 @@ export function InventoryValuation() {
     [t],
   );
 
+  // Every list read is numbered; only the latest may answer, so a read from the workspace just left
+  // (or one a refresh overtook) never lands on screen.
+  const listSeq = useRef(0);
   const loadBase = useCallback(async () => {
     if (workspaceId === null) {
       setLoading(false);
       return;
     }
+    if (liveWorkspace.current !== workspaceId) return;
     setLoading(true);
+    const mine = ++listSeq.current;
     setFailed(false);
     setDenied(false);
     const [itemsRes, methodsRes, historyRes, rollupRes] = await Promise.all([
@@ -237,6 +291,7 @@ export function InventoryValuation() {
       client.call('inventory_valuation_method_history', { workspaceId }),
       client.call('inventory_valuation_preview', { workspaceId }),
     ]);
+    if (mine !== listSeq.current || liveWorkspace.current !== workspaceId) return;
     if (isErr(itemsRes.body)) {
       if (itemsRes.body.error === 'permission_denied' || itemsRes.status === 403) setDenied(true);
       else setFailed(true);
@@ -253,13 +308,19 @@ export function InventoryValuation() {
     }
     setAssignments(isErr(historyRes.body) ? [] : parseAssignments(historyRes.body));
     setTotalValueMinor(isErr(rollupRes.body) ? 0 : ((rollupRes.body as { totalValueMinor?: number }).totalValueMinor ?? 0));
-    setSelectedId((prev) => (prev !== null && parsed.some((i) => i.id === prev) ? prev : (parsed[0]?.id ?? null)));
+    // An item that left the list closes; nothing takes its place (D152 rule 5).
+    setSelectedId((prev) => (prev !== null && parsed.some((i) => i.id === prev) ? prev : null));
     setLoading(false);
   }, [client, workspaceId]);
 
+  // Every detail read is numbered; only the LATEST may answer into the pane. A read that a close or a
+  // newer selection or as-of date overtook is dropped, so the pane never shows one item under another item's pill.
+  const detailSeq = useRef(0);
   const loadDetail = useCallback(
     async (item: Item, at: string, netRealisable: string) => {
       if (workspaceId === null) return;
+      if (liveWorkspace.current !== workspaceId) return;
+      const mine = ++detailSeq.current;
       setDetailLoading(true);
       const parsedNrv = Number.parseInt(netRealisable, 10);
       const response = await client.call('inventory_valuation_preview', {
@@ -268,6 +329,7 @@ export function InventoryValuation() {
         asOf: at,
         ...(Number.isInteger(parsedNrv) ? { netRealisableValues: { [item.id]: parsedNrv } } : {}),
       });
+      if (mine !== detailSeq.current || liveWorkspace.current !== workspaceId) return;
       setValuation(isErr(response.body) ? null : (parseValuation(response.body)[0] ?? null));
       setDetailLoading(false);
     },
@@ -280,12 +342,18 @@ export function InventoryValuation() {
 
   useEffect(() => {
     if (selected !== null) void loadDetail(selected, asOf, nrv);
-    else setValuation(null);
+    else {
+      detailSeq.current += 1;
+      setValuation(null);
+      setDetailLoading(false);
+    }
   }, [selected, asOf, nrv, loadDetail]);
 
   const refresh = useCallback(async () => {
     await loadBase();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (selected !== null) await loadDetail(selected, asOf, nrv);
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [loadBase, loadDetail, selected, asOf, nrv]);
 
   const toggleMethod = useCallback(
@@ -298,11 +366,13 @@ export function InventoryValuation() {
         enabled,
         idempotencyKey: newKey(),
       });
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
       if (isErr(response.body)) {
         setWriteError(response.body);
         return;
       }
       await refresh();
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     },
     [client, workspaceId, refresh],
   );
@@ -321,12 +391,14 @@ export function InventoryValuation() {
       reason: defaultDraft.reason.trim() === '' ? undefined : defaultDraft.reason.trim(),
       idempotencyKey: newKey(),
     });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (isErr(response.body)) {
       setWriteError(response.body);
       return;
     }
     setDefaultDrawer(false);
     await refresh();
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [client, workspaceId, defaultDraft, refresh]);
 
   if (workspaceId === null) return <NoWorkspaceState body={t('invValuation.noWorkspace')} />;
@@ -453,7 +525,7 @@ export function InventoryValuation() {
                         type="button"
                         className="iv-list-item"
                         aria-current={i.id === selectedId ? 'true' : undefined}
-                        onClick={() => setSelectedId(i.id)}
+                        onClick={() => choose(selectedId === i.id ? null : i.id)}
                       >
                         {i.name}
                       </button>

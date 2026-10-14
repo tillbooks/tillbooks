@@ -35,6 +35,7 @@ import { WorkspaceProvider } from '../../app/workspace';
 import { watchReads, neverSettles } from '../../test-transport';
 import fixture from '../../i18n/format-money-currency.fixture.json';
 import listAccountsFixture from '../Accounts/list-accounts.fixture.json';
+import { composeEngine } from '../../../test-support/composeEngine';
 
 type Handler = RestResponse | ((input: Record<string, unknown>) => RestResponse | Promise<RestResponse>);
 type Handlers = Record<string, Handler>;
@@ -60,6 +61,9 @@ const ACCOUNTS: RestResponse = ok({
   accounts: [
     recorded('1020', fixture.lines[0].account),
     recorded('3200', fixture.lines[1].account),
+    // The output-VAT account a derived Umsatzsteuer leg books to (A1), under the recorded chart's own id:
+    // the engine composes the leg (D152 amendment), and its book holds 2200 under that id.
+    recorded('2200', listAccountsFixture.accounts.find((account) => account.number === '2200')?.id ?? 'acc_17'),
   ],
 });
 
@@ -69,6 +73,8 @@ const READS: Handlers = {
   vat_codes: ok({ taxCodes: [] }),
   list_cost_centers: ok({ costCenters: [] }),
   get_company_profile: PROFILE,
+  // The composer's lines and captions are the REAL engine's (D152 amendment): no stand-in derives a figure.
+  compose_entry: composeEngine(),
 };
 
 /** The journal row the posted USD entry appears as, so the drawer can be opened from the list. */
@@ -138,8 +144,15 @@ async function pickAccount(field: HTMLElement, id: string) {
   await userEvent.type(field, row.number);
   await userEvent.keyboard('{Enter}');
 }
-/** Type a balanced pair of amounts into the two composing lines. */
+/** A1 "Aufteilen": the line grid, where the balance status and the difference live. */
+async function openGrid(dialog: HTMLElement) {
+  await userEvent.click(await within(dialog).findByRole('button', { name: 'Split' }));
+  await within(dialog).findByLabelText('Account 1');
+}
+
+/** Type a balanced pair of amounts into the two grid lines. */
 async function typeBalanced(dialog: HTMLElement, amount: string) {
+  await openGrid(dialog);
   await pickAccount(await within(dialog).findByLabelText('Account 1'), fixture.lines[0].account);
   await pickAccount(within(dialog).getByLabelText('Account 2'), fixture.lines[1].account);
   await userEvent.type(within(dialog).getByLabelText('Debit 1'), amount);
@@ -159,30 +172,37 @@ describe('EntryDrawer, the base currency is a setting and not a synonym for CHF'
     expect(transport.asked).toContain('get_entry');
   });
 
-  it('COMPOSE: the balance totals carry the workspace base currency, never a defaulted CHF', async () => {
-    const { dialog } = await openCompose();
-    await typeBalanced(dialog, '1000.00');
-
-    // EUR 1'000.00 twice: the debit total and the credit total. The defect printed CHF for both, on
-    // a figure that will post into books kept in euros.
-    await waitFor(() => expect(within(dialog).getAllByText("EUR 1'000.00")).toHaveLength(2));
-    expect(within(dialog).queryByText("CHF 1'000.00")).toBeNull();
+  it('COMPOSE: the derived VAT caption is denominated in the workspace base currency, never a defaulted CHF', async () => {
+    // A taxed Buchungssatz: 1020 an 3200, gross 1'081.00 with UST81. The caption names the derived leg
+    // and the net, both base-currency figures, because the drawer posts with no currency of its own.
+    const { dialog } = await openCompose({
+      vat_codes: ok({ taxCodes: [{ code: 'UST81', kind: 'output', rateBp: 810, formLine: '303', label: 'Umsatzsteuer 8.1%', active: true }] }),
+    });
+    await pickAccount(await within(dialog).findByLabelText('Debit'), fixture.lines[0].account);
+    await pickAccount(within(dialog).getByLabelText('Credit'), fixture.lines[1].account);
+    await userEvent.type(within(dialog).getByLabelText('Amount'), '1081.00');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^VAT(,|$)/ }));
+    const option = (await screen.findAllByRole('option')).find((o) => o.querySelector('.combobox__code')?.textContent === 'UST81');
+    if (option === undefined) throw new Error('no UST81 option');
+    await userEvent.click(option);
+    const caption = await within(dialog).findByText(/of which VAT/);
+    expect(caption).toHaveTextContent("of which VAT EUR 81.00 to 2200 · net EUR 1'000.00");
+    expect(dialog.textContent ?? '').not.toMatch(/CHF/);
     expect(fixture.baseCurrency).toBe('EUR');
   });
 
-  it('COMPOSE: the unbalanced difference is denominated too, in the same base currency', async () => {
+  it('COMPOSE: the grid difference is denominated too, in the same base currency', async () => {
     const { dialog } = await openCompose();
+    await openGrid(dialog);
     await pickAccount(await within(dialog).findByLabelText('Account 1'), fixture.lines[0].account);
     await pickAccount(within(dialog).getByLabelText('Account 2'), fixture.lines[1].account);
     await userEvent.type(within(dialog).getByLabelText('Debit 1'), '1000.00');
     await userEvent.type(within(dialog).getByLabelText('Credit 2'), '860.00');
 
     // A bare "140.00" would be a number with no unit; "CHF 140.00" is a unit this book never uses.
-    await waitFor(() =>
-      expect(dialog.querySelector('.journal-drawer-unbalanced')).toHaveTextContent('Debits and credits differ by EUR 140.00.'),
-    );
-    expect(dialog.querySelector('.journal-drawer-unbalanced .t-money')).toHaveTextContent(/^EUR 140\.00$/);
-    expect(dialog.querySelector('.journal-drawer-unbalanced')).not.toHaveTextContent(/differ by CHF/);
+    await waitFor(() => expect(dialog.querySelector('.journal-balance--off')).toHaveTextContent('Difference EUR 140.00'));
+    expect(dialog.querySelector('.journal-balance--off .t-money')).toHaveTextContent(/^EUR 140\.00$/);
+    expect(dialog.querySelector('.journal-balance--off')).not.toHaveTextContent(/CHF/);
   });
 
   it('COMPOSE: the VAT reconciliation refusal names both figures in the base currency', async () => {
@@ -193,7 +213,8 @@ describe('EntryDrawer, the base currency is a setting and not a synonym for CHF'
       },
     });
     await typeBalanced(dialog, '1000.00');
-    await userEvent.click(await within(dialog).findByRole('button', { name: 'Post' }));
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Post' })).toBeEnabled());
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Post' }));
 
     // These two are the ORIGINAL defect's own numbers, 81.00 against 76.24, in the panel that
     // reports them. The drawer posts with no currency, so the engine books in the base currency and
@@ -272,7 +293,11 @@ describe('EntryDrawer, the base currency is a setting and not a synonym for CHF'
     const { dialog } = await openCompose({
       get_company_profile: { status: 500, body: { ok: false, error: 'internal' } },
     });
-    await typeBalanced(dialog, '1000.00');
-    await waitFor(() => expect(within(dialog).getAllByText("CHF 1'000.00")).toHaveLength(2));
+    await openGrid(dialog);
+    await pickAccount(await within(dialog).findByLabelText('Account 1'), fixture.lines[0].account);
+    await pickAccount(within(dialog).getByLabelText('Account 2'), fixture.lines[1].account);
+    await userEvent.type(within(dialog).getByLabelText('Debit 1'), '1000.00');
+    await userEvent.type(within(dialog).getByLabelText('Credit 2'), '860.00');
+    await waitFor(() => expect(dialog.querySelector('.journal-balance--off')).toHaveTextContent('Difference CHF 140.00'));
   });
 });

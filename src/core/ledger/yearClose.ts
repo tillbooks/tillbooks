@@ -9,13 +9,22 @@
  * `postEntry` with `source='close'`, which balances and seals the rows exactly like any other posting.
  * It is idempotent (§H-IDEMPOTENT): a retry with the same key replays; a re-close with a different key
  * returns `year_already_closed`, never a second carry.
+ *
+ * THE SUB-ENTRIES POST UNDER AN INTERNAL SCOPE AND ARE READ BACK BEFORE THE SEAL (critic R6-1). The
+ * sweep and the carry post under `${key}:pl` / `${key}:carry` in `close_year_internal`, a scope no
+ * public verb writes; in the public `post_entry` scope a caller could pre-claim `K:pl` with any
+ * entry and the close replayed it as its sweep, sealing a year whose P&L was never swept. And the
+ * close no longer takes the answer on trust: before it seals it reads both entries back (posted,
+ * `source='close'`, dated the year end, carrying exactly the lines this close asked for) and checks
+ * that every P&L account and 2979 now net to zero over the year. Any miss throws `YearCloseFailure`
+ * and the whole close rolls back: no entry, no seal, no burned key.
  */
 
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { baseCurrencyOf } from '../fx/rates.js';
-import { postEntry } from './postEntry.js';
+import { postEntryInternal, YEAR_CLOSE_POST_SCOPE } from './postEntry.js';
 import type { LineInput } from './postEntry.js';
 
 /** A closing post rejected: carried out of the idempotency transaction so the key never burns. */
@@ -33,6 +42,72 @@ function dayBefore(isoDate: string): string {
 interface PlRow {
   account_id: string;
   net: number;
+}
+
+/** A line as the books hold it, reduced to what a closing line is: account, base debit, base credit. */
+const lineKey = (account: string, debit: number, credit: number): string => `${account}|${debit}|${credit}`;
+
+/**
+ * Read a closing entry back and say why it is NOT the one this close posted, or null when it is
+ * (critic R6-1). It must exist in this workspace, be posted, carry `source='close'`, be dated the
+ * fiscal year end, and hold exactly the requested lines (as a multiset, in base Rappen). A replayed
+ * entry from anywhere else fails at least one of these.
+ */
+export function closingEntryMismatch(
+  ctx: WorkspaceContext,
+  entryId: string,
+  expected: { date: string; lines: readonly LineInput[] },
+): string | null {
+  const head = ctx.store.db
+    .prepare('SELECT status, source, date FROM journal_entry WHERE id = ? AND workspace_id = ?')
+    .get(entryId, ctx.workspaceId) as { status: string; source: string; date: string } | undefined;
+  if (head === undefined) return 'missing';
+  if (head.status !== 'posted') return 'not_posted';
+  if (head.source !== 'close') return 'not_close_source';
+  if (head.date !== expected.date) return 'wrong_date';
+  const held = (
+    ctx.store.db
+      .prepare('SELECT account_id, base_debit_minor AS d, base_credit_minor AS c FROM journal_line WHERE entry_id = ?')
+      .all(entryId) as { account_id: string; d: number; c: number }[]
+  )
+    .map((l) => lineKey(l.account_id, l.d, l.c))
+    .sort();
+  const asked = expected.lines.map((l) => lineKey(l.account, l.debit ?? 0, l.credit ?? 0)).sort();
+  if (held.length !== asked.length || held.some((k, i) => k !== asked[i])) return 'lines_differ';
+  return null;
+}
+
+/**
+ * The accounts the close left standing, read after it posted (critic R6-1): every income and expense
+ * account that does not net to zero over the fiscal year (every entry counted, the close's own
+ * included), and 2979 when its balance is not zero. 2979 is read over ALL posted entries, exactly
+ * as the carry reads it, because the carry zeroes the account's whole balance (a residual from an
+ * earlier year included), not only the year's movement. Empty is the only state a year may be
+ * sealed in.
+ */
+export function unsweptAfterClose(ctx: WorkspaceContext, start: string, end: string, a2979: string): string[] {
+  const pl = ctx.store.db
+    .prepare(
+      `SELECT a.number AS number
+         FROM journal_entry e
+         CROSS JOIN journal_line l INDEXED BY journal_line_entry ON l.entry_id = e.id
+         JOIN account a ON a.id = l.account_id
+        WHERE e.workspace_id = ? AND e.status = 'posted' AND e.date >= ? AND e.date <= ?
+          AND a.type IN ('income', 'expense')
+        GROUP BY l.account_id
+       HAVING SUM(l.base_debit_minor - l.base_credit_minor) != 0`,
+    )
+    .all(ctx.workspaceId, start, end) as { number: string }[];
+  const bal2979 = (
+    ctx.store.db
+      .prepare(
+        `SELECT COALESCE(SUM(l.base_debit_minor - l.base_credit_minor), 0) AS bal
+           FROM journal_line l JOIN journal_entry e ON e.id = l.entry_id
+          WHERE e.workspace_id = ? AND e.status = 'posted' AND l.account_id = ?`,
+      )
+      .get(ctx.workspaceId, a2979) as { bal: number }
+  ).bal;
+  return [...pl.map((r) => r.number), ...(bal2979 !== 0 ? ['2979'] : [])].sort();
 }
 
 export function hardCloseYear(
@@ -166,15 +241,24 @@ export function hardCloseYear(
     return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, 'close_year', () => {
       let closingEntryId: string | null = null;
       if (plLines.length > 0) {
-        const posted = postEntry(ctx, {
-          date: end,
-          source: 'close',
-          description: `Jahresabschluss ${year}: Erfolgsrechnung nach 2979`,
-          idempotencyKey: `${input.idempotencyKey}:pl`,
-          lines: plLines,
-        });
+        const posted = postEntryInternal(
+          ctx,
+          {
+            date: end,
+            source: 'close',
+            description: `Jahresabschluss ${year}: Erfolgsrechnung nach 2979`,
+            idempotencyKey: `${input.idempotencyKey}:pl`,
+            lines: plLines,
+          },
+          YEAR_CLOSE_POST_SCOPE,
+        );
         if (!posted.ok) throw new YearCloseFailure(posted);
         closingEntryId = posted.entryId;
+        // Read back: the entry the key answered with is THIS close's sweep, not a replay of anything else.
+        const mismatch = closingEntryMismatch(ctx, closingEntryId, { date: end, lines: plLines });
+        if (mismatch !== null) {
+          throw new YearCloseFailure(err('year_close_unverified', { year, entry: 'pl', entryId: closingEntryId, reason: mismatch }));
+        }
       }
 
       // Carry 2979's ACTUAL balance (debit − credit) to 2970, read after the P&L sweep, so 2979 always
@@ -198,15 +282,31 @@ export function hardCloseYear(
           carry > 0n
             ? [{ account: a2979, credit: Number(carry) }, { account: a2970, debit: Number(carry) }]
             : [{ account: a2979, debit: Number(-carry) }, { account: a2970, credit: Number(-carry) }];
-        const carried = postEntry(ctx, {
-          date: end,
-          source: 'close',
-          description: `Jahresabschluss ${year}: 2979 nach 2970`,
-          idempotencyKey: `${input.idempotencyKey}:carry`,
-          lines: carryLines,
-        });
+        const carried = postEntryInternal(
+          ctx,
+          {
+            date: end,
+            source: 'close',
+            description: `Jahresabschluss ${year}: 2979 nach 2970`,
+            idempotencyKey: `${input.idempotencyKey}:carry`,
+            lines: carryLines,
+          },
+          YEAR_CLOSE_POST_SCOPE,
+        );
         if (!carried.ok) throw new YearCloseFailure(carried);
         carryEntryId = carried.entryId;
+        const mismatch = closingEntryMismatch(ctx, carryEntryId, { date: end, lines: carryLines });
+        if (mismatch !== null) {
+          throw new YearCloseFailure(err('year_close_unverified', { year, entry: 'carry', entryId: carryEntryId, reason: mismatch }));
+        }
+      }
+
+      // Read back the outcome before the seal: every P&L account and 2979 net to zero over the year.
+      // A sweep that missed anything (or a carry that did not land) refuses here, rolling the whole
+      // close back, rather than sealing a year whose result was never carried.
+      const unswept = unsweptAfterClose(ctx, start, end, a2979);
+      if (unswept.length > 0) {
+        throw new YearCloseFailure(err('year_close_unverified', { year, entry: 'balances', accounts: unswept }));
       }
 
       // Seal the fiscal year. Posted AFTER the closing entries so their own source='close' postings are

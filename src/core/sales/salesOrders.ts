@@ -51,6 +51,8 @@ export interface SalesOrderRow {
   expected_on: string | null;
   notes: string | null;
   actor: string | null;
+  /** D164: the document-level Leistungsdatum carried from the quote; null when none was stated. */
+  supply_date?: string | null;
   created_at: string;
 }
 
@@ -69,6 +71,8 @@ export interface SoLineRow {
   backorder_qty: number;
   invoiced_qty: number;
   sort: number;
+  /** D164: the line's own stated Leistungsdatum, carried from the quote line. */
+  supply_date?: string | null;
   created_at: string;
 }
 
@@ -78,12 +82,16 @@ export interface SoLineInput {
   quantityMilli?: number;
   unitPriceMinor?: number;
   taxCode?: string | null;
+  /** D164: carried from a quote line (sales_order_from_quote); not part of the create verb's schema. */
+  supplyDate?: string | null;
 }
 
 export interface CreateSalesOrderInput {
   contactId?: string | null;
   lines?: SoLineInput[];
   currency?: string;
+  /** D164: carried from the quote's document-level date; not part of the create verb's schema. */
+  supplyDate?: string | null;
   quoteId?: string | null;
   expectedOn?: string | null;
   notes?: string | null;
@@ -267,6 +275,7 @@ function resolveLines(ctx: WorkspaceContext, lines: SoLineInput[], contactId: st
     quantityMilli: number;
     unitPriceMinor: number;
     taxCode: string | null;
+    supplyDate: string | null;
   }[] = [];
   for (const [index, line] of lines.entries()) {
     const position = index + 1;
@@ -310,6 +319,7 @@ function resolveLines(ctx: WorkspaceContext, lines: SoLineInput[], contactId: st
       quantityMilli,
       unitPriceMinor,
       taxCode: taxCode ?? null,
+      supplyDate: line.supplyDate ?? null,
     });
   }
   return ok({ lines: resolved });
@@ -335,7 +345,7 @@ export function createSalesOrder(ctx: WorkspaceContext, input: CreateSalesOrderI
   const resolvedLines = resolveLines(ctx, input.lines ?? [], contactId);
   if (!resolvedLines.ok) return resolvedLines;
   const lines = (resolvedLines as unknown as {
-    lines: { itemId: string | null; description: string | null; quantityMilli: number; unitPriceMinor: number; taxCode: string | null }[];
+    lines: { itemId: string | null; description: string | null; quantityMilli: number; unitPriceMinor: number; taxCode: string | null; supplyDate: string | null }[];
   }).lines;
 
   // §H-FX trace: snapshot the CHF/txn rate ONCE when foreign and a rate is on record. A missing rate
@@ -354,8 +364,8 @@ export function createSalesOrder(ctx: WorkspaceContext, input: CreateSalesOrderI
     ctx.store.db
       .prepare(
         `INSERT INTO sales_order
-           (id, workspace_id, number, contact_id, quote_id, status, currency, fx_rate, order_date, expected_on, notes, actor, created_at)
-         VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)`,
+           (id, workspace_id, number, contact_id, quote_id, status, currency, fx_rate, order_date, expected_on, notes, actor, supply_date, created_at)
+         VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -369,12 +379,13 @@ export function createSalesOrder(ctx: WorkspaceContext, input: CreateSalesOrderI
         input.expectedOn ?? null,
         input.notes ?? null,
         input.actor ?? ctx.actor,
+        input.supplyDate ?? null,
         at,
       );
     const insert = ctx.store.db.prepare(
       `INSERT INTO so_line
-         (id, workspace_id, sales_order_id, item_id, description, qty, unit_price_rappen, unit_price_base_rappen, fx_rate, tax_code, delivered_qty, backorder_qty, invoiced_qty, sort, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 0, 0, 0, ?, ?)`,
+         (id, workspace_id, sales_order_id, item_id, description, qty, unit_price_rappen, unit_price_base_rappen, fx_rate, tax_code, delivered_qty, backorder_qty, invoiced_qty, sort, supply_date, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 0, 0, 0, ?, ?, ?)`,
     );
     lines.forEach((line, index) => {
       insert.run(
@@ -388,6 +399,7 @@ export function createSalesOrder(ctx: WorkspaceContext, input: CreateSalesOrderI
         fxRate,
         line.taxCode,
         index + 1,
+        line.supplyDate,
         at,
       );
     });
@@ -427,8 +439,8 @@ export function salesOrderFromQuote(
   const quote = getDocument(ctx, { documentId: input.quoteId });
   if (!quote.ok) return quote;
   const q = quote as unknown as {
-    document: { type: string; status: string; contact_id?: string | null; contactId?: string | null; currency: string };
-    lines: { item_id?: string | null; itemId?: string | null; description: string | null; quantity_milli?: number; quantityMilli?: number; unit_price_minor?: number; unitPriceMinor?: number; tax_code?: string | null; taxCode?: string | null }[];
+    document: { type: string; status: string; contact_id?: string | null; contactId?: string | null; currency: string; supplyDate?: string | null };
+    lines: { item_id?: string | null; itemId?: string | null; description: string | null; quantity_milli?: number; quantityMilli?: number; unit_price_minor?: number; unitPriceMinor?: number; tax_code?: string | null; taxCode?: string | null; supplyDate?: string | null }[];
   };
   if (q.document.type !== 'quote') return err('not_a_quote', { quoteId: input.quoteId, type: q.document.type });
   if (q.document.status !== 'accepted') {
@@ -441,8 +453,17 @@ export function salesOrderFromQuote(
     quantityMilli: l.quantityMilli ?? l.quantity_milli ?? 1000,
     unitPriceMinor: l.unitPriceMinor ?? l.unit_price_minor ?? 0,
     taxCode: l.taxCode ?? l.tax_code ?? null,
+    // D164: a clone keeps the line's own Leistungsdatum ...
+    supplyDate: l.supplyDate ?? null,
   }));
-  const createInput: CreateSalesOrderInput = { contactId, lines, currency: q.document.currency, quoteId: input.quoteId };
+  // ... and the document-level one, so the invoice this order becomes posts at the quote's dates.
+  const createInput: CreateSalesOrderInput = {
+    contactId,
+    lines,
+    currency: q.document.currency,
+    quoteId: input.quoteId,
+    supplyDate: q.document.supplyDate ?? null,
+  };
   if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {
     createInput.idempotencyKey = input.idempotencyKey;
   }
@@ -594,11 +615,15 @@ export function salesOrderInvoice(
       quantityMilli: b.qty,
       unitPriceMinor: b.line.unit_price_rappen,
       taxCode: b.line.tax_code,
+      // D164: the order line's own Leistungsdatum travels onto the invoice line ...
+      supplyDate: b.line.supply_date ?? null,
     }));
     const created = createDocument(ctx, {
       type: 'invoice',
       contactId: order.contact_id,
       currency: order.currency,
+      // ... and the order's document-level one onto the invoice (lineSupplyDate prices at both).
+      supplyDate: order.supply_date ?? null,
       lines: invoiceLines,
       notes: `Auftrag ${order.number}`,
     });

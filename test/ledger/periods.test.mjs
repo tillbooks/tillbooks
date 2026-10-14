@@ -17,6 +17,7 @@ import {
   listPeriodLocks,
   assertPeriodOpen,
 } from '../../dist/core/ledger/index.js';
+import { lockPeriodSealed } from '../../dist/core/ledger/periods.js';
 import { setup, entry } from './a03-support.mjs';
 import { errOf, objs, obj } from '../support/narrow.mjs';
 
@@ -57,7 +58,7 @@ test('reopenMonth clears a soft lock and posting works again', () => {
 
 test('reopenMonth refuses a sealed hard lock (hard_lock_sealed)', () => {
   const { ctx } = setup();
-  lockPeriod(ctx, { period: '2026-06', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'l1' });
+  lockPeriodSealed(ctx, { period: '2026-06', reason: 'vat_filed', idempotencyKey: 'l1' });
   const reopened = reopenMonth(ctx, { period: '2026-06', idempotencyKey: 'o1' });
   assert.equal(reopened.ok, false);
   assert.equal(reopened.error, 'hard_lock_sealed');
@@ -65,8 +66,8 @@ test('reopenMonth refuses a sealed hard lock (hard_lock_sealed)', () => {
 
 test('lockPeriod is idempotent and blocks posting; listPeriodLocks shows it', () => {
   const { ctx, byNumber } = setup();
-  assert.equal(lockPeriod(ctx, { period: '2026-06', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'l1' }).ok, true);
-  assert.equal(lockPeriod(ctx, { period: '2026-06', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'l2' }).ok, true);
+  assert.equal(lockPeriodSealed(ctx, { period: '2026-06', reason: 'vat_filed', idempotencyKey: 'l1' }).ok, true);
+  assert.equal(lockPeriodSealed(ctx, { period: '2026-06', reason: 'vat_filed', idempotencyKey: 'l2' }).ok, true);
 
   const blocked = postEntry(ctx, entry(byNumber, { debitNo: '6500', creditNo: '1000', amount: 100, date: '2026-06-15', idempotencyKey: 'k1' }));
   const refusal = errOf(blocked, 'postEntry into a hard-locked month');
@@ -84,7 +85,7 @@ test('lockPeriod is idempotent and blocks posting; listPeriodLocks shows it', ()
 
 test('unlockPeriod refuses a filing/year seal but clears an unsealed manual hard lock', () => {
   const { ctx } = setup();
-  lockPeriod(ctx, { period: '2026-06', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'l1' });
+  lockPeriodSealed(ctx, { period: '2026-06', reason: 'vat_filed', idempotencyKey: 'l1' });
   assert.equal(unlockPeriod(ctx, { period: '2026-06', idempotencyKey: 'u1' }).error, 'hard_lock_sealed');
 
   lockPeriod(ctx, { period: '2026-08', kind: 'hard', idempotencyKey: 'l2' });
@@ -94,7 +95,7 @@ test('unlockPeriod refuses a filing/year seal but clears an unsealed manual hard
 
 test('a locked fiscal YEAR blocks a post dated anywhere in that year', () => {
   const { ctx, byNumber } = setup();
-  lockPeriod(ctx, { period: '2026', kind: 'hard', reason: 'year_close', idempotencyKey: 'l1' });
+  lockPeriodSealed(ctx, { period: '2026', reason: 'year_close', idempotencyKey: 'l1' });
   const blocked = postEntry(ctx, entry(byNumber, { debitNo: '6500', creditNo: '1000', amount: 100, date: '2026-03-15', idempotencyKey: 'k1' }));
   const refusal = errOf(blocked, 'postEntry into a locked fiscal year');
   assert.equal(refusal.error, 'period_locked');
@@ -104,7 +105,7 @@ test('a locked fiscal YEAR blocks a post dated anywhere in that year', () => {
 test('assertPeriodOpen resolves the fiscal year for a non-January fiscal_year_start', () => {
   const { ctx, store, workspaceId } = setup({ fiscalYearStart: '04-01' });
   // Fiscal year 2026 = 2026-04-01 .. 2027-03-31. A hard lock on '2026' must block 2027-02, not 2026-02.
-  lockPeriod(ctx, { period: '2026', kind: 'hard', reason: 'year_close', idempotencyKey: 'l1' });
+  lockPeriodSealed(ctx, { period: '2026', reason: 'year_close', idempotencyKey: 'l1' });
 
   const blockedNextCal = assertPeriodOpen({ store, workspaceId }, '2027-02-15');
   assert.equal(blockedNextCal.error, 'period_locked', '2027-02 is inside fiscal year 2026');

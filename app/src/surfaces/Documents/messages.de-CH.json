@@ -97,16 +97,27 @@
       "quantity": "Menge",
       "unitPrice": "Einzelpreis",
       "vat": "MWST",
+      "lineSupplyDate": "Leistungsdatum {date}",
+      "lineSupplyResetShort": "auf Datum setzen",
+      "lineSupplyReset": "Position {number} auf Datum setzen",
       "amount": "Betrag",
       "addLine": "Position hinzufügen",
       "removeLine": "Position {number} entfernen",
       "subtotal": "Zwischensumme",
       "total": "Total",
+      "totalPending": "wird berechnet",
+      "figures": "Beträge",
       "vatSummary": "MWST-Übersicht",
       "saveDraft": "Entwurf speichern",
       "saved": "Gespeichert",
-      "reasonNoCustomer": "Wähle zuerst einen Kunden.",
       "reasonNoLines": "Füge zuerst eine Position hinzu.",
+      "reasonNoDate": "Das Datum fehlt: setz das Datum der Leistung.",
+      "reasonZeroLine": "Position {number} hat noch keinen Betrag.",
+      "reasonVatPending": "Die MWST wird noch berechnet. Drück gleich noch einmal.",
+      "reasonNeedsSupplyDate": "Position {number} mit {code} braucht ein Leistungsdatum: setz das Datum auf den Tag der Leistung.",
+      "reasonVatRefused": "Für Position {number} lässt sich die MWST nicht berechnen.",
+      "typeAdopted": "Dieser Entwurf war schon als {type} gespeichert und bleibt es.",
+      "dayMoved": "Es ist jetzt der {date}: Datum und Beträge sind neu gerechnet, prüf sie und stell dann aus.",
       "reasonNeedsFxRate": "Für {currency} fehlt ein Kurs auf den {date}.",
       "reasonFxMethod": "Der Kurs für {currency} passt nicht zur Umrechnungsbasis der Steuerperiode {taxPeriod}.",
       "noContactsInline": "Noch keine Kunden. Lege den ersten gleich hier an:",
@@ -135,12 +146,14 @@
         "system": "System"
       },
       "issuedAndSentAck": "{number} ist ausgestellt und an {email} versendet.",
-      "issuedNotSentAck": "{number} ist ausgestellt, aber noch nicht an {email} versendet."
+      "issuedNotSentAck": "{number} ist ausgestellt, aber noch nicht an {email} versendet.",
+      "vatPosted": "MWST auf diesem Beleg: {tax}"
     },
     "issue": {
       "title": "Beleg ausstellen",
       "numberLine": "Eine Nummer wird vergeben.",
       "postingLine": "Eine Buchung über {total} wird erstellt.",
+      "postingLineUnpriced": "Eine Buchung wird erstellt, die Beträge rechnet TILL beim Ausstellen.",
       "immutabilityLine": "Ausgestellte Belege kannst du nicht mehr bearbeiten, nur stornieren.",
       "quoteLine": "Die Offerte wird ausgestellt und erhält eine Nummer.",
       "confirm": "Ausstellen",
@@ -157,26 +170,33 @@
     "terms": {
       "title": "Konditionen",
       "dueDate": "Zahlbar bis",
-      "paymentTerms": "Zahlungsfrist des Kunden",
-      "termsDays": "{days} Tage",
-      "applyTerms": "Frist übernehmen",
+      "infoLabel": "Mehr zu den Konditionen",
+      "fromTerms": "Bleibt das Feld leer, setzt TILL die Fälligkeit beim Ausstellen: Ausstellungsdatum plus die Zahlungsfrist von {name} ({days} Tage).",
+      "fromTermsImmediate": "{name} zahlt sofort: Bleibt das Feld leer, ist die Rechnung an ihrem Ausstellungsdatum fällig.",
+      "fromDefault": "Bleibt das Feld leer, setzt TILL die Fälligkeit beim Ausstellen: {name} hat keine eigene Zahlungsfrist, also gilt die Standardfrist von {days} Tagen.",
+      "fromNone": "Weder {name} noch der Arbeitsbereich hat eine Zahlungsfrist: Bleibt das Feld leer, ist die Rechnung an ihrem Ausstellungsdatum fällig.",
+      "derivedDays": "Ergibt sich beim Ausstellen: {days} Tage ab Rechnungsdatum.",
+      "derivedImmediate": "Ergibt sich beim Ausstellen: fällig am Rechnungsdatum.",
       "reference": "Zahlungsreferenz",
-      "referencePending": "Die Referenz wird beim Ausstellen aus der Rechnungsnummer gebildet."
+      "referencePending": "Die Zahlungsreferenz entsteht beim Ausstellen aus der Rechnungsnummer."
     },
     "qr": {
       "title": "QR-Zahlteil",
       "readiness": "QR-Bereitschaft",
+      "infoLabel": "Mehr zum QR-Zahlteil",
       "ready": "Alles bereit: Adresse, IBAN und Währung stimmen.",
       "pendingIssue": "Den QR-Zahlteil gibt es ab dem Ausstellen. Vorher wäre die Referenz erfunden.",
-      "missingAddress": "Die Kundenadresse ist unvollständig, es fehlt: {fields}.",
+      "missingAddress": "Für eine QR-Rechnung fehlt in der Kundenadresse noch: {fields}.",
       "fixAddress": "Adresse vervollständigen",
       "fixCreditorAddress": "Deine Adresse vervollständigen",
-      "needsIban": "Für diesen Arbeitsbereich ist keine IBAN hinterlegt. Ohne IBAN gibt es keinen QR-Zahlteil.",
+      "needsIban": "Für diesen Arbeitsbereich ist keine IBAN hinterlegt, darum gibt es keinen QR-Zahlteil.",
+      "needsCreditorAddress": "Deine eigene Adresse fehlt noch, darum gibt es keinen QR-Zahlteil.",
       "toSetup": "IBAN hinterlegen",
       "unsupportedCurrency": "In {currency} gibt es keinen QR-Zahlteil.",
       "qrIbanChfOnly": "Ab dem {date} trägt deine QR-IBAN nur noch CHF, also gibt es für {currency} keinen Zahlteil.",
       "field": {
         "street": "Strasse",
+        "houseNo": "Nr.",
         "zip": "PLZ",
         "city": "Ort",
         "country": "Land"
@@ -207,6 +227,7 @@
     },
     "currency": {
       "baseOption": "{currency} (Buchwährung)",
+      "infoLabel": "Mehr zur Währung",
       "other": "Andere Währung",
       "otherCode": "Währungscode",
       "otherHint": "Drei Buchstaben nach ISO 4217, zum Beispiel USD.",
@@ -214,8 +235,9 @@
         "qrr": "Der Zahlteil entsteht beim Ausstellen, mit einer QR-Referenz.",
         "scor": "Der Zahlteil entsteht beim Ausstellen, mit einer SCOR-Referenz.",
         "noIban": "Ohne hinterlegte IBAN gibt es in keiner Währung einen Zahlteil.",
-        "unsupported": "Den QR-Zahlteil gibt es nur in CHF und EUR. Eine Rechnung in {currency} kannst du stellen und verbuchen, sie bekommt einfach keinen Zahlteil.",
-        "chfOnly": "Ab dem {date} trägt eine QR-IBAN nur noch CHF. Eine Rechnung in {currency} mit diesem Datum bekommt darum keinen Zahlteil.",
+        "unsupported": "Den QR-Zahlteil gibt es nur in CHF und EUR.",
+        "unsupportedDetail": "Eine Rechnung in {currency} kannst du stellen und verbuchen, sie bekommt einfach keinen Zahlteil.",
+        "chfOnly": "Ab dem {date} trägt eine QR-IBAN nur noch CHF, darum bekommt eine Rechnung in {currency} mit diesem Datum keinen Zahlteil.",
         "chfOnlyRemedy": "Mit einer normalen IBAN gäbe es weiterhin einen Zahlteil, dann mit SCOR-Referenz. Das ist unsere Schlussfolgerung: zu einem Konto mit nur einer QR-IBAN sagt SIX nichts.",
         "chfOnlyValidity": "Rechnungen, die du vorher ausstellst, bleiben zahlbar. Die Fassung 2.3 gilt noch bis November 2027."
       }
@@ -291,7 +313,33 @@
       "vatLine": "Davon MWST {tax}.",
       "noQrLine": "Diese Rechnung bekommt keinen QR-Zahlteil:",
       "sendLine": "Anschliessend per E-Mail an {email} senden",
-      "confirmAndSend": "Ausstellen und senden"
+      "confirmAndSend": "Ausstellen und senden",
+      "dueBeforeIssue": "Zahlbar bis {due} liegt vor dem heutigen Ausstellungsdatum, die Rechnung ist also sofort überfällig."
+    },
+    "qrFix": {
+      "title": "Für den QR-Zahlteil fehlt noch etwas",
+      "lead": "Trag es hier ein, dann bekommt die Rechnung ihren QR-Zahlteil und lässt sich mit jeder Banking-App bezahlen. Lässt du die Felder leer, wird sie ohne Zahlteil ausgestellt.",
+      "creditorHeading": "Deine Adresse (Zahlungsempfänger)",
+      "ibanHeading": "Dein Konto",
+      "customerHeading": "Adresse von {name}",
+      "field": {
+        "name": "Name",
+        "street": "Strasse",
+        "number": "Nr.",
+        "zip": "PLZ",
+        "town": "Ort",
+        "country": "Land (z. B. CH)",
+        "iban": "IBAN oder QR-IBAN"
+      },
+      "incomplete": "Eine Adresse ist unvollständig. Fülle alle Felder aus oder leere den Block. Es wurde nichts gespeichert und nichts ausgestellt.",
+      "invalidIban": "Das ist keine gültige IBAN. Es wurde nichts gespeichert und nichts ausgestellt.",
+      "illegalCharacter": "Ein Zeichen ist im QR-Zahlteil nicht erlaubt. Es wurde nichts ausgestellt.",
+      "invalidCountry": "Das Land ist der zweistellige Ländercode, zum Beispiel CH. Es wurde nichts ausgestellt.",
+      "fieldTooLong": "Ein Feld ist länger, als der QR-Zahlteil erlaubt. Kürze es bitte. Es wurde nichts ausgestellt.",
+      "ibanNotChLi": "Der QR-Zahlteil braucht eine IBAN, die mit CH oder LI beginnt. Es wurde nichts ausgestellt.",
+      "saveFailed": "Das konnte nicht gespeichert werden. Es wurde nichts ausgestellt.",
+      "saveAndIssue": "Speichern und ausstellen",
+      "saveIssueAndSend": "Speichern, ausstellen und senden"
     },
     "error": {
       "needsQrIban": "Ohne hinterlegte IBAN gibt es keinen QR-Zahlteil. Die Rechnung selbst bleibt gültig.",
@@ -314,7 +362,8 @@
       "invalidQrBill": "Der QR-Zahlteil erfüllt die SIX-Vorgaben noch nicht.",
       "notAvailable": "Ein Entwurf hat noch keine Nummer und darum weder Referenz noch PDF.",
       "sendFailed": "Der Versand hat nicht geklappt. Die Rechnung bleibt ausgestellt, du kannst es also erneut versuchen.",
-      "notAnInvoice": "Dieser Beleg ist keine Rechnung."
+      "notAnInvoice": "Dieser Beleg ist keine Rechnung.",
+      "needsSupplyDate": "Position {number} mit {code} braucht ein Leistungsdatum. Setz das Datum auf den Tag der Leistung oder gib der Position ihr eigenes Leistungsdatum."
     }
   },
   "creditNote": {
@@ -336,7 +385,8 @@
     "listForInvoice": "Gutschriften zu dieser Rechnung",
     "issue": {
       "title": "Gutschrift ausstellen",
-      "postingLine": "Eine Buchung über {total} wird erstellt. Sie reduziert die Forderung an den Kunden."
+      "postingLine": "Eine Buchung über {total} wird erstellt. Sie reduziert die Forderung an den Kunden.",
+      "postingLineUnpriced": "Eine Buchung wird erstellt, die Beträge rechnet TILL beim Ausstellen. Sie reduziert die Forderung an den Kunden."
     },
     "linesDerived": "Die Positionen einer Gutschrift sind aus der Rechnung abgeleitet und lassen sich hier nicht bearbeiten.",
     "changeSelectionHint": "Um die Auswahl zu ändern, lösche diesen Entwurf und erstelle eine neue Gutschrift aus der Rechnung.",

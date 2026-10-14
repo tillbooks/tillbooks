@@ -35,6 +35,12 @@ import needsFxRate from './needs-fx-rate.fixture.json';
 import recordPayment from './record-payment.fixture.json';
 import listAccounts from './list-accounts.fixture.json';
 import previewRemainder from './preview-remainder.fixture.json';
+// The Bankkonten the Konto default is inferred from: the A19 fixture, pinned to the live engine by
+// `test/banking/studio-bank-accounts-fixture.test.mjs`. Both of its accounts book on acc_2 (1020).
+import listBankAccounts from '../BankAccounts/list-bank-accounts.fixture.json';
+// The books' base currency, which the Konto default needs (critic F2): the Setup recording, pinned to the
+// live engine by `test/setup/profile-fixture.test.mjs`.
+import companyProfile from '../Setup/company-profile.fixture.json';
 import type { BankAccountOption } from './model';
 
 type Canned = Record<string, RestResponse | ((input: Record<string, unknown>) => RestResponse)>;
@@ -101,6 +107,8 @@ const HAPPY: Canned = {
   record_payment: ok(recordPayment),
   list_accounts: ACCOUNTS,
   list_contacts: CONTACTS,
+  list_bank_accounts: ok(listBankAccounts),
+  get_company_profile: ok(companyProfile),
 };
 
 /**
@@ -392,36 +400,42 @@ describe('S2/S4/S5: the allocator, stacked money then candidates then preview', 
     renderPayments(HAPPY, transport);
     await screen.findByText('Muster AG');
     await userEvent.click(screen.getByRole('button', { name: 'Zahlung erfassen' }));
+    // D152: the list is only asked for once there is something to rank it by.
+    await userEvent.type(within(await screen.findByRole('dialog')).getByLabelText('Betrag'), '500');
     await transport.started('suggest_payment_matches');
     expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
   });
 
   it('EMPTY (a): no open items at all points at issuing an invoice', async () => {
-    await openAllocator({
+    const dialog = await openAllocator({
       ...HAPPY,
       suggest_payment_matches: ok({ ...(suggestMatches), candidates: [], openItemCount: 0 }),
     });
+    await userEvent.type(within(dialog).getByLabelText('Betrag'), '500');
     expect(await screen.findByText('Es gibt keine offenen Posten.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Rechnung ausstellen' })).toBeInTheDocument();
   });
 
   it('EMPTY (b): open items exist but none fits, which is a DIFFERENT state with a different way out', async () => {
-    await openAllocator({
+    const dialog = await openAllocator({
       ...HAPPY,
       suggest_payment_matches: ok({ ...(suggestMatches), candidates: [], openItemCount: 4 }),
     });
+    await userEvent.type(within(dialog).getByLabelText('Betrag'), '500');
     expect(await screen.findByText('Kein offener Posten passt zu dieser Zahlung.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Suche erweitern' })).toBeInTheDocument();
     expect(screen.queryByText('Es gibt keine offenen Posten.')).not.toBeInTheDocument();
   });
 
   it('counts open items and reference matches as TWO numbers, so a ranked list never reads as filtered', async () => {
-    await openAllocator();
+    const dialog = await openAllocator();
+    await userEvent.type(within(dialog).getByLabelText('Betrag'), '500');
     expect(await screen.findByText('0 von 2 offenen Posten')).toBeInTheDocument();
   });
 
   it('states the tier in words for a ranked row', async () => {
-    await openAllocator();
+    const dialog = await openAllocator();
+    await userEvent.type(within(dialog).getByLabelText('Betrag'), '500');
     expect(await screen.findByText('Betrag und Kunde stimmen')).toBeInTheDocument();
   });
 
@@ -430,8 +444,12 @@ describe('S2/S4/S5: the allocator, stacked money then candidates then preview', 
       ...suggestMatches,
       candidates: [{ ...suggestMatches.candidates[0], kind: null, reason: null }],
     };
-    await openAllocator({ ...HAPPY, suggest_payment_matches: ok(untiered) });
-    await screen.findByText('R-2026-0002');
+    const dialog = await openAllocator({ ...HAPPY, suggest_payment_matches: ok(untiered) });
+    await userEvent.type(within(dialog).getByLabelText('Betrag'), '500');
+    // An untiered row is not a suggestion (D152): it waits behind the one disclosure, field-less.
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Alle offenen Posten zeigen (1)' }));
+    const table = dialog.querySelector('.pay-cand-table') as HTMLElement;
+    expect(within(table).getByText('R-2026-0002')).toBeInTheDocument();
     // The vocabulary staying honest is its whole job: no tier means no word, not a softer word.
     expect(screen.queryByText('Betrag und Kunde stimmen')).not.toBeInTheDocument();
     expect(screen.queryByText(/Betrag ähnlich/)).not.toBeInTheDocument();
@@ -460,53 +478,44 @@ describe('S2/S4/S5: the allocator, stacked money then candidates then preview', 
     expect(within(legs).getByText('1020 Bankkonto')).toBeInTheDocument();
   });
 
-  it('BLOCKED: a blocker still renders the plan, disables the confirm, and says WHY', async () => {
+  it('BLOCKED: a blocker still renders the plan, takes the confirm away, and says WHY', async () => {
     await openAllocator({ ...HAPPY, preview_payment: ok(previewBlocked) });
     const dialog = await screen.findByRole('dialog');
     await userEvent.type(within(dialog).getByLabelText('Betrag'), '900');
 
-    const post = within(dialog).getByRole('button', { name: 'Zahlung buchen' });
-    await waitFor(() => expect(post).toBeDisabled());
-    // A disabled control without a visible reason is the logged defect class (D15/C3).
-    expect(within(dialog).getByRole('alert')).toBeInTheDocument();
+    // D152 rule 3: what unlocks it sits beside it, so the confirm is ABSENT rather than disabled, and
+    // the reason is on screen in its panel (D15/C3: never a held control without a visible reason).
+    await waitFor(() => expect(within(dialog).getByRole('alert')).toBeInTheDocument());
+    expect(within(dialog).queryByRole('button', { name: 'Zahlung buchen' })).not.toBeInTheDocument();
     // The plan is still on screen: that is what makes a blocker different from a rejection. Scoped to
     // the legs table by class, since the Werkbank renders three tables (see the disclosure test).
     const legs = dialog.querySelector('.pay-legs') as HTMLElement;
     expect(within(legs).getByText('1020 Bankkonto')).toBeInTheDocument();
   });
 
-  it('BLOCKED: the reason beside the confirm is INTERPOLATED, not a raw i18n token', async () => {
-    // The browser flow found this line printing "Periode {period} ist gesperrt." verbatim while the
-    // panel two elements above interpolated the same code correctly, because the inline reason
-    // called `t(key)` with no parameters. Every parameterised blocker code was affected.
+  it('BLOCKED: the reason is INTERPOLATED, not a raw i18n token', async () => {
+    // The browser flow once found a reason line printing "Periode {period} ist gesperrt." verbatim
+    // while the panel interpolated the same code correctly. Every parameterised blocker was affected.
     const dialog = await openAllocator({ ...HAPPY, preview_payment: ok(previewBlocked) });
     await userEvent.type(within(dialog).getByLabelText('Betrag'), '900');
-    await waitFor(() =>
-      expect(within(dialog).getByRole('button', { name: 'Zahlung buchen' })).toBeDisabled(),
-    );
 
     // preview-blocked.fixture.json carries the live `allocation_exceeds_open`, which takes three
     // parameters: the document number and both figures.
-    const reason = dialog.querySelector('.pay-blocked-reason');
-    expect(reason).not.toBeNull();
-    expect(reason).toHaveTextContent('R-2026-0003 ist nur noch mit CHF 250.00 offen, du weist CHF 900.00 zu.');
+    const sentence = 'R-2026-0003 ist nur noch mit CHF 250.00 offen, du weist CHF 900.00 zu.';
+    await waitFor(() => expect(dialog.querySelector('.pay-error-message')).toHaveTextContent(sentence));
     // The i18n layer leaves an unfilled token visible on purpose, so this is the defect's signature.
-    expect(reason?.textContent).not.toContain('{');
+    expect(dialog.querySelector('.pay-error-message')?.textContent).not.toContain('{');
   });
 
-  it('BLOCKED: the inline reason and the error panel are the SAME sentence, from one path', async () => {
-    // The invariant behind the fix. Two interpolation paths for one code is the bug; asserting the
-    // two renderings agree is what stops a second one being written back in.
+  it('BLOCKED: the reason is said ONCE, by the panel, not again beside an absent confirm', async () => {
+    // Two renderings of one code were two interpolation paths, which is how the raw-token defect got
+    // in. With the confirm absent (D152) the panel is the one rendering: no second line repeats it.
     const dialog = await openAllocator({ ...HAPPY, preview_payment: ok(previewBlocked) });
     await userEvent.type(within(dialog).getByLabelText('Betrag'), '900');
-    await waitFor(() =>
-      expect(within(dialog).getByRole('button', { name: 'Zahlung buchen' })).toBeDisabled(),
-    );
+    await waitFor(() => expect(dialog.querySelector('.pay-error-message')).not.toBeNull());
 
-    const panel = dialog.querySelector('.pay-error-message');
-    const reason = dialog.querySelector('.pay-blocked-reason');
-    expect(panel?.textContent).toBeTruthy();
-    expect(reason?.textContent).toBe(panel?.textContent);
+    expect(within(dialog).getAllByText(/ist nur noch mit CHF 250.00 offen/)).toHaveLength(1);
+    expect(dialog.querySelector('.pay-blocked-reason')).toBeNull();
   });
 
   it('REFUSED: needs_fx_rate is a rate to record, offered as a recoverable state', async () => {
@@ -525,15 +534,10 @@ describe('S2/S4/S5: the allocator, stacked money then candidates then preview', 
     // Not a dead end: it explains and offers the way out.
     expect(within(dialog).getByText(/Ohne Kurs wird nichts umgerechnet/)).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Kurs hinterlegen' })).toBeInTheDocument();
-    await waitFor(() =>
-      expect(within(dialog).getByRole('button', { name: 'Zahlung buchen' })).toBeDisabled(),
-    );
-
-    // The REFUSAL branch of the same line. It was the other half of the raw-token defect: a whole
-    // rejection reached the inline reason with no parameters either.
-    const reason = dialog.querySelector('.pay-blocked-reason');
-    expect(reason).toHaveTextContent('Für EUR/CHF fehlt der Kurs vom 20.07.2026.');
-    expect(reason?.textContent).not.toContain('{');
+    // Nothing can post on a refused plan, so the confirm is absent and the panel is the one reason.
+    expect(within(dialog).queryByRole('button', { name: 'Zahlung buchen' })).not.toBeInTheDocument();
+    expect(dialog.querySelector('.pay-error-message')?.textContent).not.toContain('{');
+    expect(dialog.querySelector('.pay-blocked-reason')).toBeNull();
   });
 
   it('S9: names every account by NUMBER and NAME, and offers only the bank-and-cash range', async () => {
@@ -546,6 +550,9 @@ describe('S2/S4/S5: the allocator, stacked money then candidates then preview', 
     // test about a picker nobody has rendered yet.
     const dialog = await settleAllocator(await screen.findByRole('dialog'));
     const picker = within(dialog).getByLabelText('Konto');
+    // The default is the Bankkonto's ledger account (both fixture Bankkonten book on 1020), never
+    // 1000 Kassenbestand just because the chart lists it first.
+    await waitFor(() => expect(picker).toHaveTextContent('1020 Bankkonto'));
     await userEvent.click(picker);
     const options = screen.getAllByRole('option').map((option) => (option.textContent ?? '').replace('✓', '').trim());
 
@@ -607,26 +614,21 @@ describe('S2/S4/S5: the allocator, stacked money then candidates then preview', 
     expect(posts[0].onAccountMinor).toBe(108100);
   });
 
-  it('P12b: a Guthaben needs an owner, so the chip is held with the reason beside it', async () => {
+  it('P12b: a Guthaben needs an owner, so the chip is ABSENT until the Gegenpartei is picked', async () => {
     await openAllocator({ ...HAPPY, preview_payment: ok(previewRemainder) });
     const dialog = await screen.findByRole('dialog');
     await userEvent.type(within(dialog).getByLabelText('Betrag'), '1081');
+    await within(dialog).findByText(/Noch zuzuweisen/);
 
-    // No counterparty picked: the control is disabled BEFORE the click, and says why (D15/C3).
-    const park = await within(dialog).findByRole('button', { name: 'Als Guthaben parken' });
-    expect(park).toBeDisabled();
-    expect(
-      within(dialog).getByText('Ein Guthaben braucht einen Kunden. Wähl zuerst, von wem das Geld kommt.'),
-    ).toBeInTheDocument();
+    // D152 rule 3: the Gegenpartei that unlocks it sits right beside it, so no greyed chip and no
+    // second copy of the reason (the engine's needs_counterparty blocker says it in its panel).
+    expect(within(dialog).queryByRole('button', { name: 'Als Guthaben parken' })).not.toBeInTheDocument();
 
-    // Picking the owner releases it, and the reason goes away with the cause. The option is
-    // awaited first: the Gegenpartei list arrives with the async `list_contacts` read.
+    // Picking the owner brings it, enabled. The option is awaited first: the Gegenpartei list
+    // arrives with the async `list_contacts` read.
     await userEvent.click(within(dialog).getByLabelText('Gegenpartei'));
     await userEvent.click(await screen.findByRole('option', { name: 'Beispiel GmbH' }));
-    await waitFor(() =>
-      expect(within(dialog).getByRole('button', { name: 'Als Guthaben parken' })).toBeEnabled(),
-    );
-    expect(within(dialog).queryByText(/Ein Guthaben braucht einen Kunden/)).not.toBeInTheDocument();
+    expect(await within(dialog).findByRole('button', { name: 'Als Guthaben parken' })).toBeEnabled();
   });
 
   it('S9 EMPTY: no bank account replaces the picker with a banner-CTA, not an empty select', async () => {

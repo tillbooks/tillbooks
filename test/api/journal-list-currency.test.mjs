@@ -37,6 +37,10 @@ function world() {
   // transports; grant post -> auto so the fixture posts rather than drafts (the D103 ceremony).
   const dial = call({ ...deps, actor: 'studio' }, 'set_agent_dial', { workspaceId, capability: 'post', level: 'auto', idempotencyKey: 'dial-post' });
   assert.ok(dial.ok, JSON.stringify(dial));
+  // D161: recording a rate is governed under customize (the rate table the books convert with), so the
+  // fixture grants that too; ungranted, the agent's rate is a Vorschlag and the posting has no rate.
+  const rateDial = call({ ...deps, actor: 'studio' }, 'set_agent_dial', { workspaceId, capability: 'customize', level: 'auto', idempotencyKey: 'dial-customize' });
+  assert.ok(rateDial.ok, JSON.stringify(rateDial));
 
   const rate = call(deps, 'record_exchange_rate', {
     workspaceId,
@@ -49,6 +53,7 @@ function world() {
     idempotencyKey: 'fx-eur',
   });
   assert.ok(rate.ok, JSON.stringify(rate));
+  assert.equal(rate.drafted, undefined, 'customize granted: the rate is recorded, not proposed');
 
   const posted = call(deps, 'post_entry', {
     workspaceId,

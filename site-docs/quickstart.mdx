@@ -1,44 +1,97 @@
 ---
 title: "Quickstart"
-description: "Install TILL from npm and connect it to your agent."
+description: "Install TILL from npm, open the Studio in your browser, and connect your agent."
 ---
 
 <Note>
-  TILL is pre-alpha. It installs and runs, but do not keep real books on it yet.
+  TILL is in public beta. If you move real books in, keep your old system running until the figures
+  match, and read [what the beta does not do yet](/introduction#what-the-beta-does-not-do-yet).
 </Note>
+
+{/* TODO(publish): these steps are true once tillbooks@1.0.0-beta.1 is on npm with the Studio
+    vendored into the package (launch plan P0.1), published with `npm publish --tag beta` (latest
+    stays 0.1.0; deprecate 0.1.0 so a bare install points at the beta). The 0.1.0 on npm today has no Studio, and its
+    `till up` answers "The Studio is not built into this install". */}
+
+## What you need
+
+Node.js 22 or newer, on macOS or Linux. `node --version` tells you which one you have. If you have
+none, install the LTS release from [nodejs.org](https://nodejs.org).
 
 ## Install
 
-TILL is on npm as `tillbooks`. Installing it globally puts the `till` command on your path:
-
 ```bash
-npm install -g tillbooks
+npm install -g tillbooks@beta
 ```
 
-## Check it runs
+Keep the `@beta`: until the beta ends, a plain `tillbooks` on npm is the old 0.1.0, which has no
+Studio. This puts the `till` command on your path. `till help` lists what it can do.
+
+## Start the Studio
 
 ```bash
-till help
+till up
 ```
 
-prints the command list. `till up` starts the Studio, the human oversight GUI. The ledger is created
-at `~/.till/till.db`; set `TILL_DB_PATH` to put it somewhere else.
+`till up` starts the Studio at `http://127.0.0.1:8788` and opens it in your browser. It listens on
+your own machine only. Leave the terminal open while you work; `Ctrl+C` stops TILL. If you run
+`till up` a second time, it opens the browser at the one already running.
+
+The first screen offers three ways to start:
+
+- **Create a new ledger.** Enter your company name, and TILL sets up the books with the Kontenrahmen
+  KMU.
+- **Restore a backup** from a `.tillbackup` file. It goes into a new workspace, so nothing you have
+  is overwritten.
+- **Adopt an existing database.** This imports nothing: it shows you how to restart TILL on an
+  existing TILL database file (`TILL_DB_PATH=<path> till up`).
+
+Beneath the three sits a quieter line: **Try the demo** sets up a demo workspace with sample
+postings, which you can delete later.
+
+Your books go to `~/.till/till.db`. Set `TILL_DB_PATH` to keep them somewhere else, and `TILL_PORT`
+to use another port.
+
+## Moving from bexio or another system
+
+Open **Data migration** in the Studio. You can load your exports (bexio's CSV and Excel files, for
+example) into a Testmandant first: a trial company where you check them before they become your real
+books. Before you switch, the parallel run compares TILL's trial balance, MWST figures and open items
+with the figures you enter from your old system, to the Rappen. Keep the old system running until
+they match.
+
+Fixed assets, stock and payroll history do not come over, and last year's journal lands in a
+read-only archive beside the live books.
+
+## Back up
+
+A backup runs when you start it: **Data & Backup**, then **Back up now**. Copy the `.tillbackup`
+file somewhere other than the computer the books are on, and take one before every upgrade.
 
 ## Connect an agent
 
-TILL speaks MCP over stdio. Point your MCP client at `till mcp`, or let `npx` fetch the package for
-you. No API key is needed:
+TILL speaks MCP over stdio. Point your MCP client (Claude Desktop, Cursor and others) at `till mcp`,
+or let `npx` fetch the package for you. No account and no API key are needed:
 
 ```json
 {
   "mcpServers": {
     "tillbooks": {
       "command": "npx",
-      "args": ["-y", "tillbooks", "mcp"]
+      "args": ["-y", "tillbooks@beta", "mcp"]
     }
   }
 }
 ```
+
+The agent and the Studio work on the same file, so what the agent does shows up in the Studio. By
+default, the agent waits for your OK before it books anything, moves your money, grants access or
+deletes your data for good. See [the agent interface](/mcp/overview).
+
+The dial covers agents that connect to TILL. An agent that can drive your browser or run commands on
+your computer can act as you: give your agent TILL, not your browser or your shell. This matters
+for agents that can also run commands, such as Claude Code: what they do through TILL follows the
+dial, and what they do in your shell or your browser does not.
 
 ## From source
 
@@ -47,11 +100,11 @@ To work on TILL itself, build it from a checkout:
 ```bash
 git clone https://github.com/tillbooks/tillbooks.git
 cd tillbooks
-npm install
-npm run build
-node bin/till.mjs help
+npm run setup            # installs the core and the Studio dependencies
+npm run build:all        # builds the core into dist/ and the Studio into app/dist/
+node bin/till.mjs up
 ```
 
-See [the agent interface](/mcp/overview) for the verbs it exposes, and
+See [the agent interface](/mcp/overview) for what an agent can do, and
 [run TILL inside an agent](/mcp/run-inside-agent) if you would rather not run it on a machine of your
 own.

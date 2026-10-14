@@ -77,11 +77,12 @@ import {
 // side and never reads the journal; the join below labels the column and sums NOTHING across the
 // wall. The two static walls are asserted in test/migration/archive-walls.test.mjs.
 import { archiveComparative, type ArchiveComparativeAccount } from '../core/migration/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ReportActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,

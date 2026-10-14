@@ -26,11 +26,12 @@ import {
   runtimeCatalog,
   selectRuntimeModel,
 } from '../core/voice/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface VoiceActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -53,7 +54,7 @@ export function voiceActions(h: VoiceActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'voice_build',
-      'write',
+      'write:correctable:derived',
       'Lerne den Schreibstil aus gesendeten Nachrichten: reads the outbound corpus of one E04 mail account (plus optional E00 documents by id), distils a readable style card, and embeds every exemplar through the LOCAL OP6 runtime, storing locators, vectors and hashes and NEVER an excerpt (Art. 321 index-never-copy). Fewer than 20 sent messages answers corpus_too_small with the honest have/need counts; no installed runtime answers needs_local_runtime, never a cloud fallback; no chosen model answers needs_model_selection. Re-running with a new key rebuilds and supersedes by row, the previous profile retained.',
       ctxSchema({ accountId: STR, documentIds: STR_ARRAY, name: STR, idempotencyKey: STR }, ['accountId']),
       (ctx, input) => buildVoiceProfile(ctx, as(input)),
@@ -95,7 +96,7 @@ export function voiceActions(h: VoiceActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'runtime_select',
-      'write',
+      'write:reversible:internal',
       'Wähle das Modell der lokalen Entwurfs-Engine: persists the choice of the workspace from the shipped catalog (source=catalog, validated against the manifest AND the RAM floor of the machine IN THE VERB, so an agent cannot select a model the machine cannot run: unknown_model_ref retains the old selection, insufficient_ram names the have/need GB) or a local .gguf path behind Erweitert (source=byo, unsupported, no quality claim). Reversible and visible in runtime_status.',
       ctxSchema({ modelRef: STR, source: STR, ggufPath: STR, idempotencyKey: STR }, ['source']),
       (ctx, input) => selectRuntimeModel(ctx, as(input)),

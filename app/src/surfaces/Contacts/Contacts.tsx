@@ -29,7 +29,7 @@
  * is genuinely CRM-specific: the kind/role glyph cells, the segment/filter chips, the merge bulk bar,
  * the drawer tab strip, the timeline, the portal panels, the merge diff and the import review.
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
@@ -112,6 +112,14 @@ export function Contacts() {
   // trusted over it. A failed profile read leaves it standing rather than blocking the list: the
   // contacts are the surface's job, and the engine still owns what a write records.
   const [baseCurrency, setBaseCurrency] = useState('CHF');
+  /**
+   * D163: the workspace default Zahlungsfrist the editor's empty terms field stands for ("Standard
+   * (30 Tage)"). `undefined` while it is not known: before the first read, after a failed read, and
+   * from the moment the workspace changes, so one workspace's Standard is never shown in another.
+   */
+  const [workspaceTermsDays, setWorkspaceTermsDays] = useState<number | null | undefined>(undefined);
+  /** The newest load: an answer to an older one (another workspace, an older filter) is dropped. */
+  const loadSeq = useRef(0);
   const [loading, setLoading] = useState(true);
   // K-34: the table's own skeleton, never before 200ms and never for less than 300ms once shown.
   const showSkeleton = useSkeletonHold(loading);
@@ -135,6 +143,7 @@ export function Contacts() {
   const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     if (workspaceId === null) {
       setLoading(false);
       return;
@@ -155,6 +164,8 @@ export function Contacts() {
       }),
       client.call('get_company_profile', { workspaceId }),
     ]);
+    // A newer load (a workspace switch, a filter change) overtook this one: its answer speaks nowhere.
+    if (seq !== loadSeq.current) return;
 
     if (isErr(resp.body)) {
       if (resp.body.error === 'permission_denied' || resp.status === 403) {
@@ -172,9 +183,15 @@ export function Contacts() {
     // have shipped from a key the engine never sent), so the value is taken one level down and only
     // when it is a real code.
     if (!isErr(profileResp.body)) {
-      const profile = profileResp.body.profile as { baseCurrency?: string | null } | undefined;
+      const profile = profileResp.body.profile as
+        | { baseCurrency?: string | null; defaultPaymentTermsDays?: number | null }
+        | undefined;
       const base = profile?.baseCurrency ?? null;
       if (base !== null && base !== '') setBaseCurrency(base);
+      const terms = profile?.defaultPaymentTermsDays;
+      setWorkspaceTermsDays(typeof terms === 'number' && Number.isSafeInteger(terms) && terms >= 0 ? terms : null);
+    } else {
+      setWorkspaceTermsDays(undefined);
     }
     setLoading(false);
   }, [client, workspaceId, showArchived, roleFilter, kindFilter, segmentFilter]);
@@ -182,6 +199,16 @@ export function Contacts() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A workspace switch does not remount this surface, so everything that belongs to the OLD workspace
+  // goes here: an open editor or drawer (its Standard-Zahlungsfrist and its contact are the old
+  // workspace's), the merge selection, and the known Standard itself until the new read answers.
+  useEffect(() => {
+    setEditor(null);
+    setDetail(null);
+    setSelected([]);
+    setWorkspaceTermsDays(undefined);
+  }, [workspaceId]);
 
   const filtered = useMemo(
     () => contacts.filter((contact) => matchesSearch(contact, search)),
@@ -531,6 +558,7 @@ export function Contacts() {
           contact={editor.mode === 'edit' ? editor.contact : undefined}
           contacts={contacts}
           baseCurrency={baseCurrency}
+          workspaceTermsDays={workspaceTermsDays}
           onClose={() => setEditor(null)}
           onSaved={() => void load()}
         />

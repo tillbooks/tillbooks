@@ -4,8 +4,10 @@ description: "One docker compose up: a TILL instance at your own URL, passkey lo
 ---
 
 <Warning>
-  TILL is pre-alpha. Do not run your business on it. This page exists so you can run a real
-  instance and find out what breaks before anyone's books depend on it.
+  TILL is in public beta, and a served instance is its least-travelled path. We have proven this
+  recipe end to end against a local image, but we keep our own books on a local install, not on a
+  served one. Run a served instance beside your current system until the figures match, and read
+  [the threat model](/self-hosting/threat-model) before you put it on the internet.
 </Warning>
 
 One host, one compose stack, one SQLite file on one volume, replicated to a bucket every second.

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { act, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { I18nProvider } from '../../i18n';
-import { WorkspaceProvider } from '../../app/workspace';
+import { WorkspaceProvider, useWorkspace } from '../../app/workspace';
 import { CapabilitiesContext, type Capabilities } from '../../lib/capabilities';
 import DocumentsSurface from './index';
 import getFixture from './get-document.fixture.json';
@@ -79,18 +79,289 @@ const base = (): Canned => ({
   vat_preview: ok({ ok: true, kind: 'output', netMinor: 15000, taxMinor: 1215, grossMinor: 16215, rateBp: 810, deductible: false, formLine: '303', trace: { taxCode: 'UST81', taxBaseMinor: 15000, taxAmountMinor: 1215 } }),
 });
 
-describe('DocumentEditor, precondition gating (D15/C3)', () => {
-  it('disables Ausstellen with an inline reason naming the missing customer, then the missing lines', async () => {
+describe('DocumentEditor, D152 rule 3: no Ausstellen beside the control that unlocks it', () => {
+  it('at rest there is no Ausstellen and no sentence about it; the customer brings the button, enabled', async () => {
     renderNew(base());
-    const issue = await screen.findByRole('button', { name: 'Ausstellen' });
-    expect(issue).toBeDisabled();
-    expect(screen.getByText('Wähle zuerst einen Kunden.')).toBeInTheDocument();
+    await screen.findByLabelText('Kunde');
+    expect(screen.queryByRole('button', { name: 'Ausstellen' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Wähle zuerst einen Kunden.')).not.toBeInTheDocument();
+    // Nothing on the page is a disabled button waiting for the customer.
+    expect(screen.queryAllByRole('button').filter((b) => (b as HTMLButtonElement).disabled)).toEqual([]);
 
-    // Pick a customer: the reason advances to the missing positions, still disabled.
+    await userEvent.click(screen.getByLabelText('Kunde'));
+    await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));
+    expect(screen.getByRole('button', { name: 'Ausstellen' })).toBeEnabled();
+    // Clearing the customer takes the button away again.
+    await userEvent.click(screen.getByLabelText('Kunde'));
+    await userEvent.click(screen.getByRole('option', { name: 'Kunde wählen' }));
+    expect(screen.queryByRole('button', { name: 'Ausstellen' })).not.toBeInTheDocument();
+  });
+
+  it('a press the engine would refuse names the gap in ONE line at the moment of the act, and saves nothing', async () => {
+    const createSpy = vi.fn<CannedHandler>(() => ok({ document: { id: 'doc_new', type: 'invoice', status: 'draft' } }));
+    renderNew({ ...base(), create_document: createSpy });
     await userEvent.click(await screen.findByLabelText('Kunde'));
     await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));
-    expect(screen.getByText('Füge zuerst eine Position hinzu.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ausstellen' })).toBeDisabled();
+    const issue = screen.getByRole('button', { name: 'Ausstellen' });
+    // Before the press, no reason is on screen.
+    expect(screen.queryByText('Füge zuerst eine Position hinzu.')).not.toBeInTheDocument();
+
+    // No positions: the engine answers needs_lines.
+    await userEvent.click(issue);
+    const reason = await screen.findByRole('alert');
+    expect(reason).toHaveTextContent('Füge zuerst eine Position hinzu.');
+    expect(issue).toHaveAccessibleDescription('Füge zuerst eine Position hinzu.');
+    expect(createSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    // A position with a text but no amount: the engine answers invalid_line (a zero line cannot
+    // post), so the press names the position instead.
+    await userEvent.type(screen.getByLabelText('Bezeichnung 1'), 'Beratung');
+    await userEvent.click(issue);
+    expect(await screen.findByText('Position 1 hat noch keinen Betrag.')).toBeInTheDocument();
+    expect(createSpy).not.toHaveBeenCalled();
+
+    // The amount clears the gap: the line goes, and the next press saves and opens the confirm.
+    await userEvent.type(screen.getByLabelText('Einzelpreis 1'), '150');
+    expect(screen.queryByText('Position 1 hat noch keinen Betrag.')).not.toBeInTheDocument();
+    await userEvent.click(issue);
+    await waitFor(() => expect(createSpy).toHaveBeenCalledOnce());
+    expect(await screen.findByRole('alertdialog', { name: 'Rechnung ausstellen' })).toBeInTheDocument();
+  });
+
+  it('a quote with a priceless position is not refused for it: only an invoice posts', async () => {
+    const createSpy = vi.fn<CannedHandler>(() => ok({ document: { id: 'doc_q', type: 'quote', status: 'draft' } }));
+    renderNew({ ...base(), create_document: createSpy }, '/documents/new?type=quote');
+    await userEvent.click(await screen.findByLabelText('Kunde'));
+    await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));
+    await userEvent.type(screen.getByLabelText('Bezeichnung 1'), 'Option A');
+    await userEvent.click(screen.getByRole('button', { name: 'Ausstellen' }));
+    await waitFor(() => expect(createSpy).toHaveBeenCalledOnce());
+    expect(screen.queryByText(/hat noch keinen Betrag/)).not.toBeInTheDocument();
+  });
+});
+
+describe('DocumentEditor, D152 rule 2 and the MWST summary', () => {
+  /** A transport whose vat_preview answers only when the test releases it. */
+  function heldPreview(canned: Canned) {
+    const waiting: (() => void)[] = [];
+    const transport: Transport = async (action, input) => {
+      if (action === 'vat_preview') {
+        await new Promise<void>((resolve) => waiting.push(resolve));
+      }
+      const entry = canned[action];
+      if (entry === undefined) return { status: 404, body: { ok: false, error: 'unknown_action' } };
+      return typeof entry === 'function' ? entry(input) : entry;
+    };
+    return { transport, release: () => waiting.splice(0).forEach((resolve) => resolve()) };
+  }
+
+  function renderWith(transport: Transport) {
+    return render(
+      <TillClientProvider client={new TillClient(transport)}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_test">
+            <MemoryRouter initialEntries={['/documents/new']}>
+              <Routes>
+                <Route path="/documents/*" element={<DocumentsSurface />} />
+              </Routes>
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+  }
+
+  it('at rest there is no MWST summary and no QR readiness: no customer, no amount', async () => {
+    renderNew({ ...base(), list_documents: ok({ documents: [] }) });
+    // The line already carries the workspace default code (UST81), exactly the audited screen.
+    await waitFor(() => expect(screen.getByLabelText('MWST 1')).toHaveTextContent(/· UST81$/));
+    expect(screen.queryByTestId('vat-summary-empty')).not.toBeInTheDocument();
+    expect(screen.queryByText('Keine MWST auf diesem Beleg')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('MWST-Übersicht')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('QR-Bereitschaft')).not.toBeInTheDocument();
+    // An amount without a customer is still not enough.
+    await userEvent.type(screen.getByLabelText('Einzelpreis 1'), '150');
+    expect(screen.queryByLabelText('MWST-Übersicht')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('QR-Bereitschaft')).not.toBeInTheDocument();
+  });
+
+  it('never says "Keine MWST" about a line that carries a code while its preview has not answered', async () => {
+    const { transport, release } = heldPreview({ ...base(), list_documents: ok({ documents: [] }) });
+    renderWith(transport);
+    await userEvent.click(await screen.findByLabelText('Kunde'));
+    await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));
+    await waitFor(() => expect(screen.getByLabelText('MWST 1')).toHaveTextContent(/· UST81$/));
+    await userEvent.type(screen.getByLabelText('Einzelpreis 1'), '150');
+    // Customer and amount are there, the preview is in flight: neither a summary nor a false empty.
+    expect(screen.queryByText('Keine MWST auf diesem Beleg')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('MWST-Übersicht')).not.toBeInTheDocument();
+
+    release();
+    // The figure is the engine's answer (vat_preview, the computeLineTax the posting runs).
+    const summary = await screen.findByLabelText('MWST-Übersicht');
+    expect(within(summary).getAllByText('CHF 12.15').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Keine MWST auf diesem Beleg')).not.toBeInTheDocument();
+  });
+
+  it('an amount changed while its new preview is out hides the summary and the Total: no stale tax (critic F5)', async () => {
+    let hold = false;
+    const held: (() => void)[] = [];
+    const transport: Transport = async (action, input) => {
+      if (action === 'vat_preview') {
+        if (hold) await new Promise<void>((resolve) => held.push(resolve));
+        const net = Number(input.amountMinor);
+        const tax = Math.round((net * 810) / 10000);
+        return ok({ kind: 'output', netMinor: net, taxMinor: tax, grossMinor: net + tax, rateBp: 810, deductible: false, formLine: '303', trace: { taxCode: 'UST81', taxBaseMinor: net, taxAmountMinor: tax } });
+      }
+      const entry = ({ ...base(), list_documents: ok({ documents: [] }) } as Canned)[action];
+      if (entry === undefined) return { status: 404, body: { ok: false, error: 'unknown_action' } };
+      return typeof entry === 'function' ? entry(input) : entry;
+    };
+    renderWith(transport);
+    await userEvent.click(await screen.findByLabelText('Kunde'));
+    await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));
+    await waitFor(() => expect(screen.getByLabelText('MWST 1')).toHaveTextContent(/· UST81$/));
+    await userEvent.type(screen.getByLabelText('Einzelpreis 1'), '150');
+    const summary = await screen.findByLabelText('MWST-Übersicht');
+    await waitFor(() => expect(within(summary).getAllByText('CHF 12.15').length).toBeGreaterThan(0));
+    const totals = document.querySelector('.documents-editor-totals') as HTMLElement;
+    expect(within(totals).getByText('CHF 162.15')).toBeInTheDocument();
+
+    hold = true;
+    // 150 -> 1500 in one keystroke, never through an empty field (which would drop every answer).
+    await userEvent.type(screen.getByLabelText('Einzelpreis 1'), '0');
+    // The answer on file is for CHF 150: it is not this line's answer any more.
+    expect(screen.queryByLabelText('MWST-Übersicht')).not.toBeInTheDocument();
+    expect(within(totals).queryByText('CHF 162.15')).not.toBeInTheDocument();
+    expect(within(totals).getByText('wird berechnet')).toBeInTheDocument();
+
+    held.splice(0).forEach((resolve) => resolve());
+    await waitFor(() => expect(within(totals).getByText("CHF 1'621.50")).toBeInTheDocument());
+    expect(within(screen.getByLabelText('MWST-Übersicht')).getAllByText('CHF 121.50').length).toBeGreaterThan(0);
+  });
+
+  it('a refused preview is not "Keine MWST" either: the summary stays away and the line says why', async () => {
+    renderNew({ ...base(), list_documents: ok({ documents: [] }), vat_preview: reject('rate_era_unknown') });
+    await userEvent.click(await screen.findByLabelText('Kunde'));
+    await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));
+    await waitFor(() => expect(screen.getByLabelText('MWST 1')).toHaveTextContent(/· UST81$/));
+    await userEvent.type(screen.getByLabelText('Einzelpreis 1'), '150');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText('Keine MWST auf diesem Beleg')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('MWST-Übersicht')).not.toBeInTheDocument();
+  });
+
+  it('"Keine MWST" chosen by hand, with a customer and an amount, is said honestly', async () => {
+    renderNew({ ...base(), list_documents: ok({ documents: [] }) });
+    await userEvent.click(await screen.findByLabelText('Kunde'));
+    await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));
+    await waitFor(() => expect(screen.getByLabelText('MWST 1')).toHaveTextContent(/· UST81$/));
+    await pickTaxCode(screen.getByLabelText('MWST 1'), '');
+    await userEvent.type(screen.getByLabelText('Einzelpreis 1'), '150');
+    expect(await screen.findByText('Keine MWST auf diesem Beleg')).toBeInTheDocument();
+  });
+});
+
+describe('DocumentEditor, a workspace switch (wave B-2 lesson)', () => {
+  function Switcher({ onReady }: { onReady: (switchTo: (id: string) => void) => void }) {
+    const { setWorkspaceId } = useWorkspace();
+    onReady(setWorkspaceId);
+    return null;
+  }
+
+  function renderSwitchable(transport: Transport, initial = '/documents/new') {
+    let switchTo: (id: string) => void = () => undefined;
+    let path = '';
+    function Where() {
+      path = useLocation().pathname;
+      return null;
+    }
+    render(
+      <TillClientProvider client={new TillClient(transport)}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_a">
+            <Switcher onReady={(fn) => (switchTo = fn)} />
+            <MemoryRouter initialEntries={[initial]}>
+              <Where />
+              <Routes>
+                <Route path="/documents/*" element={<DocumentsSurface />} />
+              </Routes>
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    return { switchTo: (id: string) => act(() => switchTo(id)), path: () => path };
+  }
+
+  it('drops the customer, the lines and the typed due date of the old workspace, and reads the new one', async () => {
+    const asked: string[] = [];
+    const contactsFor: Record<string, unknown[]> = {
+      ws_a: [{ id: 'ct_a', name: 'Alpha AG', paymentTermsDays: 30 }],
+      ws_b: [{ id: 'ct_b', name: 'Beta GmbH', paymentTermsDays: 10 }],
+    };
+    const transport: Transport = async (action, input) => {
+      if (action === 'list_contacts') {
+        asked.push(String(input.workspaceId));
+        return ok({ contacts: contactsFor[String(input.workspaceId)] ?? [] });
+      }
+      const entry = base()[action];
+      if (entry === undefined) return { status: 404, body: { ok: false, error: 'unknown_action' } };
+      return typeof entry === 'function' ? entry(input) : entry;
+    };
+    const ws = renderSwitchable(transport);
+    await userEvent.click(await screen.findByLabelText('Kunde'));
+    await userEvent.click(screen.getByRole('option', { name: 'Alpha AG' }));
+    await userEvent.type(screen.getByLabelText('Bezeichnung 1'), 'Beratung');
+    await userEvent.type(screen.getByLabelText('Zahlbar bis'), '2026-12-24');
+    expect(screen.getByLabelText('Zahlbar bis')).toHaveValue('2026-12-24');
+
+    ws.switchTo('ws_b');
+    await waitFor(() => expect(asked).toEqual(['ws_a', 'ws_b']));
+    await waitFor(() => expect(screen.getByLabelText('Kunde')).toHaveTextContent('Kunde wählen'));
+    expect(screen.getByLabelText('Bezeichnung 1')).toHaveValue('');
+    expect(screen.getByLabelText('Zahlbar bis')).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Ausstellen' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('Kunde'));
+    expect(screen.queryByRole('option', { name: 'Alpha AG' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Beta GmbH' })).toBeInTheDocument();
+  });
+
+  it('an issue answered after a switch lands in the workspace it was pressed in and navigates nowhere', async () => {
+    let releaseIssue: () => void = () => undefined;
+    const issueCalls: Record<string, unknown>[] = [];
+    const canned: Canned = {
+      ...base(),
+      create_document: ok({ document: { id: 'doc_a', type: 'invoice', status: 'draft' } }),
+    };
+    const transport: Transport = async (action, input) => {
+      if (action === 'issue_invoice') {
+        issueCalls.push(input);
+        await new Promise<void>((resolve) => (releaseIssue = resolve));
+        return ok({ ...issueFixture });
+      }
+      const entry = canned[action];
+      if (entry === undefined) return { status: 404, body: { ok: false, error: 'unknown_action' } };
+      return typeof entry === 'function' ? entry(input) : entry;
+    };
+    const ws = renderSwitchable(transport);
+    await userEvent.click(await screen.findByLabelText('Kunde'));
+    await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));
+    await userEvent.type(screen.getByLabelText('Einzelpreis 1'), '150');
+    await userEvent.click(screen.getByRole('button', { name: 'Ausstellen' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Rechnung ausstellen' });
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Ausstellen/ }));
+    await waitFor(() => expect(issueCalls).toHaveLength(1));
+    expect(issueCalls[0]).toMatchObject({ workspaceId: 'ws_a', invoiceId: 'doc_a' });
+
+    ws.switchTo('ws_b');
+    await act(async () => releaseIssue());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The editor of ws_b is fresh, and nobody was sent to ws_a's document inside ws_b's books.
+    expect(ws.path()).toBe('/documents/new');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Kunde')).toHaveTextContent('Kunde wählen');
   });
 });
 
@@ -358,6 +629,24 @@ describe('DocumentEditor, the customer typed inline (friction ledger F-03, J1.1 
     expect(await screen.findByText('Bergblick AG ist als Kunde angelegt und ausgewählt.')).toBeInTheDocument();
   });
 
+  it('once a create has answered, creating the same name again is a NEW act with a new key, never a replay', async () => {
+    let n = 0;
+    const createSpy = vi.fn<CannedHandler>((input) => {
+      n += 1;
+      return ok({ contact: { id: `ct_new${n}`, name: input.name, partyRole: 'customer', email: null } });
+    });
+    renderNew({ ...base(), create_contact: createSpy });
+    await screen.findByLabelText('Kunde');
+    await userEvent.click(screen.getByRole('button', { name: 'Neuer Kunde' }));
+    await userEvent.type(screen.getByLabelText('Name des Kunden'), 'Bergblick AG{Enter}');
+    await waitFor(() => expect(createSpy).toHaveBeenCalledOnce());
+    await userEvent.click(screen.getByRole('button', { name: 'Neuer Kunde' }));
+    await userEvent.type(screen.getByLabelText('Name des Kunden'), 'Bergblick AG{Enter}');
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(2));
+    const [first, second] = createSpy.mock.calls;
+    expect(second?.[0].idempotencyKey).not.toBe(first?.[0].idempotencyKey);
+  });
+
   it('with contacts on file, "Neuer Kunde" reveals the same inline form beside the picker', async () => {
     const createSpy = vi.fn<CannedHandler>((input) => ok({ contact: { id: 'ct_2', name: input.name, partyRole: 'customer', email: null } }));
     renderNew({ ...base(), create_contact: createSpy });
@@ -459,6 +748,101 @@ describe('DocumentEditor, issue flow (S2 -> S4)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }));
     await waitFor(() => expect(createSpy).toHaveBeenCalledOnce());
     expect(createSpy.mock.calls[0][0]).toMatchObject({ type: 'invoice', contactId: 'ct_1' });
+  });
+});
+
+describe('DocumentEditor, creating the draft is one act with one key (wave B-2 lesson)', () => {
+  /**
+   * An engine-faithful create: `rememberIdempotent` replays the stored result for a known key and
+   * ignores the input, and a refusal is stored like any result. `lose` drops the first answer on the
+   * wire AFTER the draft was created, which is the case a fresh key per call turned into two drafts.
+   */
+  function memoCreate(opts: { lose?: number; refuseFirst?: boolean } = {}) {
+    const stored = new Map<string, RestResponse>();
+    const drafts: Record<string, unknown>[] = [];
+    let calls = 0;
+    const spy = vi.fn<CannedHandler>((input) => {
+      calls += 1;
+      const key = String(input.idempotencyKey);
+      let result = stored.get(key);
+      if (result === undefined) {
+        if (opts.refuseFirst === true && calls === 1) {
+          result = reject('invalid_input');
+        } else {
+          drafts.push(input);
+          result = ok({ document: { id: `doc_${drafts.length}`, type: 'invoice', status: 'draft' } });
+        }
+        stored.set(key, result);
+      }
+      if (opts.lose !== undefined && calls <= opts.lose) return { status: 0, body: { ok: false, error: 'transport_error' } };
+      return result;
+    });
+    return { spy, drafts };
+  }
+
+  async function fillAndSave() {
+    await userEvent.click(await screen.findByLabelText('Kunde'));
+    await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));
+    await userEvent.type(screen.getByLabelText('Bezeichnung 1'), 'Beratung');
+    await userEvent.type(screen.getByLabelText('Einzelpreis 1'), '150');
+    await userEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }));
+  }
+
+  it('a save retried after a lost answer carries the SAME key, and the engine holds ONE draft', async () => {
+    const create = memoCreate({ lose: 1 });
+    const updateSpy = vi.fn<CannedHandler>(() => ok({ document: { id: 'doc_1', type: 'invoice', status: 'draft' } }));
+    renderNew({ ...base(), create_document: create.spy, update_document: updateSpy });
+    await fillAndSave();
+    await waitFor(() => expect(create.spy).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }));
+    await waitFor(() => expect(create.spy).toHaveBeenCalledTimes(2));
+    const [first, second] = create.spy.mock.calls;
+    expect(typeof first?.[0].idempotencyKey).toBe('string');
+    expect(second?.[0].idempotencyKey).toBe(first?.[0].idempotencyKey);
+    expect(create.drafts).toHaveLength(1);
+    // Same content both times, so no follow-up write was needed.
+    expect(updateSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByText('Nicht gespeichert')).not.toBeInTheDocument());
+
+    // The draft exists now: the next save is an update of it, never a second create.
+    await userEvent.type(screen.getByLabelText('Bezeichnung 1'), ' Oktober');
+    await userEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledOnce());
+    expect(updateSpy.mock.calls[0][0]).toMatchObject({ documentId: 'doc_1' });
+    expect(create.spy).toHaveBeenCalledTimes(2);
+    expect(create.drafts).toHaveLength(1);
+  });
+
+  it('a draft edited between the lost save and its retry is written as it now stands, still ONE draft', async () => {
+    const create = memoCreate({ lose: 1 });
+    const updateSpy = vi.fn<CannedHandler>(() => ok({ document: { id: 'doc_1', type: 'invoice', status: 'draft' } }));
+    renderNew({ ...base(), create_document: create.spy, update_document: updateSpy });
+    await fillAndSave();
+    await waitFor(() => expect(create.spy).toHaveBeenCalledTimes(1));
+    await userEvent.type(screen.getByLabelText('Bezeichnung 1'), ' Oktober');
+    await userEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledOnce());
+    // The retry replayed the FIRST attempt's draft (the old text), so the screen's text follows it.
+    expect(create.spy.mock.calls[1]?.[0].idempotencyKey).toBe(create.spy.mock.calls[0]?.[0].idempotencyKey);
+    expect(create.drafts).toHaveLength(1);
+    const patch = (updateSpy.mock.calls[0][0] as { documentId: string; patch: { lines: { description: string }[] } });
+    expect(patch.documentId).toBe('doc_1');
+    expect(patch.patch.lines[0]?.description).toBe('Beratung Oktober');
+  });
+
+  it('a refused create ends the act: the next save is a new act with a new key, never the stored refusal', async () => {
+    const create = memoCreate({ refuseFirst: true });
+    renderNew({ ...base(), create_document: create.spy });
+    await fillAndSave();
+    await waitFor(() => expect(create.spy).toHaveBeenCalledTimes(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }));
+    await waitFor(() => expect(create.spy).toHaveBeenCalledTimes(2));
+    const [first, second] = create.spy.mock.calls;
+    expect(second?.[0].idempotencyKey).not.toBe(first?.[0].idempotencyKey);
+    expect(create.drafts).toHaveLength(1);
   });
 });
 

@@ -16,16 +16,17 @@
  *  - axe is clean with the strip rendered.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { axe } from 'jest-axe';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { I18nProvider } from '../../i18n';
-import { WorkspaceProvider } from '../../app/workspace';
+import { WorkspaceProvider, useWorkspace } from '../../app/workspace';
 import { CapabilitiesContext, type Capabilities } from '../../lib/capabilities';
 import { Attention } from './index';
+import { consequenceSentence } from '../../lib/approval-tiers';
 
 type Handler = (input: Record<string, unknown>) => RestResponse | Promise<RestResponse>;
 type Canned = Record<string, RestResponse | Handler>;
@@ -209,9 +210,15 @@ describe('the credit row', () => {
       expect(button).toHaveClass('btn--secondary');
       expect(button).not.toHaveClass('btn--primary');
     }
-    // The focused entry is marked by its pill tint (aria-current on the row opener) alone.
+    // The focused entry is marked by its pill tint (aria-current on the row opener) alone. Nothing is
+    // current on arrival (D152 rule 5); focusing the row is what makes it so.
     const openers = screen.getAllByRole('button').filter((b) => b.className.includes('att-row-open'));
+    expect(openers[0]).not.toHaveAttribute('aria-current');
+    act(() => openers[0].focus());
     expect(openers[0]).toHaveAttribute('aria-current', 'true');
+    for (const button of screen.getAllByRole('button', { name: 'Keine Kundenzahlung' })) {
+      expect(button).toHaveClass('btn--secondary');
+    }
   });
 
   it('with a suggested invoice the apply act leads and the suggestion is named', async () => {
@@ -221,8 +228,8 @@ describe('the credit row', () => {
     const { calls } = renderHub({ attention_summary: shrinkingSummary([item]), apply_qr_match: ok({ paymentId: 'p1' }) });
     expect(await screen.findByText(/Vorschlag: R-2026-0009/)).toBeInTheDocument();
     expect(screen.getByText(/Referenz und Betrag stimmen genau/)).toBeInTheDocument();
-    // With an apply on the row, the pay sentence is due and renders (D118 C4).
-    expect(screen.getByText('Bucht eine Zahlung und gleicht offene Posten aus.')).toBeInTheDocument();
+    // With an apply on the row, the apply's own engine sentence is due and renders (D118 C4, D156).
+    expect(screen.getByText(consequenceSentence('apply_qr_match', 'de-CH') as string)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Übernehmen' }));
     await screen.findByText('Zahlung übernommen und gebucht.');
     const sent = calls.find((c) => c.action === 'apply_qr_match');
@@ -233,7 +240,9 @@ describe('the credit row', () => {
     const { calls } = renderHub({ attention_summary: shrinkingSummary([creditItem('c1')]), override_qr_match: ok({}) });
     await screen.findByText('Zahlung ohne Zuordnung');
     fireEvent.click(screen.getByRole('button', { name: 'Keine Kundenzahlung' }));
-    expect(await screen.findByText('Abgelegt: keine Kundenzahlung.')).toBeInTheDocument();
+    const done = await screen.findByText('Abgelegt: keine Kundenzahlung.');
+    // The Commit moment (D122 D-I): the row leaves, so the acknowledgement lands on the banner.
+    expect(done.closest('.action-feedback')?.hasAttribute('data-just-committed')).toBe(true);
     const sent = calls.filter((c) => c.action === 'override_qr_match');
     expect(sent).toHaveLength(1);
     expect(sent[0]?.input).toEqual({ workspaceId: 'ws_test', creditId: 'c1', action: 'dismiss', idempotencyKey: 'attention:dismiss:ws_test:c1:new', confirmed: true });
@@ -271,7 +280,10 @@ describe('the credit row', () => {
     renderHub({ attention_summary: ok(summaryOf([creditItem('c1')])), override_qr_match: refuse('period_locked') });
     await screen.findByText('Zahlung ohne Zuordnung');
     fireEvent.click(screen.getByRole('button', { name: 'Keine Kundenzahlung' }));
-    expect(await screen.findByText('Die Periode ist gesperrt: dort kann nichts mehr gebucht werden.')).toBeInTheDocument();
+    const refusal = await screen.findByText('Die Periode ist gesperrt: dort kann nichts mehr gebucht werden.');
+    expect(refusal).toBeInTheDocument();
+    // A refusal is not a commit: nothing lands.
+    expect(refusal.closest('.action-feedback')?.hasAttribute('data-just-committed')).toBe(false);
     expect(screen.getByText('Zahlung ohne Zuordnung')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Keine Kundenzahlung' })).toBeEnabled();
   });
@@ -347,7 +359,7 @@ describe('the review flag row', () => {
     expect(screen.getByText('Markiert von Reto Muster: Falsches Konto: Aufwand statt Ertrag')).toBeInTheDocument();
     expect(screen.queryByText(/member:user_3/)).not.toBeInTheDocument();
     expect(screen.getByText(/2026-07-03 · Honorar Juli/)).toBeInTheDocument();
-    expect(screen.queryByText(/Bucht unwiderruflich/)).not.toBeInTheDocument();
+    expect(screen.queryByText(consequenceSentence('post_entry', 'de-CH') as string)).not.toBeInTheDocument();
     const strip = screen.getByRole('group', { name: 'Buchung beanstandet' });
     expect(within(strip).getByRole('button', { name: 'Buchung öffnen' })).toBeInTheDocument();
     fireEvent.click(within(strip).getByRole('button', { name: 'Als geprüft freigeben' }));
@@ -392,7 +404,7 @@ describe('the dunning run row', () => {
     const { calls } = renderHub({ attention_summary: shrinkingSummary([dunningItem('run_1')]), issue_dunning_run: ok({ runId: 'run_1', status: 'issued' }) });
     expect(await screen.findByText('Mahnlauf wartet auf Freigabe')).toBeInTheDocument();
     expect(screen.getByText('3 Rechnungen, Vorschlag vom 2026-09-01')).toBeInTheDocument();
-    expect(screen.getByText('Löst den Mahnlauf aus und erhöht die Mahnstufe der Debitoren.')).toBeInTheDocument();
+    expect(screen.getByText(consequenceSentence('issue_dunning_run', 'de-CH') as string)).toBeInTheDocument();
     expect(screen.queryByText('issue_dunning_run')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Mahnlauf ausstellen' }));
     expect(await screen.findByText('Mahnlauf ausgestellt.')).toBeInTheDocument();
@@ -420,6 +432,54 @@ describe('accessibility', () => {
     await screen.findByText('Zahlung ohne Zuordnung');
     await waitFor(async () => {
       expect(await axe(container)).toHaveNoViolations();
+    });
+  });
+});
+
+describe('§H-TENANT: an act in flight does not outlive a workspace switch (critic round 2)', () => {
+  it('the old workspace act neither locks the new workspace rows nor speaks there', async () => {
+    let switchTo: (id: string) => void = () => undefined;
+    function Switcher() {
+      const { setWorkspaceId } = useWorkspace();
+      switchTo = (id: string) => setWorkspaceId(id);
+      return null;
+    }
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const calls: { action: string; input: Record<string, unknown> }[] = [];
+    const canned: Canned = {
+      attention_summary: (input) => ok(summaryOf([creditItem(input.workspaceId === 'ws_b' ? 'c2' : 'c1')])),
+      override_qr_match: async (input) => {
+        if (input.workspaceId === 'ws_a') await gate;
+        return ok({});
+      },
+    };
+    render(
+      <TillClientProvider client={new TillClient(fakeTransport(canned, calls))}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_a">
+            <CapabilitiesContext.Provider value={{ whoami: null, can: () => true, refresh: () => undefined }}>
+              <MemoryRouter initialEntries={['/attention']}>
+                <Switcher />
+                <Attention />
+              </MemoryRouter>
+            </CapabilitiesContext.Provider>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Keine Kundenzahlung' }));
+    await waitFor(() => expect(calls.some((c) => c.action === 'override_qr_match')).toBe(true));
+    act(() => switchTo('ws_b'));
+    await waitFor(() => expect(calls.some((c) => c.action === 'attention_summary' && c.input.workspaceId === 'ws_b')).toBe(true));
+    // ws_b's row acts at once: the lock of ws_a's pending act did not come along.
+    fireEvent.click(await screen.findByRole('button', { name: 'Keine Kundenzahlung' }));
+    await waitFor(() => expect(calls.filter((c) => c.action === 'override_qr_match').map((c) => c.input.workspaceId)).toEqual(['ws_a', 'ws_b']));
+    await act(async () => {
+      release?.();
+      await gate;
     });
   });
 });

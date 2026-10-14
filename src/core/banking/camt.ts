@@ -718,3 +718,51 @@ export function hashCamtStatement(stmt: ParsedCamtStatement): string {
   ];
   return 'h1:' + parts.map((p) => (p === null || p === undefined ? '' : String(p))).join('|');
 }
+
+/** Why `splitCamt053` refused to split a multi-statement message (A36 §4.7). */
+export type CamtSplitRefusal = 'iban_differs' | 'currency_differs' | 'no_sequence_number' | 'not_camt053' | 'part_unreadable';
+
+/**
+ * A36 §4.7 (D150): split a camt.053 message that carries SEVERAL `<Stmt>` (an eBanking "Datei abholen"
+ * over a date range can return one file for many days) into single-statement messages, each keeping the
+ * envelope (`Document`, `BkToCstmrStmt`, `GrpHdr`) byte for byte, so each part goes through the ONE
+ * parser and the ONE statement door (`parseCamt`, `importCamt`) exactly as a one-day file would. A
+ * message with one `<Stmt>` (or none: `parseCamt` will name why) is returned unchanged.
+ *
+ * Refuses to split, rather than guessing, when the parts disagree on the account IBAN or on the balance
+ * currency (one account per message is the SPS rule, p.45), or when a part has no `ElctrncSeqNb` (it
+ * could not be ordered against the books). Pure: no store, no clock.
+ */
+export function splitCamt053(xml: unknown): Result<{ parts: string[]; split: boolean }> {
+  if (typeof xml !== 'string' || xml.trim().length === 0) {
+    return err('schema_invalid', { reason: 'the payload is not a non-empty XML string' });
+  }
+  // A `Stmt` element with or without a namespace prefix; `StmtPgntn` and the like are not matched. A
+  // `Stmt` never contains another `Stmt`, so the lazy match ends at its own close tag.
+  const re = /<((?:[A-Za-z_][\w.-]*:)?)Stmt(?=[\s>])[^>]*>[\s\S]*?<\/\1Stmt>/g;
+  const blocks: { start: number; end: number; text: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml)) !== null) blocks.push({ start: m.index, end: m.index + m[0].length, text: m[0] });
+  const first = blocks[0];
+  const last = blocks[blocks.length - 1];
+  if (blocks.length <= 1 || first === undefined || last === undefined) return ok({ parts: [xml], split: false });
+
+  const head = xml.slice(0, first.start);
+  const tail = xml.slice(last.end);
+  const parts = blocks.map((b) => `${head}${b.text}${tail}`);
+  let iban: string | null | undefined;
+  let currency: string | null | undefined;
+  for (let i = 0; i < parts.length; i += 1) {
+    const parsed = parseCamt(parts[i]);
+    const refuse = (reason: CamtSplitRefusal, extra: Record<string, unknown> = {}) => err('camt_split_refused', { reason, part: i + 1, parts: parts.length, ...extra });
+    if (!parsed.ok) return refuse('part_unreadable', { detail: (parsed as { reason?: unknown }).reason ?? parsed.error });
+    const s = parsed.statement;
+    if (s.messageType !== 'camt053') return refuse('not_camt053');
+    if (s.electronicSeqNb === null) return refuse('no_sequence_number', { statementId: s.statementId });
+    if (iban === undefined) iban = s.iban;
+    else if (iban !== s.iban) return refuse('iban_differs', { iban: s.iban, firstIban: iban });
+    if (currency === undefined) currency = s.balanceCurrency;
+    else if (currency !== s.balanceCurrency) return refuse('currency_differs', { currency: s.balanceCurrency, firstCurrency: currency });
+  }
+  return ok({ parts, split: true });
+}

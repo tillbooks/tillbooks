@@ -23,6 +23,19 @@ export const CHECKLIST_DUE_WINDOW_DAYS = 14;
 /** Hoisted const, so the audit-vocabulary scraper does not read this provider as an audit emitter. */
 const CHECKLIST_ITEM_ENTITY_KIND = 'checklist_run_item';
 
+/**
+ * The row's subtitle names who the step is for IN WORDS (beta launch P0.4b). It used to interpolate
+ * the raw `ownerKind` into one sentence, so Pendenzen read "zuständig: human". The engine has no
+ * locale, so it picks a KEY per owner kind and the Studio's catalogue says the words ("du", "ein
+ * Agent", "das System"); an owner kind with no key of its own falls back to the template alone.
+ */
+export const CHECKLIST_SUBTITLE_KEY_BY_OWNER: Readonly<Record<string, string>> = {
+  human: 'attention.item.checklistItem.subtitleOwner.human',
+  agent: 'attention.item.checklistItem.subtitleOwner.agent',
+  system: 'attention.item.checklistItem.subtitleOwner.system',
+};
+const CHECKLIST_SUBTITLE_FALLBACK_KEY = 'attention.item.checklistItem.subtitle';
+
 interface DueItem {
   readonly run: ChecklistRunView;
   readonly item: ChecklistItemView;
@@ -68,8 +81,8 @@ export const checklistItemsDueProvider: QueueProvider = {
           entityId: item.runItemId,
           titleKey: 'attention.item.checklistItem.title',
           titleParams: { period: run.periodLabel, title: item.title },
-          subtitleKey: 'attention.item.checklistItem.subtitle',
-          subtitleParams: { template: run.templateLabel, owner: item.ownerKind },
+          subtitleKey: CHECKLIST_SUBTITLE_KEY_BY_OWNER[item.ownerKind] ?? CHECKLIST_SUBTITLE_FALLBACK_KEY,
+          subtitleParams: { template: run.templateLabel },
           since: run.createdAt,
           dueAt: item.dueAt ?? run.periodEnd,
           urgency: overdue ? 'overdue' : 'due',

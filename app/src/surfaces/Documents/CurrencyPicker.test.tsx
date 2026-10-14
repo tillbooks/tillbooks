@@ -113,6 +113,9 @@ async function pickEur() {
   await chooseCurrency('EUR');
 }
 
+/** The (i) beside "Währung" (D152 rule 4): its card is the trigger's accessible description. */
+const currencyInfo = () => screen.getByRole('button', { name: 'Mehr zur Währung' });
+
 describe('CurrencyPicker, the five states', () => {
   it('LOADING: the control is disabled while the editor resolves its own reads', async () => {
     const transport = watchReads(hang('list_contacts', async () => ok()));
@@ -171,7 +174,12 @@ describe('CurrencyPicker, the five states', () => {
 
   it('BASE: a CHF invoice shows NO rate, because a rate of 1 is not FX', async () => {
     renderEditor(base());
-    expect(await screen.findByText(/CHF ist deine Buchwährung/)).toBeInTheDocument();
+    // D152 rule 4: the sentence is behind the (i), not a note under the control.
+    await screen.findByRole('button', { name: 'Mehr zur Währung' });
+    await waitFor(() => expect(currencyInfo()).toHaveAccessibleDescription(/CHF ist deine Buchwährung/));
+    expect(document.querySelector('.documents-currency-note')).toBeNull();
+    // The flows wait on the base state's marker, which now rides on the (i).
+    expect(document.querySelector('[data-fx="base"]')).not.toBeNull();
     expect(screen.queryByLabelText('Umrechnung')).not.toBeInTheDocument();
     expect(screen.queryByText(/1 CHF = /)).not.toBeInTheDocument();
   });
@@ -186,11 +194,12 @@ describe('CurrencyPicker, the five states', () => {
     expect(within(panel).getByText('15.07.2026')).toBeInTheDocument();
     expect(within(panel).getByText('Tageskurs (Verkauf von Devisen)')).toBeInTheDocument();
     expect(within(panel).getByText('Von Hand erfasst')).toBeInTheDocument();
-    // What will happen, said before it happens. No converted amount is claimed.
-    expect(within(panel).getByText(/verbucht TILL diese Rechnung zu diesem Kurs in CHF/)).toBeInTheDocument();
+    // What will happen, said before it happens, behind the (i). No converted amount is claimed.
+    expect(within(panel).queryByText(/verbucht TILL/)).not.toBeInTheDocument();
+    expect(currencyInfo()).toHaveAccessibleDescription(/verbucht TILL diese Rechnung zu diesem Kurs in CHF/);
   });
 
-  it('ERROR (M12): needs_fx_rate names the pair and the date, and blocks Ausstellen with the reason inline', async () => {
+  it('ERROR (M12): needs_fx_rate names the pair and the date, and the press on Ausstellen names it once, saving nothing', async () => {
     renderEditor(base({ get_exchange_rate: verbatim(rateFixture.needsRateEmpty, 422) }));
     await userEvent.click(await screen.findByLabelText('Kunde'));
     await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));
@@ -202,9 +211,15 @@ describe('CurrencyPicker, the five states', () => {
     expect(within(panel).getByText(/keiner deckt dieses Datum ab/)).toBeInTheDocument();
     expect(within(panel).getByRole('link', { name: 'Kurs erfassen' })).toHaveAttribute('href', '/setup');
 
-    // D15/C3: the control is pre-disabled with the reason beside it, never shown then rejected.
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Ausstellen' })).toBeDisabled());
-    expect(screen.getByText('Für EUR fehlt ein Kurs auf den 16.07.2026.')).toBeInTheDocument();
+    // D152 rule 3: no grey button with a sentence. The press names the refusal in one line, tied
+    // to the button, and saves and opens nothing (the canned transport has no create_document).
+    const issue = screen.getByRole('button', { name: 'Ausstellen' });
+    expect(issue).toBeEnabled();
+    expect(screen.queryByText('Für EUR fehlt ein Kurs auf den 16.07.2026.')).not.toBeInTheDocument();
+    await userEvent.click(issue);
+    expect(await screen.findByText('Für EUR fehlt ein Kurs auf den 16.07.2026.')).toBeInTheDocument();
+    expect(issue).toHaveAccessibleDescription('Für EUR fehlt ein Kurs auf den 16.07.2026.');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 
     /*
      * A11-G14: and it says it ONCE. The panel used to open with "Für EUR liegt kein zulässiger Kurs
@@ -264,7 +279,10 @@ describe('CurrencyPicker, the five states', () => {
     // `get_fx_method` is what turns the rule into something actionable: a date it stops binding.
     expect(within(panel).getByText(/Wechseln kannst du erst ab 2027/)).toBeInTheDocument();
     expect(within(panel).getByText(/Erfasse den Kurs auf der Basis Monatsmittelkurs/)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Ausstellen' })).toBeDisabled());
+    // The press names the refusal in one line and opens nothing.
+    await userEvent.click(screen.getByRole('button', { name: 'Ausstellen' }));
+    expect(await screen.findByText(/passt nicht zur Umrechnungsbasis der Steuerperiode/)).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
   it('ERROR: an unreadable rate degrades to a retry, never to a silent rate', async () => {
@@ -295,9 +313,10 @@ describe('CurrencyPicker, the five states', () => {
 });
 
 describe('CurrencyPicker, the payment-part consequence (M13/ST3)', () => {
-  it('a QR-IBAN in CHF promises a QRR reference', async () => {
+  it('a QR-IBAN in CHF promises a QRR reference, behind the (i)', async () => {
     renderEditor(base());
-    expect(await screen.findByText(/mit einer QR-Referenz/)).toBeInTheDocument();
+    await screen.findByRole('button', { name: 'Mehr zur Währung' });
+    await waitFor(() => expect(currencyInfo()).toHaveAccessibleDescription(/mit einer QR-Referenz/));
   });
 
   it('a plain IBAN promises SCOR, in CHF and in EUR alike', async () => {
@@ -307,9 +326,10 @@ describe('CurrencyPicker, the payment-part consequence (M13/ST3)', () => {
         get_exchange_rate: verbatim(rateFixture.resolved),
       }),
     );
-    expect(await screen.findByText(/mit einer SCOR-Referenz/)).toBeInTheDocument();
+    await screen.findByRole('button', { name: 'Mehr zur Währung' });
+    await waitFor(() => expect(currencyInfo()).toHaveAccessibleDescription(/mit einer SCOR-Referenz/));
     await pickEur();
-    expect(await screen.findByText(/mit einer SCOR-Referenz/)).toBeInTheDocument();
+    await waitFor(() => expect(currencyInfo()).toHaveAccessibleDescription(/mit einer SCOR-Referenz/));
   });
 
   it('no IBAN at all states there is no payment part in ANY currency, and links to Setup', async () => {
@@ -326,7 +346,9 @@ describe('CurrencyPicker, the payment-part consequence (M13/ST3)', () => {
     await chooseCurrency('__other__');
     await userEvent.type(screen.getByLabelText('Währungscode'), 'USD');
 
-    expect(await screen.findByText(/Den QR-Zahlteil gibt es nur in CHF und EUR/)).toBeInTheDocument();
+    expect(await screen.findByText('Den QR-Zahlteil gibt es nur in CHF und EUR.')).toBeInTheDocument();
+    // One line on the surface; what it means for the invoice is behind the (i).
+    expect(currencyInfo()).toHaveAccessibleDescription(/Eine Rechnung in USD kannst du stellen und verbuchen/);
     // The invoice is not blocked: it issues, posts and renders, it simply gets no payment part.
     await waitFor(() => expect(screen.getByRole('button', { name: 'Ausstellen' })).toBeEnabled());
   });
@@ -361,8 +383,9 @@ describe('CurrencyPicker, the payment-part consequence (M13/ST3)', () => {
     // The remedy is named AND labelled as the inference it is: SIX states no guidance for a creditor
     // who holds only a QR-IBAN, and borrowing the authority of a citation TILL does not have would be
     // the dishonest part of an otherwise sound conclusion.
-    expect(screen.getByText(/Das ist unsere Schlussfolgerung/)).toBeInTheDocument();
-    expect(screen.getByText(/Die Fassung 2.3 gilt noch bis November 2027/)).toBeInTheDocument();
+    // D152 rule 4: one line on the surface, the remedy and its label behind the (i).
+    expect(currencyInfo()).toHaveAccessibleDescription(/Das ist unsere Schlussfolgerung/);
+    expect(currencyInfo()).toHaveAccessibleDescription(/Die Fassung 2.3 gilt noch bis November 2027/);
     // And it still does not block the invoice.
     await userEvent.click(await screen.findByLabelText('Kunde'));
     await userEvent.click(screen.getByRole('option', { name: 'Muster AG' }));

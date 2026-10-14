@@ -31,8 +31,7 @@
       "vatSetUp": "Unter MWST einrichten",
       "vatChange": "Unter MWST ändern",
       "addressLater": "Die Adresse brauchst du erst, wenn die erste QR-Rechnung rausgeht. Die IBAN speicherst du schon jetzt.",
-      "addressLead": "Name und strukturierte Adresse stehen auf der QR-Rechnung. Ohne Name gilt der Firmenname.",
-      "fixFields": "Ein Feld braucht noch eine Korrektur."
+      "addressLead": "Name und strukturierte Adresse stehen auf der QR-Rechnung. Ohne Name gilt der Firmenname."
     },
     "vatChoice": {
       "effektiv": "MWST-pflichtig, effektive Methode",
@@ -61,6 +60,12 @@
       "soll": "Vereinbart (Soll)"
     },
     "creditorName": "Name Rechnungssteller",
+    "creditorSummary": {
+      "line": "Rechnungssteller: {name} · {address}",
+      "sameName": "wie Firmenname",
+      "noAddress": "Adresse fehlt noch",
+      "incompleteAddress": "Adresse unvollständig"
+    },
     "address": {
       "label": "Adresse",
       "street": "Strasse",
@@ -77,6 +82,18 @@
     "save": "Speichern",
     "saved": "Gespeichert",
     "saving": "Wird gespeichert",
+    "notSaved": "Nicht gespeichert: {parts}",
+    "parts": {
+      "identity": "Firmenangaben",
+      "uid": "UID",
+      "mwstNo": "MWST-Nummer",
+      "fiscal": "Geschäftsjahr und Währung",
+      "vat": "MWST",
+      "creditor": "Rechnungssteller",
+      "ebill": "eBill",
+      "terms": "Standard-Zahlungsfrist"
+    },
+    "infoLabel": "Mehr zu {topic}",
     "locked": {
       "note": "Gesperrt: in diesem Arbeitsbereich wurde bereits gebucht. Basiswährung und Geschäftsjahresbeginn liegen damit fest, denn die bestehenden Buchungen bauen auf ihnen auf."
     },
@@ -85,15 +102,29 @@
       "invalidIban": "Das ist keine gültige IBAN. Bitte prüfe die Nummer: eine QR-IBAN und eine gewöhnliche IBAN sind hier beide richtig.",
       "illegalCharacter": "In einem dieser Felder steht ein Zeichen, das eine QR-Rechnung nicht tragen kann, zum Beispiel ein Zeilenumbruch. Bitte Name und Adresse je auf einer Zeile halten.",
       "needsStructuredAddress": "Bitte die vollständige, strukturierte Adresse angeben (Strasse, Haus-Nr., PLZ, Ort, Land).",
+      "invalidCountry": "Das Land ist der zweistellige Ländercode, den eine QR-Rechnung braucht, zum Beispiel CH, LI oder DE.",
+      "fieldTooLong": "Ein Feld ist länger, als eine QR-Rechnung erlaubt: Name und Strasse höchstens 70 Zeichen, Haus-Nr. und PLZ 16, Ort 35.",
+      "ibanNotChLi": "Eine QR-Rechnung braucht ein Schweizer oder Liechtensteiner Konto (eine IBAN, die mit CH oder LI beginnt). Diese IBAN ist gültig, aber auf sie lässt sich keine QR-Rechnung bezahlen.",
       "needsEmptyLedger": "Geschäftsjahr und Währung lassen sich nicht mehr ändern, sobald Buchungen vorhanden sind.",
       "invalidUid": "Die UID hat die Form CHE-123.456.789.",
       "invalidMwstNo": "Die MWST-Nummer hat die Form CHE-123.456.789 MWST.",
       "invalidLegalForm": "Diese Rechtsform kennt TILL nicht.",
-      "vatFailed": "Die MWST liess sich nicht einrichten. Die übrigen Angaben sind gespeichert; richte die MWST unter MWST ein."
+      "vatFailed": "Die MWST liess sich nicht einrichten. Die übrigen Angaben sind gespeichert; richte die MWST unter MWST ein.",
+      "cannotClear": {
+        "creditorName": "Den Namen des Rechnungsstellers kannst du hier nicht leeren. Trag den Firmennamen ein oder behalte den bisherigen Namen.",
+        "iban": "Die IBAN lässt sich hier nicht entfernen. Trag eine andere IBAN ein oder behalte die bisherige.",
+        "uid": "Die UID lässt sich hier nicht entfernen. Trag die richtige UID ein oder behalte die bisherige.",
+        "mwstNo": "Die MWST-Nummer lässt sich hier nicht entfernen. Trag die richtige Nummer ein oder behalte die bisherige."
+      },
+      "invalidPaymentTermsDays": "Die Standard-Zahlungsfrist ist eine ganze Zahl von Tagen, von 0 bis 365."
     },
     "customFields": {
-      "title": "Eigene Felder",
-      "empty": "Eigene Felder gibt es noch nicht. Sobald du welche anlegen kannst, erscheinen sie hier."
+      "title": "Eigene Felder"
+    },
+    "terms": {
+      "label": "Standard-Zahlungsfrist (Tage)",
+      "placeholder": "keine",
+      "info": "Gilt für Kunden und Lieferanten ohne eigene Zahlungsfrist: ihre Rechnungen sind so viele Tage nach dem Rechnungsdatum fällig. 0 heisst sofort. Leer lassen: fällig am Rechnungsdatum."
     }
   },
   "ebillConfig": {
@@ -102,7 +133,9 @@
     "partnerListLink": "Zertifizierte Netzwerkpartner (ebill.ch)",
     "billerPid": "eBill-Biller-ID",
     "invalidBillerPid": "Die eBill-Biller-ID besteht aus 41 gefolgt von 15 Ziffern.",
-    "connectorAbsent": "Es ist kein eBill-Konnektor konfiguriert. Das Vorbereiten von Nutzlasten funktioniert offline; für die Übermittlung wird der Cloud-Konnektor benötigt, der separat aktiviert wird."
+    "connectorTopic": "eBill-Konnektor",
+    "connectorAbsent": "Kein eBill-Konnektor konfiguriert",
+    "connectorAbsentDetail": "Das Vorbereiten von Nutzlasten funktioniert offline; für die Übermittlung wird der Cloud-Konnektor benötigt, der separat aktiviert wird."
   },
   "help": {
     "Setup": {

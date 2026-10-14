@@ -3,10 +3,12 @@
  * draft LIST that is the ONE posting control on both faces (design doc S11/S12, S4/S5).
  *
  * WHAT IT DOES. Describes one Abgrenzung (OR 958b) or one Rückstellung (OR 960e) so the engine can
- * post it: kind or reason picker with a one-line explainer each, amount in francs, the contra account
- * from a closed list (recognition over recall), description, an optional source reference. The lines
- * the draft will carry render below AS YOU TYPE, with the reversal lines under "Rückbuchung am
- * {date}". "Entwurf speichern" writes a DRAFT (`accrual_create` / `provision_create`) and never posts.
+ * post it: kind or reason picker (each one's explainer behind its (i), D152 rule 4), amount in francs,
+ * the contra account from a closed list (recognition over recall), description, an optional source
+ * reference. The booking the draft will carry is stated in ONE line below AS YOU TYPE ("Bucht per
+ * 30.06.2026: 6500 … an 2300 … · CHF 1'800.50 · Rückbuchung am 01.07.2026"), read off the same
+ * preview lines the four-column table used to show (`bookingLineOf`). "Entwurf speichern" writes a
+ * DRAFT (`accrual_create` / `provision_create`) and never posts.
  *
  * THE LIST POSTS. Every draft in the list carries "Buchen" behind the consequence confirm (D118 C4:
  * the engine's own sentence for `accrual_post` / `provision_post`), and "alle buchen" runs one call
@@ -21,11 +23,11 @@
  * engine does not hold: the preview mirrors the four statutory kinds (see `accrual-model.ts`), and
  * the engine refuses what the preview cannot know (a locked period, an archived account).
  *
- * STATES. loading (a skeleton over the list), empty ("Noch keine Abgrenzung erfasst" with the
- * editor as the first step), error (the banner with retry; a field refusal inline next to its
- * field), success (the posted row), permission-denied (the padlock naming `post`, the controls
- * disabled with the reason as text), at-scale (the list is a DataTable; twenty drafts render as
- * twenty rows with one "alle buchen").
+ * STATES. loading (a skeleton over the list), empty (one quiet line under the head, whose two
+ * "erfassen" buttons are the only way in: no second create, D152 rule 3), error (the banner with
+ * retry; a field refusal inline next to its field), success (the posted row), permission-denied
+ * (the padlock naming `post`, the controls disabled with the reason as text), at-scale (the list is
+ * a DataTable; twenty drafts render as twenty rows with one "alle buchen").
  */
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 
@@ -33,18 +35,20 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { useCapabilities, CAP } from '../../lib/capabilities';
 import { useT, formatDate, formatMoney } from '../../i18n';
-import { EmptyState, ErrorBanner, Skeleton } from '../../components/states';
+import { ErrorBanner, Skeleton } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { Modal, type ModalRole } from '../../components/Modal';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
-import { LockGlyph } from '../../components/states/glyphs';
+import { InfoGlyph, LockGlyph } from '../../components/states/glyphs';
+import { Tooltip } from '../../components/Tooltip';
 import { Select } from '../../components/Select';
 import {
   ACCRUAL_KINDS,
   ACCRUAL_KIND_RULES,
   PROVISION_REASONS,
   accrualRowsOf,
+  bookingLineOf,
   isProvisionAccount,
   parseAmountToMinor,
   pickerAccountsOf,
@@ -131,6 +135,29 @@ interface Posted {
   entryId: string;
   reversalEntryId?: string;
   reversalDate?: string;
+}
+
+/**
+ * The (i) beside a picker option (D152 rule 4: words on demand). The shared real tooltip holds the
+ * sentence and describes its own trigger; `describedById` renders a hidden copy of the same words so
+ * the control the sentence is ABOUT (a kind's radio, the reason picker) can point `aria-describedby`
+ * at it too, exactly as the composer's (i) beside Buchen does (`ConsequenceLine` variant `tooltip`).
+ */
+function Hint({ text, label, describedById }: { text: string; label: string; describedById: string }) {
+  return (
+    <span className="accrual-hint">
+      {/* Below the trigger: the drawer body scrolls, and a bubble above the first option would be
+          cut by its top edge. */}
+      <Tooltip content={text} placement="bottom">
+        <button type="button" className="btn btn--ghost btn--icon btn--sm accrual-hint-trigger" aria-label={label}>
+          <InfoGlyph size={16} />
+        </button>
+      </Tooltip>
+      <span id={describedById} hidden>
+        {text}
+      </span>
+    </span>
+  );
 }
 
 function newIdempotencyKey(): string {
@@ -235,6 +262,7 @@ export function AccrualEditor({ workspaceId, periodEnd, canPost }: AccrualEditor
   const byId = useCallback((id: string) => accounts?.find((a) => a.id === id) ?? null, [accounts]);
 
   const amountMinor = parseAmountToMinor(amountText);
+  // The live preview lines (the kind rule over the picked accounts), stated as one booking line below.
   const preview = useMemo(() => {
     const amount = amountMinor ?? 0;
     if (drawer === 'accrual') {
@@ -576,40 +604,16 @@ export function AccrualEditor({ workspaceId, periodEnd, canPost }: AccrualEditor
     return items;
   };
 
-  function renderLines(lines: PreviewLine[], caption: string) {
-    return (
-      // The table scrolls inside its own container on a narrow viewport instead of forcing the modal
-      // wider or clipping a long account name (presentation only).
-      <div className="accrual-lines-wrap">
-        <table className="accrual-lines">
-          <caption className="accrual-lines-caption">{caption}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t('accruals.lines.account')}</th>
-              <th scope="col" className="t-num">{t('accruals.lines.debit')}</th>
-              <th scope="col" className="t-num">{t('accruals.lines.credit')}</th>
-              <th scope="col">{t('accruals.lines.date')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr key={`${l.accountNumber}-${i}`}>
-                <td>{l.accountNumber === '' ? t('accruals.lines.pick') : `${l.accountNumber} ${l.accountName}`}</td>
-                <td className="t-num">{l.debitMinor > 0 ? money(l.debitMinor) : ''}</td>
-                <td className="t-num">{l.creditMinor > 0 ? money(l.creditMinor) : ''}</td>
-                <td>{formatDate(l.date)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
+  /** "6500 Verwaltungsaufwand", or the picker's "Konto wählen" while none is picked: what the table's account cell said. */
+  const accountText = (l: PreviewLine): string => (l.accountNumber === '' ? t('accruals.lines.pick') : `${l.accountNumber} ${l.accountName}`.trim());
+
+  const booking = bookingLineOf(preview.lines, drawer === 'accrual' ? preview.reversalLines : []);
 
   const accountFieldId = `${previewId}-account`;
   const amountFieldId = `${previewId}-amount`;
   const descriptionFieldId = `${previewId}-description`;
   const errorId = `${previewId}-error`;
+  const hintId = (key: string) => `${previewId}-hint-${key}`;
 
   return (
     <section className="accrual-editor panel" aria-labelledby={titleId} data-period-end={periodEnd}>
@@ -658,12 +662,10 @@ export function AccrualEditor({ workspaceId, periodEnd, canPost }: AccrualEditor
 
       {state.kind === 'loading' && <Skeleton rows={3} height={18} />}
       {state.kind === 'error' && <ErrorBanner error={state.error} onRetry={() => void load()} />}
+      {/* Empty: one quiet line under the head. The head's two "erfassen" buttons are the way in, so
+          the empty state offers no second create (D152 rule 3) and explains nothing (rule 4). */}
       {state.kind === 'ok' && state.accruals.length === 0 && state.provisions.length === 0 && (
-        <EmptyState
-          title={t('accruals.empty')}
-          hint={t('accruals.emptyHint')}
-          action={allowed ? { label: t('accruals.new'), onClick: () => openDrawer('accrual') } : undefined}
-        />
+        <p className="accrual-empty">{t('accruals.empty')}</p>
       )}
       {state.kind === 'ok' && (state.accruals.length > 0 || state.provisions.length > 0) && (
         <>
@@ -734,23 +736,28 @@ export function AccrualEditor({ workspaceId, periodEnd, canPost }: AccrualEditor
               <fieldset className="accrual-picker">
                 <legend>{t('accruals.kindLabel')}</legend>
                 {ACCRUAL_KINDS.map((k) => (
-                  <label key={k} className="accrual-picker-option">
-                    <input type="radio" name="accrual-kind" value={k} checked={kind === k} onChange={() => setKind(k)} />
-                    <span className="accrual-picker-name">{t(`accruals.kind.${k}`)}</span>
-                    <span className="accrual-picker-hint">{t(`accruals.kindHint.${k}`)}</span>
-                  </label>
+                  <div key={k} className="accrual-picker-option">
+                    <label className="accrual-picker-label">
+                      <input type="radio" name="accrual-kind" value={k} checked={kind === k} onChange={() => setKind(k)} aria-describedby={hintId(k)} />
+                      <span className="accrual-picker-name">{t(`accruals.kind.${k}`)}</span>
+                    </label>
+                    <Hint text={t(`accruals.kindHint.${k}`)} label={t('accruals.hintFor', { name: t(`accruals.kind.${k}`) })} describedById={hintId(k)} />
+                  </div>
                 ))}
               </fieldset>
             ) : (
               <div className="period-field">
                 {t('provisions.reasonLabel')}
-                <Select
-                  value={reason}
-                  onChange={(value) => setReason(value as ProvisionReason)}
-                  options={PROVISION_REASONS.map((r) => ({ value: r, label: t(`provisions.reason.${r}`) }))}
-                  ariaLabel={t('provisions.reasonLabel')}
-                />
-                <span className="accrual-picker-hint">{t(`provisions.reasonHint.${reason}`)}</span>
+                <span className="accrual-reason">
+                  <Select
+                    value={reason}
+                    onChange={(value) => setReason(value as ProvisionReason)}
+                    options={PROVISION_REASONS.map((r) => ({ value: r, label: t(`provisions.reason.${r}`) }))}
+                    ariaLabel={t('provisions.reasonLabel')}
+                    describedBy={hintId('reason')}
+                  />
+                  <Hint text={t(`provisions.reasonHint.${reason}`)} label={t('accruals.hintFor', { name: t(`provisions.reason.${reason}`) })} describedById={hintId('reason')} />
+                </span>
               </div>
             )}
 
@@ -847,10 +854,19 @@ export function AccrualEditor({ workspaceId, periodEnd, canPost }: AccrualEditor
             )}
           </form>
 
-          <div className="accrual-preview" data-testid="accrual-preview">
-            {renderLines(preview.lines, t('accruals.previewCaption'))}
-            {drawer === 'accrual' && renderLines(preview.reversalLines, t('accruals.reversalOn', { date: formatDate(dayAfter(periodEnd)) }))}
-          </div>
+          {/* The booking in one line (D152 rule 4), not a table of what the fields above already say. */}
+          {booking !== null && (
+            <p className="accrual-booking" data-testid="accrual-preview">
+              {t('accruals.booking', { date: formatDate(booking.date), debit: accountText(booking.debit), credit: accountText(booking.credit) })}
+              {booking.amountMinor > 0 && (
+                <>
+                  {' · '}
+                  <span className="t-money">{money(booking.amountMinor)}</span>
+                </>
+              )}
+              {booking.reversalDate !== null && <>{' · '}{t('accruals.reversalOn', { date: formatDate(booking.reversalDate) })}</>}
+            </p>
+          )}
         </Modal>
       )}
 

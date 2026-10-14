@@ -27,11 +27,12 @@ import {
   poAmendmentCancel,
   poAmendmentReject,
 } from '../core/purchase/poAmendment.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface PoAmendmentActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,
@@ -86,14 +87,14 @@ export function poAmendmentActions(h: PoAmendmentActionHelpers): readonly Action
     ),
     ctxAction(
       'po_amendment_start',
-      'write',
+      'write:correctable:internal',
       'Beginne eine Änderung an einer gesendeten oder teilweise erhaltenen Bestellung (OP14): opens a DRAFT amendment linked to the current active version. No live PO data is mutated yet. Materialises version 1 first if needed (US-I01.1). A PO that is draft/closed/cancelled is refused (invalid_transition); a PO with no open quantity left is nothing_open; a second amendment while one is already draft/pending_approval is amendment_in_progress (one open amendment per PO). Off the money path (P3); idempotent.',
       ctxSchema({ poId: STR, reason: STR, actor: STR, idempotencyKey: STR }, ['poId']),
       (ctx, input) => poAmendmentStart(ctx, as(input)),
     ),
     ctxAction(
       'po_amendment_update_lines',
-      'write',
+      'write:reversible:internal',
       'Setze die Änderungspositionen einer Entwurfs-Änderung (OP14): replaces the amendment`s set of change operations. Each op is change (edit a live line`s qty/unitPriceRappen/description; a field left out keeps the live value), add (a new line: itemId or free-text description, qty > 0, unitPriceRappen >= 0), or remove (drop an open line). Only a DRAFT amendment is editable (invalid_transition otherwise). A poLineId that is not a live line of this PO is not_found; an unknown itemId is invalid_reference; qty <= 0 is invalid_qty. Validated as a batch: a refusal writes zero rows.',
       ctxSchema({ amendmentId: STR, changes: AMENDMENT_CHANGES, actor: STR, idempotencyKey: STR }, ['amendmentId']),
       (ctx, input) => poAmendmentUpdateLines(ctx, as(input)),
@@ -107,28 +108,28 @@ export function poAmendmentActions(h: PoAmendmentActionHelpers): readonly Action
     ),
     ctxAction(
       'po_amendment_submit',
-      'write',
+      'write:correctable:internal',
       'Reiche eine Änderung zur Genehmigung ein (OP14, draft -> pending_approval): for a workspace that gates material amendments before they become the live commitment. Requires a valid, effective impact (a zero-delta amendment is no_effective_change; a blocking violation is returned by its code). Only a DRAFT amendment can be submitted (invalid_transition). Idempotent.',
       ctxSchema({ amendmentId: STR, actor: STR, idempotencyKey: STR }, ['amendmentId']),
       (ctx, input) => poAmendmentSubmit(ctx, as(input)),
     ),
     ctxAction(
       'po_amendment_apply',
-      'write',
+      'write:correctable:outbound',
       'Wende eine Änderung an und erzeuge die nächste PO-Version (OP14): supersedes the current active version, updates the live purchase_order + po_line to the amended values (received_qty and billed_qty on surviving lines are NEVER touched), mints version N+1 (active) with the frozen snapshot, and RE-RENDERS the outbound PO artifact carrying the new revision. P8: it returns { transmitted:false } and never emails the supplier on its own; an amended commitment reaches the supplier only through the approval dial. Applies from draft or pending_approval. Refuses qty_below_received / line_has_receipts / no_effective_change (a refusal writes zero rows). Idempotent on ROWS: a replay under the same idempotencyKey creates NO second version.',
       ctxSchema({ amendmentId: STR, actor: STR, idempotencyKey: STR }, ['amendmentId']),
       (ctx, input) => poAmendmentApply(ctx, as(input)),
     ),
     ctxAction(
       'po_amendment_cancel',
-      'write',
+      'write:correctable:internal',
       'Verwirf eine Entwurfs- oder eingereichte Änderung (OP14): status -> cancelled, the live PO untouched, and a new amendment may then be started. An already-applied amendment cannot be cancelled (invalid_transition); a further corrective amendment is required. Idempotent.',
       ctxSchema({ amendmentId: STR, reason: STR, actor: STR, idempotencyKey: STR }, ['amendmentId']),
       (ctx, input) => poAmendmentCancel(ctx, as(input)),
     ),
     ctxAction(
       'po_amendment_reject',
-      'write',
+      'write:correctable:internal',
       'Lehne eine Änderung als Genehmiger ab (OP14): status -> rejected with a mandatory reason, the live PO untouched. Allowed from draft or pending_approval; an applied amendment cannot be rejected (invalid_transition). A missing reason is invalid_input. Idempotent.',
       ctxSchema({ amendmentId: STR, reason: STR, actor: STR, idempotencyKey: STR }, ['amendmentId', 'reason']),
       (ctx, input) => poAmendmentReject(ctx, as(input)),

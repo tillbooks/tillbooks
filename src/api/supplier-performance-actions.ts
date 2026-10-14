@@ -27,11 +27,12 @@ import {
   supplierPerformanceExplain,
   supplierPerformanceAlerts,
 } from '../core/procurement/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface SupplierPerformanceActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,

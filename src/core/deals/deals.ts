@@ -586,22 +586,34 @@ export function dealToQuote(
       return ok({ dealId: deal.id, quoteId: deal.quote_id, created: false });
     }
     if (invoke === undefined) return err('needs_quotes_module', { dealId: deal.id });
-    const seeded = invoke(
-      QUOTE_CREATE_TOOL,
-      buildQuoteInput({
-        workspaceId: ctx.workspaceId,
-        contactId: deal.contact_id,
-        title: deal.title,
-        valueMinor: deal.value_minor,
-        currency: deal.currency,
-        idempotencyKey: `deal-quote-${deal.id}`,
-      }),
-      ctx.actor,
+    // K1: the key is derivable from the deal id, so the delegated quote verb runs in this composite's own
+    // idempotency scope (the invoker shares this store): a quote created first under `deal-quote-<id>`
+    // (any contact, any amount) used to be replayed here and linked to the deal as its quote.
+    const seeded = ctx.store.innerWrite('deals_to_quote', () =>
+      invoke(
+        QUOTE_CREATE_TOOL,
+        buildQuoteInput({
+          workspaceId: ctx.workspaceId,
+          contactId: deal.contact_id,
+          title: deal.title,
+          valueMinor: deal.value_minor,
+          currency: deal.currency,
+          idempotencyKey: `deal-quote-${deal.id}`,
+        }),
+        ctx.actor,
+      ),
     );
     if (!seeded.ok) return seeded;
     const quoteId = quoteIdOf(seeded as Record<string, unknown>);
     if (quoteId === undefined) {
       return err('needs_quotes_module', { dealId: deal.id, reason: 'the seam verb answered no document id' });
+    }
+    // ...and the quote is READ BACK as this deal's own: a quote for the deal's contact.
+    const quote = ctx.store.db
+      .prepare('SELECT type, contact_id FROM document WHERE workspace_id = ? AND id = ?')
+      .get(ctx.workspaceId, quoteId) as { type: string; contact_id: string | null } | undefined;
+    if (quote === undefined || quote.type !== 'quote' || quote.contact_id !== deal.contact_id) {
+      return err('inner_write_not_own', { composite: 'deals_to_quote', inner: QUOTE_CREATE_TOOL, dealId: deal.id, quoteId });
     }
     ctx.store.db
       .prepare('UPDATE deal SET quote_id = ?, updated_at = ? WHERE workspace_id = ? AND id = ?')

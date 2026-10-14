@@ -11,10 +11,10 @@
  *  - the axe pass is clean.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
@@ -119,7 +119,7 @@ describe('Pendenzen: padlock vs empty vs work waiting', () => {
     expect(refresh.querySelector('svg')).not.toBeNull();
   });
 
-  it('the urgency list renders the top rows, the leading row is selected, the amount is tabular', async () => {
+  it('the urgency list renders the top rows, NO row is current on arrival (D152 rule 5), the amount is tabular', async () => {
     renderHub({
       attention_summary: ok({
         computedAt: '2026-08-17T14:32:00.000Z',
@@ -137,9 +137,12 @@ describe('Pendenzen: padlock vs empty vs work waiting', () => {
     expect(await screen.findByText('Zahlung ohne Zuordnung')).toBeInTheDocument();
     expect(screen.getByText('Mahnlauf wartet auf Freigabe')).toBeInTheDocument();
     expect(screen.getByText("CHF 1'240.00")).toBeInTheDocument();
-    // The leading row is the selected primary affordance.
+    // D152 rule 5: no row is current on arrival. The roving tab stop still sits on the first row,
+    // so Tab lands in the list; focusing a row is the person's act and makes it current.
     const rows = screen.getAllByRole('button').filter((b) => b.className.includes('att-row-open'));
-    expect(rows[0]).toHaveAttribute('aria-current', 'true');
+    for (const row of rows) expect(row).not.toHaveAttribute('aria-current');
+    expect(rows[0]).toHaveAttribute('tabindex', '0');
+    expect(rows[1]).toHaveAttribute('tabindex', '-1');
     // The area index renders at two or more visible areas.
     expect(screen.getByText('Nach Bereich')).toBeInTheDocument();
   });
@@ -316,3 +319,126 @@ describe('Pendenzen: accessibility', () => {
     });
   });
 });
+
+describe('Pendenzen: every queue is named in words, never as a raw key (the bank_keys_review defect)', () => {
+  const ebicsItem = (queueId: string): Record<string, unknown> => ({
+    queueId,
+    entityKind: 'ebics_connection',
+    entityId: 'ebconn_synth_9',
+    titleKey: 'attention.item.bankActivation.signLetter.title',
+    titleParams: { bank: 'Synthbank' },
+    subtitleKey: 'attention.item.bankActivation.signLetter.subtitle',
+    subtitleParams: { bank: 'Synthbank', lastCheckAt: '2026-10-02T05:02:00.000Z' },
+    since: '2026-09-28T08:00:00.000Z',
+    urgency: 'open',
+    deepLink: { route: '/bank-accounts', params: {} },
+    decisionOptions: [
+      { id: 'open', verb: null, labelKey: 'attention.act.openBankAccounts', role: 'link', input: {}, deepLink: { route: '/bank-accounts', params: {} } },
+    ],
+  });
+  const single = (queueId: string, labelKey?: string) =>
+    ok({
+      computedAt: '2026-10-02T06:00:00.000Z',
+      visibleQueues: 7,
+      total: 1,
+      incomplete: false,
+      queues: [{ queueId, ...(labelKey !== undefined ? { labelKey } : {}), area: 'bank', count: 1, topUrgency: 'open' }],
+      top: [ebicsItem(queueId)],
+      failed: [],
+    });
+
+  it('bank_keys_review and bank_activation have their own queue labels', async () => {
+    const { unmount } = renderHub({ attention_summary: single('bank_keys_review', 'attention.queue.bankKeysReview') });
+    expect(await screen.findByRole('heading', { name: 'Bankschlüssel' })).toBeInTheDocument();
+    unmount();
+    renderHub({ attention_summary: single('bank_activation', 'attention.queue.bankActivation') });
+    expect(await screen.findByRole('heading', { name: 'Bank-Freischaltung' })).toBeInTheDocument();
+  });
+
+  it("a queue with no queueLabel falls back to the provider's own labelKey, silently (no raw key, no console error)", async () => {
+    renderHub({ attention_summary: single('future_queue', 'attention.queue.bankActivation') });
+    expect(await screen.findByRole('heading', { name: 'Bank: Freischaltung' })).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('attention.queueLabel');
+  });
+
+  it('a failed queue with no label at all is named by its readable id, never the dot path', async () => {
+    renderHub({
+      attention_summary: ok({
+        computedAt: '2026-10-02T06:00:00.000Z',
+        visibleQueues: 2,
+        total: 0,
+        incomplete: true,
+        queues: [],
+        top: [],
+        failed: ['future_queue'],
+      }),
+    });
+    expect(await screen.findByText(/Future queue/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('attention.queueLabel');
+  });
+
+  it('the EBICS letter row says the owner words and the last bank answer in Swiss time', async () => {
+    renderHub({ attention_summary: single('bank_activation', 'attention.queue.bankActivation') });
+    expect(await screen.findByText('Unterschreibe den INI-Brief für die Synthbank')).toBeInTheDocument();
+    expect(screen.getByText(/Zuletzt bei der Synthbank nachgefragt: 02\.10\.2026, 07:02\./)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bankkonten öffnen' })).toBeInTheDocument();
+  });
+});
+
+describe('Pendenzen: a list never opens itself (D152 rule 5)', () => {
+  const twoRows = () =>
+    ok({
+      computedAt: '2026-08-17T14:32:00.000Z',
+      visibleQueues: 2,
+      total: 2,
+      incomplete: false,
+      queues: [
+        { queueId: 'qr_match', area: 'bank', count: 1, topUrgency: 'open' },
+        { queueId: 'dunning_run', area: 'sales', count: 1, topUrgency: 'open' },
+      ],
+      top: [item('qr_match', 'c1'), item('dunning_run', 'run_7')],
+      failed: [],
+    });
+
+  it('nothing is current on arrival; Tab lands on the first row and makes it current, the arrows move it', async () => {
+    const user = userEvent.setup();
+    const { container } = renderHub({ attention_summary: twoRows() });
+    await screen.findByText('Mahnlauf wartet auf Freigabe');
+    expect(container.querySelector('[aria-current="true"]')).toBeNull();
+    const rows = screen.getAllByRole('button').filter((b) => b.className.includes('att-row-open'));
+    act(() => rows[0].focus());
+    await waitFor(() => expect(rows[0]).toHaveAttribute('aria-current', 'true'));
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() => expect(rows[1]).toHaveAttribute('aria-current', 'true'));
+    expect(rows[1]).toHaveFocus();
+    expect(rows[0]).not.toHaveAttribute('aria-current');
+  });
+
+  it('a click (or Enter) opens the row exactly where it did before: the item deep link', async () => {
+    const user = userEvent.setup();
+    render(
+      <TillClientProvider client={new TillClient(fakeTransport({ attention_summary: twoRows() }))}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_test">
+            <MemoryRouter initialEntries={['/attention']}>
+              <Routes>
+                <Route path="/attention" element={<Attention />} />
+                <Route path="/dunning" element={<LocationProbe />} />
+              </Routes>
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    await screen.findByText('Mahnlauf wartet auf Freigabe');
+    const rows = screen.getAllByRole('button').filter((b) => b.className.includes('att-row-open'));
+    act(() => rows[1].focus());
+    await user.keyboard('{Enter}');
+    expect(await screen.findByTestId('probe')).toHaveTextContent('/dunning?id=run_7');
+  });
+});
+
+function LocationProbe() {
+  const location = useLocation();
+  return <p data-testid="probe">{`${location.pathname}${location.search}`}</p>;
+}

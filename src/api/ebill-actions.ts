@@ -25,11 +25,12 @@ import {
   transmitEbill,
   getEbillDeliveryStatus,
 } from '../core/sales/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface EbillActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -58,21 +59,21 @@ export function ebillActions(h: EbillActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'set_ebill_config',
-      'write',
+      'write:reversible:internal',
       'Record the eBill-Biller-ID after enrolling with a certified network partner (a commercial step outside the product). Validates the SWP billerPid shape (41 followed by 15 digits) and upserts the one config row per workspace; a malformed id returns invalid_biller_pid and persists nothing. Naturally idempotent (asserts an absolute state), so it takes no idempotency key. Posts nothing.',
       ctxSchema({ billerPid: STR }, ['billerPid']),
       (ctx, input) => setEbillConfig(ctx, as(input)),
     ),
     ctxAction(
       'ebill_prepare',
-      'write',
+      'write:final:derived',
       "Turn an issued invoice (issued, sent, or partially_paid) into an eBill delivery payload on disk, carrying A11's QR reference unchanged. Files the A11 PDF as an E00 document (entity_kind ebill_delivery, OR 958f retention) and records an ebill_deliveries row (status prepared) with the payload's conformance facts (PDF/A profile, eBill addressing, byte length) recorded, never claimed. Refuses a draft/cancelled/settled invoice (invalid_state) and an invoice with no payment part (needs_qr_bill), writing nothing. Idempotent by outcome: at most one active (non-failed) delivery per invoice, so a re-prepare returns the existing row and its stored artifact regardless of key. Posts nothing.",
       ctxSchema({ invoiceId: STR, idempotencyKey: STR }, ['invoiceId', 'idempotencyKey']),
       (ctx, input) => prepareEbill(ctx, as(input)),
     ),
     ctxAction(
       'ebill_transmit',
-      'write',
+      'write:final:outbound',
       "Transmit a prepared delivery through the owner-gated cloud connector (P8: outbound, draft-by-default; pass confirmed=true or enable the workspace dial). Guard order: no connector returns the honest {transmitted:false, reason:'cloud_tier'} and the artifact stays downloadable; then needs_biller_pid; then needs_confirmation; then payload_not_conformant if the payload is not PDF/A-3b, not eBill-addressed, or over 10 MB (nothing non-conformant is ever transmitted). On acknowledgement records the business case and drives the invoice issued->sent (A10) only from issued. Idempotent: a transmitted delivery never resubmits; transmission is at-least-once via a stored correlation id. Posts nothing.",
       ctxSchema({ deliveryId: STR, confirmed: BOOL, idempotencyKey: STR }, ['deliveryId', 'idempotencyKey']),
       (ctx, input) => transmitEbill(ctx, as(input)),

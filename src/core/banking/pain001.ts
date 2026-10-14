@@ -71,6 +71,7 @@ import { recordPayment, PAYMENT_INTENTS } from '../payments/index.js';
 import { getCompanyProfile } from '../setup/companyProfile.js';
 import { resolveContactRef } from '../sales/contact.js';
 import { applySavedView } from '../customization/views.js';
+import { REFERENCE_MAX_LEN, compactReference, isBlankName, mintFrozenReference, referenceTakenIn } from './pain001Refs.js';
 
 // --- §H-ENUM: payment_batch.status, single point -----------------------------------------------
 
@@ -125,43 +126,11 @@ export function escapeXmlText(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/**
- * The restricted reference charset (SIX IG §3.2), for `MsgId`/`PmtInfId`/`InstrId`/`EndToEndId`
- * ONLY: letters, digits, spaces and `'()+,-./:?`. This repo's own ids are minted as
- * `<prefix>_<uuid>` (`core/ids.ts`), and `_` is NOT in that set, so every id reaching one of these
- * four fields is sanitised here rather than assumed clean.
- */
-export function toReferenceSafe(raw: string): string {
-  const mapped = raw.replace(/_/g, '-');
-  const filtered = mapped.replace(/[^A-Za-z0-9 '()+,\-./:?]/g, '');
-  // May not start with a space or a slash, may not end with a slash, may not contain "//".
-  const noLeading = filtered.replace(/^[ /]+/, '');
-  const noTrailing = noLeading.replace(/\/+$/, '');
-  return noTrailing.replace(/\/\//g, '-');
-}
-
-/** The ISO 20022 ceiling on `MsgId`/`PmtInfId`/`InstrId`/`EndToEndId`: all four are `Max35Text`. */
-export const REFERENCE_MAX_LEN = 35;
-
-/**
- * Mint a COMPACT, charset-safe reference for one of the four `Max35Text` elements (F2). This repo's
- * ids are `<prefix>_<uuid>` (`core/ids.ts`), and `<prefix>-<uuid>` is 46-47 characters once the
- * `PB-`/`PMT-`/`II-`/`E2E-` tag is added, well over the 35-character schema ceiling: a file carrying
- * one is rejected in `GrpHdr` and every payment in it fails to execute. The uuid's 128 bits are
- * re-encoded base36 (0-9a-z, all inside the SIX IG §3.2 charset), which is at most 25 characters, so
- * a one-letter tag plus the encoding never exceeds 26. A non-uuid suffix (the `sequenceIdGen` test
- * ids, `pbatch_1`) is short already and is used as-is after charset filtering. The value is a pure
- * function of the immutable id, so a regenerated batch mints the identical reference, which is what
- * keeps `MsgId` (the bank's 90-day duplicate-detection key) stable across regeneration.
- */
-export function compactReference(tag: string, id: string): string {
-  const suffix = id.slice(id.lastIndexOf('_') + 1);
-  const hex = suffix.replace(/-/g, '');
-  const core = /^[0-9a-fA-F]{32}$/.test(hex)
-    ? BigInt(`0x${hex}`).toString(36)
-    : suffix.replace(/[^0-9A-Za-z]/g, '');
-  return toReferenceSafe(`${tag}${core}`).slice(0, REFERENCE_MAX_LEN);
-}
+// The four bank references (MsgId, PmtInfId, InstrId, EndToEndId) are minted ONCE, at batch creation,
+// and FROZEN on the rows; the XML is built only from the stored values. The minting rules, the SIX
+// limits they were verified against and the reason (a restore re-mints every id) live in the leaf
+// module `./pain001Refs.ts`, re-exported here so existing importers keep their names.
+export { toReferenceSafe, REFERENCE_MAX_LEN, compactReference } from './pain001Refs.js';
 
 /**
  * The Swiss "BC number" (bank clearing number, the SAME 5-digit field SIX calls the IID), extracted
@@ -382,6 +351,8 @@ interface PreparedItem {
   isQrIban: boolean;
   referenceKind: 'qrr' | 'scor' | 'none';
   referenceValue: string | null;
+  /** The Cdtr/Nm to snapshot (D148): the vendor's name, a merge tombstone followed to its survivor. */
+  creditorName: string;
 }
 
 function prepareBatchItems(ctx: WorkspaceContext, itemIds: readonly string[]): PreparedItem[] | Result {
@@ -415,6 +386,18 @@ function prepareBatchItems(ctx: WorkspaceContext, itemIds: readonly string[]): P
     }
 
     const vendorId = bill.vendorId as string;
+    // D148 (G04 critic merge note): the creditor name is snapshotted into the file the bank receives, so
+    // a vendor without one is REFUSED here. The old renderer fell back to the vendor's database id, and a
+    // surrogate id must never reach a bank as a creditor name (a restore would also rewrite it).
+    const creditorName = resolveContactRef(ctx, vendorId)?.name ?? null;
+    if (creditorName === null || isBlankName(creditorName)) {
+      return err('creditor_name_missing', {
+        vendorBillId: billId,
+        vendorId,
+        reason: 'vendor_unnamed',
+        hint: 'give this vendor a name in the contacts before batching this bill',
+      });
+    }
     const profile = readCreditorProfile(ctx, vendorId);
     if (profile === undefined) {
       return err('needs_creditor_iban', {
@@ -461,6 +444,7 @@ function prepareBatchItems(ctx: WorkspaceContext, itemIds: readonly string[]): P
       isQrIban,
       referenceKind,
       referenceValue,
+      creditorName,
     });
   }
 
@@ -476,7 +460,16 @@ interface BatchRow {
   status: PaymentBatchStatus;
   ctrl_sum_minor: number | null;
   nb_of_txs: number | null;
+  /** The frozen pain.001 MsgId, stamped at creation (NULL only on a row no code path writes). */
   msg_id: string | null;
+  /** The frozen pain.001 PmtInfId, stamped at creation alongside `msg_id`. */
+  pmt_inf_id: string | null;
+  /** The InitgPty/Dbtr name the file carries, frozen at creation (critic r1 C2). */
+  debtor_name: string | null;
+  /** The DbtrAcct/IBAN the file carries, frozen at creation (critic r2 R2-1). */
+  debtor_iban: string | null;
+  /** When the batch first produced a file, frozen once set (critic r3 R3-2). */
+  generated_at: string | null;
   cre_dt_tm: string;
   idempotency_key: string;
   created_by: string | null;
@@ -502,11 +495,19 @@ interface BatchItemRow {
   reference_kind: 'qrr' | 'scor' | 'none';
   reference_value: string | null;
   posted_payment_id: string | null;
+  /** The frozen pain.001 InstrId and EndToEndId, stamped when the item is written. */
+  instr_id: string | null;
+  end_to_end_id: string | null;
+  /** The item's frozen position in the batch (1..n), the CdtTrfTxInf order. */
+  seq: number | null;
+  /** The Cdtr/Nm the file carries, snapshotted at creation like `creditor_iban` (D148). */
+  creditor_name: string | null;
 }
 
 function readBatchItems(ctx: WorkspaceContext, batchId: string): BatchItemRow[] {
   return ctx.store.db
-    .prepare('SELECT * FROM payment_batch_item WHERE workspace_id = ? AND batch_id = ? ORDER BY rowid')
+    // By the FROZEN position, never by rowid: a restore does not preserve row order (critic r1 C2).
+    .prepare('SELECT * FROM payment_batch_item WHERE workspace_id = ? AND batch_id = ? ORDER BY seq, rowid')
     .all(ctx.workspaceId, batchId) as BatchItemRow[];
 }
 
@@ -523,6 +524,7 @@ function batchEcho(ctx: WorkspaceContext, batchId: string): Record<string, unkno
     ctrlSumMinor: row.ctrl_sum_minor,
     nbOfTxs: row.nb_of_txs,
     msgId: row.msg_id,
+    pmtInfId: row.pmt_inf_id,
     createdBy: row.created_by,
     createdAt: row.created_at,
     items: items.map((it) => {
@@ -538,8 +540,12 @@ function batchEcho(ctx: WorkspaceContext, batchId: string): Record<string, unkno
         // the FULL snapshotted IBAN is exposed here (the masked form stays for incidental display).
         creditorIban: it.creditor_iban,
         creditorIbanMasked: maskIban(it.creditor_iban),
+        // D148: the name the payment file carries, as snapshotted (`vendorName` above is the contact now).
+        creditorName: it.creditor_name,
         isQrIban: it.is_qr_iban === 1,
         referenceKind: it.reference_kind,
+        instrId: it.instr_id,
+        endToEndId: it.end_to_end_id,
         postedPaymentId: it.posted_payment_id,
       };
     }),
@@ -549,6 +555,18 @@ function batchEcho(ctx: WorkspaceContext, batchId: string): Record<string, unkno
 /**
  * Draft a batch: validate the debtor account and every item, snapshot each item's creditor IBAN and
  * reference (finding 1/2 above), and write a `draft` batch. No posting, no XML yet (spec §4).
+ *
+ * The four pain.001 references are FROZEN here, in the same insert, beside `cre_dt_tm` (the F6
+ * precedent: a value the file carries is stamped once when the batch is drafted, never recomputed at
+ * render). Creation rather than first generation, for three reasons: it is the point `cre_dt_tm`
+ * already uses, so every value `buildPain001Xml` reads is fixed by the same write; generation stays a
+ * pure status flip that never touches an item row (items remain write-once until `markBatchPaid`
+ * stamps `posted_payment_id`); and there is no window, however short, in which a batch exists whose
+ * references still depend on an id a restore could re-mint. The cost is that a discarded draft retires
+ * the references it was given, which uniqueness never minds. Each value starts from the id-derived
+ * seed and is disambiguated when this workspace already holds it (`mintFrozenReference`): a batch
+ * restored from a book with other ids keeps the reference the bank saw, and a new batch can derive the
+ * very same value from its fresh id.
  */
 export function createPaymentBatch(ctx: WorkspaceContext, input: CreatePaymentBatchInput): Result {
   const guard =
@@ -606,33 +624,51 @@ export function createPaymentBatch(ctx: WorkspaceContext, input: CreatePaymentBa
 
   return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'create_payment_batch', () => {
     const batchId = ctx.ids.next('pbatch');
+    const db = ctx.store.db;
+    const msgId = mintFrozenReference(
+      compactReference('M', batchId),
+      referenceTakenIn(db, ctx.workspaceId, { table: 'payment_batch', column: 'msg_id' }),
+    );
+    const pmtInfId = mintFrozenReference(
+      compactReference('P', batchId),
+      referenceTakenIn(db, ctx.workspaceId, { table: 'payment_batch', column: 'pmt_inf_id' }),
+    );
     ctx.store.db
       .prepare(
         `INSERT INTO payment_batch
            (id, workspace_id, bank_account_id, execution_date, status, ctrl_sum_minor, nb_of_txs, msg_id,
-            cre_dt_tm, idempotency_key, created_by, created_at)
-         VALUES (?, ?, ?, ?, 'draft', NULL, NULL, NULL, ?, ?, ?, ?)`,
+            pmt_inf_id, debtor_name, debtor_iban, cre_dt_tm, idempotency_key, created_by, created_at)
+         VALUES (?, ?, ?, ?, 'draft', NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         batchId,
         ctx.workspaceId,
         input.bankAccountId,
         input.executionDate,
+        msgId,
+        pmtInfId,
+        debtorNameOf(ctx),
+        // Critic r2 R2-1: the debtor IBAN as the account holds it now, the value the renderer reads.
+        bankAccount.iban as string,
         ctx.clock.now(),
         input.idempotencyKey,
         ctx.actor,
         ctx.clock.now(),
       );
-    for (const item of prepared) {
+    const instrTaken = referenceTakenIn(db, ctx.workspaceId, { table: 'payment_batch_item', column: 'instr_id' });
+    const endToEndTaken = referenceTakenIn(db, ctx.workspaceId, { table: 'payment_batch_item', column: 'end_to_end_id' });
+    for (const [index, item] of prepared.entries()) {
+      const itemId = ctx.ids.next('pbitem');
       ctx.store.db
         .prepare(
           `INSERT INTO payment_batch_item
              (id, batch_id, workspace_id, vendor_bill_id, vendor_id, amount_minor, currency,
-              creditor_iban, is_qr_iban, reference_kind, reference_value, posted_payment_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+              creditor_iban, is_qr_iban, reference_kind, reference_value, posted_payment_id,
+              instr_id, end_to_end_id, seq, creditor_name, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
         )
         .run(
-          ctx.ids.next('pbitem'),
+          itemId,
           batchId,
           ctx.workspaceId,
           item.billId,
@@ -643,6 +679,12 @@ export function createPaymentBatch(ctx: WorkspaceContext, input: CreatePaymentBa
           item.isQrIban ? 1 : 0,
           item.referenceKind,
           item.referenceValue,
+          mintFrozenReference(compactReference('I', itemId), instrTaken),
+          mintFrozenReference(compactReference('E', itemId), endToEndTaken),
+          index + 1,
+          // D148: snapshotted like the IBAN (resolved and checked in `prepareBatchItems`), so a rename or
+          // an erasure never changes a generated file.
+          item.creditorName,
           ctx.clock.now(),
         );
     }
@@ -652,6 +694,18 @@ export function createPaymentBatch(ctx: WorkspaceContext, input: CreatePaymentBa
 }
 
 // --- generatePain001 -------------------------------------------------------------------------------
+
+/**
+ * The name a pain.001 carries for InitgPty and Dbtr: the company profile's creditor name, else the
+ * workspace name. Read ONCE, at batch creation, and frozen on `payment_batch.debtor_name` (critic r1
+ * C2); generation 9 backfilled older batches with this same rule, spelled in SQL.
+ */
+function debtorNameOf(ctx: WorkspaceContext): string {
+  const profile = getCompanyProfile(ctx);
+  if (!profile.ok) return 'TILL';
+  const p = profile.profile as Record<string, unknown>;
+  return (p.creditorName as string | null) ?? (p.name as string);
+}
 
 /**
  * Is the batch's debtor account routed over a NON-retired EBICS connection (the `ebics_connection_account`
@@ -673,29 +727,76 @@ function hasEbicsChannel(ctx: WorkspaceContext, bankAccountId: string): boolean 
 
 interface XmlBuildResult {
   xml: string;
-  msgId: string;
   ctrlSumMinor: number;
   nbOfTxs: number;
 }
 
+/** A batch and its items with every frozen reference present, the only shape `buildPain001Xml` renders. */
+interface FrozenBatch {
+  batch: BatchRow & { msg_id: string; pmt_inf_id: string; debtor_name: string; debtor_iban: string };
+  items: readonly (BatchItemRow & { instr_id: string; end_to_end_id: string; seq: number; creditor_name: string })[];
+}
+
 /**
- * Build the pain.001.001.09 XML: a pure function of the batch row (including its stored `cre_dt_tm`,
- * F6), its items, the debtor account and the company profile. Regenerating a `generated` batch
- * reproduces byte-identical output because none of those inputs change after `createPaymentBatch`:
- * in particular `CreDtTm` is the timestamp frozen at creation, not the wall clock at build time, so
- * the byte-identity holds under a moving clock and not only a frozen test one (D73 precedent: what
- * was generated is what re-renders).
+ * Narrow a batch to its frozen references, or name what is missing. Every row `createPaymentBatch`
+ * writes carries all four, and generation 9 backfilled every row written before; a row that still
+ * lacks one was written around the engine, and deriving a value from its id now would hand the bank a
+ * reference nobody froze, which is the exact defect this refuses to reintroduce.
  */
-function buildPain001Xml(
-  ctx: WorkspaceContext,
-  batch: BatchRow,
-  items: readonly BatchItemRow[],
-  debtorIban: string,
-  debtorName: string,
-): XmlBuildResult {
-  const msgId = compactReference('M', batch.id);
-  const pmtInfId = compactReference('P', batch.id);
-  // F6: stamped once at batch creation and stored, so regeneration is genuinely byte-identical.
+function frozenBatch(batch: BatchRow, items: readonly BatchItemRow[]): { frozen: FrozenBatch } | { refused: Result } {
+  const missing: string[] = [];
+  if (batch.msg_id === null) missing.push('msg_id');
+  if (batch.pmt_inf_id === null) missing.push('pmt_inf_id');
+  if (batch.debtor_name === null) missing.push('debtor_name');
+  if (batch.debtor_iban === null) missing.push('debtor_iban');
+  const itemsMissing = items.filter((it) => it.instr_id === null || it.end_to_end_id === null || it.seq === null).map((it) => it.id);
+  if (missing.length > 0 || itemsMissing.length > 0) {
+    return { refused: err('references_not_frozen', { batchId: batch.id, missing, itemIds: itemsMissing }) };
+  }
+  // A DRAFT written before D148 whose vendor had no name was left without one by generation 9 (never the
+  // id): it cannot be generated, and the way out is to discard it and batch the bills again. The blank
+  // rule is the one creation applies (`isBlankName`, critic r2 R2-2), so a whitespace name never reaches
+  // a FIRST file. A batch that already has a file re-renders it as sent (byte-identity with what the bank
+  // holds), so only a missing (NULL) name stops it.
+  const unnamed = items
+    .filter((it) => (batch.status === 'draft' ? isBlankName(it.creditor_name) : it.creditor_name === null))
+    .map((it) => it.id);
+  if (unnamed.length > 0) {
+    return {
+      refused: err('creditor_name_missing', {
+        batchId: batch.id,
+        itemIds: unnamed,
+        // Critic r2 R2-3: the way out differs from creation's. Re-batching the bill is refused
+        // `already_batched` until this draft is discarded, so the guidance names that step first.
+        reason: 'draft_needs_rebatch',
+        hint: 'discard this draft first, then give the vendor a name in the contacts and batch the bills again',
+      }),
+    };
+  }
+  return { frozen: { batch, items } as FrozenBatch };
+}
+
+/**
+ * Build the pain.001.001.09 XML: a pure function of the batch row (its stored `cre_dt_tm` (F6), its
+ * stored references and `debtor_name`), its items (their stored references, `seq`, `creditor_name` and
+ * IBAN snapshot) and the debtor account's IBAN. It reads no contact and no company profile (D148).
+ * Regenerating a `generated` batch reproduces byte-identical output because none of those inputs
+ * change after `createPaymentBatch`: `CreDtTm` is the timestamp frozen at creation, not the wall clock
+ * at build time, and MsgId/PmtInfId/InstrId/EndToEndId are the values frozen at creation, never
+ * re-derived from a database id. A G04 restore or an `env_copy` re-mints every id; because nothing
+ * here reads one, the restored book renders the identical file and the bank's MsgId duplicate check
+ * (SIX IG SPS 2025 §3.8) catches a re-upload (D73 precedent: what was generated is what re-renders).
+ */
+function buildPain001Xml(frozen: FrozenBatch): XmlBuildResult {
+  const { batch, items } = frozen;
+  // Critic r2 R2-1: the debtor IBAN and name are the batch's snapshots; DbtrAgt's clearing number is
+  // derived from the frozen IBAN, so it is frozen with it.
+  const debtorIban = batch.debtor_iban;
+  const debtorName = batch.debtor_name;
+  const msgId = batch.msg_id;
+  const pmtInfId = batch.pmt_inf_id;
+  // F6: stamped once at batch creation and stored, so regeneration is genuinely byte-identical. The
+  // items arrive in their frozen `seq` order (`readBatchItems`), so the CdtTrfTxInf order is fixed too.
   const creDtTm = batch.cre_dt_tm;
   const ctrlSumMinor = items.reduce((n, it) => n + it.amount_minor, 0);
   const nbOfTxs = items.length;
@@ -704,11 +805,11 @@ function buildPain001Xml(
 
   const txLines = items
     .map((it) => {
-      const instrId = compactReference('I', it.id);
-      const endToEndId = compactReference('E', it.id);
+      const instrId = it.instr_id;
+      const endToEndId = it.end_to_end_id;
       const amt = minorToDecimalString(it.amount_minor);
       const cdtrIban = it.creditor_iban.replace(/\s+/g, '').toUpperCase();
-      const cdtrName = escapeXmlText(resolveContactRef(ctx, it.vendor_id)?.name ?? it.vendor_id);
+      const cdtrName = escapeXmlText(it.creditor_name);
       const rmtInf =
         it.reference_kind === 'none'
           ? it.reference_value === null
@@ -761,7 +862,7 @@ function buildPain001Xml(
     `</CstmrCdtTrfInitn>` +
     `</Document>`;
 
-  return { xml, msgId, ctrlSumMinor, nbOfTxs };
+  return { xml, ctrlSumMinor, nbOfTxs };
 }
 
 /**
@@ -909,15 +1010,12 @@ export function generatePain001(ctx: WorkspaceContext, input: GeneratePain001Inp
   }
   const items = readBatchItems(ctx, batch.id);
   if (items.length === 0) return err('nothing_selected', { batchId: batch.id });
+  const checked = frozenBatch(batch, items);
+  if ('refused' in checked) return checked.refused;
+  const { frozen } = checked;
 
-  const account = getBankAccount(ctx, { bankAccountId: batch.bank_account_id });
-  if (!account.ok) return err('needs_bank_account', { reason: 'unknown' });
-  const debtorIban = (account.bankAccount as Record<string, unknown>).iban as string;
-
-  const profile = getCompanyProfile(ctx);
-  const debtorName = profile.ok ? (((profile.profile as Record<string, unknown>).creditorName as string | null) ?? ((profile.profile as Record<string, unknown>).name as string)) : 'TILL';
-
-  const built = buildPain001Xml(ctx, batch, items, debtorIban, debtorName);
+  // No live read of the debtor account (critic r2 R2-1): the file is built from the batch's snapshots.
+  const built = buildPain001Xml(frozen);
   const validated = validatePain001(built.xml);
   if (!validated.ok) return validated;
 
@@ -928,9 +1026,9 @@ export function generatePain001(ctx: WorkspaceContext, input: GeneratePain001Inp
     if (batch.status === 'draft') {
       ctx.store.db
         .prepare(
-          "UPDATE payment_batch SET status = 'generated', ctrl_sum_minor = ?, nb_of_txs = ?, msg_id = ? WHERE workspace_id = ? AND id = ?",
+          "UPDATE payment_batch SET status = 'generated', ctrl_sum_minor = ?, nb_of_txs = ?, generated_at = ? WHERE workspace_id = ? AND id = ?",
         )
-        .run(built.ctrlSumMinor, built.nbOfTxs, built.msgId, ctx.workspaceId, batch.id);
+        .run(built.ctrlSumMinor, built.nbOfTxs, ctx.clock.now(), ctx.workspaceId, batch.id);
       ctx.audit.record({ entityKind: 'payment_batch', entityId: batch.id, action: 'update', actor: ctx.actor, at: ctx.clock.now() });
     }
     return ok({

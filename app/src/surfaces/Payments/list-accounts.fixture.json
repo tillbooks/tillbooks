@@ -9,6 +9,7 @@
       "vatCodeDefault": null,
       "costCenterAllowed": false,
       "archived": false,
+      "statementIsVoucher": false,
       "inUse": false
     },
     {
@@ -20,6 +21,7 @@
       "vatCodeDefault": null,
       "costCenterAllowed": false,
       "archived": false,
+      "statementIsVoucher": false,
       "inUse": false
     },
     {
@@ -31,6 +33,7 @@
       "vatCodeDefault": null,
       "costCenterAllowed": true,
       "archived": false,
+      "statementIsVoucher": false,
       "inUse": false
     }
   ],

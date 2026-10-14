@@ -19,6 +19,7 @@
     "creditorIban": "CH44 3199 9123 0008 8901 2",
     "uid": "CHE-123.456.789",
     "mwstNo": "CHE-123.456.789 MWST",
+    "defaultPaymentTermsDays": 30,
     "createdAt": "2026-07-19T10:00:00.000Z",
     "ledgerLocked": false
   }

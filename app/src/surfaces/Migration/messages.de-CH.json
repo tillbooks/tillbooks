@@ -80,7 +80,7 @@
       "prepared": "{identity}: vorbereitet, produktiv ab {date}",
       "selectorLabel": "Plan",
       "abandon": "Übernahme abbrechen",
-      "abandonConfirm": "Die Übernahme abbrechen? Der Testmandant wird verworfen. Belege bereits übernommener Schritte bleiben erhalten."
+      "abandonConfirm": "Die Übernahme abbrechen? Der Testmandant, den diese Bücher angelegt haben, wird endgültig gelöscht, solange er ein Test ist (nur dieser); ging er produktiv, sind es deine Bücher und er bleibt. Belege bereits übernommener Schritte bleiben erhalten."
     },
     "source": {
       "adapter": "Format",
@@ -147,7 +147,9 @@
       "confirmLabel": "Tippe den Firmennamen ein, um produktiv zu gehen",
       "irreversible": "Das lässt sich nicht rückgängig machen. Der Testmandant kann danach nicht mehr verworfen werden.",
       "discard": "Testmandanten verwerfen",
-      "discardConfirm": "Den Testmandanten wirklich verwerfen? Der Wegwerf-Arbeitsbereich wird gelöscht. Belege aus Schritten, die bereits live gingen, bleiben erhalten.",
+      "discardConfirm": "Den Testmandanten wirklich verwerfen? Der Wegwerf-Arbeitsbereich, den diese Bücher angelegt haben, wird gelöscht; eine Kopie löscht nie den des Originals. Belege aus Schritten, die bereits live gingen, bleiben erhalten.",
+      "unlinkedOnly": "Diese Kopie zeigt nicht mehr auf den Testmandanten des Originals; das Original behält ihn.",
+      "alreadyGone": "Der Testmandant war schon gelöscht; dieser Plan zeigt nicht mehr darauf.",
       "more": "Mehr",
       "wentLive": "Dieser Arbeitsbereich sind jetzt deine echten Bücher.",
       "err": {
@@ -157,6 +159,7 @@
         "liveWorkspaceExists": "Für diese UID gibt es bereits einen Live-Mandanten. Führe die Übernahme stattdessen dort aus.",
         "confirmMismatch": "Der Name stimmt nicht mit dem Firmennamen überein.",
         "notATestmandant": "Das ist kein Testmandant.",
+        "notOwned": "Diese Kopie besitzt den Testmandanten nicht. Produktiv setzen kann ihn nur die Buchhaltung, die ihn angelegt hat.",
         "planAlreadyLive": "Diese Übernahme ist bereits live.",
         "generic": "Das hat nicht geklappt. Versuche es nochmals."
       }
@@ -387,6 +390,8 @@
     "error": "Das Einführungsprojekt konnte nicht geladen werden",
     "empty": "Ein Einführungsprojekt hält Phasen, Entscheide, Freigaben und den Parallellauf über dem Übernahmeplan zusammen, damit sie die Leute überleben, die sie gemacht haben.",
     "continueWithout": "Ohne Projekt fortfahren",
+    "skipped": "Ohne Einführungsprojekt. Weiter geht es unten mit deinen Exportdateien.",
+    "createAnyway": "Doch ein Projekt anlegen",
     "next": "Nächster Schritt",
     "needsManage": "Braucht das Recht \"Einführung verwalten\"",
     "create": "Einführungsprojekt anlegen",

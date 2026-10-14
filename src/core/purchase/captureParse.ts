@@ -21,6 +21,7 @@ import {
   isValidQrrReference,
   isValidScorReference,
 } from '../sales/qrbill.js';
+import { NOTIFICATION_NOTICES } from './qrbill/notification.js';
 
 /** One field the deterministic pass extracted, before it becomes a `capture_fields` row. */
 export interface ParsedField {
@@ -146,6 +147,9 @@ export function parseSpcPayload(payload: string): ParsedPayload {
   if (amountRaw.length > 0) {
     const minor = amountToRappen(amountRaw);
     if (minor === null) notes.push({ key: 'amount', reason: 'unparseable' });
+    // IG §4.4: 0.00 with a Table 10 notice is a "do not use for payment" notification, and 0.00 is not
+    // the bill's amount; the strict decoder of supplied payloads proposes none either (critic R2-L1).
+    else if (minor === 0 && NOTIFICATION_NOTICES.has(at(SPC.UNSTRUCTURED))) notes.push({ key: 'amount', reason: 'notification' });
     else if (currency.length === 0) notes.push({ key: 'amount', reason: 'missing_currency' });
     else push('amount', { minor, currency });
   }
@@ -173,7 +177,9 @@ export function parseSpcPayload(payload: string): ParsedPayload {
     }
   }
 
-  const swico = parseSwicoInto(at(SPC.BILLING_INFO), fields, notes);
+  const swico = parseSwicoS1(at(SPC.BILLING_INFO));
+  fields.push(...swico.fields);
+  notes.push(...swico.notes);
 
   return { qrPresent: true, swicoPresent: swico.present, fields, notes, iban: iban || null, swicoUid: swico.uid };
 }
@@ -251,14 +257,15 @@ function deriveDueDate(invoiceIso: string | null, conditions: string): string | 
  * `/20/` customer reference, `/30/` numeric UID, `/31/` VAT date/period, `/32/` VAT rate(s) with net
  * amounts, `/33/` import VAT, `/40/` conditions (and the derived due date). VAT amounts are stored as
  * PROPOSED values only and are never summed into anything: at commit, A05/A06 recompute the tax (P6).
+ *
+ * Exported for the strict decoder of supplied payloads (`qrbill/decode.ts`), so both paths read Swico
+ * through ONE parser; the fields come back `swico`-stamped and the supplied path re-stamps them.
  */
-function parseSwicoInto(
-  raw: string,
-  fields: ParsedField[],
-  notes: ParseNote[],
-): { present: boolean; uid: string | null } {
+export function parseSwicoS1(raw: string): { present: boolean; uid: string | null; fields: ParsedField[]; notes: ParseNote[] } {
+  const fields: ParsedField[] = [];
+  const notes: ParseNote[] = [];
   const s = raw.trim();
-  if (!s.startsWith('//S1')) return { present: false, uid: null };
+  if (!s.startsWith('//S1')) return { present: false, uid: null, fields, notes };
 
   // After the `//S1` prefix, the string is `/tag/value/tag/value...`. splitSwico on `//S1/10/...`
   // yields ['', '', 'S1', '10', '<v>', '11', '<v>', ...]: the leading `//` produces TWO empty
@@ -318,5 +325,5 @@ function parseSwicoInto(
     if (due !== null) push('due_date', due);
   }
 
-  return { present: true, uid: uidDigits };
+  return { present: true, uid: uidDigits, fields, notes };
 }

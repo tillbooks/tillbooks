@@ -19,14 +19,19 @@
  * Routing decides FIRST, the guard decides SECOND. That order is deliberate and load-bearing for
  * `till serve`, which mounts the MCP face alone: a request for `/api/post_entry` there must 404
  * (that face does not exist on this host) rather than 403 (it exists and you may not have it).
+ *
+ * THE GUARD IS NOT AN IDENTITY. Host and Origin stop a browser page; they say nothing about which
+ * local program is calling. The human `studio` seat is therefore held only with the per-launch Studio
+ * key (`session.ts`), checked AFTER the guard on both faces: `/mcp` seats a session without it as the
+ * governed `agent`, and `/api/:action` refuses a call without it (critic probe P6, 2026-10-12).
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { rejectNonLocal } from './local-guard.js';
 import { createMcpHttpHandler } from './mcp-http.js';
-import { handleRest } from './rest.js';
-import { resolveServedActor } from './session.js';
+import { handleRestAsync } from './rest.js';
+import { checkStudioKey, resolveServedActor, STUDIO_ACTOR } from './session.js';
 import { extractSubject, type ServedModeConfig } from './served-mode.js';
 import type { ApiDeps } from './registry.js';
 
@@ -65,9 +70,9 @@ class BodyTooLargeError extends Error {
 
 export interface LocalHttpOptions {
   /**
-   * Mount the REST twins alongside `/mcp`. The Studio dev bridge sets this; `till serve` does not,
-   * because the REST face carries the dev-only fallback actor (D25) and has no business on the
-   * production host.
+   * Mount the REST twins alongside `/mcp`. The hosts that serve the Studio (the dev bridge and
+   * `till up`) set this, together with `studioKey`; `till serve` does not: the REST face is the
+   * Studio's own bridge (D25) and that host serves no Studio.
    */
   rest?: boolean;
   /** Override the REST body cap (`MAX_BODY_BYTES`). For tests; production uses the default. */
@@ -79,6 +84,14 @@ export interface LocalHttpOptions {
    * applies, and this is byte-for-byte the pre-M01 behaviour.
    */
   servedMode?: ServedModeConfig;
+  /**
+   * The per-launch Studio key (`session.ts`), minted by the host that SERVES the Studio (`till up`,
+   * the dev bridge). In local mode it is the only way to the human `studio` seat on either face: the
+   * MCP face seats a session without it as the governed `agent`, and the REST face refuses a call
+   * without it. Absent, no request on this router can be the Studio (the REST face then refuses every
+   * call, which is fail-closed for a host that mounts it without a Studio to hand the key to).
+   */
+  studioKey?: string;
 }
 
 export interface LocalHttpRouter {
@@ -139,25 +152,53 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 /**
- * Assemble the router over the shared registry. `deps.actor` is the session FALLBACK actor for the
- * MCP face, used when a client declares a name the registry does not recognise (D13).
+ * Assemble the router over the shared registry. Neither face takes its seat from `deps.actor` in local
+ * mode: the Studio key (`opts.studioKey`) is the only way to the `studio` seat (`session.ts`).
  */
 export function createLocalHttpRouter(deps: ApiDeps, opts: LocalHttpOptions = {}): LocalHttpRouter {
   const servedMode = opts.servedMode;
+  const studioKey = opts.studioKey;
   // The MCP face owns its served handling end to end (it holds the sessions), so it gets the config
   // directly. This mirrors why `rejectNonLocal` is applied in both places: `createMcpHttpHandler` is
   // exported and must be safe when mounted on its own, never dependent on a wrapper remembering a rule.
-  const mcp = createMcpHttpHandler(deps, servedMode !== undefined ? { servedMode } : {});
+  const mcp = createMcpHttpHandler(deps, {
+    ...(servedMode !== undefined ? { servedMode } : {}),
+    ...(studioKey !== undefined ? { studioKey } : {}),
+  });
   const bodyCap = opts.maxBodyBytes ?? MAX_BODY_BYTES;
 
   /**
-   * M01: the REST face's per-request served identity, or a `missing_subject` refusal, or null when
-   * local. Returns `{ deps }` to dispatch with, or `{ refused: true }` when the response was already
-   * written (served mode with no subject). In local mode the shared `deps` pass straight through.
+   * The REST face's seat in LOCAL mode: the human `studio` seat with this launch's Studio key, and a
+   * refusal without it. Refused rather than demoted to `agent`, deliberately: the REST twins are the
+   * Studio's own bridge (D25), and a caller that is not the Studio has the MCP face, where it gets the
+   * governed seat together with the dial, the trace and the approval pointer an agent is owed. Done
+   * BEFORE the body is read, so an unauthenticated caller cannot make this host buffer anything.
    */
-  function resolveRestDeps(req: IncomingMessage, res: ServerResponse): { deps: ApiDeps } | { refused: true } {
-    if (servedMode === undefined || !servedMode.enabled) return { deps };
-    const subject = extractSubject(req.headers, servedMode);
+  function studioRestDeps(req: IncomingMessage, res: ServerResponse): { deps: ApiDeps } | { refused: true } {
+    const key = checkStudioKey(req.headers, studioKey);
+    if (key === 'valid') return { deps: { ...deps, actor: STUDIO_ACTOR } };
+    sendJson(res, 401, {
+      ok: false,
+      error: key === 'absent' ? 'studio_key_required' : 'studio_key_invalid',
+      message:
+        key === 'absent'
+          ? 'The REST bridge is the Studio\'s own door and needs the Studio key. An agent speaks MCP on /mcp.'
+          : 'This request carries a Studio key this TILL did not issue. TILL mints a new key on every start: open the Studio through the link till up printed.',
+    });
+    return { refused: true };
+  }
+
+  /**
+   * M01: the REST face's per-request served identity, or a `missing_subject` refusal. Returns
+   * `{ deps }` to dispatch with, or `{ refused: true }` when the response was already written. Only
+   * reached in served mode; local mode seats through `studioRestDeps`.
+   */
+  function servedRestDeps(
+    req: IncomingMessage,
+    res: ServerResponse,
+    config: ServedModeConfig,
+  ): { deps: ApiDeps } | { refused: true } {
+    const subject = extractSubject(req.headers, config);
     if (subject === null) {
       sendJson(res, 401, {
         ok: false,
@@ -196,6 +237,18 @@ export function createLocalHttpRouter(deps: ApiDeps, opts: LocalHttpOptions = {}
       // falls through to its own stack (in dev, that is Vite serving the SPA).
       const action = pathnameOf(req).slice(REST_PREFIX.length);
       if (req.method !== 'POST' || action === '') return false;
+      const served = servedMode !== undefined && servedMode.enabled ? servedMode : undefined;
+      // LOCAL mode: the Studio key decides the seat, before a byte of the body is read. A refused
+      // caller's body is drained unread, so the 401 flushes instead of stalling the socket.
+      let seatDeps: ApiDeps | undefined;
+      if (served === undefined) {
+        const local = studioRestDeps(req, res);
+        if ('refused' in local) {
+          req.resume();
+          return true;
+        }
+        seatDeps = local.deps;
+      }
       let raw: string;
       try {
         raw = await readBody(req, bodyCap);
@@ -211,10 +264,16 @@ export function createLocalHttpRouter(deps: ApiDeps, opts: LocalHttpOptions = {}
       // M01: resolve the served identity for THIS request (or refuse missing_subject). Done after the
       // body cap and method checks so a malformed request is answered the same way in either mode, but
       // BEFORE dispatch, so no verb ever runs under the shared fallback actor in served mode.
-      const restDeps = resolveRestDeps(req, res);
-      if ('refused' in restDeps) return true;
+      if (served !== undefined) {
+        const attested = servedRestDeps(req, res, served);
+        if ('refused' in attested) return true;
+        seatDeps = attested.deps;
+      }
+      // Unreachable (one branch above always seats or refuses), and fail-closed if that ever changes.
+      if (seatDeps === undefined) throw new Error('rest face: no seat was resolved for this request');
       const input = raw.length > 0 ? (JSON.parse(raw) as Record<string, unknown>) : {};
-      const result = handleRest(action, input, restDeps.deps);
+      // D142: awaited, so a verb the host runs off the main thread (`bank_sync`) answers here too.
+      const result = await handleRestAsync(action, input, seatDeps);
       sendJson(res, result.status, result.body);
       return true;
     },

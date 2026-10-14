@@ -59,7 +59,7 @@ export const KEY_BINDINGS: readonly KeyBinding[] = [
   { id: 'nav-open-items', labelKey: 'nav.openItems', keysLabel: 'g o', group: 'chord', chord: { leader: 'g', letter: 'o', path: '/open-items' } },
   { id: 'nav-payments', labelKey: 'nav.payments', keysLabel: 'g z', group: 'chord', chord: { leader: 'g', letter: 'z', path: '/payments' } },
   { id: 'nav-contacts', labelKey: 'nav.contacts', keysLabel: 'g k', group: 'chord', chord: { leader: 'g', letter: 'k', path: '/contacts' } },
-  { id: 'nav-mwst', labelKey: 'nav.mwst.settings', keysLabel: 'g m', group: 'chord', chord: { leader: 'g', letter: 'm', path: '/mwst' } },
+  { id: 'nav-mwst', labelKey: 'nav.mwst.abrechnung', keysLabel: 'g m', group: 'chord', chord: { leader: 'g', letter: 'm', path: '/mwst' } },
   // G15, Pendenzen: G16 reserved `g a` ("Alles was ansteht") for the attention hub (D90 / the orchestrator's
   // ruling). The letter is `a`, not the de-CH-anchored `p`, per that reservation; it carries no digit
   // (story 8.3). The roving selection over the hub's item list is component-local (the surface's own

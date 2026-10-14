@@ -95,6 +95,36 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
  */
 const MIRRORS = [
   {
+    engine: { module: 'dist/core/liquidity/index.js', export: 'PLAN_LINE_REASONS' },
+    studio: { file: 'app/src/surfaces/CreditorPayments/planning-model.ts', symbol: 'PLAN_LINE_REASONS' },
+    note: 'A40. The reason word on every proposal line; a reason missing here would render its raw code.',
+  },
+  {
+    engine: { module: 'dist/core/liquidity/index.js', export: 'NOT_DRAFTED_REASONS' },
+    studio: { file: 'app/src/surfaces/CreditorPayments/planning-model.ts', symbol: 'NOT_DRAFTED_REASONS' },
+    note: 'A40. Why a proposal line was not drafted into an A18 run (the Skonto leg first).',
+  },
+  {
+    engine: { module: 'dist/core/liquidity/index.js', export: 'PLANNED_FLOW_DIRECTIONS' },
+    studio: { file: 'app/src/surfaces/CreditorPayments/planning-model.ts', symbol: 'PLANNED_FLOW_DIRECTIONS' },
+    note: 'A40. The Ein-/Ausgang picker on a planned flow; the engine refuses anything else with invalid_input.',
+  },
+  {
+    engine: { module: 'dist/core/liquidity/index.js', export: 'PLANNED_FLOW_RECURRENCES' },
+    studio: { file: 'app/src/surfaces/CreditorPayments/planning-model.ts', symbol: 'PLANNED_FLOW_RECURRENCES' },
+    note: 'A40. The Wiederholung picker on a planned flow; the engine refuses anything else with invalid_input.',
+  },
+  {
+    engine: { module: 'dist/core/liquidity/index.js', export: 'OPTIMALITIES' },
+    studio: { file: 'app/src/surfaces/CreditorPayments/planning-model.ts', symbol: 'OPTIMALITIES' },
+    note: 'A40 rebuild. A plan is proven optimal or a heuristic answer; the Studio must never call a heuristic optimal.',
+  },
+  {
+    engine: { module: 'dist/core/liquidity/index.js', export: 'CONSERVATIVE_REASONS' },
+    studio: { file: 'app/src/surfaces/CreditorPayments/planning-model.ts', symbol: 'CONSERVATIVE_REASONS' },
+    note: 'A40 R4-M1. Each amount debited conservatively is worded by its reason; an unknown one would render nothing.',
+  },
+  {
     engine: { module: 'dist/core/customization/entities.js', export: 'ENTITY_KIND_IDS' },
     studio: { file: 'app/src/surfaces/Customization/Customization.tsx', symbol: 'ENTITY_KINDS' },
     note: 'G00 OP3. The Anpassung surface renders one panel per registered entity kind; the engine refuses anything else with `unknown_entity_kind`.',

@@ -32,18 +32,19 @@ import {
   LOCALE_PACKS,
   SOURCE_ADAPTERS,
 } from '../core/migration/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface MigrationMapActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
   ): ActionDef;
   depsAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (deps: ApiDeps, input: ActionInput) => Result,
@@ -108,7 +109,7 @@ export function migrationMapActions(h: MigrationMapActionHelpers): readonly Acti
     ),
     ctxAction(
       'migration_set_map',
-      'write',
+      'write:reversible:internal',
       'Persist a migration map for a plan. Every target is validated against the live chart (A01) and tax codes (A05) before anything is written; one unknown target rejects the whole map, and overlapping tax validity windows are refused naming both.',
       ctxSchema({ planId: STR, kind: STR, entries: ENTRIES, ruleDefault: STR, idempotencyKey: STR }, ['planId', 'kind', 'entries', 'idempotencyKey']),
       (ctx, input) => setMap(ctx, as(input)),
@@ -122,7 +123,7 @@ export function migrationMapActions(h: MigrationMapActionHelpers): readonly Acti
     ),
     ctxAction(
       'migration_save_map_template',
-      'write',
+      'write:final:internal',
       "Save a plan's finished maps as a Zuordnungsvorlage for this operator, reusable across client workspaces. Balances and every other client figure are stripped: a template carries only source labels, source account numbers and target ids.",
       ctxSchema({ planId: STR, name: STR, sourceSystem: STR, kinds: STR_LIST, idempotencyKey: STR }, ['planId', 'name', 'sourceSystem', 'kinds', 'idempotencyKey']),
       (ctx, input) => saveMapTemplate(ctx, as(input)),
@@ -136,7 +137,7 @@ export function migrationMapActions(h: MigrationMapActionHelpers): readonly Acti
     ),
     ctxAction(
       'migration_apply_map_template',
-      'write',
+      'write:reversible:internal',
       "Apply a Zuordnungsvorlage to a plan's maps and report the deltas: applied, unmatched (targets this workspace lacks), new (source accounts the template does not cover) and conflicts. A hand-set entry is never overwritten; the hand-set value wins.",
       ctxSchema({ planId: STR, templateId: STR, idempotencyKey: STR }, ['planId', 'templateId', 'idempotencyKey']),
       (ctx, input) => applyMapTemplate(ctx, as(input)),

@@ -80,7 +80,12 @@
       "source": "Backup or export path",
       "confirm": "Restore this backup into a brand-new workspace? Your current workspaces are left untouched.",
       "defaultName": "Restored workspace",
-      "close": "Close"
+      "close": "Close",
+      "portalLinks": {
+        "one": "Restored. {count} portal link stays closed until you hand it over again: open the contact's portal access and activate it if you still want it.",
+        "other": "Restored. {count} portal links stay closed until you hand them over again: open the contact's portal access and activate each one you still want."
+      },
+      "continue": "Continue"
     },
     "verify": {
       "result": "Valid. {entries} posted entries, balanced {balance}."
@@ -97,7 +102,14 @@
     "error": {
       "backup_corrupt": "This file is damaged and cannot be restored. Choose another file.",
       "incompatible_schema_version": "This backup is from an incompatible TILL version and cannot be restored.",
-      "restore_invariant_failed": "The backup did not pass the balance check and was not restored.",
+      "restore_invariant_failed": "The backup failed a consistency check and was not restored. Nothing was changed.",
+      "restore_invariant_reason": {
+        "unbalanced_entry": "The backup holds an entry whose debits and credits do not match. It was not restored; nothing was changed.",
+        "foreign_reference": "The backup points at data of another workspace in this book. It was not restored; nothing was changed. Check where the file came from.",
+        "constraint_violation": "The backup breaks a rule of this book, for example a unique key that is already taken here. It was not restored; nothing was changed.",
+        "ambiguous_reference": "A value in the backup matches more than one record, so TILL cannot tell which one it means. It was not restored; nothing was changed.",
+        "referential_integrity": "The backup points at records it does not contain. It was not restored; nothing was changed."
+      },
       "export_destination_unwritable": "The export could not be written. Free up space and try again.",
       "unrestorable_format": "An export (.tillexport) is not a restore source. Use a .tillbackup file."
     }
@@ -125,7 +137,7 @@
     },
     "parent": {
       "lager": "Inventory",
-      "anlagen": "Fixed assets"
+      "anlagen": "Assets"
     },
     "favourites": {
       "label": "Favorites",
@@ -265,6 +277,8 @@
   "errors": {
     "report_this": "Report this error",
     "invalid_input": "An input was invalid. Please check the fields and try again.",
+    "account_in_use": "This bank account is in use, so this change is refused: an opening balance is posted on it, or a payment batch that is still a draft or generated (not yet paid) names its IBAN. If the IBAN really changed, discard that batch or mark it paid first. Nothing was changed.",
+    "creditor_name_missing": "A vendor has no name, and a payment file cannot name its creditor by an internal ID. Give the vendor a name under Contacts. If the bill is already in a draft payment batch, discard that draft first, then batch the bill again. Nothing was changed.",
     "workspace_not_found": "The selected workspace could not be found.",
     "workspace_archived": "This ledger is archived and read-only. Nothing was changed. It can be reactivated from the workspace roster.",
     "unknown_action": "The application does not know this action.",
@@ -291,6 +305,9 @@
     "already_merged": "This contact has already been merged.",
     "too_many_tags": "Too many tags on this contact. At most 50 are allowed.",
     "tag_too_long": "That tag is too long. At most 40 characters are allowed.",
+    "invalid_country": "The country is the two-letter code a QR-bill needs, for example CH. Nothing was changed.",
+    "field_too_long": "A field is longer than a QR-bill allows. Please shorten it. Nothing was changed.",
+    "iban_not_ch_li": "A QR-bill needs an IBAN starting with CH or LI. Nothing was changed.",
     "occurred_in_future": "An activity cannot be dated in the future.",
     "invalid_activity_kind": "That activity type is not recognised.",
     "invalid_import_format": "The file could not be read. Check the header row and the first bad row.",

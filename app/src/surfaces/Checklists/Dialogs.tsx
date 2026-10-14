@@ -35,13 +35,22 @@ export interface StartDialogProps {
   refusalRunId: string | null;
   working: boolean;
   onStart: (templateId: TemplateId, period: string) => void;
+  /** The template the dialog opens on (`?start=`); the MWST-Periode when absent. */
+  initialTemplateId?: TemplateId;
+  /** The period it opens on, used only when the template offers it; else the template's default. */
+  initialPeriod?: string | null;
 }
 
-export function StartDialog({ open, onClose, periodsFor, defaultPeriodFor, refusal, refusalPeriods, refusalRunId, working, onStart }: StartDialogProps) {
+export function StartDialog({ open, onClose, periodsFor, defaultPeriodFor, refusal, refusalPeriods, refusalRunId, working, onStart, initialTemplateId, initialPeriod = null }: StartDialogProps) {
   const t = useT();
   const id = useId();
-  const [templateId, setTemplateId] = useState<TemplateId>('vat_period');
-  const [period, setPeriod] = useState<string>(defaultPeriodFor('vat_period') ?? periodsFor('vat_period')[0]?.label ?? '');
+  const firstTemplate: TemplateId = initialTemplateId ?? 'vat_period';
+  const [templateId, setTemplateId] = useState<TemplateId>(firstTemplate);
+  const [period, setPeriod] = useState<string>(() =>
+    initialPeriod !== null && periodsFor(firstTemplate).some((p) => p.label === initialPeriod)
+      ? initialPeriod
+      : (defaultPeriodFor(firstTemplate) ?? periodsFor(firstTemplate)[0]?.label ?? ''),
+  );
   const pick = (next: TemplateId) => {
     setTemplateId(next);
     setPeriod(defaultPeriodFor(next) ?? periodsFor(next)[0]?.label ?? '');

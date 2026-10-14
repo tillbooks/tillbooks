@@ -33,12 +33,13 @@ export { hardCloseYear } from './yearClose.js';
 // A04, opening balances: the position every statement above this one is measured from.
 export {
   setOpeningBalances,
+  prevalidateOpeningBalances,
   getOpeningBalances,
   OPENING_CONTRA_ACCOUNT_NUMBER,
   OPENING_KEY_PREFIX,
 } from './openingBalances.js';
 export type { OpeningLineInput, SetOpeningBalancesInput } from './openingBalances.js';
-export { importMigration, parseSwissAmount } from './importMigration.js';
+export { importMigration, prevalidateImportMigration, parseSwissAmount } from './importMigration.js';
 export type { ImportMapping, ImportMigrationInput } from './importMigration.js';
 
 import type { SqliteStore } from '../store/sqlite-store.js';

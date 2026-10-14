@@ -195,6 +195,10 @@ import { ACCRUALS_SCHEMA_SQL } from '../accruals/schema.js';
 // `journal_entry` only, so its position after the core ledger tables is safe. The accrual and
 // provision tables (`ACCRUALS_SCHEMA_SQL`, the other half of A38) concatenate immediately before it.
 import { VAT_SETTLEMENT_SCHEMA_SQL } from '../accruals/vatSettlementSchema.js';
+// A40 payment timing: skonto_term, planned_flow and the append-only payment_plan + payment_plan_line.
+// All §H-TENANT, none posts. payment_plan_line REFERENCES vendor_bill (A17), so it joins the union
+// after PURCHASE_SCHEMA_SQL; it is concatenated at the end beside the other late module fragments.
+import { LIQUIDITY_SCHEMA_SQL } from '../liquidity/schema.js';
 
 /**
  * Additive column migrations (M-3). `CREATE TABLE IF NOT EXISTS` never widens an EXISTING table, so
@@ -240,6 +244,16 @@ export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: st
   // is for: giving an existing file a new nullable column, self-detected via PRAGMA table_info. It
   // cannot carry the stored VALUE across, which is why generation 2 in ./migrations.ts exists too.
   { table: 'workspace', column: 'creditor_iban', ddl: 'creditor_iban TEXT' },
+  // A31 §0a (critic F3): the supplied QR payload that wrote a capture field row, NULL for every other
+  // row. A declared FK, so G04's restore remaps it with the rest (the JSON id list it replaces was
+  // lost on restore). Nullable with a NULL default, which is what ADD COLUMN ... REFERENCES needs, and
+  // a shape change only: SCHEMA_GENERATION and a backup's schemaVersion are unaffected.
+  { table: 'capture_fields', column: 'qr_payload_id', ddl: 'qr_payload_id TEXT REFERENCES capture_qr_payloads(id)' },
+  // A31 (critic R6-M1, owner rule "corrections belong to their bill"): WHICH bill the capture's live
+  // fields came from, the `billIdentity` sha256 of what that bill says, stored by the bill chokepoint
+  // (`purchase/billMerge.ts`) when a bill wins and never from a losing one. Nullable, NULL default: a
+  // shape change only (SCHEMA_GENERATION unaffected); a NULL on an older capture is derived on demand.
+  { table: 'captures', column: 'bill_identity', ddl: 'bill_identity TEXT' },
   // A06/A07 (F2): the Leistungsdatum that priced this line's VAT, when it differs from the entry
   // date. `postEntry` has taken a per-line `supplyDate` since the straddle fix and has priced the
   // tax with it ever since; it simply never stored it, so A07 had to fall back to the ENTRY date
@@ -283,6 +297,10 @@ export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: st
   // A26/A35 (F-08, J5.6): the human's optional reason on a rejected Vorschlag. Nullable, so a file
   // written before 2026-09-05 widens on open with every earlier rejection reading as "no reason given".
   { table: 'agent_action', column: 'reject_reason', ddl: 'reject_reason TEXT' },
+  // A26 (critic N1, 11.10.2026): the content pin of a Vorschlag (`agent/vorschlagPin.ts`). Nullable, so
+  // a file written before it widens on open with every earlier draft reading as "not pinned".
+  { table: 'agent_action', column: 'pin_digest', ddl: 'pin_digest TEXT' },
+  { table: 'agent_action', column: 'pin_json', ddl: 'pin_json TEXT' },
   // A15 (D73): the issue-time demand snapshot on `dunning_item`, added after the table first
   // shipped on the capability branch, so a database written by an earlier build of that branch
   // widens on open. Constant-defaulted, which is all ALTER ADD COLUMN supports, and THE TWO ZEROS
@@ -307,6 +325,14 @@ export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: st
   // parent table exists by the time ensureColumns runs. Pre-A13 rows read NULL, which is the honest
   // answer: nothing they hold is a credit note.
   { table: 'document', column: 'credited_document_id', ddl: 'credited_document_id TEXT REFERENCES document(id)' },
+  // D164 (04.10.2026): the document-level Leistungsdatum. Nullable with a NULL default, so a pre-D164
+  // document reads NULL, which is the honest answer: no document-level date was ever stated, and
+  // every line date those files hold stays exactly where it is (no line date is moved or nulled).
+  { table: 'document', column: 'supply_date', ddl: 'supply_date TEXT' },
+  // D164, critic round 5: the order path (quote -> sales order -> invoice) carries the document-level
+  // and the line Leistungsdatum like every other clone path. Nullable, NULL on every older order.
+  { table: 'sales_order', column: 'supply_date', ddl: 'supply_date TEXT' },
+  { table: 'so_line', column: 'supply_date', ddl: 'supply_date TEXT' },
   { table: 'document_line', column: 'credited_line_position', ddl: 'credited_line_position INTEGER' },
   // A23 (multi-client workspaces): the archived-mandate flag. Constant-defaulted 0, so every book
   // written before A23 opens as active; no data migration, because there is nothing to backfill.
@@ -318,6 +344,10 @@ export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: st
   // nullable), which is what "additive" means.
   { table: 'workspace', column: 'kind', ddl: "kind TEXT NOT NULL DEFAULT 'live'" },
   { table: 'workspace', column: 'promoted_at', ddl: 'promoted_at TEXT' },
+  // D163 (owner pick 04.10.2026): the workspace default Zahlungsfrist. Nullable with no default, so
+  // every book written before it opens with none set and its documents keep falling due on their own
+  // date until the Firmenprofil sets one. A shape change only: no data migration.
+  { table: 'workspace', column: 'default_payment_terms_days', ddl: 'default_payment_terms_days INTEGER' },
   // C02 (quotes / proposals): the quote-owned columns on the shared A10 `document` row, populated
   // ONLY for `type='quote'` rows, mirroring how A11 owns `sent_to_email` and A13 `credited_document_id`
   // rather than forking a second table (spec §4, "no new tables"). Every one is nullable or constant-
@@ -463,6 +493,48 @@ export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: st
   // NULL when no cadence is set (the default is OFF). Nullable, so an A33 book written before A36
   // reads it as "no schedule" on open. §H-TENANT rides the ebics_connection row it sits on.
   { table: 'ebics_connection', column: 'sync_rule_id', ddl: 'sync_rule_id TEXT' },
+  // D142 amendment (owner, 28.09.2026): "Beleg = Kontoauszug" on an account. Nullable: NULL reads as
+  // the seed default, so a book written before it needs no data migration.
+  { table: 'account', column: 'statement_is_voucher', ddl: 'statement_is_voucher INTEGER' },
+  // D142: the sync lease (one sync per connection, across threads and processes). Nullable: a book
+  // written before D142 reads "no sync running" on open.
+  { table: 'ebics_connection', column: 'sync_started_at', ddl: 'sync_started_at TEXT' },
+  // D142 critic F2: who holds the sync lease (pid, boot nonce, job), so a dead holder can be told apart.
+  { table: 'ebics_connection', column: 'sync_lease_owner', ddl: 'sync_lease_owner TEXT' },
+  // D142: the daily automatic fetch setting. Nullable: NULL reads as daily at 07:00 for an active
+  // connection, the owner's default (DECISIONS.md D142).
+  { table: 'ebics_connection', column: 'auto_sync_mode', ddl: 'auto_sync_mode TEXT' },
+  { table: 'ebics_connection', column: 'auto_sync_at', ddl: 'auto_sync_at TEXT' },
+  // D142 critic F1: who last set the schedule, the actor the automatic fetch runs as (checked live).
+  { table: 'ebics_connection', column: 'auto_sync_actor', ddl: 'auto_sync_actor TEXT' },
+  // D141 (non-author critic R2, 28.09.2026): the A12 tick's fingerprint of a waiting auto-issue draft.
+  { table: 'recurring_run_log', column: 'draft_fingerprint', ddl: 'draft_fingerprint TEXT' },
+  // A18 frozen pain.001 references (generation 9): PmtInfId on the batch, InstrId and EndToEndId on
+  // each item (`msg_id` already existed). Nullable, so a pre-generation-9 file widens on open; the
+  // generation-9 data migration then fills every row from the value its XML already carried and adds
+  // the UNIQUE indexes and freeze triggers over them, which cannot live here because they are only
+  // valid AFTER the backfill (see `freezePain001References` in `./migrations.ts`).
+  { table: 'payment_batch', column: 'pmt_inf_id', ddl: 'pmt_inf_id TEXT' },
+  { table: 'payment_batch_item', column: 'instr_id', ddl: 'instr_id TEXT' },
+  { table: 'payment_batch_item', column: 'end_to_end_id', ddl: 'end_to_end_id TEXT' },
+  // A18 (critic r1 C2): the item's frozen position in its batch, the CdtTrfTxInf order. Nullable here;
+  // generation 9 fills it from the rowid order the renderer used until now.
+  { table: 'payment_batch_item', column: 'seq', ddl: 'seq INTEGER' },
+  // A18 (critic r1 C2): the debtor name the file carries, frozen at creation; generation 9 fills it
+  // from the company profile exactly as the renderer resolved it until now.
+  { table: 'payment_batch', column: 'debtor_name', ddl: 'debtor_name TEXT' },
+  // A18 D148 (owner, 30.09.2026): the creditor name the file carries, snapshotted at creation like the
+  // IBAN; generation 9 fills it from the contact exactly as the renderer resolved it until now.
+  { table: 'payment_batch_item', column: 'creditor_name', ddl: 'creditor_name TEXT' },
+  // A18 (critic r2 R2-1): the debtor IBAN the file carries, frozen at creation; generation 9 fills it
+  // from the debtor bank account row, which is what the renderer read until now.
+  { table: 'payment_batch', column: 'debtor_iban', ddl: 'debtor_iban TEXT' },
+  // A18 (critic r3 R3-2): when the batch first produced a file; generation 9 backfills it.
+  { table: 'payment_batch', column: 'generated_at', ddl: 'generated_at TEXT' },
+  // F02 / D157: the engine-written draft marker on a portal grant. Every grant minted since D157 carries
+  // 1 and opens nothing until it is sent; a book written before D157 widens on open with every existing
+  // grant reading 0, live until its own expiry (owner decision 1). Shape only: SCHEMA_GENERATION stays.
+  { table: 'portal_grant', column: 'minted_draft', ddl: 'minted_draft INTEGER NOT NULL DEFAULT 0' },
 ];
 
 /**
@@ -644,7 +716,19 @@ export const ADDITIVE_INDEXES: readonly { name: string; ddl: string }[] = [
 // adopted ONCE into A39's decision and claim rows, and the stored rules naming a verb A39 newly denies
 // are disabled. See `adoptPreA39BankDecisions` in `./migrations.ts`. A pre-A39 backup is then refused
 // by G04's `incompatible_schema_version`, and an older build cannot open an A39 book.
-export const SCHEMA_GENERATION = 8;
+// Generation 9 (A18 frozen pain.001 references, 30.09.2026): the three new reference columns ride
+// ADDITIVE_COLUMNS; the generation is row-level plus the DDL that is only valid after it: every existing
+// batch and item is frozen ONCE at the MsgId/PmtInfId/InstrId/EndToEndId its XML already carried, then
+// the per-workspace UNIQUE indexes and the freeze triggers are created. A pre-generation-9 backup is then
+// refused by G04's `incompatible_schema_version`, which is the point: a generation-8 snapshot can carry
+// unfrozen rows, and restoring one would re-derive their references from re-minted ids.
+// See `freezePain001References` in `./migrations.ts`.
+// Generation 10 (D163, workspace default terms, 04.10.2026): `contact.payment_terms_days` becomes
+// nullable, and every stored 0 becomes NULL ONCE, because `createContact` stored 0 whenever no terms
+// were given and 0 now means "due immediately" while NULL means "the workspace default applies". A
+// pre-generation-10 backup is refused by G04's `incompatible_schema_version`: its 0s would restore as
+// "due immediately". See `nullableContactPaymentTerms` in `./migrations.ts`.
+export const SCHEMA_GENERATION = 10;
 
 const CORE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS workspace (
@@ -686,7 +770,11 @@ CREATE TABLE IF NOT EXISTS workspace (
   -- The only transition is sandbox -> live, once, through go_productive.
   kind              TEXT NOT NULL DEFAULT 'live',
   -- G12: when a Testmandant was promoted to real books. NULL on every workspace that never was one.
-  promoted_at       TEXT
+  promoted_at       TEXT,
+  -- D163 (owner pick 04.10.2026): the workspace default Zahlungsfrist in days (0 to 365), counted
+  -- from the document date when the counterparty has no terms of its own. NULL means none is set,
+  -- and a document then falls due on its own date (core/setup/paymentTerms.ts).
+  default_payment_terms_days INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS account (
@@ -698,6 +786,9 @@ CREATE TABLE IF NOT EXISTS account (
   vat_code_default    TEXT,
   cost_center_allowed INTEGER NOT NULL DEFAULT 0,
   archived            INTEGER NOT NULL DEFAULT 0,
+  -- D142 amendment "Beleg = Kontoauszug": the bank statement is this account's voucher. NULL = the
+  -- seed default (STATEMENT_VOUCHER_DEFAULT_NUMBERS), 0/1 = set on the account. Also in ADDITIVE_COLUMNS.
+  statement_is_voucher INTEGER,
   UNIQUE (workspace_id, number)
 );
 
@@ -1158,7 +1249,9 @@ CREATE TABLE IF NOT EXISTS contact (
   vat_number         TEXT,
   email              TEXT,
   default_currency   TEXT NOT NULL DEFAULT 'CHF',
-  payment_terms_days INTEGER NOT NULL DEFAULT 0,
+  -- D163: NULL means "no terms of its own, the workspace default applies"; 0 means "due
+  -- immediately". NOT NULL DEFAULT 0 until generation 10 folded both into 0 (./migrations.ts).
+  payment_terms_days INTEGER,
   archived           INTEGER NOT NULL DEFAULT 0,
   created_at         TEXT NOT NULL,
   kind               TEXT NOT NULL DEFAULT 'company',
@@ -1249,6 +1342,10 @@ CREATE TABLE IF NOT EXISTS document (
   -- 'native' (which they are). It selects whether the poster runs, so it is a fixed §H-ENUM and never
   -- a custom field (spec §6b Fixed).
   origin             TEXT NOT NULL DEFAULT 'native',
+  -- D164 additive column: the document-level Leistungsdatum (the Studio's "Datum"), stated for the
+  -- whole document. A line's own supply_date wins; NULL means the issue date (lineSupplyDate in
+  -- src/core/sales/supplyDate.ts is the one rule). Repeated in ADDITIVE_COLUMNS for pre-D164 files.
+  supply_date        TEXT,
   created_at         TEXT NOT NULL
 );
 
@@ -1405,4 +1502,4 @@ END;
  * and joins it here. That keeps the money-path DDL beside the code that writes it, and it keeps
  * concurrent capability branches from all editing one 300-line string.
  */
-export const SCHEMA_SQL = `${CORE_SCHEMA_SQL}\n${PAYMENT_SCHEMA_SQL}\n${DEBTORS_SCHEMA_SQL}\n${BANKING_SCHEMA_SQL}\n${ACCESS_SCHEMA_SQL}\n${CUSTOMIZATION_SCHEMA_SQL}\n${AUTOMATION_SCHEMA_SQL}\n${SALES_SCHEMA_SQL}\n${CONTACT_ACTIVITY_SCHEMA_SQL}\n${PURCHASE_SCHEMA_SQL}\n${CAPTURE_SCHEMA_SQL}\n${FILES_SCHEMA_SQL}\n${DUNNING_SCHEMA_SQL}\n${RECURRING_SCHEMA_SQL}\n${QR_MATCH_SCHEMA_SQL}\n${CAMT_SCHEMA_SQL}\n${PAIN001_SCHEMA_SQL}\n${REVIEW_SCHEMA_SQL}\n${AGENT_SCHEMA_SQL}\n${MIGRATION_SCHEMA_SQL}\n${ONBOARDING_SCHEMA_SQL}\n${MOVE_SCHEMA_SQL}\n${GL_ARCHIVE_SCHEMA_SQL}\n${EXTRACTION_MANIFEST_SCHEMA_SQL}\n${PROJECTS_SCHEMA_SQL}\n${TASKS_SCHEMA_SQL}\n${TIME_SCHEMA_SQL}\n${DEALS_SCHEMA_SQL}\n${STOCK_SCHEMA_SQL}\n${SALES_ORDER_SCHEMA_SQL}\n${PURCHASE_ORDER_SCHEMA_SQL}\n${HR_SCHEMA_SQL}\n${RETAINER_SCHEMA_SQL}\n${SIGN_SCHEMA_SQL}\n${PORTAL_SCHEMA_SQL}\n${REMITTANCE_SCHEMA_SQL}\n${REPORTBUILDER_SCHEMA_SQL}\n${MAIL_SCHEMA_SQL}\n${VOICE_SCHEMA_SQL}\n${DRAFTING_SCHEMA_SQL}\n${DATA_SCHEMA_SQL}\n${DOCUMENT_TEMPLATE_SCHEMA_SQL}\n${NOTIFICATIONS_SCHEMA_SQL}\n${PLUGINS_SCHEMA_SQL}\n${DISPATCH_SCHEMA_SQL}\n${PAYROLL_HANDOFF_SCHEMA_SQL}\n${EBILL_SCHEMA_SQL}\n${EBICS_SCHEMA_SQL}\n${MANAGED_SCHEMA_SQL}\n${ASSETS_SCHEMA_SQL}\n${ASSET_MASTER_SCHEMA_SQL}\n${PROCUREMENT_SCHEMA_SQL}\n${INVENTORY_SCHEMA_SQL}\n${DEPRECIATION_SCHEMA_SQL}\n${TRACKING_SCHEMA_SQL}\n${ASSET_TRANSACTION_SCHEMA_SQL}\n${PO_VERSION_SCHEMA_SQL}\n${ASSET_TRANSFER_SCHEMA_SQL}\n${MAINTENANCE_SCHEMA_SQL}\n${MOVEMENT_SCHEMA_SQL}\n${DEPRECIATION_RUN_SCHEMA_SQL}\n${RECEIPT_SCHEMA_SQL}\n${VALUATION_SCHEMA_SQL}\n${LANDED_COST_SCHEMA_SQL}\n${THREE_WAY_MATCH_SCHEMA_SQL}\n${RECONCILIATION_SCHEMA_SQL}\n${STOCKTAKE_SCHEMA_SQL}\n${ADJUST_SCHEMA_SQL}\n${SYNC_SCHEMA_SQL}\n${IMPLEMENTATION_PROJECT_SCHEMA_SQL}\n${ACCRUALS_SCHEMA_SQL}\n${VAT_SETTLEMENT_SCHEMA_SQL}\n${CHECKLISTS_SCHEMA_SQL}\n${FILE_UPLOAD_SCHEMA_SQL}`;
+export const SCHEMA_SQL = `${CORE_SCHEMA_SQL}\n${PAYMENT_SCHEMA_SQL}\n${DEBTORS_SCHEMA_SQL}\n${BANKING_SCHEMA_SQL}\n${ACCESS_SCHEMA_SQL}\n${CUSTOMIZATION_SCHEMA_SQL}\n${AUTOMATION_SCHEMA_SQL}\n${SALES_SCHEMA_SQL}\n${CONTACT_ACTIVITY_SCHEMA_SQL}\n${PURCHASE_SCHEMA_SQL}\n${CAPTURE_SCHEMA_SQL}\n${FILES_SCHEMA_SQL}\n${DUNNING_SCHEMA_SQL}\n${RECURRING_SCHEMA_SQL}\n${QR_MATCH_SCHEMA_SQL}\n${CAMT_SCHEMA_SQL}\n${PAIN001_SCHEMA_SQL}\n${REVIEW_SCHEMA_SQL}\n${AGENT_SCHEMA_SQL}\n${MIGRATION_SCHEMA_SQL}\n${ONBOARDING_SCHEMA_SQL}\n${MOVE_SCHEMA_SQL}\n${GL_ARCHIVE_SCHEMA_SQL}\n${EXTRACTION_MANIFEST_SCHEMA_SQL}\n${PROJECTS_SCHEMA_SQL}\n${TASKS_SCHEMA_SQL}\n${TIME_SCHEMA_SQL}\n${DEALS_SCHEMA_SQL}\n${STOCK_SCHEMA_SQL}\n${SALES_ORDER_SCHEMA_SQL}\n${PURCHASE_ORDER_SCHEMA_SQL}\n${HR_SCHEMA_SQL}\n${RETAINER_SCHEMA_SQL}\n${SIGN_SCHEMA_SQL}\n${PORTAL_SCHEMA_SQL}\n${REMITTANCE_SCHEMA_SQL}\n${REPORTBUILDER_SCHEMA_SQL}\n${MAIL_SCHEMA_SQL}\n${VOICE_SCHEMA_SQL}\n${DRAFTING_SCHEMA_SQL}\n${DATA_SCHEMA_SQL}\n${DOCUMENT_TEMPLATE_SCHEMA_SQL}\n${NOTIFICATIONS_SCHEMA_SQL}\n${PLUGINS_SCHEMA_SQL}\n${DISPATCH_SCHEMA_SQL}\n${PAYROLL_HANDOFF_SCHEMA_SQL}\n${EBILL_SCHEMA_SQL}\n${EBICS_SCHEMA_SQL}\n${MANAGED_SCHEMA_SQL}\n${ASSETS_SCHEMA_SQL}\n${ASSET_MASTER_SCHEMA_SQL}\n${PROCUREMENT_SCHEMA_SQL}\n${INVENTORY_SCHEMA_SQL}\n${DEPRECIATION_SCHEMA_SQL}\n${TRACKING_SCHEMA_SQL}\n${ASSET_TRANSACTION_SCHEMA_SQL}\n${PO_VERSION_SCHEMA_SQL}\n${ASSET_TRANSFER_SCHEMA_SQL}\n${MAINTENANCE_SCHEMA_SQL}\n${MOVEMENT_SCHEMA_SQL}\n${DEPRECIATION_RUN_SCHEMA_SQL}\n${RECEIPT_SCHEMA_SQL}\n${VALUATION_SCHEMA_SQL}\n${LANDED_COST_SCHEMA_SQL}\n${THREE_WAY_MATCH_SCHEMA_SQL}\n${RECONCILIATION_SCHEMA_SQL}\n${STOCKTAKE_SCHEMA_SQL}\n${ADJUST_SCHEMA_SQL}\n${SYNC_SCHEMA_SQL}\n${IMPLEMENTATION_PROJECT_SCHEMA_SQL}\n${ACCRUALS_SCHEMA_SQL}\n${VAT_SETTLEMENT_SCHEMA_SQL}\n${CHECKLISTS_SCHEMA_SQL}\n${FILE_UPLOAD_SCHEMA_SQL}\n${LIQUIDITY_SCHEMA_SQL}`;

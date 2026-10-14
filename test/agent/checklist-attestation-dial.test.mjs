@@ -88,7 +88,8 @@ test('the rule is closed and sane: a real write verb, the SAME capability as vat
   assert.equal(dialCapabilityForCall('checklist_item_complete', { evidence: { kind: 'signoff', ref: 'bank:1' } }), undefined);
   assert.equal(dialCapabilityForCall('checklist_item_complete', {}), undefined);
   assert.equal(dialCapabilityForCall('vat_mark_filed', {}), 'vat-file', 'the name-keyed map still answers first');
-  assert.equal(dialCapabilityForCall('checklist_item_skip', attestation), undefined, 'the rule is per verb, not per payload shape');
+  // (D161 governs checklist_item_skip by name under close-period, so the per-verb probe is checklist_start.)
+  assert.equal(dialCapabilityForCall('checklist_start', attestation), undefined, 'the rule is per verb, not per payload shape');
 });
 
 test('agent seat: the attestation DRAFTS under vat-file, the same mode as vat_mark_filed; the item stays open; the trace says draft', () => {
@@ -156,6 +157,9 @@ test('human path untouched: a studio attestation executes at once, opens no sess
   deps.store.close();
 });
 
+/** D161: the two ticks whose every call, the bare tenant included, is the governed one. */
+const EVERY_CALL_GOVERNED = ['run_due_recurring', 'run_due_automations'];
+
 test('the WHOLE input-keyed rule table is closed and sane: every rule names a real write verb, a real dial capability, and a verb the name-keyed map does not already govern', () => {
   // The name-keyed map has this loop in trust.test.mjs; without one here a future rule naming a
   // non-existent verb, a read verb, an unknown capability, or a verb already governed by name (which
@@ -168,7 +172,13 @@ test('the WHOLE input-keyed rule table is closed and sane: every rule names a re
     assert.ok(DIAL_CAPABILITIES.includes(rule.capability), `${rule.action}: '${rule.capability}' is a real dial capability`);
     assert.equal(DIAL_CAPABILITY_FOR_ACTION[rule.action], undefined, `${rule.action}: a verb governed by name makes its input rule dead`);
     assert.equal(typeof rule.when, 'function', `${rule.action}: the predicate is a function`);
-    assert.equal(rule.when({}), false, `${rule.action}: an empty input is never the governed one`);
+    if (EVERY_CALL_GOVERNED.includes(rule.action)) {
+      // D161: the two scheduler ticks require nothing beyond the tenant, so the bare call IS the tick.
+      assert.deepEqual(action.inputSchema.required.filter((f) => f !== 'workspaceId'), [], `${rule.action}: a tick takes only the tenant`);
+      assert.equal(rule.when({}), true, `${rule.action}: every call to the tick is the governed one`);
+    } else {
+      assert.equal(rule.when({}), false, `${rule.action}: an empty input is never the governed one`);
+    }
     assert.ok(typeof rule.why === 'string' && rule.why.length > 20, `${rule.action}: the rule states why, in a sentence`);
   }
 });

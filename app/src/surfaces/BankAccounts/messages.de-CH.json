@@ -256,7 +256,12 @@
       "unsupportedDateRange": "Ein Zeitraum wird nicht abgerufen: ein fehlender Tag kommt von Hand aus dem eBanking.",
       "initRefused": "Die ZKB hat INI und HIA mit 091002 abgelehnt. Das heisst: Partner-ID oder User-ID stimmt nicht, EBICS 3.0 (H005) ist für deinen Vertrag nicht freigeschaltet, oder der Teilnehmer ist schon initialisiert. Nur die ZKB kann das unterscheiden und zurücksetzen: ruf sie an.",
       "certificateRefused": "Die ZKB hat ein Zertifikat abgelehnt (Code {code}). Leg den Kanal still und verbinde neu: TILL erzeugt neue Schlüssel und einen neuen INI-Brief.",
-      "keyExchangeRefused": "Die ZKB hat den Schlüsselaustausch abgelehnt. Nichts wurde bestätigt."
+      "keyExchangeRefused": "Die ZKB hat den Schlüsselaustausch abgelehnt. Nichts wurde bestätigt.",
+      "syncInProgress": "Für diese Verbindung ist seit {started} ein Abruf als laufend markiert. Läuft keiner mehr, gibt TILL die Markierung um {frees} frei.",
+      "autoSyncNoActor": "Der automatische Abruf lief nicht: Weder die Person, die den Abruf eingestellt hat, noch der Inhaber darf Kontoauszüge abrufen. Gib einer von beiden das Recht für Zahlungen zurück oder stelle den Abruf als eine Person ein, die es hat.",
+      "autoSyncNoActorUnset": "Der automatische Abruf lief nicht: Niemand hat ihn eingestellt, darum ruft TILL als Inhaber ab, und der Inhaber darf keine Kontoauszüge abrufen. Gib dem Inhaber das Recht für Zahlungen zurück oder stelle den Abruf als eine Person ein, die es hat.",
+      "autoSyncNoActorOwner": "Der automatische Abruf lief nicht: Der Inhaber hat ihn eingestellt, darum ruft TILL als Inhaber ab, und der Inhaber darf keine Kontoauszüge abrufen. Gib dem Inhaber das Recht für Zahlungen zurück oder stelle den Abruf als eine Person ein, die es hat.",
+      "autoSyncNoActorAgent": "Der automatische Abruf lief nicht: Ein Agent hat ihn eingestellt, und was ein Agent einstellt, ruft TILL als Inhaber ab. Der Inhaber darf keine Kontoauszüge abrufen. Gib dem Inhaber das Recht für Zahlungen zurück oder stelle den Abruf als eine Person ein, die es hat."
     },
     "state": {
       "draft": "Entwurf",
@@ -337,6 +342,41 @@
       "confirmed": "Bankschlüssel bestätigt. Der Kanal ist aktiv.",
       "mismatch": "Die ZKB sendet jetzt andere Schlüssel als die, die du geprüft hast. Deshalb wurde nichts bestätigt. Vergleiche mit der aktuellen Ausgabe des Blatts und ruf die ZKB an, bevor du es erneut versuchst.",
       "needsTransport": "Zum Abrufen der Bankschlüssel braucht es einen eingerichteten EBICS-Transport."
+    },
+    "auto": {
+      "title": "Automatischer Abruf",
+      "daily": "Täglich automatisch abrufen",
+      "time": "Um",
+      "save": "Speichern",
+      "saving": "Wird gespeichert",
+      "denied": "Den automatischen Abruf ändern darf nur, wer Zahlungen ausführen darf.",
+      "upOnly": "TILL ruft automatisch ab, solange es mit till up läuft. War TILL zur Zeit nicht offen, folgt der Abruf, sobald es startet.",
+      "next": "Nächster automatischer Abruf: {when}",
+      "lastOk": "Letzter automatischer Abruf: {when}",
+      "lastFailed": "Letzter automatischer Abruf: {when}. {reason}",
+      "summaryDaily": "Automatisch täglich um {time}",
+      "summaryOff": "Automatischer Abruf ist aus",
+      "summaryNext": "nächster Abruf {when}",
+      "dueNow": "heute noch offen, folgt gleich",
+      "change": "Ändern",
+      "done": "Fertig"
+    },
+    "addAnother": "Weiteren Bankkanal verbinden",
+    "addEbics": "Per EBICS verbinden",
+    "details": "Details und Verwaltung",
+    "detailsBank": "Bank",
+    "detailsEbanking": "eBanking",
+    "keysConfirmedShort": "Bankschlüssel bestätigt",
+    "returnCode": {
+      "090005": "Die Bank hat keine neuen Auszüge (Code 090005).",
+      "090003": "Der Abruf der Auszüge ist für deinen Vertrag nicht freigeschaltet (Code 090003). Bitte die Bank, ihn freizuschalten.",
+      "091005": "Die Bank erlaubt diesen Abruf für deinen Teilnehmer nicht (Code 091005). Bitte die Bank, ihn freizuschalten.",
+      "091006": "Die Bank erlaubt diesen Abruf für deinen Teilnehmer nicht (Code 091006). Bitte die Bank, ihn freizuschalten.",
+      "091008": "Die Bank meldet ein Problem mit ihren Schlüsseln (Code 091008). Vergleiche die Bankschlüssel unter Bankkonten.",
+      "091117": "Die Auszüge sind zu gross für den Abruf (Code 091117). Lade diese Tage im eBanking herunter und importiere sie hier.",
+      "091119": "Die Bank ist gerade ausgelastet (Code 091119). TILL versucht es später erneut.",
+      "other": "Die Bank meldet Code {code}.",
+      "unreachable": "Die Bank hat nicht geantwortet ({reason})."
     }
   },
   "help": {
@@ -345,6 +385,75 @@
       "body": "Das Register deiner Bankkonten mit IBAN, QR-IBAN und Eröffnungssaldo. Eine QR-IBAN kann nur Zahlungen empfangen; für ausgehende Zahlungen braucht das Register zusätzlich eine normale IBAN, und die Oberfläche weist darauf hin, wenn sie fehlt. Hier verwaltest du auch den EBICS-Kanal und archivierst Konten, die nicht mehr gebraucht werden.",
       "concepts": [],
       "docsPath": "swiss/qr-bill"
+    }
+  },
+  "attention": {
+    "queue": {
+      "bankKeysReview": "Bank: Schlüssel vergleichen",
+      "bankActivation": "Bank: Freischaltung",
+      "bankStatementGap": "Bank: Auszüge fehlen",
+      "bankFetchFailed": "Bank: Abruf fehlgeschlagen"
+    },
+    "item": {
+      "bankKeysReview": {
+        "title": "{bank} hat freigeschaltet: Schlüssel vergleichen",
+        "subtitle": "Vergleiche die Hashwerte einmal mit dem Blatt der Bank."
+      },
+      "bankActivation": {
+        "sendLegs": {
+          "title": "Sende INI und HIA an die {bank}",
+          "subtitle": "Unter Bankkonten. Danach unterschreibst du den INI-Brief und schickst ihn per Post."
+        },
+        "resendLegs": {
+          "title": "Sende INI und HIA erneut an die {bank}",
+          "subtitle": "Die {bank} hat noch nicht beide bestätigt. TILL sendet nur, was fehlt. Der INI-Brief geht unterschrieben per Post."
+        },
+        "signLetter": {
+          "title": "Unterschreibe den INI-Brief für die {bank}",
+          "subtitle": "Schon unterwegs? Dann wartet TILL auf die Freischaltung. Zuletzt bei der {bank} nachgefragt: {lastCheckAt}.",
+          "subtitleNoCheck": "Schon unterwegs? Dann wartet TILL auf die Freischaltung durch die {bank}."
+        }
+      },
+      "bankStatementGap": {
+        "titleManyDays": "{bank}: Auszüge {range} fehlen ({fromDate} bis {toDate})",
+        "titleManyDay": "{bank}: Auszüge {range} fehlen ({fromDate})",
+        "titleOneDays": "{bank}: Auszug {range} fehlt ({fromDate} bis {toDate})",
+        "titleOneDay": "{bank}: Auszug {range} fehlt ({fromDate})",
+        "subtitleChained": "Der Saldo von Auszug {after} geht genau in Auszug {before} über: es fehlt kein Geld. Die Nummern dazwischen sind wahrscheinlich Tage ohne Buchung oder Buchungen, die sich aufheben.",
+        "subtitleUnchained": "In den fehlenden Auszügen stehen {differenceMinor}, die noch nicht im Buch sind. Importiere sie aus dem eBanking.",
+        "subtitlePending": "Auszug {before} wartet: in den fehlenden Auszügen davor stehen {differenceMinor}, die noch nicht im Buch sind.",
+        "subtitleWaitingInside": "Auszug {waiting} wartet in dieser Lücke und schliesst nicht an: es stehen {differenceMinor}, die noch nicht im Buch sind. Importiere die fehlenden Auszüge.",
+        "titleUnknownDays": "{bank}: nach Auszug {after} fehlen vielleicht Auszüge ({fromDate} bis {toDate})",
+        "titleUnknownDay": "{bank}: nach Auszug {after} fehlt vielleicht ein Auszug ({fromDate})",
+        "subtitleIncomplete": "Auszug {incomplete} ist auf mehrere Dateien verteilt und im Buch nicht vollständig. Ob Geld fehlt, sagt TILL erst, wenn alle Teile importiert sind.",
+        "titleIncomplete": "{bank}: Auszug {incomplete} ist im Buch nicht vollständig",
+        "titleConflicting": "{bank}: Auszug {conflicting} liegt zweimal mit verschiedenen Salden im Buch",
+        "subtitleConflicting": "Die Bank hat Auszug {conflicting} zweimal geliefert, mit verschiedenen Salden. Ob Geld fehlt, lässt sich so nicht sagen: prüfe die beiden Kopien unter Bank.",
+        "confirmationVoid": "Diese Lücke war als vollständig bestätigt. Die Bestätigung gilt nicht mehr."
+      },
+      "bankFetchFailed": {
+        "title": "{bank}: der automatische Abruf ist fehlgeschlagen",
+        "notGranted": "Die Bank gibt den Abruf nicht frei (Code {code}). Bitte die Bank, ihn freizuschalten, und ruf dann unter Bankkonten von Hand ab.",
+        "busy": "Die Bank war heute bei jedem Versuch ausgelastet (Code {code}). Ruf die Auszüge später unter Bankkonten von Hand ab.",
+        "tooLarge": "Die Auszüge sind zu gross für den Abruf (Code {code}). Lade die Tage im eBanking herunter und importiere sie unter Bankkonten.",
+        "refused": "Die Bank hat den Abruf abgelehnt (Code {code}). Öffne die Bankkonten und ruf erneut ab.",
+        "unreachable": "Die Bank hat heute bei keinem Versuch geantwortet ({code}). Prüfe die Internetverbindung und ruf unter Bankkonten von Hand ab.",
+        "keystore": "Der Schlüsselspeicher war gesperrt. Starte TILL mit dem Passwort neu, dann ruft es die Auszüge ab.",
+        "noActor": "Niemand mit dem Recht, Zahlungen zu verwalten, kann den Abruf ausführen. Prüfe die Rollen unter Mitglieder.",
+        "noWire": "TILL lief ohne Bankverbindung. Starte TILL mit «till up», dann ruft es die Auszüge ab.",
+        "keysChanged": "Die Bankschlüssel haben sich geändert. Vergleiche sie unter Bankkonten, bevor wieder abgerufen wird.",
+        "untrusted": "Die Antwort der Bank liess sich nicht prüfen. Lade den Tag im eBanking herunter und importiere ihn. Wiederholt es sich, ruf die Bank an.",
+        "local": "Der Abruf konnte auf diesem Gerät nicht fertig werden. Ruf die Auszüge unter Bankkonten von Hand ab.",
+        "other": "Der Abruf endete mit {code}. Öffne die Bankkonten und ruf erneut ab."
+      }
+    },
+    "act": {
+      "compareBankKeys": "Schlüssel vergleichen",
+      "openBankAccounts": "Bankkonten öffnen",
+      "closeGap": "Lücke schliessen",
+      "confirmGap": "Nichts fehlt, bestätigen",
+      "confirmGapConfirm": "Ja, nichts fehlt",
+      "confirmGapReason": "Woran siehst du, dass nichts fehlt?"
     }
   }
 }

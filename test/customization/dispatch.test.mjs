@@ -26,6 +26,7 @@ import { join } from 'node:path';
 
 import { getAction } from '../../dist/api/registry.js';
 import { DISPATCH_VARIABLES } from '../../dist/core/customization/index.js';
+import { handleRest } from '../../dist/api/rest.js';
 import { freshDeps, mintWorkspace, recordingRelay } from '../api/support.mjs';
 
 const call = (deps, name, input) => getAction(name).run(deps, input);
@@ -477,6 +478,118 @@ test('H-TENANT: dispatch texts and log rows are invisible across the workspace b
   const foreign = must(call(deps, 'list_dispatches', { workspaceId: other }), 'foreign list');
   assert.equal(foreign.dispatches.length, 0);
   assert.equal(foreign.texts.length, 0);
+});
+
+// --- dispatch_text_reset: back to the built-in default ------------------------------------------
+
+const textRows = (deps, workspaceId) =>
+  deps.store.db
+    .prepare('SELECT * FROM dispatch_texts WHERE workspace_id = ? ORDER BY document_kind, locale')
+    .all(workspaceId);
+
+test('G05 §10: dispatch_text_reset deletes the saved slot, and the preview falls back to the built-in default', () => {
+  const { deps, workspaceId } = world('rs');
+  const saved = must(
+    call(deps, 'dispatch_text_upsert', {
+      workspaceId,
+      documentKind: 'invoice',
+      locale: 'de-CH',
+      subject: 'Eigener Betreff {{invoice_number}}',
+      body: 'Eigener Text {{contact_name}}',
+    }),
+    'upsert',
+  );
+  // A second slot that must survive the reset of the first one.
+  must(
+    call(deps, 'dispatch_text_upsert', { workspaceId, documentKind: 'invoice', locale: 'en', subject: 'Own', body: 'Own text' }),
+    'upsert en',
+  );
+  const before = must(call(deps, 'dispatch_preview', { workspaceId, documentKind: 'invoice', locale: 'de-CH' }), 'preview');
+  assert.equal(before.messages[0].defaulted, false);
+
+  const reset = must(call(deps, 'dispatch_text_reset', { workspaceId, documentKind: 'invoice', locale: 'de-CH' }), 'reset');
+  assert.equal(reset.removedDispatchTextId, saved.dispatchText.dispatchTextId);
+  assert.equal(reset.defaulted, true);
+  assert.equal(reset.unchanged, undefined);
+
+  const left = textRows(deps, workspaceId);
+  assert.deepEqual(left.map((r) => `${r.document_kind}/${r.locale}`), ['invoice/en'], 'only the named slot is deleted');
+  const after = must(call(deps, 'dispatch_preview', { workspaceId, documentKind: 'invoice', locale: 'de-CH' }), 'preview');
+  assert.equal(after.messages[0].defaulted, true, 'the slot resolves to the built-in default again');
+  assert.match(after.messages[0].subject, /^Rechnung R-2026-0001 von /);
+  const listed = must(call(deps, 'list_dispatches', { workspaceId }), 'list');
+  assert.deepEqual(listed.texts.map((x) => x.locale), ['en']);
+});
+
+test('G05 §10: dispatch_text_reset is naturally idempotent: an unsaved slot answers ok, unchanged, and writes nothing', () => {
+  const { deps, workspaceId } = world('rsi');
+  must(
+    call(deps, 'dispatch_text_upsert', { workspaceId, documentKind: 'quote', locale: 'fr-CH', subject: 'Offre', body: 'Texte' }),
+    'upsert',
+  );
+  const input = { workspaceId, documentKind: 'dunning_run', locale: 'it-CH' };
+  const snapshot = JSON.stringify(textRows(deps, workspaceId));
+  const first = must(call(deps, 'dispatch_text_reset', input), 'reset unsaved');
+  assert.equal(first.unchanged, true);
+  assert.equal(first.defaulted, true);
+  assert.equal(JSON.stringify(textRows(deps, workspaceId)), snapshot, 'an unsaved-slot reset touched a row');
+  // A double delivery of a REAL reset: the second call finds the slot already unsaved.
+  must(call(deps, 'dispatch_text_reset', { workspaceId, documentKind: 'quote', locale: 'fr-CH' }), 'reset');
+  const again = must(call(deps, 'dispatch_text_reset', { workspaceId, documentKind: 'quote', locale: 'fr-CH' }), 'reset again');
+  assert.equal(again.unchanged, true);
+  assert.deepEqual(textRows(deps, workspaceId), []);
+});
+
+test('G05 §10: dispatch_text_reset refuses a bad kind and a bad locale with the save verb\'s own codes', () => {
+  const { deps, workspaceId } = world('rsv');
+  must(
+    call(deps, 'dispatch_text_upsert', { workspaceId, documentKind: 'invoice', locale: 'de-CH', subject: 'S', body: 'B' }),
+    'upsert',
+  );
+  const kind = call(deps, 'dispatch_text_reset', { workspaceId, documentKind: 'credit_note', locale: 'de-CH' });
+  assert.equal(kind.ok, false);
+  assert.equal(kind.error, 'unknown_document_kind');
+  const locale = call(deps, 'dispatch_text_reset', { workspaceId, documentKind: 'invoice', locale: 'de-DE' });
+  assert.equal(locale.ok, false);
+  assert.equal(locale.error, 'invalid_locale');
+  assert.equal(textRows(deps, workspaceId).length, 1, 'a refused reset deleted a row');
+});
+
+test('H-TENANT: dispatch_text_reset in one workspace never deletes the same slot of another', () => {
+  const { deps, workspaceId } = world('rst1');
+  const other = mintWorkspace(deps, 'Fremd AG', 'rst2-ws').workspaceId;
+  for (const ws of [workspaceId, other]) {
+    must(
+      call(deps, 'dispatch_text_upsert', { workspaceId: ws, documentKind: 'invoice', locale: 'de-CH', subject: 'S', body: 'B' }),
+      'upsert',
+    );
+  }
+  must(call(deps, 'dispatch_text_reset', { workspaceId, documentKind: 'invoice', locale: 'de-CH' }), 'reset');
+  assert.equal(textRows(deps, workspaceId).length, 0);
+  assert.equal(textRows(deps, other).length, 1, 'the reset crossed the workspace boundary');
+});
+
+test('G05 §10 A24: without manage_dispatch_texts the reset refuses before any delete, on the registry and the REST twin', () => {
+  const { deps, workspaceId } = world('rsp');
+  must(
+    call(deps, 'dispatch_text_upsert', { workspaceId, documentKind: 'invoice', locale: 'de-CH', subject: 'S', body: 'B' }),
+    'upsert',
+  );
+  // Provision the workspace (the first invite flips it) and narrow the calling actor to viewer.
+  must(call(deps, 'invite_member', { workspaceId, email: 'leser@muster.ch', role: 'viewer', idempotencyKey: 'rsp-inv' }), 'invite');
+  const seat = must(call(deps, 'list_members', { workspaceId }), 'members').members.find((m) => m.actorId === 'agent');
+  assert.ok(seat !== undefined, 'the provisioning flip did not seat the agent');
+  must(call(deps, 'set_role', { workspaceId, memberId: seat.memberId, role: 'viewer' }), 'set_role');
+  const me = must(call(deps, 'whoami', { workspaceId }), 'whoami');
+  assert.equal(me.capabilities.includes('manage_dispatch_texts'), false, 'viewer must not hold the gate');
+
+  const input = { workspaceId, documentKind: 'invoice', locale: 'de-CH' };
+  const denied = call(deps, 'dispatch_text_reset', input);
+  assert.equal(denied.ok, false);
+  assert.equal(denied.error, 'permission_denied');
+  const viaRest = handleRest('dispatch_text_reset', input, deps);
+  assert.equal(viaRest.body.error, 'permission_denied');
+  assert.equal(textRows(deps, workspaceId).length, 1, 'a refused reset deleted the slot');
 });
 
 // --- Structural guards: P3 by omission, append-only ----------------------------------------------

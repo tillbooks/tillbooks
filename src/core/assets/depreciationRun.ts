@@ -40,8 +40,8 @@ import { createHash } from 'node:crypto';
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
-import { postEntry } from '../ledger/postEntry.js';
-import { reverseEntry } from '../ledger/reverseEntry.js';
+import { postEntryInternalChecked } from '../ledger/innerPosting.js';
+import { reverseOwnedEntry, DEPRECIATION_RUN_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
 import { getEntry } from '../ledger/reads.js';
 import { calculateDepreciation, isPeriod, daysInPeriod } from './depreciation/engine.js';
 import type { AssetSnapshot, CalcContext } from './depreciation/types.js';
@@ -726,14 +726,17 @@ export function assetDepreciationRunPost(ctx: WorkspaceContext, input: RunPostIn
       // way the per-asset asset_depreciation_line rows already exist for the sub-ledger audit.
       const journalLines = buildJournalLines(runRow.posting_granularity, lines);
 
-      const posted = postEntry(ctx, {
+      // K1: the key is built from the run id, which any reader holds from the draft on, so the entry
+      // posts in this composite's own scope (a `post_entry` made first under the same key used to be
+      // replayed as the run's depreciation) and is read back as this run's own.
+      const posted = postEntryInternalChecked(ctx, {
         date: postingDate,
         source: 'asset_depreciation',
         description: `Abschreibung ${runRow.period}`,
         ref: runRow.id,
         idempotencyKey: JSON.stringify(['asset_depreciation_entry', runRow.id]),
         lines: journalLines,
-      });
+      }, 'asset_depreciation_run_post_internal');
       if (!posted.ok) throw new RunAbort(posted);
       const entryId = posted.entryId;
 
@@ -916,12 +919,12 @@ export function assetDepreciationRunReverse(ctx: WorkspaceContext, input: RunRev
     ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey as string, 'asset_depreciation_run_reverse', () => {
       // The one legal correction: reverse the original journal through A02 (a new mirror entry). The
       // original journal and the original run amounts are never touched (§H-AUDIT).
-      const reversed = reverseEntry(ctx, {
+      const reversed = reverseOwnedEntry(ctx, {
         entryId: runRow.journal_entry_id as string,
         date: reverseDate,
         description: reverseDescription,
         idempotencyKey: JSON.stringify(['asset_depreciation_reverse', runRow.id, input.idempotencyKey]),
-      });
+      }, DEPRECIATION_RUN_REVERSAL_OWNER);
       if (!reversed.ok) throw new RunAbort(reversed);
       const reversalId = reversed.reversalId;
 

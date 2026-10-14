@@ -11,10 +11,14 @@ import { createServer } from 'node:http';
 
 import { createLocalHttpRouter, MAX_BODY_BYTES } from '../../dist/api/local-http.js';
 import { makeApiDeps } from '../../dist/api/mcp.js';
+import { mintStudioKey, studioHeaders } from './studio-key-support.mjs';
+
+/** The Studio key the bridge holds: the cap is measured on the Studio's own requests. */
+const STUDIO_KEY = mintStudioKey();
 
 async function withBridge(maxBodyBytes, body) {
   const { deps, store } = makeApiDeps();
-  const router = createLocalHttpRouter(deps, { rest: true, maxBodyBytes });
+  const router = createLocalHttpRouter(deps, { rest: true, maxBodyBytes, studioKey: STUDIO_KEY });
   const http = createServer((req, res) => {
     void router.handle(req, res).then((handled) => {
       if (handled) return;
@@ -36,7 +40,7 @@ async function withBridge(maxBodyBytes, body) {
 const post = (port, action, raw) =>
   fetch(`http://127.0.0.1:${port}/api/${action}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json', accept: 'application/json', ...studioHeaders(STUDIO_KEY) },
     body: raw,
   });
 

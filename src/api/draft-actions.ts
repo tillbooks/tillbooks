@@ -18,11 +18,12 @@ import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
 import { generateDraft, regenerateDraft, listDraftRuns } from '../core/drafting/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface DraftActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -44,7 +45,7 @@ export function draftActions(h: DraftActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'draft_generate',
-      'write',
+      'write:correctable:internal',
       'Erstelle einen Antwortentwurf für einen Mail-Thread, lokal und in den Entwurfsordner des eigenen Mail-Programms (nie versendet: TILL hat kein Sende-Verb und kein SMTP). Der Entwurf spricht mit dem gelernten Schreibstil (E05) und wird NUR für einen Kontakt mit eingeschalteter Einwilligung (contact.ledger_grounding_enabled, via contacts_update) mit den Buchhaltungs-Fakten aus A16/A11/B00 fundiert; groundInLedger:false schaltet die Fundierung zusätzlich AUS, einschalten kann kein Parameter (die Einwilligungs-Asymmetrie). Ein unbekannter Absender fundiert nie; ohne read_sales fundiert nichts. Antwortet nothing_to_reply_to wenn die neuste Nachricht schon von Ihnen ist, needs_voice_profile ohne Schreibstil, needs_local_runtime ohne lokale Engine (kein Cloud-Fallback existiert), source_changed wenn die Nachricht sich geändert hat. Ein Schlüssel schreibt genau EINEN Entwurf.',
       ctxSchema(
         { threadId: STR, profileId: STR, groundInLedger: BOOL, idempotencyKey: STR },
@@ -54,9 +55,9 @@ export function draftActions(h: DraftActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'draft_regenerate',
-      'write',
-      'Erstelle einen Entwurf neu, mit optionalem Hinweis ("kürzer", "förmlicher"): schreibt eine NEUE draft_run-Zeile (die Versuchsfolge bleibt nachvollziehbar) und ERSETZT die Nachricht im Entwurfsordner statt eine zweite daneben zu legen. Ein Entwurf, den der Mensch schon gesendet oder gelöscht hat, antwortet draft_gone und wird nicht neu erzeugt: gesendet heisst seiner. Einwilligung und RBAC werden neu gelesen, nie vom früheren Lauf geerbt.',
-      ctxSchema({ draftRunId: STR, hint: STR, idempotencyKey: STR }, ['draftRunId', 'idempotencyKey']),
+      'write:final:internal',
+      'Erstelle einen Entwurf neu, mit optionalem Hinweis ("kürzer", "förmlicher"): schreibt eine NEUE draft_run-Zeile (die Versuchsfolge bleibt nachvollziehbar) und ERSETZT die Nachricht im Entwurfsordner statt eine zweite daneben zu legen. Ein Entwurf, den der Mensch schon gesendet oder gelöscht hat, antwortet draft_gone und wird nicht neu erzeugt: gesendet heisst seiner. Hat der Mensch den Entwurf im Mail-Programm bearbeitet und noch nicht gesendet, antwortet draft_edited und nichts wird überschrieben; nur overwriteEdits:true ersetzt seine Änderungen. Einwilligung und RBAC werden neu gelesen, nie vom früheren Lauf geerbt.',
+      ctxSchema({ draftRunId: STR, hint: STR, overwriteEdits: BOOL, idempotencyKey: STR }, ['draftRunId', 'idempotencyKey']),
       (ctx, input) => regenerateDraft(ctx, as(input)),
     ),
     ctxAction(

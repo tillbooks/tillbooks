@@ -110,6 +110,11 @@
     "model": {
       "changed": "Mit einem anderen Modell erstellt."
     },
+    "edited": {
+      "question": "Du hast diesen Entwurf seit dem Erstellen geändert. Trotzdem neu erstellen?",
+      "overwrite": "Trotzdem neu erstellen",
+      "keep": "Meine Änderungen behalten"
+    },
     "review": {
       "note": "Du prüfst und sendest in deiner Mail-App. TILL sendet nie."
     },

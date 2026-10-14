@@ -43,6 +43,8 @@ interface VendorReads {
   grants?: () => Promise<RestResponse> | RestResponse;
   pos?: () => RestResponse;
   advices?: () => RestResponse;
+  /** Every portal_grant_send input the panel sent (D161.2, the restored draft's hand-over). */
+  sent?: Record<string, unknown>[];
 }
 
 function transportWith(reads: VendorReads): Transport {
@@ -57,6 +59,10 @@ function transportWith(reads: VendorReads): Transport {
       return ok({ grantId: 'g1', grant: { id: 'g1', status: 'draft', expiresAt: '2026-10-01' }, localLink: '/portal?token=SECRET-ONE-TIME', clamped: false });
     }
     if (action === 'vendor_portal_revoke') return ok({ grantId: (input as { grantId: string }).grantId });
+    if (action === 'portal_grant_send') {
+      reads.sent?.push(input as Record<string, unknown>);
+      return ok({ grantId: (input as { grantId: string }).grantId, sent: false, reason: 'cloud_tier' });
+    }
     return { status: 404, body: { ok: false, error: 'unknown_action' } };
   };
 }
@@ -130,6 +136,38 @@ describe('F03 Lieferantenportal panel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Portalzugang erstellen' }));
     expect(await screen.findByText('Dieser Link wird nur einmal angezeigt.')).toBeTruthy();
     expect(screen.getByLabelText('Link kopieren')).toBeTruthy();
+  });
+
+  it('D161.2: a restored DRAFT says it waits to be handed over again, and Link freischalten sends it confirmed', async () => {
+    let status = 'draft';
+    const grants = () => ok({ grants: [{ id: 'g9', status, expiresAt: '2026-10-01' }] });
+    const sent: Record<string, unknown>[] = [];
+    renderWith(transportWith({ grants, sent }), [CAP.portalManage, CAP.readMasterData]);
+    await openPortalTab();
+    expect(await screen.findByText('Aus einer Sicherung wiederhergestellt: öffnet nichts, bis du ihn wieder freigibst.')).toBeTruthy();
+    status = 'active';
+    await userEvent.click(screen.getByRole('button', { name: 'Link freischalten' }));
+    expect(await screen.findByText('Aktiv')).toBeTruthy();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ workspaceId: 'ws_test', grantId: 'g9', confirmed: true });
+    expect(typeof sent[0]?.['idempotencyKey']).toBe('string');
+    expect(screen.queryByRole('button', { name: 'Link freischalten' })).toBeNull();
+  });
+
+  it('D161.2: an active or revoked vendor grant offers no activation', async () => {
+    const grants = () => ok({ grants: [{ id: 'g1', status: 'active', expiresAt: '2026-10-01' }, { id: 'g2', status: 'revoked', expiresAt: '2026-10-01' }] });
+    renderWith(transportWith({ grants }), [CAP.portalManage, CAP.readMasterData]);
+    await openPortalTab();
+    await screen.findByText('Aktiv');
+    expect(screen.queryByRole('button', { name: 'Link freischalten' })).toBeNull();
+  });
+
+  it('D161.2: without portal.manage a restored draft shows its hint but no activation', async () => {
+    const grants = () => ok({ grants: [{ id: 'g9', status: 'draft', expiresAt: '2026-10-01' }] });
+    renderWith(transportWith({ grants }), [CAP.readMasterData]);
+    await openPortalTab();
+    expect(await screen.findByText('Aus einer Sicherung wiederhergestellt: öffnet nichts, bis du ihn wieder freigibst.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Link freischalten' })).toBeNull();
   });
 
   it('PERMISSION-DENIED: without portal.manage the panel is read-only (no create, no revoke), lists still read', async () => {

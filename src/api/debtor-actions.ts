@@ -33,11 +33,12 @@ import {
   getAgingBucketConfig,
   setAgingBucketConfig,
 } from '../core/debtors/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface DebtorActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -83,7 +84,7 @@ export function debtorActions(h: DebtorActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'set_aging_bucket_config',
-      'write',
+      'write:reversible:internal',
       `Redefine where the aging buckets cut, as a strictly increasing list of positive day counts (the default [30, 60, 90] gives 0-30, 31-60, 61-90 and 90+). This changes the VIEW only: the buckets re-partition the same receivables total and can never change it, and the reconciliation to 1100 Debitoren holds for any boundary set. It is a DACH reporting convention, not a statutory figure, and it is not a dunning deadline (A15 owns those). A repeat call under the same idempotencyKey writes nothing.`,
       ctxSchema({ boundariesDays: BOUNDARIES, idempotencyKey: STR }, ['boundariesDays', 'idempotencyKey']),
       (ctx, input) => setAgingBucketConfig(ctx, input as never),

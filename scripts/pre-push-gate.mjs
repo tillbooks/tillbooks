@@ -41,22 +41,26 @@ import {
   readdirSync,
   rmSync,
   statSync,
-  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { depsIntact, provideDeps } from './lib/gate-deps.mjs';
 import {
   DEVELOP_REF,
+  backgroundVerdict,
   classifyPath,
   fastPhases,
   gatedUpdates,
   isZeroSha,
+  lastVerdict,
   parsePushLines,
   planLane,
+  pushWarnings,
   satisfiedByCache,
   selectTests,
+  stateLabel,
   stricterLane,
 } from './lib/push-gate.mjs';
 
@@ -85,20 +89,6 @@ const ROOT = (() => {
 process.chdir(ROOT);
 
 /** @param {string[]} args @param {string} [cwd] */
-
-/** The nearest existing `rel` directory: this checkout, the main checkout (for linked worktrees), then ancestors. */
-function nearestModules(rel) {
-  const candidates = [process.cwd()];
-  const common = tryGit(['rev-parse', '--path-format=absolute', '--git-common-dir']);
-  if (common) candidates.push(dirname(common));
-  for (let d = dirname(process.cwd()); d !== dirname(d); d = dirname(d)) candidates.push(d);
-  for (const base of candidates) {
-    const p = join(base, rel);
-    if (existsSync(p)) return resolve(p);
-  }
-  return null;
-}
-
 function git(args, cwd) {
   return execFileSync('git', args, { cwd, env: cleanEnv(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 }
@@ -119,6 +109,13 @@ const STATUS = join(COMMON, 'till-gate-status.json');
 const RUNS = join(COMMON, 'till-gate-runs');
 const GREEN_REF = 'refs/till/develop-green';
 const CACHE_KEEP = 200;
+/**
+ * The main checkout (the directory that holds the common git dir), or null for a bare repository. The
+ * background gate runs from here and links node_modules from here, never from the pushing checkout: a
+ * linked worktree is often removed right after its push, which on 30.09.2026 pulled node_modules out
+ * from under a running gate.
+ */
+const MAIN = existsSync(join(dirname(COMMON), '.git')) ? dirname(COMMON) : null;
 
 /** @param {number} ms */
 function sleep(ms) {
@@ -249,7 +246,7 @@ function withLock(label, fn) {
 
 // ---- Status and notification. ---------------------------------------------------------------------
 
-/** @returns {{ state?: string, sha?: string, subject?: string, log?: string, at?: string, reason?: string }} */
+/** @returns {import('./lib/push-gate.mjs').GateStatus} */
 function readStatus() {
   try {
     return JSON.parse(readFileSync(STATUS, 'utf8'));
@@ -258,9 +255,15 @@ function readStatus() {
   }
 }
 
-/** @param {Record<string, string>} status */
+/**
+ * A green or red status is itself the last tested verdict; any other state carries the previous one
+ * along, so `running`, `skipped` or `untested` never hide a red develop.
+ * @param {Record<string, string>} status
+ */
 function writeStatus(status) {
-  writeFileSync(STATUS, `${JSON.stringify({ ...status, at: new Date().toISOString() }, null, 2)}\n`);
+  const tested = status.state === 'green' || status.state === 'red';
+  const verdict = tested ? undefined : lastVerdict(readStatus());
+  writeFileSync(STATUS, `${JSON.stringify({ ...status, at: new Date().toISOString(), ...(verdict ? { verdict } : {}) }, null, 2)}\n`);
 }
 
 /** @param {string} title @param {string} message */
@@ -271,13 +274,7 @@ function notify(title, message) {
 }
 
 function warnIfDevelopRed() {
-  const status = readStatus();
-  if (status.state === 'red') {
-    console.log(`pre-push: WARNING develop is RED since ${status.at}: ${status.subject}`);
-    console.log(`pre-push:         fix forward first. Log: ${status.log}`);
-  } else if (status.state === 'running') {
-    console.log(`pre-push: a background full gate is running for ${status.subject}`);
-  }
+  for (const line of pushWarnings(readStatus())) console.log(line);
 }
 
 // ---- Change sets and phases. ------------------------------------------------------------------------
@@ -329,18 +326,46 @@ function phase(label, cmd, args, options = {}) {
   return true;
 }
 
+/**
+ * `phase`, but with the output captured as well as printed (to the log), so the caller can read what
+ * failed: the background gate classifies an `npm ci` failure by npm's error code (critic LD-1).
+ * @param {string} label @param {string} cmd @param {string[]} args @param {{ cwd?: string }} [options]
+ * @returns {{ ok: boolean, output: string }}
+ */
+function phaseCaptured(label, cmd, args, options = {}) {
+  const started = Date.now();
+  console.log(`pre-push: ${label} ...`);
+  const result = spawnSync(cmd, args, {
+    cwd: options.cwd ? resolve(ROOT, options.cwd) : ROOT,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    env: cleanEnv(),
+  });
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  const secs = Math.round((Date.now() - started) / 1000);
+  if (result.status !== 0) {
+    console.error(`pre-push: ${label} FAILED after ${secs}s`);
+    return { ok: false, output };
+  }
+  console.log(`pre-push: ${label} ok (${secs}s)`);
+  return { ok: true, output };
+}
+
 /** The fast lane: what a non-engine change to develop can break directly. */
 /** @param {string[]} paths @param {string} tip */
 function runFast(paths, tip) {
   const plan = fastPhases(paths);
   if (!phase('check:style', 'npm', ['run', 'check:style'])) return false;
   if (plan.appTypecheck && !phase('Studio typecheck', 'npx', ['tsc', '-b'], { cwd: 'app' })) return false;
-  const vitest = ['vitest', 'run', '--maxWorkers=4', '--minWorkers=1'];
+  const vitest = ['vitest', 'run', '--maxWorkers=4'];
   if (plan.appAll) {
     if (!phase('Studio tests (all: a non-source Studio file changed)', 'npx', vitest, { cwd: 'app' })) return false;
   } else {
     const related = plan.appTests.filter((file) => existsSync(join('app', file)));
-    const args = ['vitest', 'related', '--run', '--passWithNoTests', '--maxWorkers=4', '--minWorkers=1', ...related];
+    const args = ['vitest', 'related', '--run', '--passWithNoTests', '--maxWorkers=4', ...related];
     if (related.length > 0 && !phase(`Studio tests related to ${related.length} changed file(s)`, 'npx', args, { cwd: 'app' })) {
       return false;
     }
@@ -396,7 +421,8 @@ function queueBackground(sha) {
   const child = spawn(process.execPath, [SELF, '--background', sha], {
     detached: true,
     stdio: ['ignore', fd, fd],
-    cwd: process.cwd(),
+    // Not the pushing checkout: a linked worktree may be removed while the background gate runs.
+    cwd: MAIN ?? process.cwd(),
     env: { ...cleanEnv(), TILL_GATE_LOG: log },
   });
   child.unref();
@@ -411,11 +437,23 @@ function markGreen(sha) {
   notify('TILL gate: develop is green', subjectOf(sha));
 }
 
-/** @param {string} sha */
-function markRed(sha) {
+/** @param {string} sha @param {string} [reason] what failed, when it is not the gate itself */
+function markRed(sha, reason) {
   const log = process.env.TILL_GATE_LOG ?? '';
-  writeStatus({ state: 'red', sha, subject: subjectOf(sha), log });
-  notify('TILL gate: develop is RED', `${subjectOf(sha)}. Fix forward. Log: ${log}`);
+  writeStatus({ state: 'red', sha, subject: subjectOf(sha), log, ...(reason ? { reason } : {}) });
+  notify('TILL gate: develop is RED', `${subjectOf(sha)}. ${reason ? `${reason}. ` : ''}Fix forward. Log: ${log}`);
+}
+
+/**
+ * The run tested nothing (its dependencies could not be provided, or vanished while it ran). Not red,
+ * and develop-green stays where it is.
+ * @param {string} sha @param {string} reason
+ */
+function markUntested(sha, reason) {
+  const log = process.env.TILL_GATE_LOG ?? '';
+  writeStatus({ state: 'untested', sha, subject: subjectOf(sha), log, reason });
+  console.error(`background gate: ${stateLabel('untested')}: ${reason}`);
+  notify(`TILL gate: develop ${stateLabel('untested')}`, `${subjectOf(sha)}. ${reason}. Log: ${log}`);
 }
 
 /** @param {string} sha */
@@ -446,23 +484,38 @@ function background(sha) {
     const dir = mkdtempSync(join(tmpdir(), 'till-gate-'));
     try {
       git(['worktree', 'add', '--detach', dir, target]);
-      // A push from a linked worktree has no node_modules of its own (it resolves them from the main
-      // checkout), so look in this checkout, then the main checkout, then every ancestor directory.
-      for (const modules of ['node_modules', 'app/node_modules', 'web/node_modules']) {
-        const found = nearestModules(modules);
-        if (found !== null) symlinkSync(found, join(dir, modules));
+      // The fresh worktree has no node_modules anywhere (root, app/, web/): link the main checkout's
+      // where the lockfile is identical, `npm ci` where it is not (scripts/lib/gate-deps.mjs).
+      const runCi = (/** @type {string} */ cwd) =>
+        phaseCaptured(`npm ci (${relative(dir, cwd) || 'root'})`, 'npm', ['ci', '--no-audit', '--no-fund'], { cwd });
+      const deps = provideDeps({ worktree: dir, source: MAIN, runCi });
+      for (const step of deps.steps) console.log(`background gate: ${step.dir} node_modules ${step.how}`);
+      if (!deps.ok) {
+        // Critic LD-1: an install the commit itself broke (its lockfile) is red; anything else is untested.
+        if (backgroundVerdict({ depsOk: false, depsCause: deps.cause, gateOk: false }).state === 'red') {
+          console.error(`background gate: RED: ${deps.error}`);
+          markRed(target, deps.error);
+          return 1;
+        }
+        markUntested(target, `dependencies could not be provided: ${deps.error}`);
+        return 2;
       }
       const options = { cwd: dir };
-      const ok =
+      const gateOk =
         phase('npm run gate', 'npm', ['run', 'gate'], options) &&
         phase('web build', 'npm', ['run', 'build', '--prefix', 'web'], options) &&
         phase('check:aeo', 'npm', ['run', 'check:aeo', '--prefix', 'web'], options);
-      if (ok) {
+      const verdict = backgroundVerdict({ depsOk: true, gateOk, depsIntactAfter: depsIntact(dir, deps.steps) });
+      if (verdict.state === 'green') {
         // A fresh detached checkout of `target` is by construction the commit under test.
         recordTree(tree, 'gate');
         recordTree(tree, 'web');
         markGreen(target);
         return 0;
+      }
+      if (verdict.state === 'untested') {
+        markUntested(target, 'node_modules vanished while the gate ran (a checkout was removed or reinstalled)');
+        return 2;
       }
       markRed(target);
       return 1;
@@ -480,9 +533,10 @@ function status() {
   const green = tryGit(['rev-parse', GREEN_REF]);
   tryGit(['fetch', '-q', 'origin', 'develop']);
   const tip = tryGit(['rev-parse', 'origin/develop']);
-  console.log(`last background gate: ${s.state ?? 'none yet'}${s.subject ? `  ${s.subject}` : ''}${s.at ? `  (${s.at})` : ''}`);
+  console.log(`last background gate: ${stateLabel(s.state)}${s.subject ? `  ${s.subject}` : ''}${s.at ? `  (${s.at})` : ''}`);
   if (s.log) console.log(`log: ${s.log}`);
   if (s.reason) console.log(`reason: ${s.reason}`);
+  if (s.verdict) console.log(`last tested verdict: ${stateLabel(s.verdict.state)}  ${s.verdict.subject ?? ''}  (${s.verdict.at ?? '?'})`);
   console.log(`develop-green: ${green ? subjectOf(green) : 'not set yet'}`);
   if (tip) console.log(`origin/develop: ${subjectOf(tip)}${green === tip ? '  (green)' : '  (not yet proven green)'}`);
   return 0;

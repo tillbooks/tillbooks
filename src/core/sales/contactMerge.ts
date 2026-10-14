@@ -209,6 +209,44 @@ const ANONYMISED_NAME = 'Anonymisiert';
 const REDACTED_BODY = '[anonymisiert]';
 
 /**
+ * Personal data an erasure deliberately LEAVES in place, because the row it sits in is a retained
+ * business record (OR 958f, GeBüV Art. 9: ten years, readable): the erasure report names each one with
+ * the rows it concerns, so what was kept is stated rather than discovered.
+ *
+ * `payment_batch_item` (A18, D148): a payment-batch item snapshots the creditor's name and IBAN at batch
+ * creation, and that snapshot is what the pain.001 file handed to the bank carries (`Cdtr/Nm`,
+ * `CdtrAcct/IBAN`). The file is a record of a payment instruction; regenerating it after an erasure
+ * must reproduce what was sent (the bank deduplicates on its MsgId), so the snapshot survives the
+ * erasure exactly as the posted journal and the document numbers do.
+ *
+ * ONLY WHERE A FILE EXISTS (owner decision, 01.10.2026, critic r2 R2-5): the retention reason holds for
+ * an item of a batch that produced a file (generated, paid, or discarded after generation). An item of a
+ * batch discarded as a draft never reached a bank, so the erasure CLEARS its snapshot (name to NULL,
+ * IBAN to '') and reports the count as `paymentSnapshotsCleared`; the A18 freeze trigger admits exactly
+ * that change and nothing else. An item of a LIVE draft is neither, so a LIVE draft REFUSES the erasure
+ * (owner decision 01.10.2026, "refuse, discard first"): `contact_in_open_payment_batch` names each draft,
+ * and the operator discards it (then the snapshot is cleared) or generates and pays it (then it is
+ * retained). After that refusal every item of the identity is either cleared or retained.
+ */
+export const ERASURE_RETAINED_FIELDS: readonly {
+  table: string;
+  /** The column naming the contact the row belongs to. */
+  contactColumn: string;
+  columns: readonly string[];
+  reason: string;
+}[] = [
+  {
+    table: 'payment_batch_item',
+    contactColumn: 'vendor_id',
+    columns: ['creditor_name', 'creditor_iban'],
+    reason: 'payment_file_is_a_retained_business_record_OR958f',
+  },
+];
+
+/** A payment batch that produced a file (the A18 `batchHadFile` rule, in SQL over alias `b`): the frozen stamp. */
+const BATCH_HAD_FILE_SQL = 'b.generated_at IS NOT NULL';
+
+/**
  * The document statuses that still BIND one of the parties, and therefore block an erasure.
  *
  * revDSG grants a right to erasure; it does not compel one against an overriding interest, and an
@@ -275,6 +313,11 @@ export function anonymiseContact(
   ctx: WorkspaceContext,
   input: { contactId: string; idempotencyKey?: string },
 ): Result {
+  // D156 critic F1: the schema REQUIRES the key, so the engine does too. With it optional, a call
+  // without one ran unkeyed (and, from a governed seat, fell past the dial's draft screen).
+  if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
+    return err('invalid_input', { field: 'idempotencyKey' });
+  }
   const contact = readContact(ctx, input.contactId);
   if (contact === undefined) return err('not_found', { contactId: input.contactId });
   if (contact.merged_into_id !== null) {
@@ -310,6 +353,28 @@ export function anonymiseContact(
     });
   }
 
+  // Owner decision 01.10.2026 ("refuse, discard first"): a payment batch still in DRAFT that names this
+  // identity has produced no file, so nothing retains its snapshot, yet it may still become one naming
+  // the person. The erasure refuses and names each draft (its execution date and items), so the operator
+  // discards it or generates and pays it out first. §H-TENANT on both tables.
+  const openBatches = ctx.store.db
+    .prepare(
+      `SELECT b.id AS batchId, b.execution_date AS executionDate, COUNT(*) AS items
+         FROM payment_batch_item i
+         JOIN payment_batch b ON b.workspace_id = i.workspace_id AND b.id = i.batch_id
+        WHERE i.workspace_id = ? AND i.vendor_id IN (${idPlaceholders}) AND b.status = 'draft'
+        GROUP BY b.id, b.execution_date
+        ORDER BY b.execution_date, b.id`,
+    )
+    .all(ctx.workspaceId, ...identity) as { batchId: string; executionDate: string; items: number }[];
+  if (openBatches.length > 0) {
+    return err('contact_in_open_payment_batch', {
+      contactId: input.contactId,
+      batches: openBatches,
+      reason: 'discard_or_pay_out_the_draft_payment_batch_first',
+    });
+  }
+
   // The strings this erasure must reach EVERYWHERE, captured before the UPDATE overwrites them:
   // the identity's names and emails as stored. The trace sweep below runs on these values.
   const erasedStrings = (
@@ -321,6 +386,24 @@ export function anonymiseContact(
     .filter((v): v is string => typeof v === 'string' && v !== ANONYMISED_NAME);
 
   const run = (): Result => {
+    // What stays, and where (D148, owner R2-5): counted over this identity, §H-TENANT on every table.
+    const itemCount = (field: (typeof ERASURE_RETAINED_FIELDS)[number], batchFilter: string): number =>
+      (
+        ctx.store.db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM ${field.table} i
+               JOIN payment_batch b ON b.workspace_id = i.workspace_id AND b.id = i.batch_id
+              WHERE i.workspace_id = ? AND i.${field.contactColumn} IN (${idPlaceholders}) AND ${batchFilter}`,
+          )
+          .get(ctx.workspaceId, ...identity) as { n: number }
+      ).n;
+    const retained = ERASURE_RETAINED_FIELDS.map((field) => ({
+      table: field.table,
+      columns: [...field.columns],
+      rows: itemCount(field, BATCH_HAD_FILE_SQL),
+      reason: field.reason,
+    }));
+    let paymentSnapshotsCleared = { items: 0 };
     let mailPurged = { threads: 0, messages: 0, drafts: 0, fieldValues: 0 };
     let voicePurged = { exemplars: 0 };
     let draftRunsPurged = { draftRuns: 0 };
@@ -344,6 +427,18 @@ export function anonymiseContact(
             WHERE workspace_id = ? AND contact_id IN (${idPlaceholders})`,
         )
         .run(REDACTED_BODY, ctx.workspaceId, ...identity);
+      // Owner R2-5: a batch discarded as a draft never produced a file, so its items keep no record the
+      // retention duty covers. Their creditor snapshot is cleared (the A18 trigger admits only this).
+      paymentSnapshotsCleared = {
+        items: ctx.store.db
+          .prepare(
+            `UPDATE payment_batch_item SET creditor_name = NULL, creditor_iban = ''
+              WHERE workspace_id = ? AND vendor_id IN (${idPlaceholders})
+                AND batch_id IN (SELECT b.id FROM payment_batch b
+                                  WHERE b.workspace_id = ? AND b.status = 'discarded' AND b.generated_at IS NULL)`,
+          )
+          .run(ctx.workspaceId, ...identity, ctx.workspaceId).changes,
+      };
       // E05 (spec §7 erasure-coverage): the voice exemplars embedded from this identity's mail go
       // FIRST, in the same transaction, because the purge needs the `mail_message` rows the E04
       // sweep below is about to erase. An embedding is deleted with a DELETE, which is the whole
@@ -382,6 +477,13 @@ export function anonymiseContact(
       draftRunsPurged,
       /** The A35 trace rows whose recorded arguments (or prose) named the person (critic F9). */
       tracePurged,
+      /**
+       * What this erasure deliberately LEFT, because it sits in a retained business record (D148):
+       * one entry per `ERASURE_RETAINED_FIELDS` table, with the columns kept and the rows concerned.
+       */
+      retained,
+      /** Owner R2-5: items of batches discarded as drafts whose creditor snapshot this erasure cleared. */
+      paymentSnapshotsCleared,
     });
   };
 

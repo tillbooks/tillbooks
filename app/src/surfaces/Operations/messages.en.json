@@ -11,6 +11,9 @@
     "action": {
       "run": "Check now"
     },
+    "info": {
+      "label": "What the offline proof covers"
+    },
     "scope": {
       "note": "This is about TILL, not about your Mac. Your mail app uses the internet; that is how your mail arrives."
     },
@@ -139,8 +142,12 @@
   },
   "journey": {
     "_block": "M03 journey (N4a)",
+    "publishing": {
+      "infoLabel": "What publishing means"
+    },
     "location": {
       "local": "Your books: one single file on this device ({path}). Nothing leaves TILL by itself.",
+      "short": "Your books: {path}",
       "served": "Your books: one file on this instance; export and backup at any time.",
       "unknown": "Data location unknown.",
       "retry": "Try again",
@@ -151,6 +158,7 @@
     "hosting": {
       "title": "Hosting",
       "model": "One ledger, one instance. Every additional person and device works as a client of it. No device sync.",
+      "modelLabel": "How hosting works",
       "rung": {
         "current": "now",
         "local": {

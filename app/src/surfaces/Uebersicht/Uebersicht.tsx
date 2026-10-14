@@ -33,6 +33,7 @@ import { AttentionStrip } from './AttentionStrip';
 import { MandatesStrip } from './MandatesStrip';
 import { SetupCard, workspaceHasData } from './SetupCard';
 import { HomeDoors } from './HomeDoors';
+import { BankBand } from './BankBand';
 import './Uebersicht.css';
 
 /** A fresh key per write, so a retry after a transport failure is a retry and not a second write. */
@@ -104,6 +105,27 @@ function parseViews(body: unknown): SavedViewDto[] {
       typeof (v as { name?: unknown }).name === 'string' &&
       (v as { layout?: unknown }).layout === 'dashboard',
   );
+}
+
+/**
+ * The tiles the band renders instead of the grid (D142): `bank_inbox` is the Bankeingang band above
+ * the wall, a queue with its own doors, not a figure among figures.
+ */
+const BAND_TILES: ReadonlySet<string> = new Set(['bank_inbox']);
+
+/**
+ * Where a tile's click lands: its Studio route WITH the drill's params as a query string, so the
+ * surface opens on what the figure counted (the drill used to drop them). `workspaceId` is the Studio's
+ * own context, never a URL parameter, and only plain values travel.
+ */
+export function drillHref(drill: DrillDescriptor): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(drill.params ?? {})) {
+    if (key === 'workspaceId') continue;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') query.set(key, String(value));
+  }
+  const qs = query.toString();
+  return qs === '' ? drill.studioRoute : `${drill.studioRoute}?${qs}`;
 }
 
 export type RangePreset = 'month' | 'quarter' | 'year' | 'custom';
@@ -212,7 +234,7 @@ export function Uebersicht() {
   const saveView = useCallback(async () => {
     if (workspaceId === null || overview === null || saveName.trim() === '') return;
     setSaveFailed(null);
-    const rendered = overview.tiles.filter((tile) => tile.ok).map((tile) => tile.tile);
+    const rendered = overview.tiles.filter((tile) => tile.ok && !BAND_TILES.has(tile.tile)).map((tile) => tile.tile);
     const response = await client.call('create_saved_view', {
       workspaceId,
       entityKind: 'workspace',
@@ -240,8 +262,9 @@ export function Uebersicht() {
 
   if (workspaceId === null) return <NoWorkspaceState />;
 
-  const shown = overview?.tiles.filter((tile) => tile.ok) ?? [];
-  const hiddenCount = (overview?.tiles.length ?? 0) - shown.length;
+  const wall = overview?.tiles.filter((tile) => !BAND_TILES.has(tile.tile)) ?? [];
+  const shown = wall.filter((tile) => tile.ok);
+  const hiddenCount = wall.length - shown.length;
 
   return (
     <section className="uebersicht" aria-labelledby="uebersicht-title">
@@ -263,6 +286,9 @@ export function Uebersicht() {
           that does not yet matter). The card renders nothing once the books carry real data, so an
           established workspace sees the controls at the top as before. */}
       {!loading && !failed && overview !== null ? <SetupCard tiles={overview.tiles} /> : null}
+      {/* D142: the Bankeingang band, between the attention strip and the tile grid, above the range
+          controls because it is current work, not a figure of the chosen period. */}
+      <BankBand />
       <div className="uebersicht-controls">
         {/* K-11/K-12 (D137): the range is the shared Segmented control, four sibling values of one
             view. Its chosen segment is a neutral raise, so "Monat" and the "Buchen" primary are no
@@ -403,7 +429,7 @@ export function Uebersicht() {
                   <button
                     type="button"
                     className="uebersicht-tile panel--interactive"
-                    onClick={() => navigate(drill.studioRoute)}
+                    onClick={() => navigate(drillHref(drill))}
                   >
                     {body}
                   </button>

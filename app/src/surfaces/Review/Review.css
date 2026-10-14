@@ -38,15 +38,18 @@
   width: 6rem;
 }
 
-/* --- the sticky coverage header (2a) --- */
+/* --- the sticky coverage header (2a) ---
+   It pins directly UNDER the sticky SurfaceHeader (whose measured height SurfaceHeader.tsx publishes
+   on <main>), not at the same line: at `top: 0` the two shared one pin line and this later, same-tier
+   band painted over the page title and the period picker. */
 .rv-coverage {
   position: sticky;
-  top: 0;
+  top: var(--surface-header-height, 0px);
   z-index: var(--t-z-sticky);
   display: flex;
   align-items: center;
   gap: var(--t-space-3);
-  padding: var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
   flex-wrap: wrap;
 }
 
@@ -114,12 +117,15 @@
   margin-left: auto;
 }
 
-.rv-lock-reason {
-  margin: 0;
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  max-width: 32ch;
+/* The (i) at the end of the counts: why Periode sperren is not on the bar, as a hover and focus card
+   (D152 rule 4). The ghost icon button keeps the counts line one line tall. */
+.rv-lock-info {
+  display: inline-flex;
+  align-items: center;
+}
+
+.rv-lock-info .tooltip {
+  max-width: 320px;
 }
 
 /* Standalone / primary controls: the 44px tier (D116). */
@@ -213,6 +219,44 @@
 .rv-rowactions {
   display: inline-flex;
   gap: var(--t-space-0-5);
+}
+
+/*
+ * D152 rule 3: the row actions rest VISUALLY hidden and show on the row that is SELECTED (DataTable's
+ * `data-selected` on the current row) or holds FOCUS (`:focus-within` matches the focused row itself
+ * and keeps the actions up while focus is on one of them). It is the rail's favourite-controls pattern
+ * (global.css `.rail-fav-controls`): opacity plus `pointer-events: none`, never `visibility` or
+ * `display`, so the actions stay in the accessibility tree (a screen reader finds them in every row's
+ * Aktionen cell) and in the Tab order both ways (Tab from a row reaches its actions, Shift+Tab from the
+ * next row reaches them too, and the focus reveals them). A pointer on a resting row passes through to
+ * the row, whose click selects it. The hover reveal is for a real hover only: on touch, a tap selects
+ * the row, and a sticky emulated hover never leaves a second row's actions up. The cell keeps its
+ * width, so the row does not jump when its actions appear.
+ */
+.rv-rowactions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-motion-pill) var(--t-ease-out);
+}
+
+.rv .data-table-row[data-selected] .rv-rowactions,
+.rv .data-table-row:focus-within .rv-rowactions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: hover) {
+  .rv .data-table-row:hover .rv-rowactions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* An approved row's empty approve slot: the same 32px square, so comment and flag line up. */
+.rv-rowbtn-slot {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
 }
 
 /* Dense-row controls: the 32px band (D116), comfortably above the 24px AA floor. */

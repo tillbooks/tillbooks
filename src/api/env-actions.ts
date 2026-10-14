@@ -38,11 +38,12 @@ import {
   defaultSeeders,
   type LandscapeDeps,
 } from '../core/landscape/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface EnvActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,
@@ -139,14 +140,14 @@ export function envActions(h: EnvActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'env_switch',
-      'write',
+      'write:reversible:ui-state',
       'Set the active environment for this face. Switching to a served (hosted) env records the pointer and marks the face read-only; a local main stays writable (D135). Destructive env-wide verbs stay refused on main regardless. Unconfirmed, returns a plan and changes nothing (P8).',
       ctxSchema({ name: STR, confirmed: BOOL, idempotencyKey: STR }, ['name']),
       (ctx, input, deps) => stagedWrite(ctx, input, 'env_switch', () => envSwitch(landscapeDeps(ctx, deps), input)),
     ),
     ctxAction(
       'env_create',
-      'write',
+      'write:reversible:internal',
       'Create a new environment and populate its data root per its policy: synthetic (seeded, seed selectable, default the Seeblick golden ledger) or live (an empty ledger). policy=copy is Phase B. Refuses a data root that collides with an existing environment or aliases main`s volume. Unconfirmed, returns a plan and changes nothing (P8).',
       ctxSchema(
         {
@@ -174,7 +175,7 @@ export function envActions(h: EnvActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'env_copy',
-      'write',
+      'write:final:erase',
       'Copy data one-way from a source environment into a lower one, sanitized. scope is instance (every workspace) or mandate:<workspaceId> (one workspace, others in the target untouched). sanitize is raw (verbatim), pseudonymize (deterministic PII masking, valid CH test IBANs, amounts intact unless scaleFactor is given) or structure_synthetic (structure kept, amounts and transactions replaced). Build-then-swap: a failed copy leaves the prior target intact. Refuses target=main and refuses a source whose tier rank is not strictly above the target (down-only). The SECRET FLOOR always neutralizes live access secrets (bank/EBICS/token) regardless of level; the owner-only retainSecrets override lifts it. Refuses a copy into the active env without force. Unconfirmed, returns the exact plan and changes nothing (P8).',
       ctxSchema(
         {
@@ -194,14 +195,14 @@ export function envActions(h: EnvActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'env_reset',
-      'write',
+      'write:final:erase',
       'Wipe and repopulate an environment from its data policy, build-then-swap: a new db file is seeded and gated (foreign-key check plus a balance re-foot) and swapped in only on success, so a failed reset leaves the prior environment intact. Refused on main (by data root, not just name) and on the active env without force. Reset of a copy-policy env is Phase B. Unconfirmed, returns a plan and changes nothing (P8).',
       ctxSchema({ name: STR, seed: STR, force: BOOL, confirmed: BOOL, idempotencyKey: STR }, ['name']),
       (ctx, input, deps) => stagedWrite(ctx, input, 'env_reset', () => envReset(landscapeDeps(ctx, deps), input)),
     ),
     ctxAction(
       'env_delete',
-      'write',
+      'write:final:erase',
       'Remove a named environment`s data root and its landscape entry. Refused on main always, on a standard tier without force (use reset), and on the active environment (switch away first). Unconfirmed, returns a plan and changes nothing (P8).',
       ctxSchema({ name: STR, force: BOOL, confirmed: BOOL, idempotencyKey: STR }, ['name']),
       (ctx, input, deps) => stagedWrite(ctx, input, 'env_delete', () => envDelete(landscapeDeps(ctx, deps), input)),

@@ -24,6 +24,8 @@
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
+import { isGovernedSeat } from '../access/capability.js';
+import { isPluginCallActor } from '../plugins/callScope.js';
 import { automationEventDef, AUTOMATION_EVENT_IDS } from '../automation/events.js';
 import { entityKindDef, ENTITY_KIND_IDS, tenantColumnOf } from '../customization/entities.js';
 import { applySavedView } from '../customization/views.js';
@@ -466,6 +468,14 @@ export type SetPreferenceOk = { preference: NotificationPrefView };
 export function setPreference(ctx: WorkspaceContext, input: SetPreferenceInput): Result<SetPreferenceOk> {
   const denied = requireSelfOrManageMembers(ctx, input.userId);
   if (denied !== undefined) return denied as Result<SetPreferenceOk>;
+  // Critic N4 (claude/rmap-land, coordinator ruling): the `ui-state` exemption is the person's OWN UI state.
+  // A governed seat (the agent, a plugin call, an agent member) may set its own preferences only; muting a
+  // person's inbox or email is that person's (or an admin's) act, so it is refused before anything is written.
+  // A plugin call carries the installing member's actor id, so it has no preferences of its own: every
+  // userId refuses it, the installer's included.
+  if ((input.userId !== ctx.actor || isPluginCallActor(ctx.actor)) && isGovernedSeat(ctx.store, ctx.actor)) {
+    return err('capability_forbidden', { reason: 'needs_a_person', userId: input.userId }) as Result<SetPreferenceOk>;
+  }
   if (!isNotificationChannel(input.channel)) {
     return err('invalid_channel', { channel: input.channel, known: ['inbox', 'email', 'push'] });
   }

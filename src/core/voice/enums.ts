@@ -25,3 +25,16 @@ export type RuntimeSource = (typeof RUNTIME_SOURCES)[number];
 export function isRuntimeSource(value: unknown): value is RuntimeSource {
   return typeof value === 'string' && (RUNTIME_SOURCES as readonly string[]).includes(value);
 }
+
+/**
+ * D144, the "System One" question types `decide()` answers (E05 §10.1): `noul` is a yes-or-no
+ * question answered by one probability of yes, `choice` picks one of 2 to `maxChoices` options,
+ * `score` places the state on 2 to `maxChoices` ordered levels. Single-sourced here; the manifest
+ * validation and the core door both read it.
+ */
+export const DECIDE_QUESTION_TYPES = ['noul', 'choice', 'score'] as const;
+export type DecideQuestionType = (typeof DECIDE_QUESTION_TYPES)[number];
+
+export function isDecideQuestionType(value: unknown): value is DecideQuestionType {
+  return typeof value === 'string' && (DECIDE_QUESTION_TYPES as readonly string[]).includes(value);
+}

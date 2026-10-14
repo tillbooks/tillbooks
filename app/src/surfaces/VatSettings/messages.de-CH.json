@@ -21,7 +21,20 @@
     "timing": {
       "label": "Abrechnungsart",
       "ist": "Ist (vereinnahmt)",
-      "soll": "Soll (vereinbart)"
+      "soll": "Soll (vereinbart)",
+      "istUnsupported": "Ist: rechnet TILL noch nicht"
+    },
+    "info": {
+      "methodBinding": "Wann ein Wechsel der Methode gilt",
+      "timingBinding": "Wann ein Wechsel der Abrechnungsart gilt",
+      "option": "Was {option} bedeutet",
+      "ist": "Warum TILL Ist noch nicht rechnet"
+    },
+    "leaveIst": {
+      "title": "Auf Soll wechseln?",
+      "body": "Nach dem Speichern kannst du Ist hier nicht mehr wählen. Fortfahren?",
+      "confirm": "Fortfahren",
+      "close": "Bei Ist bleiben"
     },
     "registered": "MWST-pflichtig",
     "registeredHint": "Dieser Arbeitsbereich rechnet MWST ab.",

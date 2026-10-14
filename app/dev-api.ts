@@ -31,7 +31,18 @@
  * ONE DATABASE: the path comes from `TILL_DB_PATH`, defaulting to `~/.till/till.db`, resolved by the
  * engine's own `resolveDbPath`. It used to be hardcoded to `app/.dev-data/till.db` while `till mcp`
  * defaulted to `:memory:`, so the Studio and the agent were not on one ledger at all.
+ *
+ * THE STUDIO KEY (critic probe P6 and critic R3-B2, 2026-10-12). This bridge serves the Studio, so,
+ * exactly like `till up`, it holds a per-launch Studio key and hands the human `studio` seat ONLY to a
+ * request that carries it (`src/api/session.ts`). The served page carries NO key: Vite prints the
+ * Studio LINK beside its own URLs, `http://localhost:PORT/#k=<key>`, and the key travels only in that
+ * fragment, which a browser never sends to a server. Open that link; the Studio keeps the key for the
+ * tab and sends it back in a header. The key is minted at start, or taken from `TILL_STUDIO_KEY` when
+ * the process that launches Vite needs it itself (the browser-flow harness seeds through `/api` and
+ * hands it to its browser); a short or malformed value is refused rather than accepted as a weaker
+ * key. That env var is read HERE ONLY, by the dev server: `till up` never reads it.
  */
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -49,8 +60,32 @@ type LocalHttpRouter = {
 
 let ready: Promise<{ router: LocalHttpRouter }> | null = null;
 
+/** The env var a launcher may set to choose the dev bridge's Studio key. Dev server only. */
+export const DEV_STUDIO_KEY_ENV = 'TILL_STUDIO_KEY';
+
+/** Mirrors `STUDIO_KEY_FRAGMENT` in `src/api/session.ts` (and `app/src/lib/studio-key.ts`). */
+const STUDIO_KEY_FRAGMENT = 'k';
+
+/**
+ * The dev bridge's Studio key: `TILL_STUDIO_KEY` when set, else 32 fresh CSPRNG bytes. A set value
+ * must be base64url and carry at least 32 bytes (43 characters), the strength of a minted key, or
+ * the dev server refuses to start: a launcher that types `TILL_STUDIO_KEY=test` gets an error, not
+ * a guessable Studio seat.
+ */
+export function resolveDevStudioKey(env: NodeJS.ProcessEnv = process.env): string {
+  const chosen = env[DEV_STUDIO_KEY_ENV]?.trim();
+  if (chosen === undefined || chosen === '') return randomBytes(32).toString('base64url');
+  if (!/^[A-Za-z0-9_-]{43,}$/.test(chosen)) {
+    throw new Error(
+      `${DEV_STUDIO_KEY_ENV} must be base64url with at least 32 bytes of entropy (43+ characters), ` +
+        "for example the output of: node -e \"console.log(require('crypto').randomBytes(32).toString('base64url'))\"",
+    );
+  }
+  return chosen;
+}
+
 /** Load the compiled engine, open the one database, and assemble the router over both faces, once. */
-function boot() {
+function boot(studioKey: string) {
   if (ready === null) {
     ready = (async () => {
       const { SqliteStore } = (await import(DIST('core/store/sqlite-store.js'))) as {
@@ -62,7 +97,10 @@ function boot() {
         ensureDbPath: () => string;
       };
       const { createLocalHttpRouter } = (await import(DIST('api/local-http.js'))) as {
-        createLocalHttpRouter: (deps: unknown, opts?: { rest?: boolean; servedMode?: unknown }) => LocalHttpRouter;
+        createLocalHttpRouter: (
+          deps: unknown,
+          opts?: { rest?: boolean; servedMode?: unknown; studioKey?: string },
+        ) => LocalHttpRouter;
       };
       // M01 DEV OPT-IN. `resolveServedMode` reads TILL_SERVED_MODE (throws on a bad value, fail closed).
       const { resolveServedMode, SERVED_MODE_ENV } = (await import(DIST('api/served-mode.js'))) as {
@@ -79,18 +117,13 @@ function boot() {
 
       const dbPath = ensureDbPath();
       const store = new SqliteStore({ location: dbPath }) as { close: () => void };
-      // The REST face keeps its own actor, and that actor is DEV-BRIDGE-ONLY (D25): the
-      // `/api/:action` twin exists as the rollback path until StreamableHTTP has survived one full
-      // wave, and its server-side 'studio' stamp is the weaker actor story. Nothing production-facing
-      // may inherit it. On the MCP face the actor is decided per session at `initialize` (D13) by the
-      // seating rule in `src/api/session.ts`: a `till-studio` client is the Studio, ANY other client
-      // is the governed `agent` seat. This value is NOT the MCP fallback (it was until F-08, which is
-      // how an unrecognised client here was seated as the Studio and bypassed the dial).
+      // No face takes its seat from `actor` here: both are seated by the Studio key (the seating rule
+      // in `src/api/session.ts`). `agent` is the fail-closed value for anything that might read it.
       const deps = {
         store,
         clock: systemClock,
         ids: systemIdGen,
-        actor: 'studio',
+        actor: 'agent',
         diagnostics: makeDiagnosticsPort(),
       };
       // Closing the store checkpoints the write-ahead log. Without it, every `npm run dev` session
@@ -123,7 +156,7 @@ function boot() {
       console.log(`[till] ledger at ${dbPath}, MCP on /mcp${servedMode !== undefined ? ' (served mode: opt-in)' : ''}`);
       // `rest: true` mounts the REST twins BEHIND the same localhost guard as /mcp. This is the only
       // host that opts into them: `till serve` runs the MCP face alone.
-      const routerOpts: { rest: boolean; servedMode?: unknown } = { rest: true };
+      const routerOpts: { rest: boolean; servedMode?: unknown; studioKey: string } = { rest: true, studioKey };
       if (servedMode !== undefined) routerOpts.servedMode = servedMode;
       return { router: createLocalHttpRouter(deps, routerOpts) };
     })();
@@ -142,15 +175,30 @@ const ENGINE_PATH_RE = /^\/(mcp|api)(\/|$|\?)/;
 
 /** The Vite plugin exposing the bridge under `configureServer`. */
 export function devApiPlugin(): Plugin {
+  // Resolved lazily, on the dev server only: `apply: 'serve'` keeps this plugin out of `vite build`.
+  let studioKey: string | null = null;
+  const key = () => (studioKey ??= resolveDevStudioKey());
   return {
     name: 'till-dev-api',
+    apply: 'serve',
     configureServer(server) {
+      key(); // fail at start, not on the first request, when TILL_STUDIO_KEY is malformed
+      // The Studio LINK, printed right under Vite's own URLs: the only place the key leaves this
+      // process (the fragment never comes back to a server). The page itself carries no key.
+      const printUrls = server.printUrls.bind(server);
+      server.printUrls = () => {
+        printUrls();
+        const local = server.resolvedUrls?.local[0];
+        if (local !== undefined) {
+          server.config.logger.info(`  ➜  TILL Studio: ${local.replace(/\/+$/, '')}/#${STUDIO_KEY_FRAGMENT}=${key()}`);
+        }
+      };
       // THE mount. One middleware, one router, one guard, both faces. See the security note at the
       // top of this file before adding anything beside it.
       server.middlewares.use(async (req: Connect.IncomingMessage, res, next) => {
         let router: LocalHttpRouter;
         try {
-          ({ router } = await boot());
+          ({ router } = await boot(key()));
         } catch (cause) {
           if (!ENGINE_PATH_RE.test(req.url ?? '')) return next();
           res.statusCode = 500;

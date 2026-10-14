@@ -37,6 +37,7 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { entityKindDef, tenantColumnOf } from './entities.js';
 import { ENTITY_KIND_IDS } from './entities.js';
+import { isGovernedSeat } from '../access/capability.js';
 
 /**
  * The nine field types (§H-ENUM, fixed by §6b).
@@ -337,7 +338,9 @@ export function defineField(ctx: WorkspaceContext, input: DefineFieldInput): Res
     // P8. The actor IS the dial until A26 ships one: 'agent' is the D13 actor every MCP client that
     // is not the Studio resolves to, so an agent reshaping the schema stages the change and a human
     // releases it.
-    const draft = ctx.actor === 'agent' ? 1 : 0;
+    // Read through the ONE governed-seat rule (`isGovernedSeat`), so a served agent member's field
+    // lands as a draft like the local agent's.
+    const draft = isGovernedSeat(ctx.store, ctx.actor) ? 1 : 0;
     const id = ctx.ids.next('cfd');
     ctx.store.db
       .prepare(

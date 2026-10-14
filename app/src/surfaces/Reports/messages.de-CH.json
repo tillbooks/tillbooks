@@ -1,9 +1,9 @@
 {
   "nav": {
-    "reports": "Auswertungen"
+    "reports": "Berichte"
   },
   "reports": {
-    "title": "Auswertungen",
+    "title": "Berichte",
     "loading": "Auswertung wird geladen",
     "tablist": "Auswertung wählen",
     "headerActions": "Weitere Exporte",

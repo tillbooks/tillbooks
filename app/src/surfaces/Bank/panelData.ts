@@ -1,11 +1,9 @@
 /**
- * The panel's reads: what the selected line's consequence is made of, fetched from the engine when
- * the line is selected and never computed here. Each hook reads ONE verb, keyed on exactly the facts
+ * The context strip's reads: what the selected line's consequence is made of, fetched from the engine
+ * when the line is selected and never computed here. Each hook reads ONE verb, keyed on exactly the facts
  * its answer depends on, and drops an answer that arrives for a line that is no longer selected.
  *
- *   useVatFigures      vat_preview per taxed leg (A06 computeLineTax: net, tax, kind, deductible)
  *   useEntry           get_entry (the entry a line matches or was booked to)
- *   useSettlement      preview_payment (the legs a settlement posts, A14's own planner)
  *   useBatch           get_payment_batch (the run a debit pays)
  *   useLedgerLines     general_ledger on the bank's ledger account (the entries a line can match)
  */
@@ -14,64 +12,8 @@ import { useEffect, useState } from 'react';
 import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
 import type { JournalEntryView, JournalLineView } from '../../../../src/core/ledger/reads';
-import type { PaymentPreview } from '../Payments/model';
-import type { BankInboxLine, DraftLeg, VatFigures } from './model';
+import type { BankInboxLine } from './model';
 import { lineDate, parseInbox, shiftDate } from './model';
-import type { Lookups } from './lookups';
-
-/** vat_preview per taxed leg, keyed by the leg's index. */
-export function useVatFigures(workspaceId: string, line: BankInboxLine, legs: readonly DraftLeg[], lookups: Lookups): { figures: Map<number, VatFigures>; failed: boolean } {
-  const client = useClient();
-  const [state, setState] = useState<{ key: string; figures: Map<number, VatFigures>; failed: boolean }>({ key: '', figures: new Map(), failed: false });
-  const supplyDate = lineDate(line);
-  const key = JSON.stringify([line.bankTxnId, supplyDate, legs.map((l) => [l.amountMinor, l.taxCode])]);
-  useEffect(() => {
-    let live = true;
-    const taxed = legs.map((l, i) => ({ l, i })).filter(({ l }) => l.taxCode !== '');
-    if (taxed.length === 0) {
-      setState({ key, figures: new Map(), failed: false });
-      return undefined;
-    }
-    void Promise.all(
-      taxed.map(async ({ l, i }) => {
-        const kind = lookups.taxByCode.get(l.taxCode)?.kind ?? null;
-        const response = await client.call('vat_preview', {
-          workspaceId,
-          amountMinor: Math.abs(l.amountMinor),
-          amountIsGross: kind !== 'reverse_charge',
-          taxCode: l.taxCode,
-          ...(supplyDate !== null ? { supplyDate } : {}),
-        });
-        if (isErr(response.body)) return { i, figures: null };
-        const b = response.body as Record<string, unknown>;
-        const figures: VatFigures = {
-          netMinor: Number(b.netMinor ?? 0),
-          taxMinor: Number(b.taxMinor ?? 0),
-          grossMinor: Number(b.grossMinor ?? 0),
-          kind: typeof b.kind === 'string' ? b.kind : 'none',
-          deductible: b.deductible === true,
-          formLine: typeof b.formLine === 'string' ? b.formLine : null,
-        };
-        return { i, figures };
-      }),
-    ).then((results) => {
-      if (!live) return;
-      const map = new Map<number, VatFigures>();
-      let failed = false;
-      for (const r of results) {
-        if (r.figures === null) failed = true;
-        else map.set(r.i, r.figures);
-      }
-      setState({ key, figures: map, failed });
-    });
-    return () => {
-      live = false;
-    };
-    // `key` states every input the reads depend on.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, workspaceId, key]);
-  return state.key === key ? { figures: state.figures, failed: state.failed } : { figures: new Map(), failed: false };
-}
 
 export interface EntryDetail {
   entry: JournalEntryView;
@@ -95,46 +37,6 @@ export function useEntry(workspaceId: string, entryId: string | null): { entry: 
   }, [client, workspaceId, entryId]);
   if (entryId === null) return { entry: null, loading: false, failed: false };
   return state.id === entryId ? { entry: state.entry, loading: false, failed: state.failed } : { entry: null, loading: true, failed: false };
-}
-
-export function useSettlement(
-  workspaceId: string,
-  line: BankInboxLine,
-  bankLedgerId: string | null,
-  documentId: string | null,
-  openMinor: number | null,
-): { preview: PaymentPreview | null; loading: boolean } {
-  const client = useClient();
-  const [state, setState] = useState<{ key: string; preview: PaymentPreview | null }>({ key: '', preview: null });
-  const key = JSON.stringify([line.bankTxnId, documentId, openMinor, bankLedgerId]);
-  useEffect(() => {
-    if (documentId === null || bankLedgerId === null || openMinor === null) return undefined;
-    let live = true;
-    const abs = Math.abs(line.amountMinor);
-    const allocated = Math.min(abs, openMinor);
-    const incoming = line.amountMinor > 0;
-    void client
-      .call('preview_payment', {
-        workspaceId,
-        direction: incoming ? 'incoming' : 'outgoing',
-        date: line.valueDate ?? line.bookingDate ?? new Date().toISOString().slice(0, 10),
-        amountMinor: abs,
-        bankAccountId: bankLedgerId,
-        currency: line.currency,
-        allocations: [incoming ? { documentId, amountMinor: allocated } : { vendorBillId: documentId, amountMinor: allocated }],
-        ...(abs > openMinor ? { onAccountMinor: abs - openMinor } : {}),
-      })
-      .then((response) => {
-        if (!live) return;
-        setState({ key, preview: isErr(response.body) ? null : (response.body as unknown as PaymentPreview) });
-      });
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, workspaceId, key]);
-  if (documentId === null || bankLedgerId === null || openMinor === null) return { preview: null, loading: false };
-  return state.key === key ? { preview: state.preview, loading: false } : { preview: null, loading: true };
 }
 
 export interface BatchDetail {

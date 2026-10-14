@@ -17,11 +17,12 @@ import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
 import { getMoveState, advanceMoveStep } from '../core/move/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface MoveActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -51,7 +52,7 @@ export function moveActions(h: MoveActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'advance_move_step',
-      'write',
+      'write:reversible:ui-state',
       'Persist the move-checklist resume point, absolutely (the advance_onboarding_step shape): direction alone starts or re-asserts the move; direction plus step (1-5, done defaulting true) checks a step off or, with done:false, un-checks it (the trial-balance-mismatch recovery); abandon:true deletes the pointer (Umzug abbrechen). Never a gate: the real actions of the journey (create_backup, archive_workspace, the manual legs on the other machine) keep their own validation, and the step timestamps record a claim, not a proof. A different direction than the stored one resets the checklist. completedAt is derived: stamped when all five steps are done, cleared when one is un-done.',
       ctxSchema({ direction: STR, step: INT, done: BOOL, abandon: BOOL }, ['direction']),
       (ctx, input) => advanceMoveStep(ctx, as(input)),

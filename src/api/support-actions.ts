@@ -39,6 +39,7 @@ import {
 import type { SupportDeps } from '../core/support/index.js';
 import { VERSION } from '../index.js';
 import { resolveSupportDir } from './db-path.js';
+import type { ActionKind } from './actionKind.js';
 
 /** The A24 capability gating every read of stored diagnostics or stored reports. */
 export const DIAGNOSTICS_READ = 'diagnostics.read';
@@ -104,7 +105,7 @@ export function makeDiagnosticsPort(supportDir?: string): DiagnosticsPort {
 export interface ActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -169,7 +170,7 @@ export function supportActions(h: ActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'prepare_feedback',
-      'write',
+      'write:final:outbound',
       'Write a feedback report to ~/.till/feedback and return a mailto link for it. TILL cannot send: the report is handed to the operator to send from their own mail client.',
       ctxSchema({ ...reportFields, idempotencyKey: STR }, ['subject', 'message', 'idempotencyKey']),
       (ctx, input) =>
@@ -193,14 +194,14 @@ export function supportActions(h: ActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'set_diagnostics',
-      'write',
+      'write:final:ui-state',
       'Turn error recording on or off for this computer. Off is the default, and turning it off also deletes what was recorded. Set this only when the person asks for it.',
       ctxSchema({ capture: BOOL }, ['capture']),
       (ctx, input) => refuseServedMachineScope(ctx) ?? setDiagnostics(depsFor(ctx, supportDir, undefined), input),
     ),
     ctxAction(
       'clear_diagnostics',
-      'write',
+      'write:final:ui-state',
       'Delete every recorded error detail. Reports already written are kept.',
       ctxSchema(),
       (ctx) => refuseServedMachineScope(ctx) ?? clearDiagnostics(depsFor(ctx, supportDir, undefined)),

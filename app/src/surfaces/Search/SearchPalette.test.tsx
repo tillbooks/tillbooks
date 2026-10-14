@@ -90,6 +90,24 @@ describe('the command palette', () => {
     expect(screen.getAllByRole('option').length).toBeGreaterThan(0);
   });
 
+  it('rises in the middle like a modal; the rows it opens with stagger over three steps, a typed result does not', async () => {
+    render(tree(transportOf({ search_global: ok({ results: [], total: 0, hasMore: false, failedKinds: [] }) })));
+    await openPalette();
+    expect(screen.getByRole('dialog')).toHaveClass('motion-reveal--center');
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(3);
+    expect(options.slice(0, 3).map((o) => o.getAttribute('data-motion-item'))).toEqual(['1', '2', '3']);
+    // The stagger is capped at three items: nothing past the third carries a step.
+    expect(screen.getByRole('dialog').querySelectorAll('[data-motion-item]')).toHaveLength(3);
+    // Arrow movement is instant: it moves the active row and stamps nothing new.
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('dialog').querySelectorAll('[data-motion-item]')).toHaveLength(3);
+    // Typing re-ranks without a fade: no row carries a step any more.
+    await userEvent.type(screen.getByRole('combobox'), 'Journal');
+    await screen.findByRole('option', { name: /^Journal$/ });
+    expect(screen.getByRole('dialog').querySelectorAll('[data-motion-item]')).toHaveLength(0);
+  });
+
   it('ranks a navigation destination to the top when its name is typed', async () => {
     render(tree(transportOf({ search_global: ok({ results: [], total: 0, hasMore: false, failedKinds: [] }) })));
     await openPalette();

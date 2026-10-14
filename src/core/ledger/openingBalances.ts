@@ -37,7 +37,7 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { requireString, optionalText } from './inputGuards.js';
-import { postEntry } from './postEntry.js';
+import { postEntryInternalChecked } from './innerPosting.js';
 import type { LineInput } from './postEntry.js';
 import { fiscalYearOf } from './periods.js';
 import { baseCurrencyOf } from '../fx/rates.js';
@@ -437,6 +437,37 @@ function prepareLines(
 }
 
 /**
+ * What `setOpeningBalances` decided before it posts: a refusal, the replay of an earlier call under the
+ * same key, or the checked plan it will hand to `postEntry`. Every check below is a READ, so the same
+ * function answers the dial's pre-draft screen (`prevalidateOpeningBalances`) and the verb itself, and
+ * the two can never refuse the same input in two different ways (D158: drafted or direct, one Result).
+ */
+type OpeningPlan =
+  | { readonly kind: 'refused'; readonly result: Result }
+  | { readonly kind: 'replay'; readonly result: Result }
+  | {
+      readonly kind: 'post';
+      readonly asOf: string;
+      readonly year: string;
+      readonly entryKey: string;
+      readonly idempotencyKey: string;
+      readonly lines: LineInput[];
+      readonly debitMinor: number;
+      readonly creditMinor: number;
+      readonly differenceMinor: number;
+    };
+
+/**
+ * D158: the verb's own validation, with nothing written, for the transport seam to run BEFORE it drafts
+ * an agent's call. An input this verb would refuse returns that exact refusal; an input it would post,
+ * or a key it would replay, returns undefined (the seam then drafts, and the approval replays the verb).
+ */
+export function prevalidateOpeningBalances(ctx: WorkspaceContext, input: SetOpeningBalancesInput): Result | undefined {
+  const plan = planOpening(ctx, input);
+  return plan.kind === 'refused' ? plan.result : undefined;
+}
+
+/**
  * Seed the workspace's opening position as ONE balanced, posted, immutable, idempotent entry.
  *
  * The sign discipline is the part worth reading twice. `differenceMinor` is Sigma debit MINUS Sigma
@@ -446,6 +477,71 @@ function prepareLines(
  * out, which is precisely the class of defect that survives a total-level check.
  */
 export function setOpeningBalances(ctx: WorkspaceContext, input: SetOpeningBalancesInput): Result {
+  const plan = planOpening(ctx, input);
+  if (plan.kind !== 'post') return plan.result;
+  const { asOf, year, entryKey, idempotencyKey, lines, debitMinor, creditMinor, differenceMinor } = plan;
+
+  // The post runs INSIDE the memo so the caller's whole Result is what a retry replays, and a
+  // rejection escapes by THROWING rather than returning, so a refused post never burns the key. Same
+  // shape A03's year-close uses, and for the same reason: a caller whose post was refused for a
+  // locked period must be able to retry the identical call once the period reopens.
+  try {
+    return ctx.store.rememberIdempotent(ctx.workspaceId, idempotencyKey, 'set_opening_balances', () => {
+      const posted = postEntryInternalChecked(ctx, {
+        date: asOf,
+        source: 'import',
+        description: input.description ?? `Eröffnungsbilanz per ${asOf}`,
+        // OR 957a Abs. 2 Ziff. 2, the Belegnachweis: the caller's own reference to the source
+        // document rides on the entry, so the opening position can be walked back to the Inventar
+        // OR 958c Abs. 2 asks for. Optional, because the entry's source and key already trace
+        // provenance (§4).
+        ...(input.reference !== undefined ? { ref: input.reference } : {}),
+        lines,
+        idempotencyKey: entryKey,
+      }, 'set_opening_balances_internal');
+      // Every A02 rejection rides out unchanged: `permission_denied` (A24), `period_locked`
+      // (§H-PERIOD), `unbalanced` from the posting core. Re-coding any of them here would give one
+      // condition two names on two surfaces.
+      if (!posted.ok) throw new OpeningPostFailure(posted);
+      return ok({
+        entryId: posted.entryId,
+        asOf,
+        year,
+        differenceMinor,
+        debitMinor,
+        creditMinor,
+        lineCount: lines.length,
+      });
+    });
+  } catch (e) {
+    if (e instanceof OpeningPostFailure) return e.result;
+    throw e;
+  }
+}
+
+/** Every check `setOpeningBalances` makes before it posts, in its order, reading and never writing. */
+function planOpening(ctx: WorkspaceContext, input: SetOpeningBalancesInput): OpeningPlan {
+  const checked = checkOpening(ctx, input);
+  if (checked instanceof OpeningPostPlan) return { kind: 'post', ...checked };
+  // A memo replay is the only Result `checkOpening` answers that is ok: every other answer is a refusal.
+  return checked.ok ? { kind: 'replay', result: checked } : { kind: 'refused', result: checked };
+}
+
+/** The checked plan `postEntry` is handed: everything the verb resolved, nothing yet written. */
+class OpeningPostPlan {
+  constructor(
+    readonly asOf: string,
+    readonly year: string,
+    readonly entryKey: string,
+    readonly idempotencyKey: string,
+    readonly lines: LineInput[],
+    readonly debitMinor: number,
+    readonly creditMinor: number,
+    readonly differenceMinor: number,
+  ) {}
+}
+
+function checkOpening(ctx: WorkspaceContext, input: SetOpeningBalancesInput): Result | OpeningPostPlan {
   const guard =
     requireString(input.idempotencyKey, 'idempotencyKey') ??
     optionalText(input.reference, 'reference') ??
@@ -545,42 +641,7 @@ export function setOpeningBalances(ctx: WorkspaceContext, input: SetOpeningBalan
     });
   }
 
-  // The post runs INSIDE the memo so the caller's whole Result is what a retry replays, and a
-  // rejection escapes by THROWING rather than returning, so a refused post never burns the key. Same
-  // shape A03's year-close uses, and for the same reason: a caller whose post was refused for a
-  // locked period must be able to retry the identical call once the period reopens.
-  try {
-    return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, 'set_opening_balances', () => {
-      const posted = postEntry(ctx, {
-        date: asOf,
-        source: 'import',
-        description: input.description ?? `Eröffnungsbilanz per ${asOf}`,
-        // OR 957a Abs. 2 Ziff. 2, the Belegnachweis: the caller's own reference to the source
-        // document rides on the entry, so the opening position can be walked back to the Inventar
-        // OR 958c Abs. 2 asks for. Optional, because the entry's source and key already trace
-        // provenance (§4).
-        ...(input.reference !== undefined ? { ref: input.reference } : {}),
-        lines,
-        idempotencyKey: entryKey,
-      });
-      // Every A02 rejection rides out unchanged: `permission_denied` (A24), `period_locked`
-      // (§H-PERIOD), `unbalanced` from the posting core. Re-coding any of them here would give one
-      // condition two names on two surfaces.
-      if (!posted.ok) throw new OpeningPostFailure(posted);
-      return ok({
-        entryId: posted.entryId,
-        asOf,
-        year,
-        differenceMinor,
-        debitMinor,
-        creditMinor,
-        lineCount: lines.length,
-      });
-    });
-  } catch (e) {
-    if (e instanceof OpeningPostFailure) return e.result;
-    throw e;
-  }
+  return new OpeningPostPlan(asOf, year, entryKey, input.idempotencyKey as string, lines, debitMinor, creditMinor, differenceMinor);
 }
 
 interface PositionRow {

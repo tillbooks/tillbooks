@@ -37,6 +37,8 @@ const EXPECTED_NAMES = [
   'delete_draft',
   'get_entry',
   'list_journal',
+  // D152 amendment: the composer's read, spread in right after the A02 block.
+  'compose_entry',
   // A03
   'close_month',
   'reopen_month',
@@ -109,6 +111,9 @@ const EXPECTED_NAMES = [
   // A36, live bank feed (read: static bank directory; write: scheduled-sync rule linkage)
   'bank_channel_directory',
   'set_bank_sync_schedule',
+  // A36 §4.7 (D150): the confirmation that a chained statement gap holds nothing, and its withdrawal.
+  'confirm_statement_gap',
+  'revoke_statement_gap_confirmation',
   // A19 / §H-FX
   'record_exchange_rate',
   'list_exchange_rates',
@@ -224,9 +229,11 @@ const EXPECTED_NAMES = [
   'preview_document_template',
   'list_document_templates',
   'get_document_template',
-  // G05 §10, dispatch texts and the cross-document send log (D29). One naturally-idempotent write
-  // and two reads; the three send verbs are untouched and merely append log rows.
+  // G05 §10, dispatch texts and the cross-document send log (D29). Two naturally-idempotent writes
+  // (the save and its inverse, the reset) and two reads; the three send verbs are untouched and
+  // merely append log rows.
   'dispatch_text_upsert',
+  'dispatch_text_reset',
   'dispatch_preview',
   'list_dispatches',
   // G01, automation rules. Seven writes and four reads. `disable_automation_rule` is the only write in
@@ -404,6 +411,7 @@ const EXPECTED_NAMES = [
   'get_dunning_config',
   'set_dunning_config',
   'propose_dunning_run',
+  'discard_dunning_run',
   'issue_dunning_run',
   'get_dunning_pdf',
   'send_dunning_run',
@@ -430,6 +438,8 @@ const EXPECTED_NAMES = [
   // A20, camt reconciliation (camt-actions.ts, spread after A21). Three writes and two reads; a
   // CREDIT never settles here, it is decided in A21's own queue that import_camt routes it into.
   'import_camt',
+  // A36 §4.7 (D150): the multi-file hand repair of a statement gap.
+  'import_camt_files',
   'suggest_matches',
   // A36 (live bank feed): the per-txn needs_review emitter and the matching-tuning setter.
   'review_bank_txn',
@@ -445,6 +455,8 @@ const EXPECTED_NAMES = [
   'book_bank_line',
   'ignore_bank_line',
   'reopen_bank_line',
+  // D144 (A39 §12): the model rung's write, G01-denied like the rest; it posts nothing.
+  'suggest_bank_lines',
   // A18, creditor payments (pain001-actions.ts, spread after A21's QR matching). Five writes and
   // three reads. `set_creditor_bank_profile` and `mark_batch_paid` sit on the G01 denylist (D65 leg
   // (f) and the D77 judgment-confirmation leg, respectively); `discard_payment_batch` is the F4
@@ -457,6 +469,16 @@ const EXPECTED_NAMES = [
   'list_payment_batches',
   'mark_batch_paid',
   'discard_payment_batch',
+  // A40, payment timing (spread in right after A18).
+  'liquidity_forecast',
+  'liquidity_skonto_set',
+  'liquidity_skonto_list',
+  'liquidity_flow_set',
+  'liquidity_flow_list',
+  'liquidity_plan_propose',
+  'liquidity_plan_get',
+  'liquidity_plan_list',
+  'liquidity_plan_draft_batches',
   // A23, multi-client workspaces. `list_workspaces` (D12) moved here from its inline slot when A23
   // took ownership of the roster: a tool's position is part of its history, not its meaning, and
   // the NAME (the stable external contract) did not change.
@@ -532,6 +554,7 @@ const EXPECTED_NAMES = [
   'migration_diff_testmandant_to_live',
   'go_productive',
   'discard_testmandant',
+  'discard_orphan_testmandant',
   // G03 onboarding: the wizard resume pointer and the demo workspace, in append order.
   'get_onboarding_progress',
   'advance_onboarding_step',

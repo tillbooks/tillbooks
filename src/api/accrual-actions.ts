@@ -42,11 +42,12 @@ import {
   vatSettlementList,
   vatAnnualReconciliation,
 } from '../core/accruals/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface AccrualActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -63,7 +64,7 @@ export function accrualActions(h: AccrualActionHelpers): ActionDef[] {
     // --- N2: accruals (OR 958b) -------------------------------------------------------------------
     ctxAction(
       'accrual_create',
-      'write',
+      'write:reversible:internal',
       "Describe an Abgrenzung (OR Art. 958b) and save it as a DRAFT: `kind` is one of prepaid_expense (Aufwand vorausbezahlt, Dr 1300), accrued_income (Ertrag noch nicht fakturiert, Dr 1300), accrued_expense (Aufwand noch nicht fakturiert, Cr 2300) or deferred_income (Ertrag vorausbezahlt erhalten, Cr 2300); `contraAccount` is the P&L account (number or id, income for the income kinds, expense for the expense kinds); `amountMinor` is integer Rappen; `periodEnd` is the balance-sheet date. Returns the draft with the exact lines the post will write and the reversal lines dated the day after. Nothing is posted.",
       ctxSchema(
         {
@@ -83,21 +84,21 @@ export function accrualActions(h: AccrualActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'accrual_post',
-      'write',
+      'write:correctable:books',
       "Post a drafted Abgrenzung as an atomic PAIR: the accrual entry dated `periodEnd` (source `accrual`) and its automatic Rückbuchung dated the first day after (a real reversal, linked). A locked reversal date rolls the whole pair back, so the books never carry an accrual without the reversal that backs it out. Idempotent per accrual: the same key replays, a different key on a posted accrual is `already_posted`, a discarded draft is `draft_discarded`.",
       ctxSchema({ accrualId: STR, idempotencyKey: STR }, ['accrualId', 'idempotencyKey']),
       (ctx, input) => accrualPost(ctx, input as never),
     ),
     ctxAction(
       'accrual_reverse',
-      'write',
+      'write:correctable:books',
       "Revert a posted Abgrenzung without editing history: posts the MIRROR pair (the Storno dated `periodEnd`, its own reversal dated the day after), so all four entries net to zero on every account in both periods. Refuses `already_reversed` a second time and `not_posted` on a draft.",
       ctxSchema({ accrualId: STR, reason: STR, idempotencyKey: STR }, ['accrualId', 'idempotencyKey']),
       (ctx, input) => accrualReverse(ctx, input as never),
     ),
     ctxAction(
       'accrual_discard',
-      'write',
+      'write:correctable:internal',
       'Retire a drafted Abgrenzung before it posts. The row stays on record as `discarded` with its reason; a posted accrual cannot be discarded (`already_posted`), reverse it instead.',
       ctxSchema({ accrualId: STR, reason: STR, idempotencyKey: STR }, ['accrualId', 'idempotencyKey']),
       (ctx, input) => accrualDiscard(ctx, input as never),
@@ -120,7 +121,7 @@ export function accrualActions(h: AccrualActionHelpers): ActionDef[] {
     // --- N2: provisions (OR 960e) -----------------------------------------------------------------
     ctxAction(
       'provision_create',
-      'write',
+      'write:reversible:internal',
       "Describe a Rückstellung (OR Art. 960e) and save it as a DRAFT: `reason` is one of the eight statutory ids (Garantie, Ferien und Überzeit, Prozess, Grossreparatur, Sanierung, Restrukturierung, Steuern, Sonstige; `invalid_reason` names the exact ids, and `sonstige` needs a description of at least 10 characters); `provisionAccount` is 2330, 2600 or a liability numbered 23xx/26xx; `expenseAccount` is the P&L account the formation is charged to. Returns the draft with its lines (Dr expense / Cr provision). Nothing is posted.",
       ctxSchema(
         {
@@ -138,14 +139,14 @@ export function accrualActions(h: AccrualActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'provision_post',
-      'write',
+      'write:correctable:books',
       'Post a drafted Rückstellung as ONE entry (Dr expense / Cr provision, source `provision`) dated `periodEnd`. No automatic reversal: OR 960e Abs. 4 does not release a provision by the calendar. Idempotent per provision; a different key on a posted one is `already_posted`.',
       ctxSchema({ provisionId: STR, idempotencyKey: STR }, ['provisionId', 'idempotencyKey']),
       (ctx, input) => provisionPost(ctx, input as never),
     ),
     ctxAction(
       'provision_release',
-      'write',
+      'write:correctable:books',
       'Release part or all of a posted Rückstellung: posts Dr provision / Cr `targetAccount` (the original expense account, or an income account) for `amountMinor` on `date`. Refuses `release_exceeds_balance` above the open balance; the provision reads `released` at zero. Idempotent on `idempotencyKey` for as long as the release that key booked still stands; a key whose release was undone refuses `already_reversed_key` (release again under a new key). A release is undone only with `provision_release_reverse`; the raw `reverse_entry` refuses its entry with `owned_by`.',
       ctxSchema(
         { provisionId: STR, date: STR, amountMinor: INT, targetAccount: STR, idempotencyKey: STR },
@@ -155,21 +156,21 @@ export function accrualActions(h: AccrualActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'provision_reverse',
-      'write',
+      'write:correctable:books',
       'Reverse the formation entry of a posted Rückstellung (a real reversing entry, dated `periodEnd` unless `date` names another open day). Refuses `release_blocked` while any release stands unreversed (undo the releases first through `provision_release_reverse`, newest first) and `already_reversed` a second time. This is the ONLY way to reverse the formation: the raw `reverse_entry` refuses it with `owned_by`.',
       ctxSchema({ provisionId: STR, date: STR, reason: STR, idempotencyKey: STR }, ['provisionId', 'idempotencyKey']),
       (ctx, input) => provisionReverse(ctx, input as never),
     ),
     ctxAction(
       'provision_release_reverse',
-      'write',
+      'write:correctable:books',
       'Undo one release of a Rückstellung with a real reversing entry (dated the release date unless `date` names another open day), so the open balance and the `posted` / `released` reading follow from the journal again. This is the ONLY way to reverse a release entry: the raw `reverse_entry` refuses it with `owned_by`, and so it refuses the undo itself. Refuses `not_found` and `already_reversed`. Idempotent on `idempotencyKey`.',
       ctxSchema({ releaseId: STR, date: STR, reason: STR, idempotencyKey: STR }, ['releaseId', 'idempotencyKey']),
       (ctx, input) => provisionReleaseReverse(ctx, input as never),
     ),
     ctxAction(
       'provision_discard',
-      'write',
+      'write:correctable:internal',
       'Retire a drafted Rückstellung before it posts. The row stays on record as `discarded` with its reason; a posted provision cannot be discarded (`already_posted`), reverse or release it instead.',
       ctxSchema({ provisionId: STR, reason: STR, idempotencyKey: STR }, ['provisionId', 'idempotencyKey']),
       (ctx, input) => provisionDiscard(ctx, input as never),
@@ -220,14 +221,14 @@ export function vatSettlementActions(h: AccrualActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'vat_settlement_post',
-      'write',
+      'write:correctable:books',
       "Book the MWST-Saldierung the preview showed: transfer the filed period's balances on 2200, 1170 and 1171 to 2201 (MWST-Abrechnungskonto), dated the period end, `source='vat_settlement'`, so the three tax accounts read zero and 2201 carries what the ESTV is owed. Admitted inside the filed, hard-locked period under three enforced conditions (no VAT trace, only the tax accounts, never into a year-close seal); the filed return and the Abstimmung are unchanged by it. Refuses `period_not_filed` before the filing, `nothing_to_settle` on an empty period, `already_posted` while a settlement of the period stands, `period_locked` with reason `year_close` on a sealed year. Idempotent on `idempotencyKey` for as long as the settlement that key booked still stands; a key whose settlement was reversed refuses `already_reversed_key` (post again under a new key, which books a new settlement). The correction is `vat_settlement_reverse`.",
       ctxSchema({ period: STR, idempotencyKey: STR }, ['period', 'idempotencyKey']),
       (ctx, input) => vatSettlementPost(ctx, input as never),
     ),
     ctxAction(
       'vat_settlement_reverse',
-      'write',
+      'write:correctable:books',
       'Reverse a posted MWST-Saldierung with a reversing entry dated the period end, so 2200, 1170, 1171 and 2201 net to zero again inside the settled period; the settlement row reads `reversed` and keeps its history, and a later `vat_settlement_post` for the period books a new settlement. This is the ONLY way to reverse a settlement entry: the generic `reverse_entry` refuses it with `owned_by`, because the settlement row must move with the mirror. Refuses `not_found` and `already_reversed`. Idempotent on `idempotencyKey`.',
       ctxSchema({ settlementId: STR, idempotencyKey: STR }, ['settlementId', 'idempotencyKey']),
       (ctx, input) => vatSettlementReverse(ctx, input as never),

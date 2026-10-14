@@ -25,11 +25,12 @@ import {
   matchThreeWayExceptions,
   matchStatusForBill,
 } from '../core/procurement/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ThreeWayMatchActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -56,21 +57,21 @@ export function threeWayMatchActions(h: ThreeWayMatchActionHelpers): readonly Ac
   return [
     ctxAction(
       'match_three_way_create',
-      'write',
+      'write:correctable:books',
       'AGENT-FIRST. Persist a three-way match for a vendor bill (A17) against its purchase order (I01) and goods receipts (I02) when the evaluation is inside tolerance. Pass poId to pin the SAME candidate PO the evaluation was run against; otherwise the supplier oldest open PO is chosen, so an evaluate pinned to one PO and a create with no poId can land against a different PO. The engine RE-COMPUTES the evaluation under a row guard (the evaluation snapshot passed in is stored for audit but never trusted for the decision), writes an immutable match header + one line per PO line, increments billed_qty on every matched PO line exactly once, and marks the consumed I02 receipt lines. It POSTS NOTHING: the bill posting stays A17 -> A02. Refused when there is no candidate PO (no_candidate_po), nothing is open to bill (nothing_received), the bill has no CHF base figure yet (bill_not_convertible), the evaluation is out of tolerance (out_of_tolerance: use match_three_way_override), or the bill already has an active match (match_already_exists). allowPartial defaults to the workspace policy. Idempotent under idempotencyKey. Needs the purchasing.match capability.',
       ctxSchema({ billId: STR, poId: STR, evaluation: OBJ, allowPartial: BOOL, idempotencyKey: STR }, ['billId', 'idempotencyKey']),
       (ctx, input) => matchThreeWayCreate(ctx, as(input)),
     ),
     ctxAction(
       'match_three_way_override',
-      'write',
+      'write:correctable:books',
       'Force a match on an out-of-tolerance evaluation with a MANDATORY reason (min 5 chars). Pass poId to pin the SAME candidate PO the evaluation was run against; otherwise the supplier oldest open PO is chosen. Writes a permanent match header with status overridden, the reason and the overriding actor, and still increments billed_qty and marks the receipt lines. An override without a reason is refused (reason_required). The override is permanent: it can only ever be undone by match_three_way_reverse, never silently turned back into a clean match. Refused with no_candidate_po / nothing_received / bill_not_convertible / match_already_exists exactly as create. Idempotent under idempotencyKey. Needs BOTH purchasing.match AND purchasing.match_override.',
       ctxSchema({ billId: STR, poId: STR, evaluation: OBJ, reason: STR, idempotencyKey: STR }, ['billId', 'reason', 'idempotencyKey']),
       (ctx, input) => matchThreeWayOverride(ctx, as(input)),
     ),
     ctxAction(
       'match_three_way_reverse',
-      'write',
+      'write:correctable:books',
       'Reverse a matched / partial / overridden match when a material error is found. Writes a compensating record (status reversed) linked to the original, restores billed_qty on every affected PO line to its exact pre-match value, and un-marks the I02 receipt lines. It never mutates the original header or its lines (§H-AUDIT) beyond stamping the one-way reverse link. A reversed match cannot be re-activated: a fresh evaluate + create is required. A non-empty reason (min 5 chars) is mandatory (reason_required); a match that is already reversed or in a non-reversible state is refused (match_not_reversible). Idempotent under idempotencyKey. Needs the purchasing.match_override capability.',
       ctxSchema({ matchId: STR, reason: STR, idempotencyKey: STR }, ['matchId', 'reason', 'idempotencyKey']),
       (ctx, input) => matchThreeWayReverse(ctx, as(input)),

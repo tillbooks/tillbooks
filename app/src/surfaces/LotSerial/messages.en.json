@@ -7,7 +7,7 @@
     "noWorkspace": "Pick a workspace to manage lot and serial tracking.",
     "listLabel": "Trackable items",
     "detailLabel": "Item tracking detail",
-    "selectHint": "Select an item to set its tracking mode and manage its lots and serials.",
+    "selectHint": "Select an item.",
     "modeLabel": "Tracking mode",
     "notTracked": "This item is not lot- or serial-tracked. Choose a mode above to start.",
     "col": {

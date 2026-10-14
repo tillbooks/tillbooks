@@ -14,6 +14,7 @@
  * exactly what §H-TENANT exists against.
  */
 
+import { createHash } from 'node:crypto';
 import type { WorkspaceContext } from '../context.js';
 import type { Result } from '../result.js';
 import { err, ok } from '../result.js';
@@ -25,6 +26,8 @@ import type { SourceEncoding } from './adapters/parse.js';
 import { unzip, type ZipMember } from './adapters/zip.js';
 import { hasPreMigrationBackup } from './seams.js';
 import { isCutoverPending } from './stichtag.js';
+import { deleteOwnedTestmandant, owningPlan } from './testmandant.js';
+import { unlinkPlanTestmandant } from './trialReset.js';
 import { applySavedView } from '../customization/views.js';
 import { listVatPeriods } from '../vat/index.js';
 
@@ -483,18 +486,29 @@ export function discoverSource(
             failures.push({ fileId, member: m.name, error: 'source_unparseable', reason: m.error ?? 'corrupt' });
             continue;
           }
-          const up = uploadFile(ctx, {
-            contentBase64: Buffer.from(m.bytes).toString('base64'),
-            filename: m.name,
-            mime: mimeForMember(m.name),
-            tags: ['migration_bundle_member', fileId],
-            idempotencyKey: `migbundle-${fileId}-${m.name}`,
-          });
+          // K1: the key is derivable from the bundle id and the member name, so the member upload runs in
+          // this composite's own idempotency scope: a `files_upload` made first under the same key (other
+          // bytes) used to be replayed here and classified as the bundle's member.
+          const bytes = m.bytes;
+          const up = ctx.store.innerWrite('migration_discover_source', () =>
+            uploadFile(ctx, {
+              contentBase64: Buffer.from(bytes).toString('base64'),
+              filename: m.name,
+              mime: mimeForMember(m.name),
+              tags: ['migration_bundle_member', fileId],
+              idempotencyKey: `migbundle-${fileId}-${m.name}`,
+            }),
+          );
           if (!up.ok) {
             failures.push({ fileId, member: m.name, error: 'source_unparseable', reason: (up as { error?: string }).error });
             continue;
           }
           const memberFile = up.file as { id: string; sha256: string };
+          // ...and READ BACK: the stored member holds exactly these bytes.
+          if (memberFile.sha256 !== createHash('sha256').update(bytes).digest('hex')) {
+            failures.push({ fileId, member: m.name, error: 'inner_write_not_own', reason: 'files_upload' });
+            continue;
+          }
           const cls = classifyMember(plan, Buffer.from(m.bytes), m.name, sheetChoice[memberFile.id], force);
           if (!cls.ok) {
             failures.push({ fileId: memberFile.id, member: m.name, error: 'source_unparseable', reason: cls.reason });
@@ -928,10 +942,18 @@ export function readiness(ctx: WorkspaceContext, input: { planId: unknown }): Re
 // --- abandonPlan --------------------------------------------------------------------------------
 
 /**
- * US-G09.6: close the plan and discard its Testmandant. Belege for any step that reached `live` are
- * RETAINED (OR 958f), so abandoning never deletes the evidence of what was committed. After any
- * commit this verb additionally requires `commit_migration` (enforced at the registry boundary,
- * US-G09.4); the confirm gate is here.
+ * US-G09.6: close the plan as abandoned and DELETE the Testmandant these books created (owner
+ * decision 11.10.2026, as G09.6 promises). The deletion goes through the SAME single guarded path as
+ * `discard_testmandant` (`deleteOwnedTestmandant`), in this verb's one transaction, and only for a
+ * Testmandant this plan OWNS (`owningPlan`): a copy's plan that still links the original's sandbox
+ * (a book restored before the fix) drops its own link and deletes nothing, and a link to a workspace
+ * that is already gone is cleared. A Testmandant that went productive (`live`) or is a G03 `demo` is
+ * never deleted here. `testmandantDiscarded` is true only when a workspace was deleted.
+ *
+ * Belege for any step that reached `live` are RETAINED (OR 958f), so abandoning never deletes the
+ * evidence of what was committed. After any commit this verb additionally requires `commit_migration`
+ * (US-G09.4), checked HERE before the memo and before any write (the registry boundary asks only for
+ * `manage_import`); the confirm gate is here too.
  */
 export function abandonPlan(
   ctx: WorkspaceContext,
@@ -947,13 +969,42 @@ export function abandonPlan(
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey as string, 'migration_abandon_plan');
   if (replayed !== undefined) return replayed;
 
+  // US-G09.4, the rule the description, the contract and G09 state: once ANY step has committed to
+  // live books, abandoning requires `commit_migration`, not only `manage_import`. The registry boundary
+  // (`actionCapabilities.ts`) asks only for `manage_import`, so the check lives here, before the memo,
+  // and a refusal writes nothing (no deletion either). The same pattern `discardTestmandant` uses.
+  const anyCommitted = loadSteps(ctx, plan.id).some((s) => s.status === 'committed' || s.status === 'verified');
+  if (anyCommitted) {
+    const cap = ctx.capabilities.assert('commit_migration');
+    if (!cap.ok) return cap;
+  }
+
   return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey as string, 'migration_abandon_plan', () => {
     const belegeRetained = loadSourceFiles(ctx, plan.id).map((f) => f.file_id as string);
+    let testmandantDiscarded = false;
+    if (plan.testmandant_workspace_id !== null) {
+      const ownership = owningPlan(ctx, plan);
+      if (ownership === 'owner') {
+        // Only a sandbox is deleted; a Testmandant that became real books (`live`) stays linked.
+        if (testmandantKindOf(ctx, plan.testmandant_workspace_id) === 'sandbox') {
+          deleteOwnedTestmandant(ctx, plan, 'abandon');
+          testmandantDiscarded = true;
+        }
+      } else {
+        // Not this plan's (a copy) or already gone: drop only this plan's own link.
+        unlinkPlanTestmandant(ctx.store.db, ctx.workspaceId, plan.id, ctx.clock.now(), false);
+      }
+    }
     ctx.store.db
       .prepare("UPDATE migration_plan SET status = 'abandoned', closed_at = ? WHERE id = ? AND workspace_id = ?")
       .run(ctx.clock.now(), plan.id, ctx.workspaceId);
-    return ok({ ok: true, testmandantDiscarded: plan.testmandant_workspace_id !== null, belegeRetained });
+    return ok({ ok: true, testmandantDiscarded, belegeRetained });
   });
+}
+
+/** The kind of a (sibling) workspace, or undefined when it does not exist. */
+function testmandantKindOf(ctx: WorkspaceContext, workspaceId: string): string | undefined {
+  return (ctx.store.db.prepare('SELECT kind FROM workspace WHERE id = ?').get(workspaceId) as { kind: string } | undefined)?.kind;
 }
 
 // --- closePlan (R4, US-G18.6) -------------------------------------------------------------------

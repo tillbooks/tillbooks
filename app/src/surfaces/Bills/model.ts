@@ -96,6 +96,12 @@ export interface BillsView {
 export interface VendorOption {
   id: string;
   name: string;
+  /**
+   * The vendor's own Zahlungsfrist in days (`contact.payment_terms_days`): null when it has none of
+   * its own (the workspace default then applies, D163), 0 when it is due immediately. It is what the
+   * Fällig default is read from (`defaultDueDate`).
+   */
+  paymentTermsDays: number | null;
 }
 
 /** One option in the expense-account picker, from `list_accounts`. */
@@ -104,6 +110,12 @@ export interface AccountOption {
   number: string;
   name: string;
   type: string;
+  /** The account's default MWST code (A01 `vat_code_default`): the code the drawer infers (D152 rule 1). */
+  vatCodeDefault: string | null;
+  /** A01 `cost_center_allowed`: Kostenstelle and Projekt are offered only on such an account (D152 rule 2). */
+  costCenterAllowed: boolean;
+  /** A Bankkonto's own ledger account (`markBankLedgers`): never offered MWST. */
+  bankLedger?: boolean;
 }
 
 /** One option in the VAT-code picker, from `vat_codes`. */
@@ -388,6 +400,56 @@ export function parseAmountToMinor(text: string): number | null {
   const minor = Number(whole) * 100 + Number(frac.padEnd(2, '0'));
   if (!Number.isSafeInteger(minor)) return null;
   return negative ? -minor : minor;
+}
+
+/** Which rule a bill's default Fälligkeit came from (the engine's `DueDateSource`, minus `explicit`). */
+export type DueDateSource = 'contact' | 'workspace' | 'document_date';
+
+/** The engine's bound on any Zahlungsfrist (`PAYMENT_TERMS_MAX_DAYS`, critic M1). */
+const PAYMENT_TERMS_MAX_DAYS = 365;
+
+/**
+ * A Zahlungsfrist a bill can be counted with: a whole number of days from 0 to 365, else none. A
+ * stored value outside the bound (a row from before it existed) falls through to the next rule,
+ * exactly as the engine's `usableDays` does.
+ */
+function usableDays(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= PAYMENT_TERMS_MAX_DAYS ? value : null;
+}
+
+/**
+ * Where the default Fälligkeit comes from and how many days it counts: the vendor's own Zahlungsfrist
+ * (0 is "due immediately", a real answer), else the workspace default (D163, set in the Firmenprofil),
+ * else none (the bill date). The rule order of `deriveDueDate` in `src/core/setup/paymentTerms.ts`.
+ */
+export function dueDateBasis(
+  termsDays: number | null,
+  workspaceDefaultDays: number | null = null,
+): { source: DueDateSource; days: number } {
+  const contact = usableDays(termsDays);
+  if (contact !== null) return { source: 'contact', days: contact };
+  const workspace = usableDays(workspaceDefaultDays);
+  if (workspace !== null) return { source: 'workspace', days: workspace };
+  return { source: 'document_date', days: 0 };
+}
+
+/**
+ * The Fällig a bill gets when none is typed: the bill date plus the vendor's Zahlungsfrist, else the
+ * workspace default (D163), else 0 days. A vendor whose terms are 0 is due on the bill date even when a
+ * workspace default is set; a vendor with NO terms (null) takes the default.
+ *
+ * THE STUDIO'S ONE MIRROR of the engine's derivation (`deriveDueDate` in
+ * `src/core/setup/paymentTerms.ts`, which A17's `defaultDueDate` calls for a bill sent without
+ * `dueDate`), day for day (UTC calendar days, so a month end and 29 February land where the engine
+ * lands them). The drawer SHOWS this value before the commit and sends it, so the bill stores exactly
+ * what the engine would have stored for a blank field, and the person sees it first. Held identical to
+ * the engine over a terms x default x dates grid by `test/purchase/studio-bills-defaults.test.mjs`.
+ */
+export function defaultDueDate(billDate: string, termsDays: number | null, workspaceDefaultDays: number | null = null): string {
+  const { days } = dueDateBasis(termsDays, workspaceDefaultDays);
+  const at = Date.parse(`${billDate}T00:00:00.000Z`);
+  if (days === 0 || Number.isNaN(at)) return billDate;
+  return new Date(at + days * 86_400_000).toISOString().slice(0, 10);
 }
 
 /** Today, as the engine's date shape. */

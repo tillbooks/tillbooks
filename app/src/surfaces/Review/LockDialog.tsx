@@ -8,7 +8,7 @@
  *
  * It names the period and carries its own pending and failure states so the act is never a dead end.
  * THE CONSEQUENCE IS THE ENGINE'S SENTENCE (D118 C4): `lock_period` is dial-governed under
- * `close-period`, so the shared `ConsequenceLine` renders `agent.consequence.close-period`, the
+ * `close-period`, so the shared `ConsequenceLine` renders the engine's consequence for it (D156), the
  * identical string the Vorschlag card shows an approver and the Periods surface shows on its month
  * close (F-07, J4.1). One sentence for one consequence; the surface-authored twin this dialog used
  * to carry is retired. The line is the dialog's `aria-describedby`.

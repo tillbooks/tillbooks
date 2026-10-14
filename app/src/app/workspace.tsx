@@ -129,7 +129,8 @@ export function WorkspaceSurfaceRoute() {
 
 /**
  * US-G16.10, the route-layer §H-TENANT guard. On a workspace switch, a RECORD-scoped route (one
- * highlighting a record, by a `focus` query param or a detail path segment under a splat surface)
+ * highlighting a record, by a `focus` query param, the dunning hub link's `runId`, or a detail path
+ * segment under a splat surface)
  * resets to its list root, so a detail id from the workspace just left never resolves under the new
  * one. A LIST route keeps its path. This is a static property of the URL, not a runtime guess.
  */
@@ -137,7 +138,9 @@ export function tenantResetTarget(pathname: string, search: string): string | nu
   const segments = pathname.split('/').filter(Boolean);
   if (segments.length === 0) return null;
   const base = `/${segments[0]}`;
-  if (new URLSearchParams(search).has('focus')) return base; // strip the highlighted record
+  const params = new URLSearchParams(search);
+  // Strip the highlighted record: `focus` (a search hit) or `runId` (the Pendenzen link to a Mahnlauf).
+  if (params.has('focus') || params.has('runId')) return base;
   // The two surfaces that own a nested detail tree under a splat (router.tsx): a segment beyond the
   // base that is not the `new` composer is a record detail.
   if ((segments[0] === 'documents' || segments[0] === 'payments') && segments.length > 1 && segments[1] !== 'new') {

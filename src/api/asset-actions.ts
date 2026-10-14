@@ -56,11 +56,12 @@ import {
   assetReconciliationReport,
   assetReconciliationCheck,
 } from '../core/assets/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface AssetActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -132,7 +133,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'asset_category_create',
-      'write',
+      'write:correctable:internal',
       'Create a fixed-asset category carrying the defaults every asset created under it inherits (H01): a depreciation method (straight_line | declining_balance | units_of_production | none), a useful life in months, a residual value (basis points or absolute Rappen), the three GL accounts (cost=asset, accumulated depreciation=asset/liability contra, depreciation expense=expense), and an optional default cost centre. code is 1-20 chars, unique per workspace case-insensitively (duplicate_code). Wrong account types are refused with invalid_account_type before any write.',
       ctxSchema(
         {
@@ -155,14 +156,14 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_category_update',
-      'write',
+      'write:reversible:internal',
       'Edit a fixed-asset category through a patch object. The same validation as create applies (account types, useful life, residual bounds); code is immutable through this verb. Only the fields present in patch change.',
       ctxSchema({ categoryId: STR, patch: CATEGORY_PATCH, idempotencyKey: STR }, ['categoryId', 'idempotencyKey']),
       (ctx, input) => updateAssetCategory(ctx, as(input)),
     ),
     ctxAction(
       'asset_category_archive',
-      'write',
+      'write:correctable:internal',
       'Soft-archive a category (active=false): it leaves the default picker but stays resolvable for historical assets. Refused with category_in_use while any asset (even disposed) still references it. Deletion is never offered (a category must stay resolvable for its assets whole depreciable life).',
       ctxSchema({ categoryId: STR, idempotencyKey: STR }, ['categoryId', 'idempotencyKey']),
       (ctx, input) => archiveAssetCategory(ctx, as(input)),
@@ -192,7 +193,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     // --- H01, the Asset Master ------------------------------------------------------------------
     ctxAction(
       'asset_create',
-      'write',
+      'write:correctable:internal',
       'Create a capitalised fixed asset FROM a category (H00), inheriting its depreciation method, useful life, residual rule and three GL accounts; only name, acquisitionDate and acquisitionCostRappen (Rappen, >0) are required. Any of depreciationMethod/usefulLifeMonths/residualValuePct/residualValueRappen/the three GL account ids may OVERRIDE the inherited default at creation. number is optional (a unique FA-#### is generated if omitted; a manual one is unique per workspace case-insensitively, else duplicate_number). An archived category is refused with category_archived. The asset is created in status=draft; its financial baseline is immutable once a posted acquisition (H02) moves it out of draft.',
       ctxSchema(
         {
@@ -227,7 +228,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_update',
-      'write',
+      'write:reversible:internal',
       'Edit an asset through a patch object. Descriptive fields (name, description, location, responsible, serial, barcode, manufacturer, model, warranty, notes) change freely while the asset is non-terminal. The financial baseline (acquisitionDate, acquisitionCostRappen, the depreciation trio, the three GL accounts) may change ONLY while the asset is still draft: once a posted acquisition or depreciation exists, any such field in the patch is refused with financial_fields_locked and nothing is written (use a correction flow instead). A disposed or archived asset is refused with asset_terminal.',
       ctxSchema({ assetId: STR, patch: ASSET_PATCH, idempotencyKey: STR }, ['assetId', 'idempotencyKey']),
       (ctx, input) => updateAsset(ctx, as(input)),
@@ -263,7 +264,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_archive',
-      'write',
+      'write:correctable:internal',
       'Soft-archive an asset (status=archived): it leaves the active register but stays readable. Refused with asset_in_use while the asset is active or fully_depreciated (an asset the ledger still depends on cannot be hidden; dispose it via H06 instead). Only a draft or already-terminal asset may be archived.',
       ctxSchema({ assetId: STR, idempotencyKey: STR }, ['assetId', 'idempotencyKey']),
       (ctx, input) => archiveAsset(ctx, as(input)),
@@ -316,7 +317,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_depreciation_method_set_enabled',
-      'write',
+      'write:reversible:internal',
       'Enable or disable a depreciation method for this workspace (a setup action). Absence means enabled, so this only records a method switched off. The none method can never be disabled (a non-depreciating asset must always be expressible), refused with method_locked. An unknown methodKey is unknown_method. Idempotent on the (workspace, method) row.',
       ctxSchema({ methodKey: STR, enabled: BOOL, idempotencyKey: STR }, ['methodKey', 'enabled', 'idempotencyKey']),
       (ctx, input) => setMethodEnabled(ctx, as(input)),
@@ -324,7 +325,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     // --- H02, Asset Acquisition (MONEY PATH: posts the capitalisation journal) -------------------
     ctxAction(
       'asset_acquire',
-      'write',
+      'write:correctable:books',
       'Record the PRIMARY acquisition of a draft fixed asset (H02): the first financial event, which capitalises the asset. In ONE atomic transaction it writes a sub-ledger asset_transaction (type=acquisition) AND posts the balanced GL journal via A02 (Dr the asset GL account inherited from the category, Cr the chosen creditAccountId, for acquisitionCostRappen), then moves the asset draft -> active and confirms its cost base. creditAccountId must be a real asset/liability/equity account (credit_account_wrong_type otherwise; invalid_credit_account when missing or foreign). An optional residualValueRappen (0..cost) overrides the residual; optional costCenterId stamps both legs; optional source (manual|vendor_bill|project|opening) + sourceDocumentId link the event (source_document_not_found if the id does not resolve). Refused with invalid_cost (cost <= 0), asset_not_acquirable (disposed/archived), already_acquired (a primary acquisition already exists), invalid_residual, or period_locked (date in a hard-locked A03 period). After success the H01 financial-field lock is active. Idempotent on idempotencyKey: a replay returns the original {asset, transaction, journalEntry} and posts no second entry.',
       ctxSchema(
         {
@@ -345,7 +346,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_add_capitalisation',
-      'write',
+      'write:correctable:books',
       'Capitalise ADDITIONAL cost onto an already-acquired asset (H02): an improvement or major overhaul. In ONE atomic transaction it writes a sub-ledger asset_transaction (type=additional_capitalisation) AND posts the same balanced Dr asset / Cr creditAccountId pattern via A02 for amountRappen, then raises the asset acquisition_cost_rappen and net_book_value_rappen by that amount (accumulated depreciation is left unchanged; residual and useful life are untouched). Requires a live asset carrying a primary acquisition (not_acquired otherwise; asset_not_acquirable when disposed/archived). Same credit-account, source-document and period rules as asset_acquire. Idempotent on idempotencyKey.',
       ctxSchema(
         {
@@ -381,7 +382,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     // --- H05, Asset Transfer & Location (NON-POSTING: no journal entry is ever created) ----------
     ctxAction(
       'asset_location_create',
-      'write',
+      'write:correctable:internal',
       'Create a workspace fixed-asset location (a physical place assets live: a hall, a floor, a branch). code is 1-30 chars, unique per workspace case-insensitively (duplicate_code); an optional parentId nests it under another location for a light hierarchy (a foreign or missing parent is not_found). Locations are the primary filter dimension of the register and the target of asset_transfer.',
       ctxSchema(
         { code: STR, name: STR, description: STR, parentId: STR, idempotencyKey: STR },
@@ -391,7 +392,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_location_update',
-      'write',
+      'write:reversible:internal',
       'Edit a fixed-asset location through a patch object (name, description, parentId). code is immutable through this verb. Setting a parentId that would close a hierarchy loop is refused with location_cycle; parentId null or "" clears it back to a root location. Only the fields present in patch change.',
       ctxSchema(
         { locationId: STR, patch: { type: 'object', properties: { name: STR, description: STR, parentId: STR } }, idempotencyKey: STR },
@@ -401,7 +402,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_location_archive',
-      'write',
+      'write:correctable:internal',
       'Soft-archive a location (active=false): it leaves the transfer/asset pickers but stays resolvable for historical assets. Refused with location_in_use while any non-disposed asset still references it (move those assets away first). Deletion is never offered (a location must stay resolvable for the transfer history that names it). Idempotent: archiving an already-archived location succeeds and writes nothing.',
       ctxSchema({ locationId: STR, idempotencyKey: STR }, ['locationId', 'idempotencyKey']),
       (ctx, input) => archiveAssetLocation(ctx, as(input)),
@@ -422,7 +423,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_transfer',
-      'write',
+      'write:correctable:internal',
       'Transfer one or many active fixed assets to a new location and/or a new responsible person (custodian). NON-POSTING by design: it writes one immutable asset_transfer history row per asset (capturing the old and new location/responsible, the effective date and an optional reason) and updates each asset location_id / responsible_user_id, but changes NO financial field and creates NO journal entry. assetIds is 1..N (bulk supported, all-or-nothing); at least one of toLocationId / toResponsibleUserId must be supplied (nothing_to_transfer otherwise). Refused with location_inactive (target location archived), asset_not_transferable (any selected asset is disposed or archived, listing the offenders), or not_found (a foreign asset or location, §H-TENANT). Idempotent on idempotencyKey: a replay returns the original {transactions, assets, summary} and writes no second history row.',
       ctxSchema(
         {
@@ -448,7 +449,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     // --- H04, Depreciation Run & Posting (MONEY PATH: posts the period-end depreciation journal) ----
     ctxAction(
       'asset_depreciation_run_create',
-      'write',
+      'write:correctable:internal',
       'Create a DRAFT depreciation run for a period (H04): calculate the depreciation for every eligible asset via the H03 engine and persist a run header (status=draft) plus one line per asset that returned amount > 0, so a bookkeeper can review the proposed expense before anything hits the books. Eligible = status active/fully_depreciated, method != none, accumulated depreciation below cost minus residual, last_depreciation_period null or before the target period, not disposed. Optional filters narrow the set: assetIds (an explicit subset), categoryId, costCenterId. unitsByAsset maps assetId to the WHOLE units produced this period and is what makes a units_of_production asset depreciable at all (TILL captures no production data of its own, so the run carries it; same shape as asset_depreciation_preview, and values must be non-negative safe integers up to 1e12 or the create is invalid_input). skipped[] reports assets that produced NO line, as {assetId, assetNumber, reason}: on an EXPLICIT assetIds list every named asset that produced no line is reported (non_depreciable | asset_terminal | already_at_residual | period_already_processed | filtered_out | missing_production_data | missing_units_estimate | zero_amount), because naming an asset is an instruction about that asset; on a SWEEP the eligible register IS the selection, so only assets that reached the calculation are reported (missing_production_data | missing_units_estimate | zero_amount). A units_of_production asset named EXPLICITLY in assetIds is refused, not merely reported, when the input can be corrected: missing_production_data (no figure supplied) or missing_units_estimate (the asset carries no totalEstimatedUnits, so there is no denominator to allocate over). Nothing is written in either case. postingGranularity is detailed (one expense + one accum line per asset, the default) or summarised (grouped by account + cost centre); the per-asset lines exist either way for the sub-ledger audit. period is YYYY-MM. Refused with invalid_period, period_locked (the period is hard-locked in A03) or run_already_exists (a draft for the same period and selection already exists, and the response names it). Writes NO journal (the post verb does). Idempotent on idempotencyKey and on the (period, selection) signature, where the signature is built from the LINES the run would write (asset, amount and production figure), so two creates over the same eligible set yield ONE draft however the filters or the units map were spelled. When there is nothing to charge, NO run is persisted at all: the answer is {ok:true, run:null, lines:[], empty:true, skipped:[...]}, computed fresh, so it is identical on every call however many times it is repeated and whatever key each call carries. A run header exists only where at least one asset is charged, which is why a finished period never leaves an outstanding draft in run_list for a period-close checklist to trip over. Once a period is POSTED its assets carry it as their last depreciation period, so nothing is eligible and a later create for that period returns exactly that empty answer, carrying alreadyPostedRunId: the id of the most recently posted run for the period (two disjoint selections can both post for one period). A foreign assetId is not_found (§H-TENANT).',
       ctxSchema(
         {
@@ -466,14 +467,14 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_depreciation_run_post',
-      'write',
+      'write:correctable:books',
       'Post a reviewed DRAFT depreciation run (H04): in ONE atomic transaction it re-validates eligibility and the period-open state, posts one balanced GL journal via A02 (Dr the depreciation-expense account / Cr the accumulated-depreciation account for each line, source=asset_depreciation), writes one append-only asset_transaction (type=depreciation) per asset, advances every asset accumulated_depr_rappen / net_book_value_rappen / last_depreciation_period, sets a final asset to status=fully_depreciated, and marks the run posted with its journal_entry_id. postingDate defaults to the last day of the period; it may land later than the period (a late close) but never earlier than the first day of the run period, and an explicitly supplied date may not predate the acquisition date of any asset in the run (invalid_input names the field and a reason of before_period or before_acquisition). Refused with period_locked (the RUN period or the posting date is hard-locked: a posting date in an open year can never slip a charge past a sealed one), stale_draft with the reason that applies (accumulated_moved: its accumulated depreciation moved since the draft was calculated; valuation_moved: its net book value moved, for instance an asset_add_capitalisation landed while the draft was under review; asset_terminal: it was disposed or archived; asset_missing), run_reversed. A stale draft is never recomputed, because that would silently change a figure the reviewer already approved: recreate the run. Idempotent on idempotencyKey AND on run status: a re-post of an already-posted run posts NO second journal and writes NO second asset_transaction, returning the original result (a double-post never double-counts). §H-TENANT: a foreign runId is not_found.',
       ctxSchema({ runId: STR, postingDate: STR, idempotencyKey: STR }, ['runId', 'idempotencyKey']),
       (ctx, input) => assetDepreciationRunPost(ctx, as(input)),
     ),
     ctxAction(
       'asset_depreciation_run_reverse',
-      'write',
+      'write:correctable:books',
       'Reverse a POSTED depreciation run (H04) when a material error is found, without rewriting history: it calls A02 reverseEntry on the original journal (producing a new reversing entry), writes a compensating asset_transaction (type=depreciation_reversal) per line, restores every asset accumulated_depr_rappen / net_book_value_rappen / status / last_depreciation_period to its pre-run value (by delta), and marks the original run reversed with the reversing journal link. The original journal and the original run amounts are never mutated (§H-AUDIT). reverseDate defaults to the last day of the period and may not predate the first day of the run period (a reversal is booked forward, never before the charge it reverses: invalid_input names the field). The optional reason is recorded on the reversing entry description and on the compensating asset_transaction. Refused with run_not_posted (a draft), already_reversed, period_locked, and later_run_exists when a LATER run has already posted for one of the assets (the response names the blocking period): runs are reversed newest first, because the asset last_depreciation_period stays on the later run and the earlier period would otherwise be silently unrecoverable. A reversed run cannot be re-posted; a new run for the same period may be created afterwards. Idempotent on idempotencyKey. §H-TENANT: a foreign runId is not_found.',
       ctxSchema({ runId: STR, reason: STR, reverseDate: STR, idempotencyKey: STR }, ['runId', 'idempotencyKey']),
       (ctx, input) => assetDepreciationRunReverse(ctx, as(input)),
@@ -520,7 +521,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_dispose',
-      'write',
+      'write:correctable:books',
       'Dispose an active or fully_depreciated fixed asset (H06): the TERMINAL financial event (sale, scrap, donation, write-off, retirement). In ONE atomic transaction it (a) posts ONE balanced GL journal via A02 (source=asset_disposal) clearing the asset cost (Cr) and its accumulated depreciation (Dr), recognising the proceeds (Dr the proceedsAccountId) and the resulting book gain (Cr) or loss (Dr) on the gainLossAccountId; (b) writes ONE append-only asset_transaction (type=disposal, deltaCostRappen = -cost, deltaAccumDeprRappen = -accumulated, proceedsRappen, gainLossRappen) naming that journal; and (c) moves the asset to status=disposed, forces net_book_value_rappen to 0 and stamps disposed_at / disposal_proceeds_rappen (cost and accumulated stay for historical reporting). The gain/loss SIGN is proceedsRappen minus net book value: proceeds above NBV credit the gain account, below NBV debit the loss account, exactly equal writes no gain/loss line. A scrap (proceedsRappen = 0) writes no proceeds line and needs no proceedsAccountId. After success the asset is permanently excluded from every future depreciation run (H03/H04 status filter) and asset_update refuses it with asset_terminal. Refused with not_found (foreign asset, §H-TENANT), asset_already_disposed (a second dispose: first wins, second is refused), asset_archived, asset_not_acquired (a draft has no cost basis), invalid_proceeds, invalid_gain_loss_account, invalid_proceeds_account, or period_locked (disposalDate in a hard-locked A03 period). A wrong disposal is corrected by reversing the journal (A02) plus a compensating asset_transaction, never an un-dispose. Idempotent on idempotencyKey: a replay returns the original {asset, transaction, journalEntry, gainLossRappen} and posts no second journal, appends no second transaction and re-flips no status.',
       ctxSchema(
         {
@@ -587,7 +588,7 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'asset_opening_balance',
-      'write',
+      'write:correctable:books',
       'Seed the opening cost and accumulated depreciation of a fixed asset (H07, US-H07.5): for an asset that already exists in the real world at migration, it records the historical figures so the identity invariants and the recon report hold from the opening period. In ONE atomic transaction it posts ONE balanced GL journal via A02 (Dr the asset cost account for costRappen, Cr the accumulated-depreciation account for accumulatedDeprRappen when > 0, and Cr the offsetAccountId equity/opening account for the net book value cost minus accumulated) and writes ONE append-only asset_transaction of type=opening naming that journal, then moves the asset from draft to active with that baseline (which trips the H01 financial-field lock). offsetAccountId is required only when costRappen > accumulatedDeprRappen. Refused with not_found (foreign asset, §H-TENANT), already_acquired / already_opened (the asset already carries a financial event), invalid_input (bad date, non-positive cost, accumulated outside 0..cost), invalid_offset_account, and period_locked. Idempotent on idempotencyKey: a replay returns the original objects (asset, transaction, journalEntry) and posts no second journal and appends no second row.',
       ctxSchema(
         {

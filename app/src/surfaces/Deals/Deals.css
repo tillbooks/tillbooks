@@ -244,7 +244,8 @@
 .deals-drawer {
   flex: 0 0 26rem;
   position: sticky;
-  top: var(--t-space-2);
+  /* P6 (D152): pins a step under the sticky surface header, never behind it. */
+  top: calc(var(--surface-header-height, 0px) + var(--t-space-2));
   background: var(--t-bg-elev);
   border-radius: var(--t-radius-md);
   padding: var(--t-space-2);

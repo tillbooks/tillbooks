@@ -30,11 +30,12 @@ import {
   listVendorBills,
   getVendorBill,
 } from '../core/purchase/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface PurchaseActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -82,28 +83,28 @@ export function purchaseActions(h: PurchaseActionHelpers): readonly ActionDef[] 
   return [
     ctxAction(
       'create_vendor_bill',
-      'write',
+      'write:correctable:internal',
       'Erfasse eine Kreditorenrechnung als Entwurf (a draft vendor bill: no posting, no ledger effect). amountMinor is integer Rappen and is the GROSS on the paper bill unless amountIsGross is false; taxCode is an input-side code (VST-M, VST-I, BEZUG, IMPORT) or absent for a vendor that charges no MWST. projectId tags the purchase to a B00 project for the B03 Projekterfolg (a reporting dimension like costCenterId: it prices nothing and appears on no journal leg). This is the agent path (P8): draft first, then post_vendor_bill as a separate, deliberate step.',
       ctxSchema(capture, CAPTURE_REQUIRED),
       (ctx, input) => createVendorBill(ctx, as(input)),
     ),
     ctxAction(
       'record_expense',
-      'write',
+      'write:correctable:books',
       'Capture AND post a supplier bill or expense in one step (the human default): the same input as create_vendor_bill, composed with post_vendor_bill in ONE transaction, so a refused posting leaves no draft behind. Posts the expense or asset net plus 1170/1171 Vorsteuer against 2000 Kreditoren gross, stamping the §H-VAT-TRACE the MWST-Abrechnung reads. Under the Saldo method (MWSTG Art. 37) nothing is separately reclaimed and the expense books gross: the result says so with vorsteuerDeductible:false.',
       ctxSchema(capture, CAPTURE_REQUIRED),
       (ctx, input) => recordExpense(ctx, as(input)),
     ),
     ctxAction(
       'post_vendor_bill',
-      'write',
+      'write:correctable:books',
       'Post an existing draft bill to the ledger (bucht die Kreditorenrechnung). The figures are recomputed from the stored input at the supply date, so a draft that sat across a rate change or a VAT-method change books what is correct now rather than what a stale preview cached. Refuses already_posted with the entry the bill already carries, and period_locked when the bill date falls in a locked period.',
       ctxSchema({ vendorBillId: STR, idempotencyKey: STR }, ['vendorBillId', 'idempotencyKey']),
       (ctx, input) => postVendorBill(ctx, as(input)),
     ),
     ctxAction(
       'attach_receipt',
-      'write',
+      'write:correctable:books',
       'Record which Beleg belongs to a bill (OR 958f: the receipt is kept for ten years, and this is what says WHICH one). A reference, not a file: file storage is E00 and A17 stores the pointer. Permitted on a posted bill, because a Buchungsbeleg is filed after the booking at least as often as before it; it is the only column a posted bill will let you change.',
       ctxSchema({ vendorBillId: STR, receiptRef: STR, idempotencyKey: STR }, [
         'vendorBillId',
@@ -114,7 +115,7 @@ export function purchaseActions(h: PurchaseActionHelpers): readonly ActionDef[] 
     ),
     ctxAction(
       'void_vendor_bill',
-      'write',
+      'write:correctable:books',
       'Storniere eine Kreditorenrechnung: posts the faithful reversing entry (OR 957a) and flips the bill to void. Never deletes and never edits the original. A DRAFT is simply retired (nothing was booked, so nothing is reversed). A bill with any payment against it is refused with already_settled: reverse the payment first, or 2000 Kreditoren silently carries the difference.',
       ctxSchema({ vendorBillId: STR, reason: STR, date: STR, idempotencyKey: STR }, [
         'vendorBillId',

@@ -12,7 +12,7 @@
  * values. Sign-off controls without `commit_migration` are DISABLED (not hidden) with the reason as
  * text. Permission-denied renders the padlock naming `manage_implementation`.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
@@ -24,6 +24,36 @@ import { ErrorBanner, Skeleton } from '../../components/states';
 
 function newKey(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * "Ohne Projekt fortfahren" (beta launch P0.4c). The first-run audit found it rendered as a `<p>`:
+ * a bexio switcher clicked it and nothing happened, on the one screen that decides whether they
+ * migrate at all. It is a real control now. It collapses the offer to one line, so the file drop
+ * below is the next thing on the page, and it keeps a way back ("Doch ein Projekt anlegen").
+ *
+ * The choice is a per-viewer convenience, not shared state (the SetupCard precedent): it lives in
+ * `localStorage` per workspace, every access is wrapped, and a Studio that cannot remember it simply
+ * offers the project again next time.
+ */
+export const IMPL_PROJECT_SKIPPED_KEY_PREFIX = 'till-impl-project-skipped:';
+
+export function readImplProjectSkipped(workspaceId: string): boolean {
+  try {
+    return window.localStorage.getItem(`${IMPL_PROJECT_SKIPPED_KEY_PREFIX}${workspaceId}`) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeImplProjectSkipped(workspaceId: string, skipped: boolean): void {
+  try {
+    const key = `${IMPL_PROJECT_SKIPPED_KEY_PREFIX}${workspaceId}`;
+    if (skipped) window.localStorage.setItem(key, '1');
+    else window.localStorage.removeItem(key);
+  } catch {
+    // A choice that cannot be remembered is offered again next time; nothing breaks.
+  }
 }
 
 // The phase ladder and its de-CH strip labels (live = Stabilisierung in running text).
@@ -111,15 +141,46 @@ export function ImplementationProject({
   workspaceId,
   offerCreateWhenAbsent = false,
   onChanged,
+  onContinueWithout,
 }: {
   workspaceId: string;
   offerCreateWhenAbsent?: boolean;
   onChanged?: () => void;
+  /** Called when the person chooses "Ohne Projekt fortfahren" (after the offer has collapsed). */
+  onContinueWithout?: () => void;
 }): React.ReactElement | null {
   const client = useClient();
   const caps = useCapabilities();
   const t = useT();
   const [state, setState] = useState<State>({ status: 'loading' });
+  const [skipped, setSkipped] = useState<boolean>(() => readImplProjectSkipped(workspaceId));
+  const skippedLineRef = useRef<HTMLParagraphElement | null>(null);
+  const focusSkippedLine = useRef(false);
+
+  // A different workspace carries its own remembered choice.
+  useEffect(() => {
+    setSkipped(readImplProjectSkipped(workspaceId));
+  }, [workspaceId]);
+
+  // After the click, focus lands on the one line that replaced the offer, so a screen reader hears
+  // what happened and a keyboard user continues from there to the file drop below.
+  useEffect(() => {
+    if (skipped && focusSkippedLine.current) {
+      focusSkippedLine.current = false;
+      skippedLineRef.current?.focus();
+    }
+  }, [skipped]);
+
+  const continueWithout = (): void => {
+    writeImplProjectSkipped(workspaceId, true);
+    focusSkippedLine.current = true;
+    setSkipped(true);
+    onContinueWithout?.();
+  };
+  const offerAgain = (): void => {
+    writeImplProjectSkipped(workspaceId, false);
+    setSkipped(false);
+  };
 
   const canManage = caps.can(CAP.manageImplementation);
   const canSign = caps.can(CAP.commitMigration);
@@ -200,12 +261,30 @@ export function ImplementationProject({
   }
   if (state.status === 'absent') {
     if (!offerCreateWhenAbsent) return null;
+    if (skipped) {
+      return (
+        <section className="impl-project impl-skipped" aria-label={t('implProject.title')}>
+          <p ref={skippedLineRef} tabIndex={-1} className="impl-skipped-line">
+            {t('implProject.skipped')}
+          </p>
+          <div>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={offerAgain}>
+              {t('implProject.createAnyway')}
+            </button>
+          </div>
+        </section>
+      );
+    }
     return (
       <section className="impl-project impl-empty">
         <h2>{t('implProject.title')}</h2>
         <p>{t('implProject.empty')}</p>
         <CreateProjectForm workspaceId={workspaceId} disabled={!canManage} onCreated={() => void refresh()} />
-        <p className="impl-continue-without">{t('implProject.continueWithout')}</p>
+        <div className="impl-continue-without">
+          <button type="button" className="btn btn--primary" onClick={continueWithout}>
+            {t('implProject.continueWithout')}
+          </button>
+        </div>
       </section>
     );
   }

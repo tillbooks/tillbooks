@@ -264,12 +264,16 @@ export function OpenItems() {
     {
       key: 'issueDate',
       header: t('openItems.column.issueDate'),
-      render: (item) => (item.issueDate === null ? t('openItems.noDate') : formatDate(item.issueDate)),
+      render: (item) => (
+        <span className="oi-nowrap">{item.issueDate === null ? t('openItems.noDate') : formatDate(item.issueDate)}</span>
+      ),
     },
     {
       key: 'dueDate',
       header: t('openItems.column.dueDate'),
-      render: (item) => (item.dueDate === null ? t('openItems.noDueDate') : formatDate(item.dueDate)),
+      render: (item) => (
+        <span className="oi-nowrap">{item.dueDate === null ? t('openItems.noDueDate') : formatDate(item.dueDate)}</span>
+      ),
     },
     {
       key: 'open',
@@ -284,7 +288,9 @@ export function OpenItems() {
           {formatMoney(item.openMinor, item.currency)}
           {item.dunningFeeMinor > 0 && (
             <small className="oi-fee-note">
-              {t('openItems.dunningFee', { amount: formatMoney(item.dunningFeeMinor, item.currency) })}
+              {tRich('openItems.dunningFee', {
+                amount: <span className="oi-fee-amount">{formatMoney(item.dunningFeeMinor, item.currency)}</span>,
+              })}
             </small>
           )}
         </span>
@@ -294,7 +300,12 @@ export function OpenItems() {
       key: 'daysOverdue',
       header: t('openItems.column.daysOverdue'),
       numeric: true,
-      render: (item) => (item.overdue ? t('openItems.days', { n: item.daysOverdue }) : t('openItems.noOverdue')),
+      // One line per row (D152): "nicht überfällig" broke onto two lines and made the row 57px.
+      render: (item) => (
+        <span className="oi-nowrap">
+          {item.overdue ? t('openItems.days', { n: item.daysOverdue }) : t('openItems.noOverdue')}
+        </span>
+      ),
     },
   ];
 
@@ -394,6 +405,20 @@ export function OpenItems() {
             baseCurrency={baseCurrency}
           />
         )}
+        {/*
+          The mismatch sits where the passing mark sits, beside the total it is about (one status, one
+          place), and it is ONE line: the fact and the figure, the explanation behind its (i), the
+          causes and the Journal behind its chevron (D152).
+        */}
+        {settled && !reconciled && (
+          <ReconciliationBand
+            differenceMinor={differenceMinor}
+            listMinor={workspaceTotal}
+            ledgerMinor={ledgerMinor}
+            baseCurrency={baseCurrency}
+            currencies={view?.currencies ?? []}
+          />
+        )}
       </div>
 
       {/* K-11: the two views of the list are the shared Tabs; the filters and the list are its panel. */}
@@ -469,24 +494,14 @@ export function OpenItems() {
         </div>
       )}
 
-      {settled && !reconciled && (
-        <ReconciliationBand
-          differenceMinor={differenceMinor}
-          listMinor={workspaceTotal}
-          ledgerMinor={ledgerMinor}
-          baseCurrency={baseCurrency}
-          currencies={view?.currencies ?? []}
-        />
-      )}
-
       {failed && <ErrorBanner message={t('openItems.error.transport')} onRetry={() => void load()} />}
 
       {loading ? (
         <>
-          <div className="oi-tiles oi-tiles--pending" role="status" aria-busy="true" aria-live="polite">
+          <div className="oi-chips-pending" role="status" aria-busy="true" aria-live="polite">
             <span className="oi-sr">{t('openItems.loading')}</span>
             {[0, 1, 2, 3].map((n) => (
-              <span key={n} className="oi-tile oi-tile--skeleton" />
+              <span key={n} className="oi-chip-skeleton" />
             ))}
           </div>
           <div className="oi-table-wrap">
@@ -523,16 +538,9 @@ export function OpenItems() {
           */}
           {view.items.length > 0 && (
             <div className="oi-tile-group">
-              {/* K-27: the tiles' own label, left over them, with its help trigger right beside it,
-                  instead of a lone question mark 440px away at the right edge. */}
-              <div className="oi-tile-head">
-                <span className="oi-tile-heading">{t('openItems.tiles.heading')}</span>
-                <HelpHint
-                  label={t('openItems.tiles.help.label')}
-                  title={t('openItems.tiles.help.title')}
-                  body={t('openItems.tiles.help.body')}
-                />
-              </div>
+              {/* D152: the chips name themselves (the group's accessible name is the label the old
+                  heading carried), and the help trigger sits right after them (K-27), so no heading
+                  line stands between the filters and the list. */}
               <AgingTiles
                 boundaries={boundaries}
                 baseBucketTotals={view.baseBucketTotals}
@@ -540,6 +548,11 @@ export function OpenItems() {
                 items={view.items}
                 selected={bucketParam}
                 onSelect={(bucket) => setParam('bucket', bucket)}
+              />
+              <HelpHint
+                label={t('openItems.tiles.help.label')}
+                title={t('openItems.tiles.help.title')}
+                body={t('openItems.tiles.help.body')}
               />
             </div>
           )}

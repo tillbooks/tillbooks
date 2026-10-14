@@ -7,7 +7,7 @@
  * done tick).
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor, fireEvent, within, cleanup } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent, within, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
@@ -20,7 +20,7 @@ import { Checklists } from './Checklists';
 import { JourneyStrip } from '../VatReturn/JourneyStrip';
 import de from './messages.de-CH.json';
 import vatDe from '../VatReturn/messages.de-CH.json';
-import agentDe from '../Agent/messages.de-CH.json';
+import { consequenceSentence } from '../../lib/approval-tiers';
 import i18nDe from '../../i18n/de-CH.json';
 
 installMemoryStorage();
@@ -587,8 +587,8 @@ describe('Checklists, the guided close (leg 2)', () => {
     fireEvent.click(within(row).getByRole('button', { name: 'Abgrenzungen buchen (1)' }));
     const confirm = await screen.findByRole('alertdialog');
     expect(within(confirm).getByText(/Bucht 1 Entwürfe mit total CHF 1'800\.00/)).toBeTruthy();
-    // The consequence is the ENGINE's dial sentence for the post family (D118 C4), never authored here.
-    expect(within(confirm).getByText(agentDe.agent.consequence.post)).toBeTruthy();
+    // The consequence is the ENGINE's sentence (D118 C4, D156: the one catalogue), never authored here.
+    expect(within(confirm).getByText(consequenceSentence('accrual_post', 'de-CH') as string)).toBeTruthy();
     expect(calls.some((c) => c.action === 'accrual_post')).toBe(false);
     fireEvent.click(within(confirm).getByRole('button', { name: i18nDe.agent.verb.accrual_post }));
     await waitFor(() => expect(calls.filter((c) => c.action === 'accrual_post').length).toBe(1));
@@ -637,7 +637,7 @@ describe('Checklists, the guided close (leg 2)', () => {
     // Deadline word: the seal's date is a statutory rule (Art. 699 Abs. 2 OR), so the row says Frist.
     expect(within(seal).queryByRole('button', { name: de.checklists.act.skip })).toBeNull();
     fireEvent.click(within(seal).getByRole('button', { name: de.checklists.act.details }));
-    expect(within(seal).getByText(agentDe.agent.consequenceVerb.close_year)).toBeTruthy();
+    expect(within(seal).getByText((consequenceSentence('close_year', 'de-CH') as string))).toBeTruthy();
     const button = within(seal).getByRole('button', { name: de.checklists.act.seal }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(document.getElementById(button.getAttribute('aria-describedby') as string)?.textContent).toContain(de.checklists.item.accruals_posted);
@@ -652,10 +652,15 @@ describe('Checklists, the guided close (leg 2)', () => {
     expect(live.className).toContain('btn--primary');
     fireEvent.click(live);
     const confirm = await screen.findByRole('alertdialog');
-    expect(within(confirm).getByText(agentDe.agent.consequenceVerb.close_year)).toBeTruthy();
+    expect(within(confirm).getByText((consequenceSentence('close_year', 'de-CH') as string))).toBeTruthy();
     fireEvent.click(within(confirm).getByRole('button', { name: i18nDe.agent.verb.close_year }));
+    // G22 §10.12 (D152): the row seals through close_year WITH its runId (the bare call refuses while
+    // the run is open); the checklist verb never seals.
     await waitFor(() => expect(calls.some((c) => c.action === 'close_year')).toBe(true));
-    expect(calls.find((c) => c.action === 'close_year')?.input).toMatchObject({ workspaceId: 'ws_1', year: '2026' });
+    const sealCall = calls.find((c) => c.action === 'close_year')?.input;
+    expect(sealCall).toMatchObject({ workspaceId: 'ws_1', year: '2026', runId: 'y1' });
+    expect(Object.keys(sealCall ?? {}).sort()).toEqual(['idempotencyKey', 'runId', 'workspaceId', 'year']);
+    expect(calls.some((c) => c.action === 'checklist_item_complete')).toBe(false);
   });
 
   it('without post the posting verb is disabled with the padlock reason, never hidden', async () => {
@@ -740,5 +745,143 @@ describe('Checklists, the guided close (leg 2)', () => {
     expect(
       screen.getAllByRole('option').find((o) => o.getAttribute('aria-selected') === 'true')?.getAttribute('data-value'),
     ).toMatch(/^\d{4}$/);
+  });
+});
+
+/**
+ * D152 (owner's "Guided + overflow", 04.10.2026): the Periods year-close door lands here with
+ * `?start=year_close&year=YYYY`, and the Start dialog opens on that template and year instead of the
+ * MWST-Periode. The seal row then shows the year result the seal answered, in the unit it named.
+ */
+describe('Checklists, the year-close hand-off from Periods (D152)', () => {
+  const lastEnded = (n: number) => String(new Date().getFullYear() - 1 - n);
+
+  it('?start=year_close&year= opens the Start dialog on the year close and that year, and starts it', async () => {
+    const calls: Array<{ action: string; input: Record<string, unknown> }> = [];
+    render(
+      tree(
+        { checklist_list: ok({ runs: [] }), vat_periods: (input) => PERIODS(String(input.year)), checklist_start: errRes('period_not_ended') },
+        { path: `/checklisten?start=year_close&year=${lastEnded(1)}`, held: ALL_RIGHTS, calls },
+      ),
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect((within(dialog).getByRole('radio', { name: new RegExp(de.checklists.template.year_close) }) as HTMLInputElement).checked).toBe(true);
+    expect(within(dialog).getByText(de.checklists.start.consequence.year_close)).toBeTruthy();
+    // The year from the link, not the dialog's own default (the newest ended year).
+    const years = within(dialog).getByLabelText(de.checklists.start.period.year_close);
+    fireEvent.click(years);
+    expect(screen.getAllByRole('option').find((o) => o.getAttribute('aria-selected') === 'true')?.getAttribute('data-value')).toBe(lastEnded(1));
+    fireEvent.click(years);
+    fireEvent.click(within(dialog).getByRole('button', { name: de.checklists.start.action }));
+    await waitFor(() => expect(calls.some((c) => c.action === 'checklist_start')).toBe(true));
+    expect(calls.find((c) => c.action === 'checklist_start')?.input).toMatchObject({ templateId: 'year_close', period: lastEnded(1) });
+  });
+
+  it('a year the dialog does not offer falls back to its default; an unknown template or a missing right opens nothing', async () => {
+    render(tree({ checklist_list: ok({ runs: [] }), vat_periods: (input) => PERIODS(String(input.year)) }, { path: '/checklisten?start=year_close&year=1999', held: ALL_RIGHTS }));
+    const dialog = await screen.findByRole('dialog');
+    const years = within(dialog).getByLabelText(de.checklists.start.period.year_close);
+    fireEvent.click(years);
+    expect(screen.getAllByRole('option').find((o) => o.getAttribute('aria-selected') === 'true')?.getAttribute('data-value')).toBe(lastEnded(0));
+    cleanup();
+
+    // The two negatives answer `vat_periods`, so a wrongly opened Start would really open: the
+    // dialog only appears after that read settles. Each case waits past it (the list is loaded, then
+    // the in-flight reads are given time to land) before asserting nothing was asked and nothing opened.
+    const settle = () => act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+    const bogusCalls: Array<{ action: string; input: Record<string, unknown> }> = [];
+    render(tree({ checklist_list: ok(LIST), vat_periods: (input) => PERIODS(String(input.year)) }, { path: '/checklisten?start=bogus', held: ALL_RIGHTS, calls: bogusCalls }));
+    await screen.findByText('MWST-Periode Q2/2026');
+    await settle();
+    expect(bogusCalls.some((c) => c.action === 'vat_periods')).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    cleanup();
+
+    const deniedCalls: Array<{ action: string; input: Record<string, unknown> }> = [];
+    render(tree({ checklist_list: ok(LIST), vat_periods: (input) => PERIODS(String(input.year)) }, { path: `/checklisten?start=year_close&year=${lastEnded(0)}`, held: ['read_books'], calls: deniedCalls }));
+    await screen.findByText('MWST-Periode Q2/2026');
+    await settle();
+    expect(deniedCalls.some((c) => c.action === 'vat_periods')).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  const free = () => yearRun({ nextItemId: 'year_sealed', items: yearRun().items.map((i) => (i.itemId === 'year_sealed' ? { ...i, blockedBy: null } : i)) });
+  const sealed = () =>
+    yearRun({
+      nextItemId: null,
+      items: yearRun().items.map((i) =>
+        i.itemId === 'year_sealed' ? { ...i, blockedBy: null, status: 'done', storedStatus: 'done', probeResult: { key: 'seal_on_year', found: true, entryIds: [], reversalDate: null, detail: {} } } : i,
+      ),
+    });
+
+  /** Seal through the row's confirm; the re-read answers the run sealed. Hands back the seal row once it is done. */
+  async function sealAndOpenRow(closeYearAnswer: RestResponse): Promise<HTMLElement> {
+    let closed = false;
+    render(
+      tree(
+        {
+          checklist_get: () => ok(closed ? sealed() : free()),
+          close_year: () => {
+            closed = true;
+            return closeYearAnswer;
+          },
+        },
+        { path: '/checklisten?run=y1', held: ALL_RIGHTS },
+      ),
+    );
+    const journey = await screen.findByRole('list', { name: de.checklists.detail.journey });
+    fireEvent.click(within(within(journey).getAllByRole('listitem')[7] as HTMLElement).getByRole('button', { name: de.checklists.act.seal }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: i18nDe.agent.verb.close_year }));
+    await waitFor(() => expect(closed).toBe(true));
+    return waitFor(() => {
+      const row = within(screen.getByRole('list', { name: de.checklists.detail.journey })).getAllByRole('listitem')[7] as HTMLElement;
+      expect(within(row).queryByRole('button', { name: de.checklists.act.seal })).toBeNull();
+      return row;
+    });
+  }
+
+  it('the seal row shows the year result the seal answered, in the unit it named', async () => {
+    const row = await sealAndOpenRow(ok({ closingEntryId: 'je_close', carryEntryId: 'je_carry', result: 86000, baseCurrency: 'EUR' }));
+    const line = await within(row).findByTestId('chk-year-result');
+    expect(line.textContent).toBe(`${de.checklists.posting.yearResult}: EUR 860.00`);
+    expect(within(row).queryByText(/CHF/)).toBeNull();
+  });
+
+  it('no unit named, no figure: the seal row never prints the result under a guessed CHF', async () => {
+    const row = await sealAndOpenRow(ok({ closingEntryId: 'je_close', result: 86000 }));
+    expect(within(row).queryByTestId('chk-year-result')).toBeNull();
+    expect(within(row).queryByText(/860\.00/)).toBeNull();
+  });
+
+  it('a sealed run opened later shows the seal without a figure: the probe carries none, and nothing recomputes it', async () => {
+    render(tree({ checklist_get: ok(sealed()) }, { path: '/checklisten?run=y1', held: ALL_RIGHTS }));
+    const journey = await screen.findByRole('list', { name: de.checklists.detail.journey });
+    const row = within(journey).getAllByRole('listitem')[7] as HTMLElement;
+    expect(within(row).queryByRole('button', { name: de.checklists.act.seal })).toBeNull();
+    expect(within(row).queryByTestId('chk-year-result')).toBeNull();
+  });
+});
+
+/**
+ * Critic R4-3: the seal row's refusals read as one sentence each, never as a raw engine code. Any
+ * other row keeps the generic "Abgelehnt: {code}" line (the posting-row test above holds that).
+ */
+describe('Checklists, the seal row\'s refusals in words (R4-3)', () => {
+  it('a close_year refusal on the seal row renders its sentence, not the code', async () => {
+    const free = yearRun({ nextItemId: 'year_sealed', items: yearRun().items.map((i) => (i.itemId === 'year_sealed' ? { ...i, blockedBy: null } : i)) });
+    render(tree({ checklist_get: ok(free), close_year: errRes('prerequisite_open', { runId: 'y1', itemId: 'year_sealed', prerequisiteItemId: 'gv_approved' }) }, { path: '/checklisten?run=y1', held: ALL_RIGHTS }));
+    const journey = await screen.findByRole('list', { name: de.checklists.detail.journey });
+    fireEvent.click(within(within(journey).getAllByRole('listitem')[7] as HTMLElement).getByRole('button', { name: de.checklists.act.seal }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: i18nDe.agent.verb.close_year }));
+    const sentence = await screen.findByText(de.checklists.sealRefusal.prerequisite_open);
+    expect(sentence.getAttribute('role')).toBe('alert');
+    expect(screen.queryByText(/prerequisite_open/)).toBeNull();
+    // Every mapped code has a sentence in both locales, and none is a raw code.
+    for (const code of ['prerequisite_open', 'run_abandoned', 'run_year_mismatch', 'run_not_year_close', 'not_found', 'year_already_closed', 'year_close_unverified'] as const) {
+      expect(de.checklists.sealRefusal[code]).not.toContain(code);
+      expect(de.checklists.sealRefusal[code].length).toBeGreaterThan(20);
+    }
   });
 });

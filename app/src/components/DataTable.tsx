@@ -53,7 +53,8 @@ import { Link } from 'react-router-dom';
 
 import { EmptyState } from './states/EmptyState';
 import { ErrorBanner } from './states/ErrorBanner';
-import { useRevealAfterDelay, useSkeletonHold } from './states/useSkeletonTiming';
+import { SKELETON_DELAY_MS, useRevealAfterDelay, useSkeletonHold } from './states/useSkeletonTiming';
+import { MOTION_TOKENS, motionMs, prefersReducedMotion } from '../lib/motion';
 import { OverflowMenu, type OverflowMenuItem } from './OverflowMenu';
 import { SortNeutralGlyph, SortUpGlyph, SortDownGlyph, ChevronRightGlyph } from './icons';
 import { useT } from '../i18n';
@@ -378,6 +379,30 @@ export function DataTable<Row>({
     return () => observer.disconnect();
   }, [columnCount, rowCount, showSkeleton, error, updateEdges]);
 
+  // THE HANDOVER. A skeleton the person actually SAW (it outlasted the 200ms delay) gives way to the
+  // rows with a fade, so the data arrives rather than snaps in: the fade-only reveal of motion.css
+  // (`motion-reveal--under`, `--t-motion-reveal`), opacity alone, so nothing under the pointer moves. A
+  // read that answered inside the delay never showed a skeleton and swaps in at once, as before. The
+  // class is set on the DOM (like `commitAck`), so the handover costs no re-render; reduced motion
+  // stamps nothing.
+  const skeletonSince = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (showSkeleton) {
+      if (skeletonSince.current === null) skeletonSince.current = Date.now();
+      return undefined;
+    }
+    const since = skeletonSince.current;
+    skeletonSince.current = null;
+    const wrap = wrapRef.current;
+    if (since === null || wrap === null || Date.now() - since < SKELETON_DELAY_MS || prefersReducedMotion()) return undefined;
+    wrap.classList.add(HANDOVER_CLASS);
+    const timer = window.setTimeout(() => wrap.classList.remove(HANDOVER_CLASS), motionMs(MOTION_TOKENS.reveal));
+    return () => {
+      window.clearTimeout(timer);
+      wrap.classList.remove(HANDOVER_CLASS);
+    };
+  }, [showSkeleton]);
+
   // Loading and error take the whole area: a header over an error would be a lie about what is on
   // screen. The loading shape is the table's own (head strip plus rows at their real height).
   if (showSkeleton) return <DataTableSkeleton rows={skeletonRows} />;
@@ -649,6 +674,9 @@ export function DataTable<Row>({
     </div>
   );
 }
+
+/** The fade-only reveal the rows take over a skeleton that was seen (motion.css). */
+const HANDOVER_CLASS = 'motion-reveal--under';
 
 /**
  * The table's own loading shape (K-34): the head strip and `rows` rows at the height the real rows

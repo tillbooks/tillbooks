@@ -7,6 +7,10 @@
  * and, depending on the mode, its Lots and/or Serials tables with a create drawer and status actions.
  * Status is glyph + label, never colour alone (WCAG 2.2 AA). No new colour token (design-canon).
  *
+ * A LIST NEVER OPENS ITSELF (D152 rule 5, the /bank B2 pattern). Nothing is selected on load: the
+ * detail pane holds one quiet line until an item is opened by a click (or Enter/Space on its focused
+ * row) or by a deep link (`?focus=<itemId>`). A second click on the open item closes it again.
+ *
  * THE PERMISSION GATE HERE IS A CONVENIENCE (the standing Studio rule): `whoami`/capabilities fail
  * open and the engine is the real gate. Write controls disable behind `manage_master_data`; a click
  * that slips through still surfaces the engine's own `permission_denied`.
@@ -28,7 +32,8 @@
  * out of scope. No `Provenance` (C3): the lot/serial read model carries no actor/timestamp to show.
  * No `ConsequenceLine` (C4): no J01 verb carries a dial-capability consequence sentence.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -181,7 +186,29 @@ export function LotSerial() {
   const canWrite = can(CAP.manageMasterData);
 
   const [items, setItems] = useState<Item[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const focusParam = params.get('focus');
+  // D152 rule 5: nothing is selected on load. Only a deep link selects before the person acts, and a
+  // link that arrives while the surface is mounted (a search hit, the /w/:ws/ handover) opens too.
+  const [selectedId, setSelectedId] = useState<string | null>(focusParam);
+  useEffect(() => {
+    if (focusParam !== null) setSelectedId(focusParam);
+  }, [focusParam]);
+  /**
+   * The person's own choice. It retires the deep link (`?focus=` is dropped, replacing the history
+   * entry), so a row they closed stays closed and following the same link again opens it again.
+   */
+  const choose = useCallback(
+    (id: string | null) => {
+      setSelectedId(id);
+      if (params.has('focus')) {
+        const next = new URLSearchParams(params);
+        next.delete('focus');
+        setParams(next, { replace: true });
+      }
+    },
+    [params, setParams],
+  );
   const [lots, setLots] = useState<Lot[]>([]);
   const [serials, setSerials] = useState<Serial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -197,6 +224,31 @@ export function LotSerial() {
   const [serialDrawer, setSerialDrawer] = useState(false);
   const [serialDraft, setSerialDraft] = useState<SerialDraft>(EMPTY_SERIAL);
 
+  // §H-TENANT (critic round 2): a workspace switch does not remount the surface, so nothing chosen,
+  // read or drafted in the workspace just left may survive into the next one. Reset during render
+  // (React's "adjust state when a prop changes"), so no effect ever runs with the old selection
+  // under the new workspace. The first workspace (null -> id at boot) is not a switch: a deep link
+  // made before it resolved stays.
+  // The workspace on screen NOW, for a read or a write that started under the previous one: its
+  // answer is dropped (a refresh closure from before the switch would otherwise re-read the old
+  // workspace and paint it under the new one).
+  const liveWorkspace = useRef(workspaceId);
+  liveWorkspace.current = workspaceId;
+  const [shownWorkspace, setShownWorkspace] = useState(workspaceId);
+  if (shownWorkspace !== workspaceId) {
+    setShownWorkspace(workspaceId);
+    if (shownWorkspace !== null) {
+      setSelectedId(null);
+      setLots([]);
+      setSerials([]);
+      setWriteError(null);
+      setLotDrawer(false);
+      setLotDraft(EMPTY_LOT);
+      setSerialDrawer(false);
+      setSerialDraft(EMPTY_SERIAL);
+    }
+  }
+
   const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
 
   const localError = useCallback(
@@ -205,15 +257,21 @@ export function LotSerial() {
     [t],
   );
 
+  // Every list read is numbered; only the latest may answer, so a read from the workspace just left
+  // (or one a refresh overtook) never lands on screen.
+  const listSeq = useRef(0);
   const loadItems = useCallback(async () => {
     if (workspaceId === null) {
       setLoading(false);
       return;
     }
+    if (liveWorkspace.current !== workspaceId) return;
     setLoading(true);
+    const mine = ++listSeq.current;
     setFailed(false);
     setDenied(false);
     const listed = await client.call('list_items', { workspaceId });
+    if (mine !== listSeq.current || liveWorkspace.current !== workspaceId) return;
     if (isErr(listed.body)) {
       if (listed.body.error === 'permission_denied' || listed.status === 403) setDenied(true);
       else setFailed(true);
@@ -222,18 +280,25 @@ export function LotSerial() {
     }
     const parsed = parseItems(listed.body);
     setItems(parsed);
-    setSelectedId((prev) => (prev !== null && parsed.some((i) => i.id === prev) ? prev : (parsed[0]?.id ?? null)));
+    // An item that left the list closes; nothing takes its place (D152 rule 5).
+    setSelectedId((prev) => (prev !== null && parsed.some((i) => i.id === prev) ? prev : null));
     setLoading(false);
   }, [client, workspaceId]);
 
+  // Every detail read is numbered; only the LATEST may answer into the pane. A read that a close or a
+  // newer selection overtook is dropped, so the pane never shows one item under another item's pill.
+  const detailSeq = useRef(0);
   const loadDetail = useCallback(
     async (item: Item) => {
       if (workspaceId === null) return;
+      if (liveWorkspace.current !== workspaceId) return;
+      const mine = ++detailSeq.current;
       setDetailLoading(true);
       const calls: Promise<unknown>[] = [];
       if (modeHasLot(item.trackingMode)) {
         calls.push(
           client.call('lot_list', { workspaceId, itemId: item.id, includeArchived: true }).then((r) => {
+            if (mine !== detailSeq.current || liveWorkspace.current !== workspaceId) return;
             setLots(isErr(r.body) ? [] : parseLots(r.body));
           }),
         );
@@ -243,6 +308,7 @@ export function LotSerial() {
       if (modeHasSerial(item.trackingMode)) {
         calls.push(
           client.call('serial_list', { workspaceId, itemId: item.id, includeArchived: true }).then((r) => {
+            if (mine !== detailSeq.current || liveWorkspace.current !== workspaceId) return;
             setSerials(isErr(r.body) ? [] : parseSerials(r.body));
           }),
         );
@@ -250,6 +316,7 @@ export function LotSerial() {
         setSerials([]);
       }
       await Promise.all(calls);
+      if (mine !== detailSeq.current || liveWorkspace.current !== workspaceId) return;
       setDetailLoading(false);
     },
     [client, workspaceId],
@@ -262,8 +329,10 @@ export function LotSerial() {
   useEffect(() => {
     if (selected !== null) void loadDetail(selected);
     else {
+      detailSeq.current += 1;
       setLots([]);
       setSerials([]);
+      setDetailLoading(false);
     }
   }, [selected, loadDetail]);
 
@@ -272,12 +341,15 @@ export function LotSerial() {
       if (workspaceId === null) return false;
       setWriteError(null);
       const response = await client.call(action, { workspaceId, ...input });
+      if (liveWorkspace.current !== workspaceId) return false; // the answer belongs to the workspace just left
       if (isErr(response.body)) {
         setWriteError(response.body);
         return false;
       }
       await loadItems();
+      if (liveWorkspace.current !== workspaceId) return false; // the answer belongs to the workspace just left
       if (selected !== null) await loadDetail(selected);
+      if (liveWorkspace.current !== workspaceId) return false; // the answer belongs to the workspace just left
       return true;
     },
     [client, workspaceId, loadItems, loadDetail, selected],
@@ -287,6 +359,7 @@ export function LotSerial() {
     async (mode: TrackingMode) => {
       if (selected === null) return;
       await write('item_set_tracking_mode', { itemId: selected.id, mode, idempotencyKey: newKey() });
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     },
     [write, selected],
   );
@@ -300,6 +373,7 @@ export function LotSerial() {
       supplierReference: lotDraft.supplierReference.trim() === '' ? undefined : lotDraft.supplierReference.trim(),
       idempotencyKey: newKey(),
     });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (ok) {
       setLotDrawer(false);
       setLotDraft(EMPTY_LOT);
@@ -318,6 +392,7 @@ export function LotSerial() {
       numbers.length === 1
         ? await write('serial_create', { itemId: selected.id, number: numbers[0], lotId, idempotencyKey: newKey() })
         : await write('serial_create_bulk', { itemId: selected.id, numbers, lotId, idempotencyKey: newKey() });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (ok) {
       setSerialDrawer(false);
       setSerialDraft(EMPTY_SERIAL);
@@ -398,7 +473,7 @@ export function LotSerial() {
                     type="button"
                     className="ls-list-item"
                     aria-current={i.id === selectedId ? 'true' : undefined}
-                    onClick={() => setSelectedId(i.id)}
+                    onClick={() => choose(selectedId === i.id ? null : i.id)}
                   >
                     <span className="ls-item-name">{i.name}</span>
                     <span className="ls-tag">{t(`lotSerial.mode.${i.trackingMode}`)}</span>

@@ -7,8 +7,8 @@
  * `src/api/` imports from, matching every other engine area.
  */
 
-export { getOnboardingProgress, advanceOnboardingStep, ONBOARDING_PATHS, isOnboardingPath } from './progress.js';
-export type { OnboardingPath, OnboardingProgressOk, AdvanceOnboardingStepInput, AdvanceOnboardingStepOk } from './progress.js';
+export { getOnboardingProgress, advanceOnboardingStep, firstStepsOf, ONBOARDING_PATHS, isOnboardingPath } from './progress.js';
+export type { OnboardingPath, OnboardingProgressOk, OnboardingFirstSteps, AdvanceOnboardingStepInput, AdvanceOnboardingStepOk } from './progress.js';
 export { createDemoWorkspace, discardDemoWorkspace } from './demo.js';
 export type {
   CreateDemoWorkspaceInput,

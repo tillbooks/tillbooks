@@ -33,11 +33,12 @@ import {
   rateCardEnd,
   rateCardList,
 } from '../core/time/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface TimeActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -70,7 +71,7 @@ export function timeActions(h: TimeActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'time_start',
-      'write',
+      'write:reversible:internal',
       'Starte einen Timer auf einem Projekt (B00): creates an open time_entry with started_at now and the rate snapshotted through resolveRate (OP1: client, then project, then employee, then default card). One running timer per user (timer_already_running names the running entry); with no valid rate card it refuses with no_rate_defined rather than minting a 0-rate entry.',
       ctxSchema(
         { userId: STR, projectId: STR, phaseId: STR, notes: STR, billable: BOOL, idempotencyKey: STR },
@@ -80,14 +81,14 @@ export function timeActions(h: TimeActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'time_stop',
-      'write',
+      'write:correctable:internal',
       'Stoppe den laufenden Timer: stamps ended_at and computes the full elapsed minutes, midnight crossings included (the entry keeps its started_at day; day-splitting is a report concern). The entry stays status open and editable.',
       ctxSchema({ entryId: STR, idempotencyKey: STR }, ['entryId']),
       (ctx, input) => timeStop(ctx, as(input)),
     ),
     ctxAction(
       'time_log',
-      'write',
+      'write:reversible:internal',
       'Erfasse Zeit manuell (nachtragen): a finished entry with startedAt and minutes (1 to 1440), billable by default, priced by the rate card valid on the entry day (OP1 snapshot; no_rate_defined with no card, invalid_minutes outside the bound).',
       ctxSchema(
         {
@@ -106,7 +107,7 @@ export function timeActions(h: TimeActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'time_update',
-      'write',
+      'write:correctable:internal',
       'Bearbeite einen Zeiteintrag from a patch (minutes, billable, notes, startedAt, projectId, phaseId): allowed while open or submitted; from approval onward the record is frozen and refuses with entry_locked. Re-pointing to another project re-resolves the rate snapshot at the entry own capture day; a later rate-card edit never reprices captured time.',
       ctxSchema(
         { entryId: STR, patch: { type: 'object', properties: TIME_ENTRY_PATCH_FIELDS }, idempotencyKey: STR },
@@ -116,29 +117,29 @@ export function timeActions(h: TimeActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'time_delete',
-      'write',
+      'write:final:erase',
       'Lösche einen Zeiteintrag: allowed while open or submitted only; approved, locked or billed time is an ArG working-time record and refuses with entry_locked.',
       ctxSchema({ entryId: STR, idempotencyKey: STR }, ['entryId']),
       (ctx, input) => timeDelete(ctx, as(input)),
     ),
     ctxAction(
       'time_submit',
-      'write',
+      'write:correctable:internal',
       'Reiche die Zeit einer Periode ein (YYYY-MM, optional one project): every finished open entry of the period moves open to submitted; a period with nothing open refuses with nothing_to_submit. A still-running timer is not swept up.',
       ctxSchema({ period: STR, projectId: STR, idempotencyKey: STR }, ['period']),
       (ctx, input) => timeSubmit(ctx, as(input)),
     ),
     ctxAction(
       'time_approve',
-      'write',
+      'write:final:statutory',
       'Gib eingereichte Zeiteinträge frei (Freigeben): the named submitted entries move to approved, stamped with the approving session actor. All-or-nothing: an unknown id or a non-submitted entry refuses the whole call. Gated on the A24 time.approve capability.',
       ctxSchema({ entryIds: { type: 'array', items: STR }, idempotencyKey: STR }, ['entryIds']),
       (ctx, input) => timeApprove(ctx, as(input)),
     ),
     ctxAction(
       'time_lock',
-      'write',
-      'Sperre eine Periode (YYYY-MM, optional one project): every approved entry of the period moves to locked, the immutable ArG working-time record billing (B02) reads from. Nothing approved refuses with nothing_to_lock. Gated on the A24 time.approve capability.',
+      'write:final:statutory',
+      'Sperre eine Periode (YYYY-MM, optional one project): every approved entry of the period moves to locked, the immutable ArG working-time record. There is no unlock, and locked time is never billed: billing_generate_invoice (B02) and the retainer draws (B04) take only approved, unbilled entries, so bill the period before locking it. Nothing approved refuses with nothing_to_lock. Gated on the A24 time.approve capability.',
       ctxSchema({ period: STR, projectId: STR, idempotencyKey: STR }, ['period']),
       (ctx, input) => timeLock(ctx, as(input)),
     ),
@@ -167,7 +168,7 @@ export function timeActions(h: TimeActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'rate_card_upsert',
-      'write',
+      'write:correctable:internal',
       'Lege einen Tarif an (rate card): scope default, employee, project or client (scoped cards name their scopeRef), integer-Rappen rateMinor, valid from a day. costRateMinor is the optional INTERNAL cost rate (same currency) that values the B03 Projekterfolg cost basis; entries snapshot it at capture like the bill rate, and without one the cost basis degrades honestly (basisDegraded). A new card for the same scope VERSIONS the previous one: the open predecessor is end-dated at the new validFrom and its rate is never mutated, so snapshotted entries keep their price (OP1). Overlapping validity refuses with rate_card_overlap.',
       ctxSchema(
         { scope: STR, scopeRef: STR, rateMinor: INT, costRateMinor: INT, currency: STR, validFrom: STR, idempotencyKey: STR },
@@ -177,7 +178,7 @@ export function timeActions(h: TimeActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'rate_card_end',
-      'write',
+      'write:correctable:internal',
       'Beende einen Tarif ohne Nachfolger (a client override lapses): writes valid_to on an open card. An already-ended card refuses with rate_card_already_ended; validTo must be after validFrom.',
       ctxSchema({ rateCardId: STR, validTo: STR, idempotencyKey: STR }, ['rateCardId', 'validTo']),
       (ctx, input) => rateCardEnd(ctx, as(input)),

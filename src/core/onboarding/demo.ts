@@ -122,12 +122,17 @@ export function createDemoWorkspace(deps: SetupDeps, input: CreateDemoWorkspaceI
 
     // A05: effektiv/Soll, registered, NO MWST number (never fabricated). Seeds the default Swiss
     // tax-code set through configureVat's own path, so demo invoices carry real VAT.
-    const vat = configureVat(ctx, {
-      method: 'effektiv',
-      timing: 'soll',
-      registered: true,
-      idempotencyKey: `${key}:vat`,
-    });
+    // K1: the derived keys below run in this composite's own idempotency scope. (The demo workspace was
+    // minted inside this same transaction, so nobody could have written into it first; the scope makes
+    // that structural rather than a property of the ordering.)
+    const vat = deps.store.innerWrite('create_demo_workspace', () =>
+      configureVat(ctx, {
+        method: 'effektiv',
+        timing: 'soll',
+        registered: true,
+        idempotencyKey: `${key}:vat`,
+      }),
+    );
     if (!vat.ok) return vat;
 
     // A00: the demo creditor, with the SIX specimen QR-IBAN so QR summaries render (§3).
@@ -189,7 +194,9 @@ export function createDemoWorkspace(deps: SetupDeps, input: CreateDemoWorkspaceI
       if (!doc.ok) return doc;
       const documentId = (doc.document as { id: string }).id;
       if (plan.issue) {
-        const issue = issueInvoice(ctx, { invoiceId: documentId, idempotencyKey: `${key}:issue:${index}` });
+        const issue = deps.store.innerWrite('create_demo_workspace', () =>
+          issueInvoice(ctx, { invoiceId: documentId, idempotencyKey: `${key}:issue:${index}` }),
+        );
         if (!issue.ok) return issue;
         issued += 1;
       } else {

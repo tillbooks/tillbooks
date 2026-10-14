@@ -180,7 +180,13 @@ export function attentionSummary(
   // is in `failed`). The total sums only what actually answered.
   const queues: AttentionQueueSummary[] = reads
     .filter((r) => r.count > 0)
-    .map((r) => ({ queueId: r.provider.queueId, area: r.provider.area, count: r.count, topUrgency: topUrgencyOf(r.items) }));
+    .map((r) => ({
+      queueId: r.provider.queueId,
+      labelKey: r.provider.labelKey,
+      area: r.provider.area,
+      count: r.count,
+      topUrgency: topUrgencyOf(r.items),
+    }));
   const total = queues.reduce((sum, q) => sum + q.count, 0);
 
   const allItems = reads.flatMap((r) => r.items);

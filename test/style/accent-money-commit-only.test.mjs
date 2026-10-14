@@ -70,42 +70,43 @@ export const PROVEN_POSTING_VERBS = [
   {
     verb: 'issue_credit_note',
     why: 'the A13 onIssue delegate posts the mirror entry when the credit note issues',
-    hops: [{ at: 'src/core/sales/creditNote.ts:939', fn: 'buildCreditNotePosting', calls: 'postEntry' }],
-  },
-  {
-    verb: 'set_bank_opening_balance',
-    why: 'posts the bank opening balance against 9100 as one balanced entry',
-    // Two hops since critic R2-4: the verb runs its body inside one `store.tx`.
-    hops: [
-      { at: 'src/core/banking/bankAccounts.ts:471', fn: 'setBankOpeningBalance', calls: 'setBankOpeningBalanceUnderLock' },
-      { at: 'src/core/banking/bankAccounts.ts:531', fn: 'setBankOpeningBalanceUnderLock', calls: 'postEntry' },
-    ],
+    hops: [{ at: 'src/core/sales/creditNote.ts:943', fn: 'buildCreditNotePosting', calls: 'postEntry' }],
   },
   {
     verb: 'mark_batch_paid',
     why: 'books one outgoing payment per item through A14 recordPayment',
     hops: [
-      { at: 'src/core/banking/pain001.ts:1062', fn: 'markBatchPaid', calls: 'recordPayment' },
-      { at: 'src/core/payments/payment.ts:2000', fn: 'recordPayment', calls: 'postEntry' },
+      { at: 'src/core/banking/pain001.ts:1160', fn: 'markBatchPaid', calls: 'recordPayment' },
+      { at: 'src/core/payments/payment.ts:2004', fn: 'recordPayment', calls: 'postEntry' },
+    ],
+  },
+  {
+    // The dial map keys this verb on its INPUT (accounts and matches `post`, settlements `pay`), so it is
+    // in no name-map set; the proof is the accounts path. A match posts nothing and a settlement posts
+    // through A14, but the row's Buchen (A39, B2) commits all three with the one verb.
+    verb: 'book_bank_line',
+    why: 'books a bank line to accounts: performBooking routes an accounts target to bookToAccounts, which posts the entry',
+    hops: [
+      { at: 'src/core/banking/bankBooking.ts:277', fn: 'bookBankLine', calls: 'performBooking' },
+      { at: 'src/core/banking/bankBooking.ts:313', fn: 'performBooking', calls: 'bookToAccounts' },
+      { at: 'src/core/banking/bankBooking.ts:975', fn: 'bookToAccounts', calls: 'postEntry' },
     ],
   },
   {
     verb: 'issue_dunning_run',
     why: 'books the Mahngebühr of each fee-bearing item at issue (and on the C8 recovery)',
-    hops: [{ at: 'src/core/dunning/run.ts:747', fn: 'issueUnit', calls: 'postEntry' }],
-  },
-  {
-    verb: 'asset_opening_balance',
-    why: 'posts the opening cost and accumulated depreciation of a migrated asset',
-    hops: [{ at: 'src/core/assets/ledger.ts:495', fn: 'assetOpeningBalance', calls: 'postEntry' }],
+    hops: [{ at: 'src/core/dunning/run.ts:831', fn: 'issueUnit', calls: 'postEntryInternalChecked' }],
   },
 ];
 
 /** Verbs the C2 money critic measured as booking nothing. Pinned so none of them creeps back in. */
 const KNOWN_NON_POSTING = ['create_credit_note', 'stock_run_valuation', 'stock_stocktake_commit', 'inventory_stocktake_commit', 'transition_document', 'convert_document'];
 
-/** The one posting path: every journal entry the engine mints goes through one of these two. */
-const POSTING_PATH = new Set(['postEntry', 'reverseEntry']);
+/**
+ * The one posting path: every journal entry the engine mints goes through one of these. The internal
+ * doors (K1) are the same posting under an engine-internal idempotency scope.
+ */
+const POSTING_PATH = new Set(['postEntry', 'reverseEntry', 'postEntryInternal', 'postEntryInternalChecked', 'reverseEntryInternal']);
 
 /** @param {string} rel @returns {ts.SourceFile} */
 function parse(rel, source = readFileSync(join(ROOT, rel), 'utf8')) {
@@ -408,7 +409,7 @@ test('the proof check bites: a moved line, a wrong function and a non-posting la
   assert.match(moved[0] ?? '', /buildInvoicePosting calls it at src\/core\/sales\/invoice\.ts:\d+/);
   const wrongFn = checkProof({ verb: 'x', why: '', hops: [{ at: 'src/core/sales/invoice.ts:263', fn: 'issueInvoice', calls: 'postEntry' }] }, read);
   assert.match(wrongFn.join('\n'), /sits in buildInvoicePosting, not issueInvoice/);
-  const notPosting = checkProof({ verb: 'x', why: '', hops: [{ at: 'src/core/banking/pain001.ts:1062', fn: 'markBatchPaid', calls: 'recordPayment' }] }, read);
+  const notPosting = checkProof({ verb: 'x', why: '', hops: [{ at: 'src/core/banking/pain001.ts:1160', fn: 'markBatchPaid', calls: 'recordPayment' }] }, read);
   assert.match(notPosting.join('\n'), /the last hop calls recordPayment, not postEntry or reverseEntry/);
 });
 

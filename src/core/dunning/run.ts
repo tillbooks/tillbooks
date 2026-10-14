@@ -39,7 +39,7 @@ import type { Result } from '../result.js';
 import { optionalDate, requireString } from '../ledger/inputGuards.js';
 import { listOpenItems } from '../debtors/index.js';
 import type { OpenItem } from '../debtors/index.js';
-import { postEntry } from '../ledger/index.js';
+import { postEntryInternalChecked } from '../ledger/innerPosting.js';
 import { buildVatLines } from '../vat/index.js';
 import type { VatJournalLine } from '../vat/index.js';
 import { baseCurrencyOf } from '../fx/rates.js';
@@ -368,6 +368,90 @@ export function proposeDunningRun(ctx: WorkspaceContext, input: ProposeDunningRu
       .get(ctx.workspaceId, runId) as RunRow;
     return ok({ ...runView(ctx, row), proposed: true });
   });
+}
+
+export interface DiscardDunningRunInput {
+  runId?: string;
+  idempotencyKey?: string;
+}
+
+/**
+ * D161.3: discard a PROPOSED Mahnlauf and free its day.
+ *
+ * A run is keyed one per workspace per day (`dunning_run_per_day`), so a wrong proposal (the wrong
+ * date, invoices that should have waited) used to block the day: re-proposing returned the same run,
+ * and the only exit was to issue letters nobody wanted. A proposed run has booked, rendered and sent
+ * nothing (that is the whole point of the split, US-A15.5), so discarding it removes the run and its
+ * items, and the discard itself stays on the audit trail (`dunning_run` / `discard`). An issued or sent
+ * run is refused `invalid_transition`: its letters and fee stand, and a wrong fee is corrected by
+ * `reverse_entry` (§H-AUDIT).
+ *
+ * §H-IDEMPOTENT: a replay under the same key answers the stored result; a second discard of the same
+ * run under a new key reads the audit trail and answers `alreadyDiscarded` without writing. §H-TENANT:
+ * every read is scoped to `ctx.workspaceId`, so another workspace's run, live or discarded, is
+ * `not_found` and never learns it existed.
+ */
+export function discardDunningRun(ctx: WorkspaceContext, input: DiscardDunningRunInput): Result {
+  const guard = requireString(input.runId, 'runId') ?? requireString(input.idempotencyKey, 'idempotencyKey');
+  if (guard) return guard;
+  const runId = input.runId as string;
+  const key = JSON.stringify([runId, input.idempotencyKey as string]);
+
+  const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, key, 'discard_dunning_run');
+  if (replayed !== undefined) return replayed;
+
+  const run = readRun(ctx, runId);
+  if (run === undefined) {
+    const discarded = ctx.store.db
+      .prepare(
+        "SELECT 1 AS hit FROM audit_log WHERE workspace_id = ? AND entity_kind = 'dunning_run' AND entity_id = ? AND action = 'discard' LIMIT 1",
+      )
+      .get(ctx.workspaceId, runId);
+    if (discarded !== undefined) return ok({ runId, discarded: true, alreadyDiscarded: true });
+    return err('not_found', { runId });
+  }
+  if (run.status !== 'proposed') {
+    return err('invalid_transition', { runId, from: run.status, reason: 'only_a_proposed_run_can_be_discarded' });
+  }
+
+  // Critic F1: the checks above are a fast answer, never the authority. The run may be issued between
+  // them and this transaction (another caller, a G01 rule), so the transaction re-reads the run under
+  // the write lock, deletes the RUN row first and only while it is still `proposed`, and throws to roll
+  // back (no item touched, no audit row, nothing remembered under the key) when it no longer is.
+  try {
+    return ctx.store.rememberIdempotent(ctx.workspaceId, key, 'discard_dunning_run', () => {
+      const current = readRun(ctx, runId);
+      if (current === undefined) throw new DiscardRefused(err('not_found', { runId }));
+      if (current.status !== 'proposed') {
+        throw new DiscardRefused(err('invalid_transition', { runId, from: current.status, reason: 'only_a_proposed_run_can_be_discarded' }));
+      }
+      // The run row goes first, guarded on its status; its items reference it, so the foreign-key
+      // check waits for the commit (it resets itself at the end of the transaction).
+      ctx.store.db.pragma('defer_foreign_keys = ON');
+      const removed = ctx.store.db
+        .prepare("DELETE FROM dunning_run WHERE workspace_id = ? AND id = ? AND status = 'proposed'")
+        .run(ctx.workspaceId, current.id).changes;
+      if (removed === 0) {
+        throw new DiscardRefused(err('invalid_transition', { runId, reason: 'only_a_proposed_run_can_be_discarded' }));
+      }
+      const items = ctx.store.db
+        .prepare('DELETE FROM dunning_item WHERE workspace_id = ? AND run_id = ?')
+        .run(ctx.workspaceId, current.id).changes;
+      ctx.audit.record({ entityKind: 'dunning_run', entityId: current.id, action: 'discard', actor: ctx.actor, at: ctx.clock.now() });
+      return ok({ runId: current.id, discarded: true, runDate: current.run_date, itemsDiscarded: items });
+    });
+  } catch (e) {
+    if (e instanceof DiscardRefused) return e.result;
+    throw e;
+  }
+}
+
+/** Thrown inside the discard's transaction to roll it back and answer `result` instead (critic F1). */
+class DiscardRefused extends Error {
+  constructor(readonly result: Result) {
+    super('discard_refused');
+    this.name = 'DiscardRefused';
+  }
 }
 
 export interface IssueDunningRunInput {
@@ -744,13 +828,13 @@ function issueUnit(
     let feeSkippedReason: string | null = null;
 
     if (feeTotal > 0) {
-      const posted = postEntry(ctx, {
+      const posted = postEntryInternalChecked(ctx, {
         date: today,
         source: DUNNING_SOURCE,
         description: `Mahngebühren Mahnlauf ${run.run_date}`,
         idempotencyKey: `dunning-fee-${run.id}`,
         lines: feeLines,
-      });
+      }, 'issue_dunning_run_internal');
       if (!posted.ok) {
         if (posted.error === 'period_locked') {
           // §H-PERIOD, the spec's own answer: the fee is skipped and NAMED, the run still issues.
@@ -880,13 +964,13 @@ function recoverSkippedFee(
 
   try {
     return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'issue_dunning_run', () => {
-      const posted = postEntry(ctx, {
+      const posted = postEntryInternalChecked(ctx, {
         date: today,
         source: DUNNING_SOURCE,
         description: `Mahngebühren Mahnlauf ${run.run_date} (nachgebucht)`,
         idempotencyKey: `dunning-fee-${run.id}`,
         lines: built,
-      });
+      }, 'issue_dunning_run_internal');
       // Still locked, or any other rejection: abort the unit so nothing is memoised and a later
       // retry can succeed. `period_locked` rides through as itself, the honest answer.
       if (!posted.ok) throw new IssueAbort(posted);

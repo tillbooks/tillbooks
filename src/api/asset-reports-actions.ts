@@ -25,11 +25,12 @@ import {
   assetNbvSummary,
   assetEndOfLifeList,
 } from '../core/assets/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface AssetReportsActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,

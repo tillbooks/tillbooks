@@ -43,6 +43,10 @@ export const CAPTURE_FIELD_KEYS = [
   'expense_account_id',
   'tax_code',
   'doc_type',
+  // A31 §0a item 13: emitted only by a supplied QR payload (the structured creditor address as
+  // `{street?, buildingNumber?, postalCode, town, country}`, and the unstructured message `Ustrd`).
+  'vendor_address',
+  'payment_message',
 ] as const;
 export type CaptureFieldKey = (typeof CAPTURE_FIELD_KEYS)[number];
 export function isCaptureFieldKey(v: unknown): v is CaptureFieldKey {
@@ -97,3 +101,17 @@ export type CaptureDocType = (typeof CAPTURE_DOC_TYPES)[number];
 export function isCaptureDocType(v: unknown): v is CaptureDocType {
   return typeof v === 'string' && (CAPTURE_DOC_TYPES as readonly string[]).includes(v);
 }
+
+/**
+ * The sources that may supply a QR payload to `capture_extract` (spec §0a item 9). The provenance of
+ * what lands is the source itself, WHO asserted the value: a supplied payload never lands `qr`/`swico`,
+ * which mean "read from the stored bytes" (§0a item 10).
+ */
+export const CAPTURE_QR_PAYLOAD_SOURCES = ['operator', 'agent'] as const;
+export type CaptureQrPayloadSource = (typeof CAPTURE_QR_PAYLOAD_SOURCES)[number];
+export function isCaptureQrPayloadSource(v: unknown): v is CaptureQrPayloadSource {
+  return typeof v === 'string' && (CAPTURE_QR_PAYLOAD_SOURCES as readonly string[]).includes(v);
+}
+
+/** The longest `decoder` label a supplied payload may carry (`phone-scanner`, `plugin:<id>`, ...). */
+export const CAPTURE_QR_DECODER_MAX = 64;

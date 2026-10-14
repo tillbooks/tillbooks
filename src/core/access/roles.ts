@@ -206,7 +206,8 @@ export function defineRole(ctx: WorkspaceContext, input: DefineRoleInput): Resul
   if (!allowed.ok) return allowed;
 
   const guard =
-    optionalId(input.roleId, 'roleId') ?? optionalId(input.idempotencyKey, 'idempotencyKey');
+    // D156 critic F1: the schema requires the key, so the engine does too.
+    optionalId(input.roleId, 'roleId') ?? requireString(input.idempotencyKey, 'idempotencyKey');
   if (guard) return guard;
 
   const roleId = input.roleId;

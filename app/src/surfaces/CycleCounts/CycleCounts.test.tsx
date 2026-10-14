@@ -5,7 +5,7 @@
  * through `inventory_stocktake_count` and a commit through `inventory_stocktake_commit`.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -71,12 +71,12 @@ const baseCanned = (): Canned => ({
   inventory_stocktake_report: ok({ session: SESSION(), lines: [LINE()], totals: { over: 0, under: 0, absVariance: 0, exceedingThreshold: 0 } }),
 });
 
-function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Record<string, unknown> }>) {
+function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Record<string, unknown> }>, path = '/cycle-counts') {
   return render(
     <TillClientProvider client={new TillClient(fakeTransport(canned, asked))}>
       <I18nProvider>
         <WorkspaceProvider initialId="ws_test">
-          <MemoryRouter>
+          <MemoryRouter initialEntries={[path]}>
             <CycleCounts />
           </MemoryRouter>
         </WorkspaceProvider>
@@ -85,11 +85,17 @@ function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Re
   );
 }
 
+/** D152 rule 5: a session opens by the person's act. Click it in the list, as the person would. */
+async function openSession(type: string = de.cycleCounts.type.full) {
+  await userEvent.click(await screen.findByRole('button', { name: new RegExp(`^${type}`) }));
+}
+
 describe('CycleCounts, the stocktake surface', () => {
   it('lists a session and shows its frozen line with book quantity', async () => {
     renderSurface(baseCanned());
     // The session badge renders (full Inventur, open).
     expect(await screen.findAllByText(de.cycleCounts.status.open)).not.toHaveLength(0);
+    await openSession();
     // The detail line shows the frozen book quantity (not a blind hide).
     await waitFor(() => expect(screen.getByText('Widget')).toBeInTheDocument());
     expect(screen.getByText('10')).toBeInTheDocument();
@@ -101,6 +107,7 @@ describe('CycleCounts, the stocktake surface', () => {
     canned.inventory_stocktake_count = ok({ session: SESSION({ progressPct: 100 }), updatedLines: [LINE({ countedQty: 12, status: 'review_required' })] });
     renderSurface(canned, asked);
 
+    await openSession();
     await screen.findByText('Widget');
     await userEvent.type(screen.getByLabelText(de.cycleCounts.col.counted), '12');
     await userEvent.click(screen.getByRole('button', { name: de.cycleCounts.saveCount }));
@@ -126,6 +133,7 @@ describe('CycleCounts, the stocktake surface', () => {
     canned.inventory_stocktake_commit = ok({ session: SESSION({ status: 'committed' }), movementIds: ['mv_1'], movementsMinted: 1 });
     renderSurface(canned, asked);
 
+    await openSession();
     await screen.findByText('Widget');
     // The commit writes quantity movements with no ledger reach, so it is never the money tint (K-08,
     // the C2 money critic, F5): secondary beside the header's primary, primary in its confirm.
@@ -157,6 +165,7 @@ describe('CycleCounts, the stocktake surface', () => {
     canned.inventory_stocktake_cancel = ok({ session: SESSION({ status: 'cancelled' }) });
     renderSurface(canned, asked);
 
+    await openSession();
     await screen.findByText('Widget');
     // First click opens the alertdialog and cancels NOTHING.
     await userEvent.click(screen.getByRole('button', { name: de.cycleCounts.cancel }));
@@ -174,6 +183,7 @@ describe('CycleCounts, the stocktake surface', () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     renderSurface(baseCanned(), asked);
 
+    await openSession();
     await screen.findByText('Widget');
     await userEvent.click(screen.getByRole('button', { name: de.cycleCounts.commit }));
     const dialog = await screen.findByRole('alertdialog');
@@ -187,6 +197,7 @@ describe('CycleCounts, the stocktake surface', () => {
     canned.inventory_stocktake_commit = reject('uncounted_or_unapproved_lines', { lines: [] });
     renderSurface(canned);
 
+    await openSession();
     await screen.findByText('Widget');
     await userEvent.click(screen.getByRole('button', { name: de.cycleCounts.commit }));
     const dialog = await screen.findByRole('alertdialog');
@@ -200,8 +211,107 @@ describe('CycleCounts, the stocktake surface', () => {
     canned.inventory_stocktake_report = ok({ session: SESSION({ blindCount: true }), lines: [LINE({ bookQty: null })], totals: { over: 0, under: 0, absVariance: 0, exceedingThreshold: 0 } });
     renderSurface(canned);
 
+    await openSession();
     await screen.findByText('Widget');
     // The Book column header is absent while blind + open.
     expect(screen.queryByText(de.cycleCounts.col.book)).not.toBeInTheDocument();
+  });
+});
+
+describe('CycleCounts, a list never opens itself (D152 rules 5 and 2)', () => {
+  const two = (): Canned => ({
+    ...baseCanned(),
+    inventory_stocktake_list: ok({ sessions: [SESSION(), SESSION({ id: 'cyc_2', type: 'cycle', status: 'committed', progressPct: 100 })], legacy: [] }),
+    inventory_stocktake_report: (input) =>
+      input.sessionId === 'cyc_2'
+        ? ok({ session: SESSION({ id: 'cyc_2', type: 'cycle', status: 'committed', progressPct: 100 }), lines: [LINE({ countedQty: 9, varianceQty: -1, status: 'approved' })], totals: { over: 0, under: 1, absVariance: 1, exceedingThreshold: 0 } })
+        : ok({ session: SESSION(), lines: [LINE()], totals: { over: 0, under: 0, absVariance: 0, exceedingThreshold: 0 } }),
+  });
+
+  it('selects nothing on load: no current session, no detail, no report read, the list takes the width', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const { container } = renderSurface(two(), asked);
+    await screen.findByRole('button', { name: new RegExp(`^${de.cycleCounts.type.cycle}`) });
+    expect(container.querySelector('[aria-current="true"]')).toBeNull();
+    expect(screen.queryByRole('region', { name: de.cycleCounts.detailLabel })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.cycleCounts.commit })).not.toBeInTheDocument();
+    expect(container.querySelector('.cc-split--solo')).not.toBeNull();
+    expect(asked.some((a) => a.action === 'inventory_stocktake_report')).toBe(false);
+  });
+
+  it('opens the session a deep link names (?focus=)', async () => {
+    renderSurface(two(), undefined, '/cycle-counts?focus=cyc_2');
+    const item = await screen.findByRole('button', { name: new RegExp(`^${de.cycleCounts.type.cycle}`) });
+    await waitFor(() => expect(item).toHaveAttribute('aria-current', 'true'));
+    expect(await screen.findByRole('region', { name: de.cycleCounts.detailLabel })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: new RegExp(`^${de.cycleCounts.type.full}`) })).not.toHaveAttribute('aria-current');
+  });
+
+  it('a click opens an open session with its actions, a second click closes it', async () => {
+    renderSurface(two());
+    await openSession();
+    expect(await screen.findByRole('button', { name: de.cycleCounts.commit })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: de.cycleCounts.cancel })).toBeInTheDocument();
+    // Rule 2: no line waits for review, so there is nothing to approve and no grey button saying so.
+    expect(screen.queryByRole('button', { name: de.cycleCounts.approveAll })).not.toBeInTheDocument();
+    await openSession();
+    await waitFor(() => expect(screen.queryByRole('region', { name: de.cycleCounts.detailLabel })).not.toBeInTheDocument());
+  });
+
+  it('a session with lines waiting for review offers the approve, enabled', async () => {
+    const canned = baseCanned();
+    canned.inventory_stocktake_report = ok({
+      session: SESSION({ status: 'review', reviewRequiredLines: 1 }),
+      lines: [LINE({ countedQty: 12, varianceQty: 2, status: 'review_required' })],
+      totals: { over: 2, under: 0, absVariance: 2, exceedingThreshold: 1 },
+    });
+    renderSurface(canned);
+    await openSession();
+    expect(await screen.findByRole('button', { name: de.cycleCounts.approveAll })).not.toBeDisabled();
+  });
+
+  it('a committed ("Gebucht") session hides Markierte freigeben, Buchen and abbrechen instead of disabling them', async () => {
+    renderSurface(two());
+    await openSession(de.cycleCounts.type.cycle);
+    expect(await screen.findByText(de.cycleCounts.committedBanner, { exact: false })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.cycleCounts.approveAll })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.cycleCounts.commit })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.cycleCounts.cancel })).not.toBeInTheDocument();
+  });
+});
+
+describe('CycleCounts, a late detail read never lands under another session (critic F1)', () => {
+  it('open A, close it mid-read, open B: A\'s late report is dropped and B shows its own lines', async () => {
+    let releaseA: (r: RestResponse) => void = () => undefined;
+    const slowA = new Promise<RestResponse>((r) => {
+      releaseA = r;
+    });
+    let releaseB: (r: RestResponse) => void = () => undefined;
+    const slowB = new Promise<RestResponse>((r) => {
+      releaseB = r;
+    });
+    const canned: Canned = {
+      ...baseCanned(),
+      inventory_stocktake_list: ok({ sessions: [SESSION(), SESSION({ id: 'cyc_2', type: 'cycle' })], legacy: [] }),
+      inventory_stocktake_report: ((input: Record<string, unknown>) => (input.sessionId === 'cyc_1' ? slowA : slowB)) as unknown as CannedHandler,
+    };
+    renderSurface(canned);
+    await openSession();
+    await openSession(); // closed again before A's report returns
+    await act(async () => {
+      releaseA(ok({ session: SESSION(), lines: [LINE()], totals: { over: 0, under: 0, absVariance: 0, exceedingThreshold: 0 } }));
+      await slowA;
+    });
+    await openSession(de.cycleCounts.type.cycle);
+    // B's read is still in flight: A's session (its Vollinventur heading, its actions) must not stand
+    // under B's pill.
+    expect(screen.queryByRole('heading', { name: new RegExp(de.cycleCounts.type.full) })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.cycleCounts.commit })).not.toBeInTheDocument();
+    await act(async () => {
+      releaseB(ok({ session: SESSION({ id: 'cyc_2', type: 'cycle' }), lines: [LINE({ id: 'ln_2', itemName: 'Gadget' })], totals: { over: 0, under: 0, absVariance: 0, exceedingThreshold: 0 } }));
+      await slowB;
+    });
+    expect(await screen.findByText('Gadget')).toBeInTheDocument();
+    expect(screen.queryByText('Widget')).not.toBeInTheDocument();
   });
 });

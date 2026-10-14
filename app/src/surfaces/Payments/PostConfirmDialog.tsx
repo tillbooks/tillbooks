@@ -42,16 +42,16 @@ export function PostConfirmDialog({ amount, verb, busy = false, onConfirm, onCan
   return (
     <div className="pay-confirm-overlay" role="presentation" onClick={onCancel}>
       <div
-        className="pay-confirm panel"
+        className="pay-confirm panel motion-reveal--center"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(event) => event.stopPropagation()}
       >
-        <p id={titleId} className="pay-confirm-message">
+        <p id={titleId} className="pay-confirm-message" data-motion-item="1">
           {t('payment.confirm.post', { amount })}
         </p>
-        <p className="pay-confirm-detail">{t('payment.confirm.postDetail')}</p>
+        <p className="pay-confirm-detail" data-motion-item="2">{t('payment.confirm.postDetail')}</p>
         {/* C4: the same consequence sentence a human and the agent both read for this write. */}
         {verb !== undefined && <ConsequenceLine verb={verb} />}
 
@@ -65,7 +65,7 @@ export function PostConfirmDialog({ amount, verb, busy = false, onConfirm, onCan
           <span>{t('payment.confirm.postSuppress')}</span>
         </label>
 
-        <div className="pay-confirm-foot">
+        <div className="pay-confirm-foot" data-motion-item="3">
           <button type="button" className="btn btn--secondary" onClick={onCancel}>
             {t('payment.cancel')}
           </button>

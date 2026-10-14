@@ -29,11 +29,12 @@ import {
   sandboxHost,
   pluginProcessDescriptor,
 } from '../core/plugins/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface PluginActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -101,7 +102,7 @@ export function pluginActions(h: PluginActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'install_plugin',
-      'write',
+      'write:correctable:access',
       'Installiere eine Erweiterung (US-G02.1): check the pinned sha256 against the bundle (manifest_checksum_failed on a mismatch, nothing persisted), REJECT any capability naming a reserved money-path tool (capability_forbidden, no_second_posting_path, the WHOLE install fails, P3) or colliding with an existing tool/screen/source name (capability_name_conflict), store permissions.granted as the INTERSECTION of grantedScopes and the manifest`s requested scopes (never a superset), resolve compat_range against the core version, and persist a plugin_manifests row (status installed, or incompatible when the range fails). A newer version of an already-installed plugin supersedes the row in place and writes an audit_log entry before it changes.',
       ctxSchema({ source: STR, packageRef: OBJ, grantedScopes: ARR, idempotencyKey: STR }, ['source', 'packageRef', 'idempotencyKey']),
       (ctx, input) => installPlugin(ctx, as(input)),
@@ -122,28 +123,28 @@ export function pluginActions(h: PluginActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'enable_plugin',
-      'write',
+      'write:reversible:access',
       'Aktiviere eine Erweiterung (US-G02.2/3): register every capability the still-persisted manifest declares (its MCP tools, Studio screen, report source, automation actions) and start its sandbox, flipping status to installed. Refuses an incompatible plugin (plugin_incompatible, no run-anyway override, §6b) and a capability whose name another plugin has since taken (capability_name_conflict).',
       ctxSchema({ pluginId: STR, idempotencyKey: STR }, ['pluginId', 'idempotencyKey']),
       (ctx, input) => reconcileHostStatus(enablePlugin(ctx, as(input))),
     ),
     ctxAction(
       'disable_plugin',
-      'write',
+      'write:reversible:stop',
       'Deaktiviere eine Erweiterung ohne sie zu deinstallieren (US-G02.3): sweep every capability registration the plugin holds (its MCP tools vanish, its Studio screen unmounts, its report source and automation actions stop resolving), stop its sandbox, and flip status to disabled, keeping the manifest and granted permissions so a later enable_plugin needs no re-install. History (audit rows, past automation runs) is untouched.',
       ctxSchema({ pluginId: STR, idempotencyKey: STR }, ['pluginId', 'idempotencyKey']),
       (ctx, input) => reconcileHostStatus(disablePlugin(ctx, as(input))),
     ),
     ctxAction(
       'uninstall_plugin',
-      'write',
+      'write:final:access',
       'Deinstalliere eine Erweiterung (US-G02.3): disable it first (sweep its registrations), record the removal in the append-only audit_log before the row is gone, then delete the manifest row (plugin manifests are not §H-AUDIT financial data, so a real delete is correct). Traceability rides the audit chain, not an append-only manifest table.',
       ctxSchema({ pluginId: STR, idempotencyKey: STR }, ['pluginId', 'idempotencyKey']),
       (ctx, input) => reconcileHostStopped(uninstallPlugin(ctx, as(input)), (input as { pluginId?: unknown }).pluginId),
     ),
     ctxAction(
       'refresh_plugin_compat',
-      'write',
+      'write:correctable:access',
       'Prüfe die Kompatibilität neu (US-G02.4): compare the plugin`s compat_range against the current core version with standard semver range semantics and persist the verdict. A range that no longer matches flips status to incompatible and sweeps the plugin`s capabilities (its manifest and granted permissions retained); a range that matches again flips it back to installed and re-registers. Never a crash, only the badge (P9).',
       ctxSchema({ pluginId: STR, idempotencyKey: STR }, ['pluginId', 'idempotencyKey']),
       (ctx, input) => reconcileHostStatus(refreshPluginCompat(ctx, as(input))),

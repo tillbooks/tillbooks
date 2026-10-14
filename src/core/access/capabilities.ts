@@ -201,7 +201,7 @@ export type Capability =
   // "read/preview stays open to any workspace member" asked for.
   | 'manage_document_templates'
   // G05 §10 dispatch texts. Gates `dispatch_text_upsert` (the workspace's saved outbound message
-  // text per document kind and locale): reshaping the voice every future invoice/quote/reminder
+  // text per document kind and locale) and its inverse `dispatch_text_reset`: reshaping the voice every future invoice/quote/reminder
   // mail carries is a governing act over the workspace's outward face, the
   // `manage_document_templates` shape exactly. Reads (`dispatch_preview`, `list_dispatches`) ride
   // `read_master_data`, so the Protokoll and the preview stay open to every member incl. `viewer`

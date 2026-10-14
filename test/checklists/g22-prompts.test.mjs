@@ -81,6 +81,27 @@ test('prompts/get with no run names checklist_start and the period, and invents 
   }
 });
 
+test('D158: an abandoned run\'s prompt says the period gets no new run, and the engine agrees', async () => {
+  const w = world('abandoned');
+  const started = must(w.call('checklist_start', { templateId: 'vat_period', period: '2026-Q2', idempotencyKey: 'ab-start' }), 'start');
+  must(w.call('checklist_abandon', { runId: started.runId, reason: 'Falsch gestartet.', idempotencyKey: 'ab-1' }), 'abandon');
+  const { client, close } = await connected(w.deps);
+  try {
+    const res = await client.getPrompt({ name: 'checklist_vat_period', arguments: { workspaceId: w.wid, period: '2026-Q2' } });
+    const text = res.messages[0].content.text;
+    assert.match(text, /This run was abandoned \(Falsch gestartet\.\)/);
+    assert.match(text, /gets no new run for that period/);
+    assert.doesNotMatch(text, /Start a new run/, 'never sends the agent into a restart the engine cannot make');
+  } finally {
+    await close();
+  }
+  // What the prompt claims, measured: a restart for the period hands the abandoned run back.
+  const again = must(w.call('checklist_start', { templateId: 'vat_period', period: '2026-Q2', idempotencyKey: 'ab-again' }), 'restart');
+  assert.equal(again.created, false);
+  assert.equal(again.runId, started.runId);
+  assert.equal(again.status, 'abandoned');
+});
+
 test('parity: the prompt lists exactly the open items checklist_get returns, in the same order, as the walk progresses', async () => {
   const w = world('parity');
   const started = must(w.call('checklist_start', { templateId: 'vat_period', period: '2026-Q2', idempotencyKey: 'p-start' }), 'start');
@@ -101,7 +122,8 @@ test('parity: the prompt lists exactly the open items checklist_get returns, in 
     assert.match(first.text, /call vat_return \{workspaceId: "/);
     assert.match(first.text, /the next actionable one is vat_return_computed/);
     must(w.call('checklist_item_complete', { runId: started.runId, itemId: 'vat_return_computed', idempotencyKey: 'p-4' }), '4');
-    must(w.call('checklist_item_complete', { runId: started.runId, itemId: 'abstimmung_reviewed', idempotencyKey: 'p-5' }), '5');
+    // Item 5 is the owner's sign-off: a person records it (critic N3, a governed seat is refused needs_a_person).
+    must(getAction('checklist_item_complete').run({ ...w.deps, actor: 'studio' }, { workspaceId: w.wid, runId: started.runId, itemId: 'abstimmung_reviewed', idempotencyKey: 'p-5' }), '5');
     const mid = await expectOpen();
     assert.match(mid.text, /Done: 5\./);
     must(w.call('checklist_item_skip', { runId: started.runId, itemId: 'ech0217_exported', reason: 'Von Hand.', idempotencyKey: 'p-6' }), 'skip 6');

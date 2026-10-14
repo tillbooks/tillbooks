@@ -1077,7 +1077,8 @@ test('A07 §H-IDEMPOTENT: re-filing on the same key mints no second lock, counte
   // fresh `idempotency` row on every replay, forever. So that is what gets counted.
   const keys = () =>
     ctx.store.db
-      .prepare("SELECT COUNT(*) AS c FROM idempotency WHERE workspace_id = ? AND verb = 'lock_period'")
+      // The internal seal writer's own scope (critic R5-2, D152): no public lock_period writes it.
+      .prepare("SELECT COUNT(*) AS c FROM idempotency WHERE workspace_id = ? AND verb = 'lock_period_sealed'")
       .get(ctx.workspaceId).c;
 
   const first = markVatPeriodFiled(ctx, { period: '2026-Q2', idempotencyKey: 'f-1' });

@@ -33,18 +33,19 @@ import {
   setRole,
   whoami,
 } from '../core/access/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface PermissionActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
   ): ActionDef;
   depsAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (deps: ApiDeps, input: ActionInput) => Result,
@@ -83,7 +84,7 @@ export function permissionActions(h: PermissionActionHelpers): readonly ActionDe
     ),
     ctxAction(
       'invite_member',
-      'write',
+      'write:correctable:access',
       'Invite someone to this workspace with a role. Writes a pending membership and PREPARES the invite; TILL has no transport and never claims a send, so the token is handed back for the operator to deliver. kind (human, the default, or agent) says what the invitee is: an agent member is the governed seat, its writes draft under the approval dial and its calls land in the trace, on every door including a served one.',
       ctxSchema({ email: STR, role: STR, displayName: STR, kind: STR, idempotencyKey: STR }, [
         'email',
@@ -94,28 +95,28 @@ export function permissionActions(h: PermissionActionHelpers): readonly ActionDe
     ),
     depsAction(
       'accept_invite',
-      'write',
+      'write:correctable:pre-workspace',
       'Redeem an invite token: bind this session actor to the invited identity and activate the membership. Pre-workspace, because the accepter is not a member yet.',
       depsSchema({ token: STR }, ['token']),
       (deps, input) => acceptInvite(deps, input),
     ),
     ctxAction(
       'set_role',
-      'write',
+      'write:reversible:access',
       "Change a member's role. It takes effect on their next call: nothing caches a capability resolution. Demoting the only remaining owner is refused (last_owner).",
       ctxSchema({ memberId: STR, role: STR }, ['memberId', 'role']),
       (ctx, input) => setRole(ctx, input),
     ),
     ctxAction(
       'revoke_member',
-      'write',
+      'write:correctable:access',
       "Remove a member's access to this workspace. The person's identity survives, so re-inviting them restores their history. Revoking the only remaining owner is refused (last_owner).",
       ctxSchema({ memberId: STR }, ['memberId']),
       (ctx, input) => revokeMember(ctx, input),
     ),
     ctxAction(
       'define_role',
-      'write',
+      'write:reversible:access',
       'Create a custom role, or reshape one of the three editable built-ins, as a named subset of the capability registry. A name outside the registry is refused (unknown_capability): a role can only ever recombine capabilities that already gate a real verb.',
       ctxSchema({ roleId: STR, name: STR, capabilities: CAPABILITY_LIST, idempotencyKey: STR }, [
         'capabilities',
@@ -125,7 +126,7 @@ export function permissionActions(h: PermissionActionHelpers): readonly ActionDe
     ),
     ctxAction(
       'archive_role',
-      'write',
+      'write:correctable:access',
       'Soft-flag a custom role so it stops being offered. Never a delete, so historical attributions still resolve, and refused while any member still holds it (role_in_use).',
       ctxSchema({ roleId: STR, idempotencyKey: STR }, ['roleId', 'idempotencyKey']),
       (ctx, input) => archiveRole(ctx, input),

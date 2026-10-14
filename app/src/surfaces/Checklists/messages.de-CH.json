@@ -6,10 +6,18 @@
     "queue": {
       "checklistItemsDue": "Checklisten: fällige Schritte"
     },
+    "queueLabel": {
+      "checklist_items_due": "Checklisten"
+    },
     "item": {
       "checklistItem": {
         "title": "{period}: {title}",
-        "subtitle": "{template}, zuständig: {owner}"
+        "subtitle": "{template}",
+        "subtitleOwner": {
+          "human": "{template}, zuständig: du",
+          "agent": "{template}, zuständig: ein Agent",
+          "system": "{template}, zuständig: das System"
+        }
       }
     },
     "act": {
@@ -46,6 +54,15 @@
     "error": {
       "transport": "Die Checklisten konnten nicht geladen werden.",
       "refused": "Abgelehnt: {code}"
+    },
+    "sealRefusal": {
+      "prerequisite_open": "Das Jahr lässt sich noch nicht abschliessen, weil ein vorheriger Schritt offen ist.",
+      "run_abandoned": "Diese Checkliste wurde abgebrochen und schliesst das Jahr darum nicht ab.",
+      "run_year_mismatch": "Diese Checkliste gehört zu einem anderen Geschäftsjahr.",
+      "run_not_year_close": "Nur ein Jahresabschluss kann ein Geschäftsjahr abschliessen.",
+      "not_found": "Diese Checkliste wurde nicht gefunden, lade die Seite neu.",
+      "year_already_closed": "Dieses Geschäftsjahr ist bereits abgeschlossen.",
+      "year_close_unverified": "Der Abschluss liess sich nicht bestätigen: Es wurde nichts gebucht und das Jahr nicht versiegelt."
     },
     "empty": {
       "title": "Noch keine Checkliste",
@@ -338,6 +355,7 @@
       "unavailable": "Die Prüfung der Buchung ist nicht verfügbar: {reason}",
       "posted": "Gebucht. Belege: {entries}.",
       "noEntry": "keine",
+      "yearResult": "Jahresergebnis",
       "reversalOn": "Rückbuchung am {date}.",
       "nothingToSettle": "Nichts zu saldieren: die MWST-Konten dieser Periode stehen auf null.",
       "willPost": "Zu buchen: {total}."

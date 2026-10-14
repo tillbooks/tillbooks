@@ -56,6 +56,8 @@ const ENGINE_KEYS = [
   'inUse',
   'name',
   'number',
+  // D142 amendment: "Beleg = Kontoauszug", the effective value.
+  'statementIsVoucher',
   'type',
   'vatCodeDefault',
   'workspaceId',

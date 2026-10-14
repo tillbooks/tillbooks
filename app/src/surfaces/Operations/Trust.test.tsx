@@ -8,7 +8,7 @@
  * Rendered in de-CH (the I18nProvider default), so the assertions read the de-CH catalogue directly.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
@@ -21,7 +21,7 @@ import { CapabilitiesProvider } from '../../lib/CapabilitiesProvider';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { Trust, SETUP_DOORS } from './Trust';
+import { Trust, SETUP_DOORS, shortPath } from './Trust';
 import { SyncHosting } from './SyncHosting';
 import { SyncSignalProvider } from './sync-signal';
 import de from './messages.de-CH.json';
@@ -188,14 +188,99 @@ describe('Trust (E07 Vertrauen panel)', () => {
   });
 });
 
+/**
+ * D152 rule 4 (the owner's pick of 03.10.2026, cognitive-load audit): the panel RESTS as one line,
+ * its state, its (i) and its one action. The words it used to print at rest live in the (i) card:
+ * still in the DOM (the LIMITS snapshot above keeps holding every key), reachable on hover and
+ * focus, and named as the trigger's description. These pin that nothing explanatory sits on the
+ * working surface and that nothing was deleted on the way into the card.
+ */
+describe('Trust at rest: one line, the words behind (i) (D152)', () => {
+  it('the head line carries the title, the state, the (i) and Jetzt prüfen, and nothing else', async () => {
+    const { container } = render(tree(baseCanned()));
+    await screen.findByText(de.egress.indicator.local);
+    const head = container.querySelector('.trust-head') as HTMLElement;
+    expect(head).not.toBeNull();
+    expect(head.querySelector('h2')?.textContent).toBe(de.egress.panel.title);
+    expect(head.querySelector('.egress-indicator')).not.toBeNull();
+    expect(head.querySelector('button[aria-label="' + de.egress.info.label + '"]')).not.toBeNull();
+    expect(head.contains(screen.getByRole('button', { name: de.egress.action.run }))).toBe(true);
+    // No paragraph of prose at rest: the panel's only <p> is the one-line location value.
+    expect(Array.from(container.querySelectorAll('.trust p')).map((p) => p.className)).toEqual(['trust-location']);
+  });
+
+  it('the scope note, the wifi instruction, every limit and the model note sit in the (i) card, hidden at rest', async () => {
+    render(tree(baseCanned()));
+    await screen.findByText(de.egress.indicator.local);
+    const trigger = screen.getByRole('button', { name: de.egress.info.label });
+    const cardId = trigger.getAttribute('aria-describedby');
+    expect(cardId).toBeTruthy();
+    const card = document.getElementById(cardId as string) as HTMLElement;
+    expect(card).toHaveAttribute('role', 'tooltip');
+    // Closed at rest: the card is the shared tooltip, not open until hover or focus.
+    expect(card).not.toHaveClass('is-open');
+    const words = card.textContent ?? '';
+    for (const sentence of [
+      de.egress.scope.note,
+      de.egress.setup.prompt,
+      de.egress.limits.title,
+      de.egress.limits.os,
+      de.egress.limits.machine,
+      de.egress.limits.disk,
+      de.egress.limits.sockets,
+      de.egress.limits.trust_us,
+      de.egress.model_download.note,
+    ]) {
+      expect(words).toContain(sentence);
+    }
+    // The scope note still comes FIRST (US-E07.2 Boundary), and iCloud/backup leads the limits.
+    expect(words.indexOf(de.egress.scope.note)).toBe(0);
+    expect(words.indexOf(de.egress.limits.os)).toBeLessThan(words.indexOf(de.egress.limits.machine));
+    expect(within(card).getAllByRole('listitem')).toHaveLength(5);
+  });
+
+  it('the card opens on focus and on hover, and Escape closes it', async () => {
+    render(tree(baseCanned()));
+    await screen.findByText(de.egress.indicator.local);
+    const trigger = screen.getByRole('button', { name: de.egress.info.label });
+    const card = document.getElementById(trigger.getAttribute('aria-describedby') as string) as HTMLElement;
+    act(() => trigger.focus());
+    expect(card).toHaveClass('is-open');
+    await userEvent.keyboard('{Escape}');
+    expect(card).not.toHaveClass('is-open');
+    await userEvent.hover(trigger);
+    expect(card).toHaveClass('is-open');
+  });
+
+  it('Jetzt prüfen is described by the wifi instruction it needs', async () => {
+    render(tree(baseCanned()));
+    await screen.findByText(de.egress.indicator.local);
+    expect(screen.getByRole('button', { name: de.egress.action.run })).toHaveAccessibleDescription(de.egress.setup.prompt);
+  });
+});
+
+describe('shortPath (the location value, kept to one line)', () => {
+  it('keeps a short path whole', () => {
+    expect(shortPath('/Users/x/.till/till.db')).toBe('/Users/x/.till/till.db');
+  });
+  it('keeps the root and the last two segments of a long path around an ellipsis', () => {
+    expect(shortPath('/home/someone/ledgers/archive/2026/books/demo.db')).toBe('/home/\u2026/books/demo.db');
+  });
+  it('abbreviates a long Windows path with its own separator', () => {
+    expect(shortPath('C:\\Users\\someone\\AppData\\Roaming\\till\\books\\till.db')).toBe('C:\\\u2026\\books\\till.db');
+  });
+});
+
 describe('Trust data-location line (M03 V2)', () => {
   const J = (de as unknown as { journey: { location: Record<string, string> } }).journey.location;
 
   it('LOCAL: names the database path off delivery_status, with the backup and hosting links', async () => {
-    render(tree(baseCanned()));
-    expect(
-      await screen.findByText(J.local.replace('{path}', '/Users/x/.till/till.db')),
-    ).toBeInTheDocument();
+    const { container } = render(tree(baseCanned()));
+    // At rest the line carries the value; the full sentence around it reads in the (i) card.
+    expect(await screen.findByText(J.short.replace('{path}', '/Users/x/.till/till.db'))).toBeInTheDocument();
+    const sentence = screen.getByText(J.local.replace('{path}', '/Users/x/.till/till.db'));
+    expect(sentence.closest('[role="tooltip"]')).not.toBeNull();
+    expect(container.querySelector('.trust-location')?.textContent).not.toContain(J.local.split('{path}')[1].trim());
     expect(screen.getByRole('link', { name: J.backupLink })).toHaveAttribute('href', '#data-title');
     expect(screen.getByRole('link', { name: J.hostingLink })).toHaveAttribute('href', '#sync-title');
   });

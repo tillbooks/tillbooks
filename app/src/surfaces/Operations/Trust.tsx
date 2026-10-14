@@ -5,19 +5,20 @@
  * off `/setup` onto their own route; the E07 §6 prose was retargeted to match.
  *
  * WHAT RENDERS HERE, and why each line is in the product rather than in a linked PDF:
- *   - the standing trust INDICATOR (glyph + label, the three honest states) fed by `egress_status`;
- *   - the SCOPE note first (this is about TILL, not your Mac: the mail app uses the internet, that is
- *     how mail arrives), so the claim is never oversold;
- *   - "Jetzt prüfen", which runs `egress_self_test` (a REAL generation under the socket probe) and
- *     reports passed / violated / needs-setup HONESTLY;
- *   - the LIMITS list in full, iCloud/backup FIRST, so a reader comes away trusting us slightly more
- *     and the claim slightly less, which is the correct outcome (US-E07.4);
- *   - the one deliberate network event named out loud (the model download).
+ *   - AT REST, one line (D152 rule 4, the owner's pick of 03.10.2026): the standing trust INDICATOR
+ *     (glyph + label, the three honest states) fed by `egress_status`, its (i), and "Jetzt prüfen",
+ *     which runs `egress_self_test` (a REAL generation under the socket probe) and reports passed /
+ *     violated / needs-setup HONESTLY; under it, the data-location value;
+ *   - IN THE (i) CARD, one hover or focus away and always in the DOM: the SCOPE note first (this is
+ *     about TILL, not your Mac: the mail app uses the internet, that is how mail arrives), so the
+ *     claim is never oversold; the wifi instruction; the LIMITS list in full, iCloud/backup FIRST, so
+ *     a reader comes away trusting us slightly more and the claim slightly less, which is the correct
+ *     outcome (US-E07.4); and the one deliberate network event named out loud (the model download).
  *
  * The panel renders itself away with no workspace (the Diagnostics precedent) and shows the padlock
  * without `egress.read`. The engine is the real gate; `whoami` here is a convenience that fails open.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
@@ -26,6 +27,8 @@ import { useT } from '../../i18n';
 import { PermissionDenied } from '../../components/states';
 import { useCapabilities } from '../../lib/capabilities';
 import { EgressIndicator, type EgressIndicatorState } from '../../components/EgressIndicator';
+import { Tooltip } from '../../components/Tooltip';
+import { InfoGlyph } from '../../components/states/glyphs';
 import { useSyncSignal } from './sync-signal';
 import { Link } from 'react-router-dom';
 import './Trust.css';
@@ -61,6 +64,23 @@ export const SETUP_DOORS: Readonly<Record<string, string>> = {
   draftable_thread: '/correspondence',
 };
 
+/** Past this length the location line abbreviates the path; the (i) card always holds it whole. */
+const PATH_INLINE_MAX = 40;
+
+/**
+ * The location line's value, kept to one line (D152 rule 4): a long path keeps its root and its
+ * last two segments, the folder and the file a person recognises, around an ellipsis
+ * (`/tmp/…/A1/demo.db`). The full path is never lost: the card states it in its sentence.
+ */
+export function shortPath(path: string): string {
+  if (path.length <= PATH_INLINE_MAX) return path;
+  const sep = path.includes('\\') && !path.includes('/') ? '\\' : '/';
+  const parts = path.split(sep);
+  if (parts.length <= 4) return path;
+  const head = parts[0] === '' ? `${sep}${parts[1]}` : parts[0];
+  return [head, '\u2026', ...parts.slice(-2)].join(sep);
+}
+
 function stateOf(body: unknown): EgressIndicatorState {
   const state = (body as { state?: unknown })?.state;
   return state === 'local' || state === 'violated' ? state : 'unknown';
@@ -81,6 +101,7 @@ export function Trust() {
   const [denied, setDenied] = useState(false);
   const [running, setRunning] = useState(false);
   const [outcome, setOutcome] = useState<SelfTestOutcome | null>(null);
+  const promptId = useId();
   // M02: a zero-egress product shows egress the moment it exists. This one member-visible read tells
   // the Vertrauen panel whether the ledger stream is published; the line below appears only when it is.
   const [publishing, setPublishing] = useState(false);
@@ -167,20 +188,40 @@ export function Trust() {
 
   return (
     <section className="trust" aria-labelledby="trust-title">
+      {/* D152 (rule 4, words on demand): the panel rests as ONE line, its state and its one action.
+          Every explanation the panel used to print at rest (the scope note, the full location
+          sentence, the wifi instruction, the honest limits, the model download) sits in the (i)
+          card beside the state, one hover or one focus away, and stays in the DOM so a screen
+          reader reaches it through the trigger's aria-describedby. Nothing was deleted: the
+          caveats are the panel's honesty, and US-E07.4 still holds them in the product. */}
       <header className="trust-head">
         <h2 id="trust-title" className="trust-title">
           {t('egress.panel.title')}
         </h2>
         <EgressIndicator state={indicator} label={indicatorLabel} />
+        <span className="trust-info">
+          <Tooltip placement="bottom" content={<TrustCard served={served} location={location} promptId={promptId} />}>
+            <button type="button" className="btn btn--ghost btn--icon trust-info-trigger" aria-label={t('egress.info.label')}>
+              <InfoGlyph size={16} />
+            </button>
+          </Tooltip>
+        </span>
+        <button
+          type="button"
+          className="btn btn--secondary trust-run"
+          disabled={running}
+          aria-describedby={promptId}
+          onClick={() => void runSelfTest()}
+        >
+          {t('egress.action.run')}
+        </button>
       </header>
 
-      {/* The scope note FIRST: the claim is about TILL, not the Mac (US-E07.2 Boundary). */}
-      <p className="trust-scope">{t('egress.scope.note')}</p>
-
-      {/* M03 (V2): the data-location line. One fact row with two quiet links: where the data lives,
-          and where the backup and hosting stories start. Served mode swaps the path for the instance
-          posture and points its second link at the exit box (S5.1). A failed read says UNKNOWN with
-          retry, never a guessed path. */}
+      {/* M03 (V2): the data-location line, reduced to its value. Local mode names the file and keeps
+          the two quiet links to where the backup and hosting stories start; the sentence around the
+          path sits in the card. Served mode states the instance posture (one sentence) and points
+          its second link at the exit box (S5.1). A failed read says UNKNOWN with retry, never a
+          guessed path. */}
       <p className="trust-location">
         {served ? (
           <>
@@ -201,7 +242,7 @@ export function Trust() {
           </>
         ) : location.kind === 'known' ? (
           <>
-            <span>{t('journey.location.local', { path: location.path ?? '' })}</span>{' '}
+            <span className="trust-location-value">{t('journey.location.short', { path: shortPath(location.path ?? '') })}</span>{' '}
             <a className="trust-location-link" href="#data-title">
               {t('journey.location.backupLink')}
             </a>{' '}
@@ -225,13 +266,6 @@ export function Trust() {
           {t('sync.trust.publishing')}
         </p>
       )}
-
-      <div className="trust-check">
-        <p className="trust-prompt">{t('egress.setup.prompt')}</p>
-        <button type="button" className="btn btn--secondary" disabled={running} onClick={() => void runSelfTest()}>
-          {t('egress.action.run')}
-        </button>
-      </div>
 
       {outcome?.kind === 'passed' && <p className="trust-passed">{t('egress.setup.passed')}</p>}
       {outcome?.kind === 'needs_setup' && (
@@ -273,17 +307,48 @@ export function Trust() {
         </div>
       )}
 
-      {/* The honest limits, in full, iCloud/backup first (US-E07.4). A snapshot test asserts each key. */}
-      <section className="trust-limits" aria-labelledby="trust-limits-title">
-        <h3 id="trust-limits-title">{t('egress.limits.title')}</h3>
-        <ul>
-          {LIMIT_KEYS.map((key) => (
-            <li key={key}>{t(`egress.limits.${key}`)}</li>
-          ))}
-        </ul>
-      </section>
-
-      <p className="trust-model-note">{t('egress.model_download.note')}</p>
     </section>
+  );
+}
+
+/**
+ * The (i) card's content: everything the panel explains, in reading order. The scope note FIRST (the
+ * claim is about TILL, not the Mac: US-E07.2 Boundary), then where the books live, then how to run
+ * the proof, then the honest limits IN FULL with iCloud/backup first (US-E07.4: a snapshot test
+ * asserts each key), then the one deliberate network event. Spans with list roles rather than a
+ * ul/li, because a tooltip is phrasing content (the HelpHint precedent).
+ */
+function TrustCard({
+  served,
+  location,
+  promptId,
+}: {
+  served: boolean;
+  location: { kind: 'pending' | 'known' | 'unknown'; path: string | null };
+  /** The wifi instruction's id: "Jetzt prüfen" names it as its description. */
+  promptId: string;
+}) {
+  const t = useT();
+  return (
+    <span className="trust-card">
+      <span className="trust-card-para trust-scope">{t('egress.scope.note')}</span>
+      {!served && location.kind === 'known' && (
+        <span className="trust-card-para">{t('journey.location.local', { path: location.path ?? '' })}</span>
+      )}
+      <span id={promptId} className="trust-card-para">
+        {t('egress.setup.prompt')}
+      </span>
+      <span className="trust-card-title">
+        {t('egress.limits.title')}
+      </span>
+      <span className="trust-limits" role="list" aria-label={t('egress.limits.title')}>
+        {LIMIT_KEYS.map((key) => (
+          <span key={key} role="listitem" className="trust-limit">
+            {t(`egress.limits.${key}`)}
+          </span>
+        ))}
+      </span>
+      <span className="trust-card-para trust-model-note">{t('egress.model_download.note')}</span>
+    </span>
   );
 }

@@ -1,9 +1,9 @@
 {
   "nav": {
-    "inventory": "Lager"
+    "inventory": "Lagerbestand"
   },
   "stock": {
-    "route": { "title": "Lager" },
+    "route": { "title": "Lagerbestand" },
     "reason": {
       "receipt": "Zugang",
       "issue": "Abgang",
@@ -71,8 +71,8 @@
   },
   "help": {
     "Inventory": {
-      "title": "Lager",
-      "body": "Lager zeigt den Bestand je Artikel und Lagerort und markiert tiefe Bestände. Eine Bewegung erfassen ist der eine Weg, auf dem sich Bestand ändert; direktes Überschreiben gibt es nicht. Die Bewertung rechnet den Lagerwert zum Periodenende aus und zeigt die Buchung, bevor etwas verbucht wird. Die Inventur zählt, zeigt die Differenz und verbucht sie erst nach deiner Prüfung.",
+      "title": "Lagerbestand",
+      "body": "Der Lagerbestand zeigt die Menge je Artikel und Lagerort und markiert tiefe Bestände. Eine Bewegung erfassen ist der eine Weg, auf dem sich Bestand ändert; direktes Überschreiben gibt es nicht. Die Bewertung rechnet den Lagerwert zum Periodenende aus und zeigt die Buchung, bevor etwas verbucht wird. Die Inventur zählt, zeigt die Differenz und verbucht sie erst nach deiner Prüfung.",
       "concepts": [],
       "docsPath": "introduction"
     }

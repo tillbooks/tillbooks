@@ -350,6 +350,55 @@ export function statusOf(period: VatPeriod, todayIso: string): PeriodStatus {
   return period.periodEnd >= todayIso ? 'open' : 'ready';
 }
 
+/**
+ * Where the shown period stands in the journey, said as ONE step: the next thing the filer does
+ * (D152, "Schritt 3 von 6: exportieren"). `step` is null once every step is behind them.
+ *
+ * Every input is a fact the surface already holds, and none of them is a click:
+ *
+ *   computed   the return came back with figures                               (step 1 behind)
+ *   exported   the export verb returned a file for THIS period in this session, or the G22 run
+ *              holds the engine's export evidence (`exportedAt`)               (step 3 behind)
+ *   attested   the G22 run holds the human's ePortal attestation               (step 4 behind)
+ *   marked     a `vat_filed` hard lock covers the period                       (step 5 behind)
+ *   settlement A38's settlement read: null means it refused or has not answered, so there are five
+ *              steps and no sixth to fake; `posted` puts step 6 behind
+ *
+ * STEP 2 IS NEVER THE NEXT STEP, and that is owner decision W2 rather than an omission. The
+ * Abstimmung is TILL's own heuristic: it warns on its own line and never blocks the export or the
+ * filing, so a difference does not hold the journey at "prüfen". The full strip still renders step 2
+ * as not done while a difference is unexplained.
+ *
+ * `exported` from this session's verb is NOT the strip's "exportiert am": that tick stays on the
+ * engine's recorded evidence alone (JourneyStrip). The verb answering with a file for this period
+ * is enough to say what the filer does next; it is not enough to claim a done step.
+ */
+export interface JourneyFacts {
+  computed: boolean;
+  exported: boolean;
+  attested: boolean;
+  marked: boolean;
+  settlement: { posted: boolean } | null;
+}
+
+export interface JourneyPosition {
+  /** The next step, 1 to 6, or null when every step is done. */
+  step: 1 | 3 | 4 | 5 | 6 | null;
+  total: 5 | 6;
+}
+
+export function journeyPosition(facts: JourneyFacts): JourneyPosition {
+  const total = facts.settlement === null ? 5 : 6;
+  if (facts.marked) {
+    if (facts.settlement === null || facts.settlement.posted) return { step: null, total };
+    return { step: 6, total };
+  }
+  if (!facts.computed) return { step: 1, total };
+  if (facts.attested) return { step: 5, total };
+  if (facts.exported) return { step: 4, total };
+  return { step: 3, total };
+}
+
 /** Today as an ISO day, in the operator's own timezone rather than UTC. */
 export function todayIso(): string {
   const now = new Date();

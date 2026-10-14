@@ -24,6 +24,7 @@ import type { Result } from '../result.js';
 import { getDocument } from '../sales/document.js';
 import { applySavedView } from './views.js';
 import { TEMPLATE_LOCALES } from './documentTemplates.js';
+import { dispatchDefaultText } from './dispatchDefaults.js';
 
 /** §H-ENUM: the three dispatchable kinds. `credit_note` is excluded by design (spec §10.3). */
 export const DISPATCH_TEXT_KINDS: readonly string[] = ['invoice', 'quote', 'dunning_run'];
@@ -65,69 +66,6 @@ export const MAX_DISPATCH_BODY_LENGTH = 4000;
 
 const KIND_SET: ReadonlySet<string> = new Set(DISPATCH_TEXT_KINDS);
 const LOCALE_SET: ReadonlySet<string> = new Set(TEMPLATE_LOCALES);
-
-/**
- * The built-in default text per kind and locale (P9: a send never fails for lack of a saved text,
- * and the log then carries `dispatch_text_defaulted:true`). Plain business prose, real umlauts,
- * no sharp-s (de-CH has none). Every variable named here is in the kind's registry above.
- */
-const DEFAULT_TEXTS: Readonly<Record<string, Readonly<Record<string, { subject: string; body: string }>>>> =
-  Object.freeze({
-    invoice: Object.freeze({
-      'de-CH': {
-        subject: 'Rechnung {{invoice_number}} von {{company_name}}',
-        body: 'Guten Tag {{contact_name}}\n\nIm Anhang finden Sie die Rechnung {{invoice_number}} über {{amount_total}}, zahlbar bis {{due_date}}.\n\nFreundliche Grüsse\n{{company_name}}',
-      },
-      'fr-CH': {
-        subject: 'Facture {{invoice_number}} de {{company_name}}',
-        body: 'Bonjour {{contact_name}}\n\nVous trouverez en annexe la facture {{invoice_number}} de {{amount_total}}, payable au {{due_date}}.\n\nMeilleures salutations\n{{company_name}}',
-      },
-      'it-CH': {
-        subject: 'Fattura {{invoice_number}} da {{company_name}}',
-        body: 'Buongiorno {{contact_name}}\n\nIn allegato trova la fattura {{invoice_number}} di {{amount_total}}, pagabile entro il {{due_date}}.\n\nCordiali saluti\n{{company_name}}',
-      },
-      en: {
-        subject: 'Invoice {{invoice_number}} from {{company_name}}',
-        body: 'Dear {{contact_name}}\n\nPlease find attached invoice {{invoice_number}} for {{amount_total}}, due by {{due_date}}.\n\nKind regards\n{{company_name}}',
-      },
-    }),
-    quote: Object.freeze({
-      'de-CH': {
-        subject: 'Offerte {{quote_number}} von {{company_name}}',
-        body: 'Guten Tag {{contact_name}}\n\nIm Anhang finden Sie unsere Offerte {{quote_number}} über {{amount_total}}, gültig bis {{valid_until}}.\n\nFreundliche Grüsse\n{{company_name}}',
-      },
-      'fr-CH': {
-        subject: 'Offre {{quote_number}} de {{company_name}}',
-        body: 'Bonjour {{contact_name}}\n\nVous trouverez en annexe notre offre {{quote_number}} de {{amount_total}}, valable jusqu’au {{valid_until}}.\n\nMeilleures salutations\n{{company_name}}',
-      },
-      'it-CH': {
-        subject: 'Offerta {{quote_number}} da {{company_name}}',
-        body: 'Buongiorno {{contact_name}}\n\nIn allegato trova la nostra offerta {{quote_number}} di {{amount_total}}, valida fino al {{valid_until}}.\n\nCordiali saluti\n{{company_name}}',
-      },
-      en: {
-        subject: 'Quote {{quote_number}} from {{company_name}}',
-        body: 'Dear {{contact_name}}\n\nPlease find attached our quote {{quote_number}} for {{amount_total}}, valid until {{valid_until}}.\n\nKind regards\n{{company_name}}',
-      },
-    }),
-    dunning_run: Object.freeze({
-      'de-CH': {
-        subject: 'Zahlungserinnerung von {{company_name}}',
-        body: 'Guten Tag {{contact_name}}\n\nZu den Rechnungen {{invoice_numbers}} sind {{overdue_total}} offen (Mahnstufe {{dunning_level}}, Stand {{run_date}}). Details finden Sie im Anhang.\n\nFreundliche Grüsse\n{{company_name}}',
-      },
-      'fr-CH': {
-        subject: 'Rappel de paiement de {{company_name}}',
-        body: 'Bonjour {{contact_name}}\n\nPour les factures {{invoice_numbers}}, un montant de {{overdue_total}} reste ouvert (niveau de rappel {{dunning_level}}, au {{run_date}}). Vous trouverez les détails en annexe.\n\nMeilleures salutations\n{{company_name}}',
-      },
-      'it-CH': {
-        subject: 'Sollecito di pagamento da {{company_name}}',
-        body: 'Buongiorno {{contact_name}}\n\nPer le fatture {{invoice_numbers}} risulta aperto un importo di {{overdue_total}} (livello di sollecito {{dunning_level}}, al {{run_date}}). I dettagli sono in allegato.\n\nCordiali saluti\n{{company_name}}',
-      },
-      en: {
-        subject: 'Payment reminder from {{company_name}}',
-        body: 'Dear {{contact_name}}\n\n{{overdue_total}} is outstanding on invoices {{invoice_numbers}} (reminder level {{dunning_level}}, as of {{run_date}}). Details are attached.\n\nKind regards\n{{company_name}}',
-      },
-    }),
-  });
 
 interface DispatchTextRow {
   id: string;
@@ -235,6 +173,47 @@ export function dispatchTextUpsert(ctx: WorkspaceContext, input: DispatchTextUps
   });
 }
 
+export interface DispatchTextResetInput {
+  documentKind: string;
+  locale: string;
+}
+
+/**
+ * Return one `(documentKind, locale)` slot to the built-in default text by DELETING its saved row
+ * (spec §10.4). Afterwards the slot resolves exactly as one never saved: `resolveDispatchText`
+ * falls back to `dispatchDefaultText`, the preview says `defaulted:true`, and a later change to the
+ * built-in text reaches it. Saving the standard text instead would freeze a copy of it.
+ *
+ * NATURALLY IDEMPOTENT, the upsert's set-style rule: it asserts the absolute state "this slot has
+ * no saved text". Resetting an unsaved slot is that same state, so it answers ok with
+ * `unchanged: true` and touches nothing. Kind and locale are validated against the same enums as
+ * the save, and the delete is scoped to the context's workspace (§H-TENANT). The send log is
+ * untouched: a reset changes what FUTURE sends say, never what a past send said.
+ */
+export function dispatchTextReset(ctx: WorkspaceContext, input: DispatchTextResetInput): Result {
+  return ctx.store.tx((): Result => {
+    if (!KIND_SET.has(input.documentKind)) {
+      return err('unknown_document_kind', { documentKind: input.documentKind, known: [...DISPATCH_TEXT_KINDS] });
+    }
+    if (!LOCALE_SET.has(input.locale)) {
+      return err('invalid_locale', { locale: input.locale, allowed: [...TEMPLATE_LOCALES] });
+    }
+    const existing = readText(ctx, input.documentKind, input.locale);
+    if (existing === undefined) {
+      return ok({ documentKind: input.documentKind, locale: input.locale, defaulted: true, unchanged: true });
+    }
+    ctx.store.db
+      .prepare('DELETE FROM dispatch_texts WHERE workspace_id = ? AND document_kind = ? AND locale = ?')
+      .run(ctx.workspaceId, input.documentKind, input.locale);
+    return ok({
+      documentKind: input.documentKind,
+      locale: input.locale,
+      defaulted: true,
+      removedDispatchTextId: existing.id,
+    });
+  });
+}
+
 /** The resolved text for a slot: the saved row, else the built-in default (P9, never an error). */
 export function resolveDispatchText(
   ctx: WorkspaceContext,
@@ -246,8 +225,7 @@ export function resolveDispatchText(
   if (saved !== undefined) {
     return { subject: saved.subject, body: saved.body, defaulted: false, locale: effective };
   }
-  const defaults = DEFAULT_TEXTS[documentKind] ?? DEFAULT_TEXTS['invoice']!;
-  const text = defaults[effective] ?? defaults['de-CH']!;
+  const text = dispatchDefaultText(documentKind, effective);
   return { subject: text.subject, body: text.body, defaulted: true, locale: effective };
 }
 

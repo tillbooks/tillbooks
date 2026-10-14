@@ -8,6 +8,10 @@
  * `inventory_balance_by_location`. Create/edit happen in a right-hand drawer. Status is glyph + label,
  * never colour alone (WCAG 2.2 AA). No new colour token (design-canon).
  *
+ * A LIST NEVER OPENS ITSELF (D152 rule 5, the /bank B2 pattern). Nothing is selected on load and the
+ * list takes the width; a warehouse opens by a click on its row, Enter or Space on the focused row, or
+ * a deep link (`?focus=<warehouseId>`). A second click on the open row closes it again.
+ *
  * ## BUILT ON THE SHARED UI PRIMITIVES (D118 B2, 2026-08-24)
  *
  * The three tables (the warehouse master list, the location tree, the on-hand-by-location breakdown)
@@ -25,7 +29,8 @@
  * open and the engine is the real gate. Write controls disable behind `manage_master_data`; a click
  * that slips through still surfaces the engine's own `permission_denied`.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -180,7 +185,29 @@ export function Warehouses() {
   const { can } = useCapabilities();
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const focusParam = params.get('focus');
+  // D152 rule 5: nothing is selected on load. Only a deep link selects before the person acts, and a
+  // link that arrives while the surface is mounted (a search hit, the /w/:ws/ handover) opens too.
+  const [selectedId, setSelectedId] = useState<string | null>(focusParam);
+  useEffect(() => {
+    if (focusParam !== null) setSelectedId(focusParam);
+  }, [focusParam]);
+  /**
+   * The person's own choice. It retires the deep link (`?focus=` is dropped, replacing the history
+   * entry), so a row they closed stays closed and following the same link again opens it again.
+   */
+  const choose = useCallback(
+    (id: string | null) => {
+      setSelectedId(id);
+      if (params.has('focus')) {
+        const next = new URLSearchParams(params);
+        next.delete('focus');
+        setParams(next, { replace: true });
+      }
+    },
+    [params, setParams],
+  );
   const [tree, setTree] = useState<LocationNode[]>([]);
   const [balance, setBalance] = useState<BalanceRow[]>([]);
   const [showArchived, setShowArchived] = useState(false);
@@ -198,6 +225,32 @@ export function Warehouses() {
   const [locDraft, setLocDraft] = useState<LocationDraft>(EMPTY_LOC);
   const [confirm, setConfirm] = useState<{ kind: 'warehouse' | 'location'; id: string; label: string } | null>(null);
 
+  // §H-TENANT (critic round 2): a workspace switch does not remount the surface, so nothing chosen,
+  // read or drafted in the workspace just left may survive into the next one. Reset during render
+  // (React's "adjust state when a prop changes"), so no effect ever runs with the old selection
+  // under the new workspace. The first workspace (null -> id at boot) is not a switch: a deep link
+  // made before it resolved stays.
+  // The workspace on screen NOW, for a read or a write that started under the previous one: its
+  // answer is dropped (a refresh closure from before the switch would otherwise re-read the old
+  // workspace and paint it under the new one).
+  const liveWorkspace = useRef(workspaceId);
+  liveWorkspace.current = workspaceId;
+  const [shownWorkspace, setShownWorkspace] = useState(workspaceId);
+  if (shownWorkspace !== workspaceId) {
+    setShownWorkspace(workspaceId);
+    if (shownWorkspace !== null) {
+      setSelectedId(null);
+      setTree([]);
+      setBalance([]);
+      setWriteError(null);
+      setWhDrawer('closed');
+      setWhDraft(EMPTY_WH);
+      setLocDrawer('closed');
+      setLocDraft(EMPTY_LOC);
+      setConfirm(null);
+    }
+  }
+
   const canWrite = can(CAP.manageMasterData);
   // Resolve a J00 rejection to its surface-scoped message, or undefined to let ErrorBanner map it.
   const localError = useCallback(
@@ -209,18 +262,24 @@ export function Warehouses() {
   const flatLocations = useMemo(() => flatten(tree, showArchived), [tree, showArchived]);
   const activeLocations = useMemo(() => flatten(tree, false), [tree]);
 
+  // Every list read is numbered; only the latest may answer, so a read from the workspace just left
+  // (or one a refresh overtook) never lands on screen.
+  const listSeq = useRef(0);
   const loadWarehouses = useCallback(async () => {
     if (workspaceId === null) {
       setLoading(false);
       return;
     }
+    if (liveWorkspace.current !== workspaceId) return;
     setLoading(true);
+    const mine = ++listSeq.current;
     setFailed(false);
     setDenied(false);
     const listed = await client.call('warehouse_list', {
       workspaceId,
       ...(showArchived ? {} : { active: true }),
     });
+    if (mine !== listSeq.current || liveWorkspace.current !== workspaceId) return;
     if (isErr(listed.body)) {
       if (listed.body.error === 'permission_denied' || listed.status === 403) setDenied(true);
       else setFailed(true);
@@ -234,18 +293,25 @@ export function Warehouses() {
       return;
     }
     setWarehouses(parsed);
-    setSelectedId((prev) => (prev !== null && parsed.some((w) => w.id === prev) ? prev : (parsed[0]?.id ?? null)));
+    // A warehouse that left the list (archived, filtered) closes; nothing takes its place.
+    setSelectedId((prev) => (prev !== null && parsed.some((w) => w.id === prev) ? prev : null));
     setLoading(false);
   }, [client, workspaceId, showArchived]);
 
+  // Every detail read is numbered; only the LATEST may answer into the pane. A read that a close or a
+  // newer selection overtook is dropped, so the pane never shows one row under another row's pill.
+  const detailSeq = useRef(0);
   const loadDetail = useCallback(
     async (warehouseId: string) => {
       if (workspaceId === null) return;
+      if (liveWorkspace.current !== workspaceId) return;
+      const mine = ++detailSeq.current;
       setDetailLoading(true);
       const [treeRes, balRes] = await Promise.all([
         client.call('location_tree', { workspaceId, warehouseId }),
         client.call('inventory_balance_by_location', { workspaceId, warehouseId }),
       ]);
+      if (mine !== detailSeq.current || liveWorkspace.current !== workspaceId) return;
       setTree(isErr(treeRes.body) ? [] : parseTree(treeRes.body));
       setBalance(isErr(balRes.body) ? [] : parseBalance(balRes.body));
       setDetailLoading(false);
@@ -258,11 +324,12 @@ export function Warehouses() {
   }, [loadWarehouses]);
 
   useEffect(() => {
+    // A changed selection starts from an empty pane; a close retires any read still on its way.
+    detailSeq.current += 1;
+    setTree([]);
+    setBalance([]);
+    setDetailLoading(false);
     if (selectedId !== null) void loadDetail(selectedId);
-    else {
-      setTree([]);
-      setBalance([]);
-    }
   }, [selectedId, loadDetail]);
 
   const write = useCallback(
@@ -270,12 +337,15 @@ export function Warehouses() {
       if (workspaceId === null) return false;
       setWriteError(null);
       const response = await client.call(action, { workspaceId, ...input });
+      if (liveWorkspace.current !== workspaceId) return false; // the answer belongs to the workspace just left
       if (isErr(response.body)) {
         setWriteError(response.body);
         return false;
       }
       await loadWarehouses();
+      if (liveWorkspace.current !== workspaceId) return false; // the answer belongs to the workspace just left
       if (selectedId !== null) await loadDetail(selectedId);
+      if (liveWorkspace.current !== workspaceId) return false; // the answer belongs to the workspace just left
       return true;
     },
     [client, workspaceId, loadWarehouses, loadDetail, selectedId],
@@ -283,6 +353,7 @@ export function Warehouses() {
 
   const ensureDefault = useCallback(async () => {
     await write('inventory_ensure_default_location', {});
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
   }, [write]);
 
   // --- warehouse drawer ---
@@ -305,8 +376,10 @@ export function Warehouses() {
     let ok = false;
     if (whDrawer === 'create') {
       ok = await write('warehouse_create', { code: whDraft.code.trim(), ...shared, idempotencyKey: newKey() });
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     } else {
       ok = await write('warehouse_update', { warehouseId: whDrawer, patch: shared, idempotencyKey: newKey() });
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     }
     if (ok) setWhDrawer('closed');
   }, [write, whDraft, whDrawer]);
@@ -342,6 +415,7 @@ export function Warehouses() {
         description: locDraft.description.trim() === '' ? undefined : locDraft.description.trim(),
         idempotencyKey: newKey(),
       });
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     } else {
       ok = await write('location_update', {
         locationId: locDrawer,
@@ -352,6 +426,7 @@ export function Warehouses() {
         },
         idempotencyKey: newKey(),
       });
+      if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     }
     if (ok) setLocDrawer('closed');
   }, [write, locDraft, locDrawer, selected]);
@@ -362,6 +437,7 @@ export function Warehouses() {
       confirm.kind === 'warehouse'
         ? await write('warehouse_archive', { warehouseId: confirm.id, idempotencyKey: newKey() })
         : await write('location_archive', { locationId: confirm.id, idempotencyKey: newKey() });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     if (ok) setConfirm(null);
   }, [write, confirm]);
 
@@ -480,14 +556,14 @@ export function Warehouses() {
           )}
         </div>
       ) : (
-        <div className="wh-split">
+        <div className={selected === null ? 'wh-split wh-split--solo' : 'wh-split'}>
           <section className="wh-pane" aria-label={t('warehouses.listLabel')}>
             <DataTable
               columns={warehouseColumns}
               rows={warehouses}
               rowKey={(w) => w.id}
               caption={t('warehouses.listLabel')}
-              onRowClick={(w) => setSelectedId(w.id)}
+              onRowClick={(w) => choose(selectedId === w.id ? null : w.id)}
               rowLabel={(w) => `${w.code} ${w.name}`}
               // K-24: the open warehouse wears the selection pill on every cell, no side bar.
               isRowCurrent={(w) => w.id === selectedId}
@@ -495,88 +571,84 @@ export function Warehouses() {
             />
           </section>
 
-          <section className="wh-pane wh-detail" aria-label={t('warehouses.detailLabel')}>
-            {selected === null ? (
-              <p className="wh-muted">{t('warehouses.selectHint')}</p>
-            ) : (
-              <>
-                <div className="wh-detail-head">
-                  <div>
-                    <h2 className="wh-detail-title">
-                      {selected.code} <span className="wh-muted">{selected.name}</span>
-                    </h2>
-                  </div>
-                  {/* K-21: Bearbeiten in the open, the rarer verbs behind one overflow. */}
-                  <div className="wh-detail-actions">
-                    <button type="button" className="btn btn--secondary btn--sm" onClick={() => openWhEdit(selected)} disabled={!canWrite}>
-                      {t('warehouses.edit')}
-                    </button>
-                    {canWrite && (!selected.isDefault || selected.active) && (
-                      <OverflowMenu
-                        quiet
-                        label={t('warehouses.actionsFor', { code: selected.code })}
-                        items={[
-                          ...(!selected.isDefault && selected.active
-                            ? [
-                                {
-                                  key: 'default',
-                                  label: t('warehouses.makeDefault'),
-                                  onSelect: () =>
-                                    void write('warehouse_set_default', { warehouseId: selected.id, idempotencyKey: newKey() }),
-                                },
-                              ]
-                            : []),
-                          ...(selected.active
-                            ? [
-                                {
-                                  key: 'archive',
-                                  label: t('warehouses.archive'),
-                                  onSelect: () => {
-                                    setWriteError(null);
-                                    setConfirm({ kind: 'warehouse', id: selected.id, label: selected.code });
-                                  },
-                                },
-                              ]
-                            : []),
-                        ]}
-                      />
-                    )}
-                  </div>
+          {selected !== null && (
+            <section className="wh-pane wh-detail" aria-label={t('warehouses.detailLabel')}>
+              <div className="wh-detail-head">
+                <div>
+                  <h2 className="wh-detail-title">
+                    {selected.code} <span className="wh-muted">{selected.name}</span>
+                  </h2>
                 </div>
-
-                <div className="wh-subhead">
-                  <h3 className="wh-h3">{t('warehouses.locations.title')}</h3>
-                  <button type="button" className="btn btn--secondary btn--sm" onClick={openLocCreate} disabled={!canWrite || !selected.active}>
-                    {t('warehouses.locations.new')}
+                {/* K-21: Bearbeiten in the open, the rarer verbs behind one overflow. */}
+                <div className="wh-detail-actions">
+                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => openWhEdit(selected)} disabled={!canWrite}>
+                    {t('warehouses.edit')}
                   </button>
+                  {canWrite && (!selected.isDefault || selected.active) && (
+                    <OverflowMenu
+                      quiet
+                      label={t('warehouses.actionsFor', { code: selected.code })}
+                      items={[
+                        ...(!selected.isDefault && selected.active
+                          ? [
+                              {
+                                key: 'default',
+                                label: t('warehouses.makeDefault'),
+                                onSelect: () =>
+                                  void write('warehouse_set_default', { warehouseId: selected.id, idempotencyKey: newKey() }),
+                              },
+                            ]
+                          : []),
+                        ...(selected.active
+                          ? [
+                              {
+                                key: 'archive',
+                                label: t('warehouses.archive'),
+                                onSelect: () => {
+                                  setWriteError(null);
+                                  setConfirm({ kind: 'warehouse', id: selected.id, label: selected.code });
+                                },
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
+                  )}
                 </div>
+              </div>
 
-                <DataTable
-                  columns={locationColumns}
-                  rows={flatLocations}
-                  rowKey={(n) => n.id}
-                  caption={t('warehouses.locations.title')}
-                  loading={detailLoading}
-                  skeletonRows={3}
-                  emptyState={<p className="wh-muted">{t('warehouses.locations.empty')}</p>}
-                  rowClassName={(n) => (n.active ? undefined : 'wh-archived')}
-                  onRowClick={canWrite ? (n) => openLocEdit(n) : undefined}
-                  rowLabel={(n) => n.code ?? n.name}
-                  rowActions={canWrite ? locationActions : undefined}
-                  rowActionsLabel={(n) => t('warehouses.locations.actionsFor', { code: n.code ?? n.name })}
-                />
+              <div className="wh-subhead">
+                <h3 className="wh-h3">{t('warehouses.locations.title')}</h3>
+                <button type="button" className="btn btn--secondary btn--sm" onClick={openLocCreate} disabled={!canWrite || !selected.active}>
+                  {t('warehouses.locations.new')}
+                </button>
+              </div>
 
-                <h3 className="wh-h3 wh-onhand-head">{t('warehouses.balance.title')}</h3>
-                <DataTable
-                  columns={balanceColumns}
-                  rows={balance}
-                  rowKey={(r) => `${r.itemId}-${r.locationId}`}
-                  caption={t('warehouses.balance.title')}
-                  emptyState={<p className="wh-muted">{t('warehouses.balance.empty')}</p>}
-                />
-              </>
-            )}
-          </section>
+              <DataTable
+                columns={locationColumns}
+                rows={flatLocations}
+                rowKey={(n) => n.id}
+                caption={t('warehouses.locations.title')}
+                loading={detailLoading}
+                skeletonRows={3}
+                emptyState={<p className="wh-muted">{t('warehouses.locations.empty')}</p>}
+                rowClassName={(n) => (n.active ? undefined : 'wh-archived')}
+                onRowClick={canWrite ? (n) => openLocEdit(n) : undefined}
+                rowLabel={(n) => n.code ?? n.name}
+                rowActions={canWrite ? locationActions : undefined}
+                rowActionsLabel={(n) => t('warehouses.locations.actionsFor', { code: n.code ?? n.name })}
+              />
+
+              <h3 className="wh-h3 wh-onhand-head">{t('warehouses.balance.title')}</h3>
+              <DataTable
+                columns={balanceColumns}
+                rows={balance}
+                rowKey={(r) => `${r.itemId}-${r.locationId}`}
+                caption={t('warehouses.balance.title')}
+                emptyState={<p className="wh-muted">{t('warehouses.balance.empty')}</p>}
+              />
+            </section>
+          )}
         </div>
       )}
 

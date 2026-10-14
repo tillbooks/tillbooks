@@ -125,6 +125,9 @@ describe('WorkspaceRoute', () => {
 describe('tenantResetTarget (US-G16.10, the route-layer H-TENANT guard)', () => {
   it('resets a record-highlighted route to its list root', () => {
     expect(tenantResetTarget('/contacts', '?focus=contact_1')).toBe('/contacts');
+    // The hub's link to a Mahnlauf names a record too, so it is stripped the same way.
+    expect(tenantResetTarget('/dunning', '?runId=dun_2')).toBe('/dunning');
+    expect(tenantResetTarget('/dunning', '?view=v_1&runId=dun_2')).toBe('/dunning');
     expect(tenantResetTarget('/documents/invoices/inv_1', '')).toBe('/documents');
   });
 
@@ -168,6 +171,14 @@ describe('TenantRouteReset', () => {
     });
     expect(screen.getByTestId('path')).toHaveTextContent('/contacts');
     expect(screen.getByTestId('path').textContent).not.toContain('focus');
+  });
+
+  it('strips the dunning hub link (?runId=) on a workspace switch, so A`s run never resolves under B', async () => {
+    mounted('/dunning?runId=dun_from_A');
+    await act(async () => {
+      screen.getByRole('button', { name: 'switch' }).click();
+    });
+    expect(screen.getByTestId('path').textContent).toBe('/dunning');
   });
 
   it('keeps a list route on a workspace switch', async () => {

@@ -95,11 +95,24 @@ test('every A04 verb has a REST twin whose body IS the registry result', () => {
   assert.equal(bad.body.error, 'unbalanced');
   assert.equal(bad.body.differenceMinor, 60);
 
-  // A write, through REST, lands in the ledger.
-  const written = fx.rest('set_opening_balances', {
+  // D158: `fx.deps` is the agent seat, and the opening position is dial-governed under `post`, so the
+  // seat's valid set is a Vorschlag (200, nothing posted) while its invalid one above was refused by the
+  // verb's own check with the registry's own 422. The refusal is identical drafted or direct.
+  assert.deepEqual(bad.body, fx.call('set_opening_balances', {
+    lines: [{ account: '1020', debitMinor: 100 }, { account: '2800', creditMinor: 40 }],
+    idempotencyKey: 'rest-unb',
+  }));
+  const proposed = fx.rest('set_opening_balances', { lines: balancedSet(fx.accId), idempotencyKey: 'rest-prop' });
+  assert.equal(proposed.status, 200);
+  assert.equal(proposed.body.drafted, true);
+  assert.equal(fx.call('get_opening_balances', {}).source, 'none', 'a proposal posts nothing');
+
+  // A write, through REST, lands in the ledger: a human at the Studio is not dial-governed.
+  const written = handleRest('set_opening_balances', {
+    workspaceId: fx.workspaceId,
     lines: balancedSet(fx.accId),
     idempotencyKey: 'rest-ok',
-  });
+  }, { ...fx.deps, actor: 'studio' });
   assert.equal(written.status, 200);
   assert.equal(written.body.ok, true);
   assert.equal(fx.call('get_opening_balances', {}).entryId, written.body.entryId);

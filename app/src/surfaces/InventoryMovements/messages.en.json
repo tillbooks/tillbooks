@@ -7,7 +7,7 @@
     "noWorkspace": "Pick a workspace to view the movement ledger.",
     "listLabel": "Stockable items",
     "detailLabel": "Movement history",
-    "selectHint": "Select an item to see its on-hand and movement history.",
+    "selectHint": "Select an item.",
     "onHand": "On hand",
     "record": "Record movement",
     "transfer": "Transfer",

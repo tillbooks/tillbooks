@@ -253,7 +253,8 @@ test('requisition_convert_to_po stamps source_document_type/id; a directly-creat
   // A requisition converted to a PO stamps the provenance pair for real drill-back.
   const req = must(call(s.deps, 'requisition_upsert', { workspaceId: s.workspaceId, neededBy: '2026-09-01', urgency: 'normal', description: 'Nachschub', lines: [{ itemId: s.item, description: 'Rohstoff', qtyMilli: 5000, estimatedUnitCostRappen: 9000, preferredSupplierId: s.vendor }], idempotencyKey: 'pr-req' }), 'req upsert').requisition;
   must(call(s.deps, 'requisition_submit', { workspaceId: s.workspaceId, requisitionId: req.id, idempotencyKey: 'pr-sub' }), 'submit');
-  must(call(s.deps, 'requisition_approve', { workspaceId: s.workspaceId, requisitionId: req.id, idempotencyKey: 'pr-appr' }), 'approve');
+  // D161.2: the agent seat raised it, so a person approves it.
+  must(call({ ...s.deps, actor: 'studio' }, 'requisition_approve', { workspaceId: s.workspaceId, requisitionId: req.id, idempotencyKey: 'pr-appr' }), 'approve');
   const conv = must(call(s.deps, 'requisition_convert_to_po', { workspaceId: s.workspaceId, requisitionId: req.id, lines: [{ lineId: req.lines[0].id, qtyMilli: 5000 }], supplierContactId: s.vendor, idempotencyKey: 'pr-conv' }), 'convert');
   const convGet = call(s.deps, 'po_get', { workspaceId: s.workspaceId, poId: conv.purchaseOrderId });
   assert.equal(convGet.po.sourceDocumentType, 'requisition');

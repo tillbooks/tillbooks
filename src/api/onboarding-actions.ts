@@ -29,18 +29,19 @@ import {
   createDemoWorkspace,
   discardDemoWorkspace,
 } from '../core/onboarding/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface OnboardingActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
   ): ActionDef;
   depsAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (deps: ApiDeps, input: ActionInput) => Result,
@@ -70,14 +71,14 @@ export function onboardingActions(h: OnboardingActionHelpers): readonly ActionDe
     ),
     ctxAction(
       'advance_onboarding_step',
-      'write',
+      'write:final:ui-state',
       'Persist the first-run wizard resume point: path (fresh|import|demo) and the current step, absolutely, so a closed tab reopens where it left off. Never a business-logic gate: every underlying setup verb keeps its own validation and idempotency, and an agent session skips this bookkeeping entirely (spec US-G03.5). completed:true stamps the wizard finished, once; a later call never un-completes it.',
       ctxSchema({ path: STR, step: STR, completed: BOOL }, ['path', 'step']),
       (ctx, input) => advanceOnboardingStep(ctx, as(input)),
     ),
     depsAction(
       'create_demo_workspace',
-      'write',
+      'write:reversible:pre-workspace',
       'Mint a disposable demo workspace (workspace.kind = demo) and seed it with sample Swiss books through the real verbs: chart auto-seed, MWST effektiv/Soll, three customers, three items, two issued invoices and one draft, every posting through issue_invoice, so the demo behaves identically to a real workspace. The caller is seated as owner. No MWST number or UID is fabricated; the creditor profile carries the SIX specimen QR-IBAN. A demo can never go productive: its only exit is discard_demo_workspace. Idempotent: retrying the same key returns the existing demo, never a second one.',
       depsSchema({ name: STR, idempotencyKey: STR }, ['idempotencyKey']),
       (deps, input) => createDemoWorkspace(deps, as(input)),
@@ -88,7 +89,7 @@ export function onboardingActions(h: OnboardingActionHelpers): readonly ActionDe
     // through the same capabilityPort, then the kind fence), see `core/onboarding/demo.ts`.
     depsAction(
       'discard_demo_workspace',
-      'write',
+      'write:final:erase',
       'Hard-delete a demo workspace and every row under it, because nothing in a demo is a real fiscal record. Refuses on any workspace whose kind is not demo (not_a_demo_workspace): a Testmandant discards through discard_testmandant, and a live workspace can only be archived (A23), never hard-deleted. Requires manage_settings on the demo and confirmed:true (needs_confirmation otherwise): the operator may have added their own experiments. A retry of the same key replays the stored result, even though the workspace itself is gone.',
       depsSchema({ workspaceId: STR, confirmed: BOOL, idempotencyKey: STR }, ['workspaceId', 'idempotencyKey']),
       (deps, input) => discardDemoWorkspace(deps, as(input)),

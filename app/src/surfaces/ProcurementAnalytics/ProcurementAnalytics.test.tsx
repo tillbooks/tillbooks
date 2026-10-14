@@ -1,5 +1,5 @@
 /**
- * I06 Einkaufs-Auswertungen: the surface's load states, the report switch, and the money-at-the-edge
+ * I06 Einkaufsauswertung: the surface's load states, the report switch, and the money-at-the-edge
  * rendering. House discipline: every copy assertion goes through the de-CH catalogue rather than a
  * literal typed here, and the loading assertion proves the read went in flight.
  */

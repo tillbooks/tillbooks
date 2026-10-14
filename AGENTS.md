@@ -1,14 +1,15 @@
 # AGENTS.md
 
-TILL is agent-native: an MCP server is a first-class interface, not a bolt-on. This
-file is the guide for an AI coding agent (or a contributor driving one) working in
-this repository. It is the public counterpart to the human-facing
+TILL is the agent-first ERP for Swiss SMEs: an MCP server is a first-class
+interface, not a bolt-on. This file is the guide for an AI coding agent (or a
+contributor driving one) working in this repository. It is the public counterpart to the human-facing
 [CONTRIBUTING.md](CONTRIBUTING.md), and everything here also applies to a human.
 
 ## What TILL is
 
-A local-first, MIT-licensed Swiss accounting engine. The books live in a single
-SQLite file on the user's machine. Every capability is exposed twice: as an **MCP
+A local-first, MIT-licensed ERP for Swiss SMEs: sales, purchasing, payments,
+stock, projects, books and MWST. The books live in a single SQLite file on the
+user's machine. Every capability is exposed twice: as an **MCP
 verb** an agent can call, and as a **REST twin** with the same behaviour. A
 minimalist **Studio** gives a human oversight of what the agent did.
 

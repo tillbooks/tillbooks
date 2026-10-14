@@ -670,6 +670,11 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // A36: link/unlink the scheduled-sync rule pointer. Banking-write, the same capability as the
   // `bank_sync` verb it schedules; it fires no rule and moves no money.
   set_bank_sync_schedule: 'pay',
+  // A36 §4.7 (D150): confirming that a chained statement gap holds nothing, and withdrawing it. The
+  // same right as the statement door (`import_camt`, `pay`): the confirmation decides whether the books
+  // are complete, so it is never cheaper than importing the statement would be.
+  confirm_statement_gap: 'pay',
+  revoke_statement_gap_confirmation: 'pay',
 
   // --- A12, recurring invoices -----------------------------------------------------------------
   // Every write takes `issue`, the same right the schedule's OUTPUT requires: a schedule is a
@@ -797,6 +802,19 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // reaches no poster (the `create_payment_batch` shape), so `pay` alone is the honest declaration.
   discard_payment_batch: 'pay',
 
+  // --- A40, payment timing ---------------------------------------------------------------------
+  // A supplier's Skonto condition is its payment terms: master data beside the creditor IBAN
+  // (`set_creditor_bank_profile`), reaching no poster. It is NOT a payment destination (D65 leg f): it
+  // changes which day a proposal prefers, never where money goes.
+  liquidity_skonto_set: 'manage_master_data',
+  // A planned flow (rent, salaries) is a workspace forecasting setting: it posts and pays nothing.
+  liquidity_flow_set: 'manage_settings',
+  // Proposing and drafting are the `create_payment_batch` shape: payment preparation that writes no
+  // journal row and reaches no poster (drafting calls `createPaymentBatch` and nothing else), so
+  // `pay` alone is the honest declaration for both.
+  liquidity_plan_propose: 'pay',
+  liquidity_plan_draft_batches: 'pay',
+
   // --- A16, Debitoren --------------------------------------------------------------------------
   set_aging_bucket_config: 'manage_settings',
 
@@ -806,6 +824,8 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   set_dunning_config: 'manage_settings',
   // Proposing persists a reviewable draft and nothing else: `dun` alone.
   propose_dunning_run: 'dun',
+  // D161.3: discarding a proposal removes the draft `propose` made, nothing booked or sent: `dun`.
+  discard_dunning_run: 'dun',
   // THE UNCONDITIONAL MINIMUM (the `unlock_period` shape). Issuing books a Mahngebühr ONLY when
   // the config says so, and the boundary sees the input and never the config row, so `post` cannot
   // be declared here without denying a fee-less workspace's `dun` role the issue it has always
@@ -836,6 +856,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // row itself and reaches no poster directly, though a routed credit's registration inherits
   // recordIncomingCredit's own `pay` assert internally. `pay` alone.
   import_camt: 'pay',
+  // A36 §4.7 (D150): several statements through the same door, one `importCamt` per statement; the
+  // same right, never a cheaper one.
+  import_camt_files: 'pay',
   // `confirm_match` and `create_entry_for_txn` are `apply_qr_match`'s ALL-OF verbatim: the settlement
   // branch reaches `recordPayment`, which asserts `post` through `postEntry` on every path, and the
   // manual-entry branch asserts `post` directly (`postEntry`'s own gate). Declaring `pay` alone on
@@ -868,6 +891,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // Undoing a decision mints a reversal (`post`); undoing a SETTLEMENT reverses a payment, which the
   // engine additionally asserts `pay` for, state-dependently (the input cannot say which it is).
   reopen_bank_line: 'post',
+  // D144 (A39 §12): asking the local model for an account prepares a booking and records the answer;
+  // it posts nothing, but it writes, so it rides the right a booking to accounts needs.
+  suggest_bank_lines: 'post',
 
   // --- A19, bank accounts ----------------------------------------------------------------------
   create_bank_account: 'manage_master_data',
@@ -942,9 +968,10 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // --- G05 §10, dispatch texts and the send log ------------------------------------------------
   // The saved outbound text is the workspace's VOICE the way the template is its LOOK, so the one
   // write takes its own governance capability (owner-only by default, the
-  // `manage_document_templates` shape). The two reads sit in `read_master_data` (spec §10.3: the
+  // `manage_document_templates` shape); the reset, its inverse, takes the same one. The two reads sit in `read_master_data` (spec §10.3: the
   // preview and the Protokoll stay readable to any workspace member, `viewer` included).
   dispatch_text_upsert: 'manage_dispatch_texts',
+  dispatch_text_reset: 'manage_dispatch_texts',
   dispatch_preview: 'read_master_data',
   list_dispatches: 'read_master_data',
 
@@ -1224,6 +1251,12 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   migration_diff_testmandant_to_live: 'manage_import',
   go_productive: ['promote_workspace', 'commit_migration'],
   discard_testmandant: 'manage_import',
+  // The orphan exit deletes the very sandbox it names, so it is a depsAction and its gate runs in the
+  // engine (the discard_demo_workspace shape below): manage_import on the sandbox, the same right.
+  discard_orphan_testmandant: ungated(
+    'asserted_in_engine',
+    'Demands manage_import on the sandbox, asserted in core/migration/testmandant.ts through the same capabilityPort: the verb deletes its own tenant, so the boundary cannot both resolve the workspace and honour the replay of a completed discard.',
+  ),
 
   // --- G19, the extraction companion core -------------------------------------------------------
   // The two guide reads describe the SOFTWARE (which per-source export guides TILL ships, their
@@ -1850,6 +1883,11 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   list_cost_centers: 'read_books',
   get_entry: 'read_books',
   list_journal: 'read_books',
+  // D152 amendment: composing an entry reads the books (a stored entry to decompose, the chart, the period
+  // locks) AND the VAT configuration (its captions name the rate, the deductibility the method decides and
+  // the ESTV form line, which `vat_preview` gates on `read_vat`), and writes nothing. ALL OF both, so a
+  // role holding the books but not the VAT cannot read the VAT through this door (critic R4 L1).
+  compose_entry: ['read_books', 'read_vat'],
   get_audit_log: 'read_books',
   list_period_locks: 'read_books',
   trial_balance: 'read_books',
@@ -1889,6 +1927,13 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   list_payable: 'read_books',
   get_payment_batch: 'read_books',
   list_payment_batches: 'read_books',
+  // A40's five reads: a cash forecast over the bank balance, the Kreditoren and the Debitoren, and
+  // the proposals over the payables. The books domain, the list_payable reasoning.
+  liquidity_forecast: 'read_books',
+  liquidity_skonto_list: 'read_books',
+  liquidity_flow_list: 'read_books',
+  liquidity_plan_get: 'read_books',
+  liquidity_plan_list: 'read_books',
   // G13's three ARCHIVE reads (spec §3): the archive IS the books, historical or not, so querying
   // the prior system's journal is exactly as hard as querying the live one. The archive adds no new
   // read right, and every payload carries its prior-system provenance label so a holder of

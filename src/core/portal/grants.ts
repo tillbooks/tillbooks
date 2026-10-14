@@ -25,6 +25,16 @@
  *      contact's other records.
  * An EXPIRED or REVOKED token resolves to NOTHING, indistinguishably (no oracle for probing).
  *
+ * A DRAFT OPENS NOTHING (D157). A customer grant is minted as a draft and its token resolves to
+ * nothing until `portal_grant_send` hands it over (stamps `sent_at`). Liveness reads `minted_draft`, an
+ * engine-written marker no caller can set: every grant minted since D157 carries 1, and every row
+ * written before it reads the column's DEFAULT 0, so a legacy grant of either kind stays live until its
+ * own expiry (owner decision 1). `kind` is not caller input: `createGrant` mints customer grants only,
+ * and the vendor kind is reachable only through `createVendorGrant` behind the supplier fence, which
+ * stamps `sent_at` at mint (owner decision 2: a supplier link is live when it is granted). One rule,
+ * `isHandedOver`, feeds `isLive`, the derived status and `isGrantLive`, so every token read path
+ * (`resolveToken`, `portalQuoteAccept`, F03's vendor reads) and the status a person sees agree.
+ *
  * TX-ATOMICITY (the C02/D03 bug class). `better-sqlite3`'s `db.transaction(fn)` rolls back ONLY when
  * `fn` THROWS: a write-then-return-`{ok:false}` COMMITS the partial write. Every refusal here
  * (past-expiry, invalid scope, revoked, cross-tenant, wrong grantee, quote-not-acceptable) is a
@@ -46,10 +56,10 @@ import { listOpenItems } from '../debtors/openItems.js';
 import { applySavedView } from '../customization/views.js';
 import {
   isPortalScopeKind,
-  isPortalGrantKind,
   isPortalWildcardScopeKind,
   PORTAL_SCOPE_KINDS,
   PORTAL_MAX_VALIDITY_DAYS,
+  VENDOR_PORTAL_SCOPE_KINDS,
 } from './enums.js';
 import type { PortalGrantKind, PortalScopeKind } from './enums.js';
 
@@ -71,6 +81,8 @@ export interface PortalGrantRow {
   expires_at: string;
   sent_at: string | null;
   revoked_at: string | null;
+  /** D157: 1 on every grant minted since D157 (engine-written, never caller input); 0 on older rows. */
+  minted_draft: number;
   last_resolved_at: string | null;
   local_artifact_json: string;
   created_by: string;
@@ -153,18 +165,33 @@ function parseScopes(raw: string): PortalScope[] {
 }
 
 /**
+ * Has this grant been handed over (D157)? A grant minted since D157 (`minted_draft = 1`) is handed over
+ * once `sent_at` is stamped: by `portal_grant_send` for a customer grant, at mint for a vendor grant. A
+ * row written before D157 reads the column's DEFAULT 0 and counts as handed over whatever its
+ * `sent_at`, because before D157 a grant was live from creation and an old vendor grant never carried
+ * a `sent_at` at all (owner decision 1: such links stay live until their own expiry).
+ */
+function isHandedOver(row: PortalGrantRow): boolean {
+  return row.sent_at !== null || Number(row.minted_draft) === 0;
+}
+
+/**
  * The effective status of a grant, derived on read (spec §4: no bespoke state machine). Revocation
- * wins over expiry (a revoked-then-lapsed grant reads `revoked`); an unsent grant is a `draft`.
+ * wins over expiry (a revoked-then-lapsed grant reads `revoked`); a grant not yet handed over is a
+ * `draft`. `active` holds exactly when `isLive` does, so the panel never shows a dead link as active.
  */
 function effectiveStatus(row: PortalGrantRow, day: string): PortalGrantView['status'] {
   if (row.revoked_at !== null) return 'revoked';
   if (row.expires_at < day) return 'expired';
-  return row.sent_at !== null ? 'active' : 'draft';
+  return isHandedOver(row) ? 'active' : 'draft';
 }
 
-/** Is this grant usable RIGHT NOW (not revoked, not past expiry)? The resolver's gate. */
+/**
+ * Is this grant usable RIGHT NOW: not revoked, not past expiry, and handed over (a draft opens
+ * nothing, D157)? The one gate every token read path goes through.
+ */
 function isLive(row: PortalGrantRow, day: string): boolean {
-  return row.revoked_at === null && row.expires_at >= day;
+  return row.revoked_at === null && row.expires_at >= day && isHandedOver(row);
 }
 
 export function readGrant(ctx: WorkspaceContext, id: unknown): PortalGrantRow | undefined {
@@ -246,43 +273,86 @@ function entityBelongsToContact(
 
 // --- Create --------------------------------------------------------------------------------------
 
+/**
+ * What a caller may pass to `portal_grant_create`. `kind` is NOT an input (D157): it is listed only so
+ * the refusal is typed. Anything but `undefined` or `'customer'` is refused with
+ * `invalid_input {field:'kind'}` before any write, because a caller who could name the kind could mint
+ * a vendor grant, which is live at mint, and skip the send. `sent_at`, `minted_draft` and `status` are
+ * never read from input at all.
+ */
 export interface CreateGrantInput {
   contactId: string;
   scopes: PortalScope[];
   expiresAt: string;
-  kind?: string;
+  kind?: unknown;
   actor?: string;
   idempotencyKey?: string;
 }
 
+/** The engine-chosen part of a mint: never derived from caller input. */
+interface MintOptions {
+  kind: PortalGrantKind;
+  /** Stamp `sent_at` at mint (a vendor grant, owner decision 2), or leave the grant a draft. */
+  sentAtMint: boolean;
+  /**
+   * The idempotency namespace this door stores and recalls under (critic F2): `portal_grant_create`
+   * for the customer door, `vendor_portal_grant` for the vendor door. A key prefix alone does not
+   * separate the doors, because a caller can send the prefixed string as its own key.
+   */
+  verb: 'portal_grant_create' | 'vendor_portal_grant';
+}
+
+/** The kind a stored create result carries, or undefined for a refusal (which is never memoised). */
+function storedGrantKind(prior: Result): string | undefined {
+  const grant = (prior as unknown as { grant?: { kind?: unknown } }).grant;
+  return typeof grant?.kind === 'string' ? grant.kind : undefined;
+}
+
+/** The caller-supplied part of a mint, copied field by field so no other input key can reach a row. */
+interface MintInput {
+  contactId: unknown;
+  scopes: unknown;
+  expiresAt: unknown;
+  idempotencyKey?: unknown;
+}
+
 /**
- * Mint a scoped, expiring, tokened grant for a customer contact. Every scope ref is validated to
- * belong to `contactId` within the workspace BEFORE any write (so an invalid scope leaves zero
- * rows). The token is CSPRNG >=256-bit; only its SHA-256 is persisted, and the row's artifact carries
- * NO token. The one-time link is returned exactly once as `tokenOnce` / `localLink`.
- *
- * P8 (draft-gated outbound): the grant is created inactive (`sent_at` null, status `draft`). Handing
- * the link over is the separate `sendGrant` verb.
+ * Mint a scoped, expiring, tokened grant. PRIVATE: the kind and the hand-over are the engine's choice
+ * (`opts`), reachable only through `createGrant` (customer, a draft) and `createVendorGrant` (vendor,
+ * handed over at mint). Every scope ref is validated to belong to `contactId` within the workspace
+ * BEFORE any write (so an invalid scope leaves zero rows). The token is CSPRNG >=256-bit; only its
+ * SHA-256 is persisted, and the row's artifact carries NO token. The one-time link is returned exactly
+ * once as `tokenOnce` / `localLink`. Every row this writes carries `minted_draft = 1` (D157).
  */
-export function createGrant(ctx: WorkspaceContext, input: CreateGrantInput): Result {
+function mintGrant(ctx: WorkspaceContext, input: MintInput, opts: MintOptions): Result {
+  const idempotencyKey =
+    typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0 ? input.idempotencyKey : undefined;
   // Replay FIRST (the E01 pattern): a retried create answers the original grant rather than minting
   // a second token for the same key (§H-IDEMPOTENT).
-  if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {
-    const prior = ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey, 'portal_grant_create');
-    if (prior !== undefined) return prior;
+  if (idempotencyKey !== undefined) {
+    const prior = ctx.store.recallIdempotent<Result>(ctx.workspaceId, idempotencyKey, opts.verb);
+    if (prior !== undefined) {
+      // A door only ever replays its OWN kind (critic F2): a stored result of the other kind under
+      // this key is refused, never handed out with its one-time token.
+      if (storedGrantKind(prior) !== opts.kind) {
+        return err('idempotency_key_conflict', { idempotencyKey, reason: 'this key belongs to another kind of grant' });
+      }
+      return prior;
+    }
   }
 
   if (typeof input.contactId !== 'string' || input.contactId.length === 0) {
     return err('invalid_input', { field: 'contactId' });
   }
-  const kind: PortalGrantKind = isPortalGrantKind(input.kind) ? input.kind : 'customer';
+  const contactId = input.contactId;
+  const kind = opts.kind;
 
   // The contact must exist in THIS workspace (§H-TENANT): a foreign contact is refused, not silently
   // scoped across tenants.
   const contact = ctx.store.db
     .prepare('SELECT id FROM contact WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, input.contactId) as { id: string } | undefined;
-  if (contact === undefined) return err('contact_not_found', { contactId: input.contactId });
+    .get(ctx.workspaceId, contactId) as { id: string } | undefined;
+  if (contact === undefined) return err('contact_not_found', { contactId });
 
   // Expiry must be a valid future day (spec §2 error: a past expiry is refused, never created loosely).
   if (!isIsoDay(input.expiresAt)) return err('invalid_input', { field: 'expiresAt' });
@@ -295,7 +365,7 @@ export function createGrant(ctx: WorkspaceContext, input: CreateGrantInput): Res
   const expiresAt = clamped ? maxExpiry : input.expiresAt;
 
   // SCOPE VALIDATION, entirely before any write (tx-atomicity: an invalid scope writes zero rows).
-  const scopesInput = Array.isArray(input.scopes) ? input.scopes : [];
+  const scopesInput: unknown[] = Array.isArray(input.scopes) ? input.scopes : [];
   if (scopesInput.length === 0) return err('invalid_scope', { reason: 'a grant must name at least one scope' });
   const scopes: PortalScope[] = [];
   for (const [index, scope] of scopesInput.entries()) {
@@ -315,7 +385,7 @@ export function createGrant(ctx: WorkspaceContext, input: CreateGrantInput): Res
     if (typeof scopeId !== 'string' || scopeId.length === 0) {
       return err('invalid_scope', { position, kind: scopeKind, reason: 'an entity scope needs an id' });
     }
-    if (!entityBelongsToContact(ctx, scopeKind, scopeId, input.contactId)) {
+    if (!entityBelongsToContact(ctx, scopeKind, scopeId, contactId)) {
       // The CONTACT fence at write time: a scope may never reference an entity that is not this
       // contact's own, so a grant is never created loosely (spec §2 US-F02.1 error / US-F02.5).
       return err('invalid_scope', { position, kind: scopeKind, id: scopeId, reason: 'not this contact\'s record' });
@@ -330,28 +400,31 @@ export function createGrant(ctx: WorkspaceContext, input: CreateGrantInput): Res
     const artifact: PortalLocalArtifact = {
       grantId: id,
       workspaceId: ctx.workspaceId,
-      contactId: input.contactId,
+      contactId,
       kind,
       scopes,
       expiresAt,
       hosted: false,
       reason: 'cloud_tier',
     };
+    // `minted_draft` is NAMED and written as 1 here, never left to the column's DEFAULT 0, which would
+    // read as a pre-D157 grant and open at once (the structural guard in grant-liveness.test.mjs).
     ctx.store.db
       .prepare(
         `INSERT INTO portal_grant (
            id, workspace_id, contact_id, kind, token_hash, scopes, expires_at, sent_at, revoked_at,
-           last_resolved_at, local_artifact_json, created_by, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`,
+           minted_draft, last_resolved_at, local_artifact_json, created_by, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL, ?, ?, ?, ?)`,
       )
       .run(
         id,
         ctx.workspaceId,
-        input.contactId,
+        contactId,
         kind,
         hashToken(token),
         JSON.stringify(scopes),
         expiresAt,
+        opts.sentAtMint ? now : null,
         JSON.stringify(artifact),
         ctx.actor,
         now,
@@ -371,19 +444,98 @@ export function createGrant(ctx: WorkspaceContext, input: CreateGrantInput): Res
     });
   };
 
-  if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {
-    return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, 'portal_grant_create', run);
+  if (idempotencyKey !== undefined) {
+    return ctx.store.rememberIdempotent(ctx.workspaceId, idempotencyKey, opts.verb, run);
   }
   return ctx.store.tx(run);
+}
+
+/**
+ * Mint a customer grant as a DRAFT (`portal_grant_create`). P8 and D157: the grant is created inactive
+ * (`sent_at` null, status `draft`) and its token opens nothing until `sendGrant` hands it over. The
+ * kind is fixed to `customer`: an `input.kind` other than undefined or `'customer'` is refused before
+ * any write (a vendor grant is live at mint, so naming the kind would skip the send).
+ */
+export function createGrant(ctx: WorkspaceContext, input: CreateGrantInput): Result {
+  if (input.kind !== undefined && input.kind !== 'customer') {
+    return err('invalid_input', { field: 'kind', reason: 'portal_grant_create mints customer grants only; a supplier link is vendor_portal_grant' });
+  }
+  return mintGrant(
+    ctx,
+    { contactId: input.contactId, scopes: input.scopes, expiresAt: input.expiresAt, idempotencyKey: input.idempotencyKey },
+    { kind: 'customer', sentAtMint: false, verb: 'portal_grant_create' },
+  );
+}
+
+/** What `createVendorGrant` takes. The scopes default to the vendor set; the kind is not an input. */
+export interface CreateVendorGrantInput {
+  contactId: string;
+  scopes: PortalScope[];
+  expiresAt: string;
+  idempotencyKey?: string;
+}
+
+/**
+ * Mint a VENDOR grant, handed over at mint (owner decision 2, D157: a supplier link is live when it is
+ * granted; `vendor_portal_grant` is the governed hand-over). The SUPPLIER fence lives here, beside the
+ * one place the vendor kind is chosen: the contact must be a supplier (`party_role IN
+ * ('vendor','both')`), so a customer contact is never handed a vendor grant (spec F03 §2 US-F03.1
+ * error: `contact_not_found`, the same opaque code a missing contact returns). The caller namespaces
+ * the idempotency key (`vendorPortalGrant` passes `['vendor', key]`). NOT exported from the barrel:
+ * the only door to it is `vendor_portal_grant`.
+ */
+export function createVendorGrant(ctx: WorkspaceContext, input: CreateVendorGrantInput): Result {
+  if (typeof input.contactId !== 'string' || input.contactId.length === 0) {
+    return err('invalid_input', { field: 'contactId' });
+  }
+  // The SUPPLIER fence, a pre-check before any write. A contact that is not a vendor (or does not
+  // exist) is refused with the single opaque `contact_not_found` (spec §2: no customer/vendor oracle).
+  const contact = ctx.store.db
+    .prepare('SELECT party_role FROM contact WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, input.contactId) as { party_role: string } | undefined;
+  if (contact === undefined || (contact.party_role !== 'vendor' && contact.party_role !== 'both')) {
+    return err('contact_not_found', { contactId: input.contactId });
+  }
+  // The VENDOR SCOPE fence (critic F1), a pre-check before any write: a vendor grant is live at mint,
+  // so it may name only the vendor read set. A customer scope (`all_invoices`, `invoice`, `quote`,
+  // `document`) on it would open a customer's records with no send step.
+  const scopesInput: unknown[] = Array.isArray(input.scopes) ? input.scopes : [];
+  for (const [index, scope] of scopesInput.entries()) {
+    const kind = scope !== null && typeof scope === 'object' ? (scope as { kind?: unknown }).kind : undefined;
+    if (typeof kind !== 'string' || !(VENDOR_PORTAL_SCOPE_KINDS as readonly string[]).includes(kind)) {
+      return err('invalid_scope', { position: index + 1, reason: 'a supplier grant names only the vendor scopes', allowed: [...VENDOR_PORTAL_SCOPE_KINDS] });
+    }
+  }
+  // The vendor door's replays. Its own namespace first; then, for a replay stored before the
+  // namespaces were split, the shared one, which `mintGrant` accepts only when the stored grant is a
+  // vendor grant (a customer result under the same key is refused, never handed out).
+  if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {
+    const own = ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey, 'vendor_portal_grant');
+    if (own === undefined) {
+      const legacy = ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey, 'portal_grant_create');
+      if (legacy !== undefined) {
+        return storedGrantKind(legacy) === 'vendor'
+          ? legacy
+          : err('idempotency_key_conflict', { idempotencyKey: input.idempotencyKey, reason: 'this key belongs to another kind of grant' });
+      }
+    }
+  }
+  return mintGrant(
+    ctx,
+    { contactId: input.contactId, scopes: input.scopes, expiresAt: input.expiresAt, idempotencyKey: input.idempotencyKey },
+    { kind: 'vendor', sentAtMint: true, verb: 'vendor_portal_grant' },
+  );
 }
 
 // --- Send (P8 draft-gated outbound) --------------------------------------------------------------
 
 /**
  * Hand the grant link over (US-F02.1). P8: the grant is created `draft` and this is the outbound
- * moment, so it confirm-gates for human and agent callers identically. OP4: the OSS core produces the
- * local artifact and STOPS, and there is no relay in the MIT core, so send degrades honestly to
- * `sent:false, reason:'cloud_tier'` and activates the grant (draft -> active) without transmitting.
+ * moment, so it confirm-gates for human and agent callers identically. D157: this is what ACTIVATES
+ * the link: until `sent_at` is stamped here, the token of a grant minted since D157 opens nothing. OP4:
+ * the OSS core produces the local artifact and STOPS, and there is no relay in the MIT core, so send
+ * degrades honestly to `sent:false, reason:'cloud_tier'` and activates the grant (draft -> active)
+ * without transmitting.
  * The token/link is NOT re-derivable here (only its hash is stored), which is the OP4 boundary made
  * structural: the operator received the one-time link at create.
  */
@@ -408,7 +560,8 @@ export function sendGrant(
   if (row.expires_at < day) return err('grant_expired', { grantId: row.id, expiresAt: row.expires_at });
 
   // P8 confirm-gate: sending is outbound, and an unconfirmed send returns the honest degradation
-  // WITHOUT activating the grant, so an agent may draft freely (the E01/A11 shape).
+  // WITHOUT activating the grant (the draft stays dead), so an agent may draft freely (the E01/A11
+  // shape).
   if (input.confirmed !== true) {
     return err('needs_confirmation', {
       grantId: row.id,
@@ -420,7 +573,8 @@ export function sendGrant(
 
   const run = (): Result => {
     const now = ctx.clock.now();
-    // Activate (draft -> active). A re-send of an already-active grant just re-stamps updated_at.
+    // Activate (draft -> active). A re-send keeps the FIRST `sent_at` (COALESCE) and re-stamps only
+    // updated_at.
     ctx.store.db
       .prepare('UPDATE portal_grant SET sent_at = COALESCE(sent_at, ?), updated_at = ? WHERE workspace_id = ? AND id = ?')
       .run(now, now, ctx.workspaceId, row.id);
@@ -574,7 +728,10 @@ export function grantByTokenInWorkspace(
     .get(ctx.workspaceId, hashToken(token), kind) as PortalGrantRow | undefined;
 }
 
-/** Is this grant usable RIGHT NOW (not revoked, not past `day`)? Exported for F03's read verbs. */
+/**
+ * Is this grant usable RIGHT NOW (not revoked, not past `day`, handed over)? Exported for F03's read
+ * verbs, so they share the one D157 rule with the resolver and the derived status.
+ */
 export function isGrantLive(row: PortalGrantRow, day: string): boolean {
   return isLive(row, day);
 }
@@ -613,9 +770,11 @@ export function resolveToken(deps: PortalTokenDeps, input: { token?: unknown }):
   const now = ctx.clock.now();
   const day = now.slice(0, 10);
 
-  // FENCE 0 (spec §2 US-F02.4 boundary): an expired or revoked token resolves to nothing, denied
-  // identically. The denial is audited (revDSG access trail) and NO scoped data is read.
-  if (!isLive(row, day)) {
+  // FENCE 0 (spec §2 US-F02.4 boundary, D157): an expired, revoked or not-yet-sent (draft) token
+  // resolves to nothing, denied identically. So does a token that is not a CUSTOMER grant (critic F1):
+  // a vendor grant is live at mint and must never reach the customer portal. The denial is audited
+  // (revDSG access trail) and NO scoped data is read.
+  if (row.kind !== 'customer' || !isLive(row, day)) {
     ctx.audit.record({ entityKind: 'portal_grant', entityId: row.id, action: 'deny', actor: ctx.actor, at: now });
     return GRANT_DENIED();
   }
@@ -744,8 +903,9 @@ export function portalQuoteAccept(
   const now = ctx.clock.now();
   const day = now.slice(0, 10);
 
-  // FENCE 0: expired or revoked denies identically, and the attempt is audited.
-  if (!isLive(row, day)) {
+  // FENCE 0: expired, revoked, a draft (D157) or not a customer grant (critic F1) denies identically,
+  // and the attempt is audited. A pre-check: the quote is not touched.
+  if (row.kind !== 'customer' || !isLive(row, day)) {
     ctx.audit.record({ entityKind: 'portal_grant', entityId: row.id, action: 'deny', actor: ctx.actor, at: now });
     return GRANT_DENIED();
   }
@@ -788,11 +948,18 @@ export function portalQuoteAccept(
   // DELEGATE to C02's REAL accept (the A10 sent -> accepted transition). Never a hand-rolled invoice:
   // F02 opens no posting path and forks no lifecycle. C02's own error (e.g. invalid_transition on a
   // non-sent quote, quote_expired) surfaces unchanged. Idempotent via the grant/quote-scoped key above.
-  const accepted = acceptQuote(ctx, {
-    quoteId,
-    actor: `portal:${row.id}`,
-    ...(scopedIdempotencyKey !== undefined ? { idempotencyKey: scopedIdempotencyKey } : {}),
-  });
+  //
+  // K1 (04.10.2026): scoping the KEY was not enough. A wire key is any string, so an operator
+  // `quotes_accept` under the key `["<grant>","<quote>","K"]` (on any quote) landed exactly where this
+  // call looks, and the portal accept replayed it. The delegated accept now memoises in this
+  // composite's own idempotency scope (`portal_quote_accept>quotes_accept`), which no public verb writes.
+  const accepted = ctx.store.innerWrite('portal_quote_accept', () =>
+    acceptQuote(ctx, {
+      quoteId,
+      actor: `portal:${row.id}`,
+      ...(scopedIdempotencyKey !== undefined ? { idempotencyKey: scopedIdempotencyKey } : {}),
+    }),
+  );
   if (!accepted.ok) return accepted;
 
   // Audit the portal-side attribution ONLY on the real transition (spec §3/§7: the accept lands in

@@ -9,6 +9,12 @@
  * künftig automatisch") is owner-gated and states on the strong-default pair why the capability asks
  * by default. There is no edit control, and the card says so: approving replays the stored payload
  * exactly.
+ *
+ * WHAT YOU APPROVED IS WHAT RUNS (critic N1). A Vorschlag that names a record (`issue_invoice
+ * {invoiceId}`) used to show only the id. The engine now freezes the record's key figures at the
+ * proposal (number or draft, counterparty, amount with currency, line count) and the card leads with
+ * them, so the person sees what is being approved. When the record changed since, the card says so and
+ * holds the approve: the engine would refuse it (`vorschlag_stale`) and run nothing.
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -16,7 +22,9 @@ import { Link } from 'react-router-dom';
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { useCan, useCapabilities } from '../../lib/capabilities';
 import { OverflowMenu } from '../../components/OverflowMenu';
-import { CONSEQUENCE_VERBS, LABELLED_FIELDS, LABELLED_VERBS, type DraftedAction } from './model';
+import { ActionFeedback } from '../../components/ActionFeedback';
+import { LABELLED_FIELDS, LABELLED_VERBS, type DraftedAction, type VorschlagFigures } from './model';
+import { useConsequence } from '../../lib/approval-tiers';
 
 export interface VorschlagCardProps {
   action: DraftedAction;
@@ -79,6 +87,58 @@ function fieldValue(key: string, value: string | number): string {
   return String(value);
 }
 
+/** The frozen figures as read-back rows (critic N1): only the ones the engine could derive. */
+function FigureRows({ figures }: { figures: VorschlagFigures }) {
+  const t = useT();
+  const currency = figures.currency ?? 'CHF';
+  return (
+    <>
+      {figures.amountMinor !== null && (
+        <div className="vorschlag-readback-row vorschlag-amount" key="__figure-amount" data-figure="amount">
+          <dt>{figures.amountBasis === 'net' ? t('agent.card.figure.net') : t('agent.field.amount')}</dt>
+          <dd className="vorschlag-amount-figure t-money">{formatMoney(figures.amountMinor, currency)}</dd>
+        </div>
+      )}
+      {figures.taxMinor !== null && figures.grossMinor !== null && (
+        <>
+          <div className="vorschlag-readback-row" key="__figure-vat" data-figure="vat">
+            <dt>{t('agent.card.figure.vat')}</dt>
+            <dd className="t-money">{formatMoney(figures.taxMinor, currency)}</dd>
+          </div>
+          <div className="vorschlag-readback-row" key="__figure-gross" data-figure="gross">
+            <dt>{t('agent.card.figure.gross')}</dt>
+            <dd className="t-money">{formatMoney(figures.grossMinor, currency)}</dd>
+          </div>
+        </>
+      )}
+      {(figures.number !== null || figures.numberPending) && (
+        <div className="vorschlag-readback-row" key="__figure-number" data-figure="number">
+          <dt>{t('agent.card.figure.number')}</dt>
+          <dd>{figures.number ?? t('agent.card.figure.draft')}</dd>
+        </div>
+      )}
+      {figures.counterparty !== null && (
+        <div className="vorschlag-readback-row" key="__figure-counterparty" data-figure="counterparty">
+          <dt>{t('agent.card.figure.counterparty')}</dt>
+          <dd>{figures.counterparty}</dd>
+        </div>
+      )}
+      {figures.recipient !== null && (
+        <div className="vorschlag-readback-row" key="__figure-recipient" data-figure="recipient">
+          <dt>{t('agent.card.figure.recipient')}</dt>
+          <dd>{figures.recipient}</dd>
+        </div>
+      )}
+      {figures.lineCount !== null && (
+        <div className="vorschlag-readback-row" key="__figure-lines" data-figure="lines">
+          <dt>{t('agent.card.figure.lines')}</dt>
+          <dd>{figures.lineCount}</dd>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function VorschlagCard({ action, accent, onApprove, onReject, busy = false }: VorschlagCardProps) {
   const t = useT();
   // The self-approve ban, VISIBLE at the surface: the drafting actor never sees an approve control
@@ -88,6 +148,10 @@ export function VorschlagCard({ action, accent, onApprove, onReject, busy = fals
   const whoami = useCapabilities().whoami;
   const isDraftingActor = whoami?.actor === action.actor;
   const canDecide = useCan('manage_agent_dial') && !isDraftingActor;
+  // Critic N1: the record changed after the proposal, so the engine would refuse the approval and run
+  // nothing. The approve is held and the card says why; rejecting stays possible.
+  const changed = action.changedSinceProposal === true;
+  const figures = action.figures ?? null;
   const [confirmingReject, setConfirmingReject] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [showDetails, setShowDetails] = useState(false);
@@ -96,18 +160,15 @@ export function VorschlagCard({ action, accent, onApprove, onReject, busy = fals
   const verbLabel = LABELLED_VERBS.has(action.actionTool)
     ? t(`agent.verb.${action.actionTool}`)
     : action.actionTool.replace(/_/g, ' ');
-  // The verb's own sentence when it has one (D123: the membership verbs under `customize`), else the
-  // dial family's.
-  const consequence = CONSEQUENCE_VERBS.has(action.actionTool)
-    ? t(`agent.consequenceVerb.${action.actionTool}`)
-    : capability === ''
-      ? null
-      : t(`agent.consequence.${capability}`);
+  // D156: the engine's one consequence for the drafted verb (its own entry, else the family of the tier
+  // the seam stored), the identical sentence a human confirm of the same verb and the MCP description show.
+  const consequence = useConsequence(action.actionTool, capability);
   const date = action.createdAt.length >= 10 ? formatDate(action.createdAt.slice(0, 10)) : action.createdAt;
   // Critic F4: the money the approver is deciding about is the card's LEAD figure, never buried in
   // raw JSON. `null` when the payload carries no derivable figure: an absent figure is honest, an
   // invented one is not.
-  const leadAmountMinor = leadAmountOf(action);
+  // The frozen figures, when the engine has them, are the lead: they are what the approval is pinned to.
+  const leadAmountMinor = figures !== null && figures.amountMinor !== null ? null : leadAmountOf(action);
 
   return (
     <article className="vorschlag-card panel" data-action-id={action.actionId} data-accent={accent ? 'true' : 'false'}>
@@ -121,7 +182,7 @@ export function VorschlagCard({ action, accent, onApprove, onReject, busy = fals
               label: t('agent.card.details'),
               onSelect: () => setShowDetails((v) => !v),
             },
-            ...(canDecide
+            ...(canDecide && !changed
               ? [
                   {
                     key: 'approve-allow',
@@ -146,6 +207,8 @@ export function VorschlagCard({ action, accent, onApprove, onReject, busy = fals
       {consequence !== null && <p className="vorschlag-consequence">{consequence}</p>}
 
       <dl className="vorschlag-readback">
+        {/* N1: what is being approved, as the agent proposed it, leads the read-back. */}
+        {figures !== null && <FigureRows figures={figures} />}
         {/* F4: the money this draft moves LEADS the read-back, formatted, right-aligned tabular. */}
         {leadAmountMinor !== null && (
           <div className="vorschlag-readback-row vorschlag-amount" key="__amount">
@@ -177,12 +240,17 @@ export function VorschlagCard({ action, accent, onApprove, onReject, busy = fals
             return key !== 'workspaceId' && key !== 'idempotencyKey' && (typeof value === 'string' || typeof value === 'number');
           })
           .slice(0, 7)
-          .map(([key, value]) => (
-            <div className="vorschlag-readback-row" key={key}>
-              <dt>{fieldLabel(t, LABELLED_FIELDS, key)}</dt>
-              <dd>{fieldValue(key, value)}</dd>
-            </div>
-          ))}
+          .map(([key, value]) => {
+            // A contact id renders as the contact's NAME the engine resolved (critic phase0-installable
+            // r2: a vendor IBAN draft named its vendor by id), with the id kept as the tooltip.
+            const name = action.payloadLabels?.[key];
+            return (
+              <div className="vorschlag-readback-row" key={key}>
+                <dt>{fieldLabel(t, LABELLED_FIELDS, key)}</dt>
+                <dd title={name !== undefined ? String(value) : undefined}>{name ?? fieldValue(key, value)}</dd>
+              </div>
+            );
+          })}
       </dl>
 
       <p className="vorschlag-provenance">
@@ -200,6 +268,8 @@ export function VorschlagCard({ action, accent, onApprove, onReject, busy = fals
           <pre>{JSON.stringify(action.payload, null, 2)}</pre>
         </div>
       )}
+
+      {changed && <ActionFeedback tone="warn" role="note" message={t('agent.card.changed')} />}
 
       {confirmingReject ? (
         <div className="vorschlag-confirm" role="group" aria-label={t('agent.card.reject')}>
@@ -235,7 +305,7 @@ export function VorschlagCard({ action, accent, onApprove, onReject, busy = fals
             </button>
           </div>
         </div>
-      ) : canDecide ? (
+      ) : canDecide && changed ? null : canDecide ? (
         <button
           type="button"
           className={accent ? 'btn btn--primary vorschlag-approve' : 'btn btn--secondary vorschlag-approve'}

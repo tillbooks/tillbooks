@@ -7,7 +7,6 @@
     "noWorkspace": "Wähle einen Mandanten, um die Wareneingänge zu sehen.",
     "listLabel": "Wareneingänge",
     "detailLabel": "Wareneingang im Detail",
-    "selectHint": "Wähle einen Wareneingang, um seine Positionen und seinen Verlauf zu sehen.",
     "new": "Neuer Wareneingang",
     "addLine": "Position hinzufügen",
     "post": "Buchen",

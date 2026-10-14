@@ -40,6 +40,7 @@
  * period at ITS OWN VAT era.
  */
 
+import { createHash } from 'node:crypto';
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
@@ -325,6 +326,11 @@ export function createRecurringSchedule(
   ctx: WorkspaceContext,
   input: CreateRecurringScheduleInput,
 ): Result {
+  // D156 critic F1: the schema REQUIRES the key, so the engine does too. With it optional, a call
+  // without one ran unkeyed (and, from a governed seat, fell past the dial's draft screen).
+  if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
+    return err('invalid_input', { field: 'idempotencyKey' });
+  }
   const cadence = validateCadence({
     interval: input.interval,
     customDays: input.customDays,
@@ -433,6 +439,10 @@ export function updateRecurringSchedule(
   ctx: WorkspaceContext,
   input: { scheduleId: string; patch: UpdateRecurringSchedulePatch },
 ): Result {
+  // D156 critic F1: the schema requires the patch; a call without one was an unkeyed no-op update.
+  if (typeof input.patch !== 'object' || input.patch === null || Array.isArray(input.patch)) {
+    return err('invalid_input', { field: 'patch' });
+  }
   const row = readSchedule(ctx, input.scheduleId);
   if (row === undefined) return err('not_found', { scheduleId: input.scheduleId });
   if (row.status === 'ended') return err('schedule_ended', { scheduleId: input.scheduleId });
@@ -649,14 +659,15 @@ function insertRunRow(
   documentId: string | null,
   error: string | null,
   dueStamped: string | null,
+  fingerprint: string | null = null,
 ): void {
   ctx.store.db
     .prepare(
       `INSERT INTO recurring_run_log
-         (id, workspace_id, schedule_id, period_key, document_id, outcome, error, due_stamped, ran_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, workspace_id, schedule_id, period_key, document_id, outcome, error, due_stamped, ran_at, draft_fingerprint)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(ctx.ids.next('rrun'), ctx.workspaceId, row.id, period, documentId, outcome, error, dueStamped, ctx.clock.now());
+    .run(ctx.ids.next('rrun'), ctx.workspaceId, row.id, period, documentId, outcome, error, dueStamped, ctx.clock.now(), fingerprint);
 }
 
 /** The settled half of the partial index refused the insert: this period settled elsewhere. */
@@ -749,12 +760,68 @@ function stampedDueDate(
   const recorded = ctx.store.db
     .prepare(
       `SELECT due_stamped FROM recurring_run_log
-        WHERE schedule_id = ? AND period_key = ? AND due_stamped IS NOT NULL
+        WHERE workspace_id = ? AND schedule_id = ? AND period_key = ? AND due_stamped IS NOT NULL
         ORDER BY ran_at DESC, rowid DESC LIMIT 1`,
     )
-    .get(row.id, period) as { due_stamped: string | null } | undefined;
+    .get(ctx.workspaceId, row.id, period) as { due_stamped: string | null } | undefined;
   if (recorded !== undefined && recorded.due_stamped !== null) return recorded.due_stamped;
   return addDays(dayOf(doc.created_at), row.due_days);
+}
+
+/**
+ * The run-log error of an occurrence whose draft is not the schedule's own (D141, critic F1/F2). Its row
+ * records NO due stamp (critic R3-1): the tick writes nothing onto a diverged draft, so a stamp on that
+ * row would later read back as the date the draft carries and pass a stale machine date off as a
+ * negotiated one.
+ */
+export const DRAFT_DIVERGED = 'draft_diverged';
+
+function documentType(ctx: WorkspaceContext, documentId: string): string | undefined {
+  const row = ctx.store.db
+    .prepare('SELECT type FROM document WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, documentId) as { type: string } | undefined;
+  return row?.type;
+}
+
+/**
+ * The document columns a waiting draft may change without changing what the tick would issue: the
+ * lifecycle fields issuing itself writes, and the due date (the F4 repair keeps a negotiated one and
+ * the tick re-asserts its own stamp). EVERY other column of `document`, and every column of its lines
+ * but the row id, is in the fingerprint, so a column added later is covered without anyone listing it.
+ */
+const FINGERPRINT_EXCLUDED_DOCUMENT_COLUMNS: ReadonlySet<string> = new Set(['status', 'number', 'posted_entry_id', 'issue_date', 'due_date', 'sent_to_email']);
+
+/** A canonical, order-stable digest of the draft and its lines (D141, critic R2). */
+function draftFingerprint(ctx: WorkspaceContext, documentId: string): string | null {
+  const doc = ctx.store.db.prepare('SELECT * FROM document WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, documentId) as
+    | Record<string, unknown>
+    | undefined;
+  if (doc === undefined) return null;
+  const lines = ctx.store.db
+    .prepare('SELECT * FROM document_line WHERE workspace_id = ? AND document_id = ? ORDER BY position, rowid')
+    .all(ctx.workspaceId, documentId) as Record<string, unknown>[];
+  const canonical = (o: Record<string, unknown>, drop: (k: string) => boolean): [string, unknown][] =>
+    Object.keys(o)
+      .filter((k) => !drop(k))
+      .sort()
+      .map((k) => [k, o[k]]);
+  const payload = JSON.stringify({
+    document: canonical(doc, (k) => FINGERPRINT_EXCLUDED_DOCUMENT_COLUMNS.has(k)),
+    lines: lines.map((l) => canonical(l, (k) => k === 'id')),
+  });
+  return createHash('sha256').update(payload).digest('hex');
+}
+
+/** The fingerprint the tick recorded for ITS OWN waiting draft of this period, or undefined. */
+function recordedFingerprint(ctx: WorkspaceContext, row: ScheduleRow, period: string, documentId: string): string | undefined {
+  const rec = ctx.store.db
+    .prepare(
+      `SELECT draft_fingerprint AS f FROM recurring_run_log
+        WHERE workspace_id = ? AND schedule_id = ? AND period_key = ? AND document_id = ? AND draft_fingerprint IS NOT NULL
+        ORDER BY ran_at DESC, rowid DESC LIMIT 1`,
+    )
+    .get(ctx.workspaceId, row.id, period, documentId) as { f: string } | undefined;
+  return rec?.f;
 }
 
 /**
@@ -788,6 +855,16 @@ function runOccurrence(
   // THE DUE-DATE LAW, moment one: clock day + dueDays. Never the asOf cursor (R1/F1/F7).
   const dueStamped = row.due_days !== null ? addDays(today, row.due_days) : null;
 
+  // D141 (non-author critic F1/R2): the key is derivable, so a caller can claim it first. Whether the
+  // memo ALREADY existed decides provenance: a fresh create is the tick's own; a replayed one is the
+  // tick's only when one of this schedule's run rows names that document with a fingerprint.
+  const tickKey = `recurring:${row.id}:${period}`;
+  // A known, accepted gap (critic R3-3, D141.6): the read below and the create are two steps, so under
+  // D12's second writer a squat committed in the sub-millisecond between them would read as a fresh
+  // create. Wrapping both in one transaction would close it but also stop the store-write chokepoint's
+  // mid-tick refusal from landing between occurrences (the R4-2 guard in
+  // test/core/store-write-chokepoint.test.mjs). The recurring rebuild (D141.6) removes the class.
+  const replayed = ctx.store.recallIdempotent(ctx.workspaceId, tickKey, 'create_document') !== undefined;
   const created = invoke(
     'create_document',
     {
@@ -798,7 +875,7 @@ function runOccurrence(
       ...(row.currency !== null ? { currency: row.currency } : {}),
       ...(dueStamped !== null ? { dueDate: dueStamped } : {}),
       ...(row.notes !== null ? { notes: row.notes } : {}),
-      idempotencyKey: `recurring:${row.id}:${period}`,
+      idempotencyKey: tickKey,
     },
     author,
   );
@@ -827,6 +904,13 @@ function runOccurrence(
     // never notice (the F6 repair). Nothing is re-billed unattended.
     return { kind: 'settle', outcome: 'discarded', documentId: null, dueStamped, generatedDocument: false };
   }
+  // D141 (non-author critic F1, 28.09.2026): the memo is keyed by (workspace, key, verb) and the key
+  // is derivable, so a caller can claim it with a document of its own before the tick runs. Whatever
+  // the memo hands back must at least be an invoice; a squatted quote must not settle the period.
+  if (documentType(ctx, documentId) !== 'invoice') {
+    insertRunRow(ctx, row, period, 'failed', documentId, DRAFT_DIVERGED, null);
+    return { kind: 'open', outcome: 'failed', documentId, error: DRAFT_DIVERGED };
+  }
   if (doc.status !== 'draft') {
     // Issued: by a human hand-issuing the waiting draft (F5), or by a crash replay whose settle row
     // was lost (C14/F2). One rule for both: the period IS billed; settle `issued` and advance. A
@@ -839,6 +923,21 @@ function runOccurrence(
     // Review mode (the P8 default): the draft is the product. Drafting is not the financial event,
     // so this settles even inside a locked period.
     return { kind: 'settle', outcome: 'drafted', documentId, dueStamped, generatedDocument: true };
+  }
+
+  // D141 (non-author critics F1, F2 and R2, 28.09.2026): an auto-issue is the ONE step no human
+  // confirms, so it issues only a draft the tick created and nobody has changed since. A caller's draft
+  // squatted under the derivable key (F1) has no run row of this schedule naming it; a waiting draft
+  // edited during a lock (F2) no longer matches the fingerprint recorded when the tick created it. The
+  // fingerprint covers EVERY column of the draft and its lines except the lifecycle fields and the due
+  // date, so no field is "open" (the R2 finding: a subset comparison let currency, tax code and text
+  // through). Either way the draft is left for a human: `draft_diverged`, the cursor holds, and a human
+  // issue or cancel settles the period through the two rules above. A legacy waiting draft recorded
+  // before the fingerprint existed has none, and is left to a human the same way (fail closed).
+  const current = draftFingerprint(ctx, documentId);
+  if (replayed && (current === null || recordedFingerprint(ctx, row, period, documentId) !== current)) {
+    insertRunRow(ctx, row, period, 'failed', documentId, DRAFT_DIVERGED, null);
+    return { kind: 'open', outcome: 'failed', documentId, error: DRAFT_DIVERGED };
   }
 
   // THE DUE-DATE LAW, moment two: an AGED draft is re-asserted from the issue day ONLY while it
@@ -871,10 +970,10 @@ function runOccurrence(
     if (issued.error === 'period_locked') {
       // §H-PERIOD: the draft is kept (unnumbered, no ledger effect), the observation is recorded,
       // and the cursor does NOT advance past the lock: the period is retried once the lock lifts.
-      insertRunRow(ctx, row, period, 'skipped_locked', documentId, null, dueStamped);
+      insertRunRow(ctx, row, period, 'skipped_locked', documentId, null, dueStamped, draftFingerprint(ctx, documentId));
       return { kind: 'open', outcome: 'skipped_locked', documentId, error: null };
     }
-    insertRunRow(ctx, row, period, 'failed', documentId, issued.error, dueStamped);
+    insertRunRow(ctx, row, period, 'failed', documentId, issued.error, dueStamped, draftFingerprint(ctx, documentId));
     return { kind: 'open', outcome: 'failed', documentId, error: issued.error };
   }
   return { kind: 'settle', outcome: 'issued', documentId, dueStamped, generatedDocument: true };

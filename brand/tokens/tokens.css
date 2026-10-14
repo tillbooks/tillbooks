@@ -242,7 +242,12 @@
      Hover:    (UI polish round 2, K-41, D137) the one beat under the pointer: a shared primitive's
                background, ink and edge colour ease in `hover`, and nothing else. Before it the
                button glided and the select beside it snapped, two feels on one screen. Keyboard
-               repeats (arrows in the tree and the palette) never animate. */
+               repeats (arrows in the tree and the palette) never animate.
+     Loop:     (owner, 09.10.2026, D155) the one cycle that repeats: a loading skeleton's pulse or a
+               pending indicator, and nothing else. It is the single allowed exception to the
+               120-200 ms budget, because nobody waits on a loop's end, and it is never decoration.
+               The kill switch below stops it like every other token: the iteration count drops to
+               one and the duration to nothing. */
   --t-motion-nav-out: 80ms;
   --t-motion-nav-in: 200ms;
   --t-motion-pill: 120ms;
@@ -252,6 +257,7 @@
   --t-motion-reveal: 200ms;
   --t-motion-stagger: 30ms;
   --t-motion-hover: 120ms;
+  --t-motion-loop: 1400ms;
   --t-ease-out: cubic-bezier(0.2, 0, 0, 1);
   --t-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --t-travel: 8px;

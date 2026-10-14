@@ -141,9 +141,13 @@ function HashAnchor() {
       const target = document.getElementById(id);
       const main = document.getElementById('main-content');
       if (target !== null && main !== null) {
+        // The sticky header pins at main's PADDING edge (P6: the band above it is main's opaque mask),
+        // so its bottom sits padding-top plus its published height below main's top. Land the target
+        // one grid step (8px) under that, not under the header.
         const header = parseFloat(main.style.getPropertyValue('--surface-header-height')) || 0;
+        const band = parseFloat(window.getComputedStyle(main).paddingTop) || 0;
         const offset = target.getBoundingClientRect().top - main.getBoundingClientRect().top;
-        main.scrollTop += offset - header - 8;
+        main.scrollTop += offset - band - header - 8;
         return;
       }
       frame += 1;

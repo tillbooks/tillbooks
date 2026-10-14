@@ -15,6 +15,12 @@
     "defaultCurrency": "Standardwährung",
     "paymentTerms": "Zahlungsfrist",
     "paymentTermsUnit": "Tage",
+    "paymentTermsStandard": "Standard ({days} Tage)",
+    "paymentTermsStandardImmediate": "Standard (sofort)",
+    "paymentTermsStandardUnknown": "Standard",
+    "paymentTermsImmediate": "sofort",
+    "paymentTermsInfo": "Woher die Zahlungsfrist kommt",
+    "paymentTermsHelp": "Leer lassen: Es gilt die Standard-Zahlungsfrist aus dem Firmenprofil. 0 heisst sofort fällig, am Rechnungsdatum.",
     "description": "Notiz",
     "partyRole": "Rolle",
     "role": {
@@ -91,7 +97,8 @@
     },
     "error": {
       "employerMustBeCompany": "Der Arbeitgeber muss eine Firma sein.",
-      "nameRequired": "Name fehlt."
+      "nameRequired": "Name fehlt.",
+      "paymentTerms": "Die Zahlungsfrist ist eine ganze Zahl von Tagen, von 0 bis 365. 0 heisst sofort, leer heisst Standard."
     },
     "finance": {
       "hint": "Offene Posten und Zahlungen stehen auf den Finanzflächen: Debitoren, Zahlungen und Belege."
@@ -192,7 +199,8 @@
       "warning": "Damit werden Name, E-Mail, Adresse und alle Aktivitätstexte gelöscht. Gebuchte Belege bleiben erhalten (OR 958f). Das kann nicht rückgängig gemacht werden.",
       "confirmWord": "ANONYMISIEREN",
       "typeLabel": "Tippe {word}, um zu bestätigen",
-      "typeHint": "Tippe {word} genau so, dann wird die Schaltfläche aktiv."
+      "typeHint": "Tippe {word} genau so, dann wird die Schaltfläche aktiv.",
+      "inOpenPaymentBatch": "Dieser Kontakt steht noch in einem Entwurf eines Zahlungslaufs (Ausführungsdatum {dates}). Verwirf den Entwurf unter Kreditorenzahlungen oder erstelle und bezahle ihn, und anonymisiere den Kontakt dann erneut. Es wurde nichts geändert."
     },
     "import": {
       "paste": "CSV-Inhalt einfügen",
@@ -213,6 +221,7 @@
     },
     "action": {
       "create": "Zugang freigeben",
+      "activate": "Link freischalten",
       "send": "Link senden",
       "revoke": "Widerrufen",
       "share_entity": "Im Portal freigeben"
@@ -224,6 +233,7 @@
     "status": {
       "active": "Aktiv",
       "draft": "Entwurf",
+      "draftHint": "Öffnet nichts, bis du ihn freischaltest.",
       "revoked": "Widerrufen",
       "expired": "Abgelaufen",
       "local": "Nur lokal"
@@ -235,7 +245,8 @@
     "link": {
       "once": "Der Link wird nur einmal angezeigt.",
       "copy": "Kopieren",
-      "copyLabel": "Link kopieren"
+      "copyLabel": "Link kopieren",
+      "draftNote": "Dieser Link öffnet nichts, bis du ihn unten in der Liste freischaltest."
     },
     "empty": "Noch keine Portal-Freigaben.",
     "empty_scopes": "Nichts zum Freigeben vorhanden.",
@@ -253,6 +264,7 @@
     "action": {
       "grant": "Portalzugang erstellen",
       "revoke": "Zugang widerrufen",
+      "activate": "Link freischalten",
       "remittance": "Zahlungsavis erstellen"
     },
     "field": {
@@ -262,7 +274,8 @@
       "active": "Aktiv",
       "draft": "Entwurf",
       "revoked": "Widerrufen",
-      "expired": "Abgelaufen"
+      "expired": "Abgelaufen",
+      "draftHint": "Aus einer Sicherung wiederhergestellt: öffnet nichts, bis du ihn wieder freigibst."
     },
     "poStatus": {
       "sent": "Gesendet",

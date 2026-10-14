@@ -27,6 +27,11 @@
  * reads the SAME words an approver reads when clearing an agent's proposal of the same write. There
  * is no confirm Modal and no DetailDrawer: the commit button IS the P8 confirmation (the Files-delete
  * idiom, unchanged), and the run review is the surface's persistent primary panel, not a peek-detail.
+ *
+ * A LIST NEVER OPENS ITSELF (D152 rule 5, the /bank B2 pattern). The Mahnläufe list leads and no run
+ * is open on load: a run opens by a click on its row (or Enter/Space on the focused row), by the hub's
+ * deep link (`?runId=`, what a Pendenz's "Mahnlauf prüfen" names) or by proposing one, and its review
+ * card renders under the list, so the row that was clicked does not move. A second click closes it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -41,6 +46,8 @@ import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
+import { Modal } from '../../components/Modal';
+import { OverflowMenu } from '../../components/OverflowMenu';
 import { Provenance } from '../../components/Provenance';
 import { Status, type StatusKind } from '../../components/Status';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
@@ -58,6 +65,9 @@ import {
 } from './model';
 import './Dunning.css';
 
+/** The discard confirmation is consequential, so it is the alertdialog variant (the DataBackup shape). */
+const ALERT_DIALOG = 'alertdialog' as const;
+
 interface SavedViewOption {
   id: string;
   name: string;
@@ -73,8 +83,38 @@ export function Dunning() {
   const [config, setConfig] = useState<DunningConfigView | null>(null);
   const [runs, setRuns] = useState<DunningRunSummary[] | null>(null);
   const [current, setCurrent] = useState<DunningRunView | null>(null);
-  /** Which run the review panel shows. Null means "the newest", which is what a fresh visit wants. */
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  /**
+   * Which run the review card shows. Null means NONE (D152 rule 5): a fresh visit opens nothing, and
+   * only a deep link (`?runId=`, the attention hub's link) selects before the person acts. A link
+   * that arrives while the surface is mounted opens its run too.
+   */
+  const runParam = params.get('runId');
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(runParam);
+  useEffect(() => {
+    if (runParam !== null) setSelectedRunId(runParam);
+  }, [runParam]);
+  /**
+   * The person's own choice. It retires the deep link (`?runId=` is dropped, replacing the history
+   * entry, the saved view kept), so a run they closed stays closed and the same link opens it again.
+   */
+  /**
+   * The run the person just proposed (new, or the existing one for the date). It opens even when the
+   * saved view in force does not list it (critic F3): the propose is the person's act, and dropping
+   * their view to show it would throw away the context they chose. Any other choice clears it.
+   */
+  const proposedRef = useRef<string | null>(null);
+  const choose = useCallback(
+    (runId: string | null) => {
+      proposedRef.current = null;
+      setSelectedRunId(runId);
+      if (params.has('runId')) {
+        const next = new URLSearchParams(params);
+        next.delete('runId');
+        setParams(next, { replace: true });
+      }
+    },
+    [params, setParams],
+  );
   const [savedViews, setSavedViews] = useState<SavedViewOption[]>([]);
   const [feeAccounts, setFeeAccounts] = useState<FeeAccountOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,17 +127,47 @@ export function Dunning() {
   const [configOpen, setConfigOpen] = useState(false);
   const configSeeded = useRef(false);
 
+  // §H-TENANT (critic round 2): a workspace switch does not remount the surface, so nothing chosen,
+  // read or said in the workspace just left may survive into the next one: not the open run, not its
+  // card (whose Ausstellen would send the old run's id under the new workspace), not a note. Reset
+  // during render (React's "adjust state when a prop changes"), so no effect runs with the old run.
+  // The first workspace (null -> id at boot) is not a switch: a hub link made before it resolved stays.
+  const liveWorkspace = useRef(workspaceId);
+  liveWorkspace.current = workspaceId;
+  const [shownWorkspace, setShownWorkspace] = useState(workspaceId);
+  if (shownWorkspace !== workspaceId) {
+    setShownWorkspace(workspaceId);
+    if (shownWorkspace !== null) {
+      setSelectedRunId(null);
+      setCurrent(null);
+      setNote(null);
+      setBusy(null);
+    }
+  }
+  // The by-id exception of a propose and the one-time policy seeding belong to the workspace they
+  // were made in. Declared before the load effect, so it runs first on a switch.
+  useEffect(() => {
+    proposedRef.current = null;
+    configSeeded.current = false;
+  }, [workspaceId]);
+
   const canDun = useCan(CAP.dun);
   const canSend = useCan(CAP.send);
   // The engine asserts `post` before a fee-bearing issue (the unlock_period shape); the courtesy
   // gate mirrors it so the refusal is told BEFORE the click (critic N2).
   const canPost = useCan(CAP.post);
 
+  // Every load is numbered; only the latest may answer, and never one begun under another workspace
+  // (an issue's re-read that returns after a switch would otherwise paint the old workspace's runs).
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
     if (workspaceId === null) {
       setLoading(false);
       return;
     }
+    if (liveWorkspace.current !== workspaceId) return;
+    const mine = ++loadSeq.current;
+    const stale = () => mine !== loadSeq.current || liveWorkspace.current !== workspaceId;
     setLoading(true);
     setFailed(false);
     setDenied(false);
@@ -107,6 +177,7 @@ export function Dunning() {
       client.call('list_saved_views', { workspaceId, entityKind: 'dunning_run' }),
       client.call('list_accounts', { workspaceId }),
     ]);
+    if (stale()) return;
     if (isErr(configResp.body) || isErr(runsResp.body)) {
       const firstError = isErr(configResp.body) ? configResp : runsResp;
       if ((firstError.body as { error?: string }).error === 'permission_denied' || firstError.status === 403) {
@@ -144,20 +215,19 @@ export function Dunning() {
           .map((a) => ({ id: a.id, number: a.number, name: a.name })),
       );
     }
-    // The newest run is the working set by DEFAULT, and the operator can put an older one there.
-    // The history used to be a list of rows that opened nothing, which made every earlier Mahnlauf
-    // unreachable: its letters could not be reprinted, and a reminder is the evidence of what was
-    // demanded. A selection that has fallen out of the list (a filter changed) falls back to the
-    // newest rather than emptying the panel.
+    // Every row opens its run (the history used to be a list of rows that opened nothing, which made
+    // every earlier Mahnlauf unreachable: its letters could not be reprinted, and a reminder is the
+    // evidence of what was demanded). No run is opened FOR the person (D152 rule 5): a selection that
+    // has fallen out of the list (a filter changed) closes the card rather than opening another run.
     const wanted =
-      selectedRunId !== null && parsedRuns.some((r) => r.runId === selectedRunId)
+      selectedRunId !== null && (parsedRuns.some((r) => r.runId === selectedRunId) || selectedRunId === proposedRef.current)
         ? selectedRunId
-        : (parsedRuns[0]?.runId ?? null);
+        : null;
     if (wanted !== null) {
       const detail = await client.call('get_dunning_run', { workspaceId, runId: wanted });
-      if (!isErr(detail.body)) {
-        setCurrent(parseRun(detail.body));
-      }
+      if (stale()) return;
+      // A failed read never leaves the previous run's card live (critic round 2): no card at all.
+      setCurrent(isErr(detail.body) ? null : parseRun(detail.body));
     } else {
       setCurrent(null);
     }
@@ -176,12 +246,19 @@ export function Dunning() {
     setConfigOpen(!config.configured);
   }, [config]);
 
-  const proposeKey = useIdempotencyKey([workspaceId, 'propose']);
+  /**
+   * Critic N1 (D161.3): the propose key is one question per page visit, so after a discard it would
+   * replay the stored answer, the run just discarded, and the surface would open a run that no longer
+   * exists. Each successful discard asks a new question: the counter moves the key.
+   */
+  const [discardCount, setDiscardCount] = useState(0);
+  const proposeKey = useIdempotencyKey([workspaceId, 'propose', discardCount]);
   const propose = async () => {
     if (workspaceId === null) return;
     setBusy('propose');
     setNote(null);
     const response = await client.call('propose_dunning_run', { workspaceId, idempotencyKey: proposeKey });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     setBusy(null);
     if (isErr(response.body)) {
       setNote(t('dunning.error.action'));
@@ -196,11 +273,21 @@ export function Dunning() {
     // (the button did something, said nothing, and changed nothing on screen), so the surface now
     // says so and puts that run into the working set.
     if (response.body.existing === true) {
-      setSelectedRunId(String(response.body.runId));
+      choose(String(response.body.runId));
+      proposedRef.current = String(response.body.runId);
       setNote(t('dunning.alreadyProposed'));
       return;
     }
-    void load();
+    // The person proposed this run, so it is the one to review: open it. A changed selection reloads
+    // through the effect; the same one (re-proposed while open) needs the explicit re-read.
+    const proposedId = String(response.body.runId);
+    if (proposedId === selectedRunId) {
+      proposedRef.current = proposedId;
+      void load();
+    } else {
+      choose(proposedId);
+      proposedRef.current = proposedId;
+    }
   };
 
   const issueKey = useIdempotencyKey([workspaceId, 'issue', current?.runId ?? '']);
@@ -224,6 +311,7 @@ export function Dunning() {
       confirmed: true,
       idempotencyKey: intent === 'issue' ? issueKey : recoverFeeKey,
     });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     setBusy(null);
     if (isErr(response.body)) {
       const code = response.body.error;
@@ -257,6 +345,35 @@ export function Dunning() {
     void load();
   };
 
+  /**
+   * D161.3: discard a PROPOSED run and free its day. One key per run and question, like the issue.
+   * The engine re-checks the status inside its transaction, so a run issued meanwhile is refused and
+   * the reload shows it issued.
+   */
+  const discardKey = useIdempotencyKey([workspaceId, 'discard', current?.runId ?? '']);
+  const discard = async () => {
+    if (workspaceId === null || current === null) return;
+    setBusy('discard');
+    setNote(null);
+    const response = await client.call('discard_dunning_run', {
+      workspaceId,
+      runId: current.runId,
+      idempotencyKey: discardKey,
+    });
+    if (liveWorkspace.current !== workspaceId) return;
+    setBusy(null);
+    if (isErr(response.body)) {
+      setNote(response.body.error === 'invalid_transition' ? t('dunning.discardNotProposed') : t('dunning.error.action'));
+      void load();
+      return;
+    }
+    choose(null);
+    setCurrent(null);
+    setDiscardCount((n) => n + 1);
+    setNote(t('dunning.discarded'));
+    void load();
+  };
+
   const sendKey = useIdempotencyKey([workspaceId, 'send', current?.runId ?? '']);
   const send = async () => {
     if (workspaceId === null || current === null) return;
@@ -268,6 +385,7 @@ export function Dunning() {
       confirmed: true,
       idempotencyKey: sendKey,
     });
+    if (liveWorkspace.current !== workspaceId) return; // the answer belongs to the workspace just left
     setBusy(null);
     if (isErr(response.body)) {
       const code = response.body.error;
@@ -284,6 +402,7 @@ export function Dunning() {
   const downloadLetter = async (debtorId: string, debtorName: string | null) => {
     if (workspaceId === null || current === null) return;
     const response = await client.call('get_dunning_pdf', { workspaceId, runId: current.runId, debtorId });
+    if (liveWorkspace.current !== workspaceId) return;
     if (isErr(response.body)) {
       setNote(t('dunning.error.action'));
       return;
@@ -383,20 +502,6 @@ export function Dunning() {
         />
       ) : (
         <>
-          {current !== null && (
-            <CurrentRun
-              run={current}
-              canDun={canDun}
-              canSend={canSend}
-              canPost={canPost}
-              busy={busy}
-              onIssue={() => void issue('issue')}
-              onRecoverFee={() => void issue('recover-fee')}
-              onSend={() => void send()}
-              onDownload={(debtorId, debtorName) => void downloadLetter(debtorId, debtorName)}
-            />
-          )}
-
           <div className="dunning-history">
             <div className="dunning-history-head">
               <h2>{t('dunning.history')}</h2>
@@ -425,11 +530,33 @@ export function Dunning() {
               rows={history}
               rowKey={(run) => run.runId}
               caption={t('dunning.historyCaption')}
-              onRowClick={(run) => setSelectedRunId(run.runId)}
+              onRowClick={(run) => choose(run.runId === current?.runId ? null : run.runId)}
               rowLabel={(run) => t('dunning.rowOpen', { date: formatDate(run.runDate) })}
               isRowCurrent={(run) => run.runId === current?.runId}
             />
           </div>
+
+          {/* A run the person proposed opens even when the saved view does not list it; say so, so the
+              card under a list that lacks its row is not a puzzle (critic F3). */}
+          {current !== null && !history.some((r) => r.runId === current.runId) && (
+            <p className="dunning-dim" role="note">
+              {t('dunning.outsideView')}
+            </p>
+          )}
+          {current !== null && (
+            <CurrentRun
+              run={current}
+              canDun={canDun}
+              canSend={canSend}
+              canPost={canPost}
+              busy={busy}
+              onIssue={() => void issue('issue')}
+              onRecoverFee={() => void issue('recover-fee')}
+              onSend={() => void send()}
+              onDiscard={() => void discard()}
+              onDownload={(debtorId, debtorName) => void downloadLetter(debtorId, debtorName)}
+            />
+          )}
         </>
       )}
 
@@ -516,6 +643,7 @@ function CurrentRun({
   onIssue,
   onRecoverFee,
   onSend,
+  onDiscard,
   onDownload,
 }: {
   run: DunningRunView;
@@ -526,10 +654,19 @@ function CurrentRun({
   onIssue: () => void;
   onRecoverFee: () => void;
   onSend: () => void;
+  onDiscard: () => void;
   onDownload: (debtorId: string, debtorName: string | null) => void;
 }) {
   const t = useT();
+  // The card opens under the list by the person's act; bring it into view when a DIFFERENT run opens
+  // (not on the re-read after an issue or a send, which keeps the run and must not move the page).
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    cardRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [run.runId]);
   const issued = run.status !== 'proposed';
+  // D161.3: the discard asks first, in a dialog that names what it does (the engine's own sentence).
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   // A run whose items carry a fee that is not yet on the ledger BOOKS when issued (or recovered),
   // so issuing it needs `post` as well as `dun`: the engine asserts exactly this, and the courtesy
   // gate says it before the click (critic N2).
@@ -540,7 +677,7 @@ function CurrentRun({
   // C4: the governed write this run is about to commit, if any. A proposed run issues; an issued run
   // sends; a sent run has nothing pending, so it names no verb. Both governed verbs carry the `dun`
   // dial capability, so the ConsequenceLine renders the SAME sentence an approver reads when clearing
-  // an agent's proposal of the same write (`agent.consequence.dun`). It renders nothing for a verb
+  // an agent's proposal of the same write (the engine's one catalogue, D156). It renders nothing for a verb
   // with no dial capability, so a future ungoverned write would simply show no line.
   const pendingVerb =
     run.status === 'proposed' ? 'issue_dunning_run' : run.status === 'issued' ? 'send_dunning_run' : null;
@@ -610,7 +747,7 @@ function CurrentRun({
   ];
 
   return (
-    <div className="dunning-current panel" data-testid="dunning-current">
+    <div ref={cardRef} className="dunning-current panel" data-testid="dunning-current">
       <div className="dunning-current-head">
         <div>
           <h2>
@@ -668,8 +805,39 @@ function CurrentRun({
               {canDun && canSend ? t('dunning.send') : t('dunning.sendDenied')}
             </button>
           )}
+          {/* D161.3, D154: a destructive act lives under Mehr, never as a bare button beside Ausstellen.
+              Only a proposed run can be discarded, and only by someone who may operate dunning. */}
+          {run.status === 'proposed' && canDun && (
+            <OverflowMenu
+              label={t('dunning.moreActions')}
+              disabled={busy !== null}
+              items={[{ key: 'discard', label: t('dunning.discard'), danger: true, onSelect: () => setConfirmingDiscard(true) }]}
+            />
+          )}
         </div>
       </div>
+
+      <Modal
+        open={confirmingDiscard}
+        role={ALERT_DIALOG}
+        onClose={() => setConfirmingDiscard(false)}
+        title={t('dunning.discardTitle')}
+        closeLabel={t('dunning.discardClose')}
+        footer={
+          <button
+            type="button"
+            className="btn btn--danger"
+            onClick={() => {
+              setConfirmingDiscard(false);
+              onDiscard();
+            }}
+          >
+            {t('dunning.discard')}
+          </button>
+        }
+      >
+        <ConsequenceLine verb="discard_dunning_run" />
+      </Modal>
 
       {/* C4: the consequence sentence for the write the commit button will make, the same one an
           approver reads for an agent's proposal of it. Quiet by law (the ConsequenceLine's own

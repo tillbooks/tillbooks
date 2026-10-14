@@ -13,9 +13,10 @@ import { useT, formatDate, formatMoney } from '../../i18n';
 import type { BankInboxLine, DraftTarget } from './model';
 import { daysBetween, lineDate } from './model';
 import type { Lookups } from './lookups';
-import { useClaimedEntries, useLedgerLines } from './panelData';
+import { useClaimedEntries, useEntry, useLedgerLines } from './panelData';
 import { plural } from './lookups';
 import { SearchGlyph } from './glyphs';
+import { LegsPreview } from './LegsPreview';
 
 export interface LinkChooserProps {
   workspaceId: string;
@@ -60,6 +61,9 @@ export function LinkChooser({ workspaceId, line, lookups, claimedEntryIds, initi
 
   const chosen = [...same, ...other].find((c) => c.entryId === picked) ?? null;
   const difference = chosen === null ? 0 : line.amountMinor - chosen.signedMinor;
+  // The Buchungsvorschau of a match (B2: the full Soll/Haben table lives in the editors): the entry the
+  // line will point at, line by line, which the match leaves exactly as it is.
+  const { entry } = useEntry(workspaceId, chosen?.entryId ?? null);
 
   const renderCandidate = (c: (typeof candidates)[number]) => {
     const taken = claimedEntryIds.has(c.entryId) || held.has(c.entryId);
@@ -145,6 +149,15 @@ export function LinkChooser({ workspaceId, line, lookups, claimedEntryIds, initi
             />
           </label>
         </>
+      )}
+      {chosen !== null && entry !== null && (
+        <LegsPreview
+          title={t('bankInbox.compare.entryTitle')}
+          subtitle={t('bankInbox.compare.entryUnchanged', { date: formatDate(entry.entry.date) })}
+          lines={entry.lines.map((l) => ({ accountId: l.account, debit: l.debit, credit: l.credit }))}
+          currency={line.currency}
+          lookups={lookups}
+        />
       )}
       {chosen !== null && <p className="bank-mode__consequence">{t('bankInbox.link.consequence')}</p>}
       <div className="bank-mode__actions">

@@ -3,13 +3,13 @@
     "mwst": {
       "group": "VAT",
       "abrechnung": "Return",
-      "settings": "Settings"
+      "settings": "VAT settings"
     }
   },
   "vat": {
     "return": {
       "title": "VAT return",
-      "subtitle": "{method} · {timing} · {from} to {to}",
+      "subtitle": "{method} · {timing}",
       "subtitlePending": "Loading the filing method and period.",
       "method": {
         "effektiv": "Effective",
@@ -27,7 +27,6 @@
       "cancel": "Cancel",
       "confirmClose": "Close dialog",
       "rangeTo": "to",
-      "activePeriodLabel": "Active VAT period",
       "pickPeriod": "Choose a period",
       "periodTrigger": "Period: {period}",
       "periodMenu": "Choose a filing period",
@@ -66,7 +65,6 @@
       "empty": "No taxable activity in this period.",
       "emptyHint": "The return is still expected. You file it as a nil return.",
       "emptyCta": "Open the journal",
-      "exportNote": "Step 3: TILL produces the eCH-0217 file (version 2.0.0) and you download it. In step 4 you upload it to the FTA ePortal yourself: there is no interface to the FTA.",
       "export": {
         "action": "Export the eCH-0217 file",
         "working": "Building the file …",
@@ -133,7 +131,9 @@
         "unexplained": "unexplained",
         "matchNote": "The tax due equals the movement on the VAT account.",
         "noCauses": "TILL does not attribute the difference to a cause yet, so all of it sits under unexplained. It is often a VAT payment to the FTA for an earlier period, or an entry posted straight to the VAT account with no tax code.",
-        "investigate": "Check the entries on the VAT accounts"
+        "investigate": "Check the entries on the VAT accounts",
+        "info": "What the reconciliation means",
+        "disclosure": "Reconciliation in detail"
       },
       "filedBanner": "Filed: {period} is locked.",
       "filedRecomputed": "No further entries can be added. The figures below are recalculated and are not a stored copy.",
@@ -160,7 +160,32 @@
           "istTiming": "Cash-basis filing is not built yet"
         }
       },
-      "istNotImplementedCite": "MWSTG Art. 39 Abs. 2"
+      "istNotImplementedCite": "MWSTG Art. 39 Abs. 2",
+      "markFiledMore": "More actions for this return",
+      "filedInfo": "What the lock means",
+      "steps": {
+        "line": "Step {n} of {total}: {step}",
+        "allDone": "All {total} steps done",
+        "running": "Period still running",
+        "info": "What this step means",
+        "disclosure": "All steps of the return",
+        "next": {
+          "1": "compute",
+          "3": "export",
+          "4": "file in the ePortal",
+          "5": "mark as filed",
+          "6": "settle the VAT accounts"
+        },
+        "why": {
+          "1": "TILL computes the return from your posted entries.",
+          "3": "TILL produces the eCH-0217 file (version 2.0.0) and you download it. In step 4 you upload it to the FTA ePortal yourself: there is no interface to the FTA.",
+          "4": "Upload the file to the FTA ePortal yourself: there is no interface to the FTA. Then mark the period as filed here, and TILL locks it.",
+          "5": "The ePortal filing is confirmed. Mark the period as filed now, and TILL locks it.",
+          "6": "The period is filed and locked. Last, you move the balances of the VAT accounts to 2201.",
+          "done5": "The period is filed and locked.",
+          "done6": "The period is filed and locked, and the VAT accounts are settled."
+        }
+      }
     },
     "settlement": {
       "title": "Settle the VAT accounts",

@@ -25,7 +25,8 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { useCapabilities } from '../../lib/capabilities';
 import { ErrorBanner, PermissionDenied, Skeleton } from '../../components/states';
-import { LockGlyph } from '../../components/states/glyphs';
+import { InfoGlyph, LockGlyph } from '../../components/states/glyphs';
+import { Tooltip } from '../../components/Tooltip';
 import { HelpHint } from '../../components/HelpHint';
 import { useSyncSignal } from './sync-signal';
 import { HostingJourney, ExitChecklist } from './HostingJourney';
@@ -159,21 +160,39 @@ export function SyncHosting() {
         {/* The dial renders only on a known posture: never a switch whose state is unknown (design §4). */}
         {load.kind === 'ready' && (
           <div className="sync-dial-wrap">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={publishing}
-              aria-label={t('sync.dial.label')}
-              className="sync-dial"
-              disabled={!canManage || busy}
-              {...(!canManage ? { 'aria-disabled': true, 'aria-describedby': hintId } : {})}
-              onClick={() => void flip(!publishing)}
-            >
-              <span className="sync-dial-track" aria-hidden="true">
-                <span className="sync-dial-thumb" />
+            <span className="sync-dial-row">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={publishing}
+                aria-label={t('sync.dial.label')}
+                className="sync-dial"
+                disabled={!canManage || busy}
+                {...(!canManage ? { 'aria-disabled': true, 'aria-describedby': hintId } : {})}
+                onClick={() => void flip(!publishing)}
+              >
+                <span className="sync-dial-track" aria-hidden="true">
+                  <span className="sync-dial-thumb" />
+                </span>
+                <span className="sync-dial-state">{publishing ? t('sync.dial.on') : t('sync.dial.off')}</span>
+              </button>
+              {/* The claims-honesty anchor: OFF says no stream is published; ON says the stream is
+                  AVAILABLE to authorised readers and explicitly NOT that anything is connected. The
+                  dial's own label is the one-line state, so the sentence sits behind the (i) beside
+                  it (D152 rule 4, the owner's pick of 03.10.2026), one hover or focus away. */}
+              <span className="sync-posture-info">
+                <Tooltip
+                  placement="bottom"
+                  content={
+                    <span className="sync-posture">{publishing ? t('sync.state.on.body') : t('sync.state.off.body')}</span>
+                  }
+                >
+                  <button type="button" className="btn btn--ghost btn--icon sync-posture-trigger" aria-label={t('journey.publishing.infoLabel')}>
+                    <InfoGlyph size={16} />
+                  </button>
+                </Tooltip>
               </span>
-              <span className="sync-dial-state">{publishing ? t('sync.dial.on') : t('sync.dial.off')}</span>
-            </button>
+            </span>
             {/* A non-owner sees the switch DISABLED with a padlock and the reason, never enabled-then-
                 rejected (design §2, A24 courtesy gate; the engine is the real gate). */}
             {!canManage && (
@@ -197,12 +216,6 @@ export function SyncHosting() {
       {load.kind === 'ready' && (
         <>
           {actionError !== null && <ErrorBanner error={actionError} />}
-
-          {/* The claims-honesty anchor: OFF says no stream is published; ON says the stream is
-              AVAILABLE to authorised readers and explicitly NOT that anything is connected. */}
-          <p className="sync-posture diag-prose">
-            {publishing ? t('sync.state.on.body') : t('sync.state.off.body')}
-          </p>
 
           {publishing && (
             <>

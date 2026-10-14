@@ -15,7 +15,7 @@ npm run check          # typecheck + house style + tests
 node bin/till.mjs help
 ```
 
-`npm test` builds first, so a clean checkout works. Node 20 or newer. CI runs on 20 and 22.
+`npm test` builds first, so a clean checkout works. Node 22 or newer: the SQLite driver needs it.
 
 The commands above cover the core: the engine, the MCP server, and the CLI. If you touch the Studio
 under `app/`, install its dependencies and run the full gate, which builds the Studio and runs its

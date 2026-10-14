@@ -1,8 +1,10 @@
 /**
  * A31, the document-capture tables. Additive, tenant-scoped, append-only field history.
  *
- * TWO TABLES. `captures` is the queue row (one per ingested document); `capture_fields` is the
- * append-only field history (one LIVE row per key, superseded rows kept). Both carry `workspace_id`
+ * THREE TABLES. `captures` is the queue row (one per ingested document); `capture_fields` is the
+ * append-only field history (one LIVE row per key, superseded rows kept); `capture_qr_payloads` is
+ * the evidence of a supplied QR payload (spec §0a, added 2026-09-30 as a NEW table, so no schema
+ * generation and no existing row changes meaning). All three carry `workspace_id`
  * (§H-TENANT) and are new tables, so they join `SCHEMA_SQL` for the fresh-database path and are
  * copied by G04's snapshot like every other table; there is nothing for `ADDITIVE_COLUMNS` to do.
  *
@@ -60,4 +62,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS capture_fields_live
 
 CREATE INDEX IF NOT EXISTS capture_fields_by_capture
   ON capture_fields (workspace_id, capture_id);
+
+-- A31 §0a item 9: the evidence of a SUPPLIED QR payload (a phone scanner, the Studio's image decode,
+-- a G02 decoder plugin). The fields it produced carry the supplier's provenance (operator / agent);
+-- this row carries the raw payload, and each field row it wrote references it through
+-- capture_fields.qr_payload_id (an ADDITIVE_COLUMNS entry in store/schema.ts), so an auditor can see
+-- a value was decoded from a symbol and not typed. Append-only, and written only when the payload
+-- wrote a row. capture_id is a DECLARED foreign key so G04's restore remaps it (critic F3).
+CREATE TABLE IF NOT EXISTS capture_qr_payloads (
+  id            TEXT PRIMARY KEY,
+  workspace_id  TEXT NOT NULL,
+  capture_id    TEXT NOT NULL REFERENCES captures(id),
+  payload       TEXT NOT NULL,
+  sha256        TEXT NOT NULL,
+  source        TEXT NOT NULL CHECK (source IN ('operator','agent')),
+  decoder       TEXT,
+  warnings      TEXT NOT NULL DEFAULT '[]',
+  created_by    TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS capture_qr_payloads_by_capture
+  ON capture_qr_payloads (workspace_id, capture_id, created_at);
 `;

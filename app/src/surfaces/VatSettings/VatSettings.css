@@ -1,9 +1,8 @@
 /* VatSettings surface styles (spec A05 §6).
    Tokens only: no hex literals, no new colours. 8-pt grid throughout, type on the written scale
    (K-37), meaning in dim ink, never faint or opacity (K-36). Depth is a single border plus a
-   background step, never a shadow or a gradient. The method/timing badge stays neutral: the accent is
-   reserved for focus and the single primary action, and success rides --t-success, so neither ever
-   recolours the config. */
+   background step, never a shadow or a gradient. The accent is reserved for focus and the single
+   primary action, and success rides --t-success, so neither ever recolours the config. */
 
 .vat-surface {
   display: flex;
@@ -48,23 +47,6 @@
   background: var(--t-bg-soft);
   border: 1px solid var(--t-border);
   border-radius: var(--t-radius-sm);
-}
-
-/* Neutral method/timing badges. */
-.vat-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--t-space-1);
-}
-
-.vat-badge {
-  padding: var(--t-space-0-5) var(--t-space-2);
-  background: var(--t-bg-soft);
-  border: 1px solid var(--t-border);
-  border-radius: var(--t-radius-full);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
 }
 
 /* A method / timing choice group (a fieldset, not a focus stop). */
@@ -375,60 +357,109 @@
 .vat-options {
   display: flex;
   flex-direction: column;
-  gap: var(--t-space-2);
-}
-
-.vat-option {
-  display: flex;
-  gap: var(--t-space-1);
   align-items: flex-start;
+  gap: 0;
+}
+
+/* An option at rest (D152 rule 4): the radio and its label, then its (i). The words live in the
+   (i) card, so the row is one line. */
+.vat-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.vat-option-main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
   cursor: pointer;
-}
-
-.vat-option input[type='radio'] {
-  margin-top: 3px;
-}
-
-.vat-option-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .vat-option-label {
   font-weight: 500;
 }
 
-/* Layer 1: the permanent consequence line. Dim ink, never hidden, sized for de-CH length. */
-.vat-option-consequence {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  max-width: 62ch;
+/* The election group's head: its name, then the (i) holding the binding facts and the MWSTG
+   citation. A div plus a named radiogroup rather than a fieldset, because a button inside a legend
+   would become part of the group's accessible name. */
+.vat-choice-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
 }
 
-/* The product-limitation line: its own element, one message key with the engine refusal. */
-.vat-limitation {
-  margin: 2px 0 0;
-  color: var(--t-text-dim);
+.vat-choice-label {
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
-  max-width: 62ch;
+  font-weight: 500;
+  color: var(--t-text-dim);
 }
 
-/* The fieldset-level binding facts, with the structured citation right-aligned below them. */
-.vat-binding {
+.vat-info {
+  display: inline-flex;
+}
+
+.vat-info-trigger {
+  color: var(--t-text-dim);
+}
+
+/* The (i) card: the shared tooltip, widened to a reading measure because it holds whole sentences
+   and a citation. It opens below the ROW it explains and anchors to the row's left edge, not the
+   trigger's: the trigger sits after a label, and a card hung from it ran off a phone screen. The
+   wrap is static so the row (positioned below) is the card's containing block, and the measure
+   leaves the page and panel gutters free (4rem) on a phone. */
+.vat-option,
+.vat-choice-head,
+.vat-ist-line {
+  position: relative;
+}
+
+.vat-info .tooltip-wrap {
+  position: static;
+}
+
+.vat-info .tooltip {
+  left: 0;
+  transform: none;
+  max-width: min(26rem, calc(100vw - 4rem));
+}
+
+.vat-info-card {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin: var(--t-space-2) 0 0;
+  gap: var(--t-space-0-5);
+  white-space: normal;
+}
+
+/* The citation is a legal anchor, kept as its own line. Inherits the card's inverted ink. */
+.vat-info-cite {
+  font-style: normal;
+}
+
+/* "Ist: rechnet TILL noch nicht" (i): the line that replaces the Ist radio on a Soll workspace. Dim,
+   because it is a fact about the product, not a choice. On a workspace that HAS Ist stored it is the
+   standing condition, so it carries the warn glyph (shape plus colour, never colour alone). */
+.vat-ist-line {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin: 0;
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
   color: var(--t-text-dim);
-  max-width: 62ch;
 }
 
-/* The citation is content the operator checks against the law, so it is dim, not faint (K-36). */
+.vat-ist-line--stored {
+  color: var(--t-text);
+}
+
+.vat-ist-glyph {
+  flex: 0 0 auto;
+  color: var(--t-warn);
+}
+
+/* The structured citation style, shared with the Saldo notes and the VatReturn refusal. */
 .vat-binding-cite {
   align-self: flex-end;
   font-style: normal;
@@ -437,17 +468,12 @@
   color: var(--t-text-dim);
 }
 
-/* The eligibility comparison beside the Saldo option: limits always, figure in one of its three
-   honest states. The pending skeleton is the width of the figure, never delaying the limits. */
+/* The eligibility comparison inside the Saldo (i) card (it inherits the card's ink and size): limits
+   always, figure in one of its three honest states. The pending skeleton is the width of the figure, never delaying the limits. */
 .vat-eligibility {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-top: var(--t-space-0-5);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  max-width: 62ch;
-  color: var(--t-text-dim);
 }
 
 /* The limits and the measured turnover are `.t-money` (nowrap, tabular) inside their sentences, at

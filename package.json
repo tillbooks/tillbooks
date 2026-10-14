@@ -1,8 +1,8 @@
 {
   "name": "tillbooks",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-beta.1",
   "mcpName": "io.github.tillbooks/tillbooks",
-  "description": "TILL (Trusted Independent Ledger Library) is a free, open-source (MIT), local-first Swiss accounting app where an AI agent posts entries, categorizes, drafts and chases invoices, and prepares the MWST-Abrechnung through a first-class MCP interface, with a minimalist Studio for human oversight.",
+  "description": "Agent-first open-source ERP for Swiss SMEs: 800 MCP tools, one local file. Sales, purchasing, payments, stock, projects, books and MWST; your agent runs it, the Studio shows what it did. MIT licensed.",
   "type": "module",
   "license": "MIT",
   "author": "Nomadik GmbH",
@@ -15,7 +15,7 @@
     "till": "bin/till.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "keywords": [
     "accounting",
@@ -48,10 +48,12 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "prepack": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && npm run build",
+    "prepack": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && npm run build && node scripts/vendor-studio.mjs --build",
     "setup": "npm ci && npm --prefix app ci",
     "build:studio": "npm --prefix app run build",
     "build:all": "npm run build && npm run build:studio",
+    "vendor:studio": "node scripts/vendor-studio.mjs",
+    "verify:pack": "node scripts/verify-packed-studio.mjs",
     "typecheck": "npm run typecheck:src && npm run typecheck:test",
     "typecheck:src": "tsc -p tsconfig.json --noEmit",
     "typecheck:test": "npm run build && tsc -p tsconfig.test.json",
@@ -64,7 +66,7 @@
     "postgate": "node scripts/pre-push-gate.mjs --record gate",
     "gate:plan": "node scripts/pre-push-gate.mjs --plan",
     "gate:status": "node scripts/pre-push-gate.mjs --status",
-    "gate:studio": "cd app && npm run build && npx vitest run --maxWorkers=4 --minWorkers=1",
+    "gate:studio": "cd app && npm run build && npx vitest run --maxWorkers=4",
     "seed:demo": "npm run build && TILL_DB_PATH=$HOME/.till/till-demo.db node scripts/seed-demo-rich.mjs",
     "seed:demo:reset": "npm run build && TILL_DB_PATH=$HOME/.till/till-demo.db node scripts/seed-demo-rich.mjs --reset",
     "seed:kaizen": "npm run build && TILL_DB_PATH=$HOME/.till/till-kaizen-golden.db TILL_SEED_TODAY=$(date +%F) node scripts/seed-demo-rich.mjs --reset",
@@ -74,12 +76,12 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.5.0",
+    "@types/node": "^26.6.5",
     "jsqr": "^1.4.0",
     "typescript": "^5.7.2"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "better-sqlite3": "^13.0.3"
   }
 }

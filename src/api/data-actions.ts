@@ -36,18 +36,19 @@ import {
 } from '../core/data/index.js';
 import { resolveBackupDir } from './db-path.js';
 import { applySavedView } from '../core/customization/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface DataActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,
   ): ActionDef;
   depsAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (deps: ApiDeps, input: ActionInput) => Result,
@@ -125,14 +126,14 @@ export function dataActions(h: DataActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'export_workspace',
-      'write',
+      'write:reversible:derived',
       'Export the whole workspace to a documented, open .tillexport bundle (one JSONL file per table plus a manifest and FORMAT.md) a human can read without TILL. Optional scope names a subset of tables. Not a restore source.',
       ctxSchema({ scope: ARR, idempotencyKey: STR }, ['idempotencyKey']),
       (ctx, input, deps) => exportWorkspace(fromCtx(ctx, deps), input as never),
     ),
     ctxAction(
       'create_backup',
-      'write',
+      'write:correctable:derived',
       'Take a point-in-time .tillbackup snapshot: a tenant-scoped SQLite file plus a re-hashed manifest, recorded in the backup history. The byte-perfect artifact restore_backup consumes. An optional planId links the backup to a Datenübernahme plan (once it has reached planned), satisfying the migration commit gate’s pre-migration-backup leg; a planId in another workspace refuses.',
       ctxSchema({ planId: STR, idempotencyKey: STR }, ['idempotencyKey']),
       (ctx, input, deps) => createBackup(fromCtx(ctx, deps), input as never),
@@ -157,7 +158,7 @@ export function dataActions(h: DataActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'delete_backup',
-      'write',
+      'write:final:erase',
       'Delete a local backup/export artifact and its history row. Storage housekeeping only: a backup file carries no legal retention lock of its own.',
       ctxSchema({ backupId: STR, idempotencyKey: STR }, ['backupId', 'idempotencyKey']),
       (ctx, input, deps) =>
@@ -183,8 +184,8 @@ export function dataActions(h: DataActionHelpers): readonly ActionDef[] {
     ),
     depsAction(
       'restore_backup',
-      'write',
-      'Restore a .tillbackup into a brand-new workspace: composes create_workspace, bulk-loads every table preserving ids, and re-verifies balance + referential integrity before commit (all-or-nothing). Agent-staged: pass confirmed:true to proceed, else it returns a plan and writes nothing. Never overwrites an existing workspace.',
+      'write:correctable:pre-workspace',
+      'Restore a .tillbackup into a brand-new workspace: composes create_workspace, bulk-loads every table preserving ids, and re-verifies balance + referential integrity before commit (all-or-nothing). Agent-staged: pass confirmed:true to proceed, else it returns a plan and writes nothing. Never overwrites an existing workspace. Portal links come back closed (D161.2): every customer and supplier link that was live in the backup lands as a draft until a person hands it over again with portal_grant_send, and portalLinksAwaitingHandover says how many.',
       depsSchema({ source: STR, newWorkspaceName: STR, idempotencyKey: STR, confirmed: BOOL }, [
         'source',
         'newWorkspaceName',

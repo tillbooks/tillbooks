@@ -26,6 +26,8 @@ import { holdsAnyMembership, seatFirstOwner } from '../access/index.js';
 import type { IdentitySource } from '../access/index.js';
 import { LEGAL_FORMS, VAT_METHODS, VAT_TIMINGS, CURRENCIES, isFiscalYearStart } from './enums.js';
 import { isLedgerLocked } from './ledgerLock.js';
+import { NEW_WORKSPACE_PAYMENT_TERMS_DAYS, PAYMENT_TERMS_MAX_DAYS, isPaymentTermsDays } from './paymentTerms.js';
+import { refuseUndatedMethodChange } from '../vat/config.js';
 
 export interface SetupDeps {
   store: SqliteStore;
@@ -47,6 +49,12 @@ export interface CreateWorkspaceInput {
   baseCurrency?: string;
   fiscalYearStart?: string;
   legalForm?: string;
+  /**
+   * The workspace default Zahlungsfrist in days (0 to 365), or null for none. ABSENT gives a new
+   * workspace 30 days (owner pick 07.10.2026, "Preset 30 days for new"; D163). Existing workspaces are
+   * not touched: the column arrived NULL on them and stays so until someone sets it.
+   */
+  defaultPaymentTermsDays?: number | null;
   idempotencyKey?: string;
 }
 
@@ -86,13 +94,25 @@ export function createWorkspace(deps: SetupDeps, input: CreateWorkspaceInput): R
   }
   const invalid = validateFiscalFields(input);
   if (invalid) return invalid;
+  if (
+    input.defaultPaymentTermsDays !== undefined &&
+    input.defaultPaymentTermsDays !== null &&
+    !isPaymentTermsDays(input.defaultPaymentTermsDays)
+  ) {
+    return err('invalid_payment_terms_days', {
+      field: 'defaultPaymentTermsDays',
+      defaultPaymentTermsDays: input.defaultPaymentTermsDays,
+      min: 0,
+      max: PAYMENT_TERMS_MAX_DAYS,
+    });
+  }
 
   const mint = (): Result => {
     const id = deps.ids.next('ws');
     deps.store.db
       .prepare(
-        `INSERT INTO workspace (id, name, legal_form, base_currency, fiscal_year_start, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO workspace (id, name, legal_form, base_currency, fiscal_year_start, created_at, default_payment_terms_days)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -112,6 +132,10 @@ export function createWorkspace(deps: SetupDeps, input: CreateWorkspaceInput): R
         input.baseCurrency ?? 'CHF',
         input.fiscalYearStart ?? '01-01',
         deps.clock.now(),
+        // D163, owner pick 07.10.2026: a NEW book starts with 30 days of Standard-Zahlungsfrist, so a
+        // customer or supplier without terms of its own falls due 30 days after the document date.
+        // Visible and changeable on the Firmenprofil; an explicit null opts out at creation.
+        input.defaultPaymentTermsDays === undefined ? NEW_WORKSPACE_PAYMENT_TERMS_DAYS : input.defaultPaymentTermsDays,
       );
     // Born with the KMU chart (A01).
     seedChartOfAccounts(makeContext(deps.store, { workspaceId: id, clock: deps.clock, ids: deps.ids }));
@@ -382,6 +406,12 @@ export function setVatMethod(
   if (!VAT_TIMINGS.has(input.vatAccounting)) {
     return err('invalid_vat_accounting', { vatAccounting: input.vatAccounting });
   }
+  // D160.5: the SAME filed-period guard `vat_configure` runs. Once an MWST period is filed, moving the
+  // method or the timing without a dated era would recompute that filed period under a method it was
+  // not filed under, so it is refused with `vat_method_change_undated` and routed to `vat_configure`
+  // (which can date it). Before anything is filed, onboarding sets the method freely, as before.
+  const filed = refuseUndatedMethodChange(ctx, { method: input.vatMethod, timing: input.vatAccounting }, 'set_vat_method');
+  if (filed !== null) return filed;
   ctx.store.db
     .prepare('UPDATE workspace SET vat_method = ?, vat_accounting = ? WHERE id = ?')
     .run(input.vatMethod, input.vatAccounting, ctx.workspaceId);

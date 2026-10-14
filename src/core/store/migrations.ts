@@ -41,6 +41,14 @@ import { NOT_AUTOMATABLE } from '../automation/denylist.js';
 import { appendAuditLog } from '../ledger/auditLog.js';
 import { topUpChartOfAccounts } from '../accounts/topUp.js';
 import { systemIdGen } from '../ids.js';
+import {
+  batchHadFile,
+  compactReference,
+  isBlankName,
+  isCompactMsgId,
+  mintFrozenReference,
+  referenceTakenIn,
+} from '../banking/pain001Refs.js';
 import type { SqliteStore } from './sqlite-store.js';
 
 export interface DataMigration {
@@ -631,6 +639,337 @@ function adoptPreA39BankDecisions(db: Database): void {
   disableDeniedAutomationRules(db);
 }
 
+/**
+ * The DDL generation 9 adds once every row is frozen: one UNIQUE index per reference column, scoped to
+ * the workspace, and one trigger per table that refuses to change or clear a reference once it is set.
+ * Exported so a test can name exactly what the generation owns. Not in `SCHEMA_SQL` or
+ * `ADDITIVE_INDEXES`, because both run BEFORE the data migrations on an older file, and a UNIQUE index
+ * over `msg_id` (a column that predates generation 9 and was never checked for duplicates) or a freeze
+ * trigger ahead of the backfill would make the book unopenable or block the backfill itself.
+ */
+export const FROZEN_REFERENCE_DDL = `
+CREATE UNIQUE INDEX IF NOT EXISTS payment_batch_msg_id_ref_unique ON payment_batch (workspace_id, msg_id);
+CREATE UNIQUE INDEX IF NOT EXISTS payment_batch_pmt_inf_id_ref_unique ON payment_batch (workspace_id, pmt_inf_id);
+CREATE UNIQUE INDEX IF NOT EXISTS payment_batch_item_instr_id_ref_unique ON payment_batch_item (workspace_id, instr_id);
+CREATE UNIQUE INDEX IF NOT EXISTS payment_batch_item_end_to_end_id_ref_unique ON payment_batch_item (workspace_id, end_to_end_id);
+CREATE UNIQUE INDEX IF NOT EXISTS payment_batch_item_seq_ref_unique ON payment_batch_item (workspace_id, batch_id, seq);
+
+CREATE TRIGGER IF NOT EXISTS payment_batch_refs_frozen
+BEFORE UPDATE OF msg_id, pmt_inf_id, debtor_name, debtor_iban, generated_at, ctrl_sum_minor, nb_of_txs ON payment_batch
+WHEN (OLD.generated_at IS NOT NULL AND NEW.generated_at IS NOT OLD.generated_at)
+  OR (OLD.ctrl_sum_minor IS NOT NULL AND NEW.ctrl_sum_minor IS NOT OLD.ctrl_sum_minor)
+  OR (OLD.nb_of_txs IS NOT NULL AND NEW.nb_of_txs IS NOT OLD.nb_of_txs)
+  OR (OLD.msg_id IS NOT NULL AND NEW.msg_id IS NOT OLD.msg_id)
+  OR (OLD.pmt_inf_id IS NOT NULL AND NEW.pmt_inf_id IS NOT OLD.pmt_inf_id)
+  OR (OLD.debtor_name IS NOT NULL AND NEW.debtor_name IS NOT OLD.debtor_name)
+  OR (OLD.debtor_iban IS NOT NULL AND NEW.debtor_iban IS NOT OLD.debtor_iban)
+BEGIN
+  SELECT RAISE(ABORT, 'payment_batch_refs_frozen');
+END;
+
+CREATE TRIGGER IF NOT EXISTS payment_batch_item_refs_frozen
+BEFORE UPDATE OF batch_id, instr_id, end_to_end_id, seq, creditor_name ON payment_batch_item
+WHEN NEW.batch_id IS NOT OLD.batch_id
+  OR (OLD.instr_id IS NOT NULL AND NEW.instr_id IS NOT OLD.instr_id)
+  OR (OLD.end_to_end_id IS NOT NULL AND NEW.end_to_end_id IS NOT OLD.end_to_end_id)
+  OR (OLD.seq IS NOT NULL AND NEW.seq IS NOT OLD.seq)
+  OR (OLD.creditor_name IS NOT NULL AND NEW.creditor_name IS NOT OLD.creditor_name
+      AND NOT (NEW.creditor_name IS NULL AND EXISTS (
+        SELECT 1 FROM payment_batch b WHERE b.workspace_id = OLD.workspace_id AND b.id = OLD.batch_id
+           AND b.status = 'discarded' AND b.generated_at IS NULL)))
+BEGIN
+  SELECT RAISE(ABORT, 'payment_batch_item_refs_frozen');
+END;
+`;
+
+/**
+ * The creditor-IBAN half of the item lock (owner R2-5: an erasure may blank it, to '', only on a batch
+ * discarded as a draft). A separate trigger, created only where `payment_batch_item.creditor_iban`
+ * exists: every real book has it (A18 was born with it), but the M-3 rename fixture derives an "old"
+ * schema by renaming EVERY `creditor_iban` in `SCHEMA_SQL`, this column included, and a trigger naming
+ * a column the table lacks would make the whole generation fail on that shape.
+ */
+export const FROZEN_CREDITOR_IBAN_DDL = `
+CREATE TRIGGER IF NOT EXISTS payment_batch_item_iban_frozen
+BEFORE UPDATE OF creditor_iban ON payment_batch_item
+WHEN NEW.creditor_iban IS NOT OLD.creditor_iban
+ AND NOT (NEW.creditor_iban = '' AND EXISTS (
+   SELECT 1 FROM payment_batch b WHERE b.workspace_id = OLD.workspace_id AND b.id = OLD.batch_id
+      AND b.status = 'discarded' AND b.generated_at IS NULL))
+BEGIN
+  SELECT RAISE(ABORT, 'payment_batch_item_refs_frozen');
+END;
+`;
+
+/**
+ * Generation 9 (A18, 30.09.2026): FREEZE the four pain.001 references on every batch and item written
+ * before they were stored, then add the UNIQUE indexes and the freeze triggers over them.
+ *
+ * Until now `buildPain001Xml` re-derived MsgId/PmtInfId/InstrId/EndToEndId from the row's database id
+ * on every render (`compactReference`), and a G04 restore or an `env_copy` re-mints every id, so the
+ * same batch regenerated in a restored book carried a NEW MsgId that the bank's duplicate check (SIX
+ * IG SPS 2025 §3.8) could not recognise. From this generation on, `createPaymentBatch` stamps the four
+ * values at creation and the XML is built only from them.
+ *
+ * WHAT A ROW IS FROZEN AT is the value its XML already carried, so a batch already sent keeps what the
+ * bank saw ("derive, never transform"), with the one exception stated under ONE LIMIT below:
+ *  - InstrId, EndToEndId, PmtInfId: `compactReference` of the row's CURRENT id, exactly what the
+ *    renderer produced until now.
+ *  - MsgId: the stored `msg_id` when it has the compact shape (`isCompactMsgId`). On an untouched book
+ *    that IS `compactReference('M', id)`, written at generation. On a book a develop-era restore
+ *    produced it is the MsgId of the ORIGINAL id (restore copied the column verbatim while it re-minted
+ *    the id), which is precisely the value the bank deduplicates on; the batch's PmtInfId then follows
+ *    the same original id (`P` + the same core). A NULL (a draft) or a pre-F2 `PB-<id>` value (over 35
+ *    characters for every production id, so never accepted by a bank) takes the id-derived value.
+ *
+ * TWO LIMITS, and neither can be repaired, because the value the bank saw is gone from the book.
+ *
+ * (C3, critic r1) On a book a develop-era restore produced, the
+ * ORIGINAL item ids no longer exist anywhere, so InstrId/EndToEndId are frozen from the RE-MINTED item
+ * ids. They are then NOT the values the bank and the creditors saw for that run. MsgId is kept (and
+ * PmtInfId follows it), so the bank's duplicate check still catches a re-upload and nothing is paid
+ * twice; but a camt.053 line of such a run that names only an item's EndToEndId will not match its item,
+ * and those lines are booked by hand (the run total still matches on the PmtInfId). Every book that
+ * was never restored before generation 9 is frozen exactly.
+ *
+ * (R3-3, critic r3) The debtor IBAN is frozen from the account's CURRENT IBAN. Before generation 9
+ * `update_bank_account` allowed an IBAN change on an account with payment batches (when it had no
+ * opening balance), so on a book whose account IBAN changed AFTER a file was sent, the snapshot is an
+ * IBAN that file never carried, and a regenerated file differs from the sent one in DbtrAcct/DbtrAgt.
+ * MsgId and every other reference are frozen as sent, so the bank's duplicate check still holds at the
+ * bank that received it; a re-upload at a DIFFERENT bank is what the frozen IBAN prevents from here on.
+ *
+ * UNIQUE PER WORKSPACE, AND KEPT VALUES WIN. Rows that keep a stored MsgId are frozen first, so a
+ * derived value can never push a transmitted MsgId aside; any collision (only reachable through
+ * non-uuid test ids or a restored copy of a batch) is disambiguated by `mintFrozenReference`, which is
+ * the same rule `createPaymentBatch` uses and is what makes the UNIQUE indexes below safe to create.
+ *
+ * THE ONE ADMITTED CHANGE (owner decision, 01.10.2026, critic r2 R2-5): the item trigger also locks the
+ * creditor snapshot (name and IBAN), except that a C00 erasure may CLEAR it (name to NULL, IBAN to '')
+ * on an item of a batch discarded as a draft (`discarded` with no `generated_at`, so no file ever existed).
+ * Any other change, and any clearing on a batch that produced a file, is refused. The exception is
+ * judged on the batch the item BELONGS to (`OLD.batch_id`), and an item never changes batch (critic r3
+ * R3-1): otherwise one statement could move a sent item into a discarded draft and clear it.
+ *
+ * THE DEBTOR IBAN is frozen with them (critic r2 R2-1): `payment_batch.debtor_iban` (and so the DbtrAgt
+ * clearing number derived from it), read from the debtor bank account row as the renderer did.
+ *
+ * THE DEBTOR NAME is frozen with them (critic r1 C2): `payment_batch.debtor_name`, the InitgPty/Dbtr
+ * name, read by the renderer's rule. A restore under another workspace name changed it before.
+ *
+ * THE CREDITOR NAME is frozen with them (owner decision D148): `payment_batch_item.creditor_name`, the
+ * Cdtr/Nm, snapshotted like `creditor_iban` and read by the renderer's rule (merge tombstone followed).
+ * A vendor rename, or a C00 erasure of the vendor, changed the bytes of a sent file before.
+ *
+ * THE ITEM ORDER is frozen with them (critic r1 C2): `payment_batch_item.seq`, each item's position in
+ * its batch, is filled from the rowid order the renderer used until now. Row order is not something a
+ * G04 backup and restore preserve, so a batch rendered by rowid came back from a restore with its
+ * CdtTrfTxInf elements in another order: the same references, a different file and payload hash.
+ *
+ * IDEMPOTENT: only rows with a missing reference are touched, and a row is filled in one statement, so
+ * a second run finds nothing to do; the DDL is `IF NOT EXISTS`. It runs inside the generation's
+ * transaction like every step here, so a crash leaves generation 8 and the rows as they were.
+ */
+function freezePain001References(db: Database): void {
+  // Pass G (critic r3 R3-2): stamp `generated_at` on every batch that produced a file. Today that is
+  // proven by the status (generated or paid) or, for a discarded batch, by the control sum generation
+  // wrote in the same statement as the flip. The time is the batch's earliest recorded `update` in the
+  // audit log (the generation's own row, since generation is the first update a batch can have), else
+  // its creation time; the stamp's job is the FACT that a file existed, the time is best effort.
+  db.prepare(
+    `UPDATE payment_batch
+        SET generated_at = COALESCE(
+              (SELECT MIN(l.at) FROM audit_log l
+                WHERE l.workspace_id = payment_batch.workspace_id AND l.entity_kind = 'payment_batch'
+                  AND l.entity_id = payment_batch.id AND l.action = 'update'),
+              payment_batch.cre_dt_tm)
+      WHERE generated_at IS NULL
+        AND (status IN ('generated', 'paid') OR (status = 'discarded' AND ctrl_sum_minor IS NOT NULL))`,
+  ).run();
+
+  // Pass 0: a stored msg_id that is not a compact MsgId was never carried by a file the bank accepted;
+  // clear it on the unfrozen rows so the remaining non-NULL values are exactly the ones to keep.
+  const unfrozen = db
+    .prepare('SELECT id, workspace_id, msg_id FROM payment_batch WHERE pmt_inf_id IS NULL')
+    .all() as { id: string; workspace_id: string; msg_id: string | null }[];
+  const clearMsg = db.prepare('UPDATE payment_batch SET msg_id = NULL WHERE workspace_id = ? AND id = ?');
+  for (const row of unfrozen) if (row.msg_id !== null && !isCompactMsgId(row.msg_id)) clearMsg.run(row.workspace_id, row.id);
+
+  // Pass 1: every unfrozen batch, rows that keep a stored MsgId first, then by insertion order.
+  const batches = db
+    .prepare('SELECT id, workspace_id, msg_id FROM payment_batch WHERE pmt_inf_id IS NULL ORDER BY (msg_id IS NULL), rowid')
+    .all() as { id: string; workspace_id: string; msg_id: string | null }[];
+  const setBatch = db.prepare('UPDATE payment_batch SET msg_id = ?, pmt_inf_id = ? WHERE workspace_id = ? AND id = ?');
+  for (const b of batches) {
+    const kept = isCompactMsgId(b.msg_id) ? b.msg_id : null;
+    const msgId = mintFrozenReference(
+      kept ?? compactReference('M', b.id),
+      referenceTakenIn(db, b.workspace_id, { table: 'payment_batch', column: 'msg_id' }, b.id),
+    );
+    const pmtInfId = mintFrozenReference(
+      kept !== null ? `P${kept.slice(1)}` : compactReference('P', b.id),
+      referenceTakenIn(db, b.workspace_id, { table: 'payment_batch', column: 'pmt_inf_id' }, b.id),
+    );
+    setBatch.run(msgId, pmtInfId, b.workspace_id, b.id);
+  }
+
+  // Pass 2: every unfrozen item, by insertion order.
+  const items = db
+    .prepare('SELECT id, workspace_id FROM payment_batch_item WHERE instr_id IS NULL OR end_to_end_id IS NULL ORDER BY rowid')
+    .all() as { id: string; workspace_id: string }[];
+  const setItem = db.prepare('UPDATE payment_batch_item SET instr_id = ?, end_to_end_id = ? WHERE workspace_id = ? AND id = ?');
+  for (const it of items) {
+    const instrId = mintFrozenReference(
+      compactReference('I', it.id),
+      referenceTakenIn(db, it.workspace_id, { table: 'payment_batch_item', column: 'instr_id' }, it.id),
+    );
+    const endToEndId = mintFrozenReference(
+      compactReference('E', it.id),
+      referenceTakenIn(db, it.workspace_id, { table: 'payment_batch_item', column: 'end_to_end_id' }, it.id),
+    );
+    setItem.run(instrId, endToEndId, it.workspace_id, it.id);
+  }
+
+  // Pass 3a (critic r1 C2): the debtor name, by the renderer's own rule until now (`debtorNameOf` in
+  // pain001.ts: the profile's creditor name, else the workspace name).
+  db.prepare(
+    `UPDATE payment_batch
+        SET debtor_name = (SELECT COALESCE(w.creditor_name, w.name, 'TILL') FROM workspace w WHERE w.id = payment_batch.workspace_id)
+      WHERE debtor_name IS NULL`,
+  ).run();
+  // Critic r2 R2-1: the debtor IBAN, from the debtor bank account row the renderer read until now.
+  db.prepare(
+    `UPDATE payment_batch
+        SET debtor_iban = (SELECT a.iban FROM bank_account a
+                            WHERE a.workspace_id = payment_batch.workspace_id AND a.id = payment_batch.bank_account_id)
+      WHERE debtor_iban IS NULL`,
+  ).run();
+
+  // Pass 3c (D148): every item's creditor name, by the renderer's own rule until now (`resolveContactRef`
+  // in sales/contact.ts): the vendor contact with a merge tombstone followed to its survivor (a bounded
+  // walk, a seen-set against a hand-edited cycle), its name, else the vendor id itself.
+  //
+  // A vendor with no resolvable contact: the renderer then printed the vendor's database id. For a batch
+  // already GENERATED (or paid, or discarded after generation) that id IS what the file carried, and the
+  // bank holds that file under its MsgId, so the snapshot keeps it: byte-identity with what was sent
+  // outranks tidiness (and G04 lists the column as a natural key, so a restore never rewrites it). For a
+  // DRAFT nothing was ever sent, so no id is written: the name stays NULL and generation refuses
+  // `creditor_name_missing`, which is what creating that batch today would answer.
+  const unnamed = db
+    .prepare(
+      `SELECT i.id AS id, i.workspace_id AS workspace_id, i.vendor_id AS vendor_id, b.status AS status,
+              b.generated_at AS generated_at
+         FROM payment_batch_item i JOIN payment_batch b ON b.workspace_id = i.workspace_id AND b.id = i.batch_id
+        WHERE i.creditor_name IS NULL`,
+    )
+    .all() as { id: string; workspace_id: string; vendor_id: string; status: string; generated_at: string | null }[];
+  const contactOf = db.prepare('SELECT id, name, merged_into_id FROM contact WHERE workspace_id = ? AND id = ?');
+  const setName = db.prepare('UPDATE payment_batch_item SET creditor_name = ? WHERE workspace_id = ? AND id = ?');
+  for (const it of unnamed) {
+    type ContactLink = { id: string; name: string | null; merged_into_id: string | null };
+    let row = contactOf.get(it.workspace_id, it.vendor_id) as ContactLink | undefined;
+    const seen = new Set<string>(row === undefined ? [] : [row.id]);
+    while (row !== undefined && row.merged_into_id !== null) {
+      const next = contactOf.get(it.workspace_id, row.merged_into_id) as ContactLink | undefined;
+      if (next === undefined || seen.has(next.id)) break;
+      seen.add(next.id);
+      row = next;
+    }
+    // With a file: exactly what the renderer printed (`name ?? vendor_id`, a blank name included).
+    // Without one: only a name the creation rule accepts (`isBlankName`, critic r2 R2-2), else NULL.
+    const name = batchHadFile(it.generated_at)
+      ? (row?.name ?? it.vendor_id)
+      : isBlankName(row?.name) ? null : (row?.name as string);
+    if (name !== null) setName.run(name, it.workspace_id, it.id);
+  }
+
+  // Pass 3b (critic r1 C2): every item's position in its batch, frozen at the order the renderer used
+  // until now (rowid within the batch), continuing after any position the batch already holds.
+  const unplaced = db
+    .prepare('SELECT id, workspace_id, batch_id FROM payment_batch_item WHERE seq IS NULL ORDER BY workspace_id, batch_id, rowid')
+    .all() as { id: string; workspace_id: string; batch_id: string }[];
+  const lastSeq = db.prepare('SELECT COALESCE(MAX(seq), 0) AS n FROM payment_batch_item WHERE workspace_id = ? AND batch_id = ?');
+  const setSeq = db.prepare('UPDATE payment_batch_item SET seq = ? WHERE workspace_id = ? AND id = ?');
+  for (const it of unplaced) {
+    const next = (lastSeq.get(it.workspace_id, it.batch_id) as { n: number }).n + 1;
+    setSeq.run(next, it.workspace_id, it.id);
+  }
+
+  db.exec(FROZEN_REFERENCE_DDL);
+  if (hasColumn(db, 'payment_batch_item', 'creditor_iban')) db.exec(FROZEN_CREDITOR_IBAN_DDL);
+}
+
+/**
+ * Generation 10 (D163, owner pick 04.10.2026: workspace default terms): make
+ * `contact.payment_terms_days` NULLABLE and turn every stored 0 into NULL, once.
+ *
+ * Until now the column was `NOT NULL DEFAULT 0` and `createContact` wrote 0 whenever no terms were
+ * given, so 0 meant two things: "this contact has no terms of its own" (almost every row) and "this
+ * contact pays immediately" (a deliberate choice). D163 separates them: NULL is "none of its own, the
+ * workspace default applies", 0 is "due immediately" (`core/setup/paymentTerms.ts`). The stored rows
+ * cannot say which of the two a 0 was, and the overwhelming majority were the create default, so every
+ * 0 becomes NULL. A contact somebody deliberately set to 0 therefore takes the workspace default after
+ * this runs; while no workspace default is set that is the same date (the document date), and setting
+ * the contact's terms to 0 again restores "due immediately" for good.
+ *
+ * ## Why add, copy, drop, rename rather than a table rebuild
+ *
+ * SQLite has no `ALTER COLUMN`, so a NOT NULL cannot be lifted in place. The full rebuild generation 4
+ * performs on `journal_line` is not needed here: `contact` carries no trigger and no index over this
+ * column, and nothing references the column itself (other tables reference `contact(id)`, which this
+ * leaves untouched). So the column is REPLACED: a nullable twin is added, the values are derived into
+ * it, the old column is dropped and the twin takes its name. The rows, their rowids and every foreign
+ * key into `contact` stay exactly where they are; only the column's position in `SELECT *` moves to
+ * the end, and every reader maps it by name.
+ *
+ * Self-detecting like every step in this file: a column that is already nullable (a fresh database
+ * built from the current `SCHEMA_SQL`) is the new shape, and the function does nothing. All four
+ * statements commit with the version bump in the store's one migration transaction, and the function
+ * checks its own output before returning, so a throw leaves the old generation and the old column.
+ */
+function nullableContactPaymentTerms(db: Database): void {
+  const column = (db.pragma('table_info(contact)') as { name: string; notnull: number }[]).find(
+    (c) => c.name === 'payment_terms_days',
+  );
+  // No contact table column at all is not a TILL ledger this build wrote; nullable is the new shape.
+  if (column === undefined || column.notnull === 0) return;
+
+  const before = db.prepare('SELECT id, payment_terms_days AS days FROM contact ORDER BY rowid').all() as {
+    id: string;
+    days: number;
+  }[];
+
+  const twin = 'payment_terms_days_d163';
+  if (!hasColumn(db, 'contact', twin)) db.exec(`ALTER TABLE contact ADD COLUMN ${twin} INTEGER`);
+  db.exec(`UPDATE contact SET ${twin} = NULLIF(payment_terms_days, 0)`);
+  db.exec('ALTER TABLE contact DROP COLUMN payment_terms_days');
+  db.exec(`ALTER TABLE contact RENAME COLUMN ${twin} TO payment_terms_days`);
+
+  // --- The migration checks its own work. A throw here rolls the whole step back. -----------------
+  const after = (db.pragma('table_info(contact)') as { name: string; notnull: number }[]).find(
+    (c) => c.name === 'payment_terms_days',
+  );
+  if (after === undefined || after.notnull !== 0) {
+    throw new Error('the contact.payment_terms_days migration did not leave a nullable column');
+  }
+  const rows = db.prepare('SELECT id, payment_terms_days AS days FROM contact ORDER BY rowid').all() as {
+    id: string;
+    days: number | null;
+  }[];
+  if (rows.length !== before.length) {
+    throw new Error(`the contact.payment_terms_days migration changed the row count (${before.length} to ${rows.length})`);
+  }
+  for (const [i, row] of before.entries()) {
+    const got = rows[i];
+    const expected = row.days === 0 ? null : row.days;
+    if (got === undefined || got.id !== row.id || got.days !== expected) {
+      throw new Error(
+        `the contact.payment_terms_days migration altered contact ${row.id}: expected ${String(expected)}, got ${String(got?.days)}`,
+      );
+    }
+  }
+}
+
 export const DATA_MIGRATIONS: readonly DataMigration[] = [
   {
     generation: 1,
@@ -671,5 +1010,15 @@ export const DATA_MIGRATIONS: readonly DataMigration[] = [
     generation: 8,
     name: 'a39-bank-inbox: adopt pre-A39 bank-line decisions once and disable rules on newly denied verbs',
     apply: adoptPreA39BankDecisions,
+  },
+  {
+    generation: 9,
+    name: 'a18-frozen-references: freeze MsgId/PmtInfId/InstrId/EndToEndId at the values the XML carried, then index and lock them',
+    apply: freezePain001References,
+  },
+  {
+    generation: 10,
+    name: 'd163-contact-terms: make contact.payment_terms_days nullable and read every stored 0 as no terms of its own',
+    apply: nullableContactPaymentTerms,
   },
 ];

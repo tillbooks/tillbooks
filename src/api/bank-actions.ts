@@ -43,11 +43,12 @@ import {
   listBankAccounts,
   getBankAccount,
 } from '../core/banking/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface BankActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -66,7 +67,7 @@ export function bankActions(h: BankActionHelpers): ActionDef[] {
   return [
     ctxAction(
       'create_bank_account',
-      'write',
+      'write:correctable:books',
       'Register a Bankkonto: validates the IBAN (ISO 13616 mod-97), derives whether it is a QR-IBAN (QR-IID 30000 to 31999, receive-only), and links it to an asset account in the chart (ledgerAccountId, e.g. 1020 Bankkonto). Does NOT set an opening balance: that is set_bank_opening_balance.',
       ctxSchema(
         { name: STR, iban: STR, currency: STR, ledgerAccountId: STR, idempotencyKey: STR },
@@ -76,7 +77,7 @@ export function bankActions(h: BankActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'update_bank_account',
-      'write',
+      'write:reversible:books',
       'Rename a Bankkonto or correct its details. The IBAN, currency and verknüpftes Konto freeze once the account is referenced by a posted opening balance (account_in_use); the name stays editable for good.',
       ctxSchema(
         { bankAccountId: STR, name: STR, iban: STR, currency: STR, ledgerAccountId: STR, idempotencyKey: STR },
@@ -86,7 +87,7 @@ export function bankActions(h: BankActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'set_bank_opening_balance',
-      'write',
+      'write:correctable:books',
       "Post a Bankkonto's opening balance as a real balanced journal entry (debit the bank account, credit 9100 Eröffnungsbilanz), in integer Rappen. Explicitly confirmed and idempotent: re-sending the same idempotencyKey returns the original entry and never posts twice. A correction to a posted opening balance is a reversing entry, never a second opening.",
       ctxSchema(
         {
@@ -113,14 +114,14 @@ export function bankActions(h: BankActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'archive_bank_account',
-      'write',
+      'write:reversible:internal',
       'Archivieren: hide a closed Bankkonto from pickers while keeping it referenceable by historical statements and entries. Never deletes the account.',
       ctxSchema({ bankAccountId: STR, idempotencyKey: STR }, ['bankAccountId']),
       (ctx, input) => archiveBankAccount(ctx, as(input)),
     ),
     ctxAction(
       'unarchive_bank_account',
-      'write',
+      'write:reversible:internal',
       'Wiederherstellen: put an archived Bankkonto back in the pickers. The inverse of archive_bank_account, and a Bankkonto that is already active stays active (no rejection). Nothing about the account changes: this only clears the archived flag.',
       ctxSchema({ bankAccountId: STR, idempotencyKey: STR }, ['bankAccountId']),
       (ctx, input) => unarchiveBankAccount(ctx, as(input)),

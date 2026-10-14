@@ -26,11 +26,12 @@ import {
   runDue,
   burnDown,
 } from '../core/retainers/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface RetainerActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -53,7 +54,7 @@ export function retainerActions(h: RetainerActionHelpers): readonly ActionDef[] 
   return [
     ctxAction(
       'retainer_create',
-      'write',
+      'write:correctable:internal',
       'Mandat anlegen (B04): define a recurring retainer for a C00 contact (monthly|quarterly fee, included hours, optional cap, rollover). Validates feeRappen>0 (invalid_fee) and includedHours>=0 (invalid_hours) as structured refusals (P9). Returns warning:cap_below_included when the cap undercuts the included hours at the resolved rate (OP1), never an error. Mints an active retainer; posts nothing. Gated on A24 retainer.manage.',
       ctxSchema(
         {
@@ -74,28 +75,28 @@ export function retainerActions(h: RetainerActionHelpers): readonly ActionDef[] 
     ),
     ctxAction(
       'retainer_update',
-      'write',
+      'write:reversible:internal',
       'Mandat bearbeiten (B04): patch a retainer. Coverage terms (feeRappen, includedHours, capRappen, rollover) apply to FUTURE periods only, which is structural: a generated period stored its own draws and generation reads the row live, so an edit never rewrites history. The identity fields (period, contactId, projectId) freeze once any draw exists (retainer_has_draws). Gated on A24 retainer.manage.',
       ctxSchema({ retainerId: STR, patch: { type: 'object' }, idempotencyKey: STR }, ['retainerId', 'idempotencyKey']),
       (ctx, input) => updateRetainer(ctx, as(input)),
     ),
     ctxAction(
       'retainer_close',
-      'write',
+      'write:correctable:stop',
       'Mandat beenden (B04): end a mandate (active to ended). OR 404 Abs. 1 makes a mandate terminable at any time, so close is always reachable: it refuses period_pending only while a closed period is still unbilled, and skipFinal:true overrides even that. Closing an already-ended retainer settles to the same answer (idempotent). Gated on A24 retainer.manage.',
       ctxSchema({ retainerId: STR, skipFinal: BOOL, idempotencyKey: STR }, ['retainerId', 'idempotencyKey']),
       (ctx, input) => closeRetainer(ctx, as(input)),
     ),
     ctxAction(
       'retainer_generate_invoice',
-      'write',
+      'write:correctable:internal',
       'Rechnung erzeugen (B04): turn one ENDED retainer period into an A11 invoice DRAFT (one Pauschale line plus one Zusatzaufwand line per over-cap entry), record the drawdown ledger, flip consumed B01 time to billed, and mint the rollover carryover rows, all in one transaction. Delegates to A10 createDocument (P3: no journal entry, no VAT amount, no total minted here). Idempotent per period by the (retainer, period, fee) uniqueness guard: a period already invoiced returns the existing draft with existing:true. Refuses period_not_closed, retainer_not_active, invalid_period_key, currency_mismatch before any write. Always stops at a draft (P8); gated on A24 retainer.manage.',
       ctxSchema({ retainerId: STR, periodKey: STR, actor: STR, idempotencyKey: STR }, ['retainerId', 'periodKey', 'idempotencyKey']),
       (ctx, input) => generateInvoice(ctx, as(input)),
     ),
     ctxAction(
       'retainer_run_due',
-      'write',
+      'write:correctable:internal',
       'Alle fälligen abrechnen (B04): bill every active retainer whose period ended before asOf, iterating the retainer table directly (never an A12 recurring_schedule). SELF-KEYED (no idempotencyKey): idempotent per period via the (retainer, period, fee) uniqueness guard, so re-running the tick at any cadence bills each period exactly once; each period is its own transaction. Agent/scheduler/bulk-action oriented. Gated on A24 retainer.manage; denylisted from automation (a bulk generation tick a human or cron owns).',
       ctxSchema({ asOf: STR, actor: STR }),
       (ctx, input) => runDue(ctx, as(input)),

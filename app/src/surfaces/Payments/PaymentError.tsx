@@ -55,6 +55,8 @@ const KNOWN = new Set([
   'period_locked',
   'document_already_settled',
   'already_reversed',
+  // `allocate_payment`'s own refusal, which the allocation-mode Werkbank also says up front.
+  'nothing_to_allocate',
   'needs_fx_rate',
   'permission_denied',
   'reference_check_digit',

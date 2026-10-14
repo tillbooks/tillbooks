@@ -314,9 +314,10 @@ function isFiledOnOrAfter(ctx: WorkspaceContext, from: string): boolean {
  * Null when nothing is filed, which is the ordinary case and the one where the caller is free to
  * pick any day. The month after the latest filed one is safe whatever the cadence: Saldo files
  * semi-annually (MWSTG Art. 35 Abs. 1) and the locks are written per month by `markVatPeriodFiled`,
- * so the latest locked month is the end of the latest filed period.
+ * so the latest locked month is the end of the latest filed period. Exported for the eCH-0217
+ * refusals (D160.5 critic F1), whose next step names this day once `set_vat_method` refuses.
  */
-function nextUnfiledMonthStart(ctx: WorkspaceContext): string | null {
+export function nextUnfiledMonthStart(ctx: WorkspaceContext): string | null {
   const row = ctx.store.db
     .prepare(
       `SELECT MAX(period) AS p FROM period_lock
@@ -523,27 +524,47 @@ function refuseWritesReachingFiledPeriods(ctx: WorkspaceContext, input: Configur
     });
   }
 
-  // The method or timing moving with NO dated change to carry it. `methodChange` is what writes the
-  // closed era that keeps the old method alive for the days it governed; without one the workspace
-  // row is the only answer and every past period silently adopts the new value.
+  return refuseUndatedMethodChange(ctx, input, 'vat_configure');
+}
+
+/**
+ * The method or timing moving with NO dated change to carry it, once any MWST period is filed.
+ * `methodChange` is what writes the closed era that keeps the old method alive for the days it
+ * governed; without one the workspace row is the only answer and every past period silently adopts
+ * the new value. Null when nothing is filed (onboarding sets the method freely) or nothing moves.
+ *
+ * EXPORTED FOR `set_vat_method` (D160.5). That A00 verb writes the same two columns and used to write
+ * them with no guard, so it reached around this one: measured, a Saldo half-year filed at a payable of
+ * 83'107 Rappen recomputed to 100'440 under effektiv, and `ist` stranded it as `unsupported`. It takes
+ * no `methodChange`, so it passes none, and any move under a filed period is refused with the SAME
+ * code; the hint then names `vat_configure`, the verb that can date the change.
+ */
+export function refuseUndatedMethodChange(
+  ctx: WorkspaceContext,
+  input: { method: string; timing: string; methodChange?: { validFrom: string } },
+  verb: 'vat_configure' | 'set_vat_method',
+): Result | null {
+  if (latestFiledMonth(ctx) === null) return null;
+  const firstUnfiledFrom = nextUnfiledMonthStart(ctx);
   const current = currentMethodOnRow(ctx);
   const moved: string[] = [];
   if (input.method !== current.method) moved.push('method');
   if (input.timing !== current.timing) moved.push('timing');
-  if (moved.length > 0 && input.methodChange === undefined) {
-    return err('vat_method_change_undated', {
-      changed: moved,
-      from: { method: current.method, timing: current.timing },
-      to: { method: input.method, timing: input.timing },
-      filedMonths: filedMonthsFrom(ctx, '0001-01-01'),
-      firstUnfiledFrom,
-      reason:
-        'Changing the method or the accounting timing without dating the change rewrites how every past period is computed, including periods already filed with the ESTV, because an undated change leaves no era boundary behind it.',
-      hint: `State when the change takes effect with \`methodChange: { validFrom }\`, dated from the first day NOT yet filed, which \`firstUnfiledFrom\` names (${String(firstUnfiledFrom)}). MWSTG Art. 37 Abs. 4 allows the switch only at the start of a Steuerperiode.`,
-    });
-  }
-
-  return null;
+  if (moved.length === 0 || input.methodChange !== undefined) return null;
+  const how =
+    verb === 'set_vat_method'
+      ? 'Make the change through `vat_configure`, stating when it takes effect with `methodChange: { validFrom }`'
+      : 'State when the change takes effect with `methodChange: { validFrom }`';
+  return err('vat_method_change_undated', {
+    changed: moved,
+    from: { method: current.method, timing: current.timing },
+    to: { method: input.method, timing: input.timing },
+    filedMonths: filedMonthsFrom(ctx, '0001-01-01'),
+    firstUnfiledFrom,
+    reason:
+      'Changing the method or the accounting timing without dating the change rewrites how every past period is computed, including periods already filed with the ESTV, because an undated change leaves no era boundary behind it.',
+    hint: `${how}, dated from the first day NOT yet filed, which \`firstUnfiledFrom\` names (${String(firstUnfiledFrom)}). MWSTG Art. 37 Abs. 4 allows the switch only at the start of a Steuerperiode.`,
+  });
 }
 
 export function configureVat(ctx: WorkspaceContext, input: ConfigureVatInput): Result {

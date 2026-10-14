@@ -34,11 +34,12 @@ import {
   upsertPipeline,
   upsertPipelineStage,
 } from '../core/deals/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface DealActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,
@@ -73,7 +74,7 @@ export function dealActions(h: DealActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'deals_create',
-      'write',
+      'write:correctable:internal',
       'Lege einen Deal an: a sales opportunity on a C00 contact with an integer-Rappen value, born open in the first open stage of its pipeline (the first write seeds the default funnel Lead, Qualifiziert, Offerte, Gewonnen, Verloren when none exists). A non-base currency is converted ONCE at capture through the §H-FX resolver and frozen on the row (valueBaseMinor + fxRate, never client inputs); the creation lands on the contact timeline (OP5). A deal never posts: its value is an estimate, not a ledger row.',
       ctxSchema(
         {
@@ -92,7 +93,7 @@ export function dealActions(h: DealActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'deals_update',
-      'write',
+      'write:correctable:internal',
       'Bearbeite einen offenen Deal from a patch: retitle, re-point the contact, reschedule the expected close, or pin a manual probability (which stage moves then stop re-defaulting). A patch naming valueMinor or currency re-runs the §H-FX capture and re-freezes valueBaseMinor + fxRate; any other patch leaves the frozen trio byte-identical. A closed deal refuses with deal_closed: reopen it through deals_mark first.',
       ctxSchema(
         { dealId: STR, patch: { type: 'object', properties: DEAL_PATCH_FIELDS }, idempotencyKey: STR },
@@ -102,14 +103,14 @@ export function dealActions(h: DealActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'deals_move',
-      'write',
+      'write:correctable:internal',
       'Verschiebe einen Deal in eine andere Phase of its own pipeline: updates the stage, re-defaults the probability to the target stage unless a hand pinned it, and logs the move on the contact timeline (OP5). A stage outside the deal pipeline refuses with stage_not_in_pipeline; a stage flagged won/lost refuses with terminal_stage_use_mark, because deals_mark is the ONE door to a terminal status. Emits deal.stage_changed.',
       ctxSchema({ dealId: STR, stageId: STR, idempotencyKey: STR }, ['dealId', 'stageId']),
       (ctx, input) => moveDeal(ctx, as(input)),
     ),
     ctxAction(
       'deals_mark',
-      'write',
+      'write:correctable:internal',
       'Schliesse einen Deal ab oder öffne ihn wieder: the ONE door to status. won moves the deal into the pipeline outcome stage at probability 100; lost requires a lostReason (lost_reason_required otherwise) and lands at 0; open reopens a misclicked deal into the first open stage. A no-change re-mark is a state assertion and emits nothing; a genuine close emits deal.won or deal.lost. Every terminal move lands on the contact timeline (OP5).',
       ctxSchema({ dealId: STR, status: STR, lostReason: STR, idempotencyKey: STR }, ['dealId', 'status']),
       (ctx, input) => markDeal(ctx, as(input)),
@@ -118,7 +119,7 @@ export function dealActions(h: DealActionHelpers): readonly ActionDef[] {
     // the calling actor, so tasks_create's own gate and reminder validation apply unchanged.
     ctxAction(
       'deals_log_activity',
-      'write',
+      'write:correctable:internal',
       'Erfasse eine Aktivität auf einem Deal (note, call, email, meeting or task, the single OP5 kind enum): appends to the contact timeline through contacts_log_activity with the dealId stamped, newest-first on read. An optional reminderAt additionally mints one linked E03 task (entityKind deal) through tasks_create, so its assignee polls tasks_reminders_due like every other follow-up; a past reminder refuses with E03s own reminder_in_past. One idempotency key covers note + task together.',
       ctxSchema(
         { dealId: STR, kind: STR, body: STR, occurredAt: STR, reminderAt: STR, idempotencyKey: STR },
@@ -143,21 +144,21 @@ export function dealActions(h: DealActionHelpers): readonly ActionDef[] {
     // dispatch, as the caller, so A10's own gate (C02's, once it lands) is re-checked live.
     ctxAction(
       'deals_to_quote',
-      'write',
+      'write:correctable:internal',
       'Wandle einen Deal in eine Offerte um: delegation only (US-C01.5). Invokes the registered quote-creation verb (create_document, type quote, until C02 rebinds the seam) through the shared dispatch with the deal contact and value as the single seed line, stores the returned quote id on the deal, and logs the conversion (OP5). Idempotent on the deal: one carrying a quoteId answers it and spawns nothing. The quote verb own capability applies to the caller; C01 never bypasses it.',
       ctxSchema({ dealId: STR, idempotencyKey: STR }, ['dealId']),
       (ctx, input, deps) => dealToQuote(ctx, invokerFor(deps), as(input)),
     ),
     ctxAction(
       'pipelines_upsert',
-      'write',
+      'write:correctable:internal',
       'Lege eine Pipeline an oder benenne sie um (§6b, the OP10 flexible surface for pipeline shape): pass pipelineId to rename, omit it to create. The stage set itself is edited per stage through pipeline_stages_upsert.',
       ctxSchema({ pipelineId: STR, name: STR, idempotencyKey: STR }, []),
       (ctx, input) => upsertPipeline(ctx, as(input)),
     ),
     ctxAction(
       'pipeline_stages_upsert',
-      'write',
+      'write:correctable:internal',
       'Lege eine Phase an oder bearbeite sie (§6b): name, sort, the default probability (0 to 100, validated here, the one place a default enters), and the outcome flag (won or lost) that makes entering the stage terminal through deals_mark. Pass stageId to patch, omit it to append. The stage names are workspace data; the stage-to-status derivation stays fixed mechanism (§6b Fixed).',
       ctxSchema(
         { pipelineId: STR, stageId: STR, name: STR, sort: INT, probability: INT, outcome: STR, idempotencyKey: STR },

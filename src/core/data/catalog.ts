@@ -15,6 +15,7 @@
 
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
+import { TILL_PACKAGE_VERSION } from '../version.js';
 
 /** The minimal input-schema shape a catalog row carries (registry's `JsonSchema`, structurally). */
 export interface CatalogInputSchema {
@@ -115,9 +116,10 @@ export function getApiCatalog(actions: readonly CatalogAction[]): Result {
 }
 
 /**
- * The till version stamped into artifacts and the catalog. It mirrors the value `mcp.ts` reports as
- * the server version (the package version), kept here as the single G04 source so a manifest and the
- * catalog agree. `till_version` is INFORMATIONAL on restore (only `schema_version` gates, spec
- * §0a.6), so a plain constant is correct: it is reported, never compared.
+ * The till version stamped into artifacts and the catalog: the package's own `package.json` version,
+ * read once by `../version.ts` (the ONE source, the same file `till --version` reads), so a backup
+ * manifest, the `backups` row and the catalog all name the build that wrote them. It was a hand-typed
+ * `0.0.0`, so every backup a 1.0.0-beta.1 build took said `tillVersion: "0.0.0"`. `till_version` is
+ * INFORMATIONAL on restore (only `schema_version` gates, spec §0a.6): it is reported, never compared.
  */
-export const TILL_VERSION = '0.0.0';
+export const TILL_VERSION: string = TILL_PACKAGE_VERSION;

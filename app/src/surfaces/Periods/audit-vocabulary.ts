@@ -131,6 +131,9 @@ export const AUDIT_ENTITY_KINDS = [
   // camt entry that names a CREDIT never gets a row here at all, it becomes an A21 queue row and
   // stamps THAT chain instead (spec §0 note 2, A20 mints no second matching machine).
   'bank_statement',
+  // A36 §4.7 (D150): a person confirms that a chained statement gap holds nothing (`confirm`), or
+  // withdraws it (`revoke`). "Auszugslücke" names the object, the gap between two statements.
+  'bank_statement_gap',
   'bank_txn',
   // A18 creditor payments. `creditor_bank_profile` is the vendor IBAN A17 never captured (a payment
   // destination, D65 leg f), so every write to it is attributable, the same reasoning A19's
@@ -178,6 +181,10 @@ export const AUDIT_ENTITY_KINDS = [
   // on. The one stamped action is `create` (an advice is an immutable snapshot; a correction is a new
   // superseding advice, itself a `create`), so no new ACTION word, only the object kind.
   'remittance_advice',
+  // A15 Mahnwesen (D161.3). A proposed Mahnlauf that is discarded leaves the books untouched, and its
+  // rows are removed, so the `discard` row is the one trace that the proposal existed and who threw
+  // it away.
+  'dunning_run',
   // F01 report builder. A retained run is filed into E00 through `linkFile({ entityKind:
   // 'report_run', entityId })`, so the run is a linkable/attributable object the emission scan sees.
   // F01 itself posts nothing (P3): the consequential stamp on a filed run is `stored_file`'s, the

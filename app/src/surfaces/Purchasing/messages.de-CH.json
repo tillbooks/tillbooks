@@ -1,6 +1,6 @@
 {
   "nav": {
-    "purchasing": "Einkauf"
+    "purchasing": "Bestellungen"
   },
   "po": {
     "tab": {
@@ -53,7 +53,7 @@
         "rejection": "Ablehnung bei Prüfung"
       }
     },
-    "title": "Einkauf",
+    "title": "Bestellungen",
     "loading": "Bestellungen werden geladen",
     "empty": "Keine Bestellungen.",
     "emptyOpen": "Keine offenen Mengen.",
@@ -151,7 +151,7 @@
   },
   "help": {
     "Purchasing": {
-      "title": "Einkauf",
+      "title": "Bestellungen",
       "body": "Der Einkauf von der Bestellung über den Wareneingang bis zum Abgleich mit der Rechnung. Daneben führst du hier die offenen Mengen und die Lieferantenpreise.\n\nEine Bestellung durchläuft ihre Stationen: senden, Wareneingang erfassen, kurz schliessen, stornieren oder anpassen. Was möglich ist, folgt ihrem Status.\n\nDer Wareneingang bewegt den Lagerbestand. Geld bucht dieser Bereich nicht, das geschieht erst mit der Lieferantenrechnung.",
       "concepts": [],
       "docsPath": "introduction"

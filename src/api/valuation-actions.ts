@@ -30,11 +30,12 @@ import {
   inventoryValuationSetDefault,
   inventoryValuationSetItemMethod,
 } from '../core/inventory/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ValuationActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -94,21 +95,21 @@ export function valuationActions(h: ValuationActionHelpers): readonly ActionDef[
     ),
     ctxAction(
       'inventory_valuation_method_set_enabled',
-      'write',
+      'write:reversible:internal',
       'Turn one valuation method on or off for the workspace. Enablement gates what may be CHOSEN from here on; it is deliberately not dated, because a past figure is determined by the assignment that was in force then and not by what is switched on today. Disabling the method that is currently the workspace default is refused with method_is_default: change the default first, so no future valuation points at a method the workspace says it does not use. Absolute state-setting, so a replay of the idempotency key re-asserts the same list and writes nothing new. Posts no journal entry.',
       ctxSchema({ method: STR, enabled: BOOL, idempotencyKey: STR }, ['method', 'enabled', 'idempotencyKey']),
       (ctx, input) => inventoryValuationMethodSetEnabled(ctx, as(input)),
     ),
     ctxAction(
       'inventory_valuation_set_default',
-      'write',
+      'write:correctable:books',
       'Set the workspace default valuation method from effectiveFrom on. Appends an immutable assignment row rather than overwriting a setting, so the history of what applied when survives (OR 958c Stetigkeit) and a valuation at an earlier date still resolves to the method that was in force then. effectiveFrom is what the period lock is checked against, NOT the day you call it: a change dated into a soft- or hard-closed period is refused with period_locked before anything is written, so a sealed year cannot be restated by picking an old date. When the workspace already has movements dated on or after effectiveFrom, the change would restate their valuation for every item without an override of its own, so it is refused with method_change_blocked_open_period unless you pass forceRevaluation true AND a reason (a blank reason does not count). A disabled method is refused. Posts no journal entry.',
       ctxSchema({ method: STR, effectiveFrom: STR, forceRevaluation: BOOL, reason: STR, idempotencyKey: STR }, ['method', 'effectiveFrom', 'idempotencyKey']),
       (ctx, input) => inventoryValuationSetDefault(ctx, as(input)),
     ),
     ctxAction(
       'inventory_valuation_set_item_method',
-      'write',
+      'write:correctable:books',
       'Override the valuation method for one item from effectiveFrom on, with standardCostMinor when the method is standard_cost (required, integer Rappen, above zero). Appends an immutable assignment row; effectiveFrom is what the period lock answers to, never the call date. When the item already carries movements dated on or after effectiveFrom, those are exactly the movements this change restates, so it is refused with method_change_blocked_open_period unless you pass forceRevaluation true AND a reason: the reason is the sentence that appears in the Stetigkeit history when someone asks why the figure moved, so a force without one is refused rather than recorded blank. The revaluation itself belongs to J06. A disabled method is refused; a foreign item is not_found. Posts no journal entry.',
       ctxSchema(
         {

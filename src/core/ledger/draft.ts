@@ -14,6 +14,7 @@ import type { LineInput } from './postEntry.js';
 import { requireString, requireDate, optionalId, optionalText } from './inputGuards.js';
 import { validateLineFields } from './lineValidation.js';
 import { baseCurrencyOf } from '../fx/rates.js';
+import { resolveTax } from '../vat/resolveTax.js';
 
 export interface SaveDraftInput {
   entryId?: string;
@@ -135,12 +136,20 @@ export function saveDraft(ctx: WorkspaceContext, input: SaveDraftInput): Result<
     const insertLine = db.prepare(
       `INSERT INTO journal_line
          (id, entry_id, account_id, cost_center_id, debit_minor, credit_minor, currency,
-          base_debit_minor, base_credit_minor, fx_rate, tax_code, tax_base_minor, tax_amount_minor)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+          base_debit_minor, base_credit_minor, fx_rate, tax_code, tax_base_minor, tax_amount_minor, supply_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
     );
     for (const line of input.lines) {
       const debit = line.debit ?? 0;
       const credit = line.credit ?? 0;
+      // A line that bears no VAT stores no trace, exactly as `postEntry` stores it: the literal 'none'
+      // sentinel (or a code of kind 'none') resolves through the SAME `resolveTax` that `computeLineTax`
+      // runs for postEntry's `kind === 'none'` normalisation, so the code, base, amount and Leistungsdatum
+      // are all NULL and promotion relabels nothing. A code that does not resolve is kept as typed: a
+      // draft may hold what a post would still refuse.
+      const code = line.taxCode ?? null;
+      const resolved = code === null ? null : resolveTax(ctx, { taxCode: code, supplyDate: line.supplyDate ?? input.date });
+      const bearsVat = code !== null && !(resolved !== null && resolved.ok && resolved.kind === 'none');
       insertLine.run(
         ctx.ids.next('line'),
         entryId,
@@ -151,9 +160,15 @@ export function saveDraft(ctx: WorkspaceContext, input: SaveDraftInput): Result<
         currency,
         debit,
         credit,
-        line.taxCode ?? null,
-        line.taxBase ?? null,
-        line.taxAmount ?? null,
+        bearsVat ? code : null,
+        bearsVat ? (line.taxBase ?? null) : null,
+        bearsVat ? (line.taxAmount ?? null) : null,
+        // C10: the Leistungsdatum survives a save, so a straddle draft (a 2023 supply booked in 2024)
+        // reopens at the era it was priced in instead of silently repricing at the entry date. The
+        // shape was already checked above by `validateLineFields`, the SAME check `postEntry` runs
+        // (`invalid_line`). Stored under postEntry's own rule, so promotion relabels nothing: only a
+        // line that bears VAT carries one, and an absent value stays NULL.
+        bearsVat ? (line.supplyDate ?? null) : null,
       );
     }
 

@@ -14,7 +14,7 @@
  * graph stays acyclic: `registry.ts` imports this file and this file must not import it back.
  */
 
-import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
+import type { ActionDef, ActionInput, ApiDeps, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
 import {
@@ -23,17 +23,27 @@ import {
   diffTestmandantToLive,
   goProductive,
   discardTestmandant,
+  discardOrphanTestmandant,
 } from '../core/migration/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface MigrationTestmandantActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
   ): ActionDef;
+  depsAction(
+    name: string,
+    kind: ActionKind,
+    summary: string,
+    inputSchema: JsonSchema,
+    call: (deps: ApiDeps, input: ActionInput) => Result,
+  ): ActionDef;
   ctxSchema(props?: Record<string, unknown>, required?: string[]): JsonSchema;
+  depsSchema(props?: Record<string, unknown>, required?: string[]): JsonSchema;
   STR: { readonly type: 'string' };
 }
 
@@ -44,13 +54,13 @@ function as<T>(input: ActionInput): T {
 
 /** The G12 verbs, in append order (the §5 table order). */
 export function migrationTestmandantActions(h: MigrationTestmandantActionHelpers): readonly ActionDef[] {
-  const { ctxAction, ctxSchema, STR } = h;
+  const { ctxAction, depsAction, ctxSchema, depsSchema, STR } = h;
   const BOOL = { type: 'boolean' } as const;
 
   return [
     ctxAction(
       'migration_create_testmandant',
-      'write',
+      'write:correctable:internal',
       'Provision the Testmandant for a plan: a disposable trial workspace (workspace.kind = sandbox) that behaves identically to a real one, composed from A00 create_workspace and linked to the plan so every migration_trial_load_step targets it. Idempotent per plan: a second call returns the existing Testmandant, never a second workspace; a plan already live refuses with plan_already_live. The user-facing word is Testmandant, never "Sandbox".',
       ctxSchema({ planId: STR, idempotencyKey: STR }, ['planId', 'idempotencyKey']),
       (ctx, input) => createTestmandant(ctx, as(input)),
@@ -71,17 +81,28 @@ export function migrationTestmandantActions(h: MigrationTestmandantActionHelpers
     ),
     ctxAction(
       'go_productive',
-      'write',
-      'Promote a verified Testmandant to real books, in place, with NO re-import: the workspace simply stops being a Testmandant (kind = live), every id and timestamp stable, the A03 audit chain continuous (OR Art. 957a). The least-reversible act in the product and irreversible: it re-runs the WHOLE Eröffnungsprüfung one final time and refuses unless every control passes and none diverges (check_not_clean), no row traces to a demo seed (sandbox_contains_demo_rows), the company profile is real (needs_company_profile), and no live workspace already holds the UID (live_workspace_exists). Requires promote_workspace AND commit_migration. confirmedName is a type-to-confirm against the company legal name, checked engine-side so the agent face cannot skip it; an agent caller is draft-staged until a human confirms. Promoting an already-live workspace is a no-op, never a double-promote.',
+      'write:final:books',
+      'Promote a verified Testmandant to real books, in place, with NO re-import: the workspace simply stops being a Testmandant (kind = live), every id and timestamp stable, the A03 audit chain continuous (OR Art. 957a). The least-reversible act in the product and irreversible: it re-runs the WHOLE Eröffnungsprüfung one final time and refuses unless every control passes and none diverges (check_not_clean), no row traces to a demo seed (sandbox_contains_demo_rows), the company profile is real (needs_company_profile), and no live workspace already holds the UID (live_workspace_exists). Only the plan whose books created the Testmandant promotes it: a copy of the books whose plan still points at the original\'s Testmandant is refused (testmandant_not_owned) and nothing is written. Requires promote_workspace AND commit_migration. confirmedName is a type-to-confirm against the company legal name, checked engine-side so the agent face cannot skip it; an agent caller is draft-staged until a human confirms. Promoting an already-live workspace is a no-op, never a double-promote.',
       ctxSchema({ planId: STR, confirmedName: STR, idempotencyKey: STR }, ['planId', 'confirmedName', 'idempotencyKey']),
       (ctx, input) => goProductive(ctx, as(input)),
     ),
     ctxAction(
       'discard_testmandant',
-      'write',
-      'Discard a Testmandant and have it truly gone: a hard delete of the trial workspace and every row under it, because nothing in it is a real fiscal record until it goes productive. Refuses on any workspace whose kind is not sandbox (not_a_testmandant): a demo discards through G03, and a live workspace can never be hard-deleted through this family, so after go_productive this same call refuses. Once any step has committed to a live workspace, discard requires commit_migration. The plan itself survives and returns to planned with its trial-load state reset; the maps and declared controls are kept.',
+      'write:final:erase',
+      'Discard a Testmandant and have it truly gone: a hard delete of the trial workspace and every row under it, because nothing in it is a real fiscal record until it goes productive. It deletes only the Testmandant these books created: a copy of the books whose plan still points at the original\'s Testmandant drops its own link and deletes nothing ({unlinkedOnly:true, discardedWorkspaceId:null}), and a link to a workspace that no longer exists is cleared ({alreadyGone:true}). Refuses on any workspace whose kind is not sandbox (not_a_testmandant): a demo discards through G03, and a live workspace can never be hard-deleted through this family, so after go_productive this same call refuses. Once any step has committed to a live workspace, discard requires commit_migration. The plan itself survives and returns to planned with its trial-load state reset (an abandoned or closed plan keeps its status); the maps and declared controls are kept. A sandbox no plan links any more is discarded with discard_orphan_testmandant.',
       ctxSchema({ planId: STR, confirmed: BOOL, idempotencyKey: STR }, ['planId', 'idempotencyKey']),
       (ctx, input) => discardTestmandant(ctx, as(input)),
+    ),
+    // A depsAction ON PURPOSE, although it names a tenant: its success deletes that tenant, so the
+    // shared boundary's workspace_not_found check would break the replay of a completed discard (the
+    // discard_demo_workspace precedent). The engine restates the boundary's order: replay, existence,
+    // the manage_import gate through the same capabilityPort, the archive refusal, then the fences.
+    depsAction(
+      'discard_orphan_testmandant',
+      'write:final:erase',
+      'Discard an ORPHANED Testmandant: a hard delete of a trial workspace (kind sandbox) that no migration plan in any workspace links any more, for example one an env_copy carried without its plan. Pass the sandbox itself as workspaceId. Refuses a workspace that is not a sandbox (not_a_testmandant) and a sandbox a plan still links (testmandant_linked: discard it with discard_testmandant from that plan). Requires manage_import on the sandbox and confirmed:true (needs_confirmation otherwise). A retry of the same key replays the stored result, even though the workspace itself is gone.',
+      depsSchema({ workspaceId: STR, confirmed: BOOL, idempotencyKey: STR }, ['workspaceId', 'idempotencyKey']),
+      (deps, input) => discardOrphanTestmandant(deps, as(input)),
     ),
   ];
 }

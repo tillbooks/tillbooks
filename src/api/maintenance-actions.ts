@@ -22,11 +22,12 @@ import {
   assetMaintenanceLogGet,
   assetMaintenanceLogList,
 } from '../core/assets/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface MaintenanceActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -49,7 +50,7 @@ export function maintenanceActions(h: MaintenanceActionHelpers): readonly Action
   return [
     ctxAction(
       'asset_maintenance_log_create',
-      'write',
+      'write:correctable:internal',
       'Record a completed maintenance event against a fixed asset (H08): what was done, when, by whom and at what cost. NON-POSTING: it writes ONE asset_maintenance_log row (status=completed) and posts NO GL journal, so the captured cost is descriptive TCO metadata (feeding H09), never an expense or capitalisation booking (use the J expense or OP16 capitalisation flow for that). assetId must name an asset in this workspace that is NOT archived (asset_archived; history stays readable but new entries are blocked). maintenanceType is one of corrective | preventive | inspection | calibration | upgrade | other (invalid_maintenance_type). logDate is a required ISO date no more than 30 days in the future (missing_log_date / log_date_too_far). title is 1-200 chars. Every cost field is optional, integer Rappen, >= 0 (invalid_cost, never a float); when partsCostRappen and labourCostRappen are both given, a supplied costRappen total must equal their sum, otherwise the total is derived from them. Refused with not_found for a foreign asset (§H-TENANT). Idempotent on idempotencyKey: a replay returns the original log and writes no second row.',
       ctxSchema(
         {
@@ -74,7 +75,7 @@ export function maintenanceActions(h: MaintenanceActionHelpers): readonly Action
     ),
     ctxAction(
       'asset_maintenance_log_update',
-      'write',
+      'write:reversible:internal',
       'Correct a recent maintenance log entry (H08) through a patch object: title, description, costRappen, partsCostRappen, labourCostRappen, externalReference, notes. Identity fields (assetId, logDate, maintenanceType, the performer) are immutable after create; only the descriptive/cost fields present in patch change. Refused with log_locked once the entry is older than the workspace soft-edit window (default 90 days from creation: after it only cancel is allowed, protecting the historical record), log_cancelled if the entry is already cancelled (correct it with a fresh entry, not an edit), invalid_cost for a negative or non-integer cost, and not_found for a foreign id (§H-TENANT). Posts nothing. Idempotent on idempotencyKey.',
       ctxSchema(
         {
@@ -99,7 +100,7 @@ export function maintenanceActions(h: MaintenanceActionHelpers): readonly Action
     ),
     ctxAction(
       'asset_maintenance_log_cancel',
-      'write',
+      'write:correctable:internal',
       'Soft-cancel a maintenance log entry entered in error (H08): it sets status=cancelled and stores a required non-empty reason. The row is NEVER hard-deleted (append-oriented, OR 957/958): a cancelled entry stays visible under the list "any" status filter for audit, and is excluded from the default completed-only list and the cost roll-up. Idempotent: cancelling an already-cancelled entry is a no-op that keeps the first reason and writes nothing. Refused with invalid_input for an empty reason and not_found for a foreign id (§H-TENANT). Posts nothing.',
       ctxSchema({ id: STR, reason: STR, idempotencyKey: STR }, ['id', 'reason', 'idempotencyKey']),
       (ctx, input) => assetMaintenanceLogCancel(ctx, as(input)),

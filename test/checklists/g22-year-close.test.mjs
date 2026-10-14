@@ -257,9 +257,13 @@ test('the FY 2026 walk: every kind exercised through the real verbs, the seal he
   assert.equal(item(v, 'bank_balance_matches').status, 'open');
   assert.equal(item(v, 'bank_balance_matches').validationResult.reason, 'no_statement_no_typed_balance');
   assert.equal(item(v, 'balance_equation').status, 'done');
-  // The seal: blocked, and never the hand's.
+  // The seal: blocked, and never the hand's (the checklist engine posts nothing). The bare close_year
+  // refuses over the open run, naming it; the run's own call refuses while its seal row is blocked
+  // (G22 §10.12, D152, 04.10.2026).
   assert.notEqual(item(v, 'year_sealed').blockedBy, null);
   refuse(complete(w, run.runId, 'year_sealed', undefined), 'check_item_live', 'the seal by hand');
+  assert.equal(refuse(w.call('close_year', { year: '2026', idempotencyKey: key('bare') }), 'year_close_in_progress', 'the bare seal over an open run').yearRunId, run.runId);
+  assert.equal(refuse(w.call('close_year', { year: '2026', runId: run.runId, idempotencyKey: key('early') }), 'prerequisite_open', 'the run seal while blocked').prerequisiteItemId, item(v, 'year_sealed').blockedBy);
   refuse(complete(w, run.runId, 'statements_signed', { kind: 'statements_signoff' }), 'prerequisite_open', 'sign-off while a block fails');
 
   // The months: close January to November; December is the year's own.
@@ -357,8 +361,18 @@ test('the FY 2026 walk: every kind exercised through the real verbs, the seal he
   v = get(w, run.runId);
   assert.equal(item(v, 'year_sealed').blockedBy, null);
   assert.equal(v.nextItemId, 'year_sealed');
-  const sealed = must(w.call('close_year', { year: '2026', idempotencyKey: key('seal') }), 'close_year');
+  // The bare verb still refuses while the run is open, ready or not; the row is still never the hand's.
+  refuse(w.call('close_year', { year: '2026', idempotencyKey: key('bare-ready') }), 'year_close_in_progress', 'the bare seal over a ready run');
+  refuse(complete(w, run.runId, 'year_sealed', undefined), 'check_item_live', 'the ready seal by hand');
+  const sealKey = key('seal');
+  const sealed = must(w.call('close_year', { year: '2026', runId: run.runId, idempotencyKey: sealKey }), 'the run seals its year');
   assert.ok(sealed.closingEntryId);
+  assert.equal(typeof sealed.result, 'number');
+  assert.equal(sealed.baseCurrency, 'CHF');
+  // A replay of the key returns the stored answer, run or no run, and moves nothing.
+  assert.deepEqual(w.call('close_year', { year: '2026', runId: run.runId, idempotencyKey: sealKey }), sealed);
+  assert.deepEqual(w.call('close_year', { year: '2026', idempotencyKey: sealKey }), sealed);
+  refuse(w.call('close_year', { year: '2026', runId: run.runId, idempotencyKey: key('twice') }), 'year_already_closed', 'a second seal');
   v = get(w, run.runId);
   assert.equal(item(v, 'year_sealed').status, 'done');
   assert.equal(item(v, 'statements_signed').status, 'done', 'the seal entry is excluded from the statements hash');

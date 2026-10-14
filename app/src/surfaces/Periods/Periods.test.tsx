@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { axe } from 'jest-axe';
@@ -8,10 +8,11 @@ import Periods from './index';
 import { TillClient, type Transport, type RestResponse } from '../../lib/client';
 import { TillClientProvider } from '../../lib/client-context';
 import { I18nProvider } from '../../i18n';
-import { WorkspaceProvider } from '../../app/workspace';
+import { WorkspaceProvider, useWorkspace } from '../../app/workspace';
 import { watchReads } from '../../test-transport';
 import { AUDIT_ENTITY_KINDS, AUDIT_ACTIONS } from './audit-vocabulary';
 import listAccountsFixture from '../Accounts/list-accounts.fixture.json';
+import { consequenceSentence } from '../../lib/approval-tiers';
 
 type Handler = RestResponse | ((input: Record<string, unknown>) => RestResponse | Promise<RestResponse>);
 type Handlers = Record<string, Handler>;
@@ -29,6 +30,8 @@ const CHECKLIST_EMPTY: Handlers = {
   accrual_list: { status: 200, body: { ok: true, accruals: [], totalMinor: 0, baseCurrency: 'CHF' } },
   provision_list: { status: 200, body: { ok: true, provisions: [], openTotalMinor: 0, baseCurrency: 'CHF' } },
   list_accounts: { status: 200, body: { ...listAccountsFixture, ok: true as const } },
+  // The open year_close runs (D152, fail closed): answered, and none, so the direct seal is offered.
+  checklist_list: { status: 200, body: { ok: true, runs: [] } },
 };
 
 /**
@@ -362,47 +365,166 @@ describe('Periods, month close and reopen', () => {
   });
 });
 
-describe('Periods, year-end close (confirm-gated)', () => {
-  it('gates the year-end close behind a confirm dialog, then posts it and shows the carry entry', async () => {
+/**
+ * D152 rule 3 (cognitive-load pass B3, owner's pick "Guided + overflow", 04.10.2026): the year close
+ * has ONE visible door, the guided one. The bare "Run year-end close" (disabled until a year was
+ * picked, right beside the picker that unlocked it) moved behind the header overflow as "Close
+ * directly …": the same picker, the same confirm and the same `close_year` call as at 60429dd5.
+ */
+const LAST_YEAR = String(new Date().getFullYear() - 1);
+const THIS_YEAR = String(new Date().getFullYear());
+
+/** Open the header overflow's direct seal and pick `year`; hands back the alert dialog. */
+async function directClose(year: string): Promise<HTMLElement> {
+  await userEvent.click(screen.getByRole('button', { name: 'More actions' }));
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Close directly …' }));
+  const dialog = await screen.findByRole('alertdialog');
+  await userEvent.click(within(dialog).getByRole('combobox', { name: 'Year' }));
+  await userEvent.click(screen.getByRole('option', { name: year }));
+  return dialog;
+}
+
+describe('Periods, one visible year-close door (D152)', () => {
+  it('offers one enabled "Year-end close" link that starts the guided close, and no disabled twin at rest', async () => {
+    const { calls } = renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [] } } });
+    await screen.findByText(/No period closed yet/);
+    const actions = document.querySelector('.periods-actions') as HTMLElement;
+    const door = within(actions).getByRole('link', { name: 'Year-end close' });
+    // No run open: the checklist list with the year-close Start dialog preselected on the last ended year.
+    expect(door).toHaveAttribute('href', `/checklisten?start=year_close&year=${LAST_YEAR}`);
+    expect(within(actions).getAllByRole('link')).toHaveLength(1);
+    // The only button left in the actions panel is the month close, and it is live.
+    expect(within(actions).getAllByRole('button').map((b) => b.textContent)).toEqual(['Close month']);
+    for (const control of within(actions).getAllByRole('button')) expect(control).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /year-end close/i })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Year' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Guided year close' })).toBeNull();
+    // Nothing on the surface is disabled at rest.
+    for (const control of screen.getAllByRole('button')) expect(control).toBeEnabled();
+    expect(calls.some((c) => c.action === 'close_year')).toBe(false);
+  });
+
+  it('skips a sealed year when handing the guided start its year', async () => {
+    renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [sealedYear({ period: LAST_YEAR })] } } });
+    await screen.findByRole('table');
+    expect(screen.getByRole('link', { name: 'Year-end close' })).toHaveAttribute(
+      'href',
+      `/checklisten?start=year_close&year=${String(Number(LAST_YEAR) - 1)}`,
+    );
+  });
+
+  it('the header overflow holds the direct seal; its confirm appears only once a year is chosen', async () => {
+    renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [] } } });
+    await screen.findByText(/No period closed yet/);
+    await userEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Close directly …']);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Close directly …' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Close directly …' });
+    // At rest: the picker and Cancel, no grey confirm.
+    expect(within(dialog).queryByRole('button', { name: 'Run year-end close' })).toBeNull();
+    for (const control of within(dialog).getAllByRole('button')) expect(control).toBeEnabled();
+    // The picker is a closed list over the ten-year retention window plus this year, never a future year.
+    await userEvent.click(within(dialog).getByRole('combobox', { name: 'Year' }));
+    const values = within(screen.getByRole('listbox', { name: 'Year' }))
+      .getAllByRole('option')
+      .map((o) => o.getAttribute('data-value'))
+      .filter((v) => v !== '');
+    expect(values).toHaveLength(11);
+    expect(values[0]).toBe(THIS_YEAR);
+    expect(values[values.length - 1]).toBe(String(Number(THIS_YEAR) - 10));
+    expect(values).not.toContain(String(Number(THIS_YEAR) + 1));
+    await userEvent.click(screen.getByRole('option', { name: LAST_YEAR }));
+    expect(within(dialog).getByRole('button', { name: 'Run year-end close' })).toBeEnabled();
+    expect(screen.getByRole('alertdialog', { name: `Run the year-end close for ${LAST_YEAR}?` })).toBe(dialog);
+  });
+
+  it('hides the overflow from an actor who may not manage periods', async () => {
+    renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [] } } }, { canManage: false });
+    await screen.findByText(/No period closed yet/);
+    expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull();
+  });
+
+  it('has no axe violations with the one door in place', async () => {
+    const { container } = renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [softMonth()] } } });
+    await screen.findByRole('table');
+    await settledAuditPanel();
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('passes axe with the direct seal open on a chosen year', async () => {
+    renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [] } } });
+    await screen.findByText(/No period closed yet/);
+    await settledAuditPanel();
+    const dialog = await directClose(LAST_YEAR);
+    expect(await axe(dialog)).toHaveNoViolations();
+  });
+});
+
+describe('Periods, the direct year-end close (confirm-gated, behind the overflow)', () => {
+  it('gates the year-end close behind the confirm, then posts it and shows the result in one line', async () => {
     const closedYears: Record<string, unknown>[] = [];
     renderPeriods({
       list_period_locks: { status: 200, body: { ok: true, locks: [] } },
       close_year: (input) => {
         closedYears.push(input);
         // `baseCurrency` rides the answer because the real `close_year` sends it unconditionally,
-        // in a CHF book too (yearClose.ts). This fake used to omit it and the panel filled the gap
-        // with a defaulted CHF, so the assertion below passed over a franc label nobody had stated.
+        // in a CHF book too (yearClose.ts).
         return {
           status: 200,
-          body: {
-            ok: true,
-            closingEntryId: 'je_close',
-            carryEntryId: 'je_carry',
-            result: 250000,
-            baseCurrency: 'CHF',
-          },
+          body: { ok: true, closingEntryId: 'je_close', carryEntryId: 'je_carry', result: 250000, baseCurrency: 'CHF' },
         };
       },
     });
     await screen.findByText(/No period closed yet/);
-    await userEvent.click(screen.getByRole('combobox', { name: 'Year' }));
-    await userEvent.click(screen.getByRole('option', { name: '2026' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Run year-end close' }));
-
-    // The destructive close never fires on the first click: a confirm dialog stands in front of it.
-    const dialog = await screen.findByRole('alertdialog');
+    const dialog = await directClose(THIS_YEAR);
+    // The destructive close never fires before the confirm is pressed.
     expect(closedYears).toHaveLength(0);
-    // The irreversibility is the ENGINE'S sentence (D118 C4), the same one the Review lock shows.
-    expect(within(dialog).getByText(/cannot be reopened/i)).toBeInTheDocument();
+    // The consequence is the ENGINE'S sentence (D118 C4, D156), the same one an approver reads.
+    const line = dialog.querySelector('.consequence-line') as HTMLElement;
+    expect(line.getAttribute('data-verb')).toBe('close_year');
+    expect(line).toHaveTextContent(consequenceSentence('close_year', 'en') as string);
+    expect(within(dialog).getByText('The year-end close posts the result to accounts 2979 and 2970.')).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Run year-end close' }));
 
     await waitFor(() => expect(closedYears).toHaveLength(1));
-    expect(closedYears[0].year).toBe('2026');
-    expect(typeof closedYears[0].idempotencyKey).toBe('string');
-    expect(await screen.findByText('Year 2026 closed.')).toBeInTheDocument();
-    // The posted result renders via formatMoney and the closing entry is linked.
-    expect(screen.getByText(/CHF 2'500\.00/)).toBeInTheDocument();
-    expect(screen.getByText(/je_close/)).toBeInTheDocument();
+    expect(await screen.findByText(`Year ${THIS_YEAR} closed.`)).toBeInTheDocument();
+    // The posted result and the closing entry, in ONE line.
+    const result = screen.getByTestId('period-year-result');
+    expect(result.tagName).toBe('P');
+    expect(result.textContent).toBe("Year result: CHF 2'500.00 · Carried to 2979 (View closing entry: je_close)");
+  });
+
+  /**
+   * The payload is pinned against 60429dd5, where the bare door sent `runWrite('close_year', { year,
+   * idempotencyKey: newIdempotencyKey() })` through `client.call(action, { workspaceId, ...input })`:
+   * exactly three fields, the year as the ISO string, a fresh UUID per attempt.
+   */
+  it('sends close_year with exactly the 60429dd5 payload: workspaceId, the ISO year, a fresh idempotency key per attempt', async () => {
+    const sent: Record<string, unknown>[] = [];
+    renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      close_year: (input) => {
+        sent.push(input);
+        return sent.length === 1
+          ? { status: 422, body: { ok: false, error: 'period_locked', period: input.year } }
+          : { status: 200, body: { ok: true, result: 0, baseCurrency: 'CHF' } };
+      },
+    });
+    await screen.findByText(/No period closed yet/);
+    await userEvent.click(within(await directClose(LAST_YEAR)).getByRole('button', { name: 'Run year-end close' }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    await screen.findByRole('alert');
+    await userEvent.click(within(await directClose(LAST_YEAR)).getByRole('button', { name: 'Run year-end close' }));
+    await waitFor(() => expect(sent).toHaveLength(2));
+    for (const input of sent) {
+      expect(Object.keys(input).sort()).toEqual(['idempotencyKey', 'workspaceId', 'year']);
+      expect(input.workspaceId).toBe('ws_test');
+      expect(input.year).toBe(LAST_YEAR);
+      expect(input.idempotencyKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(JSON.stringify(input)).not.toMatch(/\d{2}\.\d{2}\.\d{4}/);
+    }
+    // A retry is a new attempt, so it carries a new key (§H-IDEMPOTENT), exactly as before.
+    expect(sent[0]?.idempotencyKey).not.toBe(sent[1]?.idempotencyKey);
   });
 
   it('surfaces year_already_closed as a dismissable error', async () => {
@@ -411,12 +533,30 @@ describe('Periods, year-end close (confirm-gated)', () => {
       close_year: { status: 422, body: { ok: false, error: 'year_already_closed' } },
     });
     await screen.findByText(/No period closed yet/);
-    await userEvent.click(screen.getByRole('combobox', { name: 'Year' }));
-    await userEvent.click(screen.getByRole('option', { name: '2026' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Run year-end close' }));
-    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Run year-end close' }));
+    await userEvent.click(within(await directClose(THIS_YEAR)).getByRole('button', { name: 'Run year-end close' }));
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('That year has already been closed.');
+  });
+
+  it('surfaces year_close_unverified (critic R6-1) as a sentence: nothing posted, nothing sealed', async () => {
+    renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      close_year: { status: 422, body: { ok: false, error: 'year_close_unverified', year: THIS_YEAR, entry: 'pl', reason: 'not_close_source' } },
+    });
+    await screen.findByText(/No period closed yet/);
+    await userEvent.click(within(await directClose(THIS_YEAR)).getByRole('button', { name: 'Run year-end close' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('The close could not be verified, so nothing was posted and the year was not sealed.');
+    expect(alert).not.toHaveTextContent('year_close_unverified');
+  });
+
+  it('cancelling the direct seal sends nothing', async () => {
+    const { calls } = renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [] } } });
+    await screen.findByText(/No period closed yet/);
+    const dialog = await directClose(THIS_YEAR);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(calls.some((c) => c.action === 'close_year')).toBe(false);
   });
 });
 
@@ -629,38 +769,13 @@ describe('Periods, date entry (D15/C1)', () => {
     expect(month).toHaveAttribute('placeholder', 'YYYY-MM');
   });
 
-  it('enters the year through a closed list covering the ten-year retention window', async () => {
-    renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [] } } });
-    await screen.findByText(/No period closed yet/);
-
-    const year = screen.getByRole('combobox', { name: 'Year' });
-    // A closed list, not a free-text field: the trigger is a listbox combobox.
-    expect(year).toHaveAttribute('aria-haspopup', 'listbox');
-
-    const thisYear = new Date().getFullYear();
-    await userEvent.click(year);
-    const values = within(screen.getByRole('listbox', { name: 'Year' }))
-      .getAllByRole('option')
-      .map((o) => o.getAttribute('data-value'))
-      .filter((v) => v !== '');
-    // Ten years back plus the current one, and never a year that has not happened yet.
-    expect(values).toHaveLength(11);
-    expect(values[0]).toBe(String(thisYear));
-    expect(values[values.length - 1]).toBe(String(thisYear - 10));
-    expect(values).not.toContain(String(thisYear + 1));
-  });
-
-  it('sends ISO to the engine from both pickers, never a Swiss-formatted date', async () => {
+  it('sends ISO to the engine from the month picker, never a Swiss-formatted date', async () => {
     const sent: Record<string, unknown>[] = [];
     renderPeriods({
       list_period_locks: { status: 200, body: { ok: true, locks: [] } },
       close_month: (input) => {
         sent.push(input);
         return { status: 200, body: { ok: true, period: input.period, kind: 'soft' } };
-      },
-      close_year: (input) => {
-        sent.push(input);
-        return { status: 200, body: { ok: true, result: 0 } };
       },
     });
     await screen.findByText(/No period closed yet/);
@@ -672,26 +787,7 @@ describe('Periods, date entry (D15/C1)', () => {
     );
     await waitFor(() => expect(sent).toHaveLength(1));
 
-    const thisYear = String(new Date().getFullYear());
-    await userEvent.click(screen.getByRole('combobox', { name: 'Year' }));
-    await userEvent.click(screen.getByRole('option', { name: thisYear }));
-    // The spy above fires when the request goes IN FLIGHT, not when its answer has been processed:
-    // both close buttons render `disabled={... || busy}` until the continuation commits, and a
-    // click on a disabled button is swallowed silently. With the year picked, enabled means
-    // exactly "the month close finished", which is the state the next click depends on.
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Run year-end close' })).toBeEnabled(),
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Run year-end close' }));
-    await userEvent.click(
-      within(await screen.findByRole('alertdialog')).getByRole('button', {
-        name: 'Run year-end close',
-      }),
-    );
-    await waitFor(() => expect(sent).toHaveLength(2));
-
     expect(sent[0].period).toBe('2026-06');
-    expect(sent[1].year).toBe(thisYear);
     // Belt and braces: nothing leaving this surface may carry the Swiss display format.
     for (const call of sent) {
       expect(JSON.stringify(call)).not.toMatch(/\d{2}\.\d{2}\.\d{4}/);
@@ -726,8 +822,8 @@ describe('Periods, month close confirmation', () => {
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(within(dialog).getByText(/June 2026/)).toBeInTheDocument();
-    // The consequence is the engine's close-period sentence (F-07, D118 C4), not surface prose.
-    expect(within(dialog).getByText(/against further posting/i)).toBeInTheDocument();
+    // The consequence is the engine's close_month sentence (F-07, D118 C4, D156), not surface prose.
+    expect(within(dialog).getByText(consequenceSentence('close_month', 'en') as string)).toBeInTheDocument();
     // A month close is reopenable, unlike the year close, and the copy must not overstate it.
     expect(within(dialog).getByText(/you can reopen the month/i)).toBeInTheDocument();
   });
@@ -881,18 +977,79 @@ describe('Periods, the month-end checklist (F-07)', () => {
     expect(within(panel).getByText(/5 items still need a look/)).toBeInTheDocument();
   });
 
-  it('when every posted bill of the month is paid, the creditor line reads 0 and is not an attention item', async () => {
+  it('when every posted bill of the month is paid, the creditor line is not shown and is not an attention item', async () => {
     renderPeriods({
       list_period_locks: { status: 200, body: { ok: true, locks: [] } },
       ...CHECKLIST,
       list_vendor_bills: { status: 200, body: { ok: true, bills: [{ id: 'vb_paid', status: 'posted', openMinor: 0, billDate: '2026-01-05' }], total: 1, truncated: false } },
     });
     const panel = await screen.findByRole('region', { name: /Month-end close \w+ \d{4}/ });
-    const creditors = (await within(panel).findByRole('link', { name: 'Open supplier bills' })).closest('[data-line="creditors"]') as HTMLElement;
-    expect(within(creditors).getByText('0', { selector: '.period-checklist-count' })).toBeInTheDocument();
-    expect(creditors.className).toContain('period-checklist-line--ok');
     // Four: drafts, bank, debtors, review. The engine's attention grade on `open_creditors` (38) is not counted.
-    expect(within(panel).getByText(/4 items still need a look/)).toBeInTheDocument();
+    expect(await within(panel).findByText(/4 items still need a look/)).toBeInTheDocument();
+    // A counted zero is a line about nothing (D152 rule 2): it is left out, not printed as "0".
+    expect(panel.querySelector('[data-line="creditors"]')).toBeNull();
+    expect(within(panel).queryByRole('link', { name: 'Open supplier bills' })).toBeNull();
+  });
+
+  /**
+   * D152 rule 2 (cognitive-load pass B3): "0 Unverbuchte Entwürfe" was a line about nothing. A line
+   * whose count is exactly 0 is hidden; a line with NO count (the MWST preview, a read that did not
+   * answer, the FX line the engine cannot check) stays, because hiding it would read as "nothing to
+   * do" where nothing was counted.
+   */
+  it('hides every line whose count is 0 and keeps the lines that carry no count', async () => {
+    renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      ...CHECKLIST,
+      month_end_checklist: (input) => ({
+        status: 200,
+        body: {
+          ok: true,
+          period: input.period,
+          items: [
+            { kind: 'dangling_drafts', count: 0, drillIds: [], status: 'ok' },
+            { kind: 'open_debtors', count: 3, drillIds: [], status: 'attention' },
+            { kind: 'vat_preview', count: 0, drillIds: [], status: 'ok', note: 'payableMinor=100960, creditMinor=0' },
+            { kind: 'fx_revaluation', count: 0, drillIds: [], status: 'not_available' },
+          ],
+        },
+      }),
+      list_reconciliation: { status: 200, body: { ok: true, matched: [], unmatched: [], partial: [] } },
+      review_status: { status: 500, body: { ok: false, error: 'unexpected_error' } },
+    });
+    const panel = await screen.findByRole('region', { name: /Month-end close \w+ \d{4}/ });
+    await within(panel).findByText(/items? still need/);
+    const shown = Array.from(panel.querySelectorAll('[data-line]')).map((l) => l.getAttribute('data-line'));
+    // Hidden: drafts (0) and bank (0 unmatched). Shown: the counted debtors and creditors, the MWST
+    // preview (no count), the review line whose read failed (no count) and the unchecked FX line.
+    expect(shown).toEqual(['debtors', 'creditors', 'vat', 'review', 'fx']);
+    expect(panel).not.toHaveTextContent('Unposted drafts');
+    expect(panel.querySelector('[data-line="review"]')).toHaveTextContent('could not be read');
+    expect(within(panel).getByText(/2 items still need a look/)).toBeInTheDocument();
+    // No count cell anywhere reads 0.
+    for (const count of panel.querySelectorAll('.period-checklist-count')) expect(count.textContent).not.toBe('0');
+  });
+
+  it('with every count at 0 only the uncounted MWST line stays, and the summary says nothing waits', async () => {
+    renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      ...CHECKLIST_EMPTY,
+      month_end_checklist: (input) => ({
+        status: 200,
+        body: {
+          ok: true,
+          period: input.period,
+          items: [
+            { kind: 'dangling_drafts', count: 0, drillIds: [], status: 'ok' },
+            { kind: 'open_debtors', count: 0, drillIds: [], status: 'ok' },
+            { kind: 'vat_preview', count: 0, drillIds: [], status: 'ok', note: 'payableMinor=0, creditMinor=0' },
+          ],
+        },
+      }),
+    });
+    const panel = await screen.findByRole('region', { name: /Month-end close \w+ \d{4}/ });
+    expect(await within(panel).findByText(/Nothing is waiting/)).toBeInTheDocument();
+    expect(Array.from(panel.querySelectorAll('[data-line]')).map((l) => l.getAttribute('data-line'))).toEqual(['vat']);
   });
 
   it('a ?month= deep link puts that month in the field, in the checklist and on its lock row', async () => {
@@ -974,13 +1131,13 @@ describe('Periods, the month-end checklist (F-07)', () => {
 });
 
 /**
- * F-07 (J4.1, D118 C4): the month close and the year close confirm with the ENGINE'S consequence
- * sentence (`agent.consequence.close-period`), the identical string the Review surface's lock dialog
- * and the Vorschlag card render. The Periods-only wording is gone; nothing here restates the
- * consequence in its own words.
+ * F-07 (J4.1, D118 C4): the month close confirms with the ENGINE'S consequence sentence
+ * (the engine's one catalogue, D156), the identical string the Review surface's lock dialog, the
+ * guided year close and the Vorschlag card render. The Periods-only wording is gone; nothing here
+ * restates the consequence in its own words.
  */
 describe('Periods, one lock sentence (F-07)', () => {
-  const SENTENCE = 'Seals an accounting period against further posting. A hard seal cannot be reopened.';
+  const SENTENCE = consequenceSentence('close_month', 'en') as string;
 
   it('the month-close confirm renders the shared close-period sentence', async () => {
     renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [] } } });
@@ -1000,44 +1157,215 @@ describe('Periods, one lock sentence (F-07)', () => {
     expect(dialog).not.toHaveTextContent(/no longer post/);
   });
 
-  it('the year-close confirm renders the same sentence for close_year', async () => {
-    renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [] } } });
-    await screen.findByText(/Nothing is waiting/);
-    await userEvent.click(screen.getByRole('combobox', { name: 'Year' }));
-    await userEvent.click(screen.getByRole('option', { name: String(new Date().getFullYear()) }));
-    fireEvent.click(screen.getByRole('button', { name: 'Run year-end close' }));
-    const dialog = await screen.findByRole('alertdialog');
-    const line = dialog.querySelector('.consequence-line') as HTMLElement;
-    expect(line.getAttribute('data-verb')).toBe('close_year');
-    expect(line).toHaveTextContent(SENTENCE);
-  });
 });
 
 describe('Periods, the year_close hand-off (D129 leg 2)', () => {
-  it('opens the guided year close when a run exists for the picked year instead of the bare seal; without one the bare action stays beside a link to start it', async () => {
+  const run = (year: string) => ({ runId: `yc_${year}`, templateId: 'year_close', templateLabel: 'Jahresabschluss', periodLabel: year, periodStart: `${year}-01-01`, periodEnd: `${year}-12-31`, status: 'open', nextItemId: 'year_sealed', openCount: 1, doneCount: 30, skippedCount: 2, itemCount: 33, createdBy: 'studio' });
+
+  it('the one door lands in the open guided run, the oldest year first, and names that year', async () => {
     const { calls } = renderPeriods({
       list_period_locks: { status: 200, body: { ok: true, locks: [] } },
       checklist_list: (input) => ({
         status: 200,
-        body: {
-          ok: true,
-          runs: input.templateId === 'year_close' ? [{ runId: 'yc_2026', templateId: 'year_close', templateLabel: 'Jahresabschluss', periodLabel: '2026', periodStart: '2026-01-01', periodEnd: '2026-12-31', status: 'open', nextItemId: 'year_sealed', openCount: 1, doneCount: 30, skippedCount: 2, itemCount: 33, createdBy: 'studio' }] : [],
-        },
+        body: { ok: true, runs: input.templateId === 'year_close' ? [run('2026'), run('2025')] : [] },
       }),
     });
     await screen.findByText(/No period closed yet/);
     await waitFor(() => expect(calls.some((c) => c.action === 'checklist_list')).toBe(true));
     expect(calls.find((c) => c.action === 'checklist_list')?.input).toMatchObject({ templateId: 'year_close', status: 'open' });
-    await userEvent.click(screen.getByRole('combobox', { name: 'Year' }));
-    await userEvent.click(screen.getByRole('option', { name: '2026' }));
-    const link = await screen.findByTestId('period-open-year-close');
-    expect(link.getAttribute('href')).toBe('/checklisten?run=yc_2026');
-    expect(screen.getByText('A guided year close is running for 2026; the seal is its last step.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Run year-end close' })).toBeNull();
-    // Another year without a run: the bare seal stays, with the guided close one link away.
-    await userEvent.click(screen.getByRole('combobox', { name: 'Year' }));
-    await userEvent.click(screen.getByRole('option', { name: '2025' }));
-    expect(screen.getByRole('button', { name: 'Run year-end close' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Guided year close' }).getAttribute('href')).toBe('/checklisten');
+    const door = await screen.findByRole('link', { name: 'Year-end close 2025' });
+    expect(door).toHaveAttribute('href', '/checklisten?run=yc_2025');
+    expect(screen.getByTestId('period-year-close')).toBe(door);
+    expect(screen.queryByRole('link', { name: 'Year-end close 2026' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /year-end close/i })).toBeNull();
+  });
+
+  it('with no open run, or when the checklists cannot be read, the door opens the checklist list', async () => {
+    renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      checklist_list: { status: 403, body: { ok: false, error: 'permission_denied' } },
+    });
+    await screen.findByText(/No period closed yet/);
+    expect(screen.getByRole('link', { name: 'Year-end close' })).toHaveAttribute('href', `/checklisten?start=year_close&year=${LAST_YEAR}`);
+  });
+});
+
+/**
+ * Critic F1 on cl-periods (G22 §10.12): the direct seal never seals a year whose guided year_close
+ * run is open. As at 60429dd5, picking that year swaps the seal for the hand-off to the run.
+ */
+describe('Periods, the direct seal defers to an open guided run (G22 §10.12)', () => {
+  it('a year with an open run gets the hand-off link and the note, never the confirm; another year gets the confirm', async () => {
+    const { calls } = renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      checklist_list: (input) => ({
+        status: 200,
+        body: { ok: true, runs: input.templateId === 'year_close' ? [{ runId: `yc_${LAST_YEAR}`, templateId: 'year_close', templateLabel: 'Jahresabschluss', periodLabel: LAST_YEAR, periodStart: `${LAST_YEAR}-01-01`, periodEnd: `${LAST_YEAR}-12-31`, status: 'open', nextItemId: 'accruals', openCount: 20, doneCount: 10, skippedCount: 0, itemCount: 30, createdBy: 'studio' }] : [] },
+      }),
+    });
+    await screen.findByRole('link', { name: `Year-end close ${LAST_YEAR}` });
+    const dialog = await directClose(LAST_YEAR);
+    expect(within(dialog).queryByRole('button', { name: 'Run year-end close' })).toBeNull();
+    expect(within(dialog).queryByText('The year-end close posts the result to accounts 2979 and 2970.')).toBeNull();
+    expect(within(dialog).getByTestId('period-open-year-close')).toHaveAttribute('href', `/checklisten?run=yc_${LAST_YEAR}`);
+    expect(within(dialog).getByRole('link', { name: 'Open the year close' })).toBeInTheDocument();
+    expect(within(dialog).getByText(`A guided year close is running for ${LAST_YEAR}; the seal is its last step.`)).toBeInTheDocument();
+    // Another year has no run: the seal and its confirm are back.
+    await userEvent.click(within(dialog).getByRole('combobox', { name: 'Year' }));
+    await userEvent.click(screen.getByRole('option', { name: THIS_YEAR }));
+    expect(within(dialog).getByRole('button', { name: 'Run year-end close' })).toBeEnabled();
+    expect(within(dialog).queryByTestId('period-open-year-close')).toBeNull();
+    expect(calls.some((c) => c.action === 'close_year')).toBe(false);
+  });
+});
+
+/**
+ * Critic F2/F3 on cl-periods: nothing of workspace A survives a switch to B, and a write still in
+ * flight for A when the switch happens paints nothing onto B (no banner, no A locks on B's grid).
+ */
+describe('Periods, a workspace switch', () => {
+  let switchTo: (id: string) => void = () => {};
+  function Switcher() {
+    const { setWorkspaceId } = useWorkspace();
+    switchTo = setWorkspaceId;
+    return null;
+  }
+
+  it('a month close in flight for A when the user switches to B paints neither its banner nor A\'s locks on B', async () => {
+    let releaseClose: (() => void) | null = null;
+    const calls: { action: string; input: Record<string, unknown> }[] = [];
+    const handlers: Handlers = {
+      get_audit_log: AUDIT_EMPTY,
+      ...CHECKLIST_EMPTY,
+      checklist_list: { status: 200, body: { ok: true, runs: [] } },
+      list_period_locks: (input) => ({
+        status: 200,
+        body: { ok: true, locks: input.workspaceId === 'ws_a' ? [softMonth({ period: '2026-05' })] : [softMonth({ period: '2025-11' })] },
+      }),
+      close_month: (input) =>
+        new Promise<RestResponse>((resolve) => {
+          releaseClose = () => resolve({ status: 200, body: { ok: true, period: input.period, kind: 'soft' } });
+        }),
+    };
+    const transport = watchReads(async (action, input) => {
+      calls.push({ action, input });
+      const h = handlers[action];
+      if (h === undefined) return { status: 404, body: { ok: false, error: 'unknown_action' } };
+      return typeof h === 'function' ? h(input) : h;
+    });
+    render(
+      <TillClientProvider client={new TillClient(transport)}>
+        <I18nProvider initialLocale="en">
+          <WorkspaceProvider initialId="ws_a">
+            <Switcher />
+            <MemoryRouter>
+              <Periods canManage canUnlock />
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    await screen.findByText('May 2026');
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-06' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Close month' }));
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Close month' }));
+    await transport.started('close_month');
+    await waitFor(() => expect(releaseClose).not.toBeNull());
+    act(() => switchTo('ws_b'));
+    await screen.findByText('November 2025');
+    const before = calls.length;
+    await act(async () => {
+      releaseClose?.();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    // A's answer reached nothing: no banner, no refetch of A's locks, and B's grid still shows B.
+    expect(screen.queryByText(/closed\./)).toBeNull();
+    expect(calls.slice(before).filter((c) => c.action === 'list_period_locks' && c.input.workspaceId === 'ws_a')).toHaveLength(0);
+    expect(screen.queryByText('May 2026')).toBeNull();
+    expect(screen.getByText('November 2025')).toBeInTheDocument();
+  });
+});
+
+/**
+ * D152, critic R2-F1 (owner: "Engine guard + fail-closed UI", 04.10.2026): the direct seal's confirm
+ * appears only once the open year runs are KNOWN and none is open for the picked year. While the read
+ * is in flight it says so; refused or unreadable it says so and links to the checklists; at confirm
+ * time it reads the runs again; and an engine `year_close_in_progress` lands on the hand-off.
+ */
+describe('Periods, the direct seal fails closed (D152, R2-F1)', () => {
+  const RUN = (year: string) => ({ runId: `yc_${year}`, templateId: 'year_close', templateLabel: 'Jahresabschluss', periodLabel: year, periodStart: `${year}-01-01`, periodEnd: `${year}-12-31`, status: 'open', nextItemId: 'accruals', openCount: 20, doneCount: 10, skippedCount: 0, itemCount: 30, createdBy: 'studio' });
+
+  it('while the runs are being read: a quiet checking line, no confirm, nothing sent', async () => {
+    const { calls, transport } = renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      checklist_list: () => new Promise<RestResponse>(() => {}),
+    });
+    await screen.findByText(/No period closed yet/);
+    await transport.started('checklist_list');
+    const dialog = await directClose(LAST_YEAR);
+    expect(within(dialog).getByTestId('period-runs-checking')).toHaveTextContent('Checking for open guided year closes …');
+    expect(within(dialog).queryByRole('button', { name: 'Run year-end close' })).toBeNull();
+    expect(calls.some((c) => c.action === 'close_year')).toBe(false);
+  });
+
+  it('runs that cannot be read: the note and a link to the checklists, no confirm', async () => {
+    const { calls } = renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      checklist_list: { status: 403, body: { ok: false, error: 'permission_denied' } },
+    });
+    await screen.findByText(/No period closed yet/);
+    const dialog = await directClose(LAST_YEAR);
+    await within(dialog).findByTestId('period-runs-unknown');
+    expect(within(dialog).getByTestId('period-runs-unknown')).toHaveTextContent('Open guided year closes could not be read, so no direct close is offered here.');
+    expect(within(dialog).getByRole('link', { name: 'Go to the checklists' })).toHaveAttribute('href', '/checklisten');
+    expect(within(dialog).queryByRole('button', { name: 'Run year-end close' })).toBeNull();
+    expect(calls.some((c) => c.action === 'close_year')).toBe(false);
+  });
+
+  it('re-reads the runs at confirm time: a run started in between turns the dialog to the hand-off, nothing sent', async () => {
+    let reads = 0;
+    const { calls } = renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      checklist_list: () => {
+        reads += 1;
+        return { status: 200, body: { ok: true, runs: reads === 1 ? [] : [RUN(LAST_YEAR)] } };
+      },
+    });
+    await screen.findByText(/No period closed yet/);
+    const dialog = await directClose(LAST_YEAR);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Run year-end close' }));
+    expect(await within(dialog).findByTestId('period-open-year-close')).toHaveAttribute('href', `/checklisten?run=yc_${LAST_YEAR}`);
+    expect(reads).toBe(2);
+    expect(calls.some((c) => c.action === 'close_year')).toBe(false);
+  });
+
+  it('a re-read that fails at confirm time sends nothing and turns the dialog to unknown', async () => {
+    let reads = 0;
+    const { calls } = renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      checklist_list: () => {
+        reads += 1;
+        return reads === 1 ? { status: 200, body: { ok: true, runs: [] } } : { status: 500, body: { ok: false, error: 'internal' } };
+      },
+    });
+    await screen.findByText(/No period closed yet/);
+    const dialog = await directClose(LAST_YEAR);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Run year-end close' }));
+    await within(dialog).findByTestId('period-runs-unknown');
+    expect(calls.some((c) => c.action === 'close_year')).toBe(false);
+  });
+
+  it('the engine refusal year_close_in_progress keeps the dialog open on the hand-off to the run it names', async () => {
+    renderPeriods({
+      list_period_locks: { status: 200, body: { ok: true, locks: [] } },
+      close_year: { status: 422, body: { ok: false, error: 'year_close_in_progress', year: LAST_YEAR, fiscalYear: LAST_YEAR, yearRunId: 'yc_race' } },
+    });
+    await screen.findByText(/No period closed yet/);
+    const dialog = await directClose(LAST_YEAR);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Run year-end close' }));
+    expect(await within(dialog).findByTestId('period-open-year-close')).toHaveAttribute('href', '/checklisten?run=yc_race');
+    expect(within(dialog).getByText(`A guided year close is running for ${LAST_YEAR}; the seal is its last step.`)).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBe(dialog);
+    expect(screen.queryByTestId('period-year-result')).toBeNull();
   });
 });

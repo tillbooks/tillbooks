@@ -4,15 +4,16 @@ description: "Use TILL with zero installed infrastructure, and the three trade-o
 ---
 
 You do not need a machine of your own for TILL. If you already work in an agent runtime (Claude
-Desktop on your Mac, or a Claude Code / Cowork session in the cloud), TILL runs inside it. Point the
-agent at a session folder that holds a TILL checkout (the package is not on npm yet, so you build it
-from source) and a `till.db`, run the MCP server, and the full verb surface works: the engine has no
-idea it is sandboxed, and tenancy, the approval dial and the permission model hold exactly as they do
-anywhere else.
+Desktop on your Mac, or a Claude Code / Cowork session in the cloud), TILL runs inside it. The
+public beta is on npm as `tillbooks@beta`, so the session needs Node.js 22 or newer and nothing
+else. Point `TILL_DB_PATH` at a `.db` file in the session folder, run the MCP server, and the full
+verb surface works: the engine has no idea it is sandboxed, and tenancy, the approval dial and the
+permission model hold exactly as they do anywhere else.
 
 ```bash
-# inside the session folder, with TILL_DB_PATH pointed at a .db in that folder
-till mcp
+# inside the session folder
+export TILL_DB_PATH="$PWD/till.db"
+npx -y tillbooks@beta mcp
 ```
 
 To tell TILL it is running this way, set one flag. TILL never guesses it:
@@ -33,9 +34,9 @@ so rather than hiding them.
 
 A cloud agent session runs on the vendor's machine, not yours. So while you work this way, "your
 books never leave your machine" does not hold: the data lives on that machine for the length of the
-session. A local Claude Desktop session keeps full residency, because it runs on your own Mac. Swiss
-data residency is exactly what the managed tier is built to contract for; this mode does not promise
-it.
+session. A local Claude Desktop session keeps full residency, because it runs on your own Mac. This
+mode makes no promise about Swiss data residency. TILL offers no hosted version today; a
+Swiss-hosted one is planned for later.
 
 ### 2. Local correspondence is off in the cloud
 
@@ -56,17 +57,16 @@ create_backup
 restore_backup   # or point TILL_DB_PATH at the file you carried back in
 ```
 
-TILL does not take backups for you, here least of all. Pre-alpha rules apply, and they apply doubly
-in a runtime that can vanish between one message and the next.
+TILL does not take backups for you, here least of all. A runtime can vanish between one message and
+the next, and the books go with it unless you carried the backup out.
 
-## The one-click extension (not shipping yet)
+## The one-click extension (not available yet)
 
 TILL is designed to ship a `.mcpb` desktop extension for Claude Desktop, so that installing `till mcp`
-is one double-click with no JSON to edit. The extension manifest is defined and version-locked to the
-npm package: it exposes exactly two settings, the database path and the support directory, and it
-bundles no database of its own.
+is one double-click with no JSON to edit. The extension manifest is defined: it exposes exactly two
+settings, the database path and the support directory, and it bundles no database of its own.
 
-It is not available to install yet, for the same reason nothing else is: TILL is pre-alpha, the
-package is unpublished, and the signed bundle is built and notarised in the release pipeline, which
-has not run. When TILL ships, the extension ships with it. See the
-[agent interface overview](/mcp/overview) for the verb surface it will give you.
+It is not available to install yet, because the bundle has not been packed or published. It is
+planned as a release asset beside the npm package. Until then, use the JSON configuration in the
+[quickstart](/quickstart#connect-an-agent). The [agent interface overview](/mcp/overview) describes
+the verb surface either way gives you.

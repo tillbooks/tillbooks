@@ -31,7 +31,7 @@ import {
   bookBankLine,
 } from '../../dist/core/banking/index.js';
 import { connectBankChannel, syncBankChannel } from '../../dist/core/banking/ebics/index.js';
-import { compactReference } from '../../dist/core/banking/pain001.js';
+import { frozenPmtInfId, frozenEndToEndId } from './frozen-refs-support.mjs';
 import { makeContext } from '../../dist/core/context.js';
 import { mockBank, container, chain } from './ebics-support.mjs';
 
@@ -98,7 +98,7 @@ function batchWithFundingDebit(t, acc, statementId, seed) {
   must(setCreditorBankProfile(t.ctx, { vendorId: vendor, iban: PLAIN_IBAN, idempotencyKey: `bcbp-${seed}` }), 'cbp');
   const batch = must(createPaymentBatch(t.ctx, { bankAccountId: acc, itemIds: [bill.vendorBillId], executionDate: '2026-07-10', idempotencyKey: `bbatch-${seed}` }), 'batch');
   must(generatePain001(t.ctx, { batchId: batch.batchId, idempotencyKey: `bgen-${seed}` }), 'gen');
-  const pmtInfId = compactReference('P', batch.batchId);
+  const pmtInfId = frozenPmtInfId(t, batch.batchId);
   const stmt = must(importCamt(t.ctx, { bankAccountId: acc, xml: camtDebit(statementId, '1000.00', { pmtInfId }), idempotencyKey: `imp-${seed}` }), 'import');
   const bankTxnId = t.store.db.prepare('SELECT id FROM bank_txn WHERE workspace_id = ? AND statement_id = ?').get(t.workspaceId, stmt.statementId).id;
   return { batchId: batch.batchId, bankTxnId, statementId: stmt.statementId };

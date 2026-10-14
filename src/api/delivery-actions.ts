@@ -19,11 +19,12 @@ import type { ActionDef, ActionInput, ApiDeps, JsonSchema } from './registry.js'
 import type { Result } from '../core/result.js';
 import { ok } from '../core/result.js';
 import { getDeliveryRuntime, TILL_VERSION } from './runtime-state.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface DeliveryActionHelpers {
   depsAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (deps: ApiDeps, input: ActionInput) => Result,

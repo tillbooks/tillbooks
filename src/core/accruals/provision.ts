@@ -25,6 +25,7 @@ import { ok, err } from '../result.js';
 import type { Result, Err } from '../result.js';
 import { requireString, requireDate, optionalText, optionalId, optionalDate } from '../ledger/inputGuards.js';
 import { postEntry } from '../ledger/postEntry.js';
+import { postEntryInternalChecked } from '../ledger/innerPosting.js';
 import { reverseOwnedEntry } from '../ledger/reverseEntry.js';
 import { applySavedView } from '../customization/views.js';
 import { baseCurrencyOf } from '../fx/rates.js';
@@ -482,13 +483,13 @@ export function provisionPost(ctx: WorkspaceContext, input: ProvisionPostInput):
   const lines = provisionLinesOf({ amountMinor: row.amount_minor, provisionAccountId: row.provision_account_id, expenseAccountId: row.expense_account_id });
   return runGuarded(() =>
     ctx.store.tx(() => {
-      const posted = postEntry(ctx, {
+      const posted = postEntryInternalChecked(ctx, {
         date: row.period_end,
         source: PROVISION_SOURCE,
         idempotencyKey: `provision:${row.id}`,
         description: `Rückstellung (${row.reason}): ${row.description}`,
         lines,
-      });
+      }, 'provision_post_internal');
       if (!posted.ok) throw new ProvisionAbort(err(posted.error, { ...posted, date: row.period_end }));
       const at = ctx.clock.now();
       ctx.store.db

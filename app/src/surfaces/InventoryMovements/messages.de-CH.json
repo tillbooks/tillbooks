@@ -7,7 +7,7 @@
     "noWorkspace": "Wähle einen Mandanten, um das Bewegungsjournal zu sehen.",
     "listLabel": "Lagerartikel",
     "detailLabel": "Bewegungsverlauf",
-    "selectHint": "Wähle einen Artikel, um seinen Bestand und Bewegungsverlauf zu sehen.",
+    "selectHint": "Wähle einen Artikel.",
     "onHand": "Bestand",
     "record": "Bewegung erfassen",
     "transfer": "Umlagern",

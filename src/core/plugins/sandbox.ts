@@ -69,6 +69,8 @@
 import type { Result } from '../result.js';
 import { err } from '../result.js';
 import { isReservedMoneyPathTool, moneyPathTools } from './reserved.js';
+import { withinPluginCall } from './callScope.js';
+import { dialCapabilitiesForCall, hasBookKeyedDialRule } from '../agent/dialMap.js';
 
 // --- Scopes -------------------------------------------------------------------------------------
 
@@ -129,8 +131,15 @@ export type PluginInvoker = (tool: string, input: Record<string, unknown>, asAct
  *      CALL time too, US-G02.2 permission-denied);
  *   2. a tool naming a reserved money-path verb is refused `capability_forbidden` (belt to install's
  *      braces, so P3 holds even if a manifest slipped one past install somehow);
- *   3. otherwise the call goes through the SAME dispatch an agent uses, AS the plugin's actor, so the
+ *   3. a call the agent dial holds for a person (`dialCapabilitiesForCall`: a G09 migration approval,
+ *      a posting, a payment, a filing) is refused `capability_forbidden` with reason `needs_a_person`
+ *      (D161.2): the bridge has no approval card, so running it would let plugin code do on the
+ *      installer's authority what the agent may only propose;
+ *   4. otherwise the call goes through the SAME dispatch an agent uses, AS the plugin's actor, so the
  *      §H-TENANT scope and the A24 capability check bind it exactly as they bind any other caller.
+ *      The dispatch runs inside `withinPluginCall` (D161.2), so for its whole duration the plugin's
+ *      actor is a governed seat and every human-only check (`isGovernedSeat`, `actorIsHuman`: a G20
+ *      sign-off, a statement-gap confirmation, the dial and its approvals) refuses it.
  *
  * `pluginActor` is the identity a plugin's calls are attributed to (and A24-resolved against): the
  * workspace member who installed it, so a plugin can never reach past what that member may do.
@@ -158,7 +167,12 @@ export function runPluginToolCall(
   if (!grantedToolNames(args.grantedScopes).has(args.tool)) {
     return err('forbidden', { tool: args.tool, reason: 'scope_not_granted' });
   }
-  return invoke(args.tool, args.input, args.pluginActor);
+  // A book-keyed rule (`whenBook`) needs the book to decide, and the bridge holds none: fail closed on
+  // the whole verb rather than let a plugin run the governed branch unseen (round-4 critic N1).
+  if (dialCapabilitiesForCall(args.tool, args.input).length > 0 || hasBookKeyedDialRule(args.tool)) {
+    return err('capability_forbidden', { reason: 'needs_a_person', tool: args.tool });
+  }
+  return withinPluginCall(args.pluginActor, () => invoke(args.tool, args.input, args.pluginActor));
 }
 
 // --- The process seam (the declared, unshipped half) --------------------------------------------

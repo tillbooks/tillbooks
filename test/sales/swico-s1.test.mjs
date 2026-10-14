@@ -212,6 +212,14 @@ test('MAJOR 1: an all-one-positive-rate invoice may still use the idiomatic sing
   assert.equal(vatTag(strdBkgInf), '8.1', 'IG Example 1 shape: one rate, whole invoice');
 });
 
+test('D164: /32/ states the rate the line POSTED at, read through lineSupplyDate (a document-level 2023 date: 7.7%)', () => {
+  const { ctx } = setup();
+  const id = issued(ctx, [[100000, 'UST81']], { supplyDate: '2023-12-20' });
+  const { amt, strdBkgInf } = payloadParts(ctx, id);
+  assert.equal(amt, '1077.00');
+  assert.equal(vatTag(strdBkgInf), '7.7', 'the tag reads the document date the posting priced at, not the issue date');
+});
+
 test('MAJOR 1: a wholly untaxed invoice states rate 0 over its whole net', () => {
   const { ctx } = setup();
   const id = issued(ctx, [[50000, 'EXPORT0']]);
@@ -250,9 +258,23 @@ test('MINOR 3: /40/ carries the default payment date derived from due_date (Tabl
   assert.match(strdBkgInf, /\/40\/0:30$/, strdBkgInf);
 });
 
-test('MINOR 3: no due date means no /40/ tag (an absent tag beats an invented condition)', () => {
-  const { ctx } = setup();
+test('D163: a draft with no due date is issued with the customer\'s terms, and /40/ states them', () => {
+  // Since D163 (04.10.2026) the engine derives the due date at issue: the issue date plus the
+  // customer's own Zahlungsfrist (30 days here). The /40/ tag then carries the real condition.
+  const { ctx, store } = setup();
   const id = issued(ctx, [[100000, 'UST81']]);
+  assert.equal(store.db.prepare('SELECT due_date FROM document WHERE id = ?').get(id).due_date, '2026-08-15');
+  const { strdBkgInf } = payloadParts(ctx, id);
+  assert.match(strdBkgInf, /\/40\/0:30$/, strdBkgInf);
+});
+
+test('MINOR 3: no stored due date means no /40/ tag (an absent tag beats an invented condition)', () => {
+  // An invoice issued BEFORE D163 kept a NULL due date, and D163 does not rewrite issued documents.
+  // Such a row is emulated here by clearing the column after issue: the reader must still invent no
+  // condition for it.
+  const { ctx, store } = setup();
+  const id = issued(ctx, [[100000, 'UST81']]);
+  store.db.prepare('UPDATE document SET due_date = NULL WHERE id = ?').run(id);
   const { strdBkgInf } = payloadParts(ctx, id);
   assert.equal(/\/40\//.test(strdBkgInf), false, strdBkgInf);
 });

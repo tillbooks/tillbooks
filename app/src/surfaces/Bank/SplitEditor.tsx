@@ -12,10 +12,11 @@ import { useT, formatMoney } from '../../i18n';
 import { PickerButton, type ComboboxOption } from '../../components/AccountCombobox';
 import { TaxCodeCombobox } from '../../components/TaxCodeCombobox';
 import type { BankInboxLine, DraftLeg, DraftTarget } from './model';
-import { absAmount, composeAccountsPreview, isCredit, minorToField, parseMoneyInput, previewBalances } from './model';
+import { absAmount, isCredit, minorToField, parseMoneyInput } from './model';
 import type { Lookups } from './lookups';
-import { accountLabel, partyOf } from './lookups';
-import { useVatFigures } from './panelData';
+import { accountLabel, partyOf, taxCodeFor, vatPickerShows } from './lookups';
+import { bankComposeRequest, previewBalances, previewLinesOf } from './bankCompose';
+import { useBankCompose } from './useBankCompose';
 import { LegsPreview } from './LegsPreview';
 import { ControlAccountWarning } from './ControlAccountWarning';
 import { RemoveGlyph } from './glyphs';
@@ -41,6 +42,9 @@ export interface SplitEditorProps {
 
 let legSeq = 0;
 
+/** How long the editor waits after the last keystroke before it asks `compose_entry` (the composer's pace). */
+const COMPOSE_DEBOUNCE_MS = 120;
+
 export function SplitEditor({ workspaceId, line, lookups, initial, busy, canPost, onBook, onCancel }: SplitEditorProps) {
   const t = useT();
   const baseId = useId();
@@ -65,16 +69,26 @@ export function SplitEditor({ workspaceId, line, lookups, initial, busy, canPost
     .map((l, i) => ({ accountId: l.accountId, amountMinor: parsed[i] ?? 0, taxCode: l.taxCode }))
     .filter((l) => l.accountId !== '' && l.amountMinor !== 0);
   const bankLedger = lookups.bankById.get(line.bankAccountId)?.ledgerAccountId ?? null;
-  const { figures } = useVatFigures(workspaceId, line, draftLegs, lookups);
-  const preview = useMemo(() => {
-    if (bankLedger === null || draftLegs.length === 0) return null;
-    const composed = composeAccountsPreview(line.amountMinor, draftLegs, bankLedger, figures, {
-      input: lookups.chartByNumber.get('1170')?.id ?? null,
-      investment: lookups.chartByNumber.get('1171')?.id ?? null,
-      output: lookups.chartByNumber.get('2200')?.id ?? null,
-    });
-    return composed !== null && previewBalances(composed) ? composed : null;
-  }, [bankLedger, draftLegs, figures, line.amountMinor, lookups]);
+  // The Soll/Haben table is the ENGINE's composition of the legs on screen (`compose_entry`, the lines
+  // `book_bank_line` posts), asked once the typing settles; while that answer is in flight it shows the
+  // "wird berechnet" note, never the lines of an earlier split.
+  const compose = useBankCompose(workspaceId, bankComposeRequest(line, draftLegs, bankLedger), { debounceMs: COMPOSE_DEBOUNCE_MS, currency: line.currency });
+  const composedLines = compose.status === 'answered' && compose.answer.composed ? previewLinesOf(compose.answer) : null;
+  const preview = composedLines !== null && composedLines.length > 0 && previewBalances(composedLines) ? composedLines : null;
+  // "wird berechnet" only while an answer is really on its way (critic L1): every other state that has no
+  // table says which one it is, and a state that can never become a table never reads as "computing".
+  const previewNote =
+    draftLegs.length === 0
+      ? t('bankInbox.legs.pickFirst')
+      : compose.status === 'denied' || (compose.status === 'failed' && compose.error.error === 'permission_denied')
+        ? t('bankInbox.legs.noRight')
+        : compose.status === 'foreign'
+          ? `${t('bankInbox.error.vatForeignCurrency.title')} ${t('bankInbox.error.vatForeignCurrency.body')}`
+          : compose.status === 'answered' && !compose.answer.composed
+            ? t('bankInbox.strip.vatFailed')
+            : compose.status === 'pending'
+              ? t('bankInbox.legs.computing')
+              : t('bankInbox.legs.unavailable');
 
   const accountOptions = useMemo<ComboboxOption[]>(
     () => lookups.chart.filter((a) => a.id !== bankLedger).map((a) => ({ id: a.id, code: a.number, label: a.name })),
@@ -155,9 +169,9 @@ export function SplitEditor({ workspaceId, line, lookups, initial, busy, canPost
                   open={openPicker === `acc-${leg.key}`}
                   onOpenChange={(open) => setOpenPicker(open ? `acc-${leg.key}` : null)}
                   onChange={(id) => {
-                    const a = lookups.chartById.get(id);
-                    setLeg(leg.key, { accountId: id, taxCode: a?.vatCodeDefault ?? leg.taxCode });
-                    setOpenPicker(`vat-${leg.key}`);
+                    const taxCode = taxCodeFor(lookups, id, leg.taxCode);
+                    setLeg(leg.key, { accountId: id, taxCode });
+                    setOpenPicker(vatPickerShows(lookups, { accountId: id, taxCode }) ? `vat-${leg.key}` : null);
                   }}
                   className="bank-picker"
                   width={360}
@@ -173,6 +187,8 @@ export function SplitEditor({ workspaceId, line, lookups, initial, busy, canPost
                 </PickerButton>
               </div>
               <div className="bank-split__leg-row">
+                {/* MWST only where a code can apply, or where the leg already carries one (the composer's rule). */}
+                {account === undefined || vatPickerShows(lookups, leg) ? (
                 <div className="bank-field bank-field--grow">
                   <span className="bank-field__label">{t('bankInbox.split.vat')}</span>
                   <TaxCodeCombobox
@@ -186,6 +202,9 @@ export function SplitEditor({ workspaceId, line, lookups, initial, busy, canPost
                     className="bank-picker"
                   />
                 </div>
+                ) : (
+                  <span className="bank-field bank-field--grow" aria-hidden="true" />
+                )}
                 <label className="bank-field bank-field--amount" htmlFor={`${baseId}-amt-${leg.key}`}>
                   <span className="bank-field__label">{t('bankInbox.split.amount')}</span>
                   <input
@@ -220,7 +239,7 @@ export function SplitEditor({ workspaceId, line, lookups, initial, busy, canPost
         lines={preview}
         currency={line.currency}
         lookups={lookups}
-        note={draftLegs.length === 0 ? t('bankInbox.legs.pickFirst') : t('bankInbox.legs.computing')}
+        note={previewNote}
       />
       <ControlAccountWarning lookups={lookups} legs={draftLegs} />
       <div className="bank-mode__actions">

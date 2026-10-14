@@ -5,8 +5,9 @@
  * INERT until a human approves it. Approving REPLAYS the stored verb through the shared dispatch, so
  * it gets the same tenant, boundary, A24 gate and throw guard every other call gets, and it replays
  * with the stored idempotency key, so an approve-twice cannot double-post (§H-IDEMPOTENT). The row's
- * `status` walks pending -> executed or pending -> rejected, never back (§6b Fixed: one source of
- * truth for the inbox state machine).
+ * `status` walks pending -> executed, pending -> rejected or pending -> stale, never back (§6b Fixed:
+ * one source of truth for the inbox state machine). `stale` (critic N1) is a Vorschlag whose pinned
+ * record changed after the proposal (`vorschlagPin.ts`): it never ran and can never be approved.
  *
  * THE AGENT CAN NEVER SELF-APPROVE (§5, §6b Fixed). It is an ACTOR-and-CAPABILITY rule enforced in the
  * verb, not a routing trick: `approve_drafted_action` is gated on `manage_agent_dial` (owner-only, so
@@ -28,8 +29,11 @@ import type { Result } from '../result.js';
 import { ok, err } from '../result.js';
 import type { ActionInvoker } from '../automation/index.js';
 import { requireString, optionalText } from '../ledger/inputGuards.js';
+import { isGovernedSeat } from '../access/capability.js';
 import { isDialCapability, writeDialLevel } from './dial.js';
+import { APPROVAL_CONFIRMS_FIELD } from './dialMap.js';
 import { backfillDraftingCall, entityRefOf } from './trace.js';
+import { pinFor, VORSCHLAG_STALE_MESSAGE, type VorschlagFigures } from './vorschlagPin.js';
 
 /**
  * The longest `reject_drafted_action.reason` the engine stores (governance critic F4, 2026-09-05).
@@ -52,6 +56,8 @@ interface AgentActionRow {
   resolved_at: string | null;
   resolved_by: string | null;
   reject_reason: string | null;
+  pin_digest: string | null;
+  pin_json: string | null;
 }
 
 export interface EnqueueDraftedActionInput {
@@ -95,15 +101,25 @@ export function enqueueDraftedAction(ctx: WorkspaceContext, input: EnqueueDrafte
   if (idempotencyKey !== null) {
     const existing = ctx.store.db
       .prepare(
-        `SELECT id, status, result_json, reject_reason FROM agent_action
-          WHERE workspace_id = ? AND action_tool = ? AND idempotency_key = ?
+        `SELECT id, status, result_json, reject_reason, pin_digest FROM agent_action
+          WHERE workspace_id = ? AND action_tool = ? AND idempotency_key = ? AND status <> 'stale'
           ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC, id DESC
           LIMIT 1`,
       )
       .get(ctx.workspaceId, actionTool, idempotencyKey) as
-      | { id: string; status: string; result_json: string | null; reject_reason: string | null }
+      | { id: string; status: string; result_json: string | null; reject_reason: string | null; pin_digest: string | null }
       | undefined;
-    if (existing !== undefined) {
+    // Critic N1: a pending Vorschlag whose pinned record changed since it was drafted is VOID, and the
+    // same-key proposal that arrives now is the "propose again" the refusal asks for. The old row goes
+    // `stale` (never approvable again) and a fresh one is minted below with the record as it is now,
+    // so the person decides on what will actually run. A stale row is never a replay target.
+    if (existing !== undefined && existing.status === 'pending' && existing.pin_digest !== null) {
+      if (pinFor(ctx, actionTool, payload)?.digest !== existing.pin_digest) {
+        markStale(ctx, existing.id);
+      } else {
+        return ok({ actionId: existing.id, status: existing.status, replayed: true });
+      }
+    } else if (existing !== undefined) {
       let result: Result | undefined;
       if (existing.status === 'executed' && existing.result_json !== null) {
         try {
@@ -122,15 +138,55 @@ export function enqueueDraftedAction(ctx: WorkspaceContext, input: EnqueueDrafte
     }
   }
 
+  // WHAT YOU APPROVED IS WHAT RUNS (critic N1): pin the records this act will consume, so approval
+  // can refuse when they changed after the proposal, and freeze the figures the card shows.
+  const pin = pinFor(ctx, actionTool, payload);
   const id = ctx.ids.next('agent_action');
   ctx.store.db
     .prepare(
       `INSERT INTO agent_action
-         (id, workspace_id, actor, dial_capability, action_tool, payload_json, status, idempotency_key, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+         (id, workspace_id, actor, dial_capability, action_tool, payload_json, status, idempotency_key, created_at, pin_digest, pin_json)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
     )
-    .run(id, ctx.workspaceId, ctx.actor, dialCapability, actionTool, JSON.stringify(payload), idempotencyKey, ctx.clock.now());
+    .run(
+      id,
+      ctx.workspaceId,
+      ctx.actor,
+      dialCapability,
+      actionTool,
+      JSON.stringify(payload),
+      idempotencyKey,
+      ctx.clock.now(),
+      pin?.digest ?? null,
+      pin === undefined ? null : JSON.stringify(pin.figures),
+    );
   return ok({ actionId: id, status: 'pending', replayed: false });
+}
+
+/** pending -> stale: the row can never be approved again, and its drafting call shows why. */
+function markStale(ctx: WorkspaceContext, actionId: string): void {
+  ctx.store.db
+    .prepare(
+      `UPDATE agent_action
+          SET status = 'stale', resolved_at = ?, resolved_by = ?
+        WHERE workspace_id = ? AND id = ? AND status = 'pending'`,
+    )
+    .run(ctx.clock.now(), ctx.actor, ctx.workspaceId, actionId);
+  backfillDraftingCall(ctx, actionId, undefined);
+}
+
+/** The `vorschlag_stale` refusal: the code, the action, and the sentence in both languages. */
+function staleRefusal(row: AgentActionRow): Result {
+  return err('vorschlag_stale', { actionId: row.id, actionTool: row.action_tool, message: VORSCHLAG_STALE_MESSAGE });
+}
+
+/**
+ * True when the pinned records changed since the Vorschlag was drafted. A row with no pin (drafted
+ * before the pin existed, or for a verb that needs none) is never stale.
+ */
+function pinChanged(ctx: WorkspaceContext, row: AgentActionRow, payload: Record<string, unknown>): boolean {
+  if (row.pin_digest === null) return false;
+  return pinFor(ctx, row.action_tool, payload)?.digest !== row.pin_digest;
 }
 
 function loadAction(ctx: WorkspaceContext, actionId: string): AgentActionRow | undefined {
@@ -145,7 +201,7 @@ export interface ListDraftedActionsInput {
   status?: unknown;
 }
 
-const ACTION_STATUSES = new Set(['pending', 'executed', 'rejected']);
+const ACTION_STATUSES = new Set(['pending', 'executed', 'rejected', 'stale']);
 
 /**
  * The queue's read face (design §5 finding 3: A26 §6 designed a queue no transport could list). The
@@ -153,6 +209,29 @@ const ACTION_STATUSES = new Set(['pending', 'executed', 'rejected']);
  * one shape; the raw stored string stays an implementation detail. Default: pending only, oldest
  * first, because the oldest pending draft is the one at risk of becoming stale (design row 9.3).
  */
+/** The payload keys that name a contact, resolved to its name for the card (critic phase0-installable r2). */
+const CONTACT_ID_KEYS: readonly string[] = ['vendorId', 'contactId', 'customerId', 'debtorId'];
+
+/**
+ * The human names behind the contact ids a payload carries, keyed by payload key. A drafted
+ * `set_creditor_bank_profile` names its vendor by contact id only, so the approver could not see WHICH
+ * vendor's IBAN was being redirected without opening the details (critic phase0-installable r2, UX).
+ * Read-only, tenant-scoped, and additive: the payload itself stays exactly what the approval replays.
+ * An id that resolves to no contact in THIS workspace is simply absent (the raw id still shows).
+ */
+function payloadLabelsOf(ctx: WorkspaceContext, payload: Record<string, unknown>): Record<string, string> {
+  const labels: Record<string, string> = {};
+  for (const key of CONTACT_ID_KEYS) {
+    const id = payload[key];
+    if (typeof id !== 'string' || id.length === 0) continue;
+    const row = ctx.store.db
+      .prepare('SELECT name FROM contact WHERE workspace_id = ? AND id = ?')
+      .get(ctx.workspaceId, id) as { name: string | null } | undefined;
+    if (row !== undefined && typeof row.name === 'string' && row.name.length > 0) labels[key] = row.name;
+  }
+  return labels;
+}
+
 export function listDraftedActions(ctx: WorkspaceContext, input: ListDraftedActionsInput): Result {
   const status = typeof input.status === 'string' ? input.status : 'pending';
   if (!ACTION_STATUSES.has(status)) {
@@ -169,12 +248,23 @@ export function listDraftedActions(ctx: WorkspaceContext, input: ListDraftedActi
       } catch {
         // A corrupt payload still lists (the row exists and a human must be able to reject it).
       }
+      let figures: VorschlagFigures | null = null;
+      try {
+        figures = row.pin_json === null ? null : (JSON.parse(row.pin_json) as VorschlagFigures | null);
+      } catch {
+        figures = null;
+      }
       return {
         actionId: row.id,
         actor: row.actor,
         dialCapability: row.dial_capability,
         actionTool: row.action_tool,
         payload,
+        payloadLabels: payloadLabelsOf(ctx, payload),
+        // Critic N1: the key figures of the record as it stood when the agent proposed this, and
+        // whether it has changed since (a pending row only): the card shows what is being approved.
+        figures,
+        ...(row.status === 'pending' && row.pin_digest !== null ? { changedSinceProposal: pinChanged(ctx, row, payload) } : {}),
         status: row.status,
         createdAt: row.created_at,
         resolvedAt: row.resolved_at,
@@ -214,6 +304,12 @@ export function approveDraftedAction(
   if (guard) return guard;
   const actionId = input.actionId as string;
 
+  // D161: approving is human-only. THE GOVERNED SEAT NEVER APPROVES ANY Vorschlag, its own or another
+  // agent seat's, enforced on the ACTOR (the `setAgentDial` shape), so it holds even for an embedder
+  // whose context bypasses A24's step-0 denial of `manage_agent_dial`. Before the row is read, so the
+  // seat learns nothing about the queue either.
+  if (isGovernedSeat(ctx.store, ctx.actor)) return err('cannot_self_approve', { actionId, reason: 'governed_seat' });
+
   const row = loadAction(ctx, actionId);
   if (row === undefined) return err('not_found', { actionId });
   if (row.status === 'executed') {
@@ -223,6 +319,7 @@ export function approveDraftedAction(
       : ok({ actionId, status: 'executed' });
   }
   if (row.status === 'rejected') return err('already_rejected', { actionId });
+  if (row.status === 'stale') return staleRefusal(row);
 
   // The agent can never self-approve: a second, independent actor must review before the irreversible
   // step (§6b Fixed). Enforced on the ACTOR, beside the capability gate at the boundary.
@@ -235,10 +332,32 @@ export function approveDraftedAction(
     return err('corrupt_drafted_action', { actionId });
   }
 
+  // WHAT YOU APPROVED IS WHAT RUNS (critic N1). The replay names a record, so it would act on whatever
+  // that record holds NOW. Recompute the pin taken at proposal; on a mismatch run nothing, void the row
+  // (`stale`, never approvable again) and ask for a new proposal. After the self-approve check, so the
+  // drafting actor cannot use an approval attempt to void its own proposals.
+  //
+  // One exception keeps the approval crash-safe (the header's recurring-run-log shape): a process death
+  // between the replay and the status flip leaves the row pending while the verb committed, and the
+  // committed act itself changed the record (an issued invoice is not a draft). When the verb's own
+  // idempotency already holds a result under the stored key, the replay below returns that result and
+  // writes nothing, so nothing unapproved can run and the pin is not consulted.
+  if (pinChanged(ctx, row, payload) && !alreadyCommitted(ctx, row, payload)) {
+    markStale(ctx, actionId);
+    return staleRefusal(row);
+  }
+
+  // D156 point 5: approving IS the human confirmation a confirm-gated verb asks for (P8), so the
+  // replay carries it (`APPROVAL_CONFIRMS_FIELD`). Without this an approved `env_delete` the agent
+  // drafted without `confirmed` replayed as a plan and was marked executed while nothing happened.
+  // Only the replayed input changes; the stored payload, which the card showed, stays as drafted.
+  const confirmField = APPROVAL_CONFIRMS_FIELD[row.action_tool];
+  const replayInput = confirmField === undefined ? payload : { ...payload, [confirmField]: true };
+
   // Replay AS THE APPROVER through the shared dispatch: the human vouches under their own authority
   // and RBAC is re-checked against them (P3). The underlying verb carries its stored idempotency key,
   // so even a re-approve after a crash cannot double-post.
-  const outcome = invoke(row.action_tool, payload, ctx.actor);
+  const outcome = invoke(row.action_tool, replayInput, ctx.actor);
   if (!outcome.ok) return outcome;
 
   ctx.store.db
@@ -275,6 +394,13 @@ export function approveDraftedAction(
  * and the drafting call in the trace gains the resolver and the moment, the same backlink the approve
  * path writes, so a rejection is as visible in the conversation as an approval is.
  */
+/** The verb already committed under the stored key (its idempotency side-table holds the result). */
+function alreadyCommitted(ctx: WorkspaceContext, row: AgentActionRow, payload: Record<string, unknown>): boolean {
+  const key = row.idempotency_key ?? (typeof payload.idempotencyKey === 'string' ? payload.idempotencyKey : null);
+  if (key === null) return false;
+  return ctx.store.recallIdempotent<unknown>(ctx.workspaceId, key, row.action_tool) !== undefined;
+}
+
 export function rejectDraftedAction(ctx: WorkspaceContext, input: ResolveDraftedActionInput): Result {
   const guard = requireString(input.actionId, 'actionId') ?? optionalText(input.reason, 'reason');
   if (guard) return guard;
@@ -293,6 +419,7 @@ export function rejectDraftedAction(ctx: WorkspaceContext, input: ResolveDrafted
     return ok({ actionId, status: 'rejected', ...(row.reject_reason !== null ? { reason: row.reject_reason } : {}) });
   }
   if (row.status === 'executed') return err('already_executed', { actionId });
+  if (row.status === 'stale') return staleRefusal(row);
 
   ctx.store.db
     .prepare(

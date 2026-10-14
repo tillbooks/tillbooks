@@ -29,9 +29,9 @@ import { createHash } from 'node:crypto';
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
-import { uploadFile, linkFile, getFileContent } from '../files/index.js';
-import { postEntry } from '../ledger/postEntry.js';
+import { uploadFile, linkFile, fileLinkedTo, getFileContent } from '../files/index.js';
 import type { LineInput } from '../ledger/postEntry.js';
+import { postEntryInternalChecked } from '../ledger/innerPosting.js';
 import { applySavedView } from '../customization/views.js';
 
 /** `journal_entry.source` for the wage journal: the existing §D0 `import` value (no enum change). */
@@ -309,13 +309,21 @@ export function payrollHandoffExport(ctx: WorkspaceContext, input: PayrollHandof
 
     // OP3: link the artifact to the payroll_handoff record. The E00-side read-back gate
     // (`getFileContent`) then gates this document on `hr.manage` (+ `hr.sensitive` when AHV present).
-    const linked = linkFile(ctx, {
-      fileId: documentId,
-      entityKind: 'payroll_handoff',
-      entityId: exportId,
-      idempotencyKey: `${input.idempotencyKey}:link`,
-    });
+    // K1: the derived key runs in this composite's own idempotency scope, never `files_link`'s public
+    // one. (The file was minted a line above, so no caller could have linked it first; the scope makes
+    // that structural rather than a property of this ordering.)
+    const linked = ctx.store.innerWrite('payroll_handoff_export', () =>
+      linkFile(ctx, {
+        fileId: documentId,
+        entityKind: 'payroll_handoff',
+        entityId: exportId,
+        idempotencyKey: `${input.idempotencyKey}:link`,
+      }),
+    );
     if (!linked.ok) throw new HandoffAbort(linked);
+    if (!fileLinkedTo(ctx, documentId, 'payroll_handoff', exportId)) {
+      throw new HandoffAbort(err('inner_write_not_own', { composite: 'payroll_handoff_export', inner: 'files_link', fileId: documentId, entityId: exportId }));
+    }
 
     ctx.audit.record({ entityKind: 'payroll_handoff', entityId: exportId, action: 'export', actor: ctx.actor, at });
     return ok({
@@ -646,14 +654,16 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
     // THE ONE posting (P3): A02 is the only path to the ledger. A02 asserts `post`, checks the
     // period lock and the balance, and is itself idempotent. A `{ok:false}` MUST be raised, not
     // returned, or the surrounding tx would commit the partial write.
-    const posted = postEntry(ctx, {
+    // K1: `postEntryInternalChecked` posts under this composite's own idempotency scope and reads the entry back,
+    // so a `post_entry` made first under `K:wjp` can never be recorded as this wage journal.
+    const posted = postEntryInternalChecked(ctx, {
       date: entryDate,
       ...(input.ref !== undefined ? { ref: input.ref } : {}),
       description: input.description ?? 'Lohnbuchung',
       lines: postingLines,
       source: WAGE_JOURNAL_SOURCE,
       idempotencyKey: `${input.idempotencyKey}:wjp`,
-    });
+    }, 'wage_journal_post_internal');
     if (!posted.ok) throw new HandoffAbort(posted);
     const postedEntryId = (posted as unknown as { entryId: string }).entryId;
 

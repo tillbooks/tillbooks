@@ -26,6 +26,7 @@ import { fixedClock } from '../../dist/core/clock.js';
 import { sequenceIdGen } from '../../dist/core/ids.js';
 import { createWorkspace } from '../../dist/core/setup/index.js';
 import { lockPeriod, ledgerPorts } from '../../dist/core/ledger/index.js';
+import { lockPeriodSealed } from '../../dist/core/ledger/periods.js';
 import {
   createAssetCategory,
   createAsset,
@@ -209,7 +210,7 @@ test('acquisition and its reads are strictly workspace-scoped', () => {
 test('an acquisition dated in a hard-locked period is refused and writes nothing', () => {
   const { ctx, store, workspaceId, acc, draftAsset } = setup();
   const asset = draftAsset();
-  const sealed = lockPeriod(ctx, { period: '2026-03', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'lk' });
+  const sealed = lockPeriodSealed(ctx, { period: '2026-03', reason: 'vat_filed', idempotencyKey: 'lk' });
   assert.equal(sealed.ok, true);
   const r = acquire(ctx, asset.id, acc, { date: '2026-03-15' });
   assert.equal(r.error, 'period_locked');

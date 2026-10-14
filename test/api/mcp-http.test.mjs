@@ -1,9 +1,12 @@
-// D12 + D13: the Studio speaks MCP over StreamableHTTP, and the audit actor is declared ONCE per
-// session at `initialize` and inherited by every call in it.
+// D12 + D13: the Studio speaks MCP over StreamableHTTP, and the audit actor is fixed ONCE per
+// session when it opens and inherited by every call in it.
 //
 // These drive the REAL SDK client against the REAL SDK server transport over a real loopback HTTP
 // server, because the point of D12 is the wire, and a fake would prove nothing about it. Nothing
 // leaves 127.0.0.1, so the suite stays offline.
+//
+// The Studio seat is held with the host's per-launch Studio key (critic probe P6, `session.ts`), so
+// the Studio sessions below open WITH the key (`openStudio`); a client name is only a label.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,10 +18,12 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { createMcpHttpHandler, STUDIO_CLIENT_NAME, resolveSessionActor } from '../../dist/api/mcp-http.js';
 import { makeApiDeps } from '../../dist/api/mcp.js';
 import { getAction } from '../../dist/api/registry.js';
+import { mintStudioKey, studioHeaders } from './studio-key-support.mjs';
 
-/** Start the MCP HTTP handler on an ephemeral port. Returns the base URL and a teardown. */
+/** Start the MCP HTTP handler on an ephemeral port. Returns the base URL, the key and a teardown. */
 async function startHttp(deps) {
-  const handler = createMcpHttpHandler(deps);
+  const studioKey = mintStudioKey();
+  const handler = createMcpHttpHandler(deps, { studioKey });
   const http = createServer((req, res) => {
     void handler.handleRequest(req, res);
   });
@@ -26,6 +31,7 @@ async function startHttp(deps) {
   const { port } = http.address();
   return {
     url: new URL(`http://127.0.0.1:${port}/mcp`),
+    studioKey,
     async stop() {
       await handler.closeAll();
       await new Promise((resolve) => http.close(resolve));
@@ -42,13 +48,15 @@ async function withServer(body) {
   const { deps, store } = makeApiDeps();
   const server = await startHttp(deps);
   const clients = [];
-  const open = async (clientName) => {
-    const client = await connect(server.url, clientName);
+  const open = async (clientName, headers = {}) => {
+    const client = await connect(server.url, clientName, headers);
     clients.push(client);
     return client;
   };
+  // The Studio's own session: it carries the Studio key, which is what seats it.
+  const openStudio = () => open(STUDIO_CLIENT_NAME, studioHeaders(server.studioKey));
   try {
-    await body({ deps, open });
+    await body({ deps, open, openStudio });
   } finally {
     for (const c of clients) await c.close();
     await server.stop();
@@ -57,9 +65,9 @@ async function withServer(body) {
 }
 
 /** Connect an MCP client that declares `clientName` at initialize. */
-async function connect(url, clientName) {
+async function connect(url, clientName, headers = {}) {
   const client = new Client({ name: clientName, version: '0.0.0' }, { capabilities: {} });
-  await client.connect(new StreamableHTTPClientTransport(url));
+  await client.connect(new StreamableHTTPClientTransport(url, { requestInit: { headers } }));
   return client;
 }
 
@@ -69,14 +77,18 @@ async function callVerb(client, name, args) {
   return JSON.parse(res.content[0].text);
 }
 
-test('resolveSessionActor maps the declared client to an actor string, and every other name is agent', () => {
-  assert.equal(resolveSessionActor({ name: STUDIO_CLIENT_NAME }), 'studio');
+test('resolveSessionActor: only the Studio key seats the Studio; every name, the Studio name included, is agent', () => {
+  // P6: a declared name is a claim, never a credential. `till-studio` WITHOUT the key is the agent.
+  assert.equal(resolveSessionActor({ name: STUDIO_CLIENT_NAME }), 'agent');
+  assert.equal(resolveSessionActor({ name: STUDIO_CLIENT_NAME }, 'absent'), 'agent');
+  assert.equal(resolveSessionActor({ name: STUDIO_CLIENT_NAME }, 'invalid'), 'agent');
   assert.equal(resolveSessionActor({ name: 'claude-ai' }), 'agent');
   assert.equal(resolveSessionActor(undefined), 'agent');
   assert.equal(resolveSessionActor({}), 'agent');
-  // F-08: there is NO host-supplied fallback any more. A second argument used to let a host seat an
-  // unknown client as anything (till up passed `studio`, so Claude Desktop bypassed the dial); the
-  // seating rule is the transport's and admits exactly the two closed-map seats.
+  // The key is the credential, whatever the name.
+  assert.equal(resolveSessionActor({ name: STUDIO_CLIENT_NAME }, 'valid'), 'studio');
+  assert.equal(resolveSessionActor(undefined, 'valid'), 'studio');
+  // F-08: there is NO host-supplied fallback. A string a host passes is not a passed key check.
   assert.equal(resolveSessionActor({ name: 'unknown' }, 'treuhand:mueller'), 'agent');
   assert.equal(resolveSessionActor({ name: 'unknown' }, 'studio'), 'agent');
 });
@@ -92,8 +104,8 @@ test('the MCP HTTP transport lists the same tools the registry defines', async (
 });
 
 test('a verb Result crosses the wire intact: ok, domain rejection, and unknown action', async () => {
-  await withServer(async ({ open }) => {
-    const client = await open(STUDIO_CLIENT_NAME);
+  await withServer(async ({ openStudio }) => {
+    const client = await openStudio();
     const created = await callVerb(client, 'create_workspace', { name: 'Wire GmbH', idempotencyKey: 'w1' });
     assert.equal(created.ok, true);
     assert.match(created.workspaceId, /^ws_/);
@@ -110,9 +122,9 @@ test('a verb Result crosses the wire intact: ok, domain rejection, and unknown a
 });
 
 test('D13: a Studio session is NOT recorded as agent, and an agent session still is', async () => {
-  await withServer(async ({ deps, open }) => {
+  await withServer(async ({ deps, open, openStudio }) => {
     // One session declaring the Studio, one declaring nothing in particular.
-    const studio = await open(STUDIO_CLIENT_NAME);
+    const studio = await openStudio();
     const agent = await open('some-agent');
     const ws = await callVerb(studio, 'create_workspace', { name: 'Audit GmbH', idempotencyKey: 'a1' });
     const workspaceId = ws.workspaceId;
@@ -160,8 +172,8 @@ test('D13: a Studio session is NOT recorded as agent, and an agent session still
 });
 
 test('two MCP sessions write to ONE database: the agent sees what the Studio posted', async () => {
-  await withServer(async ({ open }) => {
-    const studio = await open(STUDIO_CLIENT_NAME);
+  await withServer(async ({ open, openStudio }) => {
+    const studio = await openStudio();
     const agent = await open('some-agent');
     const ws = await callVerb(studio, 'create_workspace', { name: 'Shared GmbH', idempotencyKey: 's1' });
     const seen = await callVerb(agent, 'list_workspaces', {});

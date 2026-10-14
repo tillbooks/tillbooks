@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { axe } from 'jest-axe';
 
+import { useLocation } from 'react-router-dom';
 import Journal from './index';
 import { EntryDrawer } from './EntryDrawer';
 import { TillClient, type Transport, type RestResponse } from '../../lib/client';
@@ -27,6 +28,7 @@ type Handlers = Record<string, Handler>;
  * render `${account.number} ${account.label}` as "1000 undefined" for a whole release.
  */
 import listAccountsFixture from '../Accounts/list-accounts.fixture.json';
+import { consequenceSentence } from '../../lib/approval-tiers';
 
 const ACCOUNTS: RestResponse = { status: 200, body: recordedOk(listAccountsFixture) };
 
@@ -55,14 +57,36 @@ async function pickAccount(field: HTMLElement, id: string) {
 }
 
 /**
- * K-30: the MWST code is the shared Select (a combobox trigger over a portaled listbox), no longer a
- * native `<select>`. Open it and pick the option that carries the code.
+ * A1: the MWST control is the typeable `TaxCodeCombobox` (a picker button over a portaled listbox).
+ * Open it and pick the option that carries the code; '' picks "Without VAT".
  */
-async function pickTaxCode(trigger: HTMLElement, code: string) {
+async function pickVat(trigger: HTMLElement, code: string) {
   await userEvent.click(trigger);
-  const option = screen.getAllByRole('option').find((o) => o.getAttribute('data-value') === code);
-  if (option === undefined) throw new Error(`the tax code list offers no ${code}`);
+  const options = await screen.findAllByRole('option');
+  const option =
+    code === ''
+      ? options.find((o) => (o.textContent ?? '').includes('Without VAT'))
+      : options.find((o) => o.querySelector('.combobox__code')?.textContent === code);
+  if (option === undefined) throw new Error(`the tax code list offers no ${code || 'Without VAT'}`);
   await userEvent.click(option);
+}
+
+/** The codes an open MWST list offers, by their code chip. */
+function offeredCodes(): string[] {
+  return screen.getAllByRole('option').map((o) => o.querySelector('.combobox__code')?.textContent ?? '').filter((c) => c !== '');
+}
+
+/** A1 "Aufteilen": the Buchungssatz becomes the line grid, where every line names itself ("Debit 1"). */
+async function openGrid(dialog: HTMLElement) {
+  await userEvent.click(await within(dialog).findByRole('button', { name: 'Split' }));
+  await within(dialog).findByLabelText('Account 1');
+}
+
+/** A1: one Buchungssatz, Soll an Haben, one gross amount. */
+async function fillSatz(dialog: HTMLElement, debitId: string, creditId: string, amount: string) {
+  await pickAccount(await within(dialog).findByLabelText('Debit'), debitId);
+  await pickAccount(within(dialog).getByLabelText('Credit'), creditId);
+  await userEvent.type(within(dialog).getByLabelText('Amount'), amount);
 }
 
 const TAX_CODES: RestResponse = {
@@ -76,12 +100,11 @@ const TAX_CODES: RestResponse = {
   },
 };
 
-// The vat_preview stand-in is the SAME fixture the drift guard pins to the live computeLineTax
-// response (test/vat/vat-preview-fixture.test.mjs), so the app suite and the engine cannot silently
-// diverge on the response shape.
-import vatPreviewFixture from '../Vat/vat-preview.fixture.json';
+// The composer's lines, captions and verdict are the REAL engine's (D152 amendment): `compose_entry` is
+// answered by `composeEngine`, so no stand-in in this suite derives a VAT figure of its own.
+import { composeEngine } from '../../../test-support/composeEngine';
 
-const VAT_PREVIEW: RestResponse = { status: 200, body: recordedOk(vatPreviewFixture) };
+const COMPOSE = composeEngine();
 
 const COST_CENTERS: RestResponse = {
   status: 200,
@@ -93,10 +116,11 @@ const PICKERS: Handlers = {
   list_accounts: ACCOUNTS,
   vat_codes: TAX_CODES,
   list_cost_centers: COST_CENTERS,
+  compose_entry: COMPOSE,
 };
 
-function renderJournal(handlers: Handlers, opts: { locale?: 'en' | 'de-CH'; initialId?: string | null } = {}) {
-  const { locale = 'en', initialId = 'ws_test' } = opts;
+function renderJournal(handlers: Handlers, opts: { locale?: 'en' | 'de-CH'; initialId?: string | null; path?: string } = {}) {
+  const { locale = 'en', initialId = 'ws_test', path = '/journal' } = opts;
   const calls: { action: string; input: Record<string, unknown> }[] = [];
   const base: Transport = async (action, input) => {
     calls.push({ action, input });
@@ -117,14 +141,21 @@ function renderJournal(handlers: Handlers, opts: { locale?: 'en' | 'de-CH'; init
     <TillClientProvider client={client}>
       <I18nProvider initialLocale={locale}>
         <WorkspaceProvider initialId={initialId}>
-          <MemoryRouter>
+          <MemoryRouter initialEntries={[path]}>
             <Journal />
+            <LocationProbe />
           </MemoryRouter>
         </WorkspaceProvider>
       </I18nProvider>
     </TillClientProvider>,
   );
   return { ...utils, calls, transport };
+}
+
+/** The router's current search, on screen for the deep-link tests (the param must leave on close). */
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location-search">{location.search}</span>;
 }
 
 /**
@@ -372,22 +403,30 @@ describe('EntryDrawer, compose and post', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
+    await openGrid(dialog);
 
     // Two lines start empty. Pick accounts, then set only the debit: the entry is unbalanced.
     await pickAccount(await within(dialog).findByLabelText('Account 1'), BUERO);
     await pickAccount(within(dialog).getByLabelText('Account 2'), KASSE);
+    // Line 2 has an account and no amount: as the LAST line it balances itself (a dim figure, its
+    // placeholder) and Post is open. Typing the debit on line 2 instead takes that away.
     await userEvent.type(within(dialog).getByLabelText('Debit 1'), '50.00');
+    expect(within(dialog).getByLabelText('Credit 2')).toHaveAttribute('placeholder', '50.00');
+    await userEvent.type(within(dialog).getByLabelText('Debit 2'), '20.00');
 
     const postBtn = within(dialog).getByRole('button', { name: 'Post' });
     expect(postBtn).toBeDisabled();
-    // The difference is its own money span inside the sentence (C2 F4): tabular, never wrapped.
-    const unbalanced = dialog.querySelector('.journal-drawer-unbalanced') as HTMLElement;
-    expect(unbalanced).toHaveTextContent('Debits and credits differ by CHF 50.00.');
-    expect(unbalanced.querySelector('.t-money')).toHaveTextContent(/^CHF 50\.00$/);
+    // The footer names the signed difference in words and figures (never colour alone), its money
+    // its own tabular span (C2 F4).
+    const unbalanced = dialog.querySelector('.journal-balance--off') as HTMLElement;
+    expect(unbalanced).toHaveTextContent('Difference CHF 70.00');
+    expect(unbalanced.querySelector('.t-money')).toHaveTextContent(/^CHF 70\.00$/);
 
     // Balance it: credit the other line by the same amount.
+    await userEvent.clear(within(dialog).getByLabelText('Debit 2'));
     await userEvent.type(within(dialog).getByLabelText('Credit 2'), '50.00');
     await waitFor(() => expect(postBtn).toBeEnabled());
+    expect(dialog.querySelector('.journal-balance--ok')).toHaveTextContent('Balanced');
 
     await userEvent.click(postBtn);
 
@@ -420,8 +459,9 @@ describe('EntryDrawer, compose and post', () => {
     expect(postBtn).toHaveClass('btn--accent');
     expect(postBtn).not.toHaveClass('btn--primary');
 
-    // Save draft sits beside it as the plain secondary, so the two never compete.
-    expect(within(dialog).getByRole('button', { name: 'Save draft' })).toHaveClass('btn--secondary');
+    // Save draft sits beside it as the quiet ghost and Cancel as the secondary, so nothing competes.
+    expect(within(dialog).getByRole('button', { name: 'Save draft' })).toHaveClass('btn--ghost');
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveClass('btn--secondary');
   });
 
   it('surfaces an engine unbalanced rejection inline instead of throwing', async () => {
@@ -434,10 +474,8 @@ describe('EntryDrawer, compose and post', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
     // Force the client balance check to pass so the request reaches the engine, which still rejects.
-    await pickAccount(await within(dialog).findByLabelText('Account 1'), BUERO);
-    await pickAccount(within(dialog).getByLabelText('Account 2'), KASSE);
-    await userEvent.type(within(dialog).getByLabelText('Debit 1'), '10.00');
-    await userEvent.type(within(dialog).getByLabelText('Credit 2'), '10.00');
+    await fillSatz(dialog, BUERO, KASSE, '10.00');
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Post' })).toBeEnabled());
     await userEvent.click(within(dialog).getByRole('button', { name: 'Post' }));
     expect(await within(dialog).findByText(/does not balance/i)).toBeInTheDocument();
   });
@@ -459,11 +497,8 @@ describe('EntryDrawer, compose and post', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
 
-    await pickAccount(await within(dialog).findByLabelText('Account 1'), BUERO);
-    await pickAccount(within(dialog).getByLabelText('Account 2'), KASSE);
-    await userEvent.type(within(dialog).getByLabelText('Debit 1'), '50.00');
-    await userEvent.type(within(dialog).getByLabelText('Credit 2'), '50.00');
-
+    await fillSatz(dialog, BUERO, KASSE, '50.00');
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Post' })).toBeEnabled());
     await userEvent.click(within(dialog).getByRole('button', { name: 'Post' }));
 
     // The refusal names the way OUT (change the date), not only the /periods link.
@@ -478,8 +513,7 @@ describe('EntryDrawer, compose and post', () => {
     // RETAINS the composed amounts: the composer is never reset back to a blank draft.
     await userEvent.click(changeBtn);
     expect((within(dialog).getByLabelText('Date') as HTMLInputElement).value).toBe('2026-04-01');
-    expect((within(dialog).getByLabelText('Debit 1') as HTMLInputElement).value).toBe('50.00');
-    expect((within(dialog).getByLabelText('Credit 2') as HTMLInputElement).value).toBe('50.00');
+    expect((within(dialog).getByLabelText('Amount') as HTMLInputElement).value).toBe('50.00');
     // The refusal clears once the date is moved, so the drawer no longer shows a dead end.
     expect(within(dialog).queryByText(/nearest open period/i)).not.toBeInTheDocument();
   });
@@ -714,9 +748,9 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     const handlers: Handlers = {
       list_journal: { status: 200, body: { ok: true, entries: [] } },
       ...PICKERS,
-      vat_preview: (input) => {
+      compose_entry: (input) => {
         previews.push(input);
-        return VAT_PREVIEW;
+        return COMPOSE(input);
       },
       post_entry: (input) => {
         posted.push(input);
@@ -726,30 +760,28 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     renderJournal(handlers);
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
+    await openGrid(dialog);
 
-    // A full manual double entry: debtor 1081.00 / revenue net 1000.00 (UST81) / output VAT 81.00.
-    // The trace rides the revenue line the accountant already books; A06 stamps it, no auto-expansion
-    // and no second posting path, and the accountant's own lines keep the entry balanced.
+    // The MANUAL path: a full double entry the accountant types, debtor 1081.00 / revenue net 1000.00
+    // (UST81) / output VAT 81.00 on 2200. A line on a VAT account turns the derivation off for the
+    // whole entry, so the trace rides the line as typed (its net) and nothing is added.
     await pickAccount(await within(dialog).findByLabelText('Account 1'), BUERO);
     await userEvent.type(within(dialog).getByLabelText('Credit 1'), '1000.00');
-    await pickTaxCode(within(dialog).getByLabelText('Tax code 1'), 'UST81');
-
-    // The readout matches vat_preview exactly (the same figures an agent would get).
-    expect(await within(dialog).findByText(/VAT CHF 81\.00/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Gross CHF 1'081\.00/)).toBeInTheDocument();
-    // The preview call carried the line's own base and the code.
-    await waitFor(() => expect(previews.length).toBeGreaterThanOrEqual(1));
-    expect(previews.at(-1)).toMatchObject({ amountMinor: 100000, taxCode: 'UST81', amountIsGross: false });
-
-    // The S10 summary reconciles to the line: one 8.1% row and the total.
-    expect(within(dialog).getByText('8.1%')).toBeInTheDocument();
-    expect(within(dialog).getByText('Total VAT')).toBeInTheDocument();
-
     await pickAccount(within(dialog).getByLabelText('Account 2'), KASSE);
     await userEvent.type(within(dialog).getByLabelText('Debit 2'), '1081.00');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add line' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Line' }));
     await pickAccount(within(dialog).getByLabelText('Account 3'), UST);
     await userEvent.type(within(dialog).getByLabelText('Credit 3'), '81.00');
+    expect(within(dialog).getByText('VAT line typed by hand: TILL adds no VAT')).toBeInTheDocument();
+    await pickVat(within(dialog).getByRole('button', { name: /^VAT 1(,|$)/ }), 'UST81');
+
+    // The readout is the engine's own caption (the same figures an agent would get from compose_entry).
+    expect(await within(dialog).findByText(/VAT CHF 81\.00/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Gross CHF 1'081\.00/)).toBeInTheDocument();
+    // The request carried the line as booked (net, as typed) with its code, and no figure of the Studio's.
+    await waitFor(() => expect(previews.length).toBeGreaterThanOrEqual(1));
+    expect((previews.at(-1)?.lines as Record<string, unknown>[])[0]).toEqual({ account: BUERO, credit: 100000, taxCode: 'UST81', supplyDate: previews.at(-1)?.date });
+
     const postBtn = within(dialog).getByRole('button', { name: 'Post' });
     await waitFor(() => expect(postBtn).toBeEnabled());
     await userEvent.click(postBtn);
@@ -770,8 +802,8 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
       { account: KASSE, debit: 108100 },
       { account: UST, credit: 8100 },
     ]);
-    // F2 agreement: the last preview and the posted line named the SAME Leistungsdatum.
-    expect(previews.at(-1)).toMatchObject({ supplyDate: posted[0].date });
+    // F2 agreement: the last request and the posted line named the SAME Leistungsdatum.
+    expect((previews.at(-1)?.lines as Record<string, unknown>[])[0]).toMatchObject({ supplyDate: posted[0].date });
   });
 
   it('B3: holds Post while a VAT preview is in flight, so a stale figure can never be posted', async () => {
@@ -782,10 +814,13 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     const handlers: Handlers = {
       list_journal: { status: 200, body: { ok: true, entries: [] } },
       ...PICKERS,
-      vat_preview: () =>
-        new Promise<RestResponse>((resolve) => {
-          pending.push(() => resolve(VAT_PREVIEW));
-        }),
+      // Only a request carrying a code is held: the untagged entry before it is answered at once.
+      compose_entry: (input) =>
+        JSON.stringify(input.lines).includes('taxCode')
+          ? new Promise<RestResponse>((resolve) => {
+              pending.push(() => resolve(COMPOSE(input)));
+            })
+          : COMPOSE(input),
       post_entry: (input) => {
         posted.push(input);
         return cannedOk('post_entry', { ok: true, entryId: 'je_vat' });
@@ -795,12 +830,13 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
 
-    // A balanced, untagged entry first: Post is available.
+    // A balanced, untagged entry first, on the manual path (a 2200 line): Post is available.
+    await openGrid(dialog);
     await pickAccount(await within(dialog).findByLabelText('Account 1'), BUERO);
     await userEvent.type(within(dialog).getByLabelText('Credit 1'), '1000.00');
     await pickAccount(within(dialog).getByLabelText('Account 2'), KASSE);
     await userEvent.type(within(dialog).getByLabelText('Debit 2'), '1081.00');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add line' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Line' }));
     await pickAccount(within(dialog).getByLabelText('Account 3'), UST);
     await userEvent.type(within(dialog).getByLabelText('Credit 3'), '81.00');
     const postBtn = within(dialog).getByRole('button', { name: 'Post' });
@@ -808,11 +844,13 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
 
     // Tag the revenue line: the preview goes in flight and Post must HOLD until it settles (the
     // stale-trace race: an eager click here used to post a trace from the previous state).
-    await pickTaxCode(within(dialog).getByLabelText('Tax code 1'), 'UST81');
+    await pickVat(within(dialog).getByRole('button', { name: /^VAT 1(,|$)/ }), 'UST81');
     await waitFor(() => expect(postBtn).toBeDisabled());
     expect(posted).toHaveLength(0);
 
-    // Settle the preview: Post re-enables and the posted line carries the settled figures.
+    // Settle the answer: Post re-enables and the posted line carries the settled figures. (The request is
+    // debounced, so wait for it to be in flight before settling it.)
+    await waitFor(() => expect(pending.length).toBeGreaterThan(0));
     const flush = pending;
     pending = [];
     flush.forEach((resolve) => resolve());
@@ -831,57 +869,56 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     renderJournal({ list_journal: { status: 200, body: { ok: true, entries: [] } }, ...PICKERS });
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
+    await openGrid(dialog);
 
+    // A 2200 line: the manual path, where the VAT-account line offers the import code only.
     await pickAccount(await within(dialog).findByLabelText('Account 1'), UST);
-    // The picker is the shared Select: its options live in a portaled listbox while it is open.
-    await userEvent.click(within(dialog).getByLabelText('Tax code 1'));
-    let list = screen.getByRole('listbox', { name: 'Tax code 1' });
-    expect(within(list).queryByRole('option', { name: /UST81/ })).toBeNull();
-    expect(within(list).getByRole('option', { name: /Einfuhrsteuer/ })).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: /^VAT 1(,|$)/ }));
+    await screen.findAllByRole('option');
+    expect(offeredCodes()).not.toContain('UST81');
+    expect(offeredCodes()).toContain('IMPORT');
     await userEvent.keyboard('{Escape}');
     // An ordinary line keeps the full list.
     await pickAccount(within(dialog).getByLabelText('Account 2'), BUERO);
-    await userEvent.click(within(dialog).getByLabelText('Tax code 2'));
-    list = screen.getByRole('listbox', { name: 'Tax code 2' });
-    expect(within(list).getByRole('option', { name: /UST81/ })).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: /^VAT 2(,|$)/ }));
+    await screen.findAllByRole('option');
+    expect(offeredCodes()).toContain('UST81');
   });
 
-  it('M5: a tag stranded on a VAT account is flagged, dropped from the summary, and blocks Post', async () => {
-    const handlers: Handlers = {
-      list_journal: { status: 200, body: { ok: true, entries: [] } },
+  it('M5: a tag stranded on a VAT account (a loaded draft) is flagged, shows no figure, and blocks Post', async () => {
+    // Changing a line's account resets its code to the new account's default, so a stranded tag can no
+    // longer be typed into being; it arrives on an old draft. The draft opens in the grid on the manual
+    // path (a 2200 line) and the flag holds Post.
+    const draft = postedEntry({ id: 'je_st', ref: 'S-1', status: 'draft', total: null });
+    renderJournal({
+      list_journal: { status: 200, body: { ok: true, entries: [draft] } },
       ...PICKERS,
-      vat_preview: VAT_PREVIEW,
-    };
-    renderJournal(handlers);
-    await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
+      get_entry: {
+        status: 200,
+        body: {
+          ok: true,
+          entry: draft,
+          lines: [
+            { id: 'l1', account: UST, debit: null, credit: 100000, taxCode: 'UST81' },
+            { id: 'l2', account: KASSE, debit: 100000, credit: null },
+          ],
+        },
+      },
+    });
+    const table = await screen.findByRole('table');
+    await userEvent.click(within(table).getByRole('row', { name: /Open entry S-1/ }));
     const dialog = await screen.findByRole('dialog');
-
-    // Tag an ordinary revenue line, then flip its account to 2200: the tag is now stranded on the
-    // VAT account itself, which would double-count the tax in the summary.
-    await pickAccount(await within(dialog).findByLabelText('Account 1'), BUERO);
-    await userEvent.type(within(dialog).getByLabelText('Credit 1'), '1000.00');
-    await pickTaxCode(within(dialog).getByLabelText('Tax code 1'), 'UST81');
-    expect(await within(dialog).findByText(/VAT CHF 81\.00/)).toBeInTheDocument();
-    await pickAccount(within(dialog).getByLabelText('Account 2'), KASSE);
-    await userEvent.type(within(dialog).getByLabelText('Debit 2'), '1000.00');
-    const postBtn = within(dialog).getByRole('button', { name: 'Post' });
-    await waitFor(() => expect(postBtn).toBeEnabled());
-
-    await pickAccount(within(dialog).getByLabelText('Account 1'), UST);
-
-    // Flagged inline (announced, not colour-only), no contribution, Post blocked.
     expect(
       await within(dialog).findByText('Tag the revenue or expense line, not the VAT account itself.'),
     ).toBeInTheDocument();
-    expect(within(dialog).getByText('No VAT on this document')).toBeInTheDocument();
-    await waitFor(() => expect(postBtn).toBeDisabled());
+    expect(within(dialog).queryByText(/VAT CHF/)).not.toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Post' })).toBeDisabled());
   });
 
   it('surfaces a vat_trace_unreconciled rejection with the expected and booked figures, inline', async () => {
     const handlers: Handlers = {
       list_journal: { status: 200, body: { ok: true, entries: [] } },
       ...PICKERS,
-      vat_preview: VAT_PREVIEW,
       post_entry: {
         status: 422,
         body: { ok: false, error: 'vat_trace_unreconciled', account: '2200', expectedMinor: 8100, bookedMinor: 8105 },
@@ -890,10 +927,7 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     renderJournal(handlers);
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
-    await pickAccount(await within(dialog).findByLabelText('Account 1'), BUERO);
-    await userEvent.type(within(dialog).getByLabelText('Debit 1'), '10.00');
-    await pickAccount(within(dialog).getByLabelText('Account 2'), KASSE);
-    await userEvent.type(within(dialog).getByLabelText('Credit 2'), '10.00');
+    await fillSatz(dialog, BUERO, KASSE, '10.00');
     const postBtn = within(dialog).getByRole('button', { name: 'Post' });
     await waitFor(() => expect(postBtn).toBeEnabled());
     await userEvent.click(postBtn);
@@ -903,12 +937,16 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     expect(alert).toHaveTextContent(/CHF 81\.05/);
   });
 
-  it('shows the honest-empty summary for an entry with no tax codes', async () => {
+  it('an entry with no code says nothing about VAT: no caption, no summary, no "no VAT" line', async () => {
     renderJournal({ list_journal: { status: 200, body: { ok: true, entries: [] } }, ...PICKERS });
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
     // First query into the skeleton-gated body: awaited, for the reason the pre-disable test states.
-    expect(await within(dialog).findByText('No VAT on this document')).toBeInTheDocument();
+    await fillSatz(dialog, BUERO, KASSE, '10.00');
+    // The MWST control is there (an expense account), empty because 6500 carries no default.
+    expect(within(dialog).getByRole('button', { name: /^VAT(,|$)/ })).toHaveTextContent('Without VAT');
+    expect(dialog.querySelector('.journal-caption')).toBeNull();
+    expect(within(dialog).queryByText('No VAT on this document')).not.toBeInTheDocument();
   });
 
   it('renders the needs-config banner-CTA when the workspace has no tax codes (P9)', async () => {
@@ -921,10 +959,11 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     renderJournal(handlers);
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
-    // Each blank line shows the banner-CTA in place of a dropdown (P9), never posts untaxed.
+    // Where the MWST control would stand (an expense account), the banner-CTA stands instead (P9).
+    await pickAccount(await within(dialog).findByLabelText('Debit'), BUERO);
     const ctas = await within(dialog).findAllByRole('link', { name: 'Set up VAT' });
     expect(ctas[0]).toHaveAttribute('href', '/vat');
-    expect(within(dialog).queryByRole('combobox', { name: 'Tax code 1' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /^VAT(,|$)/ })).not.toBeInTheDocument();
   });
 
   it('renders the tax control read-only for a persona without the post scope', async () => {
@@ -933,8 +972,10 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     // Anchor on the loaded body first: over the skeleton the negative below would pass vacuously,
     // asserting nothing about the read-only treatment it exists to pin.
     await within(dialog).findByText('Requires the bookkeeper role.');
-    // No editable dropdown for the tax code; the control is read-only text.
-    expect(within(dialog).queryByRole('combobox', { name: 'Tax code 1' })).not.toBeInTheDocument();
+    await pickAccount(within(dialog).getByLabelText('Debit'), BUERO);
+    // No editable picker for the tax code; the control is read-only text under the same name.
+    expect(within(dialog).queryByRole('button', { name: /^VAT(,|$)/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('VAT')).toHaveClass('vat-code-readonly');
   });
 
   it('C3/M35: an archived code on a draft flags inline, suppresses the figure readout, and blocks Post', async () => {
@@ -944,7 +985,6 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     const handlers: Handlers = {
       list_journal: { status: 200, body: { ok: true, entries: [draft] } },
       ...PICKERS,
-      vat_preview: VAT_PREVIEW,
       get_entry: {
         status: 200,
         body: {
@@ -974,7 +1014,6 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     const handlers: Handlers = {
       list_journal: { status: 200, body: { ok: true, entries: [] } },
       ...PICKERS,
-      vat_preview: VAT_PREVIEW,
       post_entry: {
         status: 422,
         body: { ok: false, error: 'vat_trace_unreconciled', account: '2200', expectedMinor: 8100, bookedMinor: 8105 },
@@ -983,10 +1022,7 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     renderJournal(handlers);
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
-    await pickAccount(await within(dialog).findByLabelText('Account 1'), BUERO);
-    await userEvent.type(within(dialog).getByLabelText('Debit 1'), '10.00');
-    await pickAccount(within(dialog).getByLabelText('Account 2'), KASSE);
-    await userEvent.type(within(dialog).getByLabelText('Credit 2'), '10.00');
+    await fillSatz(dialog, BUERO, KASSE, '10.00');
     const postBtn = within(dialog).getByRole('button', { name: 'Post' });
     await waitFor(() => expect(postBtn).toBeEnabled());
     await userEvent.click(postBtn);
@@ -1008,7 +1044,7 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     renderJournal({ list_journal: { status: 200, body: { ok: true, entries: [] } }, ...PICKERS });
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
-    const account = await within(dialog).findByLabelText('Account 1');
+    const account = await within(dialog).findByLabelText('Debit');
     await userEvent.click(account);
     await userEvent.type(account, '10');
     expect(account).toHaveAttribute('aria-expanded', 'true');
@@ -1024,8 +1060,8 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     renderJournal({ list_journal: { status: 200, body: { ok: true, entries: [] } }, ...PICKERS });
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
-    await pickAccount(await within(dialog).findByLabelText('Account 1'), BUERO);
-    await userEvent.type(within(dialog).getByLabelText('Debit 1'), '42.00');
+    await pickAccount(await within(dialog).findByLabelText('Debit'), BUERO);
+    await userEvent.type(within(dialog).getByLabelText('Amount'), '42.00');
 
     await userEvent.keyboard('{Escape}');
     const discard = await screen.findByRole('alertdialog', { name: 'Discard your input?' });
@@ -1034,36 +1070,37 @@ describe('EntryDrawer, A06 VAT (S9/S10/S11)', () => {
     await userEvent.click(within(discard).getByRole('button', { name: 'Keep editing' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     // Every typed value survived the question.
-    expect(within(screen.getByRole('dialog')).getByLabelText('Debit 1')).toHaveValue('42.00');
+    expect(within(screen.getByRole('dialog')).getByLabelText('Amount')).toHaveValue('42.00');
   });
 
   it('K-29: a composer with nothing typed closes on Escape without asking', async () => {
     renderJournal({ list_journal: { status: 200, body: { ok: true, entries: [] } }, ...PICKERS });
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     await screen.findByRole('dialog');
-    await within(screen.getByRole('dialog')).findByLabelText('Account 1');
+    await within(screen.getByRole('dialog')).findByLabelText('Debit');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
-  it('K-30: the composer is the wide drawer, every line field on the shared controls, "Credit" with no minus', async () => {
+  it('A1: the composer is the wide drawer, Datum and Text first, one Buchungssatz on the shared controls', async () => {
     renderJournal({ list_journal: { status: 200, body: { ok: true, entries: [] } }, ...PICKERS });
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
-    await within(dialog).findByLabelText('Account 1');
+    await within(dialog).findByLabelText('Debit');
     expect(dialog).toHaveAttribute('data-width', 'wide');
-    expect(within(dialog).getByLabelText('Account 1')).toHaveClass('field');
-    expect(within(dialog).getByLabelText('Debit 1')).toHaveClass('field');
-    expect(within(dialog).getByLabelText('Credit 1')).toHaveClass('field');
-    // Cost centre and MWST code are the same control family: the shared Select trigger.
-    expect(within(dialog).getByLabelText('Cost centre 1')).toHaveClass('select-trigger');
-    expect(within(dialog).getByLabelText('Tax code 1')).toHaveClass('select-trigger');
-    // The column head is the side of the entry, not a sign.
-    expect(dialog.textContent ?? '').not.toMatch(/-\s*Credit/);
-    // The money commit is the tinted accent, with the C4 consequence line under the footer.
+    for (const name of ['Date', 'Description', 'Debit', 'Credit', 'Amount']) {
+      expect(within(dialog).getByLabelText(name)).toHaveClass('field');
+    }
+    // No line grid and no visible Referenz until asked for; no "So wird gebucht" table, no totals.
+    expect(within(dialog).queryByLabelText('Account 1')).toBeNull();
+    expect(within(dialog).queryByLabelText('Reference')).toBeNull();
+    expect(within(dialog).queryByRole('table')).toBeNull();
+    expect(dialog.querySelector('dl')).toBeNull();
+    // The money commit is the tinted accent; the C4 sentence is the tooltip of the (i) right of it.
     expect(within(dialog).getByRole('button', { name: 'Post' })).toHaveClass('btn--accent');
-    expect(dialog.querySelector('.drawer-foot .consequence-line[data-verb="post_entry"]')).not.toBeNull();
+    expect(dialog.querySelector('.drawer-foot .consequence-tip[data-verb="post_entry"]')).not.toBeNull();
+    expect(dialog.querySelector('.drawer-foot p.consequence-line')).toBeNull();
   });
 });
 
@@ -1313,7 +1350,7 @@ describe('EntryDrawer, C3 provenance and C4 consequence (D118)', () => {
     renderJournal({ list_journal: { status: 200, body: { ok: true, entries: [] } }, ...PICKERS });
     await userEvent.click(await screen.findByRole('button', { name: 'New entry' }));
     const dialog = await screen.findByRole('dialog');
-    await within(dialog).findByLabelText('Account 1');
+    await within(dialog).findByLabelText('Debit');
     // A composed entry never reached the engine, so there is no actor or time to show: no line.
     expect(within(dialog).queryByText(/Recorded by/)).toBeNull();
   });
@@ -1341,7 +1378,74 @@ describe('EntryDrawer, C3 provenance and C4 consequence (D118)', () => {
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Reverse' }));
     const confirm = await screen.findByRole('alertdialog');
-    // The SAME string an approver reads when clearing an agent's drafted reversal (dial `post`).
-    expect(within(confirm).getByText(/Posts irreversibly to the journal/)).toBeInTheDocument();
+    // The SAME string an approver reads when clearing an agent's drafted reversal (D156: the engine's one catalogue).
+    expect(within(confirm).getByText(consequenceSentence('reverse_entry', 'en') as string)).toBeInTheDocument();
+  });
+});
+
+describe('Journal, /journal?entry=<id> opens that entry (bank "Buchung öffnen", Payments)', () => {
+  it('reads THAT id, opens it read-only, and drops the param on close', async () => {
+    const { calls } = renderJournal(
+      {
+        list_journal: { status: 200, body: { ok: true, entries: [postedEntry()] } },
+        ...PICKERS,
+        get_entry: {
+          status: 200,
+          body: { ok: true, entry: postedEntry({ id: 'je_5', ref: 'B-5' }), lines: [
+            { id: 'l1', account: BUERO, debit: 5000, credit: null },
+            { id: 'l2', account: KASSE, debit: null, credit: 5000 },
+          ] },
+        },
+      },
+      { path: '/journal?entry=je_5' },
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'View entry' });
+    expect(await within(dialog).findByRole('button', { name: 'Reverse' })).toBeInTheDocument();
+    // Read to learn its status, then by the drawer: THAT id each time, and nothing else.
+    expect(new Set(calls.filter((c) => c.action === 'get_entry').map((c) => c.input.entryId))).toEqual(new Set(['je_5']));
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?entry=je_5');
+    await userEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[1] as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/);
+  });
+
+  it('an id the book does not hold opens nothing else: a not-found banner and a way out', async () => {
+    const { calls } = renderJournal(
+      {
+        list_journal: { status: 200, body: { ok: true, entries: [postedEntry()] } },
+        ...PICKERS,
+        get_entry: { status: 404, body: { ok: false, error: 'not_found', entryId: 'je_nope' } },
+      },
+      { path: '/journal?entry=je_nope' },
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('This entry does not exist in this workspace. Close it and pick an entry in the journal.')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('table')).toBeNull();
+    expect(new Set(calls.filter((c) => c.action === 'get_entry').map((c) => c.input.entryId))).toEqual(new Set(['je_nope']));
+    await userEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[1] as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/);
+  });
+
+  it('a DRAFT opens the way a row click opens it: in the editable composer, never read-only with Reverse', async () => {
+    renderJournal(
+      {
+        list_journal: { status: 200, body: { ok: true, entries: [postedEntry()] } },
+        ...PICKERS,
+        get_entry: {
+          status: 200,
+          body: { ok: true, entry: postedEntry({ id: 'je_d', ref: 'D-1', status: 'draft', total: null }), lines: [
+            { id: 'l1', account: BUERO, debit: 5000, credit: null },
+            { id: 'l2', account: KASSE, debit: null, credit: 5000 },
+          ] },
+        },
+      },
+      { path: '/journal?entry=je_d' },
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Edit draft' });
+    expect(await within(dialog).findByRole('button', { name: 'Post' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Reverse' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'View entry' })).toBeNull();
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?entry=je_d');
   });
 });

@@ -5,8 +5,11 @@
  * transport that answers `whoami`, the loading assertion waits for the read to have STARTED, and
  * copy is asserted through the catalogue, never as a literal typed here.
  *
- * The §10-specific claims worth singling out: both tabs render; the send-line lede renders in
- * place; the built-in-default note names itself when no slot is saved; saving drives the REAL verb
+ * The §10-specific claims worth singling out: both tabs render; an unsaved slot is PREFILLED with
+ * the engine's own built-in text (the leaf `dispatchDefaultText`, never a literal typed here), tagged
+ * "Standard", with no Speichern and no reset until the text differs, and an untouched standard never
+ * reaches the write verb (D152 rule 1); the explanations sit behind an (i) as a tooltip tied by
+ * aria-describedby, not as prose at rest (D152 rule 4); saving drives the REAL verb
  * WITHOUT an idempotencyKey (the naturally-idempotent shape is part of the contract); an
  * `unknown_variable` refusal renders its named message with the valid set; the variable chips
  * insert by keyboard (they are buttons); the Protokoll renders outcome as glyph + label with a
@@ -16,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
@@ -26,6 +30,10 @@ import { CapabilitiesProvider } from '../../lib/CapabilitiesProvider';
 import { neverSettles, watchReads } from '../../test-transport';
 import Dispatch from './index';
 import de from './messages.de-CH.json';
+import { dispatchDefaultText } from '../../../../src/core/customization/dispatchDefaults.js';
+
+const STANDARD_INVOICE = dispatchDefaultText('invoice', 'de-CH');
+const STANDARD_QUOTE = dispatchDefaultText('quote', 'de-CH');
 
 type CannedHandler = (input: Record<string, unknown>) => RestResponse;
 type Canned = Record<string, RestResponse | CannedHandler>;
@@ -157,15 +165,16 @@ describe('Dispatch', () => {
       expect(screen.getByRole('button', { name: de.dispatch.texts.save })).toBeDisabled(),
     );
     expect(screen.getByText(de.dispatch.needsPermission)).toBeInTheDocument();
+    // The reset only edits the fields, which nobody without the capability can save.
+    expect(screen.queryByRole('button', { name: de.dispatch.texts.reset })).not.toBeInTheDocument();
   });
 
-  it('SUCCESS (Textbausteine): lede, tabs and the saved slot prefill render; the preview resolves', async () => {
+  it('SUCCESS (Textbausteine): tabs and the saved slot prefill render; the preview resolves', async () => {
     render(tree(baseCanned()));
     // The prefill lands in the post-load effect, one tick after the field first renders: wait for
     // the VALUE, not merely the element (a race only visible under gate contention).
     const subject = await screen.findByLabelText(de.dispatch.texts.subject);
     await waitFor(() => expect(subject).toHaveValue('Eigener Betreff {{invoice_number}}'));
-    expect(screen.getByText(de.dispatch.lede)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: de.dispatch.tab.texts })).toHaveAttribute('aria-selected', 'true');
     // K-11: the kind is a Segmented value, a radio in a named group, the chosen one checked.
     expect(screen.getByRole('radio', { name: de.dispatch.kind.invoice })).toHaveAttribute('aria-checked', 'true');
@@ -173,9 +182,173 @@ describe('Dispatch', () => {
     expect(screen.getByText(de.dispatch.texts.previewSaved)).toBeInTheDocument();
   });
 
-  it('DEFAULT IN USE: an unsaved slot names the built-in fallback honestly', async () => {
+  it('STANDARD PREFILL (D152 rule 1): an unsaved slot shows the built-in text as an editable value, tagged Standard, nothing to save or reset', async () => {
     render(tree({ ...baseCanned(), list_dispatches: ok({ dispatches: [], texts: [] }) }));
-    expect(await screen.findByText(de.dispatch.texts.defaultInUse)).toBeInTheDocument();
+    const subject = await screen.findByLabelText(de.dispatch.texts.subject);
+    const body = screen.getByLabelText(de.dispatch.texts.body);
+    // The engine's own literal, read through the same leaf the send falls back to.
+    await waitFor(() => expect(subject).toHaveValue(STANDARD_INVOICE.subject));
+    expect(body).toHaveValue(STANDARD_INVOICE.body);
+    // Each field carries its "Standard" tag, and a screen reader hears it as the field's description.
+    expect(screen.getAllByText(de.dispatch.texts.standard)).toHaveLength(2);
+    expect(subject).toHaveAccessibleDescription(de.dispatch.texts.standard);
+    expect(body).toHaveAccessibleDescription(de.dispatch.texts.standard);
+    // Nothing differs, so nothing to save and nothing to reset: absent, not disabled.
+    expect(screen.queryByRole('button', { name: de.dispatch.texts.save })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.dispatch.texts.reset })).not.toBeInTheDocument();
+  });
+
+  it('STANDARD PREFILL: switching the kind prefills that kind\'s built-in text', async () => {
+    const user = userEvent.setup();
+    render(tree({ ...baseCanned(), list_dispatches: ok({ dispatches: [], texts: [] }) }));
+    const subject = await screen.findByLabelText(de.dispatch.texts.subject);
+    await waitFor(() => expect(subject).toHaveValue(STANDARD_INVOICE.subject));
+    await user.click(screen.getByRole('radio', { name: de.dispatch.kind.quote }));
+    await waitFor(() => expect(subject).toHaveValue(STANDARD_QUOTE.subject));
+    expect(screen.getByLabelText(de.dispatch.texts.body)).toHaveValue(STANDARD_QUOTE.body);
+  });
+
+  it('UNCHANGED STANDARD: submitting it writes NO stored override (the slot stays unsaved)', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const canned: Canned = {
+      ...baseCanned(),
+      list_dispatches: ok({ dispatches: [], texts: [] }),
+      dispatch_text_upsert: ok({ dispatchText: TEXT() }),
+    };
+    const user = userEvent.setup();
+    render(tree(canned, asked));
+    const subject = await screen.findByLabelText(de.dispatch.texts.subject);
+    await waitFor(() => expect(subject).toHaveValue(STANDARD_INVOICE.subject));
+    // Enter in the subject submits the form, the one route to save that has no button to hide.
+    await user.click(subject);
+    await user.keyboard('{Enter}');
+    // An edit that comes back to the standard is the standard again: still nothing to write.
+    await user.type(subject, 'x');
+    await user.keyboard('{Backspace}');
+    expect(subject).toHaveValue(STANDARD_INVOICE.subject);
+    expect(screen.queryByRole('button', { name: de.dispatch.texts.save })).not.toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    // Give a stray write every chance to land before asserting its absence.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(asked.some((x) => x.action === 'dispatch_text_upsert')).toBe(false);
+    expect(screen.queryByText(de.dispatch.texts.saved)).not.toBeInTheDocument();
+  });
+
+  it('EDIT AND RESET: an edit drops that field\'s tag and brings Speichern and the reset; the reset restores the standard and both leave', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const user = userEvent.setup();
+    render(tree({ ...baseCanned(), list_dispatches: ok({ dispatches: [], texts: [] }) }, asked));
+    const subject = await screen.findByLabelText(de.dispatch.texts.subject);
+    await waitFor(() => expect(subject).toHaveValue(STANDARD_INVOICE.subject));
+    await user.type(subject, ' (Kopie)');
+    // Only the edited field loses its tag; the untouched body keeps its own.
+    expect(screen.getAllByText(de.dispatch.texts.standard)).toHaveLength(1);
+    expect(subject).not.toHaveAccessibleDescription(de.dispatch.texts.standard);
+    expect(screen.getByLabelText(de.dispatch.texts.body)).toHaveAccessibleDescription(de.dispatch.texts.standard);
+    expect(screen.getByRole('button', { name: de.dispatch.texts.save })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: de.dispatch.texts.reset }));
+    expect(subject).toHaveValue(STANDARD_INVOICE.subject);
+    expect(screen.getAllByText(de.dispatch.texts.standard)).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: de.dispatch.texts.save })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.dispatch.texts.reset })).not.toBeInTheDocument();
+    // On an unsaved slot the reset only discards the edit: no write of either kind.
+    expect(asked.some((x) => x.action === 'dispatch_text_upsert' || x.action === 'dispatch_text_reset')).toBe(false);
+  });
+
+  /**
+   * A canned engine with ONE saved invoice/de-CH slot that the reset verb really deletes: the list and
+   * the preview answer from that state, so the assertions after the reset see the reload, not a
+   * locally faked value.
+   */
+  const savedSlotEngine = (resetAnswer?: RestResponse): Canned => {
+    let slotSaved = true;
+    return {
+      ...baseCanned(),
+      list_dispatches: () => ok({ dispatches: [], texts: slotSaved ? [TEXT()] : [] }),
+      dispatch_preview: () =>
+        ok({
+          messages: [
+            slotSaved
+              ? { subject: 'Eigener Betreff R-2026-0001', body: 'Eigener Text Muster AG', defaulted: false }
+              : { subject: 'Rechnung R-2026-0001 von Ihre Firma', body: 'Guten Tag Muster AG', defaulted: true },
+          ].map((m) => ({ recipient: null, contactId: null, locale: 'de-CH', attachments: [], flags: [], ...m })),
+          sample: true,
+        }),
+      dispatch_text_reset: () => {
+        if (resetAnswer !== undefined) return resetAnswer;
+        slotSaved = false;
+        return ok({ documentKind: 'invoice', locale: 'de-CH', defaulted: true, removedDispatchTextId: 'dsptxt_1' });
+      },
+    };
+  };
+
+  it('SAVED CUSTOM TEXT: the reset calls dispatch_text_reset directly, then the fields show the standard, tagged, and the preview is the built-in text', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const user = userEvent.setup();
+    render(tree(savedSlotEngine(), asked));
+    const subject = await screen.findByLabelText(de.dispatch.texts.subject);
+    await waitFor(() => expect(subject).toHaveValue('Eigener Betreff {{invoice_number}}'));
+    expect(screen.queryByText(de.dispatch.texts.standard)).not.toBeInTheDocument();
+    expect(await screen.findByText(de.dispatch.texts.previewSaved)).toBeInTheDocument();
+    // The saved text is what is in force: nothing to save, the reset offered.
+    expect(screen.queryByRole('button', { name: de.dispatch.texts.save })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: de.dispatch.texts.reset }));
+
+    await waitFor(() => expect(subject).toHaveValue(STANDARD_INVOICE.subject));
+    expect(screen.getByLabelText(de.dispatch.texts.body)).toHaveValue(STANDARD_INVOICE.body);
+    const reset = asked.filter((x) => x.action === 'dispatch_text_reset');
+    expect(reset).toHaveLength(1);
+    expect(reset[0]?.input).toEqual({ workspaceId: 'ws_1', documentKind: 'invoice', locale: 'de-CH' });
+    // No save step and no stored copy of the standard: the reset IS the write.
+    expect(asked.some((x) => x.action === 'dispatch_text_upsert')).toBe(false);
+    expect(screen.getAllByText(de.dispatch.texts.standard)).toHaveLength(2);
+    expect(await screen.findByText(de.dispatch.texts.previewDefault)).toBeInTheDocument();
+    expect(screen.queryByText(de.dispatch.texts.previewSaved)).not.toBeInTheDocument();
+    expect(screen.getByText(de.dispatch.texts.resetDone)).toBeInTheDocument();
+    // Back to an unsaved slot at the standard: nothing to save and nothing to reset.
+    expect(screen.queryByRole('button', { name: de.dispatch.texts.save })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.dispatch.texts.reset })).not.toBeInTheDocument();
+  });
+
+  it('SAVED CUSTOM TEXT: a refused reset keeps the saved text and names the refusal', async () => {
+    const user = userEvent.setup();
+    render(tree(savedSlotEngine(reject('permission_denied', {}, 403))));
+    const subject = await screen.findByLabelText(de.dispatch.texts.subject);
+    await waitFor(() => expect(subject).toHaveValue('Eigener Betreff {{invoice_number}}'));
+    await user.click(screen.getByRole('button', { name: de.dispatch.texts.reset }));
+    expect(within(await screen.findByRole('alert')).getByText(de.dispatch.needsPermission)).toBeInTheDocument();
+    expect(subject).toHaveValue('Eigener Betreff {{invoice_number}}');
+    expect(screen.queryByText(de.dispatch.texts.resetDone)).not.toBeInTheDocument();
+  });
+
+  it('ACCESSIBILITY: the prefilled editor, its tags and its (i) triggers have no axe violations', async () => {
+    const { container } = render(tree({ ...baseCanned(), list_dispatches: ok({ dispatches: [], texts: [] }) }));
+    const subject = await screen.findByLabelText(de.dispatch.texts.subject);
+    await waitFor(() => expect(subject).toHaveValue(STANDARD_INVOICE.subject));
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('WORDS ON DEMAND (D152 rule 4): no lede and no hint prose at rest; each explanation is the tooltip of an (i) tied by aria-describedby', async () => {
+    render(tree({ ...baseCanned(), list_dispatches: ok({ dispatches: [], texts: [] }) }));
+    await screen.findByLabelText(de.dispatch.texts.subject);
+    // The paragraphs the audit measured at rest are gone from the surface.
+    expect(document.querySelector('.dispatch-lede')).toBeNull();
+    expect(document.querySelectorAll('.dispatch-editor p')).toHaveLength(0);
+    // The preview keeps its one-line state ("Eingebauter Standardtext" / "Eigener Text") only.
+    expect([...document.querySelectorAll('.dispatch-preview p.dispatch-muted')].map((p) => p.textContent)).toEqual([
+      de.dispatch.texts.previewSaved,
+    ]);
+    for (const [label, hint] of [
+      [de.dispatch.texts.variablesInfo, de.dispatch.texts.variablesHint],
+      [de.dispatch.texts.previewInfo, de.dispatch.texts.previewHint],
+    ] as const) {
+      const trigger = screen.getByRole('button', { name: label });
+      expect(trigger).toHaveAccessibleDescription(hint);
+      const tip = document.getElementById(trigger.getAttribute('aria-describedby') ?? '');
+      expect(tip).toHaveAttribute('role', 'tooltip');
+      // Hidden at rest: the hint is reachable, not shown.
+      expect(tip).not.toHaveClass('is-open');
+    }
   });
 
   it('SAVE: drives dispatch_text_upsert with the typed slot and NO idempotencyKey; a chip inserts its variable', async () => {
@@ -187,7 +360,11 @@ describe('Dispatch', () => {
     };
     const user = userEvent.setup();
     render(tree(canned, asked));
-    await user.type(await screen.findByLabelText(de.dispatch.texts.subject), 'Neuer Betreff');
+    const subject = await screen.findByLabelText(de.dispatch.texts.subject);
+    await waitFor(() => expect(subject).toHaveValue(STANDARD_INVOICE.subject));
+    await user.clear(subject);
+    await user.type(subject, 'Neuer Betreff');
+    await user.clear(screen.getByLabelText(de.dispatch.texts.body));
     await user.type(screen.getByLabelText(de.dispatch.texts.body), 'Guten Tag');
     // The palette chip is a BUTTON (keyboard-insertable, never drag-only, §10.6 accessibility).
     await user.click(screen.getByRole('button', { name: '{{contact_name}}' }));
@@ -212,8 +389,9 @@ describe('Dispatch', () => {
     };
     const user = userEvent.setup();
     render(tree(canned));
-    await user.type(await screen.findByLabelText(de.dispatch.texts.subject), 'B');
-    await user.type(screen.getByLabelText(de.dispatch.texts.body), 'T');
+    const subject = await screen.findByLabelText(de.dispatch.texts.subject);
+    await waitFor(() => expect(subject).toHaveValue(STANDARD_INVOICE.subject));
+    await user.type(subject, ' x');
     await user.click(screen.getByRole('button', { name: de.dispatch.texts.save }));
     // Scoped to the ALERT: the variable palette's chips carry the same names.
     const alert = within(await screen.findByRole('alert'));

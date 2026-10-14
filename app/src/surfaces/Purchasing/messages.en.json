@@ -1,6 +1,6 @@
 {
   "nav": {
-    "purchasing": "Purchasing"
+    "purchasing": "Purchase orders"
   },
   "po": {
     "tab": {
@@ -53,7 +53,7 @@
         "rejection": "Inspection rejection"
       }
     },
-    "title": "Purchasing",
+    "title": "Purchase orders",
     "loading": "Loading purchase orders",
     "empty": "No purchase orders.",
     "emptyOpen": "No open quantities.",
@@ -151,7 +151,7 @@
   },
   "help": {
     "Purchasing": {
-      "title": "Purchasing",
+      "title": "Purchase orders",
       "body": "Purchasing from the order through goods receipt to the match against the bill. Alongside you track the open quantities and the supplier prices here.\n\nAn order moves through its stations: send, record a goods receipt, close short, cancel or revise. What is available follows its status.\n\nA goods receipt moves stock. This area posts no money, that happens only with the supplier bill.",
       "concepts": [],
       "docsPath": "introduction"

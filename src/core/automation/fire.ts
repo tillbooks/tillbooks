@@ -47,7 +47,7 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { automationEventDef, eventsEmittedBy, readPath } from './events.js';
 import { conditionHolds, resolveTemplate } from './condition.js';
-import { isNotAutomatable } from './denylist.js';
+import { isNotAutomatable, notAutomatableInput } from './denylist.js';
 
 /** The run statuses (§H-ENUM). `running` is the claim; the other five are terminal. */
 export const RUN_STATUSES: readonly string[] = [
@@ -374,6 +374,18 @@ export function evaluateAndFire(
   resolved.workspaceId = ctx.workspaceId;
   resolved.idempotencyKey = derivedIdempotencyKey(rule.id, ev.eventRef);
 
+  // THE INPUT DENYLIST, AT FIRE TIME, ON THE RESOLVED INPUT (critic R3 on cl-periods). The save path
+  // checks `notAutomatableInput` on the TEMPLATE, so `templateId: "year_close{{x}}"` passed it and then
+  // resolved to the denied value here; a stored row from before an entry, or a restored backup, would
+  // pass it too. This is the check that reads what the verb would actually receive. A violating rule
+  // fires nothing: the run is recorded FAILED with the save-time code, so the Verlauf says why.
+  if (notAutomatableInput(rule.action_tool, resolved) !== undefined) {
+    const deniedRun = claimRun(ctx, rule, ev.eventRef, resolved);
+    if (deniedRun === undefined) return 'already_accounted';
+    settleRun(ctx, deniedRun, 'failed', 'template_not_automatable');
+    return 'refused';
+  }
+
   const runId = claimRun(ctx, rule, ev.eventRef, resolved);
   // Already fired for this occurrence. The index said so, and `claimRun` has recorded the
   // redelivery on the row that refused the claim, so the caller can report it rather than say nothing.
@@ -506,6 +518,12 @@ export function retryAutomationRun(
     // §H-TENANT, restated on the way out exactly as `evaluateAndFire` restates it: a stored row may
     // not aim an action at another workspace, whatever it holds.
     resolved.workspaceId = ctx.workspaceId;
+    // The input denylist on the stored, resolved input, exactly as `evaluateAndFire` checks it.
+    const denied = notAutomatableInput(row.action_tool, resolved);
+    if (denied !== undefined) {
+      settleRun(ctx, row.id, 'failed', 'template_not_automatable');
+      return err('template_not_automatable', { runId: input.runId, tool: row.action_tool, field: denied.field, value: denied.value });
+    }
 
     let result: Result;
     try {

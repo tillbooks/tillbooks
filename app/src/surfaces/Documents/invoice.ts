@@ -26,6 +26,7 @@ import {
 
 import { qrConsequence, type QrConsequence } from './currency';
 import type { DocumentDto } from './model';
+import { qrAddressValueIssues } from '../../../../src/core/sales/qrRules.js';
 
 /** The Swiss QR-bill payload as the engine emits it (`buildQrBillPayload`, IG v2.3). */
 export interface QrBillDto {
@@ -193,6 +194,46 @@ export function dueDateFrom(issueDateIso: string | null, termsDays: number | nul
   return base.toISOString().slice(0, 10);
 }
 
+/** The longest Zahlungsfrist the engine accepts (`PAYMENT_TERMS_MAX_DAYS`, src/core/setup/paymentTerms.ts). */
+const PAYMENT_TERMS_MAX_DAYS = 365;
+
+/** A stored Zahlungsfrist the engine counts with: whole days 0 to 365, else "no usable terms". */
+function usableTermsDays(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= PAYMENT_TERMS_MAX_DAYS ? value : null;
+}
+
+/** What the issue derives for an untouched "Zahlbar bis", and which rule it comes from. */
+export interface DueDateDerivation {
+  /** The customer's name, for the (i). */
+  name: string;
+  /** The days the issue date is counted forward by (0: due on the issue date). */
+  days: number;
+  /** The customer's own terms, the workspace default, or neither (due on the issue date). */
+  source: 'contact' | 'workspace' | 'document_date';
+}
+
+/**
+ * THE Studio twin of the engine's `deriveDueDate` (src/core/setup/paymentTerms.ts, owner pick
+ * "workspace default terms"): an untouched due date is the issue date plus the customer's OWN terms,
+ * else the workspace default (`get_company_profile` `defaultPaymentTermsDays`), else 0 days. A
+ * contact's `paymentTermsDays` of `null` means "none of its own" and takes the default; `0` means
+ * "due immediately" and does not. A stored value outside 0 to 365 counts as none, as in the engine.
+ * The editor's hint and (i) read the rule here and nowhere else.
+ */
+export function dueDateDerivation(
+  contact: { name: string; paymentTermsDays?: number | null } | undefined,
+  workspaceDefaultDays: number | null | undefined,
+): DueDateDerivation | null {
+  if (contact === undefined) return null;
+  const own = usableTermsDays(contact.paymentTermsDays);
+  if (own !== null) return { name: contact.name, days: own, source: 'contact' };
+  // The Firmenprofil default is unknown (unread, or its read failed): say nothing rather than a guess.
+  if (workspaceDefaultDays === undefined) return null;
+  const fallback = usableTermsDays(workspaceDefaultDays);
+  if (fallback !== null) return { name: contact.name, days: fallback, source: 'workspace' };
+  return { name: contact.name, days: 0, source: 'document_date' };
+}
+
 /** The contact address as `list_contacts`/`get_contact` send it (null when nothing is stored). */
 export interface ContactAddress {
   street: string | null;
@@ -210,11 +251,25 @@ export interface InvoiceContact {
   paymentTermsDays?: number | null;
 }
 
+/** The contact address key for each IG element `qrAddressValueIssues` names. */
+const CONTACT_KEY_OF_QR_FIELD: Readonly<Record<string, keyof ContactAddress>> = {
+  street: 'street',
+  buildingNo: 'houseNo',
+  postalCode: 'zip',
+  town: 'city',
+  country: 'country',
+};
+
 /**
- * Which structured-address fields the QR-bill needs and this contact lacks (M10). Since IG v2.3 the
- * structured form is the ONLY permitted one (ST1), so an incomplete address is a fixable error and
- * never an unstructured fallback. `houseNo` is optional in the IG (a street without a number is
- * valid), so it is not required here.
+ * Which structured-address fields the QR-bill needs and this contact lacks or carries in a form the
+ * payment part refuses (M10). Since IG v2.3 the structured form is the ONLY permitted one (ST1), so an
+ * incomplete address is a fixable error and never an unstructured fallback. `houseNo` is optional in
+ * the IG (a street without a number is valid), so it is not required here.
+ *
+ * The VALUE rules (an alpha-2 country, the IG lengths) are the engine's own `qrAddressValueIssues`,
+ * imported, not restated (critic phase0-installable r2, R2-2): a contact stored as `Schweiz` used to
+ * read as QR-ready here, so the issue dialog neither asked nor warned and the invoice issued with no
+ * payment part. Now the dialog opens the customer block on it, prefilled, like any other gap.
  */
 export function missingAddressFields(contact: InvoiceContact | undefined): string[] {
   const a = contact?.address ?? null;
@@ -224,12 +279,23 @@ export function missingAddressFields(contact: InvoiceContact | undefined): strin
     ['city', 'city'],
     ['country', 'country'],
   ];
-  return required
+  const missing = required
     .filter(([key]) => {
       const value = a === null ? null : a[key];
       return value === null || value === undefined || String(value).trim() === '';
     })
     .map(([, label]) => label);
+  if (a === null) return missing;
+  const broken = qrAddressValueIssues({
+    street: a.street,
+    buildingNo: a.houseNo,
+    postalCode: a.zip,
+    town: a.city,
+    country: a.country,
+  })
+    .map((issue) => CONTACT_KEY_OF_QR_FIELD[issue.field])
+    .filter((key): key is keyof ContactAddress => key !== undefined && !missing.includes(key));
+  return [...missing, ...broken];
 }
 
 /**
@@ -246,8 +312,40 @@ export function missingAddressFields(contact: InvoiceContact | undefined): strin
 export interface QrReadiness {
   /** Structured-address fields the customer is missing (M10). */
   missingCustomerAddress: string[];
+  /**
+   * P0.4e: the workspace's OWN (creditor) name or structured address is incomplete, so
+   * `buildQrBill` would refuse `needs_creditor_address` at issue. False when the caller did not say
+   * (no `creditor` given): unknown is never reported as a gap.
+   */
+  missingCreditorAddress: boolean;
   /** What the chosen currency and the configured IBAN do to the payment part. */
   consequence: QrConsequence;
+}
+
+/** The creditor half of `get_company_profile` (`creditorName`, `creditorAddress`), as the engine sends it. */
+export interface CreditorView {
+  name: string | null;
+  address: unknown;
+}
+
+/** The five structured-address fields `set_creditor_profile` requires, all non-blank (A00's rule). */
+export const CREDITOR_ADDRESS_FIELDS = ['street', 'buildingNo', 'zip', 'town', 'country'] as const;
+
+/**
+ * Would `buildQrBill` accept this creditor? A name, and the five structured-address fields each a
+ * non-blank string: the same test A00's `isStructuredAddress` applies when the address is stored.
+ * The VALUE rules (alpha-2 country, IG lengths) are not repeated here: since critic phase0-installable
+ * r1 (P0.4e-6) `set_creditor_profile` refuses a value `validateQrBill` would refuse, so a stored
+ * address already meets them. An address stored before that rule could still fail at render.
+ */
+export function creditorAddressComplete(creditor: CreditorView): boolean {
+  if (typeof creditor.name !== 'string' || creditor.name.trim() === '') return false;
+  const a = creditor.address;
+  if (typeof a !== 'object' || a === null) return false;
+  return CREDITOR_ADDRESS_FIELDS.every((f) => {
+    const v = (a as Record<string, unknown>)[f];
+    return typeof v === 'string' && v.trim() !== '';
+  });
 }
 
 export function qrReadiness(input: {
@@ -257,16 +355,24 @@ export function qrReadiness(input: {
   currency: string;
   /** The invoice date: the QR-bill is judged by its own issue date, never by today. */
   issueDate: string;
+  /** The workspace's creditor name and address; omit when not loaded (then no creditor gap is claimed). */
+  creditor?: CreditorView | null;
 }): QrReadiness {
   return {
     missingCustomerAddress: missingAddressFields(input.contact),
+    missingCreditorAddress:
+      input.creditor !== undefined && input.creditor !== null && !creditorAddressComplete(input.creditor),
     consequence: qrConsequence({ currency: input.currency, iban: input.iban, issueDate: input.issueDate }),
   };
 }
 
 /** True when nothing blocks the QR-bill: the panel then says so in one line instead of listing gaps. */
 export function isQrReady(readiness: QrReadiness): boolean {
-  return readiness.missingCustomerAddress.length === 0 && readiness.consequence.kind === 'qr';
+  return (
+    readiness.missingCustomerAddress.length === 0 &&
+    !readiness.missingCreditorAddress &&
+    readiness.consequence.kind === 'qr'
+  );
 }
 
 /** One reason this invoice will carry no payment part: a copy key, its parameters, and the way out. */
@@ -293,6 +399,9 @@ export function qrGapLines(readiness: QrReadiness): QrGapLine[] {
   const lines: QrGapLine[] = [];
   if (readiness.consequence.kind === 'no_iban') {
     lines.push({ key: 'invoice.qr.needsIban', wayOut: { to: '/setup', labelKey: 'invoice.qr.toSetup' } });
+  }
+  if (readiness.missingCreditorAddress) {
+    lines.push({ key: 'invoice.qr.needsCreditorAddress', wayOut: { to: '/setup', labelKey: 'invoice.qr.fixCreditorAddress' } });
   }
   if (readiness.missingCustomerAddress.length > 0) {
     lines.push({
@@ -335,6 +444,9 @@ export const INVOICE_ERROR_KEYS: Record<string, string> = {
   send_outcome_unknown: 'invoice.error.sendOutcomeUnknown',
   needs_confirmation: 'invoice.error.needsConfirmation',
   needs_fx_rate: 'invoice.error.needsFxRate',
+  // F3 (critic round 4, D164): a historic-rate code on a line with no Leistungsdatum. The engine names
+  // the position; the sentence names the fix (the Datum, or the line's own date).
+  needs_supply_date: 'invoice.error.needsSupplyDate',
   // The two §H-FX refusals a currency choice can produce at issue time, and the SIX v2.4 cutover the
   // QR path produces. All three used to fall through to "the document could not be updated", which
   // told an operator holding a EUR invoice precisely nothing.

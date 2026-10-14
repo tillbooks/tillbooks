@@ -24,7 +24,7 @@ import {
   bankReconciledForPeriod,
 } from '../../dist/core/banking/index.js';
 import { writeLineLink, BankAbort } from '../../dist/core/banking/bankLines.js';
-import { compactReference } from '../../dist/core/banking/pain001.js';
+import { frozenPmtInfId, frozenEndToEndId } from './frozen-refs-support.mjs';
 import { postEntry, reverseEntry } from '../../dist/core/ledger/index.js';
 import { reversePayment, PAYMENT_INTENTS } from '../../dist/core/payments/payment.js';
 import { getAction } from '../../dist/api/registry.js';
@@ -80,7 +80,7 @@ test('A39R2-6 q4 (c) (L3): a leg a live decision holds is refused typed, never p
   must(markBatchPaid(t.ctx, { batchId: batch.batchId, confirmation: true, valueDate: '2026-07-22', idempotencyKey: 'hand' }));
   const pays = t.store.db.prepare('SELECT p.id, p.journal_entry_id AS e FROM payment_batch_item i JOIN payment p ON p.id = i.posted_payment_id WHERE i.batch_id = ? ORDER BY i.rowid').all(batch.batchId);
   const { lines } = importLines(t, { statementId: 'QC', entries: [
-    { ref: 'RUN', amountMinor: 100000, cd: 'DBIT', date: '2026-07-22', pmtInfId: compactReference('P', batch.batchId) },
+    { ref: 'RUN', amountMinor: 100000, cd: 'DBIT', date: '2026-07-22', pmtInfId: frozenPmtInfId(t, batch.batchId) },
     { ref: 'TWO', amountMinor: 40000, cd: 'DBIT', date: '2026-07-23' },
   ] });
   must(bookBankLine(t.ctx, { bankTxnId: lines.RUN, target: { kind: 'payment_batch', batchId: batch.batchId }, idempotencyKey: 'run' }));

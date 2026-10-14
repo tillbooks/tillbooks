@@ -8,7 +8,9 @@
       "error": "Die Anzahl offener Pendenzen konnte nicht geladen werden.",
       "retry": "Erneut versuchen",
       "allClear": "Im Moment wartet nichts auf dich.",
-      "count": "{count} warten auf dich"
+      "count": "{count} warten auf dich",
+      "countOne": "1 wartet auf dich",
+      "all": "Alle Pendenzen"
     },
     "mandates": {
       "label": "Mandate",
@@ -91,12 +93,139 @@
       "backup": "Sichern",
       "demo": "Demo ausprobieren",
       "demoBusy": "Demo wird erstellt"
+    },
+    "bankBand": {
+      "loading": "Der Bankeingang wird geladen",
+      "error": "Der Bankeingang konnte nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "caption": "Bank",
+      "bankFallback": "Bank",
+      "count": {
+        "one": "{count} offene Bankbuchung",
+        "other": "{count} offene Bankbuchungen"
+      },
+      "countTitle": "Offene Bankbuchungen",
+      "facet": {
+        "needs": {
+          "one": "{count} braucht dich",
+          "other": "{count} brauchen dich"
+        },
+        "sure": {
+          "one": "{count} sicher vorgeschlagen",
+          "other": "{count} sicher vorgeschlagen"
+        },
+        "noReceipt": {
+          "one": "{count} ohne Beleg",
+          "other": "{count} ohne Beleg"
+        }
+      },
+      "facetTitle": {
+        "needs": "Brauchen dich",
+        "sure": "Sicher vorgeschlagen",
+        "noReceipt": "Ohne Beleg"
+      },
+      "lamp": {
+        "active": "{bank} aktiv",
+        "running": "{bank}: Kontoauszüge werden abgerufen",
+        "waiting": "{bank}: warte auf Freischaltung",
+        "ready": "{bank}: Schlüssel prüfen",
+        "fault": "{bank}: Abruf gestört",
+        "off": "{bank}: Automatik aus",
+        "serveOnly": "{bank}: kein automatischer Abruf",
+        "keysChanged": "{bank}: Bankschlüssel geändert",
+        "blocked": "{bank}: Abruf gesperrt",
+        "jump": "{bank}: Auszüge fehlen",
+        "inactive": "{bank}: nicht verbunden",
+        "checkFault": "{bank}: Nachfrage gestört",
+        "resend": "{bank}: INI und HIA erneut senden"
+      },
+      "card": {
+        "active": "Kontoauszüge kommen jeden Morgen um {time} von selbst. War TILL um {time} aus, holt es den Abruf beim Start nach.",
+        "letterFirst": "Die Schlüssel sind erzeugt, aber INI und HIA sind noch nicht an die {bank} gesendet. Sende sie unter Bankkonten und schick den unterschriebenen INI-Brief.",
+        "waitingChecking": "TILL fragt jeden Morgen um {time} bei der {bank} nach, ob der Zugang freigeschaltet ist. Du musst nichts tun.",
+        "waitingOff": "Die tägliche Nachfrage ist aus. Unter Bankkonten fragst du selbst bei der {bank} nach.",
+        "waitingServe": "Von selbst nachfragen kann TILL nur mit till up. Unter Bankkonten fragst du selbst bei der {bank} nach.",
+        "ready": "Die {bank} hat freigeschaltet. Vergleiche die angezeigten Hashwerte einmal mit dem Blatt der {bank}. Das kann TILL nicht für dich tun: genau dieser Vergleich schützt vor einer falschen Bank.",
+        "readySince": "Freischaltung erkannt {when}",
+        "lastCheck": "Zuletzt geprüft {when}",
+        "nextCheck": "nächste Prüfung {when}",
+        "legsUnconfirmed": "INI und HIA sind noch nicht beide von der {bank} bestätigt. Sende sie unter Bankkonten erneut: TILL schickt nur, was fehlt. Die tägliche Nachfrage sendet nichts.",
+        "checkUnreachable": "Die letzte Nachfrage bei der {bank} kam nicht durch.",
+        "checkNoWire": "In diesem TILL ist keine Bankverbindung eingerichtet, deshalb kann TILL nicht bei der {bank} nachfragen.",
+        "checkNoKeystore": "Die Schlüsselablage fehlt oder ist beschädigt, deshalb kann TILL nicht bei der {bank} nachfragen.",
+        "checkLocked": "Die Schlüsselablage ist gesperrt, deshalb kann TILL nicht bei der {bank} nachfragen.",
+        "lastAttempt": "Letzter Versuch {when}",
+        "checkNotStarted": "Die Nachfrage bei der {bank} konnte nicht starten."
+      },
+      "action": {
+        "compareKeys": "Schlüssel vergleichen",
+        "resendLegs": "Erneut senden"
+      },
+      "steps": {
+        "label": "Einrichtung in vier Schritten",
+        "letter": "Brief an die {bank} geschickt",
+        "activate": "{bank} schaltet frei",
+        "compare": "Schlüssel einmal vergleichen",
+        "daily": "Täglicher Abruf läuft",
+        "state": {
+          "done": "erledigt",
+          "now": "jetzt",
+          "fault": "gestört",
+          "todo": "offen"
+        }
+      },
+      "facetsLabel": "Offene Bankbuchungen nach Stand",
+      "empty": {
+        "title": "Noch kein Bankkonto.",
+        "hint": "Erfasse dein Bankkonto, dann erscheinen hier die offenen Bankbuchungen.",
+        "action": "Bankkonto erfassen"
+      },
+      "fetch": {
+        "button": "Jetzt abrufen",
+        "buttonBusy": "Wird abgerufen",
+        "denied": "Kontoauszüge abrufen darf nur, wer Zahlungen ausführen darf.",
+        "running": "Kontoauszüge werden abgerufen",
+        "runningHint": "Du kannst weiterarbeiten.",
+        "fetched": "Abgerufen {when}",
+        "fetchedAuto": "Abgerufen {when}, automatisch",
+        "nothingNew": "Nichts Neues.",
+        "never": "Noch nicht abgerufen.",
+        "next": "Nächster automatischer Abruf: {when}",
+        "retryAt": "Nächster Versuch: {when}",
+        "off": "Der automatische Abruf ist aus.",
+        "offLink": "Einstellen",
+        "serveOnly": "Automatisch abrufen kann TILL nur mit till up.",
+        "keysChanged": "Die Bankschlüssel haben sich geändert. Prüfe sie, bevor wieder abgerufen wird.",
+        "blocked": "Der Abruf ist gesperrt.",
+        "manage": "Zu den Bankkonten",
+        "members": "Zu den Mitgliedern",
+        "keystoreLocked": "Die Schlüsselablage ist gesperrt, deshalb ruft TILL keine Auszüge ab.",
+        "keystoreLockedAction": "Starte TILL mit der Passphrase der Schlüsselablage neu. Von selbst versucht TILL es nicht erneut."
+      },
+      "jumpLink": "Zu {name}",
+      "when": {
+        "today": "heute {time}",
+        "yesterday": "gestern {time}",
+        "tomorrow": "morgen {time}",
+        "date": "am {date} um {time}"
+      },
+      "waiting": {
+        "one": "{count} Buchung wartet auf dich",
+        "other": "{count} Buchungen warten auf dich"
+      },
+      "waitingLabel": {
+        "one": "Buchung wartet auf dich",
+        "other": "Buchungen warten auf dich"
+      },
+      "nothingWaiting": "Nichts wartet auf dich",
+      "openShort": "{count} offen",
+      "withVorschlag": "{count} mit Vorschlag"
     }
   },
   "help": {
     "Uebersicht": {
       "title": "Übersicht",
-      "body": "Die Startseite deiner Bücher: eine Wand aus Kennzahlen, jede mit Wert, Stand und einem Weg in die Fläche dahinter. Berechnet wird alles in der Engine; diese Seite setzt nur zusammen.\n\nDen Zeitraum wählst du oben. Eine Zusammenstellung lässt sich als Ansicht speichern und wieder aufrufen.\n\nEine Kachel, deren Modul nicht eingerichtet ist, wandert hinter den Hinweis auf weitere Kacheln, statt eine falsche Null zu zeigen.",
+      "body": "Die Startseite deiner Bücher: Kennzahlen mit Wert, Stand und Weg in die Fläche dahinter.\n\nDer Bankeingang darüber zeigt die offenen Bankbuchungen als Zahl und daneben drei Symbole: die Person für Zeilen, die dich brauchen, das Häkchen für sichere Vorschläge, die durchgestrichene Büroklammer für Gebuchtes ohne Beleg. Jede Zahl führt in die Bank. Rechts steht deine Bank mit einem Punkt: grün läuft der Abruf, orange wartet etwas, rot ist etwas gestört, grau ist die Automatik aus. Zeig auf den Namen, dann steht alles in Worten da. Mit till up ruft TILL jeden Morgen selbst ab und fragt während der Einrichtung täglich nach der Freischaltung.\n\nEine Kachel ohne eingerichtetes Modul zeigt keine falsche Null.",
       "concepts": [],
       "docsPath": "quickstart"
     }

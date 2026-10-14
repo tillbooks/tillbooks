@@ -11,6 +11,9 @@
     "action": {
       "run": "Jetzt prüfen"
     },
+    "info": {
+      "label": "Was der Offline-Nachweis abdeckt"
+    },
     "scope": {
       "note": "Dies betrifft TILL, nicht deinen Mac. Deine Mail-App nutzt das Internet; so kommt deine Post an."
     },
@@ -139,8 +142,12 @@
   },
   "journey": {
     "_block": "M03 journey (N4a)",
+    "publishing": {
+      "infoLabel": "Was Publizieren bedeutet"
+    },
     "location": {
       "local": "Deine Bücher: eine einzelne Datei auf diesem Gerät ({path}). Nichts verlässt TILL von selbst.",
+      "short": "Deine Bücher: {path}",
       "served": "Deine Bücher: eine Datei auf dieser Instanz; Export und Backup jederzeit.",
       "unknown": "Speicherort unbekannt.",
       "retry": "Erneut versuchen",
@@ -151,6 +158,7 @@
     "hosting": {
       "title": "Hosting",
       "model": "Ein Hauptbuch, eine Instanz. Alle weiteren Personen und Geräte arbeiten als Clients darauf. Kein Geräte-Sync.",
+      "modelLabel": "Wie Hosting funktioniert",
       "rung": {
         "current": "jetzt",
         "local": {

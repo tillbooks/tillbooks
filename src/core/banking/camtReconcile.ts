@@ -683,16 +683,22 @@ const CERTAINTY_AS_CONFIDENCE: Record<BankProposalCertainty, 'high' | 'medium' |
  * alike): its A39 proposal's certainty, read as an A36 confidence, falls below the workspace review
  * threshold, or the line is a reversal (always a human's call). A decided line never needs review.
  * Exported for the per-line import signal (`import_camt` fires `bank_txn.needs_review` over it).
+ *
+ * D144 (critic C8): the ladder is read WITHOUT the model rung. A model's unchecked guess is the weakest
+ * reason on the ladder; it must not switch off the signal that asks a person to look, so a line whose
+ * only proposal is a model suggestion needs review exactly as it did before the model spoke.
  */
 export function lineNeedsReview(
   ctx: WorkspaceContext,
   row: BankTxnRow,
   config: CamtMatchConfig = readCamtMatchConfig(ctx),
-  pc: ProposalContext = proposalContext(ctx),
+  pc: ProposalContext = proposalContext(ctx, { withModel: false }),
 ): boolean {
   if (lineStateOf(ctx, row).state !== 'open') return false;
   if (row.reversal_ind === 1) return true;
   const proposal = proposeForLine(ctx, pc, row, readBankTxnDetail(ctx, row.id));
+  // Belt to the braces above, for a caller that hands in a context built with the model rung.
+  if (proposal.reasonCode === 'model_suggested') return true;
   const confidence = CERTAINTY_AS_CONFIDENCE[proposal.certainty];
   if (confidence === 'none') return true;
   const floor = config.reviewThreshold === 'high' ? 2 : 1;

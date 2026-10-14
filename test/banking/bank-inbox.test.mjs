@@ -30,7 +30,7 @@ import {
   generatePain001,
   markBatchPaid,
 } from '../../dist/core/banking/index.js';
-import { compactReference } from '../../dist/core/banking/pain001.js';
+import { frozenPmtInfId, frozenEndToEndId } from './frozen-refs-support.mjs';
 import { buildQrrReference } from '../../dist/core/payments/reference.js';
 import { postEntry, reverseEntry, softCloseMonth } from '../../dist/core/ledger/index.js';
 import { evaluateCheck } from '../../dist/core/checklists/index.js';
@@ -417,7 +417,7 @@ function run(t, seed, amounts) {
 test('a generated run is booked from its debit: the PmtInfId proves it, A18 marks it paid', () => {
   const t = world();
   const r = run(t, 'gen', [60000, 40000]);
-  const { lines } = importLines(t, { statementId: 'PR-1', entries: [{ ref: 'RUN', amountMinor: 100000, cd: 'DBIT', pmtInfId: compactReference('P', r.batchId) }] });
+  const { lines } = importLines(t, { statementId: 'PR-1', entries: [{ ref: 'RUN', amountMinor: 100000, cd: 'DBIT', pmtInfId: frozenPmtInfId(t, r.batchId) }] });
   const p = lineOf(must(listBankInbox(t.ctx, {})), lines.RUN).proposal;
   assert.equal(p.reasonCode, 'payment_batch_reference');
   assert.equal(p.certainty, 'sure');
@@ -432,7 +432,7 @@ test('B8.8: a run ALREADY marked paid by hand is MATCHED to its payments and pos
   const t = world();
   const r = run(t, 'paid', [60000, 40000]);
   must(markBatchPaid(t.ctx, { batchId: r.batchId, confirmation: true, valueDate: '2026-07-22', idempotencyKey: 'by-hand' }));
-  const { lines } = importLines(t, { statementId: 'PR-2', openingMinor: 100000, entries: [{ ref: 'RUN', amountMinor: 100000, cd: 'DBIT', date: '2026-07-23', pmtInfId: compactReference('P', r.batchId) }] });
+  const { lines } = importLines(t, { statementId: 'PR-2', openingMinor: 100000, entries: [{ ref: 'RUN', amountMinor: 100000, cd: 'DBIT', date: '2026-07-23', pmtInfId: frozenPmtInfId(t, r.batchId) }] });
   const p = lineOf(must(listBankInbox(t.ctx, {})), lines.RUN).proposal;
   assert.equal(p.reasonCode, 'payment_batch_reference', 'the paid run is still proposed by its PmtInfId');
   assert.equal(p.reasonParams.batchStatus, 'paid');
@@ -444,14 +444,14 @@ test('B8.8: a run ALREADY marked paid by hand is MATCHED to its payments and pos
   assert.equal(after.payments, before.payments);
   assert.equal(balanceOf(t.store, t.workspaceId, '1020'), -100000, 'the bank moved exactly once');
   // A second line with the same PmtInfId cannot claim the same payments.
-  const { lines: again } = importLines(t, { statementId: 'PR-3', seqNb: '2', entries: [{ ref: 'RUN2', amountMinor: 100000, cd: 'DBIT', pmtInfId: compactReference('P', r.batchId) }] });
+  const { lines: again } = importLines(t, { statementId: 'PR-3', seqNb: '2', entries: [{ ref: 'RUN2', amountMinor: 100000, cd: 'DBIT', pmtInfId: frozenPmtInfId(t, r.batchId) }] });
   refused(bookBankLine(t.ctx, { bankTxnId: again.RUN2, target: { kind: 'payment_batch', batchId: r.batchId }, idempotencyKey: 'run2' }), 'batch_already_linked');
 });
 
 test('a run whose total differs is shown for checking and refuses amount_mismatch naming both totals', () => {
   const t = world();
   const r = run(t, 'mis', [60000, 40000]);
-  const { lines } = importLines(t, { statementId: 'PR-4', entries: [{ ref: 'RUN', amountMinor: 60000, cd: 'DBIT', pmtInfId: compactReference('P', r.batchId) }] });
+  const { lines } = importLines(t, { statementId: 'PR-4', entries: [{ ref: 'RUN', amountMinor: 60000, cd: 'DBIT', pmtInfId: frozenPmtInfId(t, r.batchId) }] });
   const p = lineOf(must(listBankInbox(t.ctx, {})), lines.RUN).proposal;
   assert.equal(p.reasonCode, 'payment_batch_total_differs');
   assert.equal(p.certainty, 'check');
@@ -465,12 +465,12 @@ test('L6: a run booked one line per payment (camt.053 mit Details): EndToEndId n
   const t = world();
   const r = run(t, 'item', [60000, 40000]);
   const items = t.store.db.prepare('SELECT id, amount_minor FROM payment_batch_item WHERE batch_id = ? ORDER BY rowid').all(r.batchId);
-  const pmt = compactReference('P', r.batchId);
+  const pmt = frozenPmtInfId(t, r.batchId);
   const { lines } = importLines(t, {
     statementId: 'IT-1',
     entries: [
-      { ref: 'I1', amountMinor: 60000, cd: 'DBIT', pmtInfId: pmt, e2e: compactReference('E', items[0].id) },
-      { ref: 'I2', amountMinor: 40000, cd: 'DBIT', pmtInfId: pmt, e2e: compactReference('E', items[1].id) },
+      { ref: 'I1', amountMinor: 60000, cd: 'DBIT', pmtInfId: pmt, e2e: frozenEndToEndId(t, items[0].id) },
+      { ref: 'I2', amountMinor: 40000, cd: 'DBIT', pmtInfId: pmt, e2e: frozenEndToEndId(t, items[1].id) },
     ],
   });
   const inbox = must(listBankInbox(t.ctx, {}));
@@ -489,7 +489,7 @@ test('L6: a run booked one line per payment (camt.053 mit Details): EndToEndId n
   assert.equal(rowCounts(t.store, t.workspaceId).entries, before.entries);
   assert.equal(balanceOf(t.store, t.workspaceId, '1020'), -100000, 'the bank moved once per payment');
   // An item line whose amount is not its item's refuses, naming both.
-  const { lines: odd } = importLines(t, { statementId: 'IT-2', seqNb: '2', entries: [{ ref: 'I3', amountMinor: 1, cd: 'DBIT', e2e: compactReference('E', items[0].id) }] });
+  const { lines: odd } = importLines(t, { statementId: 'IT-2', seqNb: '2', entries: [{ ref: 'I3', amountMinor: 1, cd: 'DBIT', e2e: frozenEndToEndId(t, items[0].id) }] });
   const res = refused(bookBankLine(t.ctx, { bankTxnId: odd.I3, target: { kind: 'payment_batch', batchId: r.batchId }, idempotencyKey: 'i3' }), 'amount_mismatch');
   assert.equal(res.itemAmountMinor, 60000);
 });
@@ -498,7 +498,7 @@ test('L6/C8: a run in another currency refuses currency_mismatch with the parked
   const t = world();
   const r = run(t, 'cur', [30000]);
   t.store.db.prepare("UPDATE payment_batch_item SET currency = 'EUR' WHERE batch_id = ?").run(r.batchId);
-  const { lines } = importLines(t, { statementId: 'CU-1', entries: [{ ref: 'EUR', amountMinor: 30000, cd: 'DBIT', pmtInfId: compactReference('P', r.batchId) }] });
+  const { lines } = importLines(t, { statementId: 'CU-1', entries: [{ ref: 'EUR', amountMinor: 30000, cd: 'DBIT', pmtInfId: frozenPmtInfId(t, r.batchId) }] });
   assert.equal(lineOf(must(listBankInbox(t.ctx, {})), lines.EUR).proposal.reasonCode === 'payment_batch_reference', false, 'a run in another currency is never proposed');
   const res = refused(bookBankLine(t.ctx, { bankTxnId: lines.EUR, target: { kind: 'payment_batch', batchId: r.batchId }, idempotencyKey: 'eur' }), 'currency_mismatch');
   assert.match(res.fix, /creditor-payments/);

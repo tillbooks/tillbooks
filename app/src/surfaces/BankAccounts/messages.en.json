@@ -256,7 +256,12 @@
       "unsupportedDateRange": "A date range is not fetched: a missing day comes by hand from e-banking.",
       "initRefused": "ZKB refused INI and HIA with 091002. That means: the partner ID or user ID is wrong, EBICS 3.0 (H005) is not enabled for your agreement, or the subscriber is already initialised. Only ZKB can tell these apart and reset them: call them.",
       "certificateRefused": "ZKB refused a certificate (code {code}). Retire the channel and connect again: TILL creates new keys and a new INI letter.",
-      "keyExchangeRefused": "ZKB refused the key exchange. Nothing was confirmed."
+      "keyExchangeRefused": "ZKB refused the key exchange. Nothing was confirmed.",
+      "syncInProgress": "A fetch for this connection is marked running since {started}. If none is running any more, TILL frees the mark at {frees}.",
+      "autoSyncNoActor": "The automatic fetch did not run: neither the person who set it up nor the owner may fetch statements. Give one of them back the right to make payments, or set up the fetch as someone who has it.",
+      "autoSyncNoActorUnset": "The automatic fetch did not run: nobody has set it up, so TILL fetches as the owner, and the owner may not fetch statements. Give the owner back the right to make payments, or set up the fetch as someone who has it.",
+      "autoSyncNoActorOwner": "The automatic fetch did not run: the owner set it up, so TILL fetches as the owner, and the owner may not fetch statements. Give the owner back the right to make payments, or set up the fetch as someone who has it.",
+      "autoSyncNoActorAgent": "The automatic fetch did not run: an agent set it up, and TILL runs what an agent sets up as the owner. The owner may not fetch statements. Give the owner back the right to make payments, or set up the fetch as someone who has it."
     },
     "state": {
       "draft": "Draft",
@@ -337,6 +342,41 @@
       "confirmed": "Bank keys confirmed. The channel is active.",
       "mismatch": "ZKB now sends other keys than the ones you checked, so nothing was confirmed. Compare with the current edition of the sheet and call ZKB before you try again.",
       "needsTransport": "Fetching the bank keys needs a configured EBICS transport."
+    },
+    "auto": {
+      "title": "Automatic fetch",
+      "daily": "Fetch automatically every day",
+      "time": "At",
+      "save": "Save",
+      "saving": "Saving",
+      "denied": "Only someone who may make payments can change the automatic fetch.",
+      "upOnly": "TILL fetches automatically while it runs under till up. If TILL was not open at that time, the fetch follows as soon as it starts.",
+      "next": "Next automatic fetch: {when}",
+      "lastOk": "Last automatic fetch: {when}",
+      "lastFailed": "Last automatic fetch: {when}. {reason}",
+      "summaryDaily": "Automatically every day at {time}",
+      "summaryOff": "Automatic fetch is off",
+      "summaryNext": "next fetch {when}",
+      "dueNow": "still open today, follows shortly",
+      "change": "Change",
+      "done": "Done"
+    },
+    "addAnother": "Connect another bank channel",
+    "addEbics": "Connect via EBICS",
+    "details": "Details and management",
+    "detailsBank": "Bank",
+    "detailsEbanking": "eBanking",
+    "keysConfirmedShort": "Bank keys confirmed",
+    "returnCode": {
+      "090005": "The bank has no new statements (code 090005).",
+      "090003": "Fetching statements is not enabled for your contract (code 090003). Ask the bank to enable it.",
+      "091005": "The bank does not allow this fetch for your subscriber (code 091005). Ask the bank to enable it.",
+      "091006": "The bank does not allow this fetch for your subscriber (code 091006). Ask the bank to enable it.",
+      "091008": "The bank reports a problem with its keys (code 091008). Compare the bank keys under Bank accounts.",
+      "091117": "The statements are too large to fetch (code 091117). Download these days in e-banking and import them here.",
+      "091119": "The bank is busy right now (code 091119). TILL tries again later.",
+      "other": "The bank reports code {code}.",
+      "unreachable": "The bank did not answer ({reason})."
     }
   },
   "help": {
@@ -345,6 +385,75 @@
       "body": "The register of your bank accounts with IBAN, QR-IBAN and opening balance. A QR-IBAN can only receive payments; outgoing payments need an ordinary IBAN in the register as well, and the surface points it out when one is missing. Here you also manage the EBICS channel and archive accounts that are no longer in use.",
       "concepts": [],
       "docsPath": "swiss/qr-bill"
+    }
+  },
+  "attention": {
+    "queue": {
+      "bankKeysReview": "Bank: compare the keys",
+      "bankActivation": "Bank: activation",
+      "bankStatementGap": "Bank: statements missing",
+      "bankFetchFailed": "Bank: fetch failed"
+    },
+    "item": {
+      "bankKeysReview": {
+        "title": "{bank} activated the access: compare the keys",
+        "subtitle": "Compare the hashes once with the bank's sheet."
+      },
+      "bankActivation": {
+        "sendLegs": {
+          "title": "Send INI and HIA to {bank}",
+          "subtitle": "On the bank accounts screen. Then sign the INI letter and post it."
+        },
+        "resendLegs": {
+          "title": "Resend INI and HIA to {bank}",
+          "subtitle": "{bank} has not confirmed both yet. TILL sends only what is missing. The signed INI letter goes by post."
+        },
+        "signLetter": {
+          "title": "Sign the INI letter for {bank}",
+          "subtitle": "Already posted? Then TILL waits for the activation. Last checked with {bank}: {lastCheckAt}.",
+          "subtitleNoCheck": "Already posted? Then TILL waits for {bank} to activate the access."
+        }
+      },
+      "bankStatementGap": {
+        "titleManyDays": "{bank}: statements {range} are missing ({fromDate} to {toDate})",
+        "titleManyDay": "{bank}: statements {range} are missing ({fromDate})",
+        "titleOneDays": "{bank}: statement {range} is missing ({fromDate} to {toDate})",
+        "titleOneDay": "{bank}: statement {range} is missing ({fromDate})",
+        "subtitleChained": "The balance of statement {after} carries exactly into statement {before}: no money is missing. The numbers in between are probably days without bookings, or bookings that cancel out.",
+        "subtitleUnchained": "The missing statements hold {differenceMinor} that is not in the books yet. Import them from e-banking.",
+        "subtitlePending": "Statement {before} is waiting: the missing statements before it hold {differenceMinor} that is not in the books yet.",
+        "subtitleWaitingInside": "Statement {waiting} is waiting inside this gap and does not follow on: {differenceMinor} is not in the books yet. Import the missing statements.",
+        "titleUnknownDays": "{bank}: statements may be missing after statement {after} ({fromDate} to {toDate})",
+        "titleUnknownDay": "{bank}: a statement may be missing after statement {after} ({fromDate})",
+        "subtitleIncomplete": "Statement {incomplete} is split across several files and not complete in the books. Whether money is missing, TILL can say once every part is imported.",
+        "titleIncomplete": "{bank}: statement {incomplete} is not complete in the books",
+        "titleConflicting": "{bank}: statement {conflicting} is in the books twice, with different balances",
+        "subtitleConflicting": "The bank delivered statement {conflicting} twice, with different balances. Whether money is missing cannot be said this way: check both copies under Bank.",
+        "confirmationVoid": "This gap had been confirmed as complete. That confirmation no longer holds."
+      },
+      "bankFetchFailed": {
+        "title": "{bank}: the automatic fetch failed",
+        "notGranted": "The bank does not allow the fetch (code {code}). Ask the bank to enable it, then fetch by hand under Bank accounts.",
+        "busy": "The bank was busy at every attempt today (code {code}). Fetch the statements by hand later under Bank accounts.",
+        "tooLarge": "The statements are too large to fetch (code {code}). Download the days in e-banking and import them under Bank accounts.",
+        "refused": "The bank refused the fetch (code {code}). Open Bank accounts and fetch again.",
+        "unreachable": "The bank did not answer at any attempt today ({code}). Check the internet connection and fetch by hand under Bank accounts.",
+        "keystore": "The keystore was locked. Restart TILL with the password, then it fetches the statements.",
+        "noActor": "Nobody with the right to manage payments can run the fetch. Check the roles under Members.",
+        "noWire": "TILL ran without a bank connection. Start TILL with «till up», then it fetches the statements.",
+        "keysChanged": "The bank keys have changed. Compare them under Bank accounts before fetching again.",
+        "untrusted": "The bank's answer could not be verified. Download the day in e-banking and import it. If it happens again, call the bank.",
+        "local": "The fetch could not finish on this device. Fetch the statements by hand under Bank accounts.",
+        "other": "The fetch ended with {code}. Open Bank accounts and fetch again."
+      }
+    },
+    "act": {
+      "compareBankKeys": "Compare the keys",
+      "openBankAccounts": "Open bank accounts",
+      "closeGap": "Close the gap",
+      "confirmGap": "Nothing is missing, confirm",
+      "confirmGapConfirm": "Yes, nothing is missing",
+      "confirmGapReason": "How do you know nothing is missing?"
     }
   }
 }

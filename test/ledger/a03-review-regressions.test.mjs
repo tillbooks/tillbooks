@@ -15,6 +15,7 @@ import {
   getAuditLog,
   listPeriodLocks,
 } from '../../dist/core/ledger/index.js';
+import { lockPeriodSealed } from '../../dist/core/ledger/periods.js';
 import { setup, entry, balanceOf, idOf } from './a03-support.mjs';
 import { errOf, obj, objs, okOf, strCol } from '../support/narrow.mjs';
 
@@ -25,7 +26,7 @@ test('F1: lockPeriod upgrades a soft lock to a hard seal, which then refuses reo
   const { ctx, byNumber } = setup();
   assert.equal(softCloseMonth(ctx, { period: '2026-06', idempotencyKey: 's1' }).ok, true);
 
-  const sealed = lockPeriod(ctx, { period: '2026-06', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'h1' });
+  const sealed = lockPeriodSealed(ctx, { period: '2026-06', reason: 'vat_filed', idempotencyKey: 'h1' });
   assert.equal(sealed.ok, true);
   assert.equal(sealed.kind, 'hard', 'the result reports the ACTUAL resulting kind');
   assert.equal(sealed.upgraded, true);
@@ -45,7 +46,7 @@ test('F1: lockPeriod upgrades a soft lock to a hard seal, which then refuses reo
 
 test('F1: a same-or-weaker lock over an existing one reports the real current state, never a false seal', () => {
   const { ctx } = setup();
-  lockPeriod(ctx, { period: '2026-06', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'h1' });
+  lockPeriodSealed(ctx, { period: '2026-06', reason: 'vat_filed', idempotencyKey: 'h1' });
   // A later soft close of the same month must not claim to have downgraded it.
   const again = softCloseMonth(ctx, { period: '2026-06', idempotencyKey: 's2' });
   assert.equal(again.ok, true);
@@ -100,21 +101,24 @@ test('F3: a source=close line may not carry a VAT trace', () => {
 
 test('F3: source=close may post over a vat_filed lock but NOT into a year-close-sealed year', () => {
   const { ctx, byNumber } = setup();
-  // A filing lock on a month: a close entry (no VAT trace) may still land there.
-  lockPeriod(ctx, { period: '2026-06', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'l1' });
+  // A filing lock on a month: a close entry (no VAT trace) may still land there. Balance-sheet lines
+  // only: a close-sourced line on a P&L account is one the sweep does not see, and since critic R6-1
+  // the close refuses to seal a year whose P&L does not net to zero (year-close-internal-scope.test.mjs).
+  lockPeriodSealed(ctx, { period: '2026-06', reason: 'vat_filed', idempotencyKey: 'l1' });
   const overFiled = postEntry(ctx, {
     date: '2026-06-30',
     source: 'close',
     idempotencyKey: 'c1',
     lines: [
-      { account: idOf(byNumber, '6500'), debit: 500 },
+      { account: idOf(byNumber, '1020'), debit: 500 },
       { account: idOf(byNumber, '1000'), credit: 500 },
     ],
   });
   assert.equal(overFiled.ok, true, 'a close entry clears a filing lock');
 
   // After the year is sealed, no source=close entry may reopen it.
-  hardCloseYear(ctx, { year: 2026, idempotencyKey: 'yc' });
+  const closed = hardCloseYear(ctx, { year: 2026, idempotencyKey: 'yc' });
+  assert.equal(closed.ok, true, JSON.stringify(closed));
   const intoSealed = postEntry(ctx, {
     date: '2026-07-01',
     source: 'close',
@@ -170,7 +174,7 @@ test('F6: reopenMonth replays its success on retry even if the month was hard-se
   const first = reopenMonth(ctx, { period: '2026-06', idempotencyKey: 'r1' });
   assert.equal(first.ok, true);
 
-  lockPeriod(ctx, { period: '2026-06', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'h1' });
+  lockPeriodSealed(ctx, { period: '2026-06', reason: 'vat_filed', idempotencyKey: 'h1' });
   const retry = reopenMonth(ctx, { period: '2026-06', idempotencyKey: 'r1' });
   assert.equal(retry.ok, true, 'the same key replays the original success, not hard_lock_sealed');
 });

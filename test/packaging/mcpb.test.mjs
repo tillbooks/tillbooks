@@ -8,6 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
@@ -46,4 +47,20 @@ test('Windows is excluded from the platform list (D104)', () => {
   const manifest = stampAndValidate(repoRoot);
   assert.ok(manifest.compatibility.platforms.includes('darwin'));
   assert.ok(!manifest.compatibility.platforms.includes('win32'));
+});
+
+test('the Node floor is one number everywhere, and it is the one better-sqlite3 needs (critic phase0-installable r1)', () => {
+  // better-sqlite3 13 declares `engines.node >= 22`, so a TILL that advertises Node 20 installs on a
+  // runtime whose native module refuses to build or load. The npm `engines` field and the desktop
+  // extension's runtime compatibility must both say 22, and must not drift below the dependency.
+  const manifest = stampAndValidate(repoRoot);
+  const major = (range) => Number(/(\d+)/.exec(range)?.[1]);
+  assert.equal(pkg.engines.node, '>=22');
+  assert.equal(manifest.compatibility.runtimes.node, '>=22.0.0');
+  const sqlite = JSON.parse(readFileSync(createRequire(import.meta.url).resolve('better-sqlite3/package.json'), 'utf8'));
+  assert.ok(
+    major(pkg.engines.node) >= major(sqlite.engines.node),
+    `package.json engines.node ${pkg.engines.node} is below better-sqlite3's ${sqlite.engines.node}`,
+  );
+  assert.equal(major(manifest.compatibility.runtimes.node), major(pkg.engines.node), 'the manifest and package.json disagree');
 });

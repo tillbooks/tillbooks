@@ -12,6 +12,7 @@
  * workspace, and never build a second place to look at the same record (design §5c).
  */
 
+import type { VorschlagFigures } from '../agent/vorschlagPin.js';
 import type { WorkspaceContext } from '../context.js';
 
 /**
@@ -77,6 +78,12 @@ export interface AttentionDecisionOption {
   readonly humanConfirm?: boolean;
   /** True when the option takes a free-text reason before it runs (the reject confirm, J5.6). */
   readonly reasonField?: boolean;
+  /**
+   * D150: for a `reasonField` option that is NOT a rejection, the i18n keys of the confirm button and
+   * of the reason placeholder (the defaults read as a rejection: "Ja, ablehnen", "Warum lehnst du ab?").
+   */
+  readonly confirmLabelKey?: string;
+  readonly reasonPlaceholderKey?: string;
   /** The A24 capability the CLEARING verb needs; the hub hides the option when the actor lacks it. */
   readonly capability?: string;
   /** i18n key of a one-line hint rendered under the option (the D103 grant hint). */
@@ -139,6 +146,13 @@ export interface AttentionItem {
    */
   readonly proposedByKind?: ActorKind;
   readonly proposedByName?: string | null;
+  /**
+   * Critic N1 (what you approved is what runs), `agent_action` rows only: the key figures of the
+   * record the Vorschlag acts on, frozen at the proposal (`agent/vorschlagPin.ts`), and whether that
+   * record has changed since. A changed one cannot be approved (`vorschlag_stale`).
+   */
+  readonly figures?: VorschlagFigures | null;
+  readonly changedSinceProposal?: boolean;
 }
 
 /** How an actor id is named on screen: the words for a seat, or a member's display name. */
@@ -171,6 +185,11 @@ export interface QueueProvider {
 /** One queue's summary line, as `attention_summary` returns it. */
 export interface AttentionQueueSummary {
   readonly queueId: string;
+  /**
+   * The provider's own label key (`QueueProvider.labelKey`), carried so a surface that has no
+   * `attention.queueLabel.<queueId>` entry for a queue still names it in words, never as a raw key.
+   */
+  readonly labelKey: string;
   readonly area: string;
   readonly count: number;
   readonly topUrgency: AttentionUrgency;

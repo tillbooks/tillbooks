@@ -65,6 +65,9 @@ export function AccountDrawer({
   const [type, setType] = useState<AccountType>(account?.type ?? 'expense');
   const [vatDefault, setVatDefault] = useState(account?.vatCodeDefault ?? '');
   const [costCenterAllowed, setCostCenterAllowed] = useState(account?.costCenterAllowed ?? false);
+  // D142 amendment: "Beleg = Kontoauszug". Set on an existing account through `update_account` (its own
+  // edit right); a new account starts off and is flagged afterwards.
+  const [statementIsVoucher, setStatementIsVoucher] = useState(account?.statementIsVoucher ?? false);
 
   const [numberError, setNumberError] = useState<string | null>(null);
   const [formError, setFormError] = useState<Err | null>(null);
@@ -104,6 +107,9 @@ export function AccountDrawer({
         accountId,
         name: name.trim(),
         costCenterAllowed,
+        // Critic R2-3a: only a real change is sent, so a rename never pins the seed default as an
+        // explicit value (the engine keeps NULL = "follow the seed" until someone decides).
+        ...(statementIsVoucher !== (account?.statementIsVoucher ?? false) ? { statementIsVoucher } : {}),
       });
       if (isErr(updateResp.body)) {
         finishError(updateResp.body);
@@ -231,6 +237,23 @@ export function AccountDrawer({
           />
           <span>{t('account.costCenterAllowed')}</span>
         </label>
+
+        {frozen && (
+          <label className="acc-checkbox">
+            <input
+              type="checkbox"
+              checked={statementIsVoucher}
+              aria-describedby="acc-statement-voucher-hint"
+              onChange={(event) => setStatementIsVoucher(event.target.checked)}
+            />
+            <span>{t('account.statementIsVoucher')}</span>
+          </label>
+        )}
+        {frozen && (
+          <p id="acc-statement-voucher-hint" className="acc-hint">
+            {t('account.statementIsVoucherHint')}
+          </p>
+        )}
       </div>
     </DetailDrawer>
   );

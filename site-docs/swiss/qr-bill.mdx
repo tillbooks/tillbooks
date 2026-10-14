@@ -4,15 +4,21 @@ description: "QR-Rechnung with the structured-address standard."
 ---
 
 The QR-bill (QR-Rechnung) replaced the old orange and red Einzahlungsscheine. TILL generates the
-Swiss QR Code payment part with the structured address format (S), which has been the required form
-since the combined-address format was retired.
+Swiss QR Code with the structured address format (S), which has been the required form since the
+combined-address format was retired.
 
 ## What it covers
 
-- The Swiss QR Code payment part and receipt
-- QR-IBAN with the QR reference (QRR), and IBAN with a Creditor Reference (SCOR) or no reference
+- The scannable Swiss QR Code, drawn on the invoice PDF
+- QR-IBAN with the QR reference (QRR), and a plain IBAN with a Creditor Reference (SCOR). Every
+  QR-bill TILL draws carries one of the two; TILL never uses the "no reference" type.
 - Structured creditor and debtor addresses
 
+TILL puts the Swiss QR Code on the invoice PDF, with the invoice number and the amount as text. The
+creditor, debtor and reference are inside the QR code but not yet printed beside it, and the full
+payment part with the receipt, laid out to the SIX style guide, is not drawn yet. TILL does not send the invoice either: you send the PDF from your own mail program.
+
 <Note>
-  Pre-alpha: specified and in progress, not shipped. Do not use TILL for real invoices yet.
+  Public beta. Before your first real invoices go out, scan one QR-bill with your own banking app and
+  check the account, the amount and the reference it shows.
 </Note>

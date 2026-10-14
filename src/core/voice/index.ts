@@ -32,12 +32,27 @@ export {
   runtimeCatalog,
   selectRuntimeModel,
 } from './runtime.js';
-export type { Op6Adapter, RuntimeManifestEntry, SelectRuntimeInput } from './runtime.js';
+export type { Op6Adapter, RuntimeManifestEntry, SelectRuntimeInput, DecideCalibration, DecideCapability } from './runtime.js';
+export { DECIDE_MAX_CHOICES_CEILING } from './runtime.js';
+export { decide, decideModel, DECIDE_SUM_TOLERANCE, DECIDE_MAX_STATE_CHARS, DECIDE_MAX_QUESTIONS } from './decide.js';
+export type { DecideQuestion, DecideAnswer, DecideInput, DecideOk } from './decide.js';
+export {
+  recordModelDecision,
+  findModelDecision,
+  latestModelDecisions,
+  decisionInputSha256,
+  decisionFingerprint,
+  readDecisionKey,
+  ensureDecisionKey,
+} from './decisionTrace.js';
+export type { ModelDecisionRow, RecordModelDecisionInput } from './decisionTrace.js';
 export {
   VOICE_SOURCE_KINDS,
   RUNTIME_SOURCES,
+  DECIDE_QUESTION_TYPES,
   isVoiceSourceKind,
   isRuntimeSource,
+  isDecideQuestionType,
 } from './enums.js';
-export type { VoiceSourceKind, RuntimeSource } from './enums.js';
+export type { VoiceSourceKind, RuntimeSource, DecideQuestionType } from './enums.js';
 export { VOICE_SCHEMA_SQL, VOICE_TABLES } from './schema.js';

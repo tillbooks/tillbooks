@@ -118,12 +118,12 @@ describe('Shell rail: the collapsible tree (D118 A1)', () => {
   });
 
   it('auto-expands the ancestor chain of a deep link so the active item is visible', async () => {
-    // /vat is nested two levels deep: Buchhaltung > MWST > Einstellungen. Both must open on load.
+    // /vat is nested two levels deep: Buchhaltung > MWST > MWST-Einstellungen. Both must open on load.
     await renderShell('/vat');
     expect(screen.getByRole('treeitem', { name: 'Buchhaltung' })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('treeitem', { name: 'MWST' })).toHaveAttribute('aria-expanded', 'true');
     const mwst = screen.getByRole('group', { name: 'MWST' });
-    const active = within(mwst).getByRole('treeitem', { name: 'Einstellungen' });
+    const active = within(mwst).getByRole('treeitem', { name: 'MWST-Einstellungen' });
     expect(active).toHaveAttribute('aria-current', 'page');
     expect(active).toHaveAttribute('aria-selected', 'true');
   });
@@ -202,7 +202,7 @@ describe('Shell: the nested MWST rail parent (owner decision W1)', () => {
     const labels = within(sub)
       .getAllByRole('treeitem')
       .map((el) => el.textContent);
-    expect(labels).toEqual(['Abrechnung', 'Einstellungen']);
+    expect(labels).toEqual(['Abrechnung', 'MWST-Einstellungen']);
   });
 
   it('marks a nested child active with aria-current, exactly like a top-level item', async () => {
@@ -210,13 +210,13 @@ describe('Shell: the nested MWST rail parent (owner decision W1)', () => {
     const mwst = screen.getByRole('group', { name: 'MWST' });
     expect(within(mwst).getByRole('treeitem', { name: 'Abrechnung' })).toHaveAttribute('aria-current', 'page');
     // The sibling is not dragged along by the shared parent.
-    expect(within(mwst).getByRole('treeitem', { name: 'Einstellungen' })).not.toHaveAttribute('aria-current');
+    expect(within(mwst).getByRole('treeitem', { name: 'MWST-Einstellungen' })).not.toHaveAttribute('aria-current');
   });
 
   it('still routes the untouched /vat path from the nested child', async () => {
     await renderShell('/vat');
     const mwst = screen.getByRole('group', { name: 'MWST' });
-    expect(within(mwst).getByRole('treeitem', { name: 'Einstellungen' })).toHaveAttribute('aria-current', 'page');
+    expect(within(mwst).getByRole('treeitem', { name: 'MWST-Einstellungen' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('has no axe violations with the third level on screen', async () => {

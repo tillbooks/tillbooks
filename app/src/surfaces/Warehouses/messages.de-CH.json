@@ -1,6 +1,6 @@
 {
   "nav": {
-    "warehouses": "Lager"
+    "warehouses": "Lagerorte"
   },
   "warehouses": {
     "title": "Lager & Lagerorte",
@@ -9,7 +9,6 @@
     "newWarehouse": "Neues Lager",
     "listLabel": "Lager",
     "detailLabel": "Ausgewähltes Lager",
-    "selectHint": "Wähle ein Lager, um seine Lagerorte zu sehen.",
     "default": "Standard",
     "archived": "Archiviert",
     "makeDefault": "Als Standard",

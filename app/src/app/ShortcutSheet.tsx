@@ -43,7 +43,7 @@ export function ShortcutSheet() {
     <div className="palette-overlay" role="presentation" onClick={closeHelp}>
       <div
         ref={panelRef}
-        className="palette panel shortcut-sheet"
+        className="palette panel shortcut-sheet motion-reveal--center"
         role="dialog"
         aria-modal="true"
         aria-label={t('shortcut.title')}
@@ -56,12 +56,14 @@ export function ShortcutSheet() {
           }
         }}
       >
-        <p className="shortcut-heading">{t('shortcut.title')}</p>
-        {GROUP_ORDER.map((group) => {
+        <p className="shortcut-heading" data-motion-item="1">
+          {t('shortcut.title')}
+        </p>
+        {/* The Reveal stagger runs over at most three items: the heading, then the first two groups. */}
+        {GROUP_ORDER.filter((group) => KEY_BINDINGS.some((b) => b.group === group)).map((group, index) => {
           const rows = KEY_BINDINGS.filter((b) => b.group === group);
-          if (rows.length === 0) return null;
           return (
-            <div className="shortcut-group" key={group}>
+            <div className="shortcut-group" key={group} data-motion-item={index < 2 ? String(index + 2) : undefined}>
               <p className="shortcut-group-label">{t(GROUP_LABEL[group])}</p>
               <ul className="shortcut-list">
                 {rows.map((b) => (

@@ -20,7 +20,7 @@ import {
   markBatchPaid,
   confirmCamtMatch,
 } from '../../dist/core/banking/index.js';
-import { compactReference } from '../../dist/core/banking/pain001.js';
+import { frozenPmtInfId, frozenEndToEndId } from './frozen-refs-support.mjs';
 import { getAction } from '../../dist/api/registry.js';
 import { postEntry } from '../../dist/core/ledger/index.js';
 import { listPayments } from '../../dist/core/payments/index.js';
@@ -61,13 +61,13 @@ test('H1: two equal payments of a run marked paid by hand are each proposed `sur
   must(markBatchPaid(t.ctx, { batchId: r.batchId, confirmation: true, valueDate: '2026-07-22', idempotencyKey: 'h1-paid' }));
   const items = itemsOf(t, r.batchId);
   assert.equal(items.length, 2);
-  const pmt = compactReference('P', r.batchId);
+  const pmt = frozenPmtInfId(t, r.batchId);
   // The bank lists item 1 FIRST: the nearest-dated tie would otherwise fall to item 0's payment.
   const { lines } = importLines(t, {
     statementId: 'H1',
     entries: [
-      { ref: 'B', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: pmt, e2e: compactReference('E', items[1].id) },
-      { ref: 'A', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: pmt, e2e: compactReference('E', items[0].id) },
+      { ref: 'B', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: pmt, e2e: frozenEndToEndId(t, items[1].id) },
+      { ref: 'A', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: pmt, e2e: frozenEndToEndId(t, items[0].id) },
     ],
   });
   const inbox = must(listBankInbox(t.ctx, { status: 'open' }));
@@ -92,7 +92,7 @@ test('H1: a line with the run PmtInfId but NO EndToEndId is never `sure` on one 
   must(markBatchPaid(t.ctx, { batchId: r.batchId, confirmation: true, valueDate: '2026-07-22', idempotencyKey: 'h1b-paid' }));
   const { lines } = importLines(t, {
     statementId: 'H1B',
-    entries: [{ ref: 'X', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: compactReference('P', r.batchId) }],
+    entries: [{ ref: 'X', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: frozenPmtInfId(t, r.batchId) }],
   });
   const p = lineOf(must(listBankInbox(t.ctx, { status: 'open' })), lines.X).proposal;
   assert.notEqual(p.certainty, 'sure', 'the PmtInfId proves the run, not which of its equal payments');
@@ -105,7 +105,7 @@ test('H1: a run of ONE payment of the amount is still proven by the PmtInfId alo
   const items = itemsOf(t, r.batchId);
   const { lines } = importLines(t, {
     statementId: 'H1C',
-    entries: [{ ref: 'X', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: compactReference('P', r.batchId) }],
+    entries: [{ ref: 'X', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: frozenPmtInfId(t, r.batchId) }],
   });
   const p = lineOf(must(listBankInbox(t.ctx, { status: 'open' })), lines.X).proposal;
   assert.equal(p.certainty, 'sure');
@@ -182,7 +182,7 @@ test('M1: confirm_match allocations refuse already_batched for a bill in a live 
   assert.equal(byTarget.batchId, r.batchId);
   assert.deepEqual(rowCounts(t.store, t.workspaceId), before, 'the refused split by targetId moved the database');
   // The run can still be booked from its own debit afterwards.
-  const { lines: runLine } = importLines(t, { statementId: 'M1R', seqNb: '2', entries: [{ ref: 'RUN', amountMinor: 100000, cd: 'DBIT', pmtInfId: compactReference('P', r.batchId) }] });
+  const { lines: runLine } = importLines(t, { statementId: 'M1R', seqNb: '2', entries: [{ ref: 'RUN', amountMinor: 100000, cd: 'DBIT', pmtInfId: frozenPmtInfId(t, r.batchId) }] });
   assert.equal(must(bookBankLine(t.ctx, { bankTxnId: runLine.RUN, target: { kind: 'payment_batch', batchId: r.batchId }, idempotencyKey: 'm1-run' })).state, 'booked');
 });
 
@@ -287,12 +287,12 @@ test('M5: a run debit that differs from its total, or an item line that differs 
   const t = world();
   const r = run(t, 'm5', [60000, 40000]);
   const items = itemsOf(t, r.batchId);
-  const pmt = compactReference('P', r.batchId);
+  const pmt = frozenPmtInfId(t, r.batchId);
   const { lines } = importLines(t, {
     statementId: 'M5',
     entries: [
       { ref: 'TOT', amountMinor: 60500, cd: 'DBIT', pmtInfId: pmt },
-      { ref: 'ITM', amountMinor: 40100, cd: 'DBIT', e2e: compactReference('E', items[1].id) },
+      { ref: 'ITM', amountMinor: 40100, cd: 'DBIT', e2e: frozenEndToEndId(t, items[1].id) },
     ],
   });
   const inbox = must(listBankInbox(t.ctx, { status: 'open' }));
@@ -375,7 +375,7 @@ test('L3: reopen then re-match the SAME leg: a matched line, a paid run\'s line,
     statementId: 'L3',
     entries: [
       { ref: 'M', amountMinor: 900, cd: 'DBIT' },
-      { ref: 'RUN', amountMinor: 100000, cd: 'DBIT', date: '2026-07-22', pmtInfId: compactReference('P', r.batchId) },
+      { ref: 'RUN', amountMinor: 100000, cd: 'DBIT', date: '2026-07-22', pmtInfId: frozenPmtInfId(t, r.batchId) },
       { ref: 'OUT', amountMinor: 50000, cd: 'DBIT', iban: SAVINGS_IBAN, date: '2026-07-25' },
     ],
   });
@@ -411,12 +411,12 @@ test('re-critic L5: a line whose EndToEndId names a run item that is no candidat
   const r = run(t, 'rl5', [25000, 25000]);
   must(markBatchPaid(t.ctx, { batchId: r.batchId, confirmation: true, valueDate: '2026-07-22', idempotencyKey: 'rl5-paid' }));
   const items = itemsOf(t, r.batchId);
-  const pmt = compactReference('P', r.batchId);
+  const pmt = frozenPmtInfId(t, r.batchId);
   const { lines } = importLines(t, {
     statementId: 'RL5',
     entries: [
-      { ref: 'A', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: pmt, e2e: compactReference('E', items[0].id) },
-      { ref: 'A2', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: pmt, e2e: compactReference('E', items[0].id) },
+      { ref: 'A', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: pmt, e2e: frozenEndToEndId(t, items[0].id) },
+      { ref: 'A2', amountMinor: 25000, cd: 'DBIT', date: '2026-07-22', pmtInfId: pmt, e2e: frozenEndToEndId(t, items[0].id) },
     ],
   });
   // Line A takes item 0's payment; A2 names item 0 too, so its only candidate is item 1's payment.

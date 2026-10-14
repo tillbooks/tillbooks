@@ -5,7 +5,9 @@
   "pay": {
     "title": "Zahlungen an Kreditoren",
     "error": {
-      "permission_denied": "Du hast keine Berechtigung, Zahlungsläufe zu sehen."
+      "permission_denied": "Du hast keine Berechtigung, Zahlungsläufe zu sehen.",
+      "batchGone": "Der Zahlungslauf wurde inzwischen verworfen. Klick nochmals auf pain.001 generieren, dann entsteht ein neuer.",
+      "alreadyBatched": "Diese Rechnung steckt schon in einem anderen Zahlungslauf. Nimm das Häkchen weg und generiere erneut."
     },
     "empty": {
       "title": "Nichts zu bezahlen.",
@@ -14,6 +16,11 @@
     },
     "selectBills": "Rechnungen auswählen",
     "selectOne": "{vendor} auswählen",
+    "suggest": {
+      "one": "Vorschlag: 1 Zahlung fällig bis {date}, {total}.",
+      "other": "Vorschlag: {n} Zahlungen fällig bis {date}, {total}.",
+      "take": "Fällige auswählen"
+    },
     "column": {
       "vendor": "Lieferant",
       "due": "Fällig",
@@ -71,7 +78,198 @@
     "newBatch": "Neuer Zahlungslauf",
     "paidOn": "Bezahlt am {date}.",
     "toBillsLink": "Zu den Kreditorenrechnungen",
-    "pickAccountInCurrency": "Konto in {currency} wählen"
+    "pickAccountInCurrency": "Konto in {currency} wählen",
+    "tabs": {
+      "label": "Ansicht",
+      "run": "Zahlungslauf",
+      "plan": "Zahlungsplanung"
+    },
+    "plan": {
+      "denied": "Du hast keine Berechtigung, die Liquiditätsplanung zu sehen.",
+      "empty": {
+        "noBank": "Kein Bankkonto in dieser Währung.",
+        "noBankHint": "Die Planung startet beim Kontostand deiner Bankkonten.",
+        "toBankAccounts": "Bankkonto erfassen"
+      },
+      "floor": "Mindestbestand ({currency})",
+      "horizon": "Zeitraum",
+      "horizonDays": "{days} Tage",
+      "propose": "Vorschlag berechnen",
+      "proposing": "Wird berechnet…",
+      "excluded": "{n} Posten sind nicht eingerechnet: {reasons}.",
+      "resultTitle": "Zahlungsvorschlag",
+      "skontoCaptured": "Skonto möglich",
+      "lateInterest": "Verzugszins",
+      "lowest": "Tiefster Stand",
+      "lowestOn": "{amount} am {date}",
+      "optimal": "Bester Vorschlag für diesen Mindestbestand (nachgewiesen).",
+      "heuristic": "Bester gefundener Vorschlag, nicht als optimal nachgewiesen: Die Suche hat ihr Rechenbudget ausgeschöpft. Möglich wären höchstens {gap} mehr.",
+      "heuristicLate": "Verspätung insgesamt {days}; Untergrenze für jeden Vorschlag: {lower}.",
+      "heuristicLateUnproven": "Verspätung insgesamt {days}; ob es mit weniger geht, ist nicht nachgewiesen.",
+      "dayCount": {
+        "one": "1 Tag",
+        "other": "{n} Tage"
+      },
+      "baseBreach": "Schon ohne Zahlungen fällt der Kontostand am {date} auf {amount}, unter den Mindestbestand. Vorher wird nichts bezahlt.",
+      "nothingToSchedule": "Keine offene Rechnung ist im Zeitraum zu planen.",
+      "draft": "Zahlungsläufe entwerfen",
+      "drafting": "Wird entworfen…",
+      "repropose": "Neu berechnen",
+      "draftedNote": "Diese Zahlungsläufe sind Entwürfe. Nichts ist bezahlt oder übermittelt.",
+      "batchLine": "{n} Zahlungen, {total}, Ausführung {date}",
+      "generate": "pain.001 erzeugen",
+      "notDraftedTitle": "Nicht in einen Zahlungslauf übernommen:",
+      "notDrafted": {
+        "skonto_needs_reduced_amount": "Skonto möglich: {amount} bis {date}; TILL kann den Abzug noch nicht verbuchen.",
+        "needs_creditor_iban": "IBAN des Lieferanten fehlt",
+        "needs_qrr_reference": "QR-Referenz fehlt",
+        "invalid_reference": "Referenz passt nicht zur IBAN",
+        "unsupported_currency": "Währung nicht unterstützt",
+        "already_batched": "Bereits in einem Zahlungslauf",
+        "no_longer_open": "Nicht mehr offen"
+      },
+      "inputsTitle": "Was die Planung zusätzlich braucht",
+      "skontoTitle": "Skontobedingungen",
+      "noSkonto": "Noch keine Skontobedingung erfasst. TILL nimmt nie einen Skonto an, den du nicht erfasst hast.",
+      "skontoNone": "Kein Skonto",
+      "skontoVendor": "{rate} % innert {days} Tagen",
+      "skontoUntil": "{rate} % bis {date}",
+      "addSkonto": "Skonto erfassen",
+      "flowsTitle": "Geplante Zahlungen",
+      "noFlows": "Noch keine geplante Zahlung, zum Beispiel Miete oder Löhne.",
+      "recurrence": {
+        "once": "einmalig am {date}",
+        "monthly": "monatlich ab {date}",
+        "quarterly": "vierteljährlich ab {date}",
+        "yearly": "jährlich ab {date}"
+      },
+      "recurrenceName": {
+        "once": "Einmalig",
+        "monthly": "Monatlich",
+        "quarterly": "Vierteljährlich",
+        "yearly": "Jährlich"
+      },
+      "direction": {
+        "in": "Eingang",
+        "out": "Ausgang"
+      },
+      "retireFlow": "Beenden",
+      "retireFlowNamed": "{label} beenden",
+      "addFlow": "Geplante Zahlung erfassen",
+      "needsSettings": "Erfordert die Berechtigung Einstellungen",
+      "skontoDialogTitle": "Skonto für {vendor}",
+      "skontoScope": "Gilt für",
+      "skontoScopeVendor": "Alle Rechnungen dieses Lieferanten",
+      "skontoScopeBill": "Nur diese Rechnung",
+      "skontoRate": "Skonto in %",
+      "skontoDays": "Innert Tagen ab Rechnungsdatum",
+      "skontoUntilLabel": "Zahlung eingegangen bis",
+      "flowDialogTitle": "Geplante Zahlung erfassen",
+      "flowLabel": "Bezeichnung",
+      "flowDirection": "Richtung",
+      "flowAmount": "Betrag ({currency})",
+      "flowFirst": "Erstes Datum",
+      "flowRecurrence": "Wiederholung",
+      "flowAccount": "Konto",
+      "flowAccountNone": "Kein bestimmtes Konto",
+      "notInHorizon": "Nach dem Zeitraum",
+      "column": {
+        "vendor": "Lieferant",
+        "due": "Fällig",
+        "skonto": "Skonto",
+        "payDate": "Ausführung",
+        "amount": "Betrag",
+        "reason": "Warum"
+      },
+      "reason": {
+        "skonto_captured": "Skonto möglich: {skonto}, letzter Tag; TILL kann den Abzug noch nicht verbuchen",
+        "on_time_latest": "Letzter Tag vor Fälligkeit",
+        "skonto_forgone_floor": "Skonto ausgelassen: der Mindestbestand reicht nicht",
+        "skonto_forgone_search_limit": "Skonto ausgelassen: Suche vorzeitig beendet",
+        "late_floor": "{days} Tage zu spät wegen Mindestbestand, Verzugszins {interest}",
+        "deferred_floor": "Nicht im Zeitraum bezahlbar, Verzugszins mindestens {interest}",
+        "not_due_in_horizon": "Erst nach dem Zeitraum fällig",
+        "already_overdue": "Bereits überfällig: am ersten möglichen Tag bezahlt, Verzugszins {interest}",
+        "skonto_remainder": "Offener Skonto-Rest: TILL kann ihn noch nicht ausbuchen. Wird nicht bezahlt.",
+        "late_floor_one": "1 Tag zu spät wegen Mindestbestand, Verzugszins {interest}"
+      },
+      "chart": {
+        "summary": "Kontostand vom {from} bis {to}; tiefster Stand {lowest} am {date}.",
+        "balance": "Kontostand",
+        "withPlan": "Mit Vorschlag",
+        "withoutPlan": "Ohne Vorschlag",
+        "floor": "Mindestbestand {amount}",
+        "lowest": "Tiefster Stand {amount} am {date}",
+        "lowestBelow": "Unter dem Mindestbestand: {amount} am {date}",
+        "asTable": "Werte als Tabelle",
+        "date": "Datum",
+        "in": "Eingang",
+        "out": "Ausgang",
+        "inWithPlan": "Eingang (mit Vorschlag)",
+        "outWithPlan": "Ausgang (mit Vorschlag)"
+      },
+      "error": {
+        "stale_plan": "Seit dem Vorschlag haben sich die Buchungen geändert. Berechne den Vorschlag neu.",
+        "currency_mismatch": "Das Belastungskonto hat eine andere Währung als der Vorschlag.",
+        "nothing_to_draft": "Keine Zeile dieses Vorschlags lässt sich als Zahlungslauf entwerfen.",
+        "already_drafted": "Dieser Vorschlag wurde bereits als Zahlungslauf entworfen.",
+        "needs_bank_account": "Wähle ein Belastungskonto, das Zahlungen ausführen kann.",
+        "account_mismatch": "Dieser Vorschlag wurde für ein anderes Konto berechnet. Berechne ihn für das Belastungskonto neu."
+      },
+      "debitsAccount": "Die Zahlungsläufe belasten {account}. Der Mindestbestand gilt für dieses Konto allein.",
+      "debitsAccountShared": "Die Zahlungsläufe belasten {account}. Der Mindestbestand gilt für dieses Konto, zusammen mit den Zahlungen ohne bekanntes Konto (siehe Annahmen).",
+      "accountKind": {
+        "receivable": "Kundenrechnungen",
+        "recurring": "Serienrechnungen",
+        "planned": "geplante Zahlungen",
+        "payment_run": "Zahlungsläufe",
+        "vat": "MWST"
+      },
+      "conservative": {
+        "title": "Vorsichtshalber abgezogen",
+        "vat_unattributed": "MWST nicht periodengenau zuordenbar: {amount}, vorsichtshalber am {date} abgezogen.",
+        "vat_input_not_settled": "Vorsteuer nicht abgerechnet ({period}): {amount} vorsichtshalber am {date} abgezogen. Schliesse die MWST-Periode ab (Abrechnung buchen), dann entfällt der Betrag.",
+        "vat_return_refused": "MWST {period}: Die Abrechnung kann TILL noch nicht berechnen. Die gebuchte Steuer von {amount} ist vorsichtshalber am {date} abgezogen."
+      },
+      "floorBreach": {
+        "message": "Dein Mindestbestand wird am {date} durch geplante Zahlungen um {shortfall} unterschritten. Senk den Mindestbestand auf {suggested} oder nimm die Verspätungen in Kauf.",
+        "lower": "Mindestbestand auf {suggested} senken",
+        "accept": "Verspätungen in Kauf nehmen",
+        "lowerPromise": "Bei {suggested} wird jede Rechnung bis zu ihrer Fälligkeit bezahlt, eine bereits überfällige am nächsten Bankarbeitstag.",
+        "overdraws": "Wenn jede Rechnung bis zu ihrer Fälligkeit bezahlt wird, fällt dein Kontostand am {date} auf {balance}, und auch ein früherer Skonto-Abzug gleicht das nicht aus. Das reicht auch ohne Mindestbestand nicht: Es geht nur, wenn einige Rechnungen später bezahlt werden.",
+        "overdrawsBySchedule": "Schon die geplanten Zahlungen allein, ohne eine einzige offene Rechnung, bringen deinen Kontostand am {date} auf {balance}. Das ändert kein Zahlungsdatum, auch kein späteres: Es braucht mehr Geld auf dem Konto oder andere geplante Zahlungen.",
+        "overdrawsNotFound": "Wenn jede Rechnung bis zu ihrer Fälligkeit bezahlt wird, fällt dein Kontostand am {date} auf {balance}. In der verfügbaren Rechenzeit hat TILL auch ohne Mindestbestand keinen Plan ohne Verspätung gefunden; ausgeschlossen ist er damit nicht."
+      },
+      "assumptions": {
+        "title": "Annahmen",
+        "noHistory": "{n} Zahlungseingänge ({amount}) von Kunden ohne Zahlungsgeschichte: am Fälligkeitstag angenommen.",
+        "pooled": "{n} Zahlungseingänge ({amount}) nach der üblichen Zahlungsdauer aller Kunden datiert.",
+        "ledger": "Kontostand von {account} laut Buchhaltung, nicht laut Bank: noch nicht gebuchte Bankzeilen fehlen.",
+        "vat": "MWST: gebuchte Steuer und die geplanten Serienrechnungen; übriger Umsatz der laufenden Periode fehlt.",
+        "lastDay": "Rechnungen liegen auf dem letzten Tag, an dem die Zahlung noch rechtzeitig ankommt.",
+        "accountUnknown": "{n} Zahlungen ohne bekanntes Konto sind {account} zugerechnet ({kinds}): Eingänge {in}, Ausgänge {out}."
+      },
+      "uploadBy": "Lade die Datei spätestens am {date} hoch, sonst kommt die Zahlung zu spät an.",
+      "excludedReason": {
+        "other_currency": "andere Währung",
+        "no_due_date": "ohne Fälligkeit",
+        "overdue_beyond_history": "länger überfällig als je zuvor",
+        "overdue_no_history": "überfällig ohne Zahlungsgeschichte",
+        "credit_balance": "Gutschriften",
+        "customer_credit": "Kundenguthaben",
+        "skonto_remainder": "offene Skonto-Reste",
+        "run_item_missing": "unlesbare Zahlungslauf-Posten",
+        "vat_not_configured": "MWST nicht eingerichtet",
+        "vat_period_not_started": "MWST einer noch nicht begonnenen Periode (nur Serienrechnungen gezählt)",
+        "vat_period_overdue": "überfällige MWST-Periode",
+        "vat_unattributed": "MWST auf dem Konto, die keiner Periode zugeordnet werden kann",
+        "vat_due_beyond_horizon": "MWST einer Periode, die erst nach dem Zeitraum fällig wird",
+        "unsupported": "MWST-Abrechnung, die TILL noch nicht berechnen kann (vereinnahmte Entgelte)",
+        "vat_period_filed_payment_unknown": "eingereichte MWST-Periode, deren Zahlung TILL nicht sieht (Saldosteuersatz)",
+        "other_account": "auf einem anderen Konto",
+        "other": "anderer Grund"
+      }
+    }
   },
   "help": {
     "CreditorPayments": {

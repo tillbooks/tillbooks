@@ -75,6 +75,7 @@ import { BankAccountEditor } from './BankAccountEditor';
 import { BankDrawer } from './BankDrawer';
 import { OpeningBalanceStep } from './OpeningBalanceStep';
 import { EbicsChannelPanel } from './EbicsChannelPanel';
+import { GapRepairDialog } from '../Bank/GapRepairDialog';
 import {
   dismissalCoversRegister,
   liveQrIbanIds,
@@ -142,6 +143,13 @@ export function BankAccounts() {
   const editingId = params.get('account');
   const creating = params.get('new') === '1';
   const openingFor = params.get('opening');
+  // A36 §4.7 (D150): the gap repair dialog, opened by `?repair=<account>&gap=<gap>` (the attention
+  // item, the Übersicht band and the channel panel all link here).
+  const repairFor = params.get('repair');
+  const repairGap = params.get('gap');
+  const [gapDone, setGapDone] = useState<string | null>(null);
+  // Bumped when a gap was filled or confirmed, so the channel panel re-reads its feed position.
+  const [channelGeneration, setChannelGeneration] = useState(0);
 
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [chart, setChart] = useState<ChartAccount[] | null>(null);
@@ -454,6 +462,15 @@ export function BankAccounts() {
         </div>
       )}
 
+      {gapDone !== null && (
+        <div className="bank-undo" role="status">
+          <span>{gapDone}</span>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setGapDone(null)}>
+            {t('gapRepair.close')}
+          </button>
+        </div>
+      )}
+
       {undo !== null && (
         <div className="bank-undo" role="status">
           <span>{t('bank.archivedDone', { name: undo.name })}</span>
@@ -508,7 +525,38 @@ export function BankAccounts() {
 
       {/* A33: the EBICS bank-channel panel (spec §6). Rendered once the register has loaded, below the
           table: a channel belongs to the bank contract, and the register is the accounts it routes. */}
-      {!loading && !failed && <EbicsChannelPanel accounts={accounts} />}
+      {!loading && !failed && (
+        <EbicsChannelPanel
+          key={channelGeneration}
+          accounts={accounts}
+          onRepairGap={(bankAccountId, gapId) => {
+            const next = new URLSearchParams(params);
+            next.set('repair', bankAccountId);
+            next.set('gap', gapId);
+            setParams(next, { replace: false });
+          }}
+        />
+      )}
+
+      {repairFor !== null && repairGap !== null && (
+        <GapRepairDialog
+          key={`${repairFor}:${repairGap}`}
+          workspaceId={workspaceId}
+          bankAccountId={repairFor}
+          gapId={repairGap}
+          onClose={() => {
+            const next = new URLSearchParams(params);
+            next.delete('repair');
+            next.delete('gap');
+            setParams(next, { replace: false });
+          }}
+          onResolved={(message) => {
+            setGapDone(message);
+            setChannelGeneration((n) => n + 1);
+            void load();
+          }}
+        />
+      )}
 
       {(creating || editingId !== null) && (
         <BankAccountEditor

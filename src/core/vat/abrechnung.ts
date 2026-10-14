@@ -110,7 +110,7 @@ import {
 // re-exports `postEntry`, which imports `computeLineTax` from this package, so importing the index
 // here would close a cycle. `ledger/periods.ts` imports nothing from `core/vat`, so this edge is
 // one-directional and stays that way.
-import { lockPeriod } from '../ledger/periods.js';
+import { lockPeriodSealed } from '../ledger/periods.js';
 import { vatBridgeOf } from './bridge.js';
 
 /**
@@ -1381,9 +1381,11 @@ export interface MarkVatPeriodFiledInput {
  * records a fact about the world rather than performing an act in it.
  *
  * It mints NO journal entry (A07 never posts, P3 by absence) and writes no lock statement of its
- * own: A03's `lockPeriod` is the single writer, called once per month because `period_lock` keys on
+ * own: A03's `lockPeriodSealed` (the internal twin of `lockPeriod`) is the single writer, called once per month because `period_lock` keys on
  * `YYYY-MM` or `YYYY` and a quarter is neither. Each delegated call carries its own derived
- * idempotency key, so a replay of the whole filing replays each lock and no second row is minted.
+ * idempotency key in the writer's own scope, so a replay of the whole filing replays each lock and no
+ * second row is minted, and a public `lock_period` can never pre-claim one. The answer's `locks` are
+ * the rows read back after the write.
  */
 export function markVatPeriodFiled(ctx: WorkspaceContext, input: MarkVatPeriodFiledInput): Result {
   if (typeof input?.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
@@ -1394,20 +1396,34 @@ export function markVatPeriodFiled(ctx: WorkspaceContext, input: MarkVatPeriodFi
     return err('invalid_period', { period: input?.period, expected: 'YYYY-Qn or YYYY-Hn' });
   }
 
-  const locks: unknown[] = [];
-  for (const month of months) {
-    const r = lockPeriod(ctx, {
-      period: month,
-      kind: 'hard',
-      reason: 'vat_filed',
-      idempotencyKey: `${input.idempotencyKey}:${month}`,
-    });
-    // A refusal on any month stops the filing where it is and reports it. The months already sealed
-    // stay sealed: they are hard locks on periods a human declared filed, and silently unwinding
-    // them would be a destructive edit of an audit fact (§H-AUDIT).
-    if (!r.ok) return r;
-    locks.push(r);
+  // ONE TRANSACTION FOR THE WHOLE FILING (critic R5-1 on cl-periods, D152, 04.10.2026). Every month is
+  // sealed through the internal writer and then READ BACK: a month that does not end up {hard,
+  // vat_filed} refuses the filing (`filing_seal_not_held`, naming it) and rolls back every month this
+  // call wrote, so the answer can never claim a seal the books do not hold. Any other refusal of a
+  // month rolls the filing back the same way: a period is filed whole or not at all.
+  class FilingRefused {
+    constructor(readonly result: Result) {}
   }
-
-  return ok({ period: input.period, months, kind: 'hard', reason: 'vat_filed', locks });
+  try {
+    const locks = ctx.store.tx(() => {
+      const held: { period: string; kind: string; reason: string | null }[] = [];
+      for (const month of months) {
+        // The engine-internal seal writer: `lock_period` refuses `vat_filed` from any caller (critic R4-1).
+        const r = lockPeriodSealed(ctx, { period: month, reason: 'vat_filed', idempotencyKey: `${input.idempotencyKey}:${month}` });
+        if (!r.ok) throw new FilingRefused(r);
+        const row = ctx.store.db
+          .prepare('SELECT kind, reason FROM period_lock WHERE workspace_id = ? AND period = ?')
+          .get(ctx.workspaceId, month) as { kind: string; reason: string | null } | undefined;
+        if (row === undefined || row.kind !== 'hard' || row.reason !== 'vat_filed') {
+          throw new FilingRefused(err('filing_seal_not_held', { period: input.period, month, kind: row?.kind ?? null, reason: row?.reason ?? null }));
+        }
+        held.push({ period: month, kind: row.kind, reason: row.reason });
+      }
+      return held;
+    });
+    return ok({ period: input.period, months, kind: 'hard', reason: 'vat_filed', locks });
+  } catch (e) {
+    if (e instanceof FilingRefused) return e.result;
+    throw e;
+  }
 }

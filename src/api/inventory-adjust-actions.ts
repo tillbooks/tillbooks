@@ -25,11 +25,12 @@ import {
   inventoryAdjustList,
   inventoryAdjustAnalysis,
 } from '../core/inventory/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface AdjustActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -67,7 +68,7 @@ export function inventoryAdjustActions(h: AdjustActionHelpers): readonly ActionD
   return [
     ctxAction(
       'inventory_reason_create',
-      'write',
+      'write:correctable:internal',
       "Create a workspace-scoped adjustment reason code. code is upper-normalised and unique per workspace, case-insensitively (duplicate_code on collision). category is one of shrinkage, damage, found, count_variance, obsolescence, theft, quality, correction, reversal, system, other. requiresNote forces a non-empty note on any adjustment citing this code; defaultForStocktake marks it selectable by a stocktake commit. Idempotent under idempotencyKey.",
       ctxSchema(
         {
@@ -85,7 +86,7 @@ export function inventoryAdjustActions(h: AdjustActionHelpers): readonly ActionD
     ),
     ctxAction(
       'inventory_reason_update',
-      'write',
+      'write:reversible:internal',
       'Update a reason code. The code itself is immutable (it is the classifier historical rows join on); name, description, requiresNote, defaultForStocktake and isActive may change. Setting isActive false is the same soft-archive inventory_reason_archive performs. A foreign or unknown id is not_found. Idempotent under idempotencyKey.',
       ctxSchema(
         {
@@ -103,7 +104,7 @@ export function inventoryAdjustActions(h: AdjustActionHelpers): readonly ActionD
     ),
     ctxAction(
       'inventory_reason_archive',
-      'write',
+      'write:reversible:internal',
       'Soft-archive a reason code (isActive = 0): it disappears from pickers but stays queryable for historical joins, and new adjustments can no longer cite it. Never a destructive delete. A foreign or unknown id is not_found. Idempotent under idempotencyKey.',
       ctxSchema({ id: STR, idempotencyKey: STR }, ['id', 'idempotencyKey']),
       (ctx, input) => inventoryReasonArchive(ctx, as(input)),
@@ -124,7 +125,7 @@ export function inventoryAdjustActions(h: AdjustActionHelpers): readonly ActionD
     ),
     ctxAction(
       'inventory_adjust',
-      'write',
+      'write:correctable:books',
       "Post a single reason-coded quantity adjustment. Supply itemId, locationId, qtyDelta (signed integer thousandths; positive raises on-hand, negative lowers it), reasonCodeId (mandatory, must be active), optional note (required when the reason has requiresNote), optional lotId / serialId, optional unitCostMinor (a Rappen snapshot for the J03 valuation layer), optional effectiveDate (ISO date, default today). It validates the reason and note, asserts the period is open, then mints ONE J02 inventory_move (movement_type adjustment) and records an inventory_adjustment row linking the movement to the reason. Rejections mint nothing: reason_inactive / not_found / no_active_reasons (bad or missing reason), note_required, invalid_qty (qtyDelta 0), insufficient_stock (would overdraw with allow_negative_stock off), period_locked. Idempotent under idempotencyKey (a replay returns the original, posting no second movement).",
       ctxSchema(
         {
@@ -145,7 +146,7 @@ export function inventoryAdjustActions(h: AdjustActionHelpers): readonly ActionD
     ),
     ctxAction(
       'inventory_adjust_batch',
-      'write',
+      'write:correctable:books',
       'Post a multi-line adjustment atomically under one generated batchId. lines[] each carry itemId, locationId, qtyDelta, reasonCodeId (may differ per line) and optional lotId / serialId / note / unitCostMinor. Every line is validated (reason active, note policy) BEFORE any mint and the period is asserted once; all lines mint in ONE transaction. If any line fails (inactive reason, missing required note, insufficient stock, invalid qty), the WHOLE batch rolls back and nothing is written. effectiveDate defaults to today. Idempotent under idempotencyKey.',
       ctxSchema(
         {
@@ -160,7 +161,7 @@ export function inventoryAdjustActions(h: AdjustActionHelpers): readonly ActionD
     ),
     ctxAction(
       'inventory_adjust_reverse',
-      'write',
+      'write:correctable:books',
       "Reverse a single adjustment (adjustmentId) or a whole batch (batchId). Each reversal mints an opposite-sign J02 movement carrying its OWN reasonCodeId (mandatory, active) and records a new inventory_adjustment row with reverses_adjustment_id set; the original row and movement are never touched. Reversing a single adjustmentId that belongs to a batch reverses just that line; reversing by batchId reverses every not-yet-reversed line. Already reversed is already_reversed. Batch reversal is atomic. effectiveDate defaults to today (a reversal posts a correction in the current open period). Idempotent under idempotencyKey.",
       ctxSchema(
         {

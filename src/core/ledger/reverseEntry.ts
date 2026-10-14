@@ -75,6 +75,28 @@ interface OriginalRow {
  * reopen_bank_line` naming the line (`claimHolderOf` below): `reopen_bank_line` supersedes its decision
  * (releasing the claims) before it reverses, so a transfer whose other leg the other account's line
  * still holds refuses there too, naming that line (C5).
+ *
+ * The governance check of 28.09.2026 added the three document sources, each by ROW, on the same defect
+ * the accrual and payment cases had (`test/ledger/document-entry-ownership.test.mjs`):
+ *   - `purchase` belongs to `void_vendor_bill` when a `vendor_bill` row names the entry. Measured: the
+ *     raw Storno of a posted bill returned ok, the bill still read `posted` with its full amount open,
+ *     `list_vendor_bills` answered `reconciled: false`, and `void_vendor_bill` then refused
+ *     `already_reversed` for good.
+ *   - `invoice` and `credit_note` belong to `transition_document` (its `to: 'cancelled'` edge) when a
+ *     `document` row names the entry as its `posted_entry_id`. The raw Storno left the invoice `issued`
+ *     with its open item on a 1100 that had netted to zero, and the cancel refused `already_reversed`.
+ *     `invoice` stays on `POST_ENTRY_SOURCES`, so an entry no document names stays reversible (C16a's
+ *     reasoning for `payment`).
+ *   - `asset_depreciation` belongs to `asset_depreciation_run_reverse` and `inventory_valuation` to
+ *     `inventory_valuation_reverse`, each when its run row names the entry as `journal_entry_id`
+ *     (owner decision, 28.09.2026: the sources with an undo verb join now). Measured: the raw Storno
+ *     left the run `posted`, and the run's own reverse then refused `already_reversed` for good, so
+ *     the asset kept a depreciation the journal no longer carried and the next valuation measured
+ *     against a baseline that was gone.
+ * The row-backed sources with NO undo verb (the asset register's acquisition, capitalisation and
+ * disposal, expense claims, landed cost, the import-sourced openings and wage journal) are still
+ * reversible raw and still strand their row: owning them would leave no way back at all, which is a
+ * design call recorded in `docs/critique/governance-dial-and-owned-reversals.md`.
  */
 export type OwnerResolver = (ctx: WorkspaceContext, entryId: string) => string | null;
 
@@ -88,6 +110,26 @@ export function claimHolderOf(ctx: WorkspaceContext, entryId: string): string | 
     .get(ctx.workspaceId, entryId) as { t: string } | undefined;
   return row?.t ?? null;
 }
+
+/** An invoice's or credit note's entry belongs to the document's own cancel while the document names it. */
+function documentOwner(ctx: WorkspaceContext, entryId: string): string | null {
+  const doc = ctx.store.db
+    .prepare('SELECT 1 AS p FROM document WHERE workspace_id = ? AND posted_entry_id = ? LIMIT 1')
+    .get(ctx.workspaceId, entryId);
+  return doc !== undefined ? DOCUMENT_REVERSAL_OWNER : null;
+}
+
+/** The owner token of a document's entry: the verb whose `to: 'cancelled'` edge reverses it. */
+export const DOCUMENT_REVERSAL_OWNER = 'transition_document';
+
+/** The owner token of a vendor bill's purchase entry. */
+export const VENDOR_BILL_REVERSAL_OWNER = 'void_vendor_bill';
+
+/** The owner token of an H04 depreciation run's journal. */
+export const DEPRECIATION_RUN_REVERSAL_OWNER = 'asset_depreciation_run_reverse';
+
+/** The owner token of a J06 inventory valuation run's journal (an opening run included). */
+export const INVENTORY_VALUATION_REVERSAL_OWNER = 'inventory_valuation_reverse';
 
 export const OWNED_REVERSAL_SOURCES: Readonly<Record<string, string | OwnerResolver>> = {
   [VAT_SETTLEMENT_SOURCE]: 'vat_settlement_reverse',
@@ -108,6 +150,26 @@ export const OWNED_REVERSAL_SOURCES: Readonly<Record<string, string | OwnerResol
       .prepare("SELECT 1 AS p FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ? AND status = 'posted' LIMIT 1")
       .get(ctx.workspaceId, entryId);
     return reversed !== undefined ? 'reopen_bank_line' : null;
+  },
+  purchase: (ctx, entryId) => {
+    const bill = ctx.store.db
+      .prepare('SELECT 1 AS p FROM vendor_bill WHERE workspace_id = ? AND entry_id = ? LIMIT 1')
+      .get(ctx.workspaceId, entryId);
+    return bill !== undefined ? VENDOR_BILL_REVERSAL_OWNER : null;
+  },
+  invoice: documentOwner,
+  credit_note: documentOwner,
+  asset_depreciation: (ctx, entryId) => {
+    const run = ctx.store.db
+      .prepare('SELECT 1 AS p FROM asset_depreciation_run WHERE workspace_id = ? AND journal_entry_id = ? LIMIT 1')
+      .get(ctx.workspaceId, entryId);
+    return run !== undefined ? DEPRECIATION_RUN_REVERSAL_OWNER : null;
+  },
+  inventory_valuation: (ctx, entryId) => {
+    const run = ctx.store.db
+      .prepare('SELECT 1 AS p FROM inventory_valuation_run WHERE workspace_id = ? AND journal_entry_id = ? LIMIT 1')
+      .get(ctx.workspaceId, entryId);
+    return run !== undefined ? INVENTORY_VALUATION_REVERSAL_OWNER : null;
   },
   payment: (ctx, entryId) => {
     const payment = ctx.store.db
@@ -187,7 +249,23 @@ export function reverseOwnedEntry(ctx: WorkspaceContext, input: ReverseEntryInpu
   return reverse(ctx, input, owner);
 }
 
-function reverse(ctx: WorkspaceContext, input: ReverseEntryInput, owner: string | null): Result<ReverseEntryOk> {
+/**
+ * The scopes an ENGINE-INTERNAL composite reverses an entry under (K1, 04.10.2026), the reversal twin of
+ * `postEntryInternal`. A reversal's identity is `(target, key)`, so a composite that reverses an entry
+ * the public `reverse_entry` can also reach, under a key DERIVED from its own (`migrollback:<step>:<key>`),
+ * could be pre-empted: a caller reversed the same entry first under that key (at a date of its own
+ * choosing) and the composite replayed it as its own reversal. Under an internal scope the identity is
+ * `(scope, target, key)`, a shape no public call can produce. A closed literal union, never an input field.
+ */
+export const K1_INTERNAL_REVERSE_SCOPES = ['migration_rollback_step_internal'] as const;
+export type InternalReverseScope = (typeof K1_INTERNAL_REVERSE_SCOPES)[number];
+
+/** `reverseEntry` under an engine-internal scope. Not on any wire and not on the ledger index. */
+export function reverseEntryInternal(ctx: WorkspaceContext, input: ReverseEntryInput, scope: InternalReverseScope): Result<ReverseEntryOk> {
+  return reverse(ctx, input, null, scope);
+}
+
+function reverse(ctx: WorkspaceContext, input: ReverseEntryInput, owner: string | null, scope: InternalReverseScope | null = null): Result<ReverseEntryOk> {
   const capable = ctx.capabilities.assert('post');
   if (!capable.ok) return capable;
 
@@ -228,7 +306,7 @@ function reverse(ctx: WorkspaceContext, input: ReverseEntryInput, owner: string 
   // keeps two reversals of DIFFERENT entries that happen to share a client key from colliding in the
   // shared reverse_entry namespace (which would make the second a silent no-op returning the wrong
   // reversal). JSON-encoding the pair is an injective, delimiter-safe encoding of (target, key).
-  const scopedKey = JSON.stringify([input.entryId, input.idempotencyKey]);
+  const scopedKey = JSON.stringify(scope === null ? [input.entryId, input.idempotencyKey] : [scope, input.entryId, input.idempotencyKey]);
 
   // An entry is reversed at most once. If a reversal already exists and it carries this same scoped
   // key, the caller is retrying, so replay it; otherwise the entry is genuinely already reversed.

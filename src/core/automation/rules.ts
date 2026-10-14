@@ -23,6 +23,7 @@
  */
 
 import type { Capability } from '../access/capabilities.js';
+import { isGovernedSeat } from '../access/capability.js';
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
@@ -246,7 +247,9 @@ export function createAutomationRule(ctx: WorkspaceContext, input: CreateRuleInp
     // P8: an agent may compose the rule, a human decides it may run. Passing `enabled: true` from the
     // agent actor does NOT override this, which is the point: a safety default a caller can turn off
     // by asking is not a safety default.
-    const humanAuthored = ctx.actor !== 'agent';
+    // The ONE governed-seat rule (`isGovernedSeat`): a served agent member (`member:<id>` of kind
+    // `agent`) is as much an agent as the local `agent` actor, so its rule lands disabled too.
+    const humanAuthored = !isGovernedSeat(ctx.store, ctx.actor);
     const enabled = humanAuthored && input.enabled !== false;
 
     const now = ctx.clock.now();

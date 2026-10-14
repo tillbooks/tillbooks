@@ -11,6 +11,12 @@
  * sequence number or closing balance imports with the warning `not_day_end_statement`. There is no
  * "import again and admit" escape: an entry already present under the same identity is the same entry
  * (lean critic C13), and the import names how many it skipped.
+ *
+ * SEVERAL FILES (A36 §4.7, D150): the picker and the drop take more than one file. One file keeps the
+ * `import_camt` path above, with its full refusal note. Several go to `import_camt_files`, which sorts
+ * them by statement number and imports them through the same door; the dialog then lists one outcome
+ * per statement (imported, already in the books, refused with the reason) in a live region and closes
+ * on "Fertig".
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -26,6 +32,7 @@ import type { BankAccountOption } from './model';
 import { formatIban, ibanOfCamt } from './model';
 import { RefusalNote } from './RefusalNote';
 import type { NumberJump } from '../BankAccounts/channelWording';
+import { outcomeText, parseFileOutcomes, type FileOutcome } from './importOutcomes';
 
 export interface ImportResult {
   bankAccountId: string;
@@ -45,9 +52,13 @@ export interface ImportDialogProps {
   accounts: BankAccountOption[];
   /** A file handed over by a drop on the surface. */
   initialFile: File | null;
+  /** D150: several files handed over by a drop on the surface (wins over `initialFile`). */
+  initialFiles?: File[] | null;
   preferredAccountId: string | null;
   onClose: () => void;
   onImported: (result: ImportResult) => void;
+  /** D150: several files went through `import_camt_files`; the outcomes, once the person closes. */
+  onImportedFiles?: (outcomes: FileOutcome[], bankAccountId: string) => void;
 }
 
 export function ImportDialog(props: ImportDialogProps) {
@@ -55,28 +66,37 @@ export function ImportDialog(props: ImportDialogProps) {
   return <ImportDialogBody {...props} />;
 }
 
-function ImportDialogBody({ workspaceId, accounts, initialFile, preferredAccountId, onClose, onImported }: ImportDialogProps) {
+function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, preferredAccountId, onClose, onImported, onImportedFiles }: ImportDialogProps) {
   const t = useT();
   const client = useClient();
   const baseId = useId();
   const [accountId, setAccountId] = useState<string>(preferredAccountId ?? (accounts.length === 1 ? (accounts[0]?.id ?? '') : ''));
   const [file, setFile] = useState<{ name: string; xml: string } | null>(null);
+  // D150: every picked file; `file` is the first, which decides the account by its IBAN.
+  const [files, setFiles] = useState<{ name: string; xml: string }[]>([]);
+  const [outcomes, setOutcomes] = useState<FileOutcome[] | null>(null);
   const [fileIban, setFileIban] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Err | null>(null);
   const [rejected, setRejected] = useState(false);
   const key = useIdempotencyKey(['import_camt', accountId, file?.name ?? '', file?.xml.length ?? 0]);
+  const manyKey = useIdempotencyKey(['import_camt_files', accountId, files.map((f) => [f.name, f.xml.length])]);
 
   const account = accounts.find((a) => a.id === accountId);
   const fileAccount = fileIban === null ? undefined : accounts.find((a) => a.iban.replace(/\s+/g, '').toUpperCase() === fileIban);
   const unregistered = fileIban !== null && fileAccount === undefined;
 
-  const take = async (picked: File) => {
+  const take = async (pickedFiles: File[]) => {
+    const picked = pickedFiles[0];
+    if (picked === undefined) return;
     setError(null);
     setRejected(false);
-    const xml = await picked.text();
+    setOutcomes(null);
+    const read = await Promise.all(pickedFiles.map(async (f) => ({ name: f.name, xml: await f.text() })));
+    const xml = read[0]?.xml ?? '';
     const iban = ibanOfCamt(xml);
     setFile({ name: picked.name, xml });
+    setFiles(read);
     setFileIban(iban);
     const match = iban === null ? undefined : accounts.find((a) => a.iban.replace(/\s+/g, '').toUpperCase() === iban);
     if (match !== undefined) setAccountId(match.id);
@@ -85,9 +105,10 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, preferredAccount
   // A file dropped on the surface arrives once, when the dialog opens.
   const took = useRef(false);
   useEffect(() => {
-    if (took.current || initialFile === null) return;
+    const handed = initialFiles !== undefined && initialFiles !== null && initialFiles.length > 0 ? initialFiles : initialFile !== null ? [initialFile] : [];
+    if (took.current || handed.length === 0) return;
     took.current = true;
-    void take(initialFile);
+    void take(handed);
     // Once per mount, by design: the dialog body mounts per opening.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -96,6 +117,17 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, preferredAccount
     if (file === null || accountId === '' || busy) return;
     setBusy(true);
     setError(null);
+    if (files.length > 1) {
+      // D150: several files, one ordered pass in the engine, one outcome per statement here.
+      const many = await client.call('import_camt_files', { workspaceId, bankAccountId: accountId, files, idempotencyKey: manyKey });
+      setBusy(false);
+      if (isErr(many.body)) {
+        setError(many.body);
+        return;
+      }
+      setOutcomes(parseFileOutcomes(many.body));
+      return;
+    }
     const response = await client.call('import_camt', { workspaceId, bankAccountId: accountId, xml: file.xml, idempotencyKey: key });
     setBusy(false);
     if (isErr(response.body)) {
@@ -124,14 +156,27 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, preferredAccount
       title={t('bankInbox.import.title')}
       closeLabel={t('bankInbox.panel.close')}
       footer={
-        <>
-          <button type="button" className="btn btn--ghost bank-touch" onClick={onClose}>
-            {t('bankInbox.panel.cancel')}
+        outcomes !== null ? (
+          <button
+            type="button"
+            className="btn btn--primary bank-touch"
+            onClick={() => {
+              onImportedFiles?.(outcomes, accountId);
+              onClose();
+            }}
+          >
+            {t('bankInbox.import.done')}
           </button>
-          <button type="button" className="btn btn--primary bank-touch" disabled={file === null || accountId === '' || busy || unregistered} onClick={() => void submit()}>
-            {busy ? t('bankInbox.import.busy') : t('bankInbox.import.commit')}
-          </button>
-        </>
+        ) : (
+          <>
+            <button type="button" className="btn btn--ghost bank-touch" onClick={onClose}>
+              {t('bankInbox.panel.cancel')}
+            </button>
+            <button type="button" className="btn btn--primary bank-touch" disabled={file === null || accountId === '' || busy || unregistered} onClick={() => void submit()}>
+              {busy ? t('bankInbox.import.busy') : files.length > 1 ? t('bankInbox.import.commitMany', { count: files.length }) : t('bankInbox.import.commit')}
+            </button>
+          </>
+        )
       }
     >
       <div className="bank-import">
@@ -141,14 +186,13 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, preferredAccount
             {t('bankInbox.import.file')}
           </span>
           <FileDrop
+            multiple
             accept=".xml,text/xml,application/xml"
             label={t('bankInbox.import.choose')}
             prompt={t('bankInbox.import.drop')}
-            hint={file === null ? t('bankInbox.import.hint') : file.name}
-            onFiles={(files) => {
-              const first = files[0];
-              if (first !== undefined) void take(first);
-            }}
+            hint={file === null ? t('bankInbox.import.hint') : files.map((f) => f.name).join(', ')}
+            disabled={busy || outcomes !== null}
+            onFiles={(picked) => void take(picked)}
             onReject={() => setRejected(true)}
           />
           {rejected && <p className="bank-mode__warn">{t('bankInbox.import.notXml')}</p>}
@@ -185,6 +229,17 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, preferredAccount
             </div>
           </div>
         )}
+        <div className="bank-import__outcomes" aria-live="polite" role="status">
+          {outcomes !== null && (
+            <ul className="gap-repair__list">
+              {outcomes.map((o, i) => (
+                <li key={`${o.file}-${o.number ?? 'x'}-${i}`} className={`gap-repair__result is-${o.outcome}`}>
+                  {outcomeText(t, o, account?.currency ?? 'CHF')}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         {error !== null && (
           <RefusalNote
             error={error}

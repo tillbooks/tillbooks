@@ -23,6 +23,7 @@ import { useCan, CAP } from '../../lib/capabilities';
 import { ErrorBanner, Skeleton } from '../../components/states';
 import { Status, type StatusKind } from '../../components/Status';
 import type { Err } from '../../lib/client';
+import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { idemKey, type Contact } from './model';
 
 type GrantStatus = 'draft' | 'active' | 'revoked' | 'expired';
@@ -123,6 +124,26 @@ export function VendorPortalPanel({ contact, workspaceId }: { contact: Contact; 
     void load();
   }
 
+  /**
+   * D161.2 (critic F2b): a supplier link is live when granted, so a vendor DRAFT only exists after a
+   * restore, which lands every live link closed. The person hands it over again here; clicking IS the
+   * confirmation `portal_grant_send` asks for (the customer panel's `activate`, ContactDrawer.tsx).
+   */
+  async function activate(grantId: string) {
+    setWriteError(null);
+    const resp = await client.call('portal_grant_send', {
+      workspaceId,
+      grantId,
+      confirmed: true,
+      idempotencyKey: idemKey('vsend'),
+    });
+    if (isErr(resp.body)) {
+      setWriteError(resp.body);
+      return;
+    }
+    void load();
+  }
+
   async function revoke(grantId: string) {
     setWriteError(null);
     const resp = await client.call('vendor_portal_revoke', {
@@ -186,6 +207,13 @@ export function VendorPortalPanel({ contact, workspaceId }: { contact: Contact; 
             <li key={g.id} className="ct-portal-grant">
               <Status kind={STATUS_KIND[g.status]} label={t(`vendorPortal.status.${g.status}`)} />
               <span className="ct-grant-expiry t-num">{formatDate(g.expiresAt)}</span>
+              {/* D161.2: a restored link waits for a person; the row says so in words. */}
+              {g.status === 'draft' && <span className="ct-field-hint">{t('vendorPortal.status.draftHint')}</span>}
+              {canManage && g.status === 'draft' && (
+                <button type="button" className="btn btn--secondary btn--sm" onClick={() => void activate(g.id)}>
+                  {t('vendorPortal.action.activate')}
+                </button>
+              )}
               {canManage && g.status !== 'revoked' && g.status !== 'expired' && (
                 <button type="button" className="btn btn--ghost btn--sm" onClick={() => void revoke(g.id)}>
                   {t('vendorPortal.action.revoke')}
@@ -195,6 +223,8 @@ export function VendorPortalPanel({ contact, workspaceId }: { contact: Contact; 
           ))}
         </ul>
       )}
+      {/* The engine's own sentence for the activation (D156 one catalogue), shown while a draft waits. */}
+      {canManage && grants.some((g) => g.status === 'draft') && <ConsequenceLine verb="portal_grant_send" />}
 
       {/* "Sichtbar für Lieferant" preview (US-F03.2/3): exactly what the token exposes. */}
       <div className="ct-subsection">

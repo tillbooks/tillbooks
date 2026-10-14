@@ -14,7 +14,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { axe } from 'jest-axe';
 
 import { AccrualEditor } from './AccrualEditor';
-import { parseAmountToMinor, previewAccrualLines } from './accrual-model';
+import { ACCRUAL_KINDS, ACCRUAL_KIND_RULES, bookingLineOf, parseAmountToMinor, previewAccrualLines, previewProvisionLines, type AccrualKind, type PreviewLine } from './accrual-model';
+import { formatDate, formatMoney } from '../../i18n';
 import { TillClient, type Transport, type RestResponse } from '../../lib/client';
 import { TillClientProvider } from '../../lib/client-context';
 import { I18nProvider } from '../../i18n';
@@ -141,10 +142,16 @@ describe('AccrualEditor, five states', () => {
     expect(within(panel).getByRole('status')).toHaveAttribute('aria-busy', 'true');
   });
 
-  it('EMPTY: says no accrual is recorded yet and offers the editor as the first step', async () => {
+  it('EMPTY: one quiet line under the head, and the head is the only way in (D152 rules 3 and 4)', async () => {
     renderEditor({});
-    expect(await screen.findByText('No accrual recorded yet')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'New accrual' }).length).toBeGreaterThan(0);
+    const line = await screen.findByText('No accrual or provision recorded yet.');
+    // One line, one sentence: no title-and-hint empty block, no explainer.
+    expect(line.tagName).toBe('P');
+    expect(line).toHaveClass('accrual-empty');
+    // ONE create per kind: the head's two buttons. The empty state used to add a second "New accrual".
+    expect(screen.getAllByRole('button', { name: 'New accrual' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'New provision' })).toHaveLength(1);
+    expect(screen.queryByText(/Record an accrual or a provision/)).toBeNull();
   });
 
   it('ERROR: shows the banner with a retry that asks the engine again', async () => {
@@ -159,13 +166,13 @@ describe('AccrualEditor, five states', () => {
     });
     const retry = await screen.findByRole('button', { name: 'Try again' });
     fireEvent.click(retry);
-    expect(await screen.findByText('No accrual recorded yet')).toBeInTheDocument();
+    expect(await screen.findByText('No accrual or provision recorded yet.')).toBeInTheDocument();
     expect(calls.filter((c) => c.action === 'accrual_list').length).toBe(2);
   });
 
   it('PERMISSION-DENIED: without `post` the two entry points are disabled and the reason names the right', async () => {
     renderEditor({}, { canPost: false });
-    await screen.findByText('No accrual recorded yet');
+    await screen.findByText('No accrual or provision recorded yet.');
     const newAccrual = screen.getByRole('button', { name: /New accrual/ });
     expect(newAccrual).toBeDisabled();
     expect(screen.getByRole('button', { name: /New provision/ })).toBeDisabled();
@@ -201,27 +208,37 @@ describe('AccrualEditor, the drawer', () => {
         return { status: 200, body: { ok: true, accrual: accrualRow(), lines: [], reversalLines: [] } };
       },
     });
-    await screen.findByText('No accrual recorded yet');
-    await user.click(screen.getAllByRole('button', { name: 'New accrual' })[0] as HTMLElement);
+    await screen.findByText('No accrual or provision recorded yet.');
+    await user.click(screen.getByRole('button', { name: 'New accrual' }));
     const dialog = await screen.findByRole('dialog', { name: 'New accrual' });
 
-    // The kind picker carries the four kinds with an explainer each.
-    expect(within(dialog).getAllByRole('radio')).toHaveLength(4);
+    // The kind picker carries the four kinds, each explainer behind its (i) (D152 rule 4): the
+    // sentence is the (i)'s real tooltip and the radio's description, never a visible line.
+    const radios = within(dialog).getAllByRole('radio');
+    expect(radios).toHaveLength(4);
     // Two of the four kinds are passive and say so (accrued expense, deferred income).
-    expect(within(dialog).getAllByText(/credit 2300/)).toHaveLength(2);
+    const descriptionOf = (el: HTMLElement) => document.getElementById(el.getAttribute('aria-describedby') ?? '')?.textContent ?? '';
+    expect(radios.filter((r) => descriptionOf(r).includes('credit 2300'))).toHaveLength(2);
+    expect(within(dialog).getByRole('radio', { name: 'Accrued expense' })).toHaveAccessibleDescription(/You consumed, but the bill arrives in the next period \(credit 2300\)\./);
+    const info = within(dialog).getByRole('button', { name: 'What does “Prepaid expense” mean?' });
+    expect(info).toHaveAccessibleDescription('You paid, but the service belongs to the next period (debit 1300).');
+    // At rest no explainer is on screen: the tooltip is closed and the radio's copy is hidden.
+    for (const tip of within(dialog).getAllByRole('tooltip', { hidden: true })) expect(tip).not.toHaveClass('is-open');
+    await user.hover(info);
+    expect(within(dialog).getAllByRole('tooltip', { hidden: true }).filter((tip) => tip.classList.contains('is-open'))).toHaveLength(1);
+    await user.unhover(info);
+    // The (i) buttons, the hidden copies and the radios they describe pass axe inside the open drawer.
+    expect(await axe(dialog)).toHaveNoViolations();
 
     await user.type(within(dialog).getByLabelText(/Amount/), "1'800.50");
     await waitFor(() => expect(within(dialog).getByLabelText(/Contra account/)).not.toBeDisabled());
     await chooseOption(user, within(dialog).getByLabelText(/Contra account/), idOf('6500'));
     await user.type(within(dialog).getByLabelText('Description'), 'Strom Juni');
 
-    // The live preview: the two lines at period end and the two reversal lines the day after.
+    // The live booking, in ONE line (D152 rule 4): no table, the period-end booking and its reversal date.
     const preview = within(dialog).getByTestId('accrual-preview');
-    const tables = within(preview).getAllByRole('table');
-    expect(tables).toHaveLength(2);
-    expect(within(tables[0] as HTMLElement).getByText(/6500 Verwaltungs/)).toBeInTheDocument();
-    expect(within(tables[0] as HTMLElement).getByText(/2300 Passive/)).toBeInTheDocument();
-    expect(within(tables[1] as HTMLElement).getByText(/Reversal on/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('table')).toBeNull();
+    expect(preview.textContent).toBe("Posts on 30.06.2026: 6500 Verwaltungs- und Bürokosten to 2300 Passive Rechnungsabgrenzung · CHF 1'800.50 · Reversal on 01.07.2026");
 
     await user.click(within(dialog).getByRole('button', { name: 'Save draft' }));
     const create = await waitFor(() => {
@@ -249,7 +266,7 @@ describe('AccrualEditor, the drawer', () => {
     renderEditor({
       accrual_create: { status: 200, body: { ok: false, error: 'invalid_account', reason: 'kind_account_type_mismatch' } },
     });
-    await screen.findByText('No accrual recorded yet');
+    await screen.findByText('No accrual or provision recorded yet.');
     await user.click(screen.getAllByRole('button', { name: 'New accrual' })[0] as HTMLElement);
     const dialog = await screen.findByRole('dialog', { name: 'New accrual' });
     await user.type(within(dialog).getByLabelText(/Amount/), '100');
@@ -268,18 +285,22 @@ describe('AccrualEditor, the drawer', () => {
     const { calls } = renderEditor({
       provision_create: { status: 200, body: { ok: true, provision: {}, lines: [] } },
     });
-    await screen.findByText('No accrual recorded yet');
+    await screen.findByText('No accrual or provision recorded yet.');
     await user.click(screen.getByRole('button', { name: /New provision/ }));
     const dialog = await screen.findByRole('dialog', { name: 'New provision' });
     const reason = within(dialog).getByRole('combobox', { name: /Reason/ });
     await user.click(reason);
     expect(within(screen.getByRole('listbox', { name: /Reason/ })).getAllByRole('option')).toHaveLength(8);
     await user.click(screen.getByRole('option', { name: 'Litigation' }));
-    expect(within(dialog).getByText(/Pending proceedings/)).toBeInTheDocument();
+    // The reason's explainer sits behind its (i) and describes the picker; it is not a visible line.
+    expect(within(dialog).getByRole('combobox', { name: /Reason/ })).toHaveAccessibleDescription('Pending proceedings expected to cost money.');
+    expect(within(dialog).getByRole('button', { name: 'What does “Litigation” mean?' })).toHaveAccessibleDescription('Pending proceedings expected to cost money.');
     await user.type(within(dialog).getByLabelText(/Amount/), '5000');
     await waitFor(() => expect(within(dialog).getByLabelText(/Expense account/)).not.toBeDisabled());
     await chooseOption(user, within(dialog).getByLabelText(/Expense account/), idOf('6800'));
     await user.type(within(dialog).getByLabelText('Description'), 'Streitfall Lieferant');
+    // A provision has no reversal, so its one line carries none.
+    expect(within(dialog).getByTestId('accrual-preview')).toHaveTextContent(/^Posts on 30\.06\.2026: 6800 .+ to 2330 .+ · CHF 5'000\.00$/);
     await user.click(within(dialog).getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(calls.some((c) => c.action === 'provision_create')).toBe(true));
     const create = calls.find((c) => c.action === 'provision_create') as { input: Record<string, unknown> };
@@ -291,6 +312,98 @@ describe('AccrualEditor, the drawer', () => {
       expenseAccount: idOf('6800'),
       description: 'Streitfall Lieferant',
     });
+  });
+});
+
+/**
+ * D152 rule 4 (cognitive-load pass B3): the drawer's "Entry at period end" table became ONE line. The
+ * line must state EXACTLY what the table stated, so each case below rebuilds the old table's cells
+ * from the very source the table rendered (`previewAccrualLines` over the recorded chart, the account
+ * cell as "number name" or "Pick an account", money only where the side carries a figure, the date
+ * through formatDate, the reversal table captioned "Reversal on {day after}") and derives the sentence
+ * from those CELLS, independently of `bookingLineOf`. Then the rendered line has to match it.
+ */
+describe('AccrualEditor, the one-line booking (D152)', () => {
+  const PERIOD_END = '2026-06-30';
+  const recorded = (number: string) => {
+    const row = listAccountsFixture.accounts.find((a) => a.number === number);
+    if (row === undefined) throw new Error(`the recorded chart has no account ${number}`);
+    return row;
+  };
+  /** The first contra the drawer's picker offers for a kind: the chart's first live account of the rule's type. */
+  const firstContra = (kind: AccrualKind) =>
+    [...listAccountsFixture.accounts]
+      .filter((a) => a.type === ACCRUAL_KIND_RULES[kind].contraType && a.archived !== true)
+      .sort((a, b) => (a.number < b.number ? -1 : 1))[0] as (typeof listAccountsFixture.accounts)[number];
+
+  /** The old table's cells, exactly as `renderLines` printed them. */
+  const cells = (lines: PreviewLine[]) =>
+    lines.map((l) => ({
+      account: l.accountNumber === '' ? 'Pick an account' : `${l.accountNumber} ${l.accountName}`,
+      debit: l.debitMinor > 0 ? formatMoney(l.debitMinor, 'CHF') : '',
+      credit: l.creditMinor > 0 ? formatMoney(l.creditMinor, 'CHF') : '',
+      date: formatDate(l.date),
+    }));
+
+  /** The sentence the old table's cells say: the Soll row, the Haben row, the one figure, the reversal date. */
+  function sentenceOfTable(kind: AccrualKind, amountMinor: number, contra: { number: string; name: string } | null): string {
+    const balanceNumber = ACCRUAL_KIND_RULES[kind].balanceNumber;
+    const { lines, reversalLines } = previewAccrualLines(kind, amountMinor, contra === null ? null : { ...recorded(contra.number), archived: false }, { ...recorded(balanceNumber), archived: false }, PERIOD_END);
+    const table = cells(lines);
+    const reversal = cells(reversalLines);
+    // What the table showed: one date, two rows, the same figure once as Soll and once as Haben.
+    expect(new Set(table.map((r) => r.date)).size).toBe(1);
+    const sollRow = amountMinor > 0 ? table.find((r) => r.debit !== '') : table[0];
+    const habenRow = amountMinor > 0 ? table.find((r) => r.credit !== '') : table[1];
+    if (sollRow === undefined || habenRow === undefined) throw new Error('the table had no Soll or Haben row');
+    expect(sollRow.debit).toBe(habenRow.credit);
+    // The reversal table was the mirror, dated the day after: the line says it as "Reversal on {date}".
+    expect(reversal.map((r) => [r.account, r.debit, r.credit])).toEqual(table.map((r) => [r.account, r.credit, r.debit]));
+    const reversalDate = reversal[0]?.date as string;
+    expect(reversal.every((r) => r.date === reversalDate)).toBe(true);
+    const figure = sollRow.debit === '' ? '' : ` · ${sollRow.debit}`;
+    return `Posts on ${table[0]?.date}: ${sollRow.account} to ${habenRow.account}${figure} · Reversal on ${reversalDate}`;
+  }
+
+  for (const kind of ACCRUAL_KINDS) {
+    it(`${kind}: the line states exactly what the table stated, before and after the amount and the account`, async () => {
+      const user = userEvent.setup();
+      renderEditor({});
+      await screen.findByText('No accrual or provision recorded yet.');
+      await user.click(screen.getByRole('button', { name: 'New accrual' }));
+      const dialog = await screen.findByRole('dialog', { name: 'New accrual' });
+      await user.click(within(dialog).getAllByRole('radio')[ACCRUAL_KINDS.indexOf(kind)] as HTMLElement);
+      const line = within(dialog).getByTestId('accrual-preview');
+      // At rest: no amount, no contra. The table showed "Pick an account" and blank money cells.
+      expect(line.textContent).toBe(sentenceOfTable(kind, 0, null));
+      // Filled: an amount with Rappen and the picker's first contra of the kind's type.
+      await user.type(within(dialog).getByLabelText(/Amount/), "1'234.55");
+      await waitFor(() => expect(within(dialog).getByLabelText(/Contra account/)).not.toBeDisabled());
+      const contra = firstContra(kind);
+      await chooseOption(user, within(dialog).getByLabelText(/Contra account/), contra.id);
+      const expected = sentenceOfTable(kind, 123455, contra);
+      expect(line.textContent).toBe(expected);
+      // And the pure helper reads the same lines the same way (Soll, Haben, figure, reversal date).
+      const { lines, reversalLines } = previewAccrualLines(kind, 123455, { ...contra, archived: false }, { ...recorded(ACCRUAL_KIND_RULES[kind].balanceNumber), archived: false }, PERIOD_END);
+      const b = bookingLineOf(lines, reversalLines);
+      expect(b?.amountMinor).toBe(123455);
+      expect(b?.date).toBe(PERIOD_END);
+      expect(b?.reversalDate).toBe('2026-07-01');
+      expect(ACCRUAL_KIND_RULES[kind].balanceSide === 'debit' ? b?.debit.accountNumber : b?.credit.accountNumber).toBe(ACCRUAL_KIND_RULES[kind].balanceNumber);
+    });
+  }
+
+  it('a provision states its formation booking (Soll expense, Haben provision) with no reversal', () => {
+    const expense = { ...recorded('6800'), archived: false };
+    const provision = { ...recorded('2330'), archived: false };
+    const lines = previewProvisionLines(500000, provision, expense, PERIOD_END);
+    const table = cells(lines);
+    const b = bookingLineOf(lines, []);
+    expect(b).not.toBeNull();
+    expect(`${b?.debit.accountNumber} ${b?.debit.accountName}`).toBe(table.find((r) => r.debit !== '')?.account);
+    expect(`${b?.credit.accountNumber} ${b?.credit.accountName}`).toBe(table.find((r) => r.credit !== '')?.account);
+    expect(formatMoney(b?.amountMinor ?? 0, 'CHF')).toBe(table[0]?.debit);
+    expect(b?.reversalDate).toBeNull();
   });
 });
 

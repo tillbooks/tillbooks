@@ -28,6 +28,7 @@ import { fixedClock } from '../../dist/core/clock.js';
 import { sequenceIdGen } from '../../dist/core/ids.js';
 import { createWorkspace } from '../../dist/core/setup/index.js';
 import { lockPeriod, ledgerPorts } from '../../dist/core/ledger/index.js';
+import { lockPeriodSealed } from '../../dist/core/ledger/periods.js';
 import {
   createAssetCategory,
   createAsset,
@@ -309,7 +310,7 @@ test('a foreign workspace can neither dispose the asset nor read its disposal, a
 test('a disposal dated in a hard-locked period is refused and writes NOTHING', () => {
   const { ctx, store, workspaceId, acc, activeAsset } = setup();
   const id = activeAsset(1_200_000);
-  const sealed = lockPeriod(ctx, { period: '2026-07', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'lk' });
+  const sealed = lockPeriodSealed(ctx, { period: '2026-07', reason: 'vat_filed', idempotencyKey: 'lk' });
   assert.equal(sealed.ok, true, JSON.stringify(sealed));
   const before = journalCount(store, workspaceId);
   const r = dispose(ctx, id, acc, { disposalDate: '2026-07-15' });

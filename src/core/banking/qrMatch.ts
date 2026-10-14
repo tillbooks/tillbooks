@@ -1204,17 +1204,29 @@ export function overrideQrMatch(ctx: WorkspaceContext, input: OverrideQrMatchInp
         )
         .run(input.invoiceId, ctx.actor, now, ctx.workspaceId, row.id);
       if (wasApplied) {
-        const reapplied = applyQrMatch(ctx, {
-          creditId: row.id,
-          invoiceId: input.invoiceId as string,
-          mode: 'partial',
-          confirmed: true,
-          idempotencyKey: `override-reapply-${input.idempotencyKey as string}`,
-        });
+        // K1: the re-apply key is DERIVED from the override's own, so it runs in the override's own
+        // idempotency scope: an `apply_qr_match` made first on this credit under `override-reapply-K`
+        // used to be replayed here, and the override answered ok over an application the reversal
+        // above had just undone.
+        const reapplied = ctx.store.innerWrite('override_qr_match', () =>
+          applyQrMatch(ctx, {
+            creditId: row.id,
+            invoiceId: input.invoiceId as string,
+            mode: 'partial',
+            confirmed: true,
+            idempotencyKey: `override-reapply-${input.idempotencyKey as string}`,
+          }),
+        );
         // A failed re-apply rolls the WHOLE override back, reversal included: a half-done override
         // (money reversed, nothing re-applied) is worse than a refused one, and the caller can
         // still choose `unmatch` explicitly to reverse without a target.
         if (!reapplied.ok) throw new QrAbort(reapplied);
+        // ...and the re-application is READ BACK: the credit is applied, to the invoice named here, on a
+        // payment that is not one the override reversed.
+        const after = readCreditRow(ctx, row.id) as CreditRow;
+        if (after.status !== 'applied' || after.invoice_id !== input.invoiceId || after.payment_id === null || after.payment_id === reversedPaymentId) {
+          throw new QrAbort(err('inner_write_not_own', { composite: 'override_qr_match', inner: 'apply_qr_match', creditId: row.id, invoiceId: input.invoiceId }));
+        }
       }
     }
 

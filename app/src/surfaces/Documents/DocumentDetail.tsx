@@ -36,7 +36,9 @@ import { LinkedFiles } from '../Files/LinkedFiles';
 import {
   documentActions,
   documentStatusKind,
+  effectiveSupplyDate,
   idemKey,
+  isPosted,
   postedBaseFigures,
   statusKey,
   typeKey,
@@ -172,6 +174,11 @@ export function DocumentDetail({ justIssued = false, sendOutcome = null }: { jus
   const [actionErr, setActionErr] = useState<Err | null>(null);
   const [confirm, setConfirm] = useState<DocumentAction | null>(null);
   const [lineVats, setLineVats] = useState<Record<number, LineVat>>({});
+  // The posted-figure check below must not judge a half-loaded breakdown.
+  // The lines every preview has answered for. Derived against the CURRENT lines, so a new set of
+  // lines is "loading" from its very first render, never one frame late.
+  const [vatLoadedFor, setVatLoadedFor] = useState<DocumentLine[] | null>(null);
+  const vatLoaded = vatLoadedFor === lines;
   const [busy, setBusy] = useState(false);
   const [showPdf, setShowPdf] = useState(false);
   const [showSend, setShowSend] = useState(false);
@@ -235,8 +242,17 @@ export function DocumentDetail({ justIssued = false, sendOutcome = null }: { jus
 
   // The VAT summary is computed live from the lines' codes (the same vat_preview code path), so an
   // issued document shows its per-rate breakdown even though A10 stores no tax on the document row.
+  //
+  // Each line is priced through `effectiveSupplyDate`, the Studio twin of the engine's `lineSupplyDate`
+  // (D164): the line's own date (a derived Gutschrift carries the credited invoice's, so a 2023 credit
+  // is 7.7%, not 8.1%), else the document-level Leistungsdatum, else the issue date.
   useEffect(() => {
-    if (workspaceId === null || lines.length === 0) return;
+    if (workspaceId === null) return;
+    // A document with no lines has nothing to preview: its (empty) breakdown is settled at once.
+    if (lines.length === 0) {
+      setVatLoadedFor(lines);
+      return;
+    }
     let live = true;
     async function run() {
       const results: Record<number, LineVat> = {};
@@ -249,12 +265,15 @@ export function DocumentDetail({ justIssued = false, sendOutcome = null }: { jus
             amountMinor: amount,
             amountIsGross: false,
             taxCode: l.taxCode,
-            supplyDate: doc?.issueDate ?? undefined,
+            supplyDate: effectiveSupplyDate(l, doc ?? {}, doc?.issueDate ?? null) ?? undefined,
           });
           results[i] = body as LineVat;
         }),
       );
-      if (live) setLineVats(results);
+      if (live) {
+        setLineVats(results);
+        setVatLoadedFor(lines);
+      }
     }
     void run();
     return () => {
@@ -673,7 +692,25 @@ export function DocumentDetail({ justIssued = false, sendOutcome = null }: { jus
           M11 panel above prints it, off `baseTaxMinor`, derived by the engine from the posted rows.
           It stays out of this panel because `vat_preview` has no franc answer to give, and the only
           way to put one here would be to multiply `fx.fxRate` out, which is the forbidden move. */}
-      <VatSummary summary={vatSummary} currency={doc.currency} />
+      {/* A POSTED document's tax is a stored fact (`taxMinor`, persisted by the issue in the same
+          transaction as the posting). The per-rate breakdown is shown only when the previews add up
+          to exactly that figure; if they do not (a code or rate changed since, a lost preview), the
+          panel states the posted figure instead of a breakdown the books do not hold. */}
+      {/* `data-vat-state` says whether every line's preview has answered: the tests settle on it,
+          because the posted-figure line stands from the first paint and is no sign of a settled panel. */}
+      <div className="documents-detail-vat" data-vat-state={vatLoaded ? 'settled' : 'loading'}>
+        {(() => {
+          if (!isPosted(doc)) return <VatSummary summary={vatSummary} currency={doc.currency} />;
+          // Until the breakdown is in and confirmed, the stored figure stands: never a gap, never a
+          // half-loaded breakdown.
+          const posted = <p className="documents-detail-vat-posted">{t('document.detail.vatPosted', { tax: formatMoney(doc.taxMinor, doc.currency) })}</p>;
+          if (!vatLoaded) return posted;
+          const complete = lines.every(
+            (l, i) => l.taxCode === null || l.taxCode === undefined || l.taxCode === '' || (l.lineTotalMinor ?? 0) <= 0 || lineVats[i]?.ok === true,
+          );
+          return complete && vatSummary.totalTaxMinor === doc.taxMinor ? <VatSummary summary={vatSummary} currency={doc.currency} /> : posted;
+        })()}
+      </div>
 
       {hasInvoiceArtifacts(doc) && <QrPanel doc={doc} qr={qr} />}
 

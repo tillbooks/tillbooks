@@ -129,3 +129,21 @@ test('G02 sandbox: the plugins engine reaches no posting path or network transpo
     }
   }
 });
+
+test('round-4 critic N1: a book-keyed dial rule (dispatch_text_reset) is refused on the plugin bridge, which holds no book', () => {
+  let invoked = false;
+  const invoke = () => {
+    invoked = true;
+    return { ok: true };
+  };
+  const res = runPluginToolCall(invoke, {
+    grantedScopes: ['mcp_tool:dispatch_text_reset'],
+    pluginActor: 'installer',
+    tool: 'dispatch_text_reset',
+    input: { workspaceId: 'ws_1', documentKind: 'quote', locale: 'fr-CH' },
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'capability_forbidden');
+  assert.equal(res.reason ?? res.detail?.reason ?? res.details?.reason, 'needs_a_person');
+  assert.equal(invoked, false, 'a plugin reached a verb whose governed branch only the book can decide');
+});

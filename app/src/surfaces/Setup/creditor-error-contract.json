@@ -5,6 +5,9 @@
     "invalid_name": "company.err.invalidName",
     "needs_structured_address": "company.err.needsStructuredAddress",
     "invalid_iban": "company.err.invalidIban",
-    "illegal_character": "company.err.illegalCharacter"
+    "illegal_character": "company.err.illegalCharacter",
+    "invalid_country": "company.err.invalidCountry",
+    "field_too_long": "company.err.fieldTooLong",
+    "iban_not_ch_li": "company.err.ibanNotChLi"
   }
 }

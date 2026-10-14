@@ -142,7 +142,7 @@ export function SendDialog({ doc, customerEmail, onSent, onCancel, onOpenPdf }: 
           {t('invoice.send.attachment')}: {fileName}
         </p>
         {/* C4 (D118): the ONE consequence sentence for the send. `send_invoice` carries the `send`
-            dial capability, so this resolves to the same `agent.consequence.send` string an approver
+            dial capability, so this resolves to the same engine consequence (D156) an approver
             sees on the agent's proposal: one source, two faces. It is quiet by law, and renders
             nothing if the verb ever loses its dial capability. */}
         <ConsequenceLine verb="send_invoice" />

@@ -15,9 +15,21 @@
     "vendor": "Lieferant",
     "billDate": "Rechnungsdatum",
     "dueDate": "Fällig",
-    "vendorReference": "Rechnungsnummer des Lieferanten",
+    "due": {
+      "info": "Woher das Fälligkeitsdatum kommt",
+      "fromTerms": "Aus der Zahlungsfrist des Lieferanten: {days} Tage ab Rechnungsdatum.",
+      "noTerms": "Weder der Lieferant noch das Firmenprofil nennt eine Zahlungsfrist, darum ist die Rechnung am Rechnungsdatum fällig.",
+      "blankFromTerms": "Leer lassen: fällig am {date} aus der Zahlungsfrist.",
+      "blankBillDate": "Leer lassen: fällig am {date}, dem Rechnungsdatum.",
+      "immediate": "Der Lieferant verlangt Zahlung sofort, darum ist die Rechnung am Rechnungsdatum fällig.",
+      "fromDefault": "Der Lieferant hat keine eigene Zahlungsfrist, darum gilt die Standard-Zahlungsfrist aus dem Firmenprofil: {days} Tage ab Rechnungsdatum.",
+      "defaultImmediate": "Der Lieferant hat keine eigene Zahlungsfrist, und die Standard-Zahlungsfrist im Firmenprofil ist sofort: fällig am Rechnungsdatum.",
+      "blankFromDefault": "Leer lassen: fällig am {date} aus der Standard-Zahlungsfrist."
+    },
+    "vendorReference": "Rechnungsnummer",
     "net": "Netto",
     "gross": "Brutto",
+    "amount": "Betrag",
     "vat": "MWST",
     "amountIs": "Der Betrag ist",
     "vatCode": "Vorsteuer",
@@ -29,6 +41,9 @@
     "noCostCenter": "Keine",
     "project": "Projekt",
     "noProject": "Keines",
+    "addCostCenter": "Kostenstelle",
+    "addProject": "Projekt",
+    "addReceipt": "Beleg",
     "receipt": "Beleg (Referenz)",
     "post": "Buchen",
     "saveDraft": "Als Entwurf speichern",
@@ -47,6 +62,7 @@
     "rowActionsFor": "Aktionen für {row}",
     "column": {
       "reference": "Nummer",
+      "billDate": "Datum",
       "gross": "Brutto",
       "open": "Offen",
       "status": "Status"
@@ -59,13 +75,15 @@
       "void": "Storniert"
     },
     "frozen": {
-      "posted": "Diese Rechnung ist gebucht. Gebuchtes wird nie überschrieben: korrigiere sie mit einer Storno-Buchung. Den Beleg kannst du weiterhin nachtragen.",
-      "void": "Diese Rechnung ist storniert. Die Storno-Buchung steht im Journal."
+      "draft": "Entwurf: Buchen bucht genau diese Angaben.",
+      "posted": "Gebucht: nur der Beleg lässt sich noch nachtragen.",
+      "void": "Storniert, die Storno-Buchung steht im Journal.",
+      "info": "Warum die Rechnung gesperrt ist",
+      "postedWhy": "Gebuchtes wird nie überschrieben: korrigiere die Rechnung mit einer Storno-Buchung."
     },
     "preview": {
-      "title": "Was gebucht wird",
-      "none": "Trage einen Betrag ein, dann zeigt TILL hier die Aufteilung.",
-      "saldo": "Mit der Saldosteuersatz-Methode ist die Vorsteuer schon im Satz enthalten (MWSTG Art. 37), darum wird der ganze Betrag als Aufwand gebucht und nichts separat zurückgefordert."
+      "saldo": "Mit der Saldosteuersatz-Methode ist die Vorsteuer schon im Satz enthalten (MWSTG Art. 37), darum wird der ganze Betrag als Aufwand gebucht und nichts separat zurückgefordert.",
+      "saldoInfo": "Warum keine Vorsteuer"
     },
     "needsVendor": {
       "body": "Du hast noch keinen Lieferanten erfasst.",
@@ -77,6 +95,8 @@
       "vendorById": "Lieferant {id}"
     },
     "reconciliation": {
+      "short": "Abweichung zu Konto 2000: {difference}",
+      "info": "Was die Abweichung bedeutet",
       "mismatch": "Die Liste und das Konto 2000 Kreditoren weichen um {difference} ab: Liste {list}, Konto {ledger}.",
       "hint": "TILL rechnet beides unabhängig aus. Eine Abweichung heisst, dass auf 2000 etwas gebucht wurde, das nicht aus einer Kreditorenrechnung kommt."
     },
@@ -108,7 +128,11 @@
       "permissionDenied": {
         "write": "Dazu fehlt dir die Berechtigung Buchen.",
         "read": "Dazu fehlt dir die Berechtigung, die Bücher zu lesen."
-      }
+      },
+      "alreadyCaptured": "Diese Rechnung ist schon erfasst."
+    },
+    "conflict": {
+      "open": "Öffnen"
     }
   },
   "help": {

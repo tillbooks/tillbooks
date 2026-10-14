@@ -342,7 +342,7 @@ export function Migration(): React.ReactElement {
     await load();
   }
 
-  // K-18: abandon a plan (US-G09.6). Destructive and money-path-adjacent: it discards the Testmandant,
+  // K-18: abandon a plan (US-G09.6). Destructive and money-path-adjacent: it deletes a Testmandant still in trial,
   // so it is gated behind the confirm sub-state above and calls the engine with confirmed:true. Belege
   // for any step that reached live are retained by the engine, never deleted. After abandoning, fall
   // back to the first remaining plan.

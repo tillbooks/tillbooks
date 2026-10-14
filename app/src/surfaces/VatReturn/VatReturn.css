@@ -27,49 +27,69 @@
  * bespoke head/title/subtitle/actions rules this surface once carried are gone. `.vr-picker-pop`
  * still positions `right: 0` against its trigger inside the primitive's right-pinned slot. */
 
-/* --- the active period ----------------------------------------------------------------------
- * The period stated large at the top of the body, so the operator always knows which filing period
- * is on screen. No accent fill: prominence comes from type size and space (one accent, depth from
- * the step and the gap, not a box). */
+/* --- the one-line rest states (D152) ----------------------------------------------------------
+ * The journey, the Abstimmung and the filed state each rest as ONE line: a glyph where a state needs
+ * one, the words, an (i) whose card holds the sentence, and a chevron where there is more to open. The
+ * 32px icon targets (the D116 dense floor) overhang the line rather than growing it, the way the
+ * Offene Posten mismatch line does it. No box and no tinted ground: the warn colour is spent on the
+ * glyph alone, and the word "ungeklärt" carries the state for a reader who cannot see it. */
 
-.vr-period {
-  margin-top: var(--t-space-2);
-}
-
-.vr-period-eyebrow {
-  margin: 0;
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  color: var(--t-text-dim);
-}
-
-.vr-period-title {
-  margin: var(--t-space-0-5) 0 0;
-  font-size: var(--t-font-2xl);
-  line-height: var(--t-lh-2xl);
-  font-variant-numeric: tabular-nums;
-}
-
-.vr-period-meta {
+.vr-steps-line,
+.vr-recon-line,
+.vr-filed {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--t-space-0-5) var(--t-space-2);
-  margin: var(--t-space-0-5) 0 0;
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}
-
-.vr-period-range {
-  font-variant-numeric: tabular-nums;
-}
-
-/* The status is a WORD, and a filed period carries a lock glyph beside it. Never colour alone. */
-.vr-period-status {
-  display: inline-flex;
   align-items: center;
   gap: var(--t-space-0-5);
+  margin: var(--t-space-2) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.vr-steps-line .btn--icon,
+.vr-recon-line .btn--icon,
+.vr-filed .btn--icon {
+  margin-block: calc(var(--t-space-0-5) * -1.5);
+  color: var(--t-text-dim);
+}
+
+/* A step sentence is two sentences: wider than the 240px default so it reads in three lines. */
+.vr-steps-info .tooltip,
+.vr-recon-info .tooltip,
+.vr-filed-info .tooltip {
+  max-width: 360px;
+}
+
+.vr-steps-glyph,
+.vr-recon-glyph {
+  flex: none;
+}
+
+/* On a phone the words wrap INSIDE their own box, so the glyph stays at the start of the line and the
+   (i) and the chevron stay beside the words rather than dropping onto lines of their own. */
+.vr-steps-words,
+.vr-recon-verdict,
+.vr-filed-title {
+  min-width: 0;
+}
+
+/* "Periode läuft noch" is a state beside the step, in dim ink (never faint, K-36). */
+.vr-steps-running {
+  color: var(--t-text-dim);
+}
+
+.vr-steps-running::before {
+  content: '·';
+  margin-right: var(--t-space-0-5);
+}
+
+.vr-steps-toggle--on .vr-chevron,
+.vr-recon-toggle--on .vr-chevron {
+  transform: rotate(90deg);
+}
+
+.vr-steps-more[hidden],
+.vr-recon-body[hidden] {
+  display: none;
 }
 
 /* --- the journey strip ---------------------------------------------------------------------- */
@@ -132,13 +152,6 @@
   flex: 0 0 auto;
 }
 
-.vr-journey-note {
-  margin: var(--t-space-1) 0 0;
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  color: var(--t-text-dim);
-}
-
 /* --- the payable strip ---------------------------------------------------------------------- */
 
 .vr-payable {
@@ -164,60 +177,25 @@
 
 /* --- the Abstimmung ------------------------------------------------------------------------- */
 
-.vr-recon {
-  margin-top: var(--t-space-2);
-  padding: var(--t-space-2);
-}
-
 /* The warn state. Colour is never alone: the glyph and the word "ungeklärt" carry it too. */
-.vr-recon--warn {
-  border-color: var(--t-warn);
-}
-
 .vr-recon--warn .vr-recon-glyph {
   color: var(--t-warn);
 }
 
-.vr-recon-head {
-  display: flex;
-  align-items: center;
-  gap: var(--t-space-1);
-}
-
-/* A disclosure button: transparent border rather than none, so the focus ring has a box (K-10). */
-.vr-recon-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--t-space-0-5);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--t-radius-sm);
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.vr-recon-verdict {
-  margin: 0;
-}
-
 /* The unexplained remainder inside the verdict sentence is `.t-money` (nowrap, tabular), at the size
    of the sentence around it rather than the table size. */
-.vr-recon-toggle .t-money,
 .vr-recon-verdict .t-money {
   font-size: inherit;
 }
 
-.vr-recon-note {
-  margin: var(--t-space-1) 0 0;
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
+/* What the chevron opens: the arithmetic and the door into the entries, in a panel under the line. */
+.vr-recon-body {
+  margin-top: var(--t-space-1);
+  padding: var(--t-space-2);
 }
 
-.vr-recon-body {
-  margin-top: var(--t-space-2);
+.vr-recon-body > .btn {
+  margin-top: var(--t-space-1);
 }
 
 .vr-recon-group {
@@ -489,30 +467,17 @@
   color: var(--t-text-dim);
 }
 
-/* --- the filed banner ----------------------------------------------------------------------- */
-
-.vr-filed {
-  margin-top: var(--t-space-2);
-  padding: var(--t-space-2);
-  display: flex;
-  gap: var(--t-space-1);
-}
+/* --- the filed line --------------------------------------------------------------------------
+ * One line under the header (D152): the lock glyph in dim ink and the fact in words. Its layout is
+ * the shared one-line rule above; the two sentences behind it are in its (i). */
 
 .vr-filed-glyph {
-  flex: 0 0 auto;
+  flex: none;
   color: var(--t-text-dim);
 }
 
 .vr-filed-title {
-  margin: 0;
   font-weight: 500;
-}
-
-.vr-filed-body {
-  margin: var(--t-space-0-5) 0 0;
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
 }
 
 /* --- S7, the export outcome ------------------------------------------------------------------

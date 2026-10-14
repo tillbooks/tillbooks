@@ -2,16 +2,19 @@
 
 ## Supported versions
 
-TILL is pre-alpha. There is no support window yet, and there are no releases to back-port to.
-Security fixes land on `develop`. Run current code, and do not run TILL against books you cannot
-afford to lose.
+TILL is in public beta. Only the latest release gets security fixes; there are no back-ports to
+older versions. Update to the newest release, and take a backup before you do. While TILL is a beta,
+keep your previous system running until TILL's figures match it (see
+[DISCLAIMER.md](DISCLAIMER.md)).
 
 ## Reporting a vulnerability
 
 Report security issues privately. Do not open a public issue for a vulnerability.
 
 - Email **security@tillbooks.ch**.
-- Once the repository is public you can also open a private security advisory on GitHub.
+
+<!-- TODO(owner): private vulnerability reporting is switched off on tillbooks/tillbooks. Once it is
+     on, add: "or open a private security advisory on GitHub". -->
 
 Tell us what you found, how to reproduce it, and what an attacker gets out of it. A proof of concept
 helps. You will get an acknowledgement, and we will tell you honestly whether and when we can fix it.

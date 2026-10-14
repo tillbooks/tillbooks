@@ -1,10 +1,10 @@
 {
   "nav": {
-    "reportBuilder": "Berichte"
+    "reportBuilder": "Berichtsgenerator"
   },
   "reportBuilder": {
-    "route": { "title": "Berichte" },
-    "tab": { "title": "Berichte" },
+    "route": { "title": "Berichtsgenerator" },
+    "tab": { "title": "Berichtsgenerator" },
     "denied": "Du hast keine Berechtigung, Berichte zu sehen.",
     "empty": "Noch keine Berichte.",
     "emptyHint": "Ein Bericht fasst Daten aus einer Quelle zusammen und läuft als CSV oder PDF.",
@@ -62,7 +62,7 @@
   },
   "help": {
     "ReportBuilder": {
-      "title": "Berichte",
+      "title": "Berichtsgenerator",
       "body": "Eigene Berichte über deine Daten: Du wählst eine Quelle, Spalten, Filter und Sortierung und speicherst das Ganze als Bericht. Ein Lauf hängt sein Ergebnis samt Zeilenzahl an den Verlauf an; heruntergeladen wird, was der Lauf ergab. Zeitpläne mit Zustellung sind eine Cloud-Funktion und sind so gekennzeichnet.",
       "concepts": [],
       "docsPath": "introduction"

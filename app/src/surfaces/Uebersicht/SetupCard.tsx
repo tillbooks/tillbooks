@@ -44,13 +44,37 @@ import './SetupCard.css';
 export interface SetupDone {
   profile: boolean;
   vat: boolean;
+  accounts: boolean;
+  contacts: boolean;
+  items: boolean;
+  invoice: boolean;
 }
 
-export function setupDoneFrom(profile: { legalForm?: string | null; creditorIban?: string | null; vatMethod?: string | null } | null): SetupDone {
+/** Nothing is known to be done: the state before any read answered, and after a failed one. */
+export const NOTHING_DONE: SetupDone = { profile: false, vat: false, accounts: false, contacts: false, items: false, invoice: false };
+
+export function setupDoneFrom(profile: { legalForm?: string | null; creditorIban?: string | null; vatMethod?: string | null } | null): Pick<SetupDone, 'profile' | 'vat'> {
   if (profile === null) return { profile: false, vat: false };
   return {
     profile: typeof profile.legalForm === 'string' && typeof profile.creditorIban === 'string' && profile.creditorIban.length > 0,
     vat: typeof profile.vatMethod === 'string',
+  };
+}
+
+/**
+ * P0.4d: the other four steps tick from what the BOOKS hold, read off `get_onboarding_progress`'s
+ * `firstSteps` (the engine's four EXISTS probes), never off where the person clicked. A customer
+ * created inline while writing the first invoice is a contact like any other, so it ticks
+ * "Ersten Kontakt anlegen"; the seeded KMU chart ticks "Kontenplan prüfen". A missing or malformed
+ * answer ticks nothing: unknown is not done.
+ */
+export function firstStepsDoneFrom(firstSteps: unknown): Pick<SetupDone, 'accounts' | 'contacts' | 'items' | 'invoice'> {
+  const f = (typeof firstSteps === 'object' && firstSteps !== null ? firstSteps : {}) as Record<string, unknown>;
+  return {
+    accounts: f.chart === true,
+    contacts: f.contact === true,
+    items: f.item === true,
+    invoice: f.invoice === true,
   };
 }
 
@@ -103,13 +127,13 @@ export function workspaceHasData(tiles: readonly DashboardTileView[]): boolean {
 /** One setup step: the surface it links to and the message key for its label. The order is the
  *  natural setup sequence: identify the company, then its tax basis, then the accounts those postings
  *  land in, then the master data (contacts, items) a first document needs, then that first document. */
-const SETUP_STEPS: readonly { to: string; labelKey: string; done?: keyof SetupDone }[] = [
+const SETUP_STEPS: readonly { to: string; labelKey: string; done: keyof SetupDone }[] = [
   { to: '/setup', labelKey: 'dashboard.setup.step.profile', done: 'profile' },
   { to: '/vat', labelKey: 'dashboard.setup.step.vat', done: 'vat' },
-  { to: '/accounts', labelKey: 'dashboard.setup.step.accounts' },
-  { to: '/contacts', labelKey: 'dashboard.setup.step.contacts' },
-  { to: '/items', labelKey: 'dashboard.setup.step.items' },
-  { to: '/documents', labelKey: 'dashboard.setup.step.invoice' },
+  { to: '/accounts', labelKey: 'dashboard.setup.step.accounts', done: 'accounts' },
+  { to: '/contacts', labelKey: 'dashboard.setup.step.contacts', done: 'contacts' },
+  { to: '/items', labelKey: 'dashboard.setup.step.items', done: 'items' },
+  { to: '/documents', labelKey: 'dashboard.setup.step.invoice', done: 'invoice' },
 ];
 
 /**
@@ -124,33 +148,38 @@ export function SetupCard({ tiles }: { tiles: readonly DashboardTileView[] }) {
   const userId = whoami?.userId ?? null;
 
   const [dismissed, setDismissed] = useState<boolean>(() => readSetupCardDismissed(workspaceId, userId));
-  const [done, setDone] = useState<SetupDone>({ profile: false, vat: false });
+  const [done, setDone] = useState<SetupDone>(NOTHING_DONE);
 
   // Re-read the remembered dismissal when the scope (workspace or user) changes, so switching books
   // does not carry one workspace's dismissal onto another's fresh setup card. Also clear `done`
-  // SYNCHRONOUSLY: the async profile read below (no key={workspaceId} remount) only re-populates
-  // `done` once it resolves, so without this reset mandate A's "erledigt" paints over mandate B for
-  // the window before B's read returns. The async effect then fills in B's real state.
+  // SYNCHRONOUSLY: the async reads below (no key={workspaceId} remount) only re-populate `done` once
+  // they resolve, so without this reset mandate A's "erledigt" paints over mandate B for the window
+  // before B's reads return. The async effect then fills in B's real state.
   useEffect(() => {
     setDismissed(readSetupCardDismissed(workspaceId, userId));
-    setDone({ profile: false, vat: false });
+    setDone(NOTHING_DONE);
   }, [workspaceId, userId]);
 
-  // F-09: one profile read decides which first-hour steps are already answered.
+  // F-09 + P0.4d: two reads decide which first-hour steps are already answered: the profile (profile,
+  // MWST) and the books' own first-step facts (chart, contact, item, issued invoice). Each read
+  // writes ONLY its own flags, so the two can resolve in either order; a failed read marks nothing.
   useEffect(() => {
     if (workspaceId === null || workspaceId === '') return;
     let live = true;
     void client.call('get_company_profile', { workspaceId }).then((resp) => {
       if (!live) return;
+      // Set unconditionally on success: the card is not remounted on a workspace change (no
+      // key={workspaceId}), so an all-false profile must still overwrite the previous mandate's flags.
       if (isErr(resp.body)) return;
       const { profile } = resp.body as { profile?: { legalForm?: string | null; creditorIban?: string | null; vatMethod?: string | null } };
       const next = setupDoneFrom(profile ?? null);
-      // Set unconditionally: the card is not remounted on a workspace change (no key={workspaceId}),
-      // so its `done` survives a mandate switch. The old guard skipped the write on an all-false
-      // profile, which left the previous mandate's done in place and showed "erledigt" over an
-      // unconfigured step on the fresh books. Writing every time costs at most one extra render on a
-      // bare profile, a price worth paying to never carry a stale done across the switch.
-      setDone(next);
+      setDone((prev) => ({ ...prev, ...next }));
+    });
+    void client.call('get_onboarding_progress', { workspaceId }).then((resp) => {
+      if (!live) return;
+      if (isErr(resp.body)) return;
+      const next = firstStepsDoneFrom((resp.body as { firstSteps?: unknown }).firstSteps);
+      setDone((prev) => ({ ...prev, ...next }));
     });
     return () => {
       live = false;
@@ -178,7 +207,7 @@ export function SetupCard({ tiles }: { tiles: readonly DashboardTileView[] }) {
       <p className="setup-card-lead">{t('dashboard.setup.lead')}</p>
       <ol className="setup-card-steps">
         {SETUP_STEPS.map((step) => {
-          const isDone = step.done !== undefined && done[step.done];
+          const isDone = done[step.done];
           return (
             <li key={step.to} data-done={isDone ? 'true' : undefined}>
               <Link to={step.to} className="setup-card-step" aria-describedby={isDone ? `setup-card-done-${step.done}` : undefined}>

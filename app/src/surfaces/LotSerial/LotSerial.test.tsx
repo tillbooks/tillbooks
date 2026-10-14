@@ -61,12 +61,12 @@ const baseCanned = (): Canned => ({
   serial_list: ok({ serials: [] }),
 });
 
-function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Record<string, unknown> }>) {
+function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Record<string, unknown> }>, path = '/lot-serial-tracking') {
   return render(
     <TillClientProvider client={new TillClient(fakeTransport(canned, asked))}>
       <I18nProvider>
         <WorkspaceProvider initialId="ws_test">
-          <MemoryRouter>
+          <MemoryRouter initialEntries={[path]}>
             <LotSerial />
           </MemoryRouter>
         </WorkspaceProvider>
@@ -75,9 +75,15 @@ function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Re
   );
 }
 
+/** D152 rule 5: an item opens by the person's act. Click it in the list, as the person would. */
+async function openItem(name = 'Impfstoff-Charge') {
+  await userEvent.click(await screen.findByRole('button', { name: new RegExp(`^${name}`) }));
+}
+
 describe('LotSerial, the item + lots/serials detail', () => {
   it('renders a tracked item and its lot once loaded', async () => {
     renderSurface(baseCanned());
+    await openItem();
     expect((await screen.findAllByText('Impfstoff-Charge')).length).toBeGreaterThan(0);
     expect(await screen.findByText('L-2026-001')).toBeInTheDocument();
     // The lots section title renders both as the visible <h3> subhead and as the shared DataTable's
@@ -101,6 +107,7 @@ describe('LotSerial, writes', () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     renderSurface({ ...baseCanned(), lot_list: ok({ lots: [] }), lot_create: ok({ lot: LOT() }) }, asked);
     const user = userEvent.setup();
+    await openItem();
     await user.click(await screen.findByText(de.lotSerial.lots.new));
     await user.type(screen.getByLabelText(de.lotSerial.lots.field.number), 'L-2026-009');
     await user.click(screen.getByText(de.lotSerial.save));
@@ -115,6 +122,7 @@ describe('LotSerial, writes', () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     renderSurface({ ...baseCanned(), item_set_tracking_mode: ok({ item: { id: 'it_lot', trackingMode: 'lot_and_serial' } }) }, asked);
     const user = userEvent.setup();
+    await openItem();
     const select = await screen.findByRole('combobox', { name: de.lotSerial.modeLabel });
     await user.click(select);
     await user.click(screen.getByRole('option', { name: de.lotSerial.mode.lot_and_serial }));
@@ -137,6 +145,7 @@ describe('LotSerial, writes', () => {
       asked,
     );
     const user = userEvent.setup();
+    await openItem('Serien-Artikel');
     await user.click(await screen.findByText(de.lotSerial.serials.new));
     await user.type(screen.getByLabelText(de.lotSerial.serials.field.numbers), 'SN-1\nSN-2\nSN-3');
     await user.click(screen.getByText(de.lotSerial.save));
@@ -149,9 +158,46 @@ describe('LotSerial, writes', () => {
   it('surfaces the engine rejection in the lot drawer with a surface-scoped message', async () => {
     renderSurface({ ...baseCanned(), lot_list: ok({ lots: [] }), lot_create: reject('lot_number_taken') });
     const user = userEvent.setup();
+    await openItem();
     await user.click(await screen.findByText(de.lotSerial.lots.new));
     await user.type(screen.getByLabelText(de.lotSerial.lots.field.number), 'L-DUP');
     await user.click(screen.getByText(de.lotSerial.save));
     expect(await screen.findByText(de.lotSerial.errors.lot_number_taken)).toBeInTheDocument();
+  });
+});
+
+describe('LotSerial, a list never opens itself (D152 rule 5)', () => {
+  const two = (): Canned => ({
+    ...baseCanned(),
+    list_items: ok({ items: [ITEM(), ITEM({ id: 'it_ser', name: 'Serien-Artikel', trackingMode: 'serial' })] }),
+  });
+
+  it('selects nothing on load: no current item, one quiet line, no lot or serial read', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const { container } = renderSurface(two(), asked);
+    await screen.findByRole('button', { name: /^Serien-Artikel/ });
+    expect(container.querySelector('[aria-current="true"]')).toBeNull();
+    expect(screen.getByText(de.lotSerial.selectHint)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: de.lotSerial.modeLabel })).not.toBeInTheDocument();
+    expect(asked.some((a) => a.action === 'lot_list' || a.action === 'serial_list')).toBe(false);
+  });
+
+  it('opens the item a deep link names (?focus=)', async () => {
+    renderSurface(two(), undefined, '/lot-serial-tracking?focus=it_ser');
+    const item = await screen.findByRole('button', { name: /^Serien-Artikel/ });
+    await waitFor(() => expect(item).toHaveAttribute('aria-current', 'true'));
+    expect(await screen.findByRole('heading', { name: 'Serien-Artikel' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Impfstoff-Charge/ })).not.toHaveAttribute('aria-current');
+  });
+
+  it('a click opens the detail with the same controls, a second click closes it', async () => {
+    renderSurface(two());
+    await openItem();
+    expect(screen.getByRole('button', { name: /^Impfstoff-Charge/ })).toHaveAttribute('aria-current', 'true');
+    expect(await screen.findByRole('combobox', { name: de.lotSerial.modeLabel })).toBeInTheDocument();
+    expect(await screen.findByText(de.lotSerial.lots.new)).toBeInTheDocument();
+    await openItem();
+    await waitFor(() => expect(screen.getByText(de.lotSerial.selectHint)).toBeInTheDocument());
+    expect(screen.queryByRole('combobox', { name: de.lotSerial.modeLabel })).not.toBeInTheDocument();
   });
 });

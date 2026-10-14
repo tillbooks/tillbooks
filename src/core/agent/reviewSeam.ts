@@ -32,15 +32,22 @@ export interface ReviewSeam {
  * the entity (see the module note) so the seam stays a single-occurrence call from A26's side.
  */
 export const reviewSeam: ReviewSeam = {
+  // K1: the derived keys are computable by anyone (`agent-flag:<entryId>`), and `flag_entry` memoises by
+  // key alone, so a public `flag_entry` of ANOTHER entry under `agent-flag:E` would have been replayed
+  // here and E never flagged. The seam's writes run in its own idempotency scope instead.
   flagEntry: (ctx, input) =>
-    reviewFlagEntry(ctx, {
-      entryId: input.entryId,
-      reason: input.reason,
-      idempotencyKey: `agent-flag:${input.entryId}`,
-    }),
+    ctx.store.innerWrite('agent_review_seam', () =>
+      reviewFlagEntry(ctx, {
+        entryId: input.entryId,
+        reason: input.reason,
+        idempotencyKey: `agent-flag:${input.entryId}`,
+      }),
+    ),
   preparePeriod: (ctx, input) =>
-    reviewPreparePeriod(ctx, {
-      period: input.period,
-      idempotencyKey: `agent-prepare:${input.period}`,
-    }),
+    ctx.store.innerWrite('agent_review_seam', () =>
+      reviewPreparePeriod(ctx, {
+        period: input.period,
+        idempotencyKey: `agent-prepare:${input.period}`,
+      }),
+    ),
 };

@@ -56,7 +56,7 @@
   color: var(--t-danger);
 }
 
-/* Scoped so the VatSettings `.vat-badge` pill (its method/timing chips, loaded globally by Vite)
+/* Scoped names, not a bare `.vat-badge` (VatSettings styled that globally as a pill until D152), so a pill style
    cannot bleed in and render these as bordered pills: the readout and summary badges are plain
    glyph + word, never pills. */
 .vat-line-badge,

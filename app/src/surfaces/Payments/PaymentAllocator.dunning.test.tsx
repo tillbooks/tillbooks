@@ -28,6 +28,12 @@ import listPayments from './list-payments.fixture.json';
 import getPayment from './get-payment.fixture.json';
 import previewPayment from './preview-payment.fixture.json';
 import listAccounts from './list-accounts.fixture.json';
+// Pinned to the live engine by `test/banking/studio-bank-accounts-fixture.test.mjs`; both of its
+// Bankkonten book on acc_2, which is what the Werkbank's Konto defaults to (D152).
+import listBankAccounts from '../BankAccounts/list-bank-accounts.fixture.json';
+// The books' base currency, which the Konto default needs (critic F2): the Setup recording, pinned to the
+// live engine by `test/setup/profile-fixture.test.mjs`.
+import companyProfile from '../Setup/company-profile.fixture.json';
 
 type Handler = (input: Record<string, unknown>) => RestResponse;
 type Canned = Record<string, RestResponse | Handler>;
@@ -85,6 +91,8 @@ function mount(onPreview?: Handler) {
     preview_payment: onPreview ?? ok(previewPayment),
     list_accounts: ok(listAccounts),
     list_contacts: ok({ contacts: [{ id: 'contact_2', name: 'Beispiel GmbH' }] }),
+    list_bank_accounts: ok(listBankAccounts),
+    get_company_profile: ok(companyProfile),
   };
   const client = new TillClient(fakeTransport(canned));
   return render(

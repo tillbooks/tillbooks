@@ -216,3 +216,25 @@ export function lookupBankDirectoryData(query: string): BankDirectoryEntry[] {
     (b) => fold(b.bic).includes(q) || b.names.some((n) => fold(n).includes(q)),
   );
 }
+
+/**
+ * D143: the bank's SHORT name for the Übersicht band's mark ("ZKB"), read off the connection's own host,
+ * never guessed. First the directory entry whose BIC bank code (its first four letters) starts the host
+ * ID (Swiss banks issue host IDs derived from their BIC); then the entry whose short name, folded and
+ * without spaces, is a label of the host URL's hostname (`ebics.zkb.ch`). Otherwise the host ID itself,
+ * which is what the owner typed from the contract. Pure and offline, like the directory.
+ */
+export function bankShortName(host: { hostId: string; hostUrl: string }): string {
+  const hostId = host.hostId.trim().toUpperCase();
+  const byBic = BANK_DIRECTORY.find((b) => hostId.length >= 4 && hostId.startsWith(b.bic.slice(0, 4).toUpperCase()));
+  if (byBic !== undefined) return byBic.names[0] ?? host.hostId.trim();
+  let labels: string[] = [];
+  try {
+    labels = new URL(host.hostUrl).hostname.toLowerCase().split('.');
+  } catch {
+    labels = [];
+  }
+  const byHost = BANK_DIRECTORY.find((b) => b.names.some((n) => labels.includes(fold(n).replace(/\s+/g, ''))));
+  if (byHost !== undefined) return byHost.names[0] ?? host.hostId.trim();
+  return host.hostId.trim();
+}

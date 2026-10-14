@@ -30,11 +30,12 @@ import {
   getPriceList,
   resolvePrice,
 } from '../core/sales/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ItemActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -57,21 +58,21 @@ export function itemActions(h: ItemActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'delete_item',
-      'write',
+      'write:final:erase',
       'Hard-delete an item that is referenced nowhere (no document line, price-list row, variant, or stock movement). A referenced item is refused with item_referenced and its reference kinds; archive it instead so posted history stays resolvable.',
       ctxSchema({ itemId: STR, idempotencyKey: STR }, ['itemId']),
       (ctx, input) => deleteItem(ctx, as(input)),
     ),
     ctxAction(
       'item_categories_upsert',
-      'write',
+      'write:reversible:internal',
       'Create or edit an item category (two-level tree: the parent of a child must itself be a root). Pass categoryId to edit, omit it to create.',
       ctxSchema({ categoryId: STR, name: STR, parentId: STR, sort: INT, idempotencyKey: STR }),
       (ctx, input) => upsertItemCategory(ctx, as(input)),
     ),
     ctxAction(
       'item_categories_delete',
-      'write',
+      'write:final:erase',
       'Delete an item category. Refused (category_in_use) while any item or child category still points at it; reassign or empty it first.',
       ctxSchema({ categoryId: STR, idempotencyKey: STR }, ['categoryId']),
       (ctx, input) => deleteItemCategory(ctx, as(input)),
@@ -85,14 +86,14 @@ export function itemActions(h: ItemActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'price_lists_upsert',
-      'write',
+      'write:reversible:internal',
       'Create or edit a price list, scoped to exactly one contact OR one segment (scope_ambiguous otherwise). One scope holds at most one list: a second list for a contact or segment that already has one is refused with scope_taken naming the existing list, so no price is ever resolved by insertion order. Pass priceListId to edit, omit it to create.',
       ctxSchema({ priceListId: STR, name: STR, contactId: STR, segment: STR, idempotencyKey: STR }),
       (ctx, input) => upsertPriceList(ctx, as(input)),
     ),
     ctxAction(
       'price_lists_set_price',
-      'write',
+      'write:reversible:internal',
       'Set a list price for an item from a validFrom date (ISO YYYY-MM-DD; anything else is refused with invalid_input, never coerced). Price history is append-only: this adds a row rather than editing a past one, so a resolve at any date reads a stored integer Rappen amount.',
       ctxSchema({ priceListId: STR, itemId: STR, priceMinor: INT, currency: STR, validFrom: STR, idempotencyKey: STR }, [
         'priceListId',
@@ -128,14 +129,14 @@ export function itemActions(h: ItemActionHelpers): readonly ActionDef[] {
     // capability branches are editing at once.
     ctxAction(
       'price_lists_unset_price',
-      'write',
+      'write:final:erase',
       'Remove an item price from a list: pass validFrom to retract exactly that dated row, omit it to remove the item from the list entirely. Removing the item entirely is what makes price_resolve fall through to the next scope and what lets delete_item stop counting the list as a reference. Answers how many rows it took away, so a replay reports the same count and a repeat reports none.',
       ctxSchema({ priceListId: STR, itemId: STR, validFrom: STR, idempotencyKey: STR }, ['priceListId', 'itemId']),
       (ctx, input) => unsetPriceListPrice(ctx, as(input)),
     ),
     ctxAction(
       'price_lists_delete',
-      'write',
+      'write:final:erase',
       'Delete a price list together with its price rows. A price row has no reader apart from its list and a document line already snapshots the price it resolved, so the cascade removes nothing any issued document depends on. Refused with price_list_referenced if anything still points at the list.',
       ctxSchema({ priceListId: STR, idempotencyKey: STR }, ['priceListId']),
       (ctx, input) => deletePriceList(ctx, as(input)),

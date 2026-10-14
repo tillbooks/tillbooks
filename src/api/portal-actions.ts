@@ -29,18 +29,19 @@ import {
   resolveToken,
   portalQuoteAccept,
 } from '../core/portal/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface PortalActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
   ): ActionDef;
   depsAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (deps: ApiDeps, input: ActionInput) => Result,
@@ -71,24 +72,24 @@ export function portalActions(h: PortalActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'portal_grant_create',
-      'write',
-      'Gib einem Kunden Portal-Zugang frei: mint a scoped, expiring, tokened grant for a C00 contact. scopes is an explicit entity list ([{kind:"invoice"|"quote"|"document", id}] or {kind:"all_invoices"}); every id must be THIS contact\'s own record (invalid_scope otherwise, H-TENANT + per-contact fence). The token is CSPRNG >=256-bit; only its SHA-256 hash is stored, and the row carries NO usable link. The one-time link is returned once as tokenOnce/localLink and is never re-derivable. expiresAt in the past is refused; longer than the 90-day max is CLAMPED and flagged (clamped:true). Created draft (P8): handing the link over is portal_grant_send. Posts nothing (OP4: mints the local artifact and stops, hosted:false/reason:cloud_tier).',
+      'write:correctable:internal',
+      'Gib einem Kunden Portal-Zugang frei: mint a scoped, expiring, tokened grant for a C00 contact. scopes is an explicit entity list ([{kind:"invoice"|"quote"|"document", id}] or {kind:"all_invoices"}); every id must be THIS contact\'s own record (invalid_scope otherwise, H-TENANT + per-contact fence). The token is CSPRNG >=256-bit; only its SHA-256 hash is stored, and the row carries NO usable link. The one-time link is returned once as tokenOnce/localLink and is never re-derivable. expiresAt in the past is refused; longer than the 90-day max is CLAMPED and flagged (clamped:true). Created as a DRAFT (P8, D157): the link opens nothing until portal_grant_send activates it, so a draft can be prepared freely. Customer grants only: kind is not an input, and any kind other than customer is refused (invalid_input field kind); a supplier link is vendor_portal_grant. Posts nothing (OP4: mints the local artifact and stops, hosted:false/reason:cloud_tier).',
       ctxSchema(
-        { contactId: STR, scopes: SCOPES, expiresAt: STR, kind: STR, actor: STR, idempotencyKey: STR },
+        { contactId: STR, scopes: SCOPES, expiresAt: STR, actor: STR, idempotencyKey: STR },
         ['contactId', 'scopes', 'expiresAt'],
       ),
       (ctx, input) => createGrant(ctx, as(input)),
     ),
     ctxAction(
       'portal_grant_send',
-      'write',
-      'Sende den Portal-Link (P8 outbound, draft-gated): hands the grant link over and activates it (draft -> active). Confirm-gated (needs_confirmation without confirmed:true, for humans and agents alike). OP4 boundary: no transport in the MIT core, so it degrades honestly to sent:false/reason:cloud_tier and the token is NOT re-derivable here (the operator received the one-time link at create). A revoked or expired grant is refused before any write.',
+      'write:final:outbound',
+      'Sende den Portal-Link (P8 outbound, draft-gated): hands the grant link over and ACTIVATES it (draft -> active); until this runs, the draft link opens nothing (D157). Confirm-gated: needs_confirmation without confirmed:true, for humans and agents alike, and the draft stays dead. A re-send keeps the first sentAt. OP4 boundary: no transport in the MIT core, so it degrades honestly to sent:false/reason:cloud_tier and the token is NOT re-derivable here (the operator received the one-time link at create). A revoked or expired grant is refused before any write.',
       ctxSchema({ grantId: STR, confirmed: BOOL, idempotencyKey: STR }, ['grantId']),
       (ctx, input) => sendGrant(ctx, as(input)),
     ),
     ctxAction(
       'portal_grant_revoke',
-      'write',
+      'write:correctable:stop',
       'Widerrufe einen Portal-Zugang: stamps revoked_at so any resolve of the token now denies. The row is NEVER deleted (the grant history is the revDSG access trail). Revoking an already-revoked grant is a no-op returning the original state. Not destructive: it revokes, it does not delete.',
       ctxSchema({ grantId: STR, actor: STR, idempotencyKey: STR }, ['grantId']),
       (ctx, input) => revokeGrant(ctx, as(input)),
@@ -102,14 +103,14 @@ export function portalActions(h: PortalActionHelpers): readonly ActionDef[] {
     ),
     depsAction(
       'portal_resolve',
-      'write',
-      'Löse einen Portal-Token auf (the single verb the hosted page calls; agents call it to test a grant end to end): hashes the presented token, loads the grant, enforces expiry/revocation and the THREE FENCES (workspace -> contact -> scope), and returns ONLY the scoped read model: invoices (number, dates, total + open amount from A11/A14, QR reference read verbatim), quotes (C02 state), documents (E00 metadata). An expired or revoked token, or one scoped to another contact, returns grant_denied indistinguishably (no oracle). Token-authenticated, pre-workspace: no workspaceId. Computes no money, posts nothing; every resolve/denial lands in audit_log.',
+      'write:final:pre-workspace',
+      'Löse einen Portal-Token auf (the single verb the hosted page calls; agents call it to test a grant end to end): hashes the presented token, loads the grant, enforces expiry/revocation and the THREE FENCES (workspace -> contact -> scope), and returns ONLY the scoped read model: invoices (number, dates, total + open amount from A11/A14, QR reference read verbatim), quotes (C02 state), documents (E00 metadata). An expired or revoked token, a draft not yet activated by portal_grant_send (D157), or one scoped to another contact, returns grant_denied indistinguishably (no oracle). Token-authenticated, pre-workspace: no workspaceId. Computes no money, posts nothing; every resolve/denial lands in audit_log.',
       depsSchema({ token: STR }, ['token']),
       (deps, input) => resolveToken(deps, as(input)),
     ),
     depsAction(
       'portal_quote_accept',
-      'write',
+      'write:final:statutory',
       'Nimm eine Offerte über das Portal an (US-F02.3): fence-checks the token (the quote must be in scope AND belong to the grant\'s contact) then DELEGATES to C02\'s real accept (the A10 sent -> accepted transition) with actor portal:<grantId>. F02 owns no quote state and hand-rolls no invoice. Idempotent via idempotencyKey: a same-key re-accept returns the original, never a second acceptance (no double-issue). C02\'s own errors (invalid_transition on a non-sent quote, quote_expired) surface unchanged. A refused accept writes zero rows. Token-authenticated, pre-workspace: no workspaceId.',
       depsSchema({ token: STR, quoteId: STR, idempotencyKey: STR }, ['token', 'quoteId']),
       (deps, input) => portalQuoteAccept(deps, as(input)),

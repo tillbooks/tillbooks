@@ -19,11 +19,12 @@ import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
 import { importOpenItems, previewOpenItems } from '../core/migration/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface MigrationOpenItemsActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -52,7 +53,7 @@ export function migrationOpenItemsActions(h: MigrationOpenItemsActionHelpers): r
     ),
     ctxAction(
       'import_open_items',
-      'write',
+      'write:final:books',
       'Import open items (ar or ap) for a migration plan: each already-mapped row becomes an origin=migrated document (AR, at issued) or vendor bill (AP, at posted) that posts NOTHING of its own (posted_entry_id/entry_id NULL). Its only ledger effect is A04 opening 1100/2000 line; the migrated open total must tie to that line to the Rappen (a nonzero difference is a red control, never a plug posting). Atomic and idempotent: a single refused row imports nothing, and a re-run with the same idempotencyKey replays the original outcome (no duplicate rows). Rides commit_migration; denylisted from automation. priorYearDetail live carries an already-settled prior-year row as a settled migrated item that nets to zero open; archive (default) refuses it toward the G13 archive.',
       ctxSchema({ planId: STR, side: STR, rows: ARR, priorYearDetail: STR, idempotencyKey: STR }, ['planId', 'side', 'rows', 'idempotencyKey']),
       (ctx, input) => importOpenItems(ctx, as(input)),

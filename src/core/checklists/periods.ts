@@ -23,7 +23,8 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { listVatPeriods } from '../vat/index.js';
-import { fiscalYearOf } from '../ledger/index.js';
+import { fiscalYearOf, OPENING_KEY_PREFIX } from '../ledger/index.js';
+import { BANK_OPENING_KEY_PREFIX } from '../banking/bankAccounts.js';
 import { addDays, dayBefore, endOfMonth } from './deadlines.js';
 import type { ChecklistPeriodKind } from './types.js';
 
@@ -82,6 +83,100 @@ export function yearSealedOf(ctx: WorkspaceContext, yearLabel: string): boolean 
     .prepare("SELECT 1 AS one FROM period_lock WHERE workspace_id = ? AND period = ? AND kind = 'hard' AND reason = 'year_close'")
     .get(ctx.workspaceId, yearLabel) as { one: number } | undefined;
   return row !== undefined;
+}
+
+/**
+ * Where these books begin, for the AUTO-start bound (beta launch P0.4a, spec §10.8 amendment).
+ *
+ * THE DEFECT. A company created on 30.09 opened its first Pendenzen on four "überfällig" items of the
+ * August Monatsabschluss: the daily rule starts "the last ended period", and on day 0 that is a month
+ * the books never covered. An auto-start is a reminder to close a period THESE books kept, so it is
+ * bounded by the day they begin. The base bound is:
+ *
+ *   - the Stichtag, when the workspace has one: the earliest Übernahmestichtag of a migration plan that
+ *     was not abandoned (`migration_plan.cutover_date`, G09) or the date of a posted opening-balance
+ *     entry (A04, dated AT its Stichtag), whichever is earlier. A migrated company's books begin
+ *     there, even when the workspace was created months later, so its catch-up months still start;
+ *   - otherwise the day the workspace was created.
+ *
+ * A period that ENDS on or before the base bound is not auto-started: the Stichtag is the last day of
+ * the old system, and a period ending on the creation day with nothing booked in it has nothing to close.
+ *
+ * THE FOURTH SOURCE (critic phase0-installable r1, P0.4a-1). The books also begin on the earliest day
+ * they hold a POSTED entry (`first_posting`). A company that opens TILL on 05.10 and books its Q3 by
+ * hand to prepare the MWST return it still owes keeps Q3 in THESE books, so Q3 must still auto-start.
+ * The earliest of the two wins. A first posting is a book day itself, so a period is skipped only when
+ * it ends strictly BEFORE it (`inclusive: true`): a company created on 30.09 that books on 30.09 still
+ * gets September and Q3.
+ *
+ * What does NOT count: the engine's own opening postings, the carried-over position that belongs to the
+ * Stichtag and not to activity in the period (A04's `opening-balances:` entry and A19's `bank-opening:`
+ * entry, both `source = 'import'`). They are recognised by their idempotency-key namespaces, NOT by the
+ * source (critic phase0-installable r2, R2-3): `post_entry` lets any caller choose `import`, and a
+ * back-posted Q3 labelled so must keep its reminder. Nor do `reversal` entries: a reversal mirrors an
+ * original that is itself counted, and one of an opening entry is a Stichtag correction.
+ *
+ * A HAND start is never bounded: a person (or an agent) naming a period asks for it deliberately.
+ */
+export type BooksStart = {
+  /** The ISO day the books begin. */
+  readonly date: string;
+  readonly source: 'migration_cutover' | 'opening_balance' | 'workspace_created' | 'first_posting';
+  /**
+   * Whether `date` is itself a book day. `true` (a first posting): a period ending ON `date` holds an
+   * entry and is auto-started. `false` (a Stichtag, the creation day): a period ending on or before
+   * `date` is not.
+   */
+  readonly inclusive: boolean;
+};
+
+/** The one auto-start rule over a `BooksStart`: does a period ending on `periodEnd` predate these books? */
+export function periodPredatesBooks(periodEnd: string, booksStart: BooksStart): boolean {
+  return booksStart.inclusive ? periodEnd < booksStart.date : periodEnd <= booksStart.date;
+}
+
+function baseBooksStartOf(ctx: WorkspaceContext): BooksStart {
+  const cutover = ctx.store.db
+    .prepare(
+      `SELECT MIN(cutover_date) AS d FROM migration_plan
+        WHERE workspace_id = ? AND cutover_date IS NOT NULL AND cutover_date <> '' AND status <> 'abandoned'`,
+    )
+    .get(ctx.workspaceId) as { d: string | null } | undefined;
+  const opening = ctx.store.db
+    .prepare(
+      `SELECT MIN(date) AS d FROM journal_entry
+        WHERE workspace_id = ? AND status = 'posted' AND source = 'import' AND idempotency_key LIKE ?`,
+    )
+    .get(ctx.workspaceId, `${OPENING_KEY_PREFIX}:%`) as { d: string | null } | undefined;
+  const cutoverDay = cutover?.d?.slice(0, 10) ?? null;
+  const openingDay = opening?.d?.slice(0, 10) ?? null;
+  if (cutoverDay !== null && (openingDay === null || cutoverDay <= openingDay)) {
+    return { date: cutoverDay, source: 'migration_cutover', inclusive: false };
+  }
+  if (openingDay !== null) return { date: openingDay, source: 'opening_balance', inclusive: false };
+  const ws = ctx.store.db
+    .prepare('SELECT created_at FROM workspace WHERE id = ?')
+    .get(ctx.workspaceId) as { created_at: string } | undefined;
+  return { date: (ws?.created_at ?? ctx.clock.now()).slice(0, 10), source: 'workspace_created', inclusive: false };
+}
+
+export function booksStartOf(ctx: WorkspaceContext): BooksStart {
+  const base = baseBooksStartOf(ctx);
+  const first = ctx.store.db
+    .prepare(
+      `SELECT MIN(date) AS d FROM journal_entry
+        WHERE workspace_id = ? AND status = 'posted' AND source <> 'reversal'
+          AND NOT (source = 'import' AND (idempotency_key LIKE ? OR idempotency_key LIKE ?))`,
+    )
+    .get(ctx.workspaceId, `${OPENING_KEY_PREFIX}:%`, `${BANK_OPENING_KEY_PREFIX}:%`) as { d: string | null } | undefined;
+  const firstDay = first?.d?.slice(0, 10) ?? null;
+  if (firstDay === null) return base;
+  // An inclusive first posting on day P lets a period ending on P start; the exclusive base bound B lets
+  // one ending on B+1 start. So the first posting is the earlier start when P < B, and on a tie when B
+  // is the creation day (a book day). A Stichtag is the old system's last day: an entry dated ON it
+  // (a cutover adjustment) does not hand the period ending on it to these books.
+  const earlier = firstDay < base.date || (firstDay === base.date && base.source === 'workspace_created');
+  return earlier ? { date: firstDay, source: 'first_posting', inclusive: true } : base;
 }
 
 function vatPeriodsOf(ctx: WorkspaceContext, year: string): Result<{ periods: ChecklistPeriod[] }> {

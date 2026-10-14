@@ -36,6 +36,7 @@ export const MOTION_TOKENS = {
   reveal: '--t-motion-reveal',
   stagger: '--t-motion-stagger',
   hover: '--t-motion-hover',
+  loop: '--t-motion-loop',
 } as const;
 
 export type MotionToken = (typeof MOTION_TOKENS)[keyof typeof MOTION_TOKENS];
@@ -55,6 +56,7 @@ export const MOTION_DEFAULT_MS: Readonly<Record<MotionToken, number>> = {
   '--t-motion-reveal': 200,
   '--t-motion-stagger': 30,
   '--t-motion-hover': 120,
+  '--t-motion-loop': 1400,
 };
 
 /** The class `rowClassName` stamps on the row `useCommitAck` should acknowledge. */

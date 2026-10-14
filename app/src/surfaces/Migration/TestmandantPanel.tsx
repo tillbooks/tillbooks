@@ -77,6 +77,8 @@ const ERROR_KEYS: Readonly<Record<string, string>> = {
   confirm_name_mismatch: 'migration.testmandant.err.confirmMismatch',
   not_a_testmandant: 'migration.testmandant.err.notATestmandant',
   plan_already_live: 'migration.testmandant.err.planAlreadyLive',
+  // Only the books that created a Testmandant promote it; a copy of them is refused (owner, 11.10.2026).
+  testmandant_not_owned: 'migration.testmandant.err.notOwned',
 };
 
 export function TestmandantPanel(props: {
@@ -111,6 +113,10 @@ export function TestmandantPanel(props: {
   // f10: discard destroys a trial workspace, so it sits behind a confirm sub-state (shaped like the
   // close/abandon confirms on the parent surface), never firing on the first click of the disclosure.
   const [discardConfirm, setDiscardConfirm] = useState(false);
+  // A discard from a COPY of the books deletes nothing: the copy only drops its link to the original's
+  // Testmandant (`unlinkedOnly`), or the Testmandant was already gone (`alreadyGone`). Either way the
+  // panel lands on its empty state, and this says why nothing was deleted.
+  const [notice, setNotice] = useState<'unlinkedOnly' | 'alreadyGone' | null>(null);
 
   // promote_workspace AND commit_migration, the two the engine requires together; the disabled
   // control names the FIRST one missing so the operator knows exactly which right to request.
@@ -141,6 +147,7 @@ export function TestmandantPanel(props: {
   async function createTestmandant(): Promise<void> {
     setBusy(true);
     setError(null);
+    setNotice(null);
     const res = (await client.call('migration_create_testmandant', { workspaceId, planId, idempotencyKey: newIdempotencyKey() })).body;
     setBusy(false);
     if (isErr(res)) {
@@ -192,6 +199,7 @@ export function TestmandantPanel(props: {
       return;
     }
     setDiscardConfirm(false);
+    setNotice(res.unlinkedOnly === true ? 'unlinkedOnly' : res.alreadyGone === true ? 'alreadyGone' : null);
     await load();
     onChanged();
   }
@@ -210,6 +218,7 @@ export function TestmandantPanel(props: {
     return (
       <section className="testmandant testmandant-empty">
         <h2>{t('migration.testmandant.empty.title')}</h2>
+        {notice !== null && <p className="testmandant-notice" role="status">{t(`migration.testmandant.${notice}`)}</p>}
         <p>{t('migration.testmandant.empty.body')}</p>
         {canCreate && (
           <button type="button" className="btn btn--primary" disabled={busy || !caps.can(CAP.manageImport)} onClick={() => void createTestmandant()}>

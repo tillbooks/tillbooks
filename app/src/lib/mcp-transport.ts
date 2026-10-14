@@ -12,13 +12,17 @@
  * came over MCP or over the older REST bridge, so not one line of surface code has to know which
  * transport it is talking to, and swapping back is a one-line change in `client.ts`.
  *
- * The session is opened lazily on the first call and reused. `initialize` is where the audit actor
- * is declared (D13): the client name below is what makes a human action land in the audit trail as
- * `studio` rather than `agent`.
+ * The session is opened lazily on the first call and reused. The session's seat is fixed when it
+ * opens (D13): the per-launch Studio key the page carries, sent as a header, is what makes a human
+ * action land in the audit trail as `studio` rather than `agent`. The client name is only a label.
  */
 import type { Err, Result, RestResponse, Transport } from './client';
+import { guardStudioKey, studioKeyHeaders } from './studio-key';
 
-/** The client name the Studio declares at `initialize`. Mirrors `STUDIO_CLIENT_NAME` in the engine. */
+/**
+ * The client name the Studio declares at `initialize`. Mirrors `STUDIO_CLIENT_NAME` in the engine.
+ * A LABEL only: the seat comes from the Studio key (`./studio-key`), never from this name.
+ */
 export const STUDIO_CLIENT_NAME = 'till-studio';
 
 /** Where the engine mounts its MCP endpoint (same origin: the dev bridge, or the host in production). */
@@ -92,7 +96,7 @@ export function mcpTransportOver(connect: () => Promise<McpToolCaller>): Transpo
     try {
       caller = await attempt;
     } catch (cause) {
-      session = null;
+      if (session === attempt) session = null;
       return { status: 0, body: transportError(String(cause)) };
     }
 
@@ -102,7 +106,11 @@ export function mcpTransportOver(connect: () => Promise<McpToolCaller>): Transpo
       return { status: body.ok ? 200 : statusFor(body), body } satisfies RestResponse;
     } catch (cause) {
       // A mid-session failure (the engine restarted, the session id expired) invalidates the session.
-      session = null;
+      // The dead client is closed best-effort, so its stream stops retrying against the old engine.
+      if (session === attempt) {
+        session = null;
+        void Promise.resolve((caller as { close?: () => Promise<void> }).close?.()).catch(() => undefined);
+      }
       return { status: 0, body: transportError(String(cause)) };
     }
   };
@@ -122,20 +130,33 @@ export function mcpTransportOver(connect: () => Promise<McpToolCaller>): Transpo
   return transport;
 }
 
-/** The real transport: one MCP session over StreamableHTTP against the same-origin engine. */
+/**
+ * The real transport: one MCP session over StreamableHTTP against the same-origin engine.
+ *
+ * The SEAT comes from the Studio key this tab took from the link `till up` opened (`./studio-key`),
+ * sent as a header on every request of the session. The client name is only a label in the engine's
+ * trace, except that a LOCAL engine refuses a keyless session under the Studio's name: that refusal
+ * is what `guardStudioKey` turns into the full-page notice, after which no further request is sent.
+ */
 export function mcpTransport(
   options: { url?: string; clientName?: string; clientVersion?: string } = {},
 ): Transport {
   const { url = MCP_ENDPOINT, clientName = STUDIO_CLIENT_NAME, clientVersion = '0.0.0' } = options;
-  return mcpTransportOver(async () => {
-    // Imported dynamically: the SDK and its schema validator are a large slice of the bundle, and
-    // nothing needs them until the first engine call. This keeps them out of the first paint.
-    const [{ Client }, { StreamableHTTPClientTransport }] = await Promise.all([
-      import('@modelcontextprotocol/sdk/client/index.js'),
-      import('@modelcontextprotocol/sdk/client/streamableHttp.js'),
-    ]);
-    const client = new Client({ name: clientName, version: clientVersion }, { capabilities: {} });
-    await client.connect(new StreamableHTTPClientTransport(new URL(url, window.location.origin)));
-    return client as unknown as McpToolCaller;
-  });
+  return guardStudioKey(
+    mcpTransportOver(async () => {
+      // Imported dynamically: the SDK and its schema validator are a large slice of the bundle, and
+      // nothing needs them until the first engine call. This keeps them out of the first paint.
+      const [{ Client }, { StreamableHTTPClientTransport }] = await Promise.all([
+        import('@modelcontextprotocol/sdk/client/index.js'),
+        import('@modelcontextprotocol/sdk/client/streamableHttp.js'),
+      ]);
+      const client = new Client({ name: clientName, version: clientVersion }, { capabilities: {} });
+      await client.connect(
+        new StreamableHTTPClientTransport(new URL(url, window.location.origin), {
+          requestInit: { headers: studioKeyHeaders() },
+        }),
+      );
+      return client as unknown as McpToolCaller;
+    }),
+  );
 }

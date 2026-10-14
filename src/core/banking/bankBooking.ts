@@ -38,11 +38,11 @@ import type { LineInput } from '../ledger/postEntry.js';
 import { reverseOwnedEntry } from '../ledger/reverseEntry.js';
 import { recordPayment, reversePayment, PAYMENT_INTENTS, settledMinor, writeOffThresholdOf } from '../payments/payment.js';
 import { resolveRole, isRejection } from '../payments/accounts.js';
-import { computeLineTax, buildVatLines } from '../vat/applyVat.js';
+import { computeLineTax, buildVatLines, mirrorVatLine, vatIntentRules } from '../vat/applyVat.js';
 import { baseCurrencyOf } from '../fx/rates.js';
 import { settledOnVendorBill } from '../purchase/reads.js';
 import { invoiceSettlementFigures, planInvoiceSettlement } from './qrMatch.js';
-import { markBatchPaid, compactReference, liveBatchOfBill } from './pain001.js';
+import { markBatchPaid, liveBatchOfBill } from './pain001.js';
 import {
   BankAbort,
   BANK_LINE_IGNORE_REASONS,
@@ -553,7 +553,8 @@ function bookOpenItem(
 /**
  * `payment_batch` (spec §4.3, L6): a debit of the run's own Bankkonto in the run's currency. A line equal to
  * the run total accounts for every item payment; otherwise its EndToEndId must name one item of the run
- * (TILL's own `compactReference('E', item.id)`) with that item's amount, and it accounts for that item's
+ * (the value A18 froze on `payment_batch_item.end_to_end_id` and sent, never derived from the item id,
+ * which a restore re-mints: A18 F9) with that item's amount, and it accounts for that item's
  * payment only (camt.053 "mit Details von Sammelaufträgen" books one line per payment). A `generated` run
  * is first marked paid by A18's `markBatchPaid`, dated the line's booking date, and the line reads
  * `booked`; a `paid` run is matched and posts nothing. Either way the decision is written here, through
@@ -582,15 +583,16 @@ function bookPaymentBatch(
     ctx.store.db
       .prepare(
         `SELECT i.id AS id, i.amount_minor AS amountMinor, i.currency AS currency, i.posted_payment_id AS paymentId,
-                p.status AS paymentStatus, p.journal_entry_id AS entryId
+                i.end_to_end_id AS endToEndId, p.status AS paymentStatus, p.journal_entry_id AS entryId
            FROM payment_batch_item i LEFT JOIN payment p ON p.workspace_id = i.workspace_id AND p.id = i.posted_payment_id
-          WHERE i.workspace_id = ? AND i.batch_id = ? ORDER BY i.rowid`,
+          WHERE i.workspace_id = ? AND i.batch_id = ? ORDER BY i.seq, i.rowid`,
       )
       .all(ctx.workspaceId, batch.id) as {
       id: string;
       amountMinor: number;
       currency: string;
       paymentId: string | null;
+      endToEndId: string | null;
       paymentStatus: string | null;
       entryId: string | null;
     }[];
@@ -613,7 +615,7 @@ function bookPaymentBatch(
     chosenIds = items.map((i) => i.id);
   } else {
     const e2e = readBankTxnDetail(ctx, row.id)?.end_to_end_id ?? null;
-    const item = e2e === null ? undefined : items.find((i) => compactReference('E', i.id) === e2e);
+    const item = e2e === null ? undefined : items.find((i) => i.endToEndId === e2e);
     if (item === undefined) {
       abort(err('amount_mismatch', {
         bankTxnId: row.id,
@@ -633,12 +635,17 @@ function bookPaymentBatch(
   let state: 'booked' | 'matched' = 'matched';
   if (batch.status === 'generated') {
     // A18 books ONE payment per item of the run, dated the line's booking date; it writes no link.
-    const paid = markBatchPaid(ctx, {
-      batchId: batch.id,
-      confirmation: true,
-      valueDate: lineBookingDate(row),
-      idempotencyKey: `bankline-${row.id}-g${lineGeneration(ctx, row.id)}`,
-    });
+    // K1: the key is derivable from the line and its generation, and `mark_batch_paid` is public, so the
+    // run is marked paid in this composite's own idempotency scope: a `mark_batch_paid` made first under
+    // the same key (at a value date of its own) can no longer be replayed as this line's booking.
+    const paid = ctx.store.innerWrite('book_bank_line', () =>
+      markBatchPaid(ctx, {
+        batchId: batch.id,
+        confirmation: true,
+        valueDate: lineBookingDate(row),
+        idempotencyKey: `bankline-${row.id}-g${lineGeneration(ctx, row.id)}`,
+      }),
+    );
     if (!paid.ok) abort(paid as Err);
     state = 'booked';
   }
@@ -813,18 +820,6 @@ function matchExistingEntry(
   });
 }
 
-/** A06 kinds whose NATURAL direction is money arriving (an output code books a sale). */
-const NATURAL_IN_KINDS: ReadonlySet<string> = new Set(['output', 'zero', 'exempt']);
-
-function flip(line: LineInput): LineInput {
-  const { debit, credit, ...rest } = line;
-  return {
-    ...rest,
-    ...(credit !== undefined ? { debit: credit } : {}),
-    ...(debit !== undefined ? { credit: debit } : {}),
-  };
-}
-
 /**
  * The balanced line set of an `accounts` booking, built leg by leg with A06's `buildVatLines`, exactly
  * as a manual journal line is (spec §4.3): the bank legs are merged into one, and A02's post-boundary
@@ -878,18 +873,21 @@ export function buildAccountsLines(
       out.push(legIn ? { account: bankLedgerId, debit: abs } : { account: bankLedgerId, credit: abs });
       continue;
     }
-    const naturalIn = NATURAL_IN_KINDS.has(kind);
+    // A06's kind rules, shared with `compose_entry` (D152 amendment): the natural direction (an output,
+    // zero-rated or exempt code books money in), and the pricing (Bezugsteuer, Art. 45: the foreign
+    // supplier charged no Swiss VAT, so the amount paid IS the base and the tax is owed on top; every
+    // other kind is paid gross).
+    const rules = vatIntentRules(kind);
+    const naturalIn = rules.direction === 'output';
     let built: LineInput[];
     try {
       built = buildVatLines(ctx, {
         counterAccount: bankLedgerId,
         revenueOrExpenseAccount: leg.accountId,
         amountMinor: abs,
-        // Bezugsteuer (Art. 45): the foreign supplier charged no Swiss VAT, so the amount paid IS the
-        // base and the tax is owed on top; every other kind is paid gross.
-        amountIsGross: kind !== 'reverse_charge',
+        amountIsGross: !rules.pricesOnBase,
         taxCode: leg.taxCode,
-        direction: naturalIn ? 'output' : 'input',
+        direction: rules.direction,
         supplyDate,
       }) as LineInput[];
     } catch (e) {
@@ -897,7 +895,7 @@ export function buildAccountsLines(
     }
     // A leg running against its code's natural direction (a refund on an input code, a customer refund
     // on an output code) is the SAME booking mirrored: the tax is reduced, never invented.
-    out.push(...(legIn === naturalIn ? built : built.map(flip)));
+    out.push(...(legIn === naturalIn ? built : built.map(mirrorVatLine)));
   }
   // Merge every bank leg into one line: the entry names the bank movement once, with the line's amount.
   let bankNet = 0;
@@ -1236,12 +1234,17 @@ function reverseOnePayment(ctx: WorkspaceContext, row: BankTxnRow, paymentId: st
     .prepare('SELECT date FROM payment WHERE workspace_id = ? AND id = ?')
     .get(ctx.workspaceId, paymentId) as { date: string } | undefined;
   if (payment === undefined) abort(err('not_found', { paymentId }));
-  const undone = reversePayment(ctx, {
-    paymentId,
-    date: payment.date,
-    intent: PAYMENT_INTENTS.reverse,
-    idempotencyKey: `bankline-reopen-${row.id}-${paymentId}`,
-  });
+  // K1: the key is derivable from the line and the payment, so the Storno runs in this composite's own
+  // idempotency scope: a `reverse_payment` made first under the same key (at a date of its own) is no
+  // longer replayed as this reopen's reversal; the payment is then already reversed and the reopen says so.
+  const undone = ctx.store.innerWrite('reopen_bank_line', () =>
+    reversePayment(ctx, {
+      paymentId,
+      date: payment.date,
+      intent: PAYMENT_INTENTS.reverse,
+      idempotencyKey: `bankline-reopen-${row.id}-${paymentId}`,
+    }),
+  );
   if (!undone.ok) abort(undone as Err);
 }
 

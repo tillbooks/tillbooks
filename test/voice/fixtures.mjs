@@ -37,6 +37,38 @@ export function deterministicEmbed(text) {
   return vector.map((v) => v / norm);
 }
 
+/**
+ * D144, the stub `decide`: deterministic and offline. A `choice` or `score` option earns one point
+ * plus four per word (3+ letters) it shares with the state, normalised; `noul` answers 0.5. Enough
+ * structure for a suite to predict which option wins, bit-reproducible, and it touches nothing outside
+ * process memory (the E07 probe holds it to that like the rest of the stub).
+ */
+export function deterministicDecide(state, questions) {
+  const words = new Set(
+    state
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 3),
+  );
+  return questions.map((q) => {
+    if (q.type === 'noul') return { id: q.id, type: 'noul', probability: 0.5 };
+    const labels = q.type === 'choice' ? q.options : q.levels;
+    const scores = labels.map((label) => {
+      const shared = label
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length >= 3 && words.has(w)).length;
+      return 1 + 4 * shared;
+    });
+    const sum = scores.reduce((s, v) => s + v, 0);
+    return { id: q.id, type: q.type, probabilities: scores.map((v) => v / sum) };
+  });
+}
+
 /** The stub OP6 adapter. `modelRef` matches the manifest's first row so a build stamps a real ref. */
 export function stubAdapter(overrides = {}) {
   return {
@@ -45,6 +77,17 @@ export function stubAdapter(overrides = {}) {
     device: 'test',
     complete: (prompt) => `STUB COMPLETION: ${prompt.slice(0, 40)}`,
     embed: deterministicEmbed,
+    decide: deterministicDecide,
+    ...overrides,
+  };
+}
+
+/** D144: the decide block the stub's first row declares (measured, so the bank inbox accepts it). */
+export function stubDecideBlock(overrides = {}) {
+  return {
+    questionTypes: ['noul', 'choice', 'score'],
+    maxChoices: 16,
+    calibration: { method: 'stub: deterministic word overlap', measured: true, ece: 0.05, evaluatedOn: 'a synthetic stub set' },
     ...overrides,
   };
 }
@@ -69,6 +112,8 @@ export function stubManifest() {
       qualityEn: 'English quality not measured.',
       qualityMeasured: false,
       contextTokens: 8192,
+      languages: ['de', 'fr', 'it', 'en'],
+      decide: stubDecideBlock(),
     },
     {
       modelRef: 'stub-9b-q4',

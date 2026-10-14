@@ -31,12 +31,17 @@ import { join, resolve } from 'node:path';
 import { ok, err, type Result } from '../result.js';
 import { SqliteStore } from '../store/sqlite-store.js';
 import { SCHEMA_GENERATION } from '../store/schema.js';
-import { createBackup, restoreBackup } from '../data/portability.js';
+import { createBackup, restoreBackup, remapCopiedWorkspaceIds } from '../data/portability.js';
+import { sweepUnpairedTestmandantLinks, unlinkPlanTestmandant } from '../migration/trialReset.js';
+import { owningPlan } from '../migration/testmandant.js';
 import { writeLandscape, LandscapeIntegrityError } from './controlFile.js';
 import { type Environment, type LandscapeControlFile, type Sanitization } from './model.js';
 import { canCopyDown, resolveTierRank } from './tierRank.js';
 import { applySanitization, workspaceScope } from './sanitize.js';
 import { neutralizeSecrets, type NeutralizeSummary } from './secrets.js';
+// FINDING #2 (a copy never inherits an ON egress dial or the source's stream epoch): the rule lives in
+// sync/, beside `remintEpoch`, and G04 `restoreBackup` applies the same function to its own workspace.
+import { resetPublishDial, type PublishResetSummary } from '../sync/publishReset.js';
 // `readOrBootstrap` is a VALUE import from operations.ts, and operations.ts value-imports this module`s
 // copy verbs: a cycle that is safe because every use on both sides is inside a function body (lazy),
 // never at module-init time. `LandscapeDeps` is a type-only import (erased at runtime).
@@ -203,46 +208,6 @@ function withImmutabilitySuspended<T>(db: Database.Database, fn: () => T): T {
   }
 }
 
-interface PublishResetSummary {
-  /** Workspaces whose `sync_publish_state.publishing` was forced to 0 (in scope). */
-  readonly workspacesReset: number;
-  /** Workspaces whose stream `epoch` was re-minted (those that had a non-null epoch, i.e. a live stream). */
-  readonly epochsReminted: number;
-}
-
-/**
- * FINDING #2: force the egress publish dial OFF and re-mint the stream epoch on every copied workspace.
- * `sync_publish_state` is workspace-scoped, so `restoreBackup` carries `publishing = 1` and the SAME
- * `epoch` verbatim into the copy: a copied env would be primed to egress the source`s ledger facts under
- * the LIVE epoch. `remintEpoch` (sync/outbox.ts) is a `WorkspaceContext` seam the raw-db copy path cannot
- * reach, so the identical effect is applied here in SQL on the building db, scoped exactly like the
- * secret floor (`wsIds` empty = whole instance; §H-TENANT for a mandate copy). Egress is CONSENT: a copy
- * must never inherit an ON dial, and re-minting the epoch makes any consumer that had been following the
- * source see a fork rather than silently replay mismatched history (the remintEpoch contract).
- */
-function resetPublishDial(db: Database.Database, ids: { next(prefix: string): string }, wsIds: readonly string[]): PublishResetSummary {
-  const has = db
-    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sync_publish_state'")
-    .get();
-  if (has === undefined) return { workspacesReset: 0, epochsReminted: 0 };
-
-  const idList = wsIds.length > 0 ? wsIds.map(() => '?').join(', ') : null;
-  const whereScope = idList !== null ? ` WHERE workspace_id IN (${idList})` : '';
-  const params = idList !== null ? [...wsIds] : [];
-
-  // Re-mint the epoch only where a stream actually exists (epoch not null), mirroring remintEpoch.
-  const streams = db
-    .prepare(`SELECT workspace_id AS wid FROM sync_publish_state${whereScope}${whereScope ? ' AND' : ' WHERE'} epoch IS NOT NULL`)
-    .all(...params) as { wid: string }[];
-  const remint = db.prepare('UPDATE sync_publish_state SET epoch = ? WHERE workspace_id = ?');
-  for (const s of streams) remint.run(ids.next('epoch'), s.wid);
-
-  // Force publishing OFF unconditionally across the scope (a copy is never primed to egress).
-  const off = db.prepare(`UPDATE sync_publish_state SET publishing = 0${whereScope}`).run(...params);
-
-  return { workspacesReset: off.changes, epochsReminted: streams.length };
-}
-
 /**
  * A36 §4.2: every EBICS connection a copy carries lands `retired`, whatever the sanitization level and
  * whatever the (owner-only) `retainSecrets` override: a copied environment never fetches from the bank,
@@ -322,6 +287,12 @@ interface CopyRunResult {
   readonly publishReset: PublishResetSummary;
   /** A36: how many copied EBICS connections were retired (a copy never fetches from the bank). */
   readonly ebicsConnectionsRetired: number;
+  /**
+   * D161.2 (critic F2): how many portal links in the copy wait for a new hand-over. The restore lands
+   * every live grant a draft; with the secrets neutralised (the default) the token hashes are random,
+   * so no held link can open the copy at all and the count is 0.
+   */
+  readonly portalLinksAwaitingHandover: number;
 }
 
 /**
@@ -409,25 +380,74 @@ function runCopy(deps: LandscapeDeps, srcEnv: Environment, tgtEnv: Environment, 
       }
     }
 
+    // G12 (critic, 11.10.2026): a copy carries a Testmandant link only for the plan that OWNS it. Books
+    // restored before the fix can hold a copy's plan linking the original's sandbox; copied as is, the
+    // target (no creation receipts, rowids in copy order) could resolve that copy-of-copy as the owner.
+    // The link is cleared, with the trial reset, in the throwaway source copy before its backup.
+    const sourceStore: SqliteStore = srcStore;
+    sourceStore.tx(() => {
+      for (const ws of sources) {
+        const plans = sourceStore.db
+          .prepare('SELECT id, workspace_id, testmandant_workspace_id FROM migration_plan WHERE workspace_id = ? AND testmandant_workspace_id IS NOT NULL')
+          .all(ws.id) as { id: string; workspace_id: string; testmandant_workspace_id: string | null }[];
+        for (const plan of plans) {
+          if (owningPlan({ store: sourceStore }, plan) === 'not_owner') unlinkPlanTestmandant(sourceStore.db, ws.id, plan.id, clock.now());
+        }
+      }
+    });
+
     const newWsIds: string[] = [];
     const provenance: Record<string, string> = {};
     let idx = 0;
+    let portalLinksAwaitingHandover = 0;
     for (const ws of sources) {
-      const cb = createBackup(
-        { store: srcStore, clock, ids, actor: deps.actor, backupDir: bundleDir },
-        { workspaceId: ws.id, idempotencyKey: `env-copy-cb-${idx}` },
+      // K1: the key is the same on EVERY copy (`env-copy-cb-<idx>`), and the snapshot is a byte copy of
+      // the source book, idempotency table included, so a `create_backup` made first on the source under
+      // that key (an old snapshot) used to be replayed here and restored as the copy. The backup runs in
+      // this composite's own idempotency scope, which no source book can hold a record in.
+      const snapshotStore = srcStore;
+      const cb = snapshotStore.innerWrite('env_copy', () =>
+        createBackup(
+          { store: snapshotStore, clock, ids, actor: deps.actor, backupDir: bundleDir },
+          { workspaceId: ws.id, idempotencyKey: `env-copy-cb-${idx}` },
+        ),
       );
       if (!cb.ok) return err('copy_snapshot_failed', { workspace: ws.id, cause: cb });
       const rb = restoreBackup(
-        { store: buildingStore, clock, ids, actor: deps.actor, backupDir: bundleDir },
+        // The Testmandant links survive this restore (an ordinary restore clears them) so the re-point
+        // below can send each one to its Testmandant's copy; the sweep clears the rest.
+        { store: buildingStore, clock, ids, actor: deps.actor, backupDir: bundleDir, keepSiblingTestmandantLinks: true },
         { source: (cb as unknown as { artifactRef: string }).artifactRef, newWorkspaceName: ws.name, confirmed: true },
       );
       if (!rb.ok) return err('copy_restore_failed', { workspace: ws.id, cause: rb });
       const newWsId = (rb as unknown as { workspaceId: string }).workspaceId;
+      portalLinksAwaitingHandover += (rb as unknown as { portalLinksAwaitingHandover?: number }).portalLinksAwaitingHandover ?? 0;
       newWsIds.push(newWsId);
       provenance[ws.id] = newWsId; // SOURCE workspace id -> the TARGET id minted for it this run.
       idx += 1;
     }
+
+    // G04 §0c: each restore re-maps ONE workspace's ids, so a copied workspace that names ANOTHER
+    // workspace of the source (G18: a migration plan names its test mandate) still named the SOURCE
+    // workspace. Now every copied workspace exists, so it is re-pointed at that workspace's copy: this
+    // run's and, for a mandate refresh, the earlier copies still in the target. Only the workspaces this
+    // run copied are touched (a mandate copy leaves the target's other workspaces byte-identical).
+    const knownPairs: Record<string, string> = {};
+    for (const [src, tgt] of Object.entries({ ...opts.priorProvenance, ...provenance })) {
+      if (buildingStore.db.prepare('SELECT 1 FROM "workspace" WHERE id = ?').get(tgt) !== undefined) knownPairs[src] = tgt;
+    }
+    const copyStore: SqliteStore = buildingStore;
+    // Then the SWEEP (G12, owner decision 11.10.2026): a plan whose Testmandant was NOT copied (a
+    // mandate copy of the parent alone) still names the SOURCE instance's workspace, which this target
+    // does not hold. Such a link is cleared with the trial reset an ordinary restore applies, so no
+    // copied plan ever points outside the copies this target holds. A sandbox copied without its plan
+    // lands with no plan linking it, and `discard_testmandant {workspaceId}` is its exit.
+    const copiedTargets = new Set(Object.values(knownPairs));
+    const repoint = (): number => {
+      const changed = remapCopiedWorkspaceIds(copyStore.db, knownPairs, newWsIds);
+      return changed + sweepUnpairedTestmandantLinks(copyStore.db, copiedTargets, newWsIds, clock.now());
+    };
+    withImmutabilitySuspended(copyStore.db, () => copyStore.tx<number>(repoint));
 
     // PHASE 3 sanitize: scope to the copied workspace(s). An instance copy built a fresh target, so
     // every row is a copy and whole-instance scope ([] ) is correct and cheaper; a mandate copy must
@@ -491,6 +511,7 @@ function runCopy(deps: LandscapeDeps, srcEnv: Environment, tgtEnv: Environment, 
       provenance,
       publishReset,
       ebicsConnectionsRetired,
+      portalLinksAwaitingHandover: opts.retainSecrets ? portalLinksAwaitingHandover : 0,
     };
     return ok({ run: runResult });
   } catch (e) {
@@ -699,6 +720,7 @@ export function envCopy(deps: LandscapeDeps, input: CopyInput): Result {
       secretsPerColumn: run.secrets.perColumn,
       publishWorkspacesReset: run.publishReset.workspacesReset,
       publishEpochsReminted: run.publishReset.epochsReminted,
+      portalLinksAwaitingHandover: run.portalLinksAwaitingHandover,
     },
   });
 }
@@ -849,6 +871,7 @@ export function envCreateCopy(deps: LandscapeDeps, input: CreateCopyInput): Resu
       amountsScaled: run.sanitize.amountsScaled,
       secretColumnsProcessed: run.secrets.columnsProcessed,
       secretRowsNeutralized: run.secrets.rowsNeutralized,
+      portalLinksAwaitingHandover: run.portalLinksAwaitingHandover,
     },
   });
 }
@@ -929,7 +952,11 @@ export function envResetCopy(deps: LandscapeDeps, input: ResetCopyInput): Result
     source: sourceName,
     sanitize,
     phases: phases('verify'),
-    summary: { workspacesCopied: run.workspacesCopied, secretRowsNeutralized: run.secrets.rowsNeutralized },
+    summary: {
+      workspacesCopied: run.workspacesCopied,
+      secretRowsNeutralized: run.secrets.rowsNeutralized,
+      portalLinksAwaitingHandover: run.portalLinksAwaitingHandover,
+    },
   });
 }
 

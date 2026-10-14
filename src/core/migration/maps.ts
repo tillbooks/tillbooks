@@ -30,6 +30,7 @@
 import type { WorkspaceContext } from '../context.js';
 import type { Result } from '../result.js';
 import { err, ok } from '../result.js';
+import { isGovernedSeat } from '../access/capability.js';
 import { localePackDef, normalizeToken, DEFAULT_LOCALE_PACK_ID, LOCALE_PACK_IDS } from './locale/registry.js';
 import type { LocalePack } from './locale/registry.js';
 import { sourceAdapterDef } from './adapters/registry.js';
@@ -535,7 +536,8 @@ export function setMap(
 
   const run = (): Result => {
     const now = ctx.clock.now();
-    const provenance: MapProvenance = ctx.actor === 'agent' ? 'agent' : 'manual';
+    // The governed-seat rule, so a served agent member's map is labelled `agent` like the local agent's.
+    const provenance: MapProvenance = isGovernedSeat(ctx.store, ctx.actor) ? 'agent' : 'manual';
     ctx.store.db
       .prepare(
         `INSERT INTO migration_map (id, workspace_id, plan_id, kind, entries, rule_default, provenance, created_at, updated_at)

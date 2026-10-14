@@ -29,11 +29,12 @@ import {
   reportsList,
   reportsRuns,
 } from '../core/reportbuilder/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ReportBuilderActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -59,7 +60,7 @@ export function reportBuilderActions(h: ReportBuilderActionHelpers): readonly Ac
   return [
     ctxAction(
       'reports_save',
-      'write',
+      'write:reversible:internal',
       'Bericht speichern (F01): save a report definition over a REPORT_SOURCES read model (source + filters + columns + format csv|pdf). Validates the source (unknown_source), that every filter names a published field with a type-valid operator (invalid_filter_field), and that columns is a non-empty subset of the published columns, base OR cf: custom fields (columns_empty). Posts nothing (P3); renders no artifact (that is reports_run). Idempotent on idempotencyKey. Gated on A24 reports.write.',
       ctxSchema(
         { name: STR, source: STR, filters: ARR, columns: ARR, format: STR, idempotencyKey: STR },
@@ -69,35 +70,35 @@ export function reportBuilderActions(h: ReportBuilderActionHelpers): readonly Ac
     ),
     ctxAction(
       'reports_update',
-      'write',
+      'write:reversible:internal',
       'Bericht bearbeiten (F01): patch name/filters/columns/format on a saved report. Re-validates the definition against its source; changing source to one that no longer exists is refused (unknown_source). Editing a definition never mutates past report_runs artifacts (history is append-only). Idempotent on idempotencyKey. Gated on A24 reports.write.',
       ctxSchema({ reportId: STR, patch: OBJ, idempotencyKey: STR }, ['reportId', 'idempotencyKey']),
       (ctx, input) => reportsUpdate(ctx, as(input)),
     ),
     ctxAction(
       'reports_duplicate',
-      'write',
+      'write:reversible:internal',
       'Bericht duplizieren (F01): copy a definition with a "(Kopie)" suffix and WITHOUT its schedule or recipients, so a copy never silently starts mailing anyone (P8 spirit). Idempotent on idempotencyKey. Gated on A24 reports.write.',
       ctxSchema({ reportId: STR, idempotencyKey: STR }, ['reportId', 'idempotencyKey']),
       (ctx, input) => reportsDuplicate(ctx, as(input)),
     ),
     ctxAction(
       'reports_delete',
-      'write',
+      'write:final:erase',
       'Bericht löschen (F01): remove a definition and its run history. Refused with retention_locked while any run is retention-linked into E00 and still locked there (E00 owns the OR 958f lock); retained E00 documents are untouched. Deleting also deactivates any schedule, so a deleted report can never fire again. Idempotent on idempotencyKey. Gated on A24 reports.write.',
       ctxSchema({ reportId: STR, idempotencyKey: STR }, ['reportId', 'idempotencyKey']),
       (ctx, input) => reportsDelete(ctx, as(input)),
     ),
     ctxAction(
       'reports_run',
-      'write',
+      'write:correctable:derived',
       'Bericht ausführen (F01): compute the source read model with the stored filters (P5), project the stored columns, render CSV (RFC-4180, UTF-8 BOM, machine-neutral integer Rappen) or PDF (report header + rows, de-CH money) as a LOCAL artifact (OP4), append a report_runs row and return the content. An empty result set is a valid ok run (row_count 0, header-only CSV). With retain:true an accounting-record source additionally links the artifact into E00 (F01 never computes a retention date; E00 owns OR 958f). Re-running the same idempotencyKey returns the original artifact. Asserts the source own read gates too. Gated on A24 reports.run.',
       ctxSchema({ reportId: STR, format: STR, retain: BOOL, idempotencyKey: STR }, ['reportId', 'idempotencyKey']),
       (ctx, input) => reportsRun(ctx, as(input)),
     ),
     ctxAction(
       'reports_schedule',
-      'write',
+      'write:reversible:internal',
       'Zeitplan setzen (F01): store a validated cron-subset schedule (freq daily|weekly|monthly + at HH:mm, weekly weekday, monthly dayOfMonth) on a saved report; an unsupported expression is refused (invalid_schedule). Recipients are stored draft-gated (P8); in the OSS core there is no delivery transport, so delivery stays inactive (reason cloud_tier) and the LOCAL run always works. schedule:null clears the schedule and keeps the report. Idempotent on idempotencyKey. Gated on A24 reports.write.',
       ctxSchema({ reportId: STR, schedule: OBJ, recipients: ARR, idempotencyKey: STR }, ['reportId', 'idempotencyKey']),
       (ctx, input) => reportsSchedule(ctx, as(input)),

@@ -12,7 +12,7 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { requireString, optionalText } from '../ledger/inputGuards.js';
 import { applySavedView } from '../customization/views.js';
-import { ACCOUNT_TYPES } from './kmuSeed.js';
+import { ACCOUNT_TYPES, KMU_CORE_SEED, STATEMENT_VOUCHER_SEED_NUMBERS } from './kmuSeed.js';
 import { topUpChartOfAccounts } from './topUp.js';
 import type { AccountType } from './kmuSeed.js';
 
@@ -25,6 +25,29 @@ interface AccountRow {
   vat_code_default: string | null;
   cost_center_allowed: number;
   archived: number;
+  statement_is_voucher: number | null;
+}
+
+/**
+ * D142 amendment: the account numbers whose "Beleg = Kontoauszug" is ON by default, checked against the
+ * seed at load so the list can never name an account the chart does not ship.
+ */
+export const STATEMENT_VOUCHER_DEFAULT_NUMBERS: readonly string[] = STATEMENT_VOUCHER_SEED_NUMBERS.filter((n) =>
+  KMU_CORE_SEED.some((a) => a.number === n),
+);
+
+/**
+ * SQL: is the account under alias `a` one whose voucher is the bank statement? An explicit setting on
+ * the account wins; NULL falls back to the seed default. The ONE predicate every reader uses.
+ */
+export function STATEMENT_IS_VOUCHER_SQL(a: string): string {
+  const defaults = STATEMENT_VOUCHER_DEFAULT_NUMBERS.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ');
+  return `(COALESCE(${a}.statement_is_voucher, CASE WHEN ${a}.number IN (${defaults === '' ? "''" : defaults}) THEN 1 ELSE 0 END) = 1)`;
+}
+
+function statementIsVoucher(row: Pick<AccountRow, 'statement_is_voucher' | 'number'>): boolean {
+  if (row.statement_is_voucher !== null) return row.statement_is_voucher === 1;
+  return STATEMENT_VOUCHER_DEFAULT_NUMBERS.includes(row.number);
 }
 
 function mapAccount(row: AccountRow) {
@@ -37,6 +60,8 @@ function mapAccount(row: AccountRow) {
     vatCodeDefault: row.vat_code_default,
     costCenterAllowed: row.cost_center_allowed === 1,
     archived: row.archived === 1,
+    /** D142 amendment: "Beleg = Kontoauszug", the effective value (the account's own, else the seed default). */
+    statementIsVoucher: statementIsVoucher(row),
   };
 }
 
@@ -106,7 +131,7 @@ export function createAccount(ctx: WorkspaceContext, input: CreateAccountInput):
 
 export function updateAccount(
   ctx: WorkspaceContext,
-  input: { accountId: string; name?: string; vatCodeDefault?: string; costCenterAllowed?: boolean },
+  input: { accountId: string; name?: string; vatCodeDefault?: string; costCenterAllowed?: boolean; statementIsVoucher?: boolean },
 ): Result {
   const guard = requireString(input.accountId, 'accountId') ?? optionalText(input.name, 'name');
   if (guard) return guard;
@@ -129,6 +154,12 @@ export function updateAccount(
   if (input.costCenterAllowed !== undefined) {
     sets.push('cost_center_allowed = ?');
     params.push(input.costCenterAllowed ? 1 : 0);
+  }
+  // D142 amendment: "Beleg = Kontoauszug", set on the account with its own edit right.
+  if (input.statementIsVoucher !== undefined) {
+    if (typeof input.statementIsVoucher !== 'boolean') return err('invalid_input', { field: 'statementIsVoucher' });
+    sets.push('statement_is_voucher = ?');
+    params.push(input.statementIsVoucher ? 1 : 0);
   }
   if (sets.length > 0) {
     ctx.store.db.prepare(`UPDATE account SET ${sets.join(', ')} WHERE id = ?`).run(...params, input.accountId);

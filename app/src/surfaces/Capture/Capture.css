@@ -41,6 +41,27 @@
   line-height: var(--t-lh-sm);
   color: var(--t-text-dim);
 }
+/* Corrections a different bill discarded: dim history under the live proposal, never a warning red. */
+.capture__discarded {
+  margin-top: var(--t-space-2);
+}
+.capture__discardedTitle {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+}
+.capture__discardedHint {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+.capture__discarded ul {
+  margin: var(--t-space-1) 0 0;
+  padding-left: var(--t-space-2);
+  color: var(--t-text-dim);
+}
 .capture__docref {
   color: var(--t-text-dim);
   margin: 0;
@@ -78,4 +99,44 @@
 }
 .capture__committed {
   margin: 0;
+}
+
+/* A31 §0a: reading the bill's QR code in, a disclosure inside the review drawer. */
+.capture__qr {
+  margin-top: var(--t-space-2);
+}
+.capture__qr > summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+/* The body is its own flex column: a <details> element is not a reliable flex container. */
+.capture__qrBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin-top: var(--t-space-1);
+}
+.capture__qrText {
+  height: auto;
+  width: 100%;
+  padding: var(--t-space-1);
+  white-space: pre;
+  overflow-x: auto;
+}
+.capture__qrNote {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+.capture__qrOutcome p,
+.capture__qrOutcome ul {
+  margin: 0;
+}
+.capture__qrOutcome ul {
+  padding-left: var(--t-space-2);
+}
+.capture__qrBody > .btn {
+  align-self: flex-start;
+  margin-top: var(--t-space-1);
 }

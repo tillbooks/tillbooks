@@ -39,11 +39,12 @@ import {
   setWriteOffThreshold,
   PAYMENT_INTENTS,
 } from '../core/payments/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface PaymentActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -114,7 +115,7 @@ export function paymentActions(h: PaymentActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'record_payment',
-      'write',
+      'write:correctable:books',
       `Record an incoming or outgoing payment and post its balanced entry (bucht eine Zahlung). Allocates across one or several open items with partial amounts, Skonto, and an Ausbuchung of a small residual; any remainder is parked as a Guthaben for its counterparty. Requires intent='${PAYMENT_INTENTS.record}', because money never moves as a side effect.`,
       ctxSchema({ ...MONEY_SIDE, intent: STR, idempotencyKey: STR }, [
         'direction',
@@ -128,7 +129,7 @@ export function paymentActions(h: PaymentActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'allocate_payment',
-      'write',
+      'write:correctable:books',
       `Allocate a parked Guthaben to open items. The money was already booked when the payment arrived, so this posts no entry: it records which open items that money settles. Requires intent='${PAYMENT_INTENTS.allocate}'. A wrong allocation is corrected by reversing the whole payment and recording it again.`,
       ctxSchema({ paymentId: STR, allocations: ALLOCATIONS, intent: STR, idempotencyKey: STR }, [
         'paymentId',
@@ -140,7 +141,7 @@ export function paymentActions(h: PaymentActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'reverse_payment',
-      'write',
+      'write:correctable:books',
       `Reverse a payment (storniert eine Zahlung): posts a reversing entry and re-opens every document it settled. It never deletes, the original entry stays untouched, and a payment is always reversed as a whole. Requires intent='${PAYMENT_INTENTS.reverse}'.`,
       ctxSchema({ paymentId: STR, date: STR, intent: STR, idempotencyKey: STR }, [
         'paymentId',
@@ -165,7 +166,7 @@ export function paymentActions(h: PaymentActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'set_write_off_threshold',
-      'write',
+      'write:reversible:internal',
       'Set the residual below which the Studio may offer a one-click Ausbuchung, in Rappen (default CHF 1.00). It governs the offer only: a larger write-off stays recordable when it is stated deliberately. This is a product setting and not a rounding rule.',
       ctxSchema({ thresholdMinor: INT, idempotencyKey: STR }, ['thresholdMinor', 'idempotencyKey']),
       (ctx, input) => setWriteOffThreshold(ctx, input as never),

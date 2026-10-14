@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { act, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
@@ -211,6 +211,11 @@ const saldoCanned = (): Canned => ({
   vat_saldo_eligibility: ELIGIBILITY,
 });
 
+/** A workspace that already HAS Ist stored (through the engine verb, an agent, or before D152). */
+const effektivIstConfig = { ...effektivConfig, timing: 'ist' };
+
+const effektivIstCanned = (): Canned => ({ ...effektivCanned(), vat_config: ok(effektivIstConfig) });
+
 /** The three fixtures of the election read model (G17 §8b): they MUST decode to three states. */
 const UNDECIDED_CONFIG = ok({ timing: 'soll', registered: false, saldoRates: [] });
 const NOT_LIABLE_CONFIG = ok({ method: 'none', timing: 'soll', registered: false, saldoRates: [] });
@@ -360,15 +365,19 @@ describe('VatSettings, five states', () => {
     expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument();
   });
 
-  it('renders the configured success face with the method/timing badge', async () => {
+  it('renders the configured success face: the election as checked radios, no value pills (D152)', async () => {
     renderVat(effektivCanned());
-    expect(await screen.findByText('Methode: Effektiv')).toBeInTheDocument();
-    expect(screen.getByText('Abrechnungsart: Soll (vereinbart)')).toBeInTheDocument();
+    expect(await screen.findByRole('radio', { name: 'Effektiv' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Soll (vereinbart)' })).toBeChecked();
+    // The two pills repeated the checked radios right below them (rule 3): gone.
+    expect(screen.queryByText('Methode: Effektiv')).toBeNull();
+    expect(screen.queryByText('Abrechnungsart: Soll (vereinbart)')).toBeNull();
+    expect(document.querySelector('.vat-badge')).toBeNull();
   });
 
   it('has no axe violations on the configured success render', async () => {
     const { container } = renderVat(effektivCanned());
-    await screen.findByText('Methode: Effektiv');
+    await screen.findByRole('radio', { name: 'Effektiv' });
     // Audit the SETTLED render: the eligibility read resolves after mount, and axe on a
     // mid-transition DOM is the same nondeterminism the ask-set race had.
     await screen.findByText(MEASURED_LINE);
@@ -399,7 +408,7 @@ describe('VatSettings, Enable MWST', () => {
 describe('VatSettings, method switch effektiv <-> saldo', () => {
   it('reveals the saldo editor only under method=saldo', async () => {
     renderVat(effektivCanned());
-    await screen.findByText('Methode: Effektiv');
+    await screen.findByRole('radio', { name: 'Effektiv' });
     // Effektiv: no saldo editor, but the tax-code register is shown.
     expect(screen.queryByRole('heading', { name: 'Saldosteuersätze' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Steuercodes' })).toBeInTheDocument();
@@ -681,33 +690,428 @@ describe('VatSettings, the F11 panels, measured rather than assumed', () => {
   });
 });
 
+/**
+ * THE vat_configure WIRE, PINNED (D152 cognitive-load pass, statutory setting).
+ *
+ * The D152 pass changed how the election LOOKS (labels only, the sentences behind an (i)) and one
+ * thing about what it allows: Ist can no longer be newly chosen from the Studio. Nothing about what
+ * a save SENDS may move. These payloads are exact (`toEqual`, not `toMatchObject`), and this block
+ * was committed and run green against the surface BEFORE the D152 change, then again after it, so
+ * the two runs are the before/after diff of the wire: identical. D153 (04.10.2026) put one confirm in
+ * front of the Ist-to-Soll save; the payload behind that confirm is still pinned exactly here.
+ *
+ * The Ist cases are the critical half. A workspace that already HAS `timing:'ist'` stored must
+ * save `ist` back when the person leaves it alone, never a silent `soll`.
+ */
+/** The settled election: the method radios are on screen and the eligibility read has landed. */
+async function settled(): Promise<void> {
+  await screen.findByRole('radio', { name: 'Effektiv' });
+  await screen.findByText(MEASURED_LINE);
+}
+
+async function saveAndCapture(spy: ReturnType<typeof vi.fn<CannedHandler>>): Promise<Record<string, unknown>> {
+  await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+  await waitFor(() => expect(spy).toHaveBeenCalledOnce());
+  return spy.mock.calls[0][0];
+}
+
+/**
+ * Answer the D153 one-way confirm. Saving Soll over a STORED Ist asks first; the payload that the
+ * confirm sends is the payload the save would have sent before D153 (pinned below).
+ */
+async function confirmLeaveIst(): Promise<void> {
+  const dialog = await screen.findByRole('alertdialog', { name: 'Auf Soll wechseln?' });
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Fortfahren' }));
+}
+
+describe('VatSettings, the vat_configure payload is unchanged by D152', () => {
+  it('a Soll workspace saved untouched sends exactly its stored election', async () => {
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...effektivCanned(), vat_configure: spy });
+    await settled();
+    expect(await saveAndCapture(spy)).toEqual({
+      workspaceId: 'ws_test',
+      method: 'effektiv',
+      timing: 'soll',
+      registered: true,
+      vatNumber: 'CHE-123.456.789 MWST',
+      idempotencyKey: expect.any(String),
+    });
+  });
+
+  it('an Ist workspace saved untouched sends ist back, never a silent soll', async () => {
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...effektivIstCanned(), vat_configure: spy });
+    await settled();
+    expect(screen.getByRole('radio', { name: 'Ist (vereinnahmt)' })).toBeChecked();
+    expect(await saveAndCapture(spy)).toEqual({
+      workspaceId: 'ws_test',
+      method: 'effektiv',
+      timing: 'ist',
+      registered: true,
+      vatNumber: 'CHE-123.456.789 MWST',
+      idempotencyKey: expect.any(String),
+    });
+  });
+
+  it('an Ist workspace moved to Soll sends soll', async () => {
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...effektivIstCanned(), vat_configure: spy });
+    await settled();
+    await userEvent.click(screen.getByRole('radio', { name: 'Soll (vereinbart)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    // D153: the one-way step asks first; the payload behind the confirm is the pre-D152 one, exact.
+    await confirmLeaveIst();
+    await waitFor(() => expect(spy).toHaveBeenCalledOnce());
+    expect(spy.mock.calls[0][0]).toEqual({
+      workspaceId: 'ws_test',
+      method: 'effektiv',
+      timing: 'soll',
+      registered: true,
+      vatNumber: 'CHE-123.456.789 MWST',
+      idempotencyKey: expect.any(String),
+    });
+  });
+
+  it('an Ist workspace moved to Soll and back sends ist: the stored state stays choosable', async () => {
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...effektivIstCanned(), vat_configure: spy });
+    await settled();
+    await userEvent.click(screen.getByRole('radio', { name: 'Soll (vereinbart)' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Ist (vereinnahmt)' }));
+    expect((await saveAndCapture(spy)).timing).toBe('ist');
+  });
+
+  it('a Saldo workspace on Ist saved untouched sends its whole stored election', async () => {
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...saldoCanned(), vat_configure: spy });
+    await screen.findByText('Tätigkeiten');
+    await screen.findByText(MEASURED_LINE);
+    expect(await saveAndCapture(spy)).toEqual({
+      workspaceId: 'ws_test',
+      method: 'saldo',
+      timing: 'ist',
+      registered: true,
+      idempotencyKey: expect.any(String),
+      saldoRates: [{ rateBp: 620 }, { rateBp: 370 }],
+      saldoActivities: [
+        { activityId: 'restauration', name: 'Restauration', rateBp: 620, accounts: ['3200'] },
+        { activityId: 'ablieferung', name: 'Ablieferung', rateBp: 370, accounts: ['3000'] },
+      ],
+    });
+  });
+
+  it('a Soll workspace moved to Saldosteuersatz with a rate sends the saldo election on soll', async () => {
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...effektivCanned(), vat_configure: spy });
+    await settled();
+    await userEvent.click(screen.getByRole('radio', { name: 'Saldosteuersatz' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Satz hinzufügen' }));
+    await userEvent.click(screen.getByRole('combobox', { name: 'Saldosteuersatz 1' }));
+    await userEvent.click(screen.getByRole('option', { name: '6.2%' }));
+    expect(await saveAndCapture(spy)).toEqual({
+      workspaceId: 'ws_test',
+      method: 'saldo',
+      timing: 'soll',
+      registered: true,
+      vatNumber: 'CHE-123.456.789 MWST',
+      idempotencyKey: expect.any(String),
+      saldoRates: [{ rateBp: 620 }],
+      saldoActivities: [],
+    });
+  });
+});
+
+/** The (i) card whose words include `text`: the shared Tooltip's role=tooltip bubble. */
+function cardWith(text: string | RegExp): HTMLElement {
+  const card = screen.getAllByRole('tooltip', { hidden: true }).find((el) =>
+    typeof text === 'string' ? (el.textContent ?? '').includes(text) : text.test(el.textContent ?? ''),
+  );
+  if (card === undefined) throw new Error(`no (i) card holds ${String(text)}`);
+  return card;
+}
+
+/** The config panel's words OUTSIDE the (i) cards: what a person reads at rest. */
+function restingWords(): string[] {
+  const panel = document.querySelector('.vat-panel');
+  if (panel === null) throw new Error('the config panel is not on screen');
+  const clone = panel.cloneNode(true) as HTMLElement;
+  for (const card of clone.querySelectorAll('[role="tooltip"]')) card.remove();
+  return (clone.textContent ?? '').split(/\s+/).filter((w) => /\p{L}/u.test(w));
+}
+
+describe('VatSettings, the election at rest (D152 cognitive load)', () => {
+  it('shows labels only: every sentence and the MWSTG paragraphs sit in (i) cards, closed', async () => {
+    renderVat(effektivCanned());
+    await settled();
+    // The resting panel is labels and one state line: Methode, Effektiv, Saldosteuersatz,
+    // Abrechnungsart, Soll (vereinbart), "Ist: rechnet TILL noch nicht", MWST-Nummer, Speichern.
+    expect(restingWords().length).toBeLessThanOrEqual(16);
+    // Each sentence still exists, word for word, inside a closed card.
+    for (const sentence of [
+      'Du rechnest die MWST auf deinem Umsatz zum gesetzlichen Satz ab und ziehst die Vorsteuer separat ab.',
+      'Du rechnest den Umsatz zu einem von der ESTV bewilligten Satz ab.',
+      'Die MWST wird fällig, wenn du die Rechnung stellst',
+      'Ein Wechsel gilt erst ab Beginn einer Steuerperiode.',
+      'Die gewählte Abrechnungsart musst du mindestens eine Steuerperiode behalten.',
+    ]) {
+      expect(cardWith(sentence)).not.toHaveClass('is-open');
+    }
+    // The measured eligibility comparison moved into the Saldo card with its figure.
+    expect(cardWith("Dein steuerbarer Umsatz 2025: CHF 312'400.00.")).toHaveTextContent(/Zulässig bis/);
+  });
+
+  it('keeps every MWSTG article reference, each in the card it anchors', async () => {
+    renderVat(effektivCanned());
+    await settled();
+    expect(cardWith('MWSTG Art. 37 Abs. 1 und 4')).toHaveTextContent(/Ein Wechsel gilt erst ab Beginn/);
+    expect(cardWith('MWSTG Art. 39 Abs. 3')).toHaveTextContent(/mindestens eine Steuerperiode behalten/);
+    expect(cardWith('MWSTG Art. 39 Abs. 2')).toHaveTextContent(/nur nach vereinbarten Entgelten \(Soll\)/);
+  });
+
+  it('each radio names its sentence as its description, the group its binding facts', async () => {
+    renderVat(effektivCanned());
+    await settled();
+    expect(screen.getByRole('radio', { name: 'Effektiv' })).toHaveAccessibleDescription(
+      'Du rechnest die MWST auf deinem Umsatz zum gesetzlichen Satz ab und ziehst die Vorsteuer separat ab.',
+    );
+    expect(screen.getByRole('radio', { name: 'Soll (vereinbart)' })).toHaveAccessibleDescription(
+      /Die MWST wird fällig, wenn du die Rechnung stellst/,
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Methode' })).toHaveAccessibleDescription(/MWSTG Art\. 37 Abs\. 1 und 4/);
+    expect(screen.getByRole('radiogroup', { name: 'Abrechnungsart' })).toHaveAccessibleDescription(/MWSTG Art\. 39 Abs\. 3/);
+  });
+
+  it('opens an (i) card on keyboard focus and closes it on Escape', async () => {
+    renderVat(effektivCanned());
+    await settled();
+    const trigger = screen.getByRole('button', { name: 'Wann ein Wechsel der Methode gilt' });
+    const card = cardWith('MWSTG Art. 37 Abs. 1 und 4');
+    expect(card).not.toHaveClass('is-open');
+    act(() => trigger.focus());
+    expect(card).toHaveClass('is-open');
+    await userEvent.keyboard('{Escape}');
+    expect(card).not.toHaveClass('is-open');
+  });
+
+  it('a Soll workspace cannot newly choose Ist: no Ist radio, the one line with its (i) instead', async () => {
+    renderVat(effektivCanned());
+    await settled();
+    expect(screen.queryByRole('radio', { name: 'Ist (vereinnahmt)' })).toBeNull();
+    const timing = screen.getByRole('radiogroup', { name: 'Abrechnungsart' });
+    expect(within(timing).getAllByRole('radio')).toHaveLength(1);
+    expect(screen.getByText('Ist: rechnet TILL noch nicht')).toBeInTheDocument();
+    // Its (i) explains both what Ist is and why TILL does not offer it.
+    expect(screen.getByRole('button', { name: 'Warum TILL Ist noch nicht rechnet' })).toBeInTheDocument();
+    expect(cardWith('Die MWST wird fällig, wenn die Zahlung eingeht.')).toHaveTextContent(/MWSTG Art\. 39 Abs\. 2/);
+    // Not the stored-state warning: this workspace is on Soll.
+    expect(document.querySelector('.vat-ist-line--stored')).toBeNull();
+  });
+
+  it('an Ist workspace shows its stored Ist truthfully: checked, with the standing warning line', async () => {
+    renderVat(effektivIstCanned());
+    await settled();
+    expect(screen.getByRole('radio', { name: 'Ist (vereinnahmt)' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Soll (vereinbart)' })).not.toBeChecked();
+    const line = document.querySelector('.vat-ist-line--stored');
+    expect(line).not.toBeNull();
+    expect(line).toHaveTextContent('Ist: rechnet TILL noch nicht');
+    // The 44-word limitation is no longer a standing paragraph: it is the line's (i) card.
+    expect(cardWith(/nur nach vereinbarten Entgelten \(Soll\)/).closest('.vat-ist-line--stored')).not.toBeNull();
+    expect(screen.getByRole('radio', { name: 'Ist (vereinnahmt)' })).toHaveAccessibleDescription(
+      /Die MWST wird fällig, wenn die Zahlung eingeht/,
+    );
+  });
+
+  it('once a save lands Soll on an Ist workspace, Ist cannot be chosen again', async () => {
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...effektivIstCanned(), vat_configure: spy });
+    await settled();
+    await userEvent.click(screen.getByRole('radio', { name: 'Soll (vereinbart)' }));
+    // Before the save the stored Ist is still choosable (the move can be undone).
+    expect(screen.getByRole('radio', { name: 'Ist (vereinnahmt)' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await confirmLeaveIst();
+    await waitFor(() => expect(spy).toHaveBeenCalledOnce());
+    expect(spy.mock.calls[0][0].timing).toBe('soll');
+    await screen.findByText('Gespeichert');
+    // The engine now holds Soll, so the Ist radio is gone and the line is the plain fact again.
+    expect(screen.queryByRole('radio', { name: 'Ist (vereinnahmt)' })).toBeNull();
+    expect(document.querySelector('.vat-ist-line--stored')).toBeNull();
+    // A Soll-to-Soll save asks nothing: there is no one-way step left to confirm.
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(spy.mock.calls[1][0].timing).toBe('soll');
+  });
+
+  it('a REFUSED save leaves the stored Ist in place, still checked and still choosable', async () => {
+    const spy = vi.fn<CannedHandler>(() => reject('invalid_vat_number'));
+    renderVat({ ...effektivIstCanned(), vat_configure: spy });
+    await settled();
+    await userEvent.click(screen.getByRole('radio', { name: 'Soll (vereinbart)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await confirmLeaveIst();
+    await waitFor(() => expect(spy).toHaveBeenCalledOnce());
+    await screen.findByText('Format muss CHE-###.###.### MWST sein.');
+    // Nothing landed, so the engine still holds Ist and the surface still says so.
+    expect(screen.getByRole('radio', { name: 'Ist (vereinnahmt)' })).toBeInTheDocument();
+    expect(document.querySelector('.vat-ist-line--stored')).not.toBeNull();
+  });
+
+  it('a failed eligibility read offers its retry beside the Saldo (i); an unmeasurable one does not', async () => {
+    let calls = 0;
+    renderVat({
+      ...effektivCanned(),
+      vat_saldo_eligibility: () => {
+        calls += 1;
+        return calls === 1 ? reject('internal_error', 500) : ELIGIBILITY;
+      },
+    });
+    await screen.findByRole('radio', { name: 'Effektiv' });
+    const retry = await screen.findByRole('button', { name: 'Erneut versuchen' });
+    expect(cardWith('Der Umsatz konnte nicht geladen werden.')).toBeInTheDocument();
+    await userEvent.click(retry);
+    await screen.findByText(MEASURED_LINE);
+    expect(screen.queryByRole('button', { name: 'Erneut versuchen' })).toBeNull();
+  });
+
+  it('an engine that cannot measure (an Ist workspace) gets the words and no standing retry', async () => {
+    renderVat({
+      ...effektivIstCanned(),
+      vat_saldo_eligibility: ok({ year: '2025', measured: null, unavailable: { reason: 'ist' } }),
+    });
+    await screen.findByRole('radio', { name: 'Effektiv' });
+    await waitFor(() => expect(cardWith('Der Umsatz konnte nicht geladen werden.')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Erneut versuchen' })).toBeNull();
+  });
+
+  it('D153: leaving a stored Ist asks first; Cancel writes nothing and keeps Ist selected', async () => {
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...effektivIstCanned(), vat_configure: spy });
+    await settled();
+    await userEvent.click(screen.getByRole('radio', { name: 'Soll (vereinbart)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Auf Soll wechseln?' });
+    expect(dialog).toHaveAccessibleDescription('Nach dem Speichern kannst du Ist hier nicht mehr wählen. Fortfahren?');
+    // Nothing is written while the question stands.
+    expect(spy).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Abbrechen' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
+    expect(screen.getByRole('radio', { name: 'Ist (vereinnahmt)' })).toBeChecked();
+    expect(document.querySelector('.vat-ist-line--stored')).not.toBeNull();
+    // A save after the cancel is an untouched Ist save: no question, ist on the wire.
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(spy).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(spy.mock.calls[0][0]).toEqual({
+      workspaceId: 'ws_test',
+      method: 'effektiv',
+      timing: 'ist',
+      registered: true,
+      vatNumber: 'CHE-123.456.789 MWST',
+      idempotencyKey: expect.any(String),
+    });
+  });
+
+  it('D153: Escape on the confirm is a Cancel too: nothing written, Ist kept', async () => {
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...effektivIstCanned(), vat_configure: spy });
+    await settled();
+    await userEvent.click(screen.getByRole('radio', { name: 'Soll (vereinbart)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await screen.findByRole('alertdialog', { name: 'Auf Soll wechseln?' });
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
+    expect(screen.getByRole('radio', { name: 'Ist (vereinnahmt)' })).toBeChecked();
+  });
+
+  it('D153: an untouched save on a Soll workspace and an untouched Ist save never ask', async () => {
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...effektivCanned(), vat_configure: spy });
+    await settled();
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(spy).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('F2: a save that moves off Ist re-measures, so the Saldo (i) does not stay unavailable', async () => {
+    let stored: 'ist' | 'soll' = 'ist';
+    const eligibilitySpy = vi.fn<CannedHandler>(() =>
+      stored === 'ist' ? ok({ year: '2025', measured: null, unavailable: { reason: 'ist' } }) : ELIGIBILITY,
+    );
+    renderVat({
+      ...effektivIstCanned(),
+      vat_saldo_eligibility: eligibilitySpy,
+      vat_configure: (input) => {
+        stored = input.timing === 'ist' ? 'ist' : 'soll';
+        return ok();
+      },
+    });
+    await screen.findByRole('radio', { name: 'Effektiv' });
+    await waitFor(() => expect(cardWith('Der Umsatz konnte nicht geladen werden.')).toBeInTheDocument());
+    expect(eligibilitySpy).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('radio', { name: 'Soll (vereinbart)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await confirmLeaveIst();
+    await screen.findByText('Gespeichert');
+    // Re-measured after the timing landed: the figure replaces the unavailable line.
+    await screen.findByText(MEASURED_LINE);
+    expect(eligibilitySpy).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('Der Umsatz konnte nicht geladen werden.')).toBeNull();
+  });
+
+  it('F2: a save that leaves the timing as it was does not re-measure', async () => {
+    const eligibilitySpy = vi.fn<CannedHandler>(() => ELIGIBILITY);
+    const spy = vi.fn<CannedHandler>(() => ok());
+    renderVat({ ...effektivCanned(), vat_saldo_eligibility: eligibilitySpy, vat_configure: spy });
+    await settled();
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await screen.findByText('Gespeichert');
+    expect(eligibilitySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no axe violations on an Ist workspace at rest', async () => {
+    const { container } = renderVat(effektivIstCanned());
+    await settled();
+    const results = await axe(container, {
+      rules: { region: { enabled: false }, 'page-has-heading-one': { enabled: false } },
+    });
+    expect(results).toHaveNoViolations();
+  });
+});
+
 describe('VatSettings, save confirmation (D33 defect 1)', () => {
   it('shows and KEEPS the "Gespeichert" confirmation after a config save, with no skeleton flash', async () => {
     // LOADING-PROOF-EXEMPT: A success-path test that names the skeleton only to assert its ABSENCE
     // after a save. It reads the saved config before it asserts, so a surface that never read would
     // fail earlier.
     //
-    // The read still answers the ORIGINAL config (timing: soll). Under the old behaviour the save
-    // ran a full surface reload that flipped to the skeleton and remounted the panel: the edited Ist
+    // The read still answers the ORIGINAL config (timing: ist). Under the old behaviour the save
+    // ran a full surface reload that flipped to the skeleton and remounted the panel: the edited
     // timing reverted and the just-set "Gespeichert" line was unmounted the instant it rendered.
+    // (Since D152 Ist cannot be newly chosen, so the edit is the other direction: Ist to Soll.)
     const configureSpy = vi.fn<CannedHandler>(() => ok());
-    renderVat({ ...effektivCanned(), vat_configure: configureSpy });
-    await screen.findByText('Methode: Effektiv');
+    renderVat({ ...effektivIstCanned(), vat_configure: configureSpy });
+    await screen.findByRole('radio', { name: 'Effektiv' });
 
     // Edit the config, then save.
-    await userEvent.click(screen.getByRole('radio', { name: 'Ist (vereinnahmt)' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Soll (vereinbart)' }));
     await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await confirmLeaveIst();
     await waitFor(() => expect(configureSpy).toHaveBeenCalledOnce());
 
     // The confirmation is actually observable.
     expect(await screen.findByText('Gespeichert')).toBeInTheDocument();
 
     // It SURVIVES: no reload, so a tick later the line is still there, no loading skeleton has
-    // appeared (nothing carries aria-busy), and the edited Ist timing is kept rather than reverted.
+    // appeared (nothing carries aria-busy), and the edited Soll timing is kept rather than reverted.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(screen.getByText('Gespeichert')).toBeInTheDocument();
     expect(document.querySelector('[aria-busy="true"]')).toBeNull();
-    expect(screen.getByRole('radio', { name: 'Ist (vereinnahmt)' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Soll (vereinbart)' })).toBeChecked();
   });
 
   it('does NOT re-read the surface on a config save (the panel stays mounted)', async () => {
@@ -718,7 +1122,7 @@ describe('VatSettings, save confirmation (D33 defect 1)', () => {
       vat_codes: ok({ taxCodes: SEEDED_CODES }),
       vat_configure: configureSpy,
     });
-    await screen.findByText('Methode: Effektiv');
+    await screen.findByRole('radio', { name: 'Effektiv' });
     expect(configSpy).toHaveBeenCalledTimes(1);
 
     await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
@@ -733,7 +1137,7 @@ describe('VatSettings, save confirmation (D33 defect 1)', () => {
 describe('VatSettings, vat number', () => {
   it('surfaces invalid_vat_number inline on the UID field', async () => {
     renderVat({ ...effektivCanned(), vat_configure: reject('invalid_vat_number') });
-    await screen.findByText('Methode: Effektiv');
+    await screen.findByRole('radio', { name: 'Effektiv' });
     await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
     expect(await screen.findByText('Format muss CHE-###.###.### MWST sein.')).toBeInTheDocument();
   });
@@ -915,8 +1319,9 @@ describe('K-58: the tax-code Rate field is unit-explicit and range-checked clien
 
 /**
  * K-17 (kaizen round 1): `vat.return.istNotImplemented` is ONE key with THREE render sites (the
- * standing banner on an Ist workspace, the election-time line under the Ist option on a NON-Ist
- * workspace, and A07's refusal in VatReturn). The old wording opened with a present-tense claim
+ * standing condition on an Ist workspace, the election-time line on a NON-Ist workspace, and A07's
+ * refusal in VatReturn). Since D152 the first two are the SAME element: the (i) card of the line
+ * "Ist: rechnet TILL noch nicht", which on an Ist workspace carries the warn glyph. The old wording opened with a present-tense claim
  * about the workspace ("Dieser Arbeitsbereich rechnet nach vereinnahmten Entgelten (Ist) ab."),
  * true at the banner and FALSE at the election, so a Soll workspace was told it files on Ist. G17
  * mandates the single key, so the fix is a STATE-NEUTRAL rewording, not a split: the key now leads
@@ -935,13 +1340,16 @@ describe('K-17: the shared IST limitation key is true at every render site', () 
     expect(en).toMatch(/^TILL currently calculates/);
   });
 
-  it('renders as the standing banner on an Ist workspace (config.timing === ist)', async () => {
+  it('renders as the standing condition on an Ist workspace (config.timing === ist)', async () => {
     renderVat(saldoCanned());
-    expect(await screen.findByText(/nur nach vereinbarten Entgelten \(Soll\)/)).toBeInTheDocument();
+    const sentence = await screen.findByText(/nur nach vereinbarten Entgelten \(Soll\)/);
+    expect(sentence.closest('.vat-ist-line--stored')).not.toBeNull();
   });
 
-  it('renders at election time under the Ist option on a Soll workspace', async () => {
+  it('renders at election time behind the Ist line on a Soll workspace', async () => {
     renderVat(effektivCanned());
-    expect(await screen.findByText(/nur nach vereinbarten Entgelten \(Soll\)/)).toBeInTheDocument();
+    const sentence = await screen.findByText(/nur nach vereinbarten Entgelten \(Soll\)/);
+    expect(sentence.closest('.vat-ist-line')).not.toBeNull();
+    expect(sentence.closest('.vat-ist-line--stored')).toBeNull();
   });
 });

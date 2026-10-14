@@ -31,8 +31,7 @@
       "vatSetUp": "Set up under VAT",
       "vatChange": "Change under VAT",
       "addressLater": "You only need the address once the first QR-bill goes out. The IBAN saves now.",
-      "addressLead": "Name and structured address appear on the QR-bill. Without a name, the company name is used.",
-      "fixFields": "One field still needs a correction."
+      "addressLead": "Name and structured address appear on the QR-bill. Without a name, the company name is used."
     },
     "vatChoice": {
       "effektiv": "VAT registered, effective method",
@@ -61,6 +60,12 @@
       "soll": "On agreement (Soll)"
     },
     "creditorName": "Issuer name",
+    "creditorSummary": {
+      "line": "Invoice issuer: {name} · {address}",
+      "sameName": "same as company name",
+      "noAddress": "no address yet",
+      "incompleteAddress": "address incomplete"
+    },
     "address": {
       "label": "Address",
       "street": "Street",
@@ -77,6 +82,18 @@
     "save": "Save",
     "saved": "Saved",
     "saving": "Saving",
+    "notSaved": "Not saved: {parts}",
+    "parts": {
+      "identity": "Company details",
+      "uid": "UID",
+      "mwstNo": "VAT number",
+      "fiscal": "Fiscal year and currency",
+      "vat": "VAT",
+      "creditor": "Invoice issuer",
+      "ebill": "eBill",
+      "terms": "Standard payment terms"
+    },
+    "infoLabel": "More about {topic}",
     "locked": {
       "note": "Locked: this workspace already has posted entries. Base currency and fiscal-year start are fixed from here on, because the existing entries build on them."
     },
@@ -85,15 +102,29 @@
       "invalidIban": "That is not a valid IBAN. Please check the number: a QR-IBAN and an ordinary IBAN are both fine here.",
       "illegalCharacter": "One of these fields contains a character a QR-bill cannot carry, such as a line break. Please keep the name and address on a single line each.",
       "needsStructuredAddress": "Please provide the full structured address (street, building no., postal code, town, country).",
+      "invalidCountry": "The country is the two-letter code a QR-bill needs, for example CH, LI or DE.",
+      "fieldTooLong": "A field is longer than a QR-bill allows: name and street at most 70 characters, building no. and postcode 16, town 35.",
+      "ibanNotChLi": "A QR-bill needs a Swiss or Liechtenstein account (an IBAN starting with CH or LI). This IBAN is valid, but no QR-bill can be paid into it.",
       "needsEmptyLedger": "Fiscal year and currency cannot change once entries have been posted.",
       "invalidUid": "The UID has the form CHE-123.456.789.",
       "invalidMwstNo": "The VAT number has the form CHE-123.456.789 MWST.",
       "invalidLegalForm": "TILL does not know this legal form.",
-      "vatFailed": "VAT could not be set up. The other details are saved; set up VAT under VAT."
+      "vatFailed": "VAT could not be set up. The other details are saved; set up VAT under VAT.",
+      "cannotClear": {
+        "creditorName": "You cannot empty the invoice issuer name here. Enter the company name, or keep the current name.",
+        "iban": "You cannot remove the IBAN here. Enter a different IBAN, or keep the current one.",
+        "uid": "You cannot remove the UID here. Enter the correct UID, or keep the current one.",
+        "mwstNo": "You cannot remove the VAT number here. Enter the correct number, or keep the current one."
+      },
+      "invalidPaymentTermsDays": "The standard payment terms are a whole number of days, from 0 to 365."
     },
     "customFields": {
-      "title": "Custom fields",
-      "empty": "Custom fields do not exist yet. Once you can create them, they show up here."
+      "title": "Custom fields"
+    },
+    "terms": {
+      "label": "Standard payment terms (days)",
+      "placeholder": "none",
+      "info": "Applies to customers and suppliers without payment terms of their own: their invoices fall due this many days after the invoice date. 0 means immediately. Leave empty: due on the invoice date."
     }
   },
   "ebillConfig": {
@@ -102,7 +133,9 @@
     "partnerListLink": "Certified network partners (ebill.ch)",
     "billerPid": "eBill-Biller-ID",
     "invalidBillerPid": "The eBill-Biller-ID is 41 followed by 15 digits.",
-    "connectorAbsent": "No eBill connector is configured. Preparing payloads works offline; transmitting them needs the cloud connector, which is enabled separately."
+    "connectorTopic": "eBill connector",
+    "connectorAbsent": "No eBill connector configured",
+    "connectorAbsentDetail": "Preparing payloads works offline; transmitting them needs the cloud connector, which is enabled separately."
   },
   "help": {
     "Setup": {

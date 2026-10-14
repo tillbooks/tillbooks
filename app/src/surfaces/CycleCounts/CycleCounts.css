@@ -22,6 +22,11 @@
   align-items: start;
 }
 
+/* D152 rule 5: until a session is opened there is no detail pane, so the list takes the width. */
+.cc-split--solo {
+  grid-template-columns: 1fr;
+}
+
 @media (max-width: 720px) {
   .cc-split {
     grid-template-columns: 1fr;

@@ -35,7 +35,9 @@ const USAGE = `till ${VERSION} - Swiss accounting your agent can actually use
 
   The MCP server reads its SQLite path from TILL_DB_PATH, defaulting to
   ~/.till/till.db. The Studio resolves the SAME path, so the agent and the human
-  work on one ledger. Set TILL_DB_PATH=:memory: for a throwaway run.
+  work on one ledger. Set TILL_DB_PATH=:memory: for a throwaway run. On start,
+  mcp prints on stderr the ledger it opened and the Studio where a human approves
+  what the agent drafts (Agent > Vorschläge), or that none runs and till up starts it.
 
   serve binds 127.0.0.1:8788. TILL_PORT takes decimal digits, 1 to 65535, and
   refuses anything else instead of reinterpreting it. TILL_HOST accepts loopback
@@ -68,14 +70,25 @@ switch (command) {
     // Always a resolved path, never an implicit in-memory database: an agent that posts into a
     // ledger nobody else can see is worse than one that refuses to start.
     let store;
+    let dbPath;
     try {
-      ({ store } = await startMcpServer({ dbPath: ensureDbPath() }));
+      dbPath = ensureDbPath();
+      ({ store } = await startMcpServer({ dbPath }));
     } catch (e) {
       // A refused open (a book written by a newer TILL, `schema_newer_than_runtime`) is a sentence for
       // the human on stderr and a non-zero exit, the way `up` and `serve` fail below, never a stack
       // trace. stdout stays clean: it is the MCP channel.
       console.error(e instanceof Error ? e.message : String(e));
       process.exit(1);
+    }
+    // P0.5c: on STDERR only (stdout is the MCP channel): which ledger this agent opened, and the
+    // Studio where a human approves what it drafts, or how to start one. A banner that cannot be
+    // computed is never a reason to stop serving.
+    try {
+      const { mcpStartLines } = await import(new URL('../dist/api/approval-pointer.js', import.meta.url));
+      for (const line of mcpStartLines({ dbPath })) console.error(line);
+    } catch {
+      // Serving matters more than the banner.
     }
     // Closing the store is what checkpoints the write-ahead log. Without this the process exits with
     // its WAL still holding the last writes, and `till.db-wal` grows every run.
@@ -119,7 +132,8 @@ switch (command) {
       }
       process.exit(0);
     }
-    console.error(`till up: Studio${result.studioServed ? '' : ' (not built)'} at ${result.url}`);
+    // The Studio itself opens only through the #k= link `startUp` logged (D162); the bare URL is the engine.
+    console.error(`till up: engine at ${result.url}${result.studioServed ? '' : ' (Studio not built)'}`);
     console.error(`till up: MCP over HTTP at ${result.url}/mcp, REST at ${result.url}/api`);
     let closingUp = false;
     const shutdownUp = () => {

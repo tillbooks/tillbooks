@@ -48,10 +48,10 @@ const SRC_DIR = fileURLToPath(new URL('../../src/', import.meta.url));
 
 test('E05: all three voice tables exist and none carries a body, excerpt, or money column', () => {
   const store = new SqliteStore();
-  assert.deepEqual([...VOICE_TABLES].sort(), ['runtime_selection', 'voice_exemplar', 'voice_profile']);
+  assert.deepEqual([...VOICE_TABLES].sort(), ['model_decision', 'model_decision_key', 'runtime_selection', 'voice_exemplar', 'voice_profile']);
   for (const table of VOICE_TABLES) {
     const columns = store.db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
-    assert.ok(columns.length >= 4, `PRAGMA answered nothing for ${table}: the probe is broken`);
+    assert.ok(columns.length >= 3, `PRAGMA answered nothing for ${table}: the probe is broken`);
     // `style_card` is the distilled card, not source material; the probe names copy-shaped columns.
     const bodies = columns.filter((name) => /body|excerpt|raw|content|text/.test(name));
     assert.deepEqual(bodies, [], `${table} grew a copy-shaped column: ${bodies.join(', ')} (OP6 index-never-copy)`);

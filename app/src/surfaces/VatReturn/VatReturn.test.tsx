@@ -41,6 +41,7 @@ import periodsSaldoFixture from './vat-periods.saldo.fixture.json';
 import periodsFiledFixture from './vat-periods.filed.fixture.json';
 import settlementFixture from './vat-settlement.fixture.json';
 import settlementPostedFixture from './vat-settlement.posted.fixture.json';
+import formRowsGolden from './form-rows.golden.json';
 
 /**
  * The stylesheet as TEXT, read off disk beside this file.
@@ -120,6 +121,49 @@ async function settled() {
 }
 
 /**
+ * Open the filing dialog from wherever the surface offers it (D152): the header's secondary button
+ * from step 4 on, the header overflow before that. A test that is about the DIALOG uses this; the
+ * tests about WHERE the action sits assert the place directly.
+ */
+async function openFiling() {
+  const direct = screen.queryByRole('button', { name: 'Als eingereicht markieren' });
+  if (direct !== null) {
+    await userEvent.click(direct);
+    return;
+  }
+  await userEvent.click(screen.getByRole('button', { name: 'Weitere Aktionen zur Abrechnung' }));
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Als eingereicht markieren' }));
+}
+
+/** The resting journey line (D152), and the full strip behind its chevron. */
+function journeyLine(): HTMLElement {
+  return document.querySelector('.vr-steps-line') as HTMLElement;
+}
+
+async function openJourney(): Promise<HTMLElement> {
+  await userEvent.click(screen.getByRole('button', { name: 'Alle Schritte der Abrechnung' }));
+  return screen.getByRole('list', { name: 'Ablauf der Abrechnung' });
+}
+
+/** The words an (i) button points at through `aria-describedby`: the sentence behind it. */
+function describedText(button: HTMLElement): string {
+  const id = button.getAttribute('aria-describedby') ?? '';
+  return document.getElementById(id)?.textContent ?? '';
+}
+
+/** What a line SHOWS at rest: its text without the (i) cards, which are on demand only. */
+function restText(el: HTMLElement): string {
+  const copy = el.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('[role="tooltip"]').forEach((tip) => tip.remove());
+  return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/** The Abstimmung's resting line, by its verdict words. */
+function reconLine(): HTMLElement {
+  return document.querySelector('.vr-recon-line') as HTMLElement;
+}
+
+/**
  * Capture what the browser was really handed by the export, rather than trusting that a click did
  * something. jsdom has no downloads folder, so the object URL, the anchor click and the Blob are the
  * only observable evidence that a file left the app, and the Blob is what makes "the bytes on disk
@@ -172,7 +216,14 @@ describe('A07 MWST-Abrechnung: the healthy effektiv return', () => {
     await settled();
 
     expect(screen.getByRole('heading', { name: 'MWST-Abrechnung', level: 1 })).toBeInTheDocument();
-    expect(screen.getByText('Effektiv · Soll (vereinbart) · 01.04.2026 bis 30.06.2026')).toBeInTheDocument();
+    // D152: the period is named in ONE place, the Zeitraum control that also changes it. The subtitle
+    // carries the method alone, and the large "Aktive Abrechnungsperiode" block is gone.
+    expect(screen.getByText('Effektiv · Soll (vereinbart)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Zeitraum: Q2/2026' })).toBeInTheDocument();
+    expect(screen.queryByText('Aktive Abrechnungsperiode')).toBeNull();
+    expect(screen.queryByText(/01\.04\.2026 bis 30\.06\.2026/)).toBeNull();
+    const outsideSettlement = (el: Element) => el.closest('.vr-settle') === null;
+    expect(screen.getAllByText(/Q2\/2026/).filter(outsideSettlement)).toHaveLength(1);
     // Twice on purpose: once in the strip above the form, once as Ziffer 500 inside it. That is
     // what the ESTV form does, so the query names both rather than pretending one of them is wrong.
     expect(screen.getAllByText('Zu bezahlender Betrag')).toHaveLength(2);
@@ -237,7 +288,7 @@ describe('A07 MWST-Abrechnung: the healthy effektiv return', () => {
     renderSurface(transportFor(routes()));
     await settled();
 
-    const journey = screen.getByRole('list', { name: 'Ablauf der Abrechnung' });
+    const journey = await openJourney();
     const steps = within(journey).getAllByRole('listitem');
     expect(steps[0]).toHaveTextContent('erledigt');
     expect(steps[1]).toHaveTextContent('erledigt');
@@ -252,6 +303,7 @@ describe('A07 MWST-Abrechnung: the healthy effektiv return', () => {
     renderSurface(transportFor(routes()));
     await settled();
 
+    await openJourney();
     const link = screen.getByRole('link', { name: /im ePortal eingereicht/ });
     expect(link).toHaveAttribute('href', 'https://www.estv.admin.ch/de/mwst-online-abrechnen');
     expect(link).toHaveAttribute('target', '_blank');
@@ -268,13 +320,21 @@ describe('A07 MWST-Abrechnung: the healthy effektiv return', () => {
     }
   });
 
-  it('offers mark-filed as the SECONDARY action and never as the primary one (W3)', async () => {
+  it('keeps mark-filed out of the header at step 3, one level down in the overflow, and never primary (D152, W3)', async () => {
     vi.setSystemTime(TODAY);
     renderSurface(transportFor(routes()));
     await settled();
-    const button = screen.getByRole('button', { name: 'Als eingereicht markieren' });
-    expect(button.className).toContain('btn--secondary');
-    expect(button.className).not.toContain('btn--primary');
+    // Before the export the header carries the export and nothing that reads like a Submit beside it.
+    expect(screen.queryByRole('button', { name: 'Als eingereicht markieren' })).toBeNull();
+    // Filing by hand on the ePortal is lawful without a TILL export, and the engine checks no export,
+    // so the same action stays reachable in the header's overflow.
+    const more = screen.getByRole('button', { name: 'Weitere Aktionen zur Abrechnung' });
+    expect(more.className).not.toContain('btn--primary');
+    await userEvent.click(more);
+    const item = screen.getByRole('menuitem', { name: 'Als eingereicht markieren' });
+    expect(item).toBeEnabled();
+    await userEvent.click(item);
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
   });
 
   /**
@@ -301,9 +361,10 @@ describe('A07 MWST-Abrechnung: the healthy effektiv return', () => {
     expect(within(await settlementPanel()).getByRole('button', { name: 'MWST-Konten saldieren' }).className).toContain('btn--secondary');
 
     expect(screen.queryByText(/noch nicht/)).toBeNull();
+    // The step-3 sentence is no longer a paragraph on the surface: it is the (i) card of the line.
     expect(
-      screen.getByText(/TILL erstellt die eCH-0217-Datei \(Version 2.0.0\) und du lädst sie herunter/),
-    ).toBeInTheDocument();
+      describedText(within(journeyLine()).getByRole('button', { name: 'Was dieser Schritt bedeutet' })),
+    ).toMatch(/TILL erstellt die eCH-0217-Datei \(Version 2.0.0\) und du lädst sie herunter/);
   });
 });
 
@@ -628,24 +689,54 @@ describe('A07: the five refusals', () => {
 });
 
 describe('A07: the Abstimmung (owner decision W2)', () => {
-  it('warns on an unexplained difference and never disables filing', async () => {
+  it('warns on an unexplained difference in one line and never disables filing', async () => {
     vi.setSystemTime(TODAY);
     renderSurface(transportFor(routes({ vat_return: at(driftFixture) })));
-    const verdict = await screen.findByRole('button', { name: 'Abstimmung MWST-Konten: CHF 148.50 ungeklärt' });
+    await settled();
+    const line = reconLine();
+    expect(line).toHaveTextContent('Abstimmung MWST-Konten: CHF 148.50 ungeklärt');
+    expect(line.querySelector('svg')).not.toBeNull(); // the one warn glyph
     // The remainder is its own money span inside the verdict (C2 F4): tabular, never wrapped.
-    expect(verdict.querySelector('.t-money')).toHaveTextContent(/^CHF 148\.50$/);
+    expect(line.querySelector('.vr-recon-verdict .t-money')).toHaveTextContent(/^CHF 148\.50$/);
+    // The explanation is the (i)'s card, not a paragraph at rest (D152 rule 4).
+    expect(describedText(within(line).getByRole('button', { name: 'Was die Abstimmung bedeutet' }))).toMatch(
+      /TILL ordnet die Differenz noch keiner Ursache zu/,
+    );
     // Filing is a statutory obligation with a deadline. The bridge is TILL's own heuristic, so it
     // warns loudly and stays out of the way.
-    expect(screen.getByRole('button', { name: 'Als eingereicht markieren' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Weitere Aktionen zur Abrechnung' }));
+    expect(screen.getByRole('menuitem', { name: 'Als eingereicht markieren' })).toBeEnabled();
   });
 
-  it('opens expanded on a difference and shows the arithmetic against the real account', async () => {
+  it('rests CLOSED on a difference, and the chevron shows the arithmetic against the real account', async () => {
     vi.setSystemTime(TODAY);
     renderSurface(transportFor(routes({ vat_return: at(driftFixture) })));
-    await screen.findByRole('button', { name: 'Abstimmung MWST-Konten: CHF 148.50 ungeklärt' });
-    expect(screen.getByText('Ziff. 399 Total geschuldete Steuer')).toBeInTheDocument();
-    expect(screen.getByText('Bewegung Konto 2200')).toBeInTheDocument();
-    expect(screen.getByText("CHF 3'553.70")).toBeInTheDocument();
+    await settled();
+    // D152 rule 5: nothing opens itself. It used to open on a difference (250px of table, note, button).
+    const chevron = within(reconLine()).getByRole('button', { name: 'Abstimmung im Detail' });
+    expect(chevron).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Ziff. 399 Total geschuldete Steuer')).not.toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Buchungen auf den MWST-Konten prüfen' })).toBeNull();
+
+    await userEvent.click(chevron);
+    expect(chevron).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Ziff. 399 Total geschuldete Steuer')).toBeVisible();
+    expect(screen.getByText('Bewegung Konto 2200')).toBeVisible();
+    expect(screen.getByText("CHF 3'553.70")).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Buchungen auf den MWST-Konten prüfen' })).toBeVisible();
+  });
+
+  it('says a clean Abstimmung in one line with one glyph, closed, and the sentence behind the (i)', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(transportFor(routes()));
+    await settled();
+    const line = reconLine();
+    expect(line).toHaveTextContent('Abstimmung MWST-Konten: stimmt überein');
+    expect(line.querySelectorAll('svg.vr-recon-glyph')).toHaveLength(1);
+    expect(within(line).getByRole('button', { name: 'Abstimmung im Detail' })).toHaveAttribute('aria-expanded', 'false');
+    expect(describedText(within(line).getByRole('button', { name: 'Was die Abstimmung bedeutet' }))).toBe(
+      'Die geschuldete Steuer entspricht der Bewegung auf dem MWST-Konto.',
+    );
   });
 
   it('says the Saldo method cannot be checked, and shows NO drift figure at all', async () => {
@@ -667,8 +758,8 @@ describe('A07: the Abstimmung (owner decision W2)', () => {
   it('leaves journey step 2 NOT done while a difference is unexplained', async () => {
     vi.setSystemTime(TODAY);
     renderSurface(transportFor(routes({ vat_return: at(driftFixture) })));
-    await screen.findByRole('button', { name: 'Abstimmung MWST-Konten: CHF 148.50 ungeklärt' });
-    const steps = within(screen.getByRole('list', { name: 'Ablauf der Abrechnung' })).getAllByRole('listitem');
+    await settled();
+    const steps = within(await openJourney()).getAllByRole('listitem');
     expect(steps[1]).not.toHaveTextContent('erledigt');
   });
 });
@@ -750,7 +841,7 @@ describe('A07: filing', () => {
     vi.setSystemTime(TODAY);
     renderSurface(transportFor(routes()));
     await settled();
-    await userEvent.click(screen.getByRole('button', { name: 'Als eingereicht markieren' }));
+    await openFiling();
 
     const dialog = screen.getByRole('alertdialog');
     expect(within(dialog).getByText(/Es wird nichts an die ESTV übermittelt/)).toBeInTheDocument();
@@ -762,8 +853,8 @@ describe('A07: filing', () => {
   it('gates confirm behind an acknowledgement when a difference is unexplained (W2)', async () => {
     vi.setSystemTime(TODAY);
     renderSurface(transportFor(routes({ vat_return: at(driftFixture) })));
-    await screen.findByRole('button', { name: 'Abstimmung MWST-Konten: CHF 148.50 ungeklärt' });
-    await userEvent.click(screen.getByRole('button', { name: 'Als eingereicht markieren' }));
+    await settled();
+    await openFiling();
 
     const dialog = screen.getByRole('alertdialog');
     const confirm = within(dialog).getByRole('button', { name: 'Als eingereicht markieren' });
@@ -776,7 +867,7 @@ describe('A07: filing', () => {
     vi.setSystemTime(TODAY);
     renderSurface(transportFor(routes()));
     await settled();
-    await userEvent.click(screen.getByRole('button', { name: 'Als eingereicht markieren' }));
+    await openFiling();
     const dialog = screen.getByRole('alertdialog');
     expect(within(dialog).queryByRole('checkbox')).toBeNull();
     expect(within(dialog).getByRole('button', { name: 'Als eingereicht markieren' })).toBeEnabled();
@@ -792,7 +883,7 @@ describe('A07: filing', () => {
     };
     renderSurface(transport);
     await settled();
-    await userEvent.click(screen.getByRole('button', { name: 'Als eingereicht markieren' }));
+    await openFiling();
     await userEvent.click(
       within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Als eingereicht markieren' }),
     );
@@ -805,7 +896,7 @@ describe('A07: filing', () => {
     vi.setSystemTime(TODAY);
     renderSurface(transportFor(routes({ vat_mark_filed: at({ ok: false, error: 'period_locked' }, 409) })));
     await settled();
-    await userEvent.click(screen.getByRole('button', { name: 'Als eingereicht markieren' }));
+    await openFiling();
     await userEvent.click(
       within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Als eingereicht markieren' }),
     );
@@ -813,14 +904,20 @@ describe('A07: filing', () => {
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
   });
 
-  it('disables filing while the period is still running, and says why', async () => {
+  it('offers no filing while the period is still running, and says why on the journey line', async () => {
     // 15.02.2026 sits inside Q1, and no earlier quarter of 2026 has ended, so the surface lands on
     // a RUNNING period. A date inside Q2 would land on Q1, which has ended, and prove nothing.
     vi.setSystemTime(new Date('2026-02-15T09:00:00.000Z'));
     renderSurface(transportFor(routes()));
     await settled();
-    expect(screen.getByRole('button', { name: 'Als eingereicht markieren' })).toBeDisabled();
-    expect(screen.getByText(/Die Periode läuft noch/)).toBeInTheDocument();
+    // Absent rather than disabled (D152 rule 3): not in the header, not in an overflow.
+    expect(screen.queryByRole('button', { name: 'Als eingereicht markieren' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Weitere Aktionen zur Abrechnung' })).toBeNull();
+    // The state is on the line, the reason in its (i).
+    expect(journeyLine()).toHaveTextContent('Periode läuft noch');
+    expect(describedText(within(journeyLine()).getByRole('button', { name: 'Was dieser Schritt bedeutet' }))).toMatch(
+      /Die Periode läuft noch\. Als eingereicht markieren kannst du sie danach\./,
+    );
   });
 
   it('replaces the control with a banner on a filed period, and says the figures are recomputed', async () => {
@@ -828,10 +925,217 @@ describe('A07: filing', () => {
     renderSurface(transportFor(routes({ vat_periods: at(periodsFiledFixture) })));
     await settled();
     expect(screen.getByText('Eingereicht: Q2/2026 ist gesperrt.')).toBeInTheDocument();
-    // A07 persists no return. Implying a stored snapshot would be a lie about the read model.
-    expect(screen.getByText(/keine gespeicherte Kopie/)).toBeInTheDocument();
+    // A07 persists no return. Implying a stored snapshot would be a lie about the read model. Said
+    // behind the filed line's (i) (D152), in the same words.
+    const info = screen.getByRole('button', { name: 'Was die Sperre bedeutet' });
+    expect(describedText(info)).toMatch(/keine gespeicherte Kopie/);
+    expect(describedText(info)).toMatch(/Jahresabstimmung nach Art\. 72 MWSTG/);
     expect(screen.queryByRole('button', { name: 'Als eingereicht markieren' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Weitere Aktionen zur Abrechnung' })).toBeNull();
   });
+});
+
+describe('A07: the D152 rest state (one line per fact, words on demand)', () => {
+  const XML = '<?xml version="1.0" encoding="UTF-8"?>\n<eCH-0217:VATDeclaration/>\n';
+  const exportOk = at({
+    ok: true,
+    schema: { standard: 'eCH-0217', version: '2.0.0' },
+    filename: 'eCH-0217_CHE116281277_2026-04-01_2026-06-30.xml',
+    contentType: 'application/xml',
+    xml: XML,
+    byteLength: XML.length,
+    transmits: false,
+    taxCrossCheck: { recomputedTaxMinor: 370220, engineTaxMinor: 370220, differenceMinor: 0 },
+  });
+  /** A G22 `vat_period` run for Q2/2026 holding the given items. */
+  const run = (items: unknown[]) => ({
+    checklist_list: at({ ok: true, runs: [{ runId: 'r1', periodStart: '2026-04-01', status: 'open' }] }),
+    checklist_get: at({ ok: true, items }),
+  });
+
+  it('rests the journey as ONE line, "Schritt 3 von 6: exportieren", its sentence behind the (i) and the strip closed', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(transportFor(routes()));
+    await settled();
+    await settlementPanel();
+    const line = journeyLine();
+    expect(restText(line)).toMatch(/^Schritt 3 von 6: exportieren$/);
+    const info = within(line).getByRole('button', { name: 'Was dieser Schritt bedeutet' });
+    expect(describedText(info)).toBe(
+      'TILL erstellt die eCH-0217-Datei (Version 2.0.0) und du lädst sie herunter. In Schritt 4 lädst du sie selbst im ESTV ePortal hoch: eine Schnittstelle zur ESTV gibt es nicht.',
+    );
+    // The sentence lives ONLY in the (i)'s card: no paragraph on the surface carries it.
+    const carriers = screen.getAllByText(/TILL erstellt die eCH-0217-Datei/);
+    expect(carriers).toHaveLength(1);
+    expect(carriers[0]?.closest('[role="tooltip"]')).not.toBeNull();
+    // The six steps are one chevron away, never open on load.
+    const chevron = within(line).getByRole('button', { name: 'Alle Schritte der Abrechnung' });
+    expect(chevron).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('list', { name: 'Ablauf der Abrechnung' })).toBeNull();
+    expect(within(await openJourney()).getAllByRole('listitem')).toHaveLength(6);
+    expect(chevron).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('opens nothing on load: every disclosure on the surface rests closed', async () => {
+    vi.setSystemTime(TODAY);
+    const { container } = renderSurface(transportFor(routes({ vat_return: at(driftFixture) })));
+    await settled();
+    await settlementPanel();
+    expect(container.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0);
+  });
+
+  it('moves to step 4 once the export answered: the line IS the ePortal link, and mark-filed joins the header, once (W3, W4)', async () => {
+    vi.setSystemTime(TODAY);
+    captureDownload();
+    renderSurface(transportFor(routes({ vat_export_ech0217: exportOk })));
+    await settled();
+    await settlementPanel();
+    await userEvent.click(screen.getByRole('button', { name: 'eCH-0217-Datei exportieren' }));
+
+    await waitFor(() => expect(restText(journeyLine())).toMatch(/^Schritt 4 von 6: im ePortal einreichen$/));
+    const portal = within(journeyLine()).getByRole('link', { name: 'im ePortal einreichen' });
+    expect(portal).toHaveAttribute('href', 'https://www.estv.admin.ch/de/mwst-online-abrechnen');
+    expect(portal).toHaveAttribute('target', '_blank');
+
+    const button = screen.getByRole('button', { name: 'Als eingereicht markieren' });
+    expect(button.className).toContain('btn--secondary');
+    expect(button.className).not.toContain('btn--primary');
+    // One action, one place: the overflow that held it before the export is gone.
+    expect(screen.queryByRole('button', { name: 'Weitere Aktionen zur Abrechnung' })).toBeNull();
+    // A download is not the engine's evidence: the strip's step 3 still does not claim "erledigt".
+    const steps = within(await openJourney()).getAllByRole('listitem');
+    expect(steps[2]).not.toHaveTextContent('erledigt');
+  });
+
+  it('forgets this session’s export when the period changes', async () => {
+    vi.setSystemTime(TODAY);
+    captureDownload();
+    renderSurface(transportFor(routes({ vat_export_ech0217: exportOk })));
+    await settled();
+    await userEvent.click(screen.getByRole('button', { name: 'eCH-0217-Datei exportieren' }));
+    await screen.findByRole('button', { name: 'Als eingereicht markieren' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Zeitraum: Q2/2026' }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: /Q1\/2026/ }));
+    await screen.findByRole('button', { name: 'Zeitraum: Q1/2026' });
+    await settled();
+    expect(screen.queryByRole('button', { name: 'Als eingereicht markieren' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Weitere Aktionen zur Abrechnung' })).toBeInTheDocument();
+    expect(journeyLine()).toHaveTextContent(/Schritt 3 von \d: exportieren/);
+  });
+
+  it('moves to step 4 off the G22 run’s recorded export evidence, with no click in this session', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(
+      transportFor(routes(run([{ itemId: 'ech0217_exported', status: 'done', completedAt: '2026-07-10T10:00:00.000Z', signoff: null }]))),
+    );
+    await settled();
+    await settlementPanel();
+    await waitFor(() => expect(restText(journeyLine())).toMatch(/^Schritt 4 von 6: im ePortal einreichen$/));
+    expect(screen.getByRole('button', { name: 'Als eingereicht markieren' }).className).toContain('btn--secondary');
+    expect(screen.queryByRole('button', { name: 'Weitere Aktionen zur Abrechnung' })).toBeNull();
+  });
+
+  it('moves to step 5 off the G22 ePortal attestation, even without a TILL export (filed by hand)', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(
+      transportFor(
+        routes(
+          run([
+            { itemId: 'ech0217_exported', status: 'open', completedAt: null, signoff: null },
+            { itemId: 'eportal_filed', status: 'done', completedAt: '2026-07-20T10:00:00.000Z', signoff: { evidenceRef: '2026-07-20', actorKind: 'studio', actorName: null } },
+          ]),
+        ),
+      ),
+    );
+    await settled();
+    await settlementPanel();
+    await waitFor(() => expect(restText(journeyLine())).toMatch(/^Schritt 5 von 6: als eingereicht markieren$/));
+    expect(screen.getByRole('button', { name: 'Als eingereicht markieren' })).toBeInTheDocument();
+  });
+
+  it('on a filed period names the one step left, the settlement, and then says every step is done', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(transportFor(routes({ vat_periods: at(periodsFiledFixture) })));
+    await settled();
+    await settlementPanel();
+    expect(restText(journeyLine())).toMatch(/^Schritt 6 von 6: MWST-Konten saldieren$/);
+    // The filed state is one line, its two sentences behind its own (i).
+    const filed = document.querySelector('.vr-filed') as HTMLElement;
+    expect(restText(filed)).toMatch(/^Eingereicht: Q2\/2026 ist gesperrt\.$/);
+  });
+
+  it('says every step is done once the filed period is settled', async () => {
+    vi.setSystemTime(TODAY);
+    renderSurface(transportFor(routes({ vat_periods: at(periodsFiledFixture), vat_settlement_preview: at(settlementPostedFixture) })));
+    await settled();
+    await settlementPanel();
+    await waitFor(() => expect(restText(journeyLine())).toMatch(/^Alle 6 Schritte erledigt$/));
+  });
+
+  it('puts the first Ziffer under at most this much text: the words above the form are the facts, not prose', async () => {
+    vi.setSystemTime(TODAY);
+    const { container } = renderSurface(transportFor(routes({ vat_return: at(driftFixture) })));
+    await settled();
+    await settlementPanel();
+    // Everything rendered before the form, minus the (i) cards (`role="tooltip"`, shown on demand only)
+    // and the closed disclosures (`hidden`).
+    const form = container.querySelector('.vr-section') as HTMLElement;
+    const words: string[] = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const parent = node.parentElement;
+      if (parent === null || parent.closest('[role="tooltip"], [hidden]') !== null) continue;
+      if (!(form.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_PRECEDING)) continue;
+      words.push(...(node.textContent ?? '').split(/\s+/).filter((w) => /^[\p{L}]/u.test(w)));
+    }
+    // 122 at the audit (03.10.2026); the budget for this surface is about 35.
+    expect(words.length).toBeLessThanOrEqual(35);
+  });
+});
+
+/**
+ * THE FIGURES DID NOT MOVE. D152 changed where the words and controls sit, not one figure: every
+ * Ziffer row (number, label, turnover, tax) and the payable are compared, cell by cell, against
+ * `form-rows.golden.json`, which was captured by rendering the SAME recorded payloads through the
+ * surface at develop `60429dd5`, the commit before this pass.
+ */
+describe('A07: the Ziffer figures render identically after D152', () => {
+  const cases: [string, Record<string, RestResponse>, string][] = [
+    ['healthy', {}, '303'],
+    ['drift', { vat_return: at(driftFixture) }, '303'],
+    ['empty', { vat_return: at(emptyFixture) }, '303'],
+    ['filed', { vat_periods: at(periodsFiledFixture) }, '303'],
+    ['saldo', { vat_periods: at(periodsSaldoFixture), vat_return: at(saldoFixture) }, '323'],
+  ];
+  // The two-rate Saldo refusal has no figures to file: the golden pins that no Ziffer row and no
+  // payable appear, and that the refusal panel says exactly what it said before, rates included.
+  it('renders the saldo-split refusal with no Ziffer row, no payable and the same words and rates as before', async () => {
+    vi.setSystemTime(TODAY);
+    const { container } = renderSurface(
+      transportFor({ vat_periods: at(periodsSaldoFixture), vat_return: at(saldoSplitFixture, 422), get_company_profile: PROFILE }),
+    );
+    await screen.findByText(/MWSTV Art. 84 Abs. 3/);
+    const rows = [...container.querySelectorAll('table tr')].filter((tr) => tr.closest('.vr-settle') === null);
+    const payable = [...container.querySelectorAll('.vr-payable')];
+    const refusal = (container.querySelector('.vr-refusal')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const golden = (formRowsGolden as Record<string, { payable: string[]; rows: string[]; refusal?: string }>)['saldo-split'];
+    expect({ payable: payable.map((e) => e.textContent), rows: rows.map((r) => r.textContent), refusal }).toEqual(golden);
+  });
+  for (const [name, overrides, anchor] of cases) {
+    it(`renders the ${name} return's every Ziffer row and the payable exactly as before`, async () => {
+      vi.setSystemTime(TODAY);
+      const { container } = renderSurface(transportFor(routes(overrides)));
+      await screen.findByRole('rowheader', { name: anchor });
+      const rows = [...container.querySelectorAll('table tr')]
+        .filter((tr) => tr.closest('.vr-settle') === null)
+        .map((tr) => [...tr.querySelectorAll('th,td')].map((c) => (c.textContent ?? '').replace(/\s+/g, ' ').trim()).join(' | '));
+      const payable = [...container.querySelectorAll('.vr-payable')].map((e) => (e.textContent ?? '').replace(/\s+/g, ' ').trim());
+      const golden = (formRowsGolden as Record<string, { payable: string[]; rows: string[] }>)[name];
+      expect({ payable, rows: [...new Set(rows)] }).toEqual(golden);
+    });
+  }
 });
 
 describe('A07: S3, the drill-down', () => {
@@ -978,6 +1282,17 @@ describe('A07: accessibility', () => {
     vi.setSystemTime(TODAY);
     const { container } = renderSurface(transportFor(routes()));
     await settled();
+    await settlementPanel();
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('has no violations with both one-line disclosures open', async () => {
+    vi.setSystemTime(TODAY);
+    const { container } = renderSurface(transportFor(routes({ vat_return: at(driftFixture) })));
+    await settled();
+    await settlementPanel();
+    await openJourney();
+    await userEvent.click(within(reconLine()).getByRole('button', { name: 'Abstimmung im Detail' }));
     expect(await axe(container)).toHaveNoViolations();
   });
 
@@ -994,7 +1309,7 @@ describe('A07: accessibility', () => {
     vi.setSystemTime(TODAY);
     const { container } = renderSurface(transportFor(routes()));
     await settled();
-    await userEvent.click(screen.getByRole('button', { name: 'Als eingereicht markieren' }));
+    await openFiling();
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
   });
@@ -1002,7 +1317,9 @@ describe('A07: accessibility', () => {
   it('has no violations with the bridge in its warn state', async () => {
     vi.setSystemTime(TODAY);
     const { container } = renderSurface(transportFor(routes({ vat_return: at(driftFixture) })));
-    await screen.findByRole('button', { name: 'Abstimmung MWST-Konten: CHF 148.50 ungeklärt' });
+    await settled();
+    await settlementPanel();
+    expect(reconLine()).toHaveTextContent('CHF 148.50 ungeklärt');
     expect(await axe(container)).toHaveNoViolations();
   });
 

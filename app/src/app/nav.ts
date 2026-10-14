@@ -177,9 +177,10 @@ export const SURFACE_CATALOG: readonly Surface[] = [
   { path: '/bank', labelKey: 'nav.bankInbox', icon: 'reconciliation', navId: 'bank-inbox' },
   { path: '/bank-accounts', labelKey: 'nav.bankAccounts', icon: 'bankAccounts', navId: 'bank-accounts' },
 
-  // Accounting. `/mwst` and `/vat` nest under the MWST parent in the tree; the label a child shows
-  // dropped its "MWST-" prefix (the parent already says it), which is why the labelKeys differ from
-  // the surface heading. The ROUTES are untouched.
+  // Accounting. `/mwst` and `/vat` nest under the MWST parent in the tree. Abrechnung dropped its
+  // "MWST-" prefix (the parent already says it); the /vat row keeps it as "MWST-Einstellungen" since
+  // D152, because a bare "Einstellungen" read the same as the Einstellungen group heading, which opens
+  // /setup. The ROUTES are untouched.
   { path: '/journal', labelKey: 'nav.journal', icon: 'journal', navId: 'journal' },
   { path: '/periods', labelKey: 'nav.periods', icon: 'periods', navId: 'periods' },
   { path: '/fx', labelKey: 'nav.fx', icon: 'fx', navId: 'fx' },
@@ -260,6 +261,10 @@ const leaf = (navId: string): NavTreeLeaf => ({ navId });
  * The rail, top to bottom. Grouping, order and nesting live HERE and nowhere else, so this is the
  * one structure a personalization layer rearranges. The placement rationale for each row is kept
  * beside the row it explains.
+ *
+ * Every row's LABEL is unique per locale (D152 rule 3): two rows reading the same, opening different
+ * places, is a twin the reader has to open both of to tell apart. `nav-labels.test.ts` holds this over
+ * the merged catalogue; a heading may share its word only with the leaf it lands on.
  */
 export const NAV_TREE: readonly NavTreeGroup[] = [
   {
@@ -395,8 +400,8 @@ export const NAV_TREE: readonly NavTreeGroup[] = [
       leaf('fx'),
       {
         // The MWST parent: no route of its own, so clicking it lands on its first child, Abrechnung
-        // (D135). The `/vat` route is untouched; only the child labels dropped the "MWST-" prefix the
-        // parent already carries.
+        // (D135). The `/vat` route is untouched. Abrechnung drops the "MWST-" prefix the parent
+        // carries; the /vat row keeps it (D152), so it never reads as the Einstellungen group.
         navId: 'mwst-group',
         labelKey: 'nav.mwst.group',
         icon: 'vat',

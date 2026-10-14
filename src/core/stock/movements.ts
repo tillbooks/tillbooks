@@ -135,6 +135,34 @@ function crossedReorder(reorder: number | null, before: number, after: number): 
   return reorder !== null && before > reorder && after <= reorder;
 }
 
+/**
+ * K1: is the movement a key already holds the one this call asked for? Item, location, reason, the
+ * signed quantity the reason implies (a transfer's first leg is the outbound one), and the reference.
+ */
+function sameStockMove(
+  ctx: WorkspaceContext,
+  found: MovementRow,
+  asked: { itemId: string; locationId: string; reason: StockReason; qty: number; refKind: string | null; refId: string | null },
+): boolean {
+  const signed =
+    asked.reason === 'transfer' || asked.reason === 'issue'
+      ? -Math.abs(asked.qty)
+      : asked.reason === 'receipt' || asked.reason === 'return'
+        ? Math.abs(asked.qty)
+        : asked.qty;
+  const ref = ctx.store.db
+    .prepare('SELECT ref_kind, ref_id FROM stock_movement WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, found.id) as { ref_kind: string | null; ref_id: string | null } | undefined;
+  return (
+    found.itemId === asked.itemId &&
+    found.locationId === asked.locationId &&
+    found.reason === asked.reason &&
+    found.qty === signed &&
+    (ref?.ref_kind ?? null) === asked.refKind &&
+    (ref?.ref_id ?? null) === asked.refId
+  );
+}
+
 export function recordStockMove(ctx: WorkspaceContext, input: StockMoveInput): Result {
   // ONE IMMEDIATE TRANSACTION (critic R2-4). A movement writes `qty` and `unit_cost_minor`, a
   // transfer writes two movements, and the default location may be provisioned first. As bare
@@ -178,6 +206,17 @@ function recordStockMoveUnderLock(ctx: WorkspaceContext, input: StockMoveInput):
 
   // §H-IDEMPOTENT: a replay of the same key returns the original movement(s), never a second row.
   const replay = movementByKey(ctx, input.idempotencyKey);
+  if (replay !== undefined && !sameStockMove(ctx, replay, { itemId: item.id, locationId: location.id, reason, qty: input.qty, refKind, refId })) {
+    // K1 (04.10.2026): the key is the replay identity, and composites (delivery notes, goods receipts)
+    // move stock under keys DERIVED from their own key. A movement written first under such a key
+    // through the public `stock_move` / `inventory_move` verbs (another item, another quantity) used to
+    // be handed back as the composite's own. A key reused for a DIFFERENT movement is refused by name.
+    return err('idempotency_key_conflict', {
+      idempotencyKey: input.idempotencyKey,
+      movementId: replay.id,
+      reason: 'this key already recorded a different movement; a retry must repeat the same movement',
+    });
+  }
   if (replay !== undefined) {
     // Same field ORDER and values as the fresh success below, so a replay is byte-identical (the
     // conformance double-call diffs the serialised result). A replay never re-emits a low-stock

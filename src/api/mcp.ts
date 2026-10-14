@@ -1,8 +1,12 @@
 /**
  * Phase E, the MCP stdio server: one thin adapter over the shared action registry.
  *
- * Each `ActionDef` becomes an MCP tool. A `read` tool advertises `annotations.readOnlyHint`; every
- * tool's input schema is the action's minimal JSON Schema. The tool handler calls `action.run` and
+ * Each `ActionDef` becomes an MCP tool. A `read` tool advertises `annotations.readOnlyHint`; every write
+ * advertises `destructiveHint` from its declared D159 class (false only for an append-only `correctable`
+ * one), that class under `_meta['tillbooks/reversibility']`, its D160 consequence tag (plus the D156
+ * sentence in both languages where the catalogue has one) under `_meta['tillbooks/consequence']`, and, when
+ * it is idempotent for the same arguments, says so. Every
+ * tool's input schema is the action's minimal JSON Schema. The server sends `instructions`. The tool handler calls `action.run` and
  * returns the verb's `Result` as JSON content: a verb rejection (`{ ok:false, ... }`) is a normal
  * result the caller reads, NOT an MCP protocol error, so `isError` is never set for a verb outcome.
  *
@@ -38,7 +42,10 @@ import {
   type ChecklistRunView,
 } from '../core/checklists/index.js';
 import { ACTIONS, getAction } from './registry.js';
-import { runGoverned } from './agent-gate.js';
+import type { ActionDef } from './registry.js';
+import type { ConsequenceTag, Reversibility } from './actionKind.js';
+import { CONSEQUENCE_ENTRY_FOR_ACTION } from '../core/agent/dialMap.js';
+import { runGoverned, runGovernedAsync } from './agent-gate.js';
 import { resolveSessionActor, type ServedIdentity } from './session.js';
 import { makeDiagnosticsPort } from './support-actions.js';
 import { resolveEbicsRuntime, type HostEbicsPorts } from './host-runtime.js';
@@ -61,6 +68,17 @@ export function callTool(deps: ApiDeps, name: string, args: Record<string, unkno
   // for the agent seat it records the call in the trace and routes a dial-governed write through
   // `decideAction` (execute / draft / deny). Direct `action.run` callers bypass it by construction.
   const result = action === undefined ? err('unknown_action', { action: name }) : runGoverned(deps, action, args ?? {});
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+}
+
+/**
+ * D142: `callTool` for the live handler, which can await. Identical for every verb except one the host
+ * runs off the main thread (`bank_sync` under `till up`): its answer arrives when the worker finishes,
+ * and meanwhile this process keeps answering every other request. The parity suite drives `callTool`.
+ */
+export async function callToolAsync(deps: ApiDeps, name: string, args: Record<string, unknown>): Promise<ToolCallResult> {
+  const action = getAction(name);
+  const result = action === undefined ? err('unknown_action', { action: name }) : await runGovernedAsync(deps, action, args ?? {});
   return { content: [{ type: 'text', text: JSON.stringify(result) }] };
 }
 
@@ -111,6 +129,102 @@ export function renderPromptOverActions(
 }
 
 /**
+ * D156: the server `instructions` an MCP client reads at `initialize`, in the agreed positioning. Every
+ * claim is checked against the code: `whoami` answers the governed seat's effective dial level per
+ * capability (`agentDial`), a governed write at `ask` returns a drafted proposal (A35), every write that
+ * mints or moves something carries an `idempotencyKey` while the few without one are safe to repeat
+ * (the conformance gate's `IDEMPOTENCY_KEY_EXEMPT`: absolute setters or verbs that key themselves), and
+ * posted entries and issued documents are
+ * corrected by a linked reversal or credit note, never edited.
+ */
+export const MCP_SERVER_INSTRUCTIONS =
+  'TILL is an agent-first ERP for Swiss SMEs: sales, purchasing, payments, stock, projects, books and MWST in one local file. ' +
+  'Call whoami first: it names your seat and which areas run at ask, where a write returns a proposal a person approves instead of executing. ' +
+  'Every write that adds or moves something takes an idempotencyKey, and resending the same key never doubles a result; the few without one are safe to repeat: they set an absolute state or key themselves. ' +
+  'Posted entries and issued documents are corrected by a new linked document (correcting entry, credit note), never edited.';
+
+/**
+ * D156/D160: the namespaced `_meta` key carrying a write's consequence (MCP `_meta` key rules): on EVERY
+ * write its D160 `tag` (what it touches), and where the D156 catalogue has a sentence for the verb, that
+ * sentence in both languages (`en`, `de-CH`) beside the verb's declared class (`reversibility`).
+ */
+export const CONSEQUENCE_META_KEY = 'tillbooks/consequence';
+
+/**
+ * D159: the namespaced `_meta` key carrying a write's DECLARED reversibility class (`ActionDef.reversibility`,
+ * from its `write:<class>:<tag>` registration). Sent for every write; a read carries none.
+ */
+export const REVERSIBILITY_META_KEY = 'tillbooks/reversibility';
+
+/**
+ * Critic B1 (claude/rmap-land): the `correctable` writes that still advertise `destructiveHint: true`,
+ * each with the reason. The declared class describes the verb's way back (an issued document is cancelled
+ * or credited), but `destructiveHint: false` claims every call is additive, and these verbs have an edge
+ * that is not: the hint follows the worst edge, the class and `_meta` stay the declared ones.
+ */
+export const DESTRUCTIVE_DESPITE_CLASS: Readonly<Record<string, string>> = {
+  transition_document:
+    "its quote `accepted` edge is quotes_accept, which the D161 map classes final (the quote binds both sides), and its `cancelled` edge on a draft deletes the draft",
+};
+
+/** What a write's tool says under `CONSEQUENCE_META_KEY`. */
+export interface ConsequenceMeta {
+  tag: ConsequenceTag;
+  en?: string;
+  'de-CH'?: string;
+  reversibility?: Reversibility;
+}
+
+/** The MCP `Tool` this server advertises for one action (exported so the parity test reads the same shape). */
+export function toolFor(a: ActionDef): Record<string, unknown> {
+  const props = a.inputSchema.properties;
+  if (a.kind === 'read') {
+    return {
+      name: a.name,
+      description: a.consequence === undefined ? a.summary : `${a.summary} CONSEQUENCE: ${a.consequence}`,
+      inputSchema: a.inputSchema,
+      annotations: { readOnlyHint: true },
+    };
+  }
+  // Every write carries both (the registry asserts it at load); a hand-built ActionDef that does not is
+  // refused here rather than advertised with a guessed hint.
+  const reversibility = a.reversibility;
+  const tag = a.consequenceTag;
+  if (reversibility === undefined || tag === undefined) {
+    throw new Error(`toolFor: the write '${a.name}' declares no reversibility class or consequence tag (D159/D160).`);
+  }
+  const sentence = CONSEQUENCE_ENTRY_FOR_ACTION[a.name];
+  // A write is idempotent for the SAME arguments when its key is required (§H-IDEMPOTENT) or when it
+  // takes none at all (an absolute setter, the conformance gate's `IDEMPOTENCY_KEY_EXEMPT`). A write
+  // whose key is optional only replays when the caller passes one, so it claims nothing.
+  const idempotent = a.inputSchema.required.includes('idempotencyKey') || !('idempotencyKey' in props);
+  const annotations = {
+    // MCP: `destructiveHint: false` means additive-only. Only a `correctable` write is (append-only); a
+    // `reversible` one may overwrite state and a `final` one has no way back. D159: the verb's own
+    // declared class decides, never the catalogue's.
+    // A verb in DESTRUCTIVE_DESPITE_CLASS has a non-additive edge, so it claims nothing either.
+    destructiveHint: reversibility !== 'correctable' || DESTRUCTIVE_DESPITE_CLASS[a.name] !== undefined,
+    ...(idempotent ? { idempotentHint: true } : {}),
+  };
+  const consequence: ConsequenceMeta = {
+    tag,
+    ...(sentence === undefined ? {} : { en: sentence.en, 'de-CH': sentence['de-CH'], reversibility }),
+  };
+  return {
+    name: a.name,
+    // A35 (critic F11): the consequence sentence reaches the MCP CLIENT here, appended to the
+    // advertised description, so "the MCP client's confirmation prose" consumer is real: a client
+    // deciding whether to call a governed write reads what it does and what can still be done after.
+    description: a.consequence === undefined ? a.summary : `${a.summary} CONSEQUENCE: ${a.consequence}`,
+    inputSchema: a.inputSchema,
+    annotations,
+    // D156: the description stays English; `_meta` carries both languages, the same entry the Studio
+    // renders. D159/D160: every write also carries its declared class and its consequence tag.
+    _meta: { [CONSEQUENCE_META_KEY]: consequence, [REVERSIBILITY_META_KEY]: reversibility },
+  };
+}
+
+/**
  * Build the MCP `Server` with every action registered as a tool. No transport is connected yet.
  *
  * `pinnedActor` (A35 critic F12): the D13 actor is normally resolved from the client's DECLARED name
@@ -118,8 +232,10 @@ export function renderPromptOverActions(
  * from the CONNECTION itself (stdio: `till mcp` is by definition an agent process, and the Studio
  * never speaks stdio), the caller pins the actor and the declared name stops mattering, so a client
  * naming itself `till-studio` over stdio cannot shed the dial and the trace. On the shared HTTP door
- * no such pin exists in the MIT core (there is no authentication to derive a seat from): that
- * residue is stated in the A35 spec's threat model rather than papered over.
+ * the host pins the seat from the per-launch Studio key (`checkStudioKey`, `src/api/session.ts`):
+ * the Studio seat needs the key, every other session is the governed `agent` seat, and a declared
+ * client name is a trace label only. The residue (a local program that can read the served Studio
+ * page) is stated in the A35 spec's threat model.
  */
 export function buildMcpServer(
   deps: ApiDeps,
@@ -129,7 +245,7 @@ export function buildMcpServer(
     { name: 'tillbooks', version: '0.0.0' },
     // G22 (D127): `prompts` beside `tools`. One prompt per checklist template, rendered from the
     // governed `checklist_get` under the session actor (see `renderPromptOverActions`).
-    { capabilities: { tools: {}, prompts: {} } },
+    { capabilities: { tools: {}, prompts: {} }, instructions: MCP_SERVER_INSTRUCTIONS },
   );
 
   // A35 §2a: ONE MCP CONNECTION IS ONE SESSION. The key is minted per `Server` (one per stdio
@@ -173,15 +289,7 @@ export function buildMcpServer(
   });
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({
-    tools: ACTIONS.map((a) => ({
-      name: a.name,
-      // A35 (critic F11): the consequence sentence reaches the MCP CLIENT here, appended to the
-      // advertised description, so "the MCP client's confirmation prose" consumer is real: a client
-      // deciding whether to call a money-path write reads what it irreversibly does.
-      description: a.consequence === undefined ? a.summary : `${a.summary} CONSEQUENCE: ${a.consequence}`,
-      inputSchema: a.inputSchema,
-      ...(a.kind === 'read' ? { annotations: { readOnlyHint: true } } : {}),
-    })),
+    tools: ACTIONS.map(toolFor),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, (request) => {
@@ -199,7 +307,7 @@ export function buildMcpServer(
     // All of that is `sessionDeps()`, shared with the prompt handler.
     // The SDK's handler return type is a broad union (it also covers task results); our content-only
     // shape is a valid CallToolResult, so widen it to ServerResult for the registration.
-    return callTool(sessionDeps(), request.params.name, args) as unknown as ServerResult;
+    return callToolAsync(sessionDeps(), request.params.name, args) as unknown as Promise<ServerResult>;
   });
 
   return server;

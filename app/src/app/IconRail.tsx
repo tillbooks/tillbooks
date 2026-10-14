@@ -40,6 +40,11 @@ import {
   type NavItem,
 } from './nav';
 import { NavIcon } from './nav-icons';
+import { attentionBadgeName, useAttentionBadge, type AttentionBadgeState } from './chrome';
+import './IconRail.css';
+
+/** The route whose icon carries the waiting-work count (the tree's `railAttention` badge, collapsed). */
+const ATTENTION_PATH = '/attention';
 
 /** One reachable destination inside a group flyout. */
 interface Destination {
@@ -104,6 +109,7 @@ function IconEntryRow({
   onOpen,
   onClose,
   onNavigate,
+  badge,
 }: {
   entry: IconEntry;
   activeNavId: string | null;
@@ -111,12 +117,17 @@ function IconEntryRow({
   onOpen: () => void;
   onClose: () => void;
   onNavigate: (path: string) => void;
+  /** The waiting-work count on the `/attention` icon; absent on every other entry. */
+  badge?: AttentionBadgeState;
 }) {
   const t = useT();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const label = t(entry.labelKey);
+  // The count is part of the NAME ("Pendenzen, 3 offen"), never a corner number alone.
+  const badgeName = badge === undefined ? null : attentionBadgeName(t, badge);
+  const name = badgeName === null ? label : `${label}, ${badgeName}`;
   const groupActive = entry.kind === 'group' && entry.destinations.some((d) => d.navId === activeNavId);
   const linkActive = entry.kind === 'link' && entry.navId === activeNavId;
 
@@ -158,7 +169,7 @@ function IconEntryRow({
         ref={triggerRef}
         type="button"
         className={linkActive || groupActive ? 'rail-icon-btn rail-icon-btn--active' : 'rail-icon-btn'}
-        aria-label={label}
+        aria-label={name}
         aria-current={linkActive ? 'page' : undefined}
         aria-haspopup={entry.kind === 'group' ? true : undefined}
         aria-expanded={entry.kind === 'group' ? open : undefined}
@@ -169,6 +180,11 @@ function IconEntryRow({
         }}
       >
         <NavIcon name={entry.icon} className="rail-icon" />
+        {badge !== undefined && badge.kind !== 'none' && (
+          <span className={badge.kind === 'error' ? 'rail-icon-count rail-icon-count--warn' : 'rail-icon-count'} aria-hidden="true">
+            {badge.kind === 'error' ? '!' : badge.shown}
+          </span>
+        )}
       </button>
       {open && (
         <div className="rail-flyout" role="group" aria-label={label} style={{ top: pos.top, left: pos.left }}>
@@ -190,12 +206,18 @@ function IconEntryRow({
               ))}
             </>
           ) : (
-            <span className="rail-flyout-label">{label}</span>
+            <span className="rail-flyout-label">{badgeName === null ? label : name}</span>
           )}
         </div>
       )}
     </div>
   );
+}
+
+/** The `/attention` icon: the same live count the tree's row shows, read from the shared store. */
+function AttentionIconEntryRow(props: Omit<Parameters<typeof IconEntryRow>[0], 'badge'>) {
+  const badge = useAttentionBadge();
+  return <IconEntryRow {...props} badge={badge} />;
 }
 
 /** The collapsed rail body: the vertical icon strip with its flyouts. Exactly one flyout is open at a
@@ -214,17 +236,21 @@ export function IconRail({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="rail-icons">
-      {ICON_ENTRIES.map((entry) => (
-        <IconEntryRow
-          key={entry.navId}
-          entry={entry}
-          activeNavId={leafNavId}
-          open={openId === entry.navId}
-          onOpen={() => setOpenId(entry.navId)}
-          onClose={() => setOpenId((current) => (current === entry.navId ? null : current))}
-          onNavigate={go}
-        />
-      ))}
+      {ICON_ENTRIES.map((entry) => {
+        const props = {
+          entry,
+          activeNavId: leafNavId,
+          open: openId === entry.navId,
+          onOpen: () => setOpenId(entry.navId),
+          onClose: () => setOpenId((current) => (current === entry.navId ? null : current)),
+          onNavigate: go,
+        };
+        return entry.kind === 'link' && entry.path === ATTENTION_PATH ? (
+          <AttentionIconEntryRow key={entry.navId} {...props} />
+        ) : (
+          <IconEntryRow key={entry.navId} {...props} />
+        );
+      })}
     </div>
   );
 }

@@ -134,6 +134,29 @@ test('Swico S1 parses the documented tags, honours the escape, and derives the d
   assert.equal(swicoDateToIso('19053x'), null);
 });
 
+// Critic R2-L1 (30.09.2026): the strict decoder proposes no amount for an IG §4.4 "do not use for
+// payment" notification; the text-layer pass must agree instead of landing a trusted-looking qr 0.00.
+test('text-layer pass: a §4.4 notification (0.00 + Table 10 notice) proposes NO amount and says why; any other 0.00 is unchanged', () => {
+  const lines = spcPayload().split('\n');
+  lines[18] = '0.00';
+  lines[29] = 'NICHT ZUR ZAHLUNG VERWENDEN';
+  const parsed = parseSpcPayload(lines.join('\n'));
+  assert.equal(parsed.fields.find((f) => f.key === 'amount'), undefined);
+  assert.ok(parsed.notes.some((n) => n.key === 'amount' && n.reason === 'notification'));
+  assert.equal(parsed.fields.find((f) => f.key === 'currency').value, 'CHF');
+
+  // End to end through intake: no amount row, and the note is on the capture.
+  const t = setup();
+  const cap = drop(t.ctx, lines.join('\n'), 'notice').captureId;
+  const g = getCapture(t.ctx, { captureId: cap });
+  assert.equal(g.fields.find((f) => f.key === 'amount'), undefined);
+  assert.ok(g.capture.parseNotes.some((n) => n.key === 'amount' && n.reason === 'notification'));
+
+  // Without the notice the lenient pass keeps its old behaviour (A17 refuses a zero at commit).
+  lines[29] = 'Rechnung';
+  assert.deepEqual(parseSpcPayload(lines.join('\n')).fields.find((f) => f.key === 'amount').value, { minor: 0, currency: 'CHF' });
+});
+
 test('locateSpcPayload finds a payload embedded in surrounding text, and null otherwise', () => {
   assert.notEqual(locateSpcPayload('preamble text\n' + spcPayload() + '\ntrailer'), null);
   assert.equal(locateSpcPayload('a scanned receipt with no QR code at all'), null);

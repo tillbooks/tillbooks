@@ -18,8 +18,9 @@
  * that passed with their read hung forever, which audits the skeleton and calls it the surface. The
  * browser harness has `waitForPaintToSettle` (`.claude/ui-tests/lib/audit-tools.cjs`) for that, and
  * it cannot run here: it drives `document.getAnimations()` through Playwright, and its load-bearing
- * infinite-animation exclusion exists because `.skeleton` pulses `1.4s ease-in-out infinite`. The
- * jsdom equivalent is `settled()` below: real content present AND no `aria-busy` region left.
+ * infinite-animation exclusion exists because `.skeleton` pulses
+ * `var(--t-motion-loop) ease-in-out infinite`. The jsdom equivalent is `settled()` below: real content
+ * present AND no `aria-busy` region left.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -240,7 +241,7 @@ describe('OpenItems, five states', () => {
     expect(
       screen.queryByRole('group', { name: 'Aufteilung nach Fälligkeit' }),
     ).not.toBeInTheDocument();
-    expect(container.querySelectorAll('.oi-tile')).toHaveLength(0);
+    expect(container.querySelectorAll('.filter-chip')).toHaveLength(0);
     // The header total is its own money span now (t-money), so a settled "CHF 0.00 offen" is the one
     // zero figure allowed on screen; no tile or panel may print another.
     expect(screen.queryAllByText('CHF 0.00').filter((el) => el.closest('.oi-total') === null)).toHaveLength(0);
@@ -257,7 +258,15 @@ describe('OpenItems, five states', () => {
     renderOpenItems({ ...HAPPY, list_open_items: ok(without90) }, { route: '/open-items?bucket=90%2B' });
 
     await screen.findByText('Keine offenen Posten für diese Auswahl.');
-    expect(screen.getByRole('group', { name: 'Aufteilung nach Fälligkeit' })).toBeInTheDocument();
+    const group = screen.getByRole('group', { name: 'Aufteilung nach Fälligkeit' });
+    // The bucket holds no row, yet its chip stays while it is the one filtered to: it is the way out.
+    const held = within(group).getByRole('button', { name: /Über 90 Tage/ });
+    expect(held).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(held);
+    expect(await screen.findByRole('link', { name: 'R-2026-0005' })).toBeInTheDocument();
+    // Released, a bucket with no row is not offered at all: it would filter to nothing (D152 rule 2).
+    expect(within(group).queryByRole('button', { name: /Über 90 Tage/ })).not.toBeInTheDocument();
+    expect(within(group).getAllByRole('button')).toHaveLength(3);
   });
 
   it('ERROR: names what failed and retries the read in place', async () => {
@@ -377,51 +386,96 @@ describe('parked rows read the engine direction, never the sign of the amount', 
 
 // --- the tiles ------------------------------------------------------------------------------------
 
-describe('the aging tiles', () => {
-  it('derives its tile count from boundariesDays and shows base amounts and row counts', async () => {
+describe('the aging chips (D152: the tiles became FilterChips)', () => {
+  /** The four chips, by bucket, as the cards printed them: label and base amount on one chip. */
+  const CHIPS = [
+    "0 bis 30 Tage · CHF 1'432.00",
+    "31 bis 60 Tage · CHF 1'081.00",
+    "61 bis 90 Tage · CHF 1'081.00",
+    'Über 90 Tage · CHF 481.00',
+  ];
+
+  it('derives its chip count from boundariesDays and shows each bucket with its base amount', async () => {
     renderOpenItems();
     await screen.findByText('R-2026-0006');
 
     const group = screen.getByRole('group', { name: 'Aufteilung nach Fälligkeit' });
-    // [30, 60, 90] yields four buckets, never a hardcoded four.
-    expect(within(group).getAllByRole('button')).toHaveLength(4);
-
-    const first = within(group).getByRole('button', { name: /0 bis 30 Tage/ });
-    // 143200 Rappen across four rows: doc_3, doc_2 and the two parked rows.
-    expect(within(first).getByText("CHF 1'432.00")).toBeInTheDocument();
-    expect(within(first).getByText('4 Posten')).toBeInTheDocument();
-
-    const last = within(group).getByRole('button', { name: /Über 90 Tage/ });
-    expect(within(last).getByText('CHF 481.00')).toBeInTheDocument();
-    expect(within(last).getByText('1 Posten')).toBeInTheDocument();
+    // [30, 60, 90] yields four buckets, never a hardcoded four; they are the shared FilterChips.
+    const chips = within(group).getAllByRole('button');
+    expect(chips.map((chip) => chip.textContent)).toEqual(CHIPS);
+    for (const chip of chips) {
+      expect(chip).toHaveClass('filter-chip');
+      // Nothing is filtered on load: a list never narrows itself.
+      expect(chip).toHaveAttribute('aria-pressed', 'false');
+    }
+    // No card is left over: the tiles are gone, not hidden.
+    expect(document.querySelectorAll('.oi-tile')).toHaveLength(0);
   });
 
-  it('filters the list to one bucket and back, and says which tile is pressed', async () => {
+  it('carries exactly the figures the cards showed, and they add up to the header total', async () => {
     renderOpenItems();
     await screen.findByText('R-2026-0006');
 
     const group = screen.getByRole('group', { name: 'Aufteilung nach Fälligkeit' });
-    const tile = within(group).getByRole('button', { name: /31 bis 60 Tage/ });
-    await userEvent.click(tile);
+    const shown = within(group)
+      .getAllByRole('button')
+      .map((chip) => (chip.textContent ?? '').split(' · CHF ')[1] ?? '');
+    // The cards printed `baseBucketTotals` verbatim through formatMoney: 143200, 108100, 108100 and
+    // 48100 Rappen off the recording. The chips print the very same figures.
+    const recordedTotals = Object.values(listFixture.baseBucketTotals);
+    expect(shown).toEqual(["1'432.00", "1'081.00", "1'081.00", '481.00']);
+    expect(shown.map((figure) => Math.round(Number(figure.replace(/'/g, '')) * 100))).toEqual(recordedTotals);
+    // And they still tie to the header: four chips, one base total, 407500 Rappen.
+    const sum = recordedTotals.reduce((a, b) => a + b, 0);
+    expect(sum).toBe(listFixture.baseTotalOpenMinor);
+    expect(document.querySelector('.oi-total .t-money')).toHaveTextContent("CHF 4'075.00");
+  });
+
+  it('filters the list to one bucket, and pressing the chip again clears the filter', async () => {
+    renderOpenItems();
+    await screen.findByText('R-2026-0006');
+
+    const group = screen.getByRole('group', { name: 'Aufteilung nach Fälligkeit' });
+    await userEvent.click(within(group).getByRole('button', { name: /31 bis 60 Tage/ }));
 
     expect(await screen.findByRole('link', { name: 'R-2026-0004' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'R-2026-0006' })).not.toBeInTheDocument();
-    expect(within(group).getByRole('button', { name: /31 bis 60 Tage/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    const pressed = within(group).getByRole('button', { name: /31 bis 60 Tage/ });
+    expect(pressed).toHaveAttribute('aria-pressed', 'true');
+    // The chip is its own way back: no second "Alle anzeigen" beside it (one action, one place).
+    expect(screen.queryByRole('button', { name: 'Alle anzeigen' })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Alle anzeigen' }));
+    await userEvent.click(pressed);
     expect(await screen.findByRole('link', { name: 'R-2026-0006' })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: /31 bis 60 Tage/ })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('K-27: the tiles carry their own label with the help trigger right beside it', async () => {
+  it('holds one bucket at a time: another chip moves the filter rather than adding to it', async () => {
     renderOpenItems();
     await screen.findByText('R-2026-0006');
-    const heading = screen.getByText('Nach Fälligkeit');
-    const head = heading.closest('.oi-tile-head') as HTMLElement;
-    expect(head).not.toBeNull();
-    expect(within(head).getByRole('button', { name: 'Hilfe zur Aufteilung nach Fälligkeit' })).toBeInTheDocument();
+    const group = screen.getByRole('group', { name: 'Aufteilung nach Fälligkeit' });
+
+    await userEvent.click(within(group).getByRole('button', { name: /31 bis 60 Tage/ }));
+    await userEvent.click(within(group).getByRole('button', { name: /Über 90 Tage/ }));
+
+    expect(await screen.findByRole('link', { name: 'R-2026-0006' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'R-2026-0004' })).not.toBeInTheDocument();
+    expect(
+      within(group)
+        .getAllByRole('button')
+        .filter((chip) => chip.getAttribute('aria-pressed') === 'true')
+        .map((chip) => chip.textContent),
+    ).toEqual(['Über 90 Tage · CHF 481.00']);
+  });
+
+  it('K-27, D152: no heading line over the chips, and the help trigger sits right after them', async () => {
+    renderOpenItems();
+    await screen.findByText('R-2026-0006');
+    expect(screen.queryByText('Nach Fälligkeit')).not.toBeInTheDocument();
+    const group = screen.getByRole('group', { name: 'Aufteilung nach Fälligkeit' });
+    const row = group.parentElement as HTMLElement;
+    expect(row).toHaveClass('oi-tile-group');
+    expect(within(row).getByRole('button', { name: 'Hilfe zur Aufteilung nach Fälligkeit' })).toBeInTheDocument();
   });
 
   it('K-11: the two views are the shared Tabs', async () => {
@@ -444,25 +498,69 @@ describe('the reconciliation statement', () => {
     expect(screen.queryByText(/unterscheiden sich um/)).not.toBeInTheDocument();
   });
 
-  it('replaces it with the mismatch band, quoting both recorded figures', async () => {
+  it('replaces it with ONE mismatch line: the fact and the figure, nothing else at rest (D152)', async () => {
     renderOpenItems({ ...HAPPY, list_open_items: ok(mismatchFixture) });
 
-    // -1250 Rappen difference, list 407500, ledger 408750: all three off the recording.
-    // Each figure is its own money span inside its sentence (C2 F4), so the sentence is read off the
-    // paragraph and the figures off their spans.
+    // -1250 Rappen difference, off the recording.
     await waitFor(() =>
-      expect(document.querySelector('.oi-mismatch-title')).toHaveTextContent(
-        'Die offenen Posten und Konto 1100 unterscheiden sich um CHF -12.50.',
-      ),
+      expect(document.querySelector('.oi-mismatch-title')).toHaveTextContent('Abweichung zum Hauptbuch: CHF -12.50'),
     );
-    expect(document.querySelector('.oi-mismatch-detail')).toHaveTextContent("Die Liste zeigt CHF 4'075.00, das Konto CHF 4'087.50.");
-    expect([...document.querySelectorAll('.oi-mismatch .t-money')].map((el) => el.textContent)).toEqual([
+    const line = document.querySelector('.oi-mismatch') as HTMLElement;
+    expect(line).toHaveAttribute('role', 'status');
+    // It is a line in the summary, beside the total it is about, not a band in the panel.
+    expect(line.closest('.oi-summary')).not.toBeNull();
+    // At rest the line offers exactly two quiet controls, the (i) and the chevron, and no button with
+    // words: Journal öffnen and Was jetzt? are behind the chevron.
+    const controls = within(line).getAllByRole('button');
+    expect(controls.map((b) => b.getAttribute('aria-label'))).toEqual(['Was die Abweichung bedeutet', 'Was jetzt?']);
+    expect(screen.queryByRole('link', { name: 'Journal öffnen' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(screen.queryByText('Stimmt mit 1100 Forderungen aus Lieferungen und Leistungen überein')).not.toBeInTheDocument();
+  });
+
+  it('holds the explanation behind the (i), named by aria-describedby, with both recorded figures', async () => {
+    renderOpenItems({ ...HAPPY, list_open_items: ok(mismatchFixture) });
+    const info = await screen.findByRole('button', { name: 'Was die Abweichung bedeutet' });
+
+    const tip = document.getElementById(info.getAttribute('aria-describedby') ?? '');
+    expect(tip).not.toBeNull();
+    expect(tip).toHaveAttribute('role', 'tooltip');
+    // List 407500, ledger 408750, difference -1250: all three off the recording, in the two sentences
+    // the band used to print at rest.
+    expect(tip).toHaveTextContent(
+      "Die offenen Posten und Konto 1100 unterscheiden sich um CHF -12.50. Die Liste zeigt CHF 4'075.00, das Konto CHF 4'087.50.",
+    );
+    expect([...(tip as HTMLElement).querySelectorAll('.t-money')].map((el) => el.textContent)).toEqual([
       'CHF -12.50',
       "CHF 4'075.00",
       "CHF 4'087.50",
     ]);
-    expect(screen.queryByText('Stimmt mit 1100 Forderungen aus Lieferungen und Leistungen überein')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Journal öffnen' })).toHaveAttribute('href', '/journal');
+  });
+
+  it('opens the causes and the Journal behind the chevron, and closes them again', async () => {
+    renderOpenItems({ ...HAPPY, list_open_items: ok(mismatchFixture) });
+    const chevron = await screen.findByRole('button', { name: 'Was jetzt?' });
+    expect(chevron).toHaveAttribute('aria-expanded', 'false');
+    const more = document.getElementById(chevron.getAttribute('aria-controls') ?? '') as HTMLElement;
+    expect(more).not.toBeVisible();
+
+    await userEvent.click(chevron);
+    expect(chevron).toHaveAttribute('aria-expanded', 'true');
+    expect(more).toBeVisible();
+    expect(within(more).getByRole('link', { name: 'Journal öffnen' })).toHaveAttribute('href', '/journal');
+
+    await userEvent.click(chevron);
+    expect(chevron).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('link', { name: 'Journal öffnen' })).not.toBeInTheDocument();
+  });
+
+  it('has no axe violations on the mismatch line, closed and opened', async () => {
+    const { container } = renderOpenItems({ ...HAPPY, list_open_items: ok(mismatchFixture) });
+    await settled(container, 'R-2026-0006');
+    const rules = { region: { enabled: false }, 'page-has-heading-one': { enabled: false } };
+    expect(await axe(container, { rules })).toHaveNoViolations();
+    await userEvent.click(screen.getByRole('button', { name: 'Was jetzt?' }));
+    expect(await axe(container, { rules })).toHaveNoViolations();
   });
 
   it('lists two causes in a single-currency workspace, and never states a tolerance', async () => {
@@ -525,7 +623,7 @@ describe('a mixed-currency workspace', () => {
 
     const group = screen.getByRole('group', { name: 'Aufteilung nach Fälligkeit' });
     // 209844 base Rappen in 31-60, which includes the EUR row's base figure and no face sum.
-    expect(within(group).getByText("CHF 2'098.44")).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: "31 bis 60 Tage · CHF 2'098.44" })).toBeInTheDocument();
   });
 });
 

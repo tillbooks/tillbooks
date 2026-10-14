@@ -192,8 +192,10 @@ describe('CreditorPayments, the five states', () => {
     );
 
     await screen.findByText('Lieferant GmbH');
-    // F-03 (J3.4): the bill is due (2026-08-15) by today's execution date, so it arrives pre-ticked.
+    // D152 rule 5: the bill is due, but it arrives UNticked; the person ticks it.
     const checkbox = screen.getByRole('checkbox', { name: /Lieferant GmbH/ });
+    expect(checkbox).not.toBeChecked();
+    await user.click(checkbox);
     expect(checkbox).toBeChecked();
 
     const generate = screen.getByRole('button', { name: 'pain.001 generieren' });
@@ -231,6 +233,7 @@ describe('CreditorPayments, the five states', () => {
       return base(action, input);
     });
     await screen.findByText('Lieferant GmbH');
+    await user.click(screen.getByRole('checkbox', { name: /Lieferant GmbH/ }));
     const generate = screen.getByRole('button', { name: 'pain.001 generieren' });
     await waitFor(() => expect(generate).not.toHaveProperty('disabled', true));
     await user.click(generate);
@@ -261,6 +264,7 @@ describe('CreditorPayments, the five states', () => {
       }),
     );
     await screen.findByText('Lieferant GmbH');
+    await user.click(screen.getByRole('checkbox', { name: /Lieferant GmbH/ }));
     const generate = screen.getByRole('button', { name: 'pain.001 generieren' });
     await waitFor(() => expect(generate).not.toHaveProperty('disabled', true));
     await user.click(generate);
@@ -269,7 +273,7 @@ describe('CreditorPayments, the five states', () => {
     expect(screen.getByText(/lade sie selbst in dein E-Banking hoch/)).toBeTruthy();
   });
 
-  it('F-03 (J3.4): pre-selects the bills due by the execution date, in one currency, and debits the account in that currency', async () => {
+  it('F-03 (J3.4), D152: SUGGESTS the bills due by the execution date, in one currency, ticks them only on the explicit act, and debits the account in that currency', async () => {
     const user = userEvent.setup();
     const today = new Date().toISOString().slice(0, 10);
     const dueChf = { ...PAYABLE_ITEM, billId: 'vb_due', vendorName: 'Fällig AG', dueDate: '2026-08-15' };
@@ -284,10 +288,16 @@ describe('CreditorPayments, the five states', () => {
       return { status: 404, body: { ok: false, error: 'unknown_action' } };
     });
     await screen.findByText('Fällig AG');
-    // The EUR bill is due earlier, but the books are kept in CHF and a CHF bill is due: the batch is
-    // CHF, only the due CHF bill ticks, and the debit account is the CHF one (never the EUR account
-    // listed first).
+    // Nothing is ticked on load: the due bills are a suggestion line, not ticked boxes.
+    for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked();
+    expect(screen.getByText(/^Vorschlag: 1 Zahlung fällig bis \d\d\.\d\d\.\d{4}, CHF 1.081\.00\.$/)).toBeTruthy();
+    // The EUR bill is due earlier, but the books are kept in CHF and a CHF bill is due: the
+    // suggestion is CHF, taking it ticks only the due CHF bill, and the debit account is the CHF
+    // one (never the EUR account listed first).
+    await user.click(screen.getByRole('button', { name: 'Fällige auswählen' }));
     expect(screen.getByRole('checkbox', { name: /Fällig AG/ })).toBeChecked();
+    // Once the person is choosing, the suggestion line goes.
+    expect(screen.queryByRole('button', { name: 'Fällige auswählen' })).toBeNull();
     expect(screen.getByRole('checkbox', { name: /Euro SARL/ })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: /Später GmbH/ })).not.toBeChecked();
     await waitFor(() => expect(screen.getByLabelText('Belastungskonto')).toHaveTextContent('Kantonalbank Kontokorrent'));
@@ -301,7 +311,7 @@ describe('CreditorPayments, the five states', () => {
   // Critic F4 (2026-09-05): the default fell back to the first eligible account of ANY currency and
   // the engine does not refuse the mismatch, so a CHF batch would have debited the EUR account with
   // ok:true. Restore the `?? eligible[0]?.id` fallback and this fails on the EUR value.
-  it('F-03 (J3.4, critic F4): with no account in the batch currency nothing is pre-selected and Generate waits for a deliberate pick', async () => {
+  it('F-03 (J3.4, critic F4): with no account in the batch currency no account is chosen and Generate waits for a deliberate pick', async () => {
     const user = userEvent.setup();
     const dueChf = { ...PAYABLE_ITEM, billId: 'vb_due', vendorName: 'Fällig AG', dueDate: '2026-08-15' };
     const eurAccount = { ...BANK_ACCOUNT, id: 'ba_eur', name: 'Euro-Konto', currency: 'EUR' };
@@ -311,7 +321,8 @@ describe('CreditorPayments, the five states', () => {
       return { status: 404, body: { ok: false, error: 'unknown_action' } };
     });
     await screen.findByText('Fällig AG');
-    expect(screen.getByRole('checkbox', { name: /Fällig AG/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Fällig AG/ })).not.toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: /Fällig AG/ }));
     const account = screen.getByLabelText('Belastungskonto');
     await waitFor(() => expect(account).toHaveTextContent('Konto in CHF wählen'));
     expect(screen.getByRole('button', { name: 'pain.001 generieren' })).toBeDisabled();
@@ -344,7 +355,7 @@ describe('CreditorPayments, the five states', () => {
     );
 
     await screen.findByText('Lieferant GmbH');
-    expect(screen.getByRole('checkbox', { name: /Lieferant GmbH/ })).toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: /Lieferant GmbH/ }));
     await user.click(screen.getByRole('button', { name: 'pain.001 generieren' }));
     await screen.findByText('Datei ist gültig');
 
@@ -407,16 +418,19 @@ describe('CreditorPayments, capturing a creditor IBAN (F8)', () => {
 
 describe('CreditorPayments, the A24 padlock (F5)', () => {
   it('holding pay alone leaves Generate enabled once a bill and account are picked (pay suffices)', async () => {
+    const user = userEvent.setup();
     renderWith(transportFor({}), ['pay']);
     await screen.findByText('Lieferant GmbH');
-    expect(screen.getByRole('checkbox', { name: /Lieferant GmbH/ })).toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: /Lieferant GmbH/ }));
     const generate = screen.getByRole('button', { name: 'pain.001 generieren' });
     await waitFor(() => expect(generate).toHaveProperty('disabled', false));
   });
 
   it('holding neither pay nor post pre-disables Generate even with a bill selected, a VISIBLE described-by note naming the gap', async () => {
+    const user = userEvent.setup();
     renderWith(transportFor({}), ['read_books']);
     await screen.findByText('Lieferant GmbH');
+    await user.click(screen.getByRole('checkbox', { name: /Lieferant GmbH/ }));
     expect(screen.getByRole('checkbox', { name: /Lieferant GmbH/ })).toBeChecked();
     const generate = screen.getByRole('button', { name: 'pain.001 generieren' });
     expect(generate).toHaveProperty('disabled', true);
@@ -451,7 +465,7 @@ describe('CreditorPayments, the A24 padlock (F5)', () => {
       ['pay'],
     );
     await screen.findByText('Lieferant GmbH');
-    expect(screen.getByRole('checkbox', { name: /Lieferant GmbH/ })).toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: /Lieferant GmbH/ }));
     await user.click(screen.getByRole('button', { name: 'pain.001 generieren' }));
     const markPaid = await screen.findByRole('button', { name: 'Als bezahlt markieren' });
     expect(markPaid).toHaveProperty('disabled', true);
@@ -484,7 +498,7 @@ describe('CreditorPayments: C3 provenance', () => {
     const user = userEvent.setup();
     renderWith(generateWith({ ...BATCH_GENERATED, createdBy: 'm.keller' }));
     await screen.findByText('Lieferant GmbH');
-    expect(screen.getByRole('checkbox', { name: /Lieferant GmbH/ })).toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: /Lieferant GmbH/ }));
     await user.click(screen.getByRole('button', { name: 'pain.001 generieren' }));
     await screen.findByText('Datei ist gültig');
     expect(screen.getByText(/Erfasst durch m\.keller/)).toBeTruthy();
@@ -494,7 +508,7 @@ describe('CreditorPayments: C3 provenance', () => {
     const user = userEvent.setup();
     renderWith(generateWith({ ...BATCH_GENERATED, createdBy: null }));
     await screen.findByText('Lieferant GmbH');
-    expect(screen.getByRole('checkbox', { name: /Lieferant GmbH/ })).toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: /Lieferant GmbH/ }));
     await user.click(screen.getByRole('button', { name: 'pain.001 generieren' }));
     await screen.findByText('Datei ist gültig');
     expect(screen.getByText(/^Erfasst,/)).toBeTruthy();

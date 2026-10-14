@@ -627,6 +627,9 @@ function DraftPane({ workspaceId, thread }: { workspaceId: string; thread: Threa
   const [facts, setFacts] = useState<FactLine[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // D161.2: the regenerate the engine held back because the person edited the draft in their mail
+  // app (`draft_edited`). Kept so the explicit overwrite resends the SAME request, hint included.
+  const [edited, setEdited] = useState<{ draftRunId: string; hint?: string } | null>(null);
 
   const loadFacts = useCallback(async () => {
     if (thread.contactId === null || !canSeeBooks) {
@@ -699,17 +702,25 @@ function DraftPane({ workspaceId, thread }: { workspaceId: string; thread: Threa
   }, [client, workspaceId, thread.id, load]);
 
   const regenerate = useCallback(
-    async (draftRunId: string, hint?: string) => {
+    async (draftRunId: string, hint?: string, overwriteEdits = false) => {
       setBusy(true);
       setError(null);
+      setEdited(null);
       const resp = await client.call('draft_regenerate', {
         workspaceId,
         draftRunId,
         ...(hint === undefined ? {} : { hint }),
+        ...(overwriteEdits ? { overwriteEdits: true } : {}),
         idempotencyKey: newKey(),
       });
       setBusy(false);
       if (isErr(resp.body)) {
+        // Not an error but a question: the person's unsent edits are theirs, so the pane asks before
+        // anything is overwritten, and only the explicit choice resends with `overwriteEdits`.
+        if (resp.body.error === 'draft_edited' && !overwriteEdits) {
+          setEdited(hint === undefined ? { draftRunId } : { draftRunId, hint });
+          return;
+        }
         setError(draftErrorMessage(resp.body));
         return;
       }
@@ -733,6 +744,24 @@ function DraftPane({ workspaceId, thread }: { workspaceId: string; thread: Threa
     <section className="mail-draft-pane" aria-label={t('draft.pane.title')}>
       <h3 className="mail-draft-title">{t('draft.pane.title')}</h3>
       {error !== null && <p className="mail-draft-error" role="alert">{error}</p>}
+      {edited !== null && (
+        <div className="mail-draft-edited" role="status">
+          <p className="mail-draft-error">{t('draft.edited.question')}</p>
+          <div className="mail-draft-actions">
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              disabled={busy}
+              onClick={() => void regenerate(edited.draftRunId, edited.hint, true)}
+            >
+              {t('draft.edited.overwrite')}
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setEdited(null)}>
+              {t('draft.edited.keep')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {latest === undefined || latest.body === null ? (
         <>

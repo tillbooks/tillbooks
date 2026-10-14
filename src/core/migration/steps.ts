@@ -8,7 +8,7 @@
  * ledger effect arrives through A04's SINGLE opening-balance entry (`set_opening_balances`). The only
  * posting path this file can reach is the OWNING spec's verb named in `dataClasses.ts` (P3 is
  * unavailable to violate, not merely respected): the static no-`postEntry`-import assertion (spec §7)
- * holds because this file imports `setOpeningBalances`/`reverseEntry`, never `postEntry`.
+ * holds because this file imports `setOpeningBalances`/`reverseEntryInternal`, never `postEntry`.
  *
  * §H-IDEMPOTENT: every write memoises under its own verb scope, so a double commit posts once and a
  * concurrent second caller sees the terminal state and gets the stored result (asserted on ROWS).
@@ -19,7 +19,8 @@
 import type { WorkspaceContext } from '../context.js';
 import type { Result } from '../result.js';
 import { err, ok } from '../result.js';
-import { setOpeningBalances, reverseEntry } from '../ledger/index.js';
+import { setOpeningBalances } from '../ledger/index.js';
+import { reverseEntryInternal } from '../ledger/reverseEntry.js';
 import { importContacts } from '../sales/index.js';
 import { getFileContent, linkFile, fileIsStreamOnly, readBlobSegmentsSync } from '../files/files.js';
 import { allowAllCapabilities } from '../ports.js';
@@ -439,7 +440,13 @@ export function commitStep(ctx: WorkspaceContext, input: { planId: unknown; step
 
   // All six hold. Route to the owning verb (P3): the ONLY posting path this file can reach.
   return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey as string, 'migration_commit_step', () => {
-    const outcome = commitRoute(ctx, plan, step, def, rows, input.idempotencyKey as string);
+    // K1: every delegated write in the route carries a key DERIVED from this step's key or row refs
+    // (`migstep:<step>:<key>...`), so the whole route runs in this composite's own idempotency scope:
+    // a `set_opening_balances`, `contacts_import`, `files_link`, `import_camt`, `create_account`, ...
+    // made first under such a key can never be replayed here as the step's own write.
+    const outcome = ctx.store.innerWrite('migration_commit_step', () =>
+      commitRoute(ctx, plan, step, def, rows, input.idempotencyKey as string),
+    );
     if (!outcome.ok) return outcome;
     // The plan is live once a step has COMMITTED into the real books. Judged on the step's landed
     // state, not on `outcome.ok`: a CRUD step whose every row failed returns ok (row-level partial
@@ -739,7 +746,7 @@ export function rollbackStep(
     const counts = step.counts === null ? {} : (JSON.parse(step.counts) as Record<string, unknown>);
     const openingEntryId = counts.openingEntryId as string | undefined;
     if (openingEntryId !== undefined && openingEntryId !== null) {
-      const rev = reverseEntry(ctx, { entryId: openingEntryId, idempotencyKey: `migrollback:${step.id}:${input.idempotencyKey}`, description: 'Datenübernahme rückgängig' });
+      const rev = reverseEntryInternal(ctx, { entryId: openingEntryId, idempotencyKey: `migrollback:${step.id}:${input.idempotencyKey}`, description: 'Datenübernahme rückgängig' }, 'migration_rollback_step_internal');
       if (rev.ok) reversed.push((rev as { entryId?: string }).entryId ?? openingEntryId);
       else couldNotUndo.push(openingEntryId);
     }

@@ -5,7 +5,7 @@
  * `ACCRUAL_KINDS` and `PROVISION_REASONS` mirror `src/core/accruals/lines.ts` under the
  * `studio-mirrors-engine-enums` guard: the Studio offers no kind the engine would refuse and hides
  * none it would accept. The kind RULES (which balance-sheet account a kind lands on, and which side)
- * are mirrored too, for one reason only: the drawer renders the lines AS YOU TYPE, before a draft
+ * are mirrored too, for one reason only: the drawer states the booking AS YOU TYPE, before a draft
  * exists, and OR 958b fixes the four kinds and their statutory headings (1300 / 2300), so the rule
  * is not a policy that can drift. The moment the draft is saved the list renders the ENGINE's own
  * lines (`accrual_create` answers them from `accrualLinesOf`), so the preview is a convenience and
@@ -120,6 +120,40 @@ export function previewProvisionLines(
     { accountNumber: expenseAccount?.number ?? '', accountName: expenseAccount?.name ?? '', debitMinor: amountMinor, creditMinor: 0, date: periodEnd },
     { accountNumber: provisionAccount?.number ?? '', accountName: provisionAccount?.name ?? '', debitMinor: 0, creditMinor: amountMinor, date: periodEnd },
   ];
+}
+
+/**
+ * The drawer's ONE booking line (D152 rule 4, cognitive-load pass B3): "Bucht per 30.06.2026: 6500 …
+ * an 2300 … · CHF 1'800.50 · Rückbuchung am 01.07.2026". It used to be a four-column table of the
+ * same preview lines; the sentence now says what the table said, read off the VERY SAME lines, never
+ * recomputed: the Soll account is the line carrying the debit, the Haben account the line carrying
+ * the credit, the amount is that debit, the date is the lines' date, and the reversal date is the
+ * reversal lines' date (absent for a provision, which has none). Before an amount is typed both
+ * figures are 0 and no line carries a side, so the rows fall back to their rendering order, which
+ * is Soll first for every kind by construction (`previewAccrualLines`, `previewProvisionLines`), and
+ * the amount is left out exactly as the table left its money cells blank.
+ */
+export interface BookingLine {
+  date: string;
+  debit: PreviewLine;
+  credit: PreviewLine;
+  amountMinor: number;
+  reversalDate: string | null;
+}
+
+export function bookingLineOf(lines: readonly PreviewLine[], reversalLines: readonly PreviewLine[]): BookingLine | null {
+  const first = lines[0];
+  const second = lines[1];
+  if (first === undefined || second === undefined) return null;
+  const debit = lines.find((l) => l.debitMinor > 0) ?? first;
+  const credit = lines.find((l) => l.creditMinor > 0) ?? second;
+  return {
+    date: debit.date,
+    debit,
+    credit,
+    amountMinor: debit.debitMinor,
+    reversalDate: reversalLines[0]?.date ?? null,
+  };
 }
 
 /** A provision account: 2330, 2600, or any liability the workspace numbers 23xx / 26xx. */

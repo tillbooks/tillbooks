@@ -1,16 +1,24 @@
 /**
  * A25 decision D115 (coverage = 2a): the sticky header line on Review.
  *
- * It carries the counts ("142/150 freigegeben, 3 markiert, 5 offen"), a coverage meter, and the
- * Periode-sperren button, which is DISABLED until the period is clean (0 open AND 0 flagged): the
- * lock decision needs the numbers in view at row 148, not only at row 3, so this bar sticks.
+ * It carries the counts ("142/150 freigegeben, 3 markiert, 5 offen"), a coverage meter, "Alle
+ * freigeben" while entries are open, and Periode sperren. The lock decision needs the numbers in view
+ * at row 148, not only at row 3, so this bar sticks, and it is ONE line (D152).
  *
- * Locking additionally needs A03's `manage_periods`; without it the button stays visible but disabled
- * with its reason named inline (never shown-then-rejected, never a hover-only tooltip). The counts are
- * glyph PLUS text; approved rides `--t-success`, open and flagged ride neutral ink, never a second
- * accent (D115, DESIGN.md).
+ * D152 rule 3 (one action, one place; absent rather than disabled): Periode sperren is PRESENT only
+ * when it can act, i.e. the period is clean (0 offen AND 0 markiert), the actor holds A03's
+ * `manage_periods` (the F5 padlock idiom: absent without the right, never disabled-then-refused) and
+ * the period is not already hard-locked (the locked banner says so). The counts beside it already say
+ * why it is missing; the condition sentence sits behind an (i) at the end of the counts (rule 4: the
+ * shared Tooltip on an icon button, the sentence named by `aria-describedby`), so the reason is one
+ * hover or focus away, never a three-line paragraph at rest.
+ *
+ * The counts are glyph PLUS text; approved rides `--t-success`, open and flagged ride neutral ink,
+ * never a second accent (D115, DESIGN.md).
  */
 import { useT } from '../../i18n';
+import { Tooltip } from '../../components/Tooltip';
+import { InfoGlyph } from '../../components/states/glyphs';
 import { CheckGlyph, DotGlyph, FlagGlyph } from './glyphs';
 import type { ReviewStatus } from './model';
 
@@ -25,19 +33,29 @@ export interface CoverageBarProps {
   onLock: () => void;
 }
 
+/**
+ * Why Periode sperren is not on the bar, as the sentence(s) the (i) holds, or null when the lock is
+ * offered (or the period is already locked, which the locked banner says on its own). Both missing
+ * conditions are named when both apply, the period first: that is the one the reviewer can act on.
+ */
+export function lockCondition(
+  t: ReturnType<typeof useT>,
+  { clean, locked, canManagePeriods }: { clean: boolean; locked: boolean; canManagePeriods: boolean },
+): string | null {
+  if (locked) return null;
+  const reasons: string[] = [];
+  if (!clean) reasons.push(t('review.lock.notClean'));
+  if (!canManagePeriods) reasons.push(t('review.lock.needsManagePeriods'));
+  return reasons.length === 0 ? null : reasons.join(' ');
+}
+
 export function CoverageBar({ status, locked, canManagePeriods, approvingAll = false, onApproveAll, onLock }: CoverageBarProps) {
   const t = useT();
   const clean = status.open === 0 && status.flagged === 0;
   const pct = status.total === 0 ? 0 : Math.round((status.approved / status.total) * 100);
-  // The button's disabled reason, most specific first: already locked, then the missing right, then
-  // the not-clean case. One sentence, rendered beside the control (D15/C3), never a bare grey.
-  const reason = locked
-    ? t('review.lock.alreadyLocked')
-    : !canManagePeriods
-      ? t('review.lock.needsManagePeriods')
-      : !clean
-        ? t('review.lock.notClean')
-        : null;
+  const condition = lockCondition(t, { clean, locked, canManagePeriods });
+  const canLock = !locked && clean && canManagePeriods;
+  const offerApproveAll = !locked && status.open > 0 && onApproveAll !== undefined;
 
   return (
     <div className="rv-coverage panel" role="group" aria-label={t('review.coverage')}>
@@ -65,6 +83,15 @@ export function CoverageBar({ status, locked, canManagePeriods, approvingAll = f
           <span className="rv-count-figure">{status.open}</span>
           <span>{t('review.status.open')}</span>
         </span>
+        {condition !== null && (
+          <span className="rv-lock-info">
+            <Tooltip placement="bottom" content={condition}>
+              <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('review.lock.info')}>
+                <InfoGlyph size={16} />
+              </button>
+            </Tooltip>
+          </span>
+        )}
       </div>
 
       <div
@@ -78,22 +105,20 @@ export function CoverageBar({ status, locked, canManagePeriods, approvingAll = f
         <span className="rv-meter-fill" style={{ width: `${pct}%` }} />
       </div>
 
-      <div className="rv-coverage-lock">
-        {!locked && status.open > 0 && onApproveAll !== undefined && (
-          <button type="button" className="btn btn--secondary rv-action" disabled={approvingAll} onClick={onApproveAll}>
-            {approvingAll ? t('review.approveAll.working') : t('review.approveAll.action', { count: String(status.open) })}
-          </button>
-        )}
-        <button
-          type="button"
-          className="btn btn--secondary rv-action"
-          disabled={locked || !canManagePeriods || !clean}
-          onClick={onLock}
-        >
-          {locked ? t('review.lock.locked') : t('review.lockPeriod')}
-        </button>
-        {reason !== null && <p className="rv-lock-reason">{reason}</p>}
-      </div>
+      {(offerApproveAll || canLock) && (
+        <div className="rv-coverage-lock">
+          {offerApproveAll && (
+            <button type="button" className="btn btn--secondary rv-action" disabled={approvingAll} onClick={onApproveAll}>
+              {approvingAll ? t('review.approveAll.working') : t('review.approveAll.action', { count: String(status.open) })}
+            </button>
+          )}
+          {canLock && (
+            <button type="button" className="btn btn--secondary rv-action" onClick={onLock}>
+              {t('review.lockPeriod')}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

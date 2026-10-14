@@ -167,8 +167,13 @@ test('I04 override: a variance needs a reason and the override capability, and i
   const evaluation = must(call(s.deps, 'match_three_way_evaluate', { workspaceId: s.workspaceId, billId }), 'evaluate').evaluation;
   assert.equal(evaluation.status, 'variance');
 
-  // Missing reason -> reason_required, nothing written.
-  refused(call(s.deps, 'match_three_way_override', { workspaceId: s.workspaceId, billId, evaluation, reason: '', idempotencyKey: 'ovr-x' }), 'reason_required', 'override without reason');
+  // Missing reason -> refused, nothing written. Since D161 the override is dial-governed (pay), so the
+  // registry face answers a BLANK schema-required field first with invalid_input (conformance rule 7);
+  // a reason too short to be one reaches the engine, which answers reason_required.
+  const blank = call(s.deps, 'match_three_way_override', { workspaceId: s.workspaceId, billId, evaluation, reason: '', idempotencyKey: 'ovr-x' });
+  refused(blank, 'invalid_input', 'override with a blank reason');
+  assert.equal(blank.field, 'reason');
+  refused(call(s.deps, 'match_three_way_override', { workspaceId: s.workspaceId, billId, evaluation, reason: 'ok', idempotencyKey: 'ovr-y' }), 'reason_required', 'override with a reason under five characters');
   assert.equal(count(s.deps, 'three_way_match', s.workspaceId), 0, 'no header after reason_required');
 
   const ovr = must(call(s.deps, 'match_three_way_override', { workspaceId: s.workspaceId, billId, evaluation, reason: 'Preisdifferenz vereinbart', idempotencyKey: 'ovr-1' }), 'override');

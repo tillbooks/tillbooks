@@ -36,6 +36,10 @@ test('P3 guard: the ledger exposes exactly its intended verbs, no raw writer', (
     'getOpeningBalances',
     'importMigration',
     'parseSwissAmount',
+    // D158: the verb's own checks with nothing written, which the dial seam runs before it drafts an
+    // agent's opening position. It shares `setOpeningBalances`'s plan and never reaches postEntry.
+    'prevalidateImportMigration',
+    'prevalidateOpeningBalances',
     'setOpeningBalances',
   ].sort();
   const exportedFns = Object.keys(ledger)

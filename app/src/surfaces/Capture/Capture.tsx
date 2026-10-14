@@ -76,14 +76,28 @@ import { Status, type StatusKind } from '../../components/Status';
 import { AccountCombobox, Combobox, type ComboboxOption } from '../../components/AccountCombobox';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { COMMIT_TARGET_CLASS, useCommitAck } from '../../lib/motion';
+import { detectSwissQrText } from './qrDetect';
 import './Capture.css';
 
 interface CaptureField {
+  id?: string;
   key: string;
   value: unknown;
   provenance: string;
   confidence: string;
   superseded: boolean;
+  /** A31 §0a: set when a supplied QR payload wrote this row (the value was decoded, not typed). */
+  qrPayloadId?: string | null;
+  /**
+   * Why a superseded row is history. `discarded_with_bill`: a value typed for the PREVIOUS bill that a
+   * different bill reset (owner decision 01.10.2026, "corrections belong to their bill").
+   */
+  supersededReason?: string | null;
+}
+/** One issue of the strict QR decoder (`qrbill/decode.ts`): the code is localised, the line shown. */
+interface QrIssue {
+  code: string;
+  line: number | null;
 }
 interface CaptureRow {
   id: string;
@@ -133,6 +147,13 @@ function renderValue(field: CaptureField): string {
   }
   if ((field.key === 'invoice_date' || field.key === 'due_date') && typeof v === 'string') {
     return formatDate(v);
+  }
+  if (field.key === 'vendor_address' && v !== null && typeof v === 'object') {
+    // The structured creditor address as one postal line: "Talweg 7, 3000 Bern, CH".
+    const a = v as { street?: string; buildingNumber?: string; postalCode?: string; town?: string; country?: string };
+    const street = [a.street, a.buildingNumber].filter((x) => typeof x === 'string' && x !== '').join(' ');
+    const place = [a.postalCode, a.town].filter((x) => typeof x === 'string' && x !== '').join(' ');
+    return [street, place, a.country ?? ''].filter((x) => x !== '').join(', ');
   }
   return typeof v === 'string' ? v : JSON.stringify(v);
 }
@@ -208,6 +229,11 @@ export function Capture() {
   // the decaying tint once the queue has refetched.
   const [justCommittedId, setJustCommittedId] = useState<string | null>(null);
   const [posted, setPosted] = useState<{ captureId: string; billId: string; posted: boolean } | null>(null);
+  // A31 §0a: the QR payload a person reads in (pasted from a phone scanner, or found by the browser in
+  // an image capture at drop time), and what the strict decoder said about the last attempt.
+  const [qrText, setQrText] = useState('');
+  const [qrFound, setQrFound] = useState<{ captureId: string; text: string } | null>(null);
+  const [qrOutcome, setQrOutcome] = useState<{ kind: 'errors' | 'warnings' | 'done'; issues: QrIssue[] } | null>(null);
 
   const load = useCallback(async () => {
     if (workspaceId === null) {
@@ -401,6 +427,51 @@ export function Capture() {
     else setDetail(null);
   }, [selectedId, loadDetail]);
 
+  // A different capture opens with an empty QR field, unless the browser found a code in its image.
+  // Keyed on the selection alone: reading the find through a ref keeps a successful read-in (which
+  // clears the find) from wiping the outcome it just reported.
+  const qrFoundRef = useRef(qrFound);
+  qrFoundRef.current = qrFound;
+  useEffect(() => {
+    const found = qrFoundRef.current;
+    setQrOutcome(null);
+    setQrText(found !== null && found.captureId === selectedId ? found.text : '');
+  }, [selectedId]);
+
+  const onReadQr = useCallback(async () => {
+    if (detail === null || workspaceId === null) return;
+    const captureId = detail.capture.id;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const fromImage = qrFound !== null && qrFound.captureId === captureId && qrFound.text === qrText;
+      const response = await client.call('capture_extract', {
+        workspaceId,
+        captureId,
+        // The person reads the payload in, so the values land as their assertion (operator); the
+        // payload record keeps which reader produced the text.
+        source: 'operator',
+        qrPayload: qrText,
+        decoder: fromImage ? 'studio-barcode-detector' : 'pasted',
+        idempotencyKey: newKey(),
+      });
+      if (isErr(response.body)) {
+        const body = response.body as unknown as { error: string; errors?: QrIssue[] };
+        if (body.error === 'qr_payload_invalid') setQrOutcome({ kind: 'errors', issues: body.errors ?? [] });
+        else setNotice(refusalText(t, response.body, { own: 'capture.error' }));
+        return;
+      }
+      const warnings = (response.body as unknown as { qrPayload?: { warnings?: QrIssue[] } }).qrPayload?.warnings ?? [];
+      setQrOutcome({ kind: warnings.length > 0 ? 'warnings' : 'done', issues: warnings });
+      setQrFound(null);
+      setQrText('');
+      await load();
+      await loadDetail(captureId);
+    } finally {
+      setBusy(false);
+    }
+  }, [client, detail, workspaceId, qrFound, qrText, load, loadDetail, t]);
+
   const select = useCallback(
     (id: string | null) => {
       const next = new URLSearchParams(params);
@@ -431,6 +502,13 @@ export function Capture() {
         }
         const body = response.body as unknown as { captureId: string; duplicate: boolean };
         if (body.duplicate) setNotice(t('capture.duplicate'));
+        // A31 §0a item 12: an image whose QR code the browser can read pre-fills the paste field. A
+        // pre-fill only: the person reads it in, so nothing machine-found is written unasked.
+        const found = await detectSwissQrText(file);
+        if (found !== null) {
+          setQrFound({ captureId: body.captureId, text: found });
+          setQrText(found);
+        }
         await load();
         select(body.captureId);
       } finally {
@@ -442,6 +520,12 @@ export function Capture() {
 
   const liveFields = useMemo(
     () => (detail?.capture.fields ?? []).filter((f) => !f.superseded && f.key !== 'doc_type'),
+    [detail],
+  );
+  // The corrections a different bill discarded: history the reviewer must see before committing, so a
+  // value they typed never vanishes silently when they read in the right bill.
+  const discardedFields = useMemo(
+    () => (detail?.capture.fields ?? []).filter((f) => f.superseded && f.supersededReason === 'discarded_with_bill' && f.key !== 'doc_type'),
     [detail],
   );
 
@@ -647,8 +731,16 @@ export function Capture() {
                       <th scope="row">{t(`capture.field.${f.key}`)}</th>
                       <td className={isMoneyValue(f) ? 'capture__val t-money' : 'capture__val'}>{renderValue(f)}</td>
                       <td>
-                        <span className="capture__prov" aria-label={t(`capture.provenance.${f.provenance}`)}>
+                        <span
+                          className="capture__prov"
+                          aria-label={
+                            typeof f.qrPayloadId === 'string'
+                              ? `${t(`capture.provenance.${f.provenance}`)}, ${t('capture.provenance.viaQr')}`
+                              : t(`capture.provenance.${f.provenance}`)
+                          }
+                        >
                           {t(`capture.provenance.${f.provenance}`)}
+                          {typeof f.qrPayloadId === 'string' ? ` · ${t('capture.provenance.viaQr')}` : ''}
                         </span>{' '}
                         <span className="capture__conf">{t(`capture.confidence.${f.confidence}`)}</span>
                       </td>
@@ -657,7 +749,85 @@ export function Capture() {
                 </tbody>
               </table>
             )}
+            {discardedFields.length > 0 ? (
+              <section className="capture__discarded" aria-labelledby="capture-discarded-title">
+                <h3 id="capture-discarded-title" className="capture__discardedTitle">
+                  {t('capture.discarded.title')}
+                </h3>
+                <p className="capture__discardedHint">{t('capture.discarded.hint')}</p>
+                <ul>
+                  {discardedFields.map((f, i) => (
+                    <li key={f.id ?? `${f.key}-${i}`}>
+                      <span>{t(`capture.field.${f.key}`)}</span>{' '}
+                      <span className={isMoneyValue(f) ? 'capture__val t-money' : 'capture__val'}>{renderValue(f)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </div>
+
+          {detail.capture.status === 'needs_review' && canDrop ? (
+            // A31 §0a: read the bill's QR code in when the file did not carry it as text. Open by
+            // default only when there is nothing to review yet or the browser found a code.
+            <details
+              key={detail.capture.id}
+              className="capture__qr"
+              open={liveFields.length === 0 || (qrFound !== null && qrFound.captureId === detail.capture.id)}
+            >
+              <summary>{t('capture.qr.title')}</summary>
+              <div className="capture__qrBody">
+                {qrFound !== null && qrFound.captureId === detail.capture.id ? (
+                  <p className="capture__qrNote" role="status">
+                    {t('capture.qr.found')}
+                  </p>
+                ) : null}
+                <label className="capture__picker" htmlFor="capture-qr-text">
+                  <span>{t('capture.qr.label')}</span>
+                  <textarea
+                    id="capture-qr-text"
+                    className="field capture__qrText"
+                    rows={6}
+                    spellCheck={false}
+                    value={qrText}
+                    aria-describedby="capture-qr-hint"
+                    aria-invalid={qrOutcome?.kind === 'errors'}
+                    onChange={(event) => {
+                      setQrText(event.target.value);
+                      if (qrOutcome !== null) setQrOutcome(null);
+                    }}
+                  />
+                </label>
+                <p id="capture-qr-hint" className="capture__qrNote">
+                  {t('capture.qr.hint')}
+                </p>
+                {qrOutcome !== null ? (
+                  <div className="capture__qrOutcome" role={qrOutcome.kind === 'errors' ? 'alert' : 'status'}>
+                    <p>
+                      {qrOutcome.kind === 'errors'
+                        ? t('capture.error.qr_payload_invalid')
+                        : qrOutcome.kind === 'warnings'
+                          ? t('capture.qr.warningsTitle')
+                          : t('capture.qr.done')}
+                    </p>
+                    {qrOutcome.issues.length > 0 ? (
+                      <ul>
+                        {qrOutcome.issues.map((issue, n) => (
+                          <li key={`${issue.code}-${n}`}>
+                            {issue.line !== null ? `${t('capture.qr.line', { line: issue.line })}: ` : ''}
+                            {t(`capture.qr.issue.${issue.code}`)}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+                <button type="button" className="btn btn--secondary" disabled={busy || qrText.trim() === ''} onClick={() => void onReadQr()}>
+                  {t('capture.qr.read')}
+                </button>
+              </div>
+            </details>
+          ) : null}
 
           {detail.capture.status === 'needs_review' ? (
             <>

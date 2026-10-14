@@ -26,7 +26,7 @@ import {
   bookBankLine,
   reopenBankLine,
 } from '../../dist/core/banking/index.js';
-import { compactReference } from '../../dist/core/banking/pain001.js';
+import { frozenPmtInfId, frozenEndToEndId } from './frozen-refs-support.mjs';
 import { buildQrrReference } from '../../dist/core/payments/reference.js';
 import { postEntry } from '../../dist/core/ledger/index.js';
 import { checklistStart, checklistGet } from '../../dist/core/checklists/index.js';
@@ -57,9 +57,9 @@ function goLiveBook() {
   assert.deepEqual(items.map((i) => i.amount_minor), [60000, 40000]);
   const fill = {
     QRR_INVOICE: buildQrrReference(inv.number),
-    PMTINF: compactReference('P', batch.batchId),
-    E2E_1: compactReference('E', items[0].id),
-    E2E_2: compactReference('E', items[1].id),
+    PMTINF: frozenPmtInfId(t, batch.batchId),
+    E2E_1: frozenEndToEndId(t, items[0].id),
+    E2E_2: frozenEndToEndId(t, items[1].id),
   };
   const main = read('bank-inbox-day-camt053.xml').replace(/@@([A-Z0-9_]+)@@/g, (_, k) => fill[k]);
   assert.equal(/@@/.test(main), false, 'every placeholder is filled');

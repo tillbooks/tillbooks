@@ -50,6 +50,7 @@ import type { Result } from '../result.js';
 import type { SqliteStore } from '../store/sqlite-store.js';
 import type { CapabilityPort } from '../ports.js';
 import { AGENT_ACTOR, SERVED_STRANGER_ACTOR } from './actors.js';
+import { isPluginCallActor } from '../plugins/callScope.js';
 import type { IdentitySource } from './actors.js';
 import type { Capability } from './capabilities.js';
 import {
@@ -180,9 +181,14 @@ export function parseCapabilities(json: string): readonly Capability[] {
  *
  * One indexed lookup (`user_by_actor`); `agent` short-circuits before it. A stranger and an actor with
  * no `user` row are not governed (they hold nothing anyway).
+ *
+ * D161.2: the actor of a plugin call that is running right now is governed too (`plugins/callScope.ts`).
+ * The bridge dispatches a plugin's call as the member who installed it; without this every human-only
+ * check read the installer and let plugin code pass as a person.
  */
 export function isGovernedSeat(store: SqliteStore, actor: string): boolean {
   if (actor === AGENT_ACTOR) return true;
+  if (isPluginCallActor(actor)) return true;
   const row = store.db.prepare('SELECT kind FROM user WHERE actor_id = ?').get(actor) as { kind: string } | undefined;
   return row?.kind === 'agent';
 }

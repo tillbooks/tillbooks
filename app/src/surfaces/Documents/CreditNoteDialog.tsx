@@ -30,7 +30,7 @@ import { ErrorBanner } from '../../components/states';
 // The ENGINE's own apportionment (pure leaf module, the RecurringEditor enum-import precedent):
 // the shares previewed here and the shares the engine will derive at create are ONE function.
 import { apportionNet } from '../../../../src/core/sales/apportion';
-import { idemKey, lineTotalMinor, parseMinor, type DocumentDto, type DocumentLine } from './model';
+import { effectiveSupplyDate, idemKey, lineTotalMinor, parseMinor, type DocumentDto, type DocumentLine } from './model';
 
 type Arm = 'full' | 'positions' | 'amount';
 
@@ -145,7 +145,10 @@ export function CreditNoteDialog({
         lines.map(async (l, i) => {
           const share = shares[i] ?? 0;
           if (share === 0) return 0;
-          const supplyDate = l.supplyDate ?? invoice.issueDate;
+          // The ONE rule (D164, `effectiveSupplyDate`, the twin of the engine's `lineSupplyDate`): the
+          // line's own date, else the invoice's document-level Leistungsdatum, else its issue date,
+          // which is exactly the date `createCreditNote` pins and the credit posts at.
+          const supplyDate = effectiveSupplyDate(l, invoice, invoice.issueDate);
           const { body } = await client.call('vat_preview', {
             workspaceId,
             amountMinor: share,

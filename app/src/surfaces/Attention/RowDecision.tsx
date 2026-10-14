@@ -16,11 +16,19 @@
  * Studio seat in words, a member by the name the read model knows, and an actor the engine cannot
  * place with no name at all. The raw id is compared against `whoami` for "Von dir markiert" and
  * rides only as the tooltip of the reason line; it never reaches the screen as text.
+ *
+ * WHAT YOU APPROVED IS WHAT RUNS (critic N1). An `agent_action` row carries the figures the engine
+ * froze when the agent proposed it (number or draft, counterparty, amount, lines), shown as one quiet
+ * line, and `changedSinceProposal` when the record moved since: then the approve exits are hidden,
+ * the sentence says why, and rejecting stays possible.
  */
 import { useId, useState, type ReactNode } from 'react';
 
 import en from '../../i18n/en.json';
-import { useT } from '../../i18n';
+import { useI18n, useT, type Locale } from '../../i18n';
+import { figuresLine, type VorschlagFigures } from '../Agent/model';
+import { ActionFeedback } from '../../components/ActionFeedback';
+import { consequenceForVerb, consequenceSentence } from '../../lib/approval-tiers';
 import { useCapabilities } from '../../lib/capabilities';
 
 export type DecisionRole = 'primary' | 'secondary' | 'danger' | 'link';
@@ -40,6 +48,9 @@ export interface DecisionOption {
   input: Record<string, string | number | boolean>;
   humanConfirm?: boolean;
   reasonField?: boolean;
+  /** D150: a reason option that is not a rejection names its own confirm button and placeholder. */
+  confirmLabelKey?: string;
+  reasonPlaceholderKey?: string;
   capability?: string;
   hintKey?: string;
   deepLink?: { route: string; params: Record<string, string> };
@@ -57,7 +68,14 @@ export interface DecisionItem {
   consequenceKey?: string | null;
   proposedBy?: string;
   proposedByKind?: ActorKind;
+  /** Critic N1, `agent_action` rows: the figures frozen at the proposal. */
+  figures?: VorschlagFigures | null;
+  /** Critic N1: the record changed since the proposal, so approving would run nothing. */
+  changedSinceProposal?: boolean;
 }
+
+/** The approve verb a changed Vorschlag may not offer (the engine refuses it `vorschlag_stale`). */
+const APPROVE_VERB = 'approve_drafted_action';
 
 /**
  * The verbs the shared catalogue carries a human label for (`agent.verb.*`, all 38 dial-governed
@@ -87,6 +105,8 @@ export function parseDecisionOptions(raw: unknown): DecisionOption[] {
       input: o.input !== null && typeof o.input === 'object' ? (o.input as Record<string, string | number | boolean>) : {},
       humanConfirm: o.humanConfirm === true,
       reasonField: o.reasonField === true,
+      ...(typeof o.confirmLabelKey === 'string' ? { confirmLabelKey: o.confirmLabelKey } : {}),
+      ...(typeof o.reasonPlaceholderKey === 'string' ? { reasonPlaceholderKey: o.reasonPlaceholderKey } : {}),
       capability: typeof o.capability === 'string' ? o.capability : undefined,
       hintKey: typeof o.hintKey === 'string' ? o.hintKey : undefined,
       deepLink:
@@ -111,8 +131,31 @@ export interface RowDecisionProps {
   onOpen: (deepLink: { route: string; params: Record<string, string> }) => void;
 }
 
+/** The capability prefix of the engine's `consequenceKey` (`agent.consequence.<capability>`). */
+const CONSEQUENCE_KEY_PREFIX = 'agent.consequence.';
+
+/**
+ * The row's D118 C4 consequence in the active locale (D156: the engine's one catalogue), or null when
+ * the engine said the row's write carries none (`consequenceKey: null`). The engine names the dial tier
+ * in `consequenceKey`; the verb is the drafted tool on an A35 row (`subtitleParams.tool`), else the
+ * first exit whose verb carries a consequence. Resolution is the engine's: the verb's own entry, else
+ * the tier's family, so the row reads the sentence the Vorschlag card and a human confirm read.
+ */
+export function rowConsequence(item: DecisionItem, locale: Locale): string | null {
+  const key = item.consequenceKey;
+  if (typeof key !== 'string' || !key.startsWith(CONSEQUENCE_KEY_PREFIX)) return null;
+  const capability = key.slice(CONSEQUENCE_KEY_PREFIX.length);
+  const drafted = item.queueId === 'agent_action' ? item.subtitleParams?.tool : undefined;
+  const verb =
+    typeof drafted === 'string' && drafted.length > 0
+      ? drafted
+      : (item.decisionOptions ?? []).map((o) => o.verb).find((v): v is string => v !== null && consequenceForVerb(v) !== null) ?? '';
+  return consequenceSentence(verb, locale, capability);
+}
+
 export function RowDecision({ item, selected, busy, onAct, onOpen }: RowDecisionProps) {
   const t = useT();
+  const { locale } = useI18n();
   const { can, whoami } = useCapabilities();
   const reasonFieldId = useId();
   const [confirming, setConfirming] = useState<DecisionOption | null>(null);
@@ -122,9 +165,12 @@ export function RowDecision({ item, selected, busy, onAct, onOpen }: RowDecision
   // The drafting actor never sees an approve control (the engine's cannot_self_approve still bites
   // underneath); the reason is named in place rather than pointing at a rights page.
   const isOwnProposal = item.queueId === 'agent_action' && whoami !== null && item.proposedBy !== undefined && whoami.actor === item.proposedBy;
+  const changed = item.queueId === 'agent_action' && item.changedSinceProposal === true;
+  const figures = item.queueId === 'agent_action' && item.figures != null ? figuresLine(t, item.figures) : null;
   const visible = options.filter((o) => {
     if (o.role === 'link') return true;
     if (isOwnProposal) return false;
+    if (changed && o.verb === APPROVE_VERB && !o.reasonField) return false;
     return o.capability === undefined || can(o.capability);
   });
   const params = item.subtitleParams ?? {};
@@ -144,7 +190,7 @@ export function RowDecision({ item, selected, busy, onAct, onOpen }: RowDecision
         : t(item.reasonKey, params);
   // The raw actor id is a tooltip at most (an operator debugging a flag may want the engine's key).
   const reasonTitle = item.queueId === 'review_flag' && item.proposedBy !== undefined ? item.proposedBy : undefined;
-  const consequence = item.consequenceKey === undefined || item.consequenceKey === null ? null : t(item.consequenceKey);
+  const consequence = rowConsequence(item, locale);
   const hint = visible.find((o) => o.hintKey !== undefined)?.hintKey;
 
   const button = (option: DecisionOption): ReactNode => {
@@ -210,7 +256,9 @@ export function RowDecision({ item, selected, busy, onAct, onOpen }: RowDecision
           ) : null}
         </p>
       )}
+      {figures !== null && <p className="att-decide-figures t-money" data-figures="">{figures}</p>}
       {consequence !== null && <p className="att-decide-consequence">{consequence}</p>}
+      {changed && <ActionFeedback tone="warn" role="note" message={t('agent.card.changed')} />}
       {isOwnProposal && <p className="att-decide-reason">{t('agent.card.selfHint')}</p>}
       {confirming !== null ? (
         <div className="att-decide-confirm" role="group" aria-label={t(confirming.labelKey)}>
@@ -222,7 +270,7 @@ export function RowDecision({ item, selected, busy, onAct, onOpen }: RowDecision
             className="field att-decide-reason-field"
             type="text"
             value={reason}
-            placeholder={t('attention.act.reasonPlaceholder')}
+            placeholder={t(confirming.reasonPlaceholderKey ?? 'attention.act.reasonPlaceholder')}
             disabled={busy}
             onChange={(e) => setReason(e.target.value)}
             onKeyDown={(e) => {
@@ -239,15 +287,15 @@ export function RowDecision({ item, selected, busy, onAct, onOpen }: RowDecision
           <div className="att-decide-actions">
             <button
               type="button"
-              className="btn btn--danger btn--sm"
-              disabled={busy}
+              className={confirming.role === 'danger' ? 'btn btn--danger btn--sm' : 'btn btn--secondary btn--sm'}
+              disabled={busy || (confirming.confirmLabelKey !== undefined && reason.trim() === '')}
               onClick={() => {
                 const option = confirming;
                 setConfirming(null);
                 onAct(option, reason.trim());
               }}
             >
-              {t('attention.act.rejectConfirm')}
+              {t(confirming.confirmLabelKey ?? 'attention.act.rejectConfirm')}
             </button>
             <button type="button" className="btn btn--ghost btn--sm" onClick={() => setConfirming(null)}>
               {t('attention.act.rejectKeep')}

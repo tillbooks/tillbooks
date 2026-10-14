@@ -263,3 +263,146 @@ describe('DocumentDetail, legal actions only (D19/M23)', () => {
     expect(transitionSpy.mock.calls[0][0]).toMatchObject({ documentId: 'doc_1', to: 'cancelled' });
   });
 });
+
+describe('DocumentDetail, an issued line is priced at its OWN supply date (critic R2-1)', () => {
+  /** computeLineTax as the engine runs it: the supply date's ERA decides the normal rate (7.7% before 2024). */
+  function eraPreview(input: Record<string, unknown>): RestResponse {
+    const net = Number(input.amountMinor);
+    const rateBp = String(input.supplyDate) < '2024-01-01' ? 770 : 810;
+    const tax = Math.round((net * rateBp) / 10000);
+    return ok({ ok: true, kind: 'output', netMinor: net, taxMinor: tax, grossMinor: net + tax, rateBp, deductible: false, formLine: '303', trace: { taxCode: 'UST81', taxBaseMinor: net, taxAmountMinor: tax } });
+  }
+
+  /** An issued Gutschrift of a 2023 invoice, as get_document sends it: the line keeps the pinned date. */
+  const issuedCreditNote = (taxMinor = 7700) =>
+    ok({
+      document: {
+        ...getFixture.document,
+        id: 'doc_cn',
+        type: 'credit_note',
+        status: 'issued',
+        number: 'G-2026-0001',
+        issueDate: '2026-10-03',
+        postedEntryId: 'entry_cn',
+        creditedDocumentId: 'doc_inv',
+        subtotalMinor: 100000,
+        taxMinor,
+        totalMinor: 100000 + taxMinor,
+      },
+      lines: [{ id: 'l1', position: 1, description: 'Beratung 2023', quantityMilli: 1000, unitPriceMinor: 100000, lineTotalMinor: 100000, taxCode: 'UST81', supplyDate: '2023-06-01', creditedLinePosition: 1 }],
+      history: getFixture.history,
+    });
+
+  it('an issued 2023 credit note shows the 7.7% the ledger holds, asked at 2023-06-01, never at the issue date', async () => {
+    const asked: unknown[] = [];
+    renderDetail(
+      {
+        get_document: issuedCreditNote(),
+        get_contact: contact,
+        vat_preview: (input) => {
+          asked.push(input.supplyDate);
+          return eraPreview(input);
+        },
+        list_documents: ok({ documents: [] }),
+      },
+      '/documents/doc_cn',
+    );
+    const summary = await screen.findByLabelText('MWST-Übersicht');
+    expect(asked).toEqual(['2023-06-01']);
+    expect(within(summary).getByText('7.7%')).toBeInTheDocument();
+    expect(within(summary).getAllByText('CHF 77.00').length).toBeGreaterThan(0);
+    expect(within(summary).queryByText('CHF 81.00')).not.toBeInTheDocument();
+  });
+
+  it('a posted document whose live breakdown does not add up to its stored tax states the stored figure instead', async () => {
+    // The preview answers at today's rate (a changed code, say): 81.00 against the 77.00 posted.
+    renderDetail(
+      {
+        get_document: issuedCreditNote(),
+        get_contact: contact,
+        vat_preview: (input) => eraPreview({ ...input, supplyDate: '2026-10-03' }),
+        list_documents: ok({ documents: [] }),
+      },
+      '/documents/doc_cn',
+    );
+    // Settled first: the stored figure stands from the first paint, so only a SETTLED panel that still
+    // states it (and no breakdown) proves the mismatch guard (critic round 5, M11).
+    await waitFor(() => expect(document.querySelector('[data-vat-state="settled"]')).not.toBeNull());
+    expect(screen.getByText('MWST auf diesem Beleg: CHF 77.00')).toBeInTheDocument();
+    expect(screen.queryByLabelText('MWST-Übersicht')).not.toBeInTheDocument();
+    expect(screen.queryByText('CHF 81.00')).not.toBeInTheDocument();
+  });
+
+  it('a posted document states its stored tax at once, never a gap while the breakdown loads', async () => {
+    let release: () => void = () => undefined;
+    const transport: Transport = async (action, input) => {
+      if (action === 'vat_preview') {
+        await new Promise<void>((r) => (release = r));
+        return eraPreview(input);
+      }
+      const canned: Canned = { get_document: issuedCreditNote(), get_contact: contact, list_documents: ok({ documents: [] }) };
+      const entry = canned[action];
+      if (entry === undefined) return { status: 404, body: { ok: false, error: 'unknown_action' } };
+      return typeof entry === 'function' ? entry(input) : entry;
+    };
+    render(
+      <TillClientProvider client={new TillClient(transport)}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_test">
+            <MemoryRouter initialEntries={['/documents/doc_cn']}>
+              <Routes>
+                <Route path="/documents/*" element={<DocumentsSurface />} />
+              </Routes>
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    expect(await screen.findByText('MWST auf diesem Beleg: CHF 77.00')).toBeInTheDocument();
+    // Before the preview answers the panel is LOADING, and it states the stored figure, no breakdown.
+    expect(document.querySelector('[data-vat-state="loading"]')).not.toBeNull();
+    expect(screen.queryByLabelText('MWST-Übersicht')).not.toBeInTheDocument();
+    release();
+    await waitFor(() => expect(document.querySelector('[data-vat-state="settled"]')).not.toBeNull());
+    const summary = await screen.findByLabelText('MWST-Übersicht');
+    expect(within(summary).getAllByText('CHF 77.00').length).toBeGreaterThan(0);
+    expect(screen.queryByText('MWST auf diesem Beleg: CHF 77.00')).not.toBeInTheDocument();
+  });
+
+  it('an issued invoice dated through its DOCUMENT Leistungsdatum (D164) is priced at it: 7.7%, as posted', async () => {
+    const asked: unknown[] = [];
+    const issuedInvoice = ok({
+      document: {
+        ...getFixture.document,
+        id: 'doc_iv',
+        type: 'invoice',
+        status: 'issued',
+        number: 'R-2026-0009',
+        issueDate: '2026-10-03',
+        supplyDate: '2023-12-20',
+        postedEntryId: 'entry_iv',
+        subtotalMinor: 100000,
+        taxMinor: 7700,
+        totalMinor: 107700,
+      },
+      lines: [{ id: 'l1', position: 1, description: 'Umbau', quantityMilli: 1000, unitPriceMinor: 100000, lineTotalMinor: 100000, taxCode: 'UST81', supplyDate: null }],
+      history: getFixture.history,
+    });
+    renderDetail(
+      {
+        get_document: issuedInvoice,
+        get_contact: contact,
+        vat_preview: (input) => {
+          asked.push(input.supplyDate);
+          return eraPreview(input);
+        },
+        get_invoice_qr: reject('needs_qr_iban'),
+        list_documents: ok({ documents: [] }),
+      },
+      '/documents/doc_iv',
+    );
+    const summary = await screen.findByLabelText('MWST-Übersicht');
+    expect(asked).toEqual(['2023-12-20']);
+    expect(within(summary).getByText('7.7%')).toBeInTheDocument();
+  });
+});

@@ -7,7 +7,8 @@
  *
  *   1. it serves the BUILT Studio (static files) at `/`, so there is no Vite and no second terminal;
  *   2. it mounts the REST twins (`/api/:action`) beside `/mcp`, behind the SAME localhost guard
- *      (`createLocalHttpRouter({ rest: true })`), which is the shipped form of the dev bridge;
+ *      (`createLocalHttpRouter({ rest: true })`), which is the shipped form of the dev bridge, and
+ *      both faces hand the human seat only to the Studio it serves, through a per-launch key;
  *   3. it runs the in-process scheduler tick (US-M00.4) so "recurring" does not mean "recurring
  *      whenever an agent happens to poke the tick".
  *
@@ -24,16 +25,20 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 import { makeApiDeps } from './mcp.js';
-import { resolveEbicsRuntime } from './host-runtime.js';
+import { resolveEbicsRuntime, type HostEbicsPorts } from './host-runtime.js';
+import { createBankActivationOffload, createBankSyncOffload, isSharableDbPath } from './bank-sync-offload.js';
+import { reclaimDeadSyncLeases } from '../core/banking/ebics/index.js';
+import type { ApiDeps } from './registry.js';
 import { createLocalHttpRouter, pathnameOf } from './local-http.js';
 import { resolveServedMode, type ServedModeConfig } from './served-mode.js';
 import { rejectNonLocal } from './local-guard.js';
+import { mintStudioKey, studioLink } from './session.js';
 import {
   isBindablePort,
   invalidPortRefusal,
@@ -60,10 +65,11 @@ const here = dirname(fileURLToPath(import.meta.url));
  *      compiles to `dist/api/up.js`, so `dist/studio` is one directory up and over);
  *   3. `app/dist`, the repo-checkout location `npm --prefix app run build` writes.
  *
- * The `dist/studio` vs `app/dist` choice is the package-layout call §9 flags as owner-gated: this
- * resolver serves whichever is present, so the code does not force the decision and works from a
- * packed tarball and a checkout alike. When NEITHER exists, `till up` still starts and serves the
- * API faces; a GET for the Studio returns a plain message telling the operator to build it.
+ * The package-layout call M00 §9 left owner-gated is answered (beta launch plan P0.1, 30.09.2026):
+ * VENDORED. `prepack` runs `scripts/vendor-studio.mjs --build`, so a packed tarball carries
+ * `dist/studio` and the Docker image already did. The resolver still serves whichever is present, so
+ * a checkout works off `app/dist` without a pack. When NEITHER exists, `till up` still starts and
+ * serves the API faces; a GET for the Studio returns `STUDIO_NOT_BUILT`, naming both ways out.
  */
 export function resolveStudioDir(env: NodeJS.ProcessEnv = process.env): string | null {
   const override = env.TILL_STUDIO_DIR?.trim();
@@ -74,6 +80,19 @@ export function resolveStudioDir(env: NodeJS.ProcessEnv = process.env): string |
   ];
   return candidates.find((dir) => existsSync(join(dir, 'index.html'))) ?? null;
 }
+
+/**
+ * What a Studio GET answers when no build was found. Since the beta (P0.1) the npm package VENDORS
+ * the Studio into `dist/studio` at `prepack`, so an npm install that lands here is an older or broken
+ * package, and the old advice ("npm --prefix app run build") was a command an installed package
+ * cannot run: it has no `app/`. Both ways out are named, the checkout one and the package one.
+ */
+export const STUDIO_NOT_BUILT = [
+  'The Studio is not built into this install.',
+  'Installed from npm: reinstall a release that ships it (npm install -g tillbooks@beta).',
+  'From a checkout: npm run setup, then npm run build:all.',
+  'Or set TILL_STUDIO_DIR to a built Studio.',
+].join('\n');
 
 /** A small, sufficient content-type table for a Vite build's asset kinds. */
 const CONTENT_TYPES: Record<string, string> = {
@@ -100,12 +119,11 @@ const CONTENT_TYPES: Record<string, string> = {
  *
  * PATH TRAVERSAL is refused: the requested path is normalised and rejoined under `studioDir`, and a
  * resolved target that escapes the directory falls back to `index.html` rather than reading it.
+ *
+ * The files are served AS BUILT. The shell carries no Studio key, in any mode (critic R3-B2): the key
+ * reaches the browser only through the link `startUp` prints and opens.
  */
-export async function serveStudio(
-  req: IncomingMessage,
-  res: ServerResponse,
-  studioDir: string,
-): Promise<boolean> {
+export async function serveStudio(req: IncomingMessage, res: ServerResponse, studioDir: string): Promise<boolean> {
   if (req.method !== 'GET' && req.method !== 'HEAD') return false;
   const pathname = pathnameOf(req);
 
@@ -173,6 +191,11 @@ export interface UpOptions {
   allowNonLoopback?: boolean;
   /** M01: served-mode config. Defaults to `resolveServedMode()` (env, throws on misconfiguration). */
   servedMode?: ServedModeConfig;
+  /**
+   * D142: the ports module the sync worker builds its wire from, instead of the live-wire recipe. For
+   * the suites (a slow synthetic bank behind the worker); production leaves it unset.
+   */
+  bankSyncPorts?: { portsModule: string; portsOptions?: unknown };
   log?: (line: string) => void;
 }
 
@@ -181,8 +204,55 @@ export interface UpHandle {
   store: SqliteStore;
   scheduler: Scheduler;
   url: string;
+  /**
+   * The link the person opens the Studio through: `url` plus `/#k=<key>`. The fragment never reaches
+   * a server, which is how the key reaches the browser and nothing else (critic R3-B2).
+   */
+  studioUrl: string;
   studioServed: boolean;
+  /**
+   * This launch's Studio key. In process only: the caller that started `till up` already holds the
+   * store, so handing it the key grants nothing new. Tests use it to act as the Studio over HTTP.
+   */
+  studioKey: string;
   close(): Promise<void>;
+}
+
+/**
+ * Where a running `till up` keeps its Studio link for a SECOND `till up` (the redirect) to reopen: in
+ * the support directory beside the lock, readable by the owner only (0600). Not in the lock itself,
+ * because `till mcp` reads the lock to point an AGENT at the Studio, and the key must never reach one.
+ */
+export function studioLinkPath(supportDir: string): string {
+  return join(supportDir, 'till-up.studio-link');
+}
+
+function writeStudioLinkFile(supportDir: string, link: string): void {
+  try {
+    const file = studioLinkPath(supportDir);
+    writeFileSync(file, JSON.stringify({ pid: process.pid, link }), { mode: 0o600 });
+    chmodSync(file, 0o600); // an older file keeps its mode on rewrite: tighten it explicitly
+  } catch {
+    // Best-effort: without it a second `till up` opens the bare URL and the Studio shows the hint.
+  }
+}
+
+function removeStudioLinkFile(supportDir: string): void {
+  try {
+    rmSync(studioLinkPath(supportDir), { force: true });
+  } catch {
+    // Best-effort, like the lock release.
+  }
+}
+
+/** The Studio link a live `till up` (pid `pid`) left for a second one, or null. */
+export function readStudioLink(supportDir: string, pid: number): string | null {
+  try {
+    const parsed = JSON.parse(readFileSync(studioLinkPath(supportDir), 'utf8')) as { pid?: unknown; link?: unknown };
+    return parsed.pid === pid && typeof parsed.link === 'string' ? parsed.link : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -198,6 +268,16 @@ export type UpResult =
  * bind checks run FIRST, exactly as `till serve`, so a refused run neither binds a socket nor leaves
  * a database behind.
  */
+/** Is a process with this pid alive? `EPERM` means it exists but is not ours: alive. */
+export function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
 export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   const host = opts.host ?? '127.0.0.1';
   const port = opts.port ?? DEFAULT_PORT;
@@ -223,15 +303,22 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   // database, let alone start a scheduler. A live holder is a redirect; a stale lock is reclaimed. The
   // lock is written with the requested port and rewritten with the BOUND port once listening (they
   // differ only when the caller asked for an ephemeral port, which real fixed-port usage never does).
+  // P0.5: the lock names the ledger too, so an agent's `till mcp` can tell whether this Studio has its book open.
+  const lockDbPath = opts.dbPath !== undefined ? { dbPath: opts.dbPath } : {};
   const acquired = acquireLock(supportDir, {
     pid: process.pid,
     host,
     port,
     url: `http://${authority}:${port}`,
     startedAt,
+    ...lockDbPath,
   });
   if (!acquired.acquired) {
-    return { started: false, holder: acquired.holder };
+    // The redirect opens the live instance's Studio LINK when that instance left one (the key is in
+    // its fragment), so a second `till up` lands in a working Studio rather than in the no-key hint.
+    // Only the returned copy carries it: the lock on disk keeps the bare URL `till mcp` reads.
+    const link = readStudioLink(supportDir, acquired.holder.pid);
+    return { started: false, holder: link === null ? acquired.holder : { ...acquired.holder, url: link } };
   }
 
   const studioDir = opts.studioDir === undefined ? resolveStudioDir() : opts.studioDir;
@@ -242,22 +329,66 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   // single-instance lock taken above: nothing is serving, and a lock naming this still-live pid would
   // turn a retry in the same process into a redirect to a server that never started.
   let opened: ReturnType<typeof makeApiDeps>;
+  let hostPorts: HostEbicsPorts;
   try {
-    opened = makeApiDeps(opts.dbPath, await resolveEbicsRuntime());
+    hostPorts = await resolveEbicsRuntime();
+    opened = makeApiDeps(opts.dbPath, hostPorts);
   } catch (e) {
     releaseLock(supportDir, process.pid);
     throw e;
   }
-  const { deps, store } = opened;
-  // The REST face's actor is `studio` (D25), the shipped form of the dev bridge's posture: the REST
-  // twins are the Studio's own bridge and the Studio is the human. The MCP face NEVER inherits it: it
-  // seats every session by the rule in `session.ts` (a `till-studio` client lands `studio`, `till-cli`
-  // and EVERY unrecognised client land the governed `agent` seat). Until F-08 (2026-09-05) this value
-  // was also the MCP face's fallback, so Claude Desktop on `till up` was seated as the Studio and
-  // bypassed the A35 dial and the trace. `till up` changes transport, not rights (A24 is untouched).
-  // M01: in served mode BOTH faces require and resolve the proxy-attested subject; the `studio`
-  // fallback actor below is used only in local mode (served requests never fall back to it).
-  const router = createLocalHttpRouter({ ...deps, actor: 'studio' }, { rest: true, servedMode });
+  const { store } = opened;
+  // D142 critic F2: a process killed mid-sync left its lease; the single-instance lock above proves no
+  // other till up runs, so a lease whose holder process is gone is taken over now, not in 15 minutes.
+  reclaimDeadSyncLeases(store, isPidAlive);
+  // D142: `bank_sync` runs in a worker thread on its own connection to the same book, so the Studio
+  // keeps answering while the bank wire waits. An in-memory book cannot be shared with a thread; there
+  // the verb runs in process, exactly as before.
+  const deps: ApiDeps = isSharableDbPath(opts.dbPath)
+    ? {
+        ...opened.deps,
+        bankSyncRunner: createBankSyncOffload({
+          dbPath: opts.dbPath,
+          ...(hostPorts.recipe !== undefined ? { recipe: hostPorts.recipe } : {}),
+          ...(opts.bankSyncPorts !== undefined ? opts.bankSyncPorts : {}),
+        }),
+        // D143 critic F1: the daily activation check's HPB runs in the same kind of worker.
+        bankActivationRunner: createBankActivationOffload({
+          dbPath: opts.dbPath,
+          ...(hostPorts.recipe !== undefined ? { recipe: hostPorts.recipe } : {}),
+          ...(opts.bankSyncPorts !== undefined ? opts.bankSyncPorts : {}),
+        }),
+      }
+    : opened.deps;
+  // The REST twins are the Studio's own bridge (D25) and the Studio is the human; the MCP face seats
+  // every session by the rule in `session.ts`. Until F-08 (2026-09-05) the REST actor was also the MCP
+  // face's fallback, so Claude Desktop on `till up` was seated as the Studio and bypassed the A35 dial
+  // and the trace. `till up` changes transport, not rights (A24 is untouched).
+  // M01: in served mode BOTH faces require and resolve the proxy-attested subject.
+  //
+  // THE STUDIO KEY (critic probe P6, 2026-10-12; delivery reworked for critic R3-B2). The human seat
+  // used to be granted to a NAME (an MCP client declaring `till-studio`) and, on the REST twins, to any
+  // caller at all. It is now granted only to a request carrying this launch's key: 32 bytes from the
+  // CSPRNG, minted here, held in this process's memory, and checked in constant time on both faces
+  // (`session.ts`). A restart mints a new key.
+  //
+  // HOW THE KEY REACHES THE BROWSER: OUT OF BAND, THROUGH THE LINK (the Jupyter-token pattern, owner
+  // decision 2026-10-12). `till up` prints and opens `http://HOST:PORT/#k=<key>`. Browsers never send a
+  // URL fragment to the server, so the key travels from this process to the person's browser and to
+  // nothing else; the Studio moves it into `sessionStorage` and strips the fragment. The served HTML
+  // carries NO key. The first version wrote it into the page as a `<meta>` tag, and any local HTTP
+  // client (a fetch tool, a browser-driving agent, curl) could GET `/`, read it and issue an invoice
+  // as the person with 0 Vorschläge (R3-B2).
+  //
+  // WHY A REQUEST HEADER AND NOT A COOKIE. Cookies are not isolated by port, so a page on
+  // `http://localhost:3000` (any other dev server, any local tool's UI) is SAME-SITE with this one:
+  // `SameSite=Strict` still attaches the cookie to its cross-origin `fetch`, the port-agnostic Origin
+  // check passes it (`localhost` is local), and a `text/plain` POST needs no preflight, so that page
+  // could issue an invoice as the person. The cookie would also be sent to every other server on
+  // localhost. A custom header has neither problem: another origin cannot attach one without a CORS
+  // preflight, which no face here answers.
+  const studioKey = mintStudioKey();
+  const router = createLocalHttpRouter(deps, { rest: true, servedMode, studioKey });
 
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     void router
@@ -274,11 +405,7 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
         }
         if (studioDir !== null && (await serveStudio(req, res, studioDir))) return;
         res.writeHead(studioDir === null ? 501 : 404, { 'content-type': 'text/plain; charset=utf-8' });
-        res.end(
-          studioDir === null
-            ? 'The Studio is not built into this install. Build it (npm --prefix app run build) or set TILL_STUDIO_DIR.'
-            : 'not found',
-        );
+        res.end(studioDir === null ? STUDIO_NOT_BUILT : 'not found');
       })
       .catch((e) => {
         if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json' });
@@ -315,7 +442,7 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   const url = `http://${authority}:${boundPort}`;
   // Finalise the lock with the real bound port, so a second `till up` redirects to a URL that dials.
   if (boundPort !== port) {
-    acquireLock(supportDir, { pid: process.pid, host, port: boundPort, url, startedAt });
+    acquireLock(supportDir, { pid: process.pid, host, port: boundPort, url, startedAt, ...lockDbPath });
   }
 
   setDeliveryRuntime({ mode: 'up', host, port: boundPort, studioServed });
@@ -323,13 +450,20 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   const scheduler = createScheduler(deps, { intervalMs: opts.tickMs ?? resolveTickMs() });
   scheduler.start();
 
+  // The link the person opens the Studio through: the ONLY place the key leaves this process. It is
+  // printed and opened, and kept beside the lock (owner-only) for a second `till up` to reopen.
+  const studioUrl = studioLink(url, studioKey);
+  writeStudioLinkFile(supportDir, studioUrl);
+
   let closed = false;
   const handle: UpHandle = {
     server,
     store,
     scheduler,
     url,
+    studioUrl,
     studioServed,
+    studioKey,
     async close() {
       if (closed) return;
       closed = true;
@@ -337,12 +471,14 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
       await router.closeAll();
       await new Promise<void>((res, rej) => server.close((err) => (err ? rej(err) : res())));
       store.close();
+      removeStudioLinkFile(supportDir);
       releaseLock(supportDir, process.pid);
       resetDeliveryRuntime();
     },
   };
 
-  if (opts.open !== false) openBrowser(url, log);
+  if (studioServed) log(`till up: open the Studio through ${studioUrl}`);
+  if (opts.open !== false) openBrowser(studioUrl, log);
 
   return { started: true, ...handle };
 }

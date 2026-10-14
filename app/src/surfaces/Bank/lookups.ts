@@ -17,7 +17,7 @@ import type {
   LineVorschlag,
   TaxCode,
 } from './model';
-import { isCredit, lineDate } from './model';
+import { formatIban, formatReference, isCredit, lineDate, taxCodeOnChoosing, vatCanApply, vatNeverApplies } from './model';
 
 type T = (key: string, params?: Record<string, string | number>) => string;
 
@@ -72,25 +72,104 @@ export const EMPTY_LOOKUPS: Lookups = buildLookups({
   dial: null,
 });
 
+/**
+ * Whether a one-leg booking shows its MWST picker (B2). A leg that CARRIES a code always shows it, on any
+ * account, so the person sees the code and can clear it to "Ohne MWST": nothing hidden ever carries a
+ * value (critic R2-2: a history proposal on 1170 with VST-M otherwise booked VAT on top of a VAT leg,
+ * unseen). A leg without a code shows the picker only where a code can apply (`vatCanApply`), never on a
+ * VAT account or a Bankkonto's ledger account.
+ */
+export function vatPickerShows(l: Lookups, leg: { accountId: string; taxCode: string }): boolean {
+  if (leg.taxCode !== '') return true;
+  const account = l.chartById.get(leg.accountId);
+  if (account === undefined) return false;
+  const bankLedgers = bankLedgersOf(l);
+  if (vatNeverApplies(account, bankLedgers)) return false;
+  return vatCanApply(account, bankLedgers);
+}
+
+/** Every Bankkonto's own ledger account: never a VAT target. */
+export function bankLedgersOf(l: Lookups): ReadonlySet<string> {
+  return new Set(l.bankAccounts.map((b) => b.ledgerAccountId).filter((id): id is string => id !== null));
+}
+
+/** The code a leg takes when the person chooses its account (`taxCodeOnChoosing` with this register). */
+export function taxCodeFor(l: Lookups, accountId: string, held: string): string {
+  return taxCodeOnChoosing(l.chartById.get(accountId), held, bankLedgersOf(l));
+}
+
+/** A posted entry as the strip says it: one Buchungssatz, and the whole of it when the line is cut. */
+export interface Satz {
+  short: string;
+  full: string;
+  truncated: boolean;
+}
+
+/**
+ * A posted entry's stored lines as ONE Buchungssatz, Soll an Haben ("6510 83.16 · 1170 6.74 an 1020
+ * 89.90"), read straight off the entry (nothing recomputed). A compound entry keeps at most `perSide`
+ * accounts a side and names the rest as "+n"; `full` carries every line for the tooltip.
+ */
+export function satzOf(t: T, l: Lookups, lines: readonly { account: string; debit: number; credit: number }[], currency: string, perSide = 2): Satz {
+  const bare = (m: number) => formatMoney(m, currency).slice(currency.length + 1);
+  const part = (x: { account: string }, amount: number) => `${l.chartById.get(x.account)?.number ?? t('bankInbox.legs.unknownAccount')} ${bare(amount)}`;
+  const debit = lines.filter((x) => x.debit > 0).map((x) => part(x, x.debit));
+  const credit = lines.filter((x) => x.credit > 0).map((x) => part(x, x.credit));
+  const side = (parts: string[]) =>
+    parts.length <= perSide ? parts.join(' · ') : `${parts.slice(0, perSide).join(' · ')} ${t('bankInbox.strip.satzMore', { count: parts.length - perSide })}`;
+  const truncated = debit.length > perSide || credit.length > perSide;
+  return {
+    short: t('bankInbox.strip.satz', { debit: side(debit), credit: side(credit) }),
+    full: t('bankInbox.strip.satz', { debit: debit.join(' · '), credit: credit.join(' · ') }),
+    truncated,
+  };
+}
+
 /** "6510 Telefon und Internet", or '' for an account the chart does not hold. */
 export function accountLabel(l: Lookups, accountId: string): string {
   const a = l.chartById.get(accountId);
   return a === undefined ? '' : `${a.number} ${a.name}`;
 }
 
-/** The counterparty a person recognises the line by: the name, else the remittance, else the reference. */
+/**
+ * The counterparty a person recognises the line by: the name; without one the counterparty's IBAN
+ * (critic F7: a credit with only an IBAN was otherwise "Bankzeile ohne Namen"), else the remittance,
+ * else the bank's entry reference.
+ */
 export function partyOf(t: T, line: BankInboxLine): string {
-  return line.counterparty.name ?? line.remittance.text ?? line.entryRef ?? t('bankInbox.row.unnamed');
+  if (line.counterparty.name !== null) return line.counterparty.name;
+  if (line.counterparty.iban !== null) return formatIban(line.counterparty.iban);
+  return line.remittance.text ?? line.entryRef ?? t('bankInbox.row.unnamed');
 }
 
 /**
- * The second words of a row: the remittance text (else the reference) when a NAME leads. When the
- * line has no name, the remittance text or the bank's entry reference already leads, and repeating
- * it would read twice.
+ * The second words of a row: the remittance text (else the reference) when a NAME or an IBAN leads.
+ * When neither does, the remittance text or the bank's entry reference already leads, and repeating it
+ * would read twice.
  */
 export function detailOf(line: BankInboxLine): string {
-  if (line.counterparty.name === null) return '';
+  if (line.counterparty.name === null && line.counterparty.iban === null) return '';
   return line.remittance.text ?? line.remittance.referenceValue ?? '';
+}
+
+/**
+ * What identifies the line beyond its row, for the strip's dim tail: the payment reference and the
+ * counterparty IBAN, formatted as printed, each only when the row does not already show it.
+ */
+export function identityTail(t: T, line: BankInboxLine): { label: string; full: string }[] {
+  const shown = `${partyOf(t, line)} ${detailOf(line)}`.replace(/\s+/g, '').toUpperCase();
+  const out: { label: string; full: string }[] = [];
+  const ref = line.remittance.referenceValue;
+  if (ref !== null && !shown.includes(ref.replace(/\s+/g, '').toUpperCase())) {
+    const value = formatReference(line.remittance.referenceKind, ref);
+    out.push({ label: t('bankInbox.strip.reference', { value }), full: value });
+  }
+  const iban = line.counterparty.iban;
+  if (iban !== null && !shown.includes(iban.replace(/\s+/g, '').toUpperCase())) {
+    const value = formatIban(iban);
+    out.push({ label: t('bankInbox.strip.iban', { value }), full: value });
+  }
+  return out;
 }
 
 /** A count-dependent key: `<key>.one` for one, `<key>.other` for every other count. */
@@ -228,11 +307,64 @@ export function reasonSentence(t: T, l: Lookups, line: BankInboxLine): string {
     }
     case 'history':
       return t('bankInbox.reason.history', { date: date(params.lastDate), account: account(params.accountId), vat: vat(params.taxCode), count: Number(params.count ?? 1) });
+    case 'model_suggested':
+      // D144: a model's choice among code-built candidates, recorded before it was shown; always `check`.
+      return t('bankInbox.reason.model_suggested', {
+        account: account(params.accountId),
+        percent: modelPercent(params.probability),
+        count: Number(params.candidates ?? 0),
+      });
     case 'no_proposal':
       return t('bankInbox.reason.no_proposal');
     default:
       return '';
   }
+}
+
+/**
+ * The reason as the context strip says it (B2: "one line where it fits"). The row already shows the
+ * account, the VAT code and the amount, so the common reasons say only what the row cannot: WHY. The
+ * rare ones keep their full sentence, because their words are the way out (a run that differs, a
+ * transfer booked in another month).
+ */
+export function stripReasonSentence(t: T, l: Lookups, line: BankInboxLine): string {
+  const proposal = line.proposal;
+  if (proposal === null) return '';
+  const params = proposal.reasonParams as Record<string, unknown>;
+  const date = (v: unknown) => (typeof v === 'string' && v.length >= 10 ? formatDate(v) : '');
+  switch (proposal.reasonCode) {
+    case 'history':
+      return t('bankInbox.strip.reason.history', { date: date(params.lastDate), count: Number(params.count ?? 1) });
+    case 'qr_reference_exact':
+      return t('bankInbox.strip.reason.qr_reference_exact', { number: sp(params.documentNumber) ?? t('bankInbox.target.invoice') });
+    case 'existing_entry_reference':
+      return t('bankInbox.strip.reason.existing_entry_reference', { date: date(params.entryDate) });
+    case 'model_suggested':
+      return modelStripSentence(t, line);
+    default:
+      return reasonSentence(t, l, line);
+  }
+}
+
+/**
+ * The model rung's reason in ONE sentence for the context strip (B2), carrying every word D144 asks for:
+ * a model, on this device, its probability, its MEASURED calibration error (ECE), and that nobody has
+ * checked it. A decision recorded without a measured error says so rather than inventing one.
+ */
+export function modelStripSentence(t: T, line: BankInboxLine): string {
+  const params = (line.proposal?.reasonParams ?? {}) as Record<string, unknown>;
+  const model = typeof params.modelRef === 'string' ? params.modelRef : '';
+  const percent = modelPercent(params.probability);
+  const ece = params.ece;
+  if (typeof ece !== 'number' || !Number.isFinite(ece)) return t('bankInbox.strip.modelNoEce', { model, percent });
+  return t('bankInbox.strip.model', { model, percent, ece: String(Math.round(ece * 1000) / 10) });
+}
+
+/** A model probability as a whole percent ("82"), never rounded up to a certainty it did not state. */
+export function modelPercent(p: unknown): string {
+  if (typeof p !== 'number' || !Number.isFinite(p)) return '';
+  // The 1e-9 absorbs binary noise (0.29 * 100 is 28.999...); it never lifts a figure to the next percent.
+  return String(Math.min(99, Math.floor(p * 100 + 1e-9)));
 }
 
 /** The date a person reads for a line, in full. */

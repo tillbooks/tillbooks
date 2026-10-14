@@ -32,6 +32,7 @@ import { sequenceIdGen } from '../../dist/core/ids.js';
 import { createWorkspace } from '../../dist/core/setup/index.js';
 import { createCostCenter } from '../../dist/core/accounts/index.js';
 import { lockPeriod, ledgerPorts } from '../../dist/core/ledger/index.js';
+import { lockPeriodSealed } from '../../dist/core/ledger/periods.js';
 import {
   createAssetCategory,
   createAsset,
@@ -242,7 +243,7 @@ test('APPEND-ONLY: the posted journal, the asset_transaction, the run line and r
 test('PERIOD LOCK: create into a hard-locked period is refused and writes no run', () => {
   const { ctx, store, workspaceId, activeAsset } = setup();
   activeAsset();
-  assert.equal(lockPeriod(ctx, { period: '2026-02', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'lk' }).ok, true);
+  assert.equal(lockPeriodSealed(ctx, { period: '2026-02', reason: 'vat_filed', idempotencyKey: 'lk' }).ok, true);
   const r = assetDepreciationRunCreate(ctx, { period: '2026-02', idempotencyKey: 'd' });
   assert.equal(r.error, 'period_locked');
   assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM asset_depreciation_run WHERE workspace_id = ?').get(workspaceId).n, 0);
@@ -253,7 +254,7 @@ test('PERIOD LOCK: posting a draft into a period that locks afterwards is refuse
   const assetId = activeAsset();
   const draft = assetDepreciationRunCreate(ctx, { period: '2026-02', idempotencyKey: 'd' });
   assert.equal(draft.ok, true);
-  assert.equal(lockPeriod(ctx, { period: '2026-02', kind: 'hard', reason: 'vat_filed', idempotencyKey: 'lk' }).ok, true);
+  assert.equal(lockPeriodSealed(ctx, { period: '2026-02', reason: 'vat_filed', idempotencyKey: 'lk' }).ok, true);
   const r = assetDepreciationRunPost(ctx, { runId: draft.run.id, idempotencyKey: 'p' });
   assert.equal(r.error, 'period_locked');
   // Nothing half-done: no journal, no transaction, run still draft, asset untouched.
@@ -270,7 +271,7 @@ test('PERIOD LOCK: a sealed year cannot be back-charged by moving the posting da
   assert.equal(draft.ok, true, JSON.stringify(draft));
 
   // The financial year 2026 is closed and sealed. February 2026 is now legally frozen.
-  assert.equal(lockPeriod(ctx, { period: '2026', kind: 'hard', reason: 'year_close', idempotencyKey: 'lk' }).ok, true);
+  assert.equal(lockPeriodSealed(ctx, { period: '2026', reason: 'year_close', idempotencyKey: 'lk' }).ok, true);
 
   // Posting the SAME run with a posting date in the still-open 2027 must NOT slip a February 2026
   // charge past the seal: the run's OWN period is what the sub-ledger and the register record.

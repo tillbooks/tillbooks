@@ -25,3 +25,22 @@
 .consequence-line-text {
   flex: 1 1 auto;
 }
+
+/* The `tooltip` variant (the A1 composer): an (i) icon button at the end of a footer row, whose real
+   tooltip holds the sentence. The bubble opens above and anchors to the trigger's RIGHT edge, because
+   the trigger sits at the drawer's right edge and a centred bubble would run off the viewport. Wider
+   than the shared 240px so the sentence reads in two lines, not five. */
+.consequence-tip {
+  display: inline-flex;
+}
+
+.consequence-tip .tooltip {
+  left: auto;
+  right: 0;
+  transform: none;
+  max-width: 320px;
+}
+
+.consequence-tip-trigger {
+  color: var(--t-text-dim);
+}

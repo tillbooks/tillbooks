@@ -11,7 +11,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, writeFileSync, unlinkSync } from 'node:fs';
+import { readdirSync, writeFileSync, unlinkSync, readFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { installEgressProbe } from '../mail/egress-probe.mjs';
@@ -24,7 +24,7 @@ const { ok, err } = await import('../../dist/core/result.js');
 const { registerRuntime, resetRuntimeRegistration } = await import('../../dist/core/voice/index.js');
 const { generateDraft } = await import('../../dist/core/drafting/index.js');
 const { freshDeps, mintWorkspace } = await import('../api/support.mjs');
-const { tempStoreDir, makeMaildirStore } = await import('../mail/fixtures.mjs');
+const { tempStoreDir, makeMaildirStore, makeMboxStore, makeAppleMailStore } = await import('../mail/fixtures.mjs');
 const { stubManifest, outboundCorpus } = await import('../voice/fixtures.mjs');
 const { recordingAdapter, inboundAsk } = await import('./fixtures.mjs');
 
@@ -33,13 +33,15 @@ const { recordingAdapter, inboundAsk } = await import('./fixtures.mjs');
  * outbound corpus plus one inbound question, an indexed account, a selected model, and (unless
  * told otherwise) a built voice profile and an issued invoice for the contact.
  */
-function world({ consent = true, buildVoice = true, invoiceMinor = 20000, ask = undefined } = {}) {
+function world({ consent = true, buildVoice = true, invoiceMinor = 20000, ask = undefined, store = 'maildir', trailingNewline = false } = {}) {
   const deps = freshDeps();
   const { workspaceId } = mintWorkspace(deps);
   const call = (name, input) => getAction(name).run(deps, { workspaceId, ...input });
 
   const { adapter, prompts } = recordingAdapter();
-  registerRuntime(adapter, stubManifest());
+  // A model that ends its answer with a newline (most do): the mbox dialect trims it on read.
+  const runtime = trailingNewline ? { ...adapter, complete: (prompt) => `${adapter.complete(prompt)}\n\n` } : adapter;
+  registerRuntime(runtime, stubManifest());
 
   const contact = call('create_contact', {
     partyRole: 'customer',
@@ -58,8 +60,9 @@ function world({ consent = true, buildVoice = true, invoiceMinor = 20000, ask = 
   const root = tempStoreDir('till-e06-');
   const messages = outboundCorpus(21);
   messages.push(ask ?? inboundAsk());
-  const paths = makeMaildirStore(root, messages);
-  const account = call('mail_connect', { adapter: 'thunderbird', storePath: root, address: 'praxis@example.ch', idempotencyKey: 'w-c' });
+  const paths =
+    store === 'mbox' ? makeMboxStore(root, messages) : store === 'apple' ? makeAppleMailStore(root, messages) : makeMaildirStore(root, messages);
+  const account = call('mail_connect', { adapter: store === 'apple' ? 'apple_mail' : 'thunderbird', storePath: root, address: 'praxis@example.ch', idempotencyKey: 'w-c' });
   assert.equal(call('mail_reindex', { accountId: account.accountId, idempotencyKey: 'w-r' }).ok, true);
   assert.equal(call('runtime_select', { modelRef: 'stub-4b-q4', source: 'catalog', idempotencyKey: 'w-s' }).ok, true);
   if (buildVoice) {
@@ -263,6 +266,87 @@ test('E06 US-E06.4: regenerate writes a NEW run, REPLACES the Drafts message, an
   assert.equal(gone.ok, false);
   assert.equal(gone.error, 'draft_gone');
   assert.equal(readdirSync(draftsDir).length, 0, 'draft_gone re-created the deleted draft');
+});
+
+test('D161.2: regenerate never overwrites a person\'s unsent edits: draft_edited, unless overwriteEdits:true', () => {
+  const w = world();
+  const first = w.call('draft_generate', { threadId: w.thread.id, idempotencyKey: 'ed-1' });
+  assert.equal(first.ok, true, JSON.stringify(first));
+  const draftFile = () => {
+    const ref = w.deps.store.db.prepare('SELECT store_ref FROM mail_draft WHERE workspace_id = ? LIMIT 1').get(w.workspaceId).store_ref;
+    return join(w.root, ref);
+  };
+  const runs = () => w.deps.store.db.prepare('SELECT COUNT(*) AS n FROM draft_run WHERE workspace_id = ?').get(w.workspaceId).n;
+
+  // The person edits the draft in their own mail client and has not sent it yet.
+  appendFileSync(draftFile(), '\r\nPS: Ich rufe Sie morgen an.');
+  const edited = readFileSync(draftFile(), 'utf8');
+  const promptsBefore = w.prompts.length;
+  const runsBefore = runs();
+
+  const refused = w.call('draft_regenerate', { draftRunId: first.draftRunId, hint: 'kürzer', idempotencyKey: 'ed-2' });
+  assert.equal(refused.ok, false, `regenerate overwrote the person's edits: ${JSON.stringify(refused)}`);
+  assert.equal(refused.error, 'draft_edited');
+  assert.equal(readFileSync(draftFile(), 'utf8'), edited, 'the edited draft was touched');
+  assert.equal(w.prompts.length, promptsBefore, 'the model was asked anyway');
+  assert.equal(runs(), runsBefore, 'a refused regenerate recorded a run');
+
+  // Critic N1 round 2 (N-a): the explicit choice destroys a person's words, so it is a person's: the
+  // governed seat is refused needs_a_person and nothing is touched.
+  const seat = w.call('draft_regenerate', { draftRunId: first.draftRunId, hint: 'kürzer', overwriteEdits: true, idempotencyKey: 'ed-2' });
+  assert.equal(seat.ok, false);
+  assert.equal(seat.reason, 'needs_a_person', JSON.stringify(seat));
+  assert.equal(readFileSync(draftFile(), 'utf8'), edited, 'the governed seat touched the edited draft');
+
+  // The person's explicit choice replaces it, the same key notwithstanding (the refusal was never remembered).
+  const overwritten = getAction('draft_regenerate').run(
+    { ...w.deps, actor: 'studio' },
+    { workspaceId: w.workspaceId, draftRunId: first.draftRunId, hint: 'kürzer', overwriteEdits: true, idempotencyKey: 'ed-2' },
+  );
+  assert.equal(overwritten.ok, true, JSON.stringify(overwritten));
+  assert.equal(readFileSync(draftFile(), 'utf8').includes('PS: Ich rufe Sie morgen an.'), false);
+  assert.equal(readdirSync(join(w.root, 'Drafts', 'cur')).length, 1);
+  // A regenerated draft nobody touched regenerates again without the flag.
+  const again = w.call('draft_regenerate', { draftRunId: overwritten.draftRunId, idempotencyKey: 'ed-3' });
+  assert.equal(again.ok, true, JSON.stringify(again));
+  // overwriteEdits must be a boolean.
+  assert.equal(w.call('draft_regenerate', { draftRunId: again.draftRunId, overwriteEdits: 'yes', idempotencyKey: 'ed-4' }).ok, false);
+});
+
+test('D161.2: the edit check reads the draft as each store holds it (mbox, Apple Mail), so an untouched draft regenerates', () => {
+  for (const store of ['mbox', 'apple']) {
+    const w = world({ store, trailingNewline: true });
+    const first = w.call('draft_generate', { threadId: w.thread.id, idempotencyKey: `${store}-1` });
+    assert.equal(first.ok, true, `${store}: ${JSON.stringify(first)}`);
+    const again = w.call('draft_regenerate', { draftRunId: first.draftRunId, idempotencyKey: `${store}-2` });
+    assert.equal(again.ok, true, `${store}: an untouched draft read as edited: ${JSON.stringify(again)}`);
+    // An edit in the store is still caught.
+    const ref = w.deps.store.db.prepare('SELECT store_ref FROM mail_draft WHERE workspace_id = ? LIMIT 1').get(w.workspaceId).store_ref;
+    const file = join(w.root, ref.split('#')[0]);
+    writeFileSync(file, readFileSync(file, 'utf8').replace('Guten Tag', 'Liebe Frau Muster'));
+    const refused = w.call('draft_regenerate', { draftRunId: again.draftRunId, idempotencyKey: `${store}-3` });
+    assert.equal(refused.error, 'draft_edited', `${store}: ${JSON.stringify(refused)}`);
+  }
+});
+
+test('critic nit: an mbox draft written before the read-back hash (its hash over the trailing newlines the store trims) does not read as edited', async () => {
+  const { bodySha256, ADAPTERS } = await import('../../dist/core/mail/index.js');
+  const w = world({ store: 'mbox', trailingNewline: true });
+  const first = w.call('draft_generate', { threadId: w.thread.id, idempotencyKey: 'old-1' });
+  assert.equal(first.ok, true, JSON.stringify(first));
+  // Put the row back the way the engine wrote it before this branch: the hash of the message as handed
+  // to the adapter, which ended in the model's two newlines that the mbox read trims.
+  const row = w.deps.store.db.prepare('SELECT id, store_ref FROM mail_draft WHERE workspace_id = ? LIMIT 1').get(w.workspaceId);
+  const readBack = ADAPTERS.thunderbird.readBody(w.root, row.store_ref);
+  assert.ok(readBack !== undefined && !readBack.endsWith('\n'), 'premise: the mbox read trims the trailing newlines');
+  w.deps.store.db.prepare('UPDATE mail_draft SET body_sha256 = ? WHERE id = ?').run(bodySha256(`${readBack}\n\n`), row.id);
+
+  const again = w.call('draft_regenerate', { draftRunId: first.draftRunId, idempotencyKey: 'old-2' });
+  assert.equal(again.ok, true, `an untouched pre-branch mbox draft read as edited: ${JSON.stringify(again)}`);
+  // A real edit is still an edit.
+  const file = join(w.root, 'Drafts');
+  writeFileSync(file, readFileSync(file, 'utf8').replace('Guten Tag', 'Liebe Frau Muster'));
+  assert.equal(w.call('draft_regenerate', { draftRunId: again.draftRunId, idempotencyKey: 'old-3' }).error, 'draft_edited');
 });
 
 test('E06 US-E06.3: draft_list reads bodies on demand and surfaces modelChanged honestly', () => {

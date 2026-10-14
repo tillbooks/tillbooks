@@ -12,14 +12,14 @@
  *  - axe is clean on the surface.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { I18nProvider } from '../../i18n';
-import { WorkspaceProvider } from '../../app/workspace';
+import { WorkspaceProvider, useWorkspace } from '../../app/workspace';
 import { CapabilitiesContext, ALLOW_ALL, type Capabilities } from '../../lib/capabilities';
 import { Agent } from './index';
 import { Turn } from './TurnList';
@@ -41,7 +41,7 @@ function fakeTransport(canned: Canned): Transport {
 const NO_DIAL_RIGHT: Capabilities = { whoami: null, can: (c) => c !== 'manage_agent_dial', refresh: () => undefined };
 
 function trustRows(over: Record<string, Partial<Record<string, unknown>>> = {}) {
-  const caps = ['post', 'issue', 'send', 'dun', 'pay', 'vat-file', 'customize', 'plugin-install', 'close-period', 'go-live'];
+  const caps = ['post', 'issue', 'send', 'dun', 'pay', 'vat-file', 'customize', 'plugin-install', 'close-period', 'go-live', 'erase', 'share', 'stock'];
   return caps.map((capability) => ({
     capability,
     stored: 'ask',
@@ -191,7 +191,15 @@ describe('Berechtigungen', () => {
     });
     fireEvent.click(await screen.findByRole('tab', { name: 'Berechtigungen' }));
     expect(await screen.findByText('Buchen')).toBeInTheDocument();
-    expect(screen.getAllByText('Noch nichts vorgeschlagen')).toHaveLength(10);
+    expect(screen.getAllByText('Noch nichts vorgeschlagen')).toHaveLength(13);
+    // D156: the two new families render with their de-CH labels, never their raw ids.
+    expect(screen.getAllByText('Löschen').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Freigeben').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('erase')).toBeNull();
+    expect(screen.queryByText('share')).toBeNull();
+    // D161: the stock family renders in the Geld group with its de-CH label.
+    expect(screen.getAllByText('Lager').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('stock')).toBeNull();
     expect(screen.getByText(/Fenster: 19.05.2026 bis 17.08.2026/)).toBeInTheDocument();
     // The strong-default pair reads "fragt immer" with the reason in place.
     expect(screen.getAllByText('fragt immer').length).toBeGreaterThanOrEqual(2);
@@ -379,6 +387,7 @@ describe('Verbindung (the MCP-first onboarding)', () => {
     host: 'localhost',
     port: 4123,
     studioServed: true,
+    dbPath: '/Users/beispiel/Buchhaltung/beispiel.db',
     scheduler: { enabled: false, lastTickAt: null, nextTickAt: null },
   });
 
@@ -387,11 +396,19 @@ describe('Verbindung (the MCP-first onboarding)', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Verbindung' }));
     // The endpoint reads host+port from delivery_status and builds http://<host>:<port>/mcp.
     expect(await screen.findByText('http://localhost:4123/mcp')).toBeInTheDocument();
-    // The copy-paste config a user drops into their client, starting TILL over stdio (till mcp).
-    const config = container.querySelector('.agent-connect-code')?.textContent ?? '';
-    expect(config).toContain('"mcpServers"');
-    expect(config).toContain('"command": "till"');
-    expect(config).toContain('"args": ["mcp"]');
+    // P0.5a: the copy-paste config is GENERATED from the running instance: the docs' form (the
+    // `tillbooks` key, `npx -y ... mcp`) with TILL_DB_PATH set to the ledger THIS process opened, so the
+    // agent cannot open a different book than the Studio shows.
+    const config = JSON.parse(container.querySelector('.agent-connect-code')?.textContent ?? '{}');
+    expect(Object.keys(config.mcpServers)).toEqual(['tillbooks']);
+    expect(config.mcpServers.tillbooks.command).toBe('npx');
+    expect(config.mcpServers.tillbooks.args[0]).toBe('-y');
+    expect(config.mcpServers.tillbooks.args[1]).toMatch(/^tillbooks(@.+)?$/);
+    expect(config.mcpServers.tillbooks.args[2]).toBe('mcp');
+    expect(config.mcpServers.tillbooks.env).toEqual({ TILL_DB_PATH: '/Users/beispiel/Buchhaltung/beispiel.db' });
+    // The path is also said in words, and so is where a human approves what the agent drafts.
+    expect(screen.getByText(/dasselbe Hauptbuch wie dieses Studio/)).toBeInTheDocument();
+    expect(screen.getByText(/Agent > Vorschläge frei/)).toBeInTheDocument();
     // The recent client labels come from list_agent_sessions, the read the Gespräche tab uses.
     await waitFor(() =>
       expect(container.querySelector('.agent-connect-clients')?.textContent ?? '').toContain('Claude Desktop'),
@@ -399,6 +416,17 @@ describe('Verbindung (the MCP-first onboarding)', () => {
     expect(container.querySelector('.agent-connect-clients')?.textContent ?? '').toContain('Claude Code');
     // Honest copy: TILL cannot write the client's config file, so this is copy-into-your-client.
     expect(screen.getByText(/kann die Konfiguration deines Clients nicht selbst schreiben/)).toBeInTheDocument();
+  });
+
+  it('P0.5a: an in-memory ledger gets no stdio block (no second process can open it), only the endpoint', async () => {
+    const { container } = renderAgent({
+      list_agent_sessions: ok({ sessions: [] }),
+      delivery_status: ok({ mode: 'up', version: '0.1.0', host: '127.0.0.1', port: 8788, studioServed: true, dbPath: ':memory:', scheduler: { enabled: true, lastTickAt: null, nextTickAt: null } }),
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Verbindung' }));
+    expect(await screen.findByText('http://127.0.0.1:8788/mcp')).toBeInTheDocument();
+    expect(screen.getByText(/im Arbeitsspeicher/)).toBeInTheDocument();
+    expect(container.querySelector('.agent-connect-code')).toBeNull();
   });
 
   it('explains the stdio start when TILL runs over the command line (mode mcp)', async () => {
@@ -419,5 +447,107 @@ describe('Gespräche empty state connects an agent (D135)', () => {
     expect(connect.tagName).toBe('BUTTON');
     fireEvent.click(connect);
     expect(screen.getByRole('tab', { name: 'Verbindung' })).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+describe('the Commit moment on a decision (D122 D-I)', () => {
+  const onePending = ok({
+    actions: [
+      { actionId: 'a9', actor: 'agent', dialCapability: 'post', actionTool: 'post_entry', payload: { date: '2026-09-02' }, status: 'pending', createdAt: '2026-09-02T10:00:00.000Z' },
+    ],
+  });
+
+  it('an approval lands its banner (data-just-committed) with the outcome in words, since the card leaves the queue', async () => {
+    const { container } = renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: onePending,
+      approve_drafted_action: ok({ actionId: 'a9', status: 'executed' }),
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    fireEvent.click(screen.getByRole('button', { name: 'Genehmigen' }));
+    expect(await screen.findByText('Genehmigt und ausgeführt')).toBeInTheDocument();
+    const banner = container.querySelector('.action-feedback--success');
+    expect(banner?.hasAttribute('data-just-committed')).toBe(true);
+  });
+
+  it('§H-TENANT: an approval answered after a workspace switch paints no banner and no old queue on the new workspace', async () => {
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const canned: Canned = {
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: (input) =>
+        input.workspaceId === 'ws_test' ? onePending : ok({ actions: [] }),
+      approve_drafted_action: (() => gate.then(() => ok({ actionId: 'a9', status: 'executed' }))) as unknown as Handler,
+    };
+    function SwitchToB() {
+      const { setWorkspaceId } = useWorkspace();
+      return (
+        <button type="button" onClick={() => setWorkspaceId('ws_b')}>
+          switch-to-b
+        </button>
+      );
+    }
+    const { container } = render(
+      <TillClientProvider client={new TillClient(fakeTransport(canned))}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_test">
+            <CapabilitiesContext.Provider value={ALLOW_ALL}>
+              <MemoryRouter initialEntries={['/agent']}>
+                <SwitchToB />
+                <Agent />
+              </MemoryRouter>
+            </CapabilitiesContext.Provider>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    fireEvent.click(screen.getByRole('button', { name: 'Genehmigen' }));
+    // The approval is in flight; the person switches to workspace B, whose queue is empty.
+    fireEvent.click(screen.getByRole('button', { name: 'switch-to-b' }));
+    expect(await screen.findByText('Nichts zu genehmigen.')).toBeInTheDocument();
+    // Workspace A's answer arrives now.
+    await act(async () => {
+      (release as unknown as () => void)();
+      await gate;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(screen.queryByText('Genehmigt und ausgeführt')).toBeNull();
+    expect(container.querySelector('.action-feedback')).toBeNull();
+    // ...and A's card never comes back onto B through a stale re-read.
+    expect(screen.queryAllByRole('article')).toHaveLength(0);
+  });
+
+  it('a refused approval lands nothing: no banner claims an outcome the engine did not give', async () => {
+    const { container } = renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: onePending,
+      approve_drafted_action: { status: 409, body: { ok: false, error: 'already_rejected' } },
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    fireEvent.click(screen.getByRole('button', { name: 'Genehmigen' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Genehmigen' })).not.toBeDisabled());
+    expect(container.querySelector('.action-feedback')).toBeNull();
+    expect(container.querySelector('[data-just-committed]')).toBeNull();
+  });
+
+  it('a rejection names itself in words and does not land the success tint', async () => {
+    const { container } = renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: onePending,
+      reject_drafted_action: ok({ actionId: 'a9', status: 'rejected' }),
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Details' })[0]);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Ablehnen' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Ja, ablehnen' }));
+    expect(await screen.findByText('Abgelehnt')).toBeInTheDocument();
+    expect(container.querySelector('.action-feedback--info')?.hasAttribute('data-just-committed')).toBe(false);
   });
 });

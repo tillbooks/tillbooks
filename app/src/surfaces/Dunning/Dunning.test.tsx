@@ -8,7 +8,7 @@
  * per `app/src/loading-state-convention.test.ts`.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { cleanup, render, screen, within, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
@@ -163,13 +163,22 @@ interface RenderOptions {
   transport?: Transport;
   held?: readonly string[] | null;
   workspaceId?: string | null;
+  /** The route the surface opens on. */
+  path?: string;
 }
 
+/**
+ * D152 rule 5: no run opens by itself. The cases that review run_1 open it the way the attention
+ * hub's "Mahnlauf prüfen" does, by its deep link (a deep link is the person's act); the cases about
+ * the bare route, the click and the toggle pass `path: '/dunning'` (see "a list never opens itself").
+ */
+const OPEN_RUN_1 = '/dunning?runId=run_1';
+
 function renderDunning(canned: Canned = happy(), options: RenderOptions = {}) {
-  const { transport, held = null, workspaceId = 'ws_test' } = options;
+  const { transport, held = null, workspaceId = 'ws_test', path = OPEN_RUN_1 } = options;
   const client = new TillClient(transport ?? fakeTransport(canned));
   const inner = (
-    <MemoryRouter initialEntries={['/dunning']}>
+    <MemoryRouter initialEntries={[path]}>
       <I18nProvider>
         <WorkspaceProvider initialId={workspaceId}>
           <TillClientProvider client={client}>
@@ -230,6 +239,71 @@ describe('Dunning: the five states', () => {
   it('no workspace: the shared no-workspace state', () => {
     renderDunning(undefined, { workspaceId: null });
     expect(screen.queryByText('Mahnwesen')).not.toBeInTheDocument();
+  });
+});
+
+describe('Dunning: discarding a proposed run (D161.3)', () => {
+  it('Mahnlauf verwerfen sits under Mehr, asks first with the engine sentence, then discards with a key', async () => {
+    const discard = vi.fn((_input: Record<string, unknown>) => ok({ runId: 'run_1', discarded: true, runDate: '2026-07-16', itemsDiscarded: 1 }));
+    renderDunning({ ...happy(), discard_dunning_run: discard as unknown as Canned[string] });
+    const current = await screen.findByTestId('dunning-current');
+    // Never a bare button beside Ausstellen (D154: destructive acts live under Mehr).
+    expect(within(current).queryByRole('button', { name: 'Mahnlauf verwerfen' })).not.toBeInTheDocument();
+    await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahnlauf verwerfen' }));
+    // The confirmation names what happens; nothing is sent until the person confirms.
+    const dialog = await screen.findByRole('alertdialog', { name: 'Diesen vorgeschlagenen Mahnlauf verwerfen?' });
+    expect(discard).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Mahnlauf verwerfen' }));
+    await waitFor(() => expect(discard).toHaveBeenCalledTimes(1));
+    expect(discard.mock.calls[0]?.[0]).toMatchObject({ workspaceId: 'ws_test', runId: 'run_1' });
+    expect(typeof discard.mock.calls[0]?.[0]?.['idempotencyKey']).toBe('string');
+    expect(await screen.findByText('Der vorgeschlagene Mahnlauf ist verworfen. Du kannst für denselben Tag einen neuen vorschlagen.')).toBeInTheDocument();
+  });
+
+  it('a run issued meanwhile is refused and says so, it is not reported as discarded', async () => {
+    const discard = vi.fn((_input: Record<string, unknown>) => reject({ error: 'invalid_transition', from: 'issued' }));
+    renderDunning({ ...happy(), discard_dunning_run: discard as unknown as Canned[string] });
+    const current = await screen.findByTestId('dunning-current');
+    await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahnlauf verwerfen' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Mahnlauf verwerfen' }));
+    expect(await screen.findByText('Dieser Mahnlauf ist kein Vorschlag mehr und bleibt bestehen.')).toBeInTheDocument();
+  });
+
+  it('critic N1: a propose after a discard is a NEW question with a new key, never the discarded run replayed', async () => {
+    const propose = vi.fn((_input: Record<string, unknown>) => ok({ ...runDetail('proposed'), proposed: true }));
+    const discard = vi.fn((_input: Record<string, unknown>) => ok({ runId: 'run_1', discarded: true, runDate: '2026-07-16', itemsDiscarded: 1 }));
+    renderDunning({
+      ...happy(),
+      propose_dunning_run: propose as unknown as Canned[string],
+      discard_dunning_run: discard as unknown as Canned[string],
+    });
+    await userEvent.click(await screen.findByRole('button', { name: 'Mahnlauf vorschlagen' }));
+    await waitFor(() => expect(propose).toHaveBeenCalledTimes(1));
+    const current = await screen.findByTestId('dunning-current');
+    await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahnlauf verwerfen' }));
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Mahnlauf verwerfen' }));
+    await waitFor(() => expect(discard).toHaveBeenCalledTimes(1));
+    await screen.findByText('Der vorgeschlagene Mahnlauf ist verworfen. Du kannst für denselben Tag einen neuen vorschlagen.');
+    await userEvent.click(screen.getByRole('button', { name: 'Mahnlauf vorschlagen' }));
+    await waitFor(() => expect(propose).toHaveBeenCalledTimes(2));
+    const first = propose.mock.calls[0]?.[0]?.['idempotencyKey'];
+    const second = propose.mock.calls[1]?.[0]?.['idempotencyKey'];
+    expect(typeof first).toBe('string');
+    expect(second).not.toBe(first);
+  });
+
+  it('an issued run, or a caller without dun, offers no discard', async () => {
+    renderDunning(happy('issued'));
+    const issued = await screen.findByTestId('dunning-current');
+    expect(within(issued).queryByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' })).not.toBeInTheDocument();
+    cleanup();
+    renderDunning(happy(), { held: ['read_sales'] });
+    const readOnly = await screen.findByTestId('dunning-current');
+    expect(within(readOnly).queryByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' })).not.toBeInTheDocument();
   });
 });
 
@@ -384,7 +458,9 @@ describe('Dunning: the proposed run', () => {
     // `existing: true`. The surface used to discard that flag and clear the note, so the click was
     // a silent no-op. Now it must say so, and it must not mint a second run.
     const propose = vi.fn((_input: Record<string, unknown>) => ok({ ...runDetail('proposed'), existing: true }));
-    renderDunning({ ...happy(), propose_dunning_run: propose as unknown as Canned[string] });
+    renderDunning({ ...happy(), propose_dunning_run: propose as unknown as Canned[string] }, { path: '/dunning' });
+    await screen.findByRole('row', { name: 'Mahnlauf vom 16.07.2026 öffnen' });
+    expect(screen.queryByTestId('dunning-current')).toBeNull();
     await userEvent.click(await screen.findByRole('button', { name: 'Mahnlauf vorschlagen' }));
     expect(
       await screen.findByText('Der Mahnlauf für dieses Datum existiert bereits: er wird unten angezeigt.'),
@@ -526,13 +602,19 @@ describe('Dunning: the run history opens', () => {
           )
         : ok(runDetail('proposed')),
     );
-    renderDunning({
-      ...OPTION_READS,
-      get_dunning_config: CONFIG,
-      list_dunning_runs: ok({ runs: [newer, older], truncated: false }),
-      get_dunning_run: readRun as unknown as Canned[string],
-    });
-    // The newest run is what a fresh visit opens on.
+    renderDunning(
+      {
+        ...OPTION_READS,
+        get_dunning_config: CONFIG,
+        list_dunning_runs: ok({ runs: [newer, older], truncated: false }),
+        get_dunning_run: readRun as unknown as Canned[string],
+      },
+      { path: '/dunning' },
+    );
+    // D152 rule 5: a fresh visit opens NO run; the newest is one click away like any other.
+    await screen.findByRole('row', { name: 'Mahnlauf vom 16.07.2026 öffnen' });
+    expect(screen.queryByTestId('dunning-current')).toBeNull();
+    await userEvent.click(screen.getByRole('row', { name: 'Mahnlauf vom 16.07.2026 öffnen' }));
     const panel = await screen.findByTestId('dunning-current');
     expect(within(panel).getByText('Mahnlauf vom 16.07.2026')).toBeInTheDocument();
 
@@ -790,5 +872,149 @@ describe('Dunning: C3 provenance', () => {
     // The quiet "Erfasst, <date>" line renders; no "durch <name>" is invented for a null actor.
     expect(within(current).getByText(/^Erfasst,/)).toBeInTheDocument();
     expect(within(current).queryByText(/Erfasst durch/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Dunning: a list never opens itself (D152 rule 5)', () => {
+  it('opens no run on load: the Mahnläufe list leads, no row is current, no run is read', async () => {
+    const readRun = vi.fn(() => ok(runDetail('proposed')));
+    const { container } = renderDunning({ ...happy(), get_dunning_run: readRun as unknown as Canned[string] }, { path: '/dunning' });
+    await screen.findByRole('row', { name: 'Mahnlauf vom 16.07.2026 öffnen' });
+    expect(screen.queryByTestId('dunning-current')).toBeNull();
+    expect(container.querySelector('[aria-current="true"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ausstellen' })).toBeNull();
+    expect(readRun).not.toHaveBeenCalled();
+  });
+
+  it('the hub deep link (?runId=) opens exactly the run it names', async () => {
+    const older = runSummary('sent', { runId: 'run_0', runDate: '2026-06-16' });
+    renderDunning(
+      {
+        ...happy(),
+        list_dunning_runs: ok({ runs: [runSummary('proposed'), older], truncated: false }),
+        get_dunning_run: (input) =>
+          input.runId === 'run_0' ? ok(runDetail('sent', { runId: 'run_0', runDate: '2026-06-16' })) : ok(runDetail('proposed')),
+      },
+      { path: '/dunning?runId=run_0' },
+    );
+    const panel = await screen.findByTestId('dunning-current');
+    expect(within(panel).getByText('Mahnlauf vom 16.06.2026')).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: 'Mahnlauf vom 16.06.2026 öffnen' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('row', { name: 'Mahnlauf vom 16.07.2026 öffnen' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('a click opens the run with the same Ausstellen, same input; a second click closes it; Enter reopens it', async () => {
+    const issue = vi.fn((_input: Record<string, unknown>) => ok(runDetail('issued', { issuedAt: '2026-07-16T00:00:00.000Z' })));
+    renderDunning({ ...happy(), issue_dunning_run: issue as unknown as Canned[string] }, { path: '/dunning', held: ['read_sales', 'dun', 'post'] });
+    // The surface re-reads on every selection, so the row is looked up afresh after each act.
+    const row = () => screen.findByRole('row', { name: 'Mahnlauf vom 16.07.2026 öffnen' });
+    await userEvent.click(await row());
+    expect(await screen.findByTestId('dunning-current')).toBeInTheDocument();
+    await waitFor(async () => expect(await row()).toHaveAttribute('aria-current', 'true'));
+
+    await userEvent.click(await row());
+    await waitFor(() => expect(screen.queryByTestId('dunning-current')).toBeNull());
+    expect(await row()).not.toHaveAttribute('aria-current');
+
+    const closed = await row();
+    act(() => closed.focus());
+    await userEvent.keyboard('{Enter}');
+    const button = await screen.findByRole('button', { name: 'Ausstellen' });
+    expect(button).toHaveClass('btn--accent');
+    await userEvent.click(button);
+    await waitFor(() => expect(issue).toHaveBeenCalledTimes(1));
+    expect(issue.mock.calls[0]?.[0]).toMatchObject({ runId: 'run_1', confirmed: true });
+    expect(typeof (issue.mock.calls[0]?.[0] as Record<string, unknown>).idempotencyKey).toBe('string');
+  });
+
+  it('a propose opens the run it created', async () => {
+    let created = false;
+    const propose = vi.fn((_input: Record<string, unknown>) => {
+      created = true;
+      return ok({ ...runDetail('proposed', { runId: 'run_2', runDate: '2026-08-01' }) });
+    });
+    renderDunning(
+      {
+        ...happy(),
+        propose_dunning_run: propose as unknown as Canned[string],
+        list_dunning_runs: () =>
+          ok({ runs: created ? [runSummary('proposed', { runId: 'run_2', runDate: '2026-08-01' }), runSummary('sent')] : [runSummary('sent')], truncated: false }),
+        get_dunning_run: (input) =>
+          input.runId === 'run_2' ? ok(runDetail('proposed', { runId: 'run_2', runDate: '2026-08-01' })) : ok(runDetail('sent')),
+      },
+      { path: '/dunning' },
+    );
+    await screen.findByRole('row', { name: 'Mahnlauf vom 16.07.2026 öffnen' });
+    expect(screen.queryByTestId('dunning-current')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Mahnlauf vorschlagen' }));
+    const panel = await screen.findByTestId('dunning-current');
+    expect(within(panel).getByText('Mahnlauf vom 01.08.2026')).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: 'Mahnlauf vom 01.08.2026 öffnen' })).toHaveAttribute('aria-current', 'true');
+  });
+});
+
+describe('Dunning: a propose under a saved view (critic F3)', () => {
+  it('opens the new run by id, keeps the view, and says the run lies outside it', async () => {
+    let created = false;
+    const listed: Array<Record<string, unknown>> = [];
+    const propose = vi.fn((_input: Record<string, unknown>) => {
+      created = true;
+      return ok(runDetail('proposed', { runId: 'run_2', runDate: '2026-08-01' }));
+    });
+    renderDunning(
+      {
+        ...happy(),
+        list_saved_views: ok({ entityKind: 'dunning_run', savedViews: [{ viewId: 'v_sent', name: 'Versendet' }] }),
+        propose_dunning_run: propose as unknown as Canned[string],
+        list_dunning_runs: (input) => {
+          listed.push(input);
+          // The saved view lists sent runs only; the fresh proposal falls outside it.
+          return input.savedViewId === 'v_sent'
+            ? ok({ runs: [runSummary('sent')], truncated: false })
+            : ok({ runs: created ? [runSummary('proposed', { runId: 'run_2', runDate: '2026-08-01' }), runSummary('sent')] : [runSummary('sent')], truncated: false });
+        },
+        get_dunning_run: (input) =>
+          input.runId === 'run_2' ? ok(runDetail('proposed', { runId: 'run_2', runDate: '2026-08-01' })) : ok(runDetail('sent')),
+      },
+      { path: '/dunning?view=v_sent' },
+    );
+    await screen.findByRole('row', { name: 'Mahnlauf vom 16.07.2026 öffnen' });
+    expect(screen.queryByTestId('dunning-current')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Mahnlauf vorschlagen' }));
+    const panel = await screen.findByTestId('dunning-current');
+    expect(within(panel).getByText('Mahnlauf vom 01.08.2026')).toBeInTheDocument();
+    expect(screen.getByText('Dieser Mahnlauf liegt ausserhalb der gewählten Ansicht: er wird unten angezeigt.')).toBeInTheDocument();
+    // The person's view is kept: every list read, including the one after the propose, is filtered.
+    expect(listed.length).toBeGreaterThan(1);
+    expect(listed.every((input) => input.savedViewId === 'v_sent')).toBe(true);
+    expect(propose).toHaveBeenCalledTimes(1);
+    // The filtered list itself is unchanged: the new run has no row in it.
+    expect(screen.queryByRole('row', { name: 'Mahnlauf vom 01.08.2026 öffnen' })).toBeNull();
+  });
+
+  it('an ordinary open run inside the view carries no outside-view note', async () => {
+    renderDunning();
+    await screen.findByTestId('dunning-current');
+    expect(screen.queryByText('Dieser Mahnlauf liegt ausserhalb der gewählten Ansicht: er wird unten angezeigt.')).toBeNull();
+  });
+});
+
+describe('Dunning: a failed run read never leaves the previous card live (critic round 2)', () => {
+  it('when the re-read of the open run fails, the card closes instead of staying with a live Ausstellen', async () => {
+    let failing = false;
+    renderDunning(
+      {
+        ...happy(),
+        get_dunning_run: () => (failing ? reject({ error: 'not_found' }, 404) : ok(runDetail('proposed'))),
+        issue_dunning_run: ok(runDetail('issued', { issuedAt: '2026-07-16T00:00:00.000Z' })),
+      },
+      { held: ['read_sales', 'dun', 'post', 'send'] },
+    );
+    const issue = await screen.findByRole('button', { name: 'Ausstellen' });
+    failing = true;
+    // The issue lands, and its re-read of the open run fails.
+    await userEvent.click(issue);
+    await waitFor(() => expect(screen.queryByTestId('dunning-current')).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Ausstellen' })).toBeNull();
   });
 });

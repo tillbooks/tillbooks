@@ -8,13 +8,36 @@
 export {
   connectBankChannel,
   syncBankChannel,
+  SYNC_LEASE_MS,
+  processSyncLeaseHolder,
+  reclaimDeadSyncLeases,
+  releaseSyncLeaseOf,
+  setSyncLeaseHolder,
+  syncLeaseFreesAt,
   transmitPaymentBatch,
   getBankChannelStatus,
   disconnectBankChannel,
   setBankSyncSchedule,
   sameHashes,
   exactSameHashes,
+  checkBankActivation,
+  readStatementGaps,
+  pendingGapStatements,
 } from './channel.js';
+export type { ActivationCheckReport } from './channel.js';
+export {
+  ACTIVATION_CHECK_STATES,
+  ACTIVATION_CHECK_MAX_ATTEMPTS,
+  ACTIVATION_CHECK_OUTCOMES,
+  ACTIVATION_CHECK_RELATED_KIND,
+  activationCheckConnections,
+  activationCheckDecision,
+  activationStatus,
+  bankReadyForReview,
+  isActivationInProgress,
+  recordUnknownActivationAttempt,
+} from './activationCheck.js';
+export type { ActivationCheckOutcome, ActivationCheckDecision, ActivationStatus, ActivationCheckConnectionRow } from './activationCheck.js';
 export {
   decideSuccessor,
   dayEndPosition,
@@ -51,8 +74,33 @@ export { EBICS_SCHEMA_SQL } from './schema.js';
 export { defaultEbicsKeystore } from './keystore.js';
 export { fileEbicsKeystore } from './keystore-file.js';
 export type { FileEbicsKeystore, PassphraseProvider } from './keystore-file.js';
-export { lookupBankDirectory, lookupBankDirectoryData, BANK_DIRECTORY } from './banks.js';
+export { lookupBankDirectory, lookupBankDirectoryData, BANK_DIRECTORY, bankShortName } from './banks.js';
 export type { BankDirectoryEntry, BankFeeNote, BankDirectoryQuirks } from './banks.js';
 export { createEbicsHttpsTransport, readZipContainer, STATEMENT_BTF, MAX_CONTAINER_MEMBERS, MAX_MEMBER_BYTES } from './transport-https.js';
 export type { EbicsHttpsTransportOptions, EbicsWire, EbicsBtf, ZipReadResult } from './transport-https.js';
 export { KEYSTORE_CHANGED_ELSEWHERE } from './keystore-file.js';
+export {
+  AUTO_SYNC_MODES,
+  AUTO_SYNC_MAX_ATTEMPTS,
+  AUTO_SYNC_RETRY_MS,
+  AUTO_SYNC_TIME_ZONE,
+  DEFAULT_AUTO_SYNC_AT,
+  AUTO_SYNC_FALLBACK_ACTOR,
+  autoSyncActor,
+  autoSyncConnections,
+  autoSyncDecision,
+  autoSyncKey,
+  autoSyncNoActorReason,
+  autoSyncSetterKind,
+  autoSyncTried,
+  autoSyncSettings,
+  autoSyncStatus,
+  isAutoSyncMode,
+  isAutoSyncTime,
+  isRetryableAutoOutcome,
+  nextDay,
+  recordAutoSyncAttempt,
+  zurichInstant,
+  zurichParts,
+} from './autoSync.js';
+export type { AutoSyncMode, AutoSyncDecision, AutoSyncSettings, AutoSyncSetterKind, AutoSyncStatus, AutoSyncAttemptView, AutoSyncConnectionRow } from './autoSync.js';

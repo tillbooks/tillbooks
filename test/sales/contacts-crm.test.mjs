@@ -174,7 +174,9 @@ test('anonymiseContact blanks personal fields, redacts activities, and keeps the
   const c = person(ctx, 'Privat Person', { email: 'privat@example.ch' });
   logActivity(ctx, { contactId: c.contact.id, kind: 'call', body: 'sensibler Inhalt' });
 
-  const done = anonymiseContact(ctx, { contactId: c.contact.id });
+  // D156 critic F1: the key the schema requires is required by the engine too.
+  assert.equal(anonymiseContact(ctx, { contactId: c.contact.id }).error, 'invalid_input');
+  const done = anonymiseContact(ctx, { contactId: c.contact.id, idempotencyKey: 'anon-1' });
   assert.equal(done.ok, true);
   assert.equal(done.contact.id, c.contact.id, 'the id survives so posted-document FKs stay intact');
   assert.equal(done.contact.name, 'Anonymisiert');
@@ -186,7 +188,7 @@ test('anonymiseContact refuses while an open (draft) document still references t
   const { ctx } = setup();
   const c = person(ctx, 'Mit Entwurf');
   createDocument(ctx, { type: 'invoice', contactId: c.contact.id, lines: [{ unitPriceMinor: 1000 }] });
-  assert.equal(anonymiseContact(ctx, { contactId: c.contact.id }).error, 'open_documents');
+  assert.equal(anonymiseContact(ctx, { contactId: c.contact.id, idempotencyKey: 'anon-open' }).error, 'open_documents');
 });
 
 // --- import (US-C00.5) -------------------------------------------------------------------------

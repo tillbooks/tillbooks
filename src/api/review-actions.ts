@@ -30,11 +30,12 @@ import {
   exportStatements,
   exportVat,
 } from '../core/review/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ReviewActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -49,21 +50,21 @@ export function reviewActions(h: ReviewActionHelpers): ActionDef[] {
   return [
     ctxAction(
       'comment_entry',
-      'write',
+      'write:correctable:internal',
       'Ask or note something about a posted journal entry without touching it: appends one comment to the entry review thread (Prüfvermerk) and never changes the entry itself or its review status. The Treuhänder queries, the client answers with a correcting reversal (reverse_entry), never an edit.',
       ctxSchema({ entryId: STR, text: STR, idempotencyKey: STR }, ['entryId', 'text', 'idempotencyKey']),
       (ctx, input) => commentEntry(ctx, input as never),
     ),
     ctxAction(
       'flag_entry',
-      'write',
+      'write:correctable:internal',
       'Flag a posted journal entry as questioned (beanstandet) with a reason: review metadata only, the posted rows stay untouched. The entry shows as flagged in review_status until someone approves it; the books are corrected by reversal, never by edit.',
       ctxSchema({ entryId: STR, reason: STR, idempotencyKey: STR }, ['entryId', 'reason', 'idempotencyKey']),
       (ctx, input) => flagEntry(ctx, input as never),
     ),
     ctxAction(
       'approve_entry',
-      'write',
+      'write:correctable:statutory',
       'Sign off one checked entry (freigeben): sets its review status to approved, as metadata, neither locking nor altering the entry. Approving an already-reversed entry is allowed and reported with alreadyReversed. A sign-off is a human act: requires the review capability (Treuhänder/owner) and no automation rule may fire it.',
       ctxSchema({ entryId: STR, note: STR, idempotencyKey: STR }, ['entryId', 'idempotencyKey']),
       (ctx, input) => approveEntry(ctx, input as never),
@@ -77,7 +78,7 @@ export function reviewActions(h: ReviewActionHelpers): ActionDef[] {
     ),
     ctxAction(
       'prepare_period',
-      'write',
+      'write:correctable:internal',
       "Ready a period for the Treuhänder's review: builds one packet (review coverage, draft count, unmatched bank items from the camt and QR queues, open debtors, MWST preview) and leaves machine flags on anomalies it detects (a duplicate-looking posting, a line missing a tax code where the account declares a default). It never approves, locks, or exports: those stay human acts. Idempotent per period, a re-run refreshes the packet and never duplicates a flag.",
       ctxSchema({ period: STR, idempotencyKey: STR }, ['period', 'idempotencyKey']),
       (ctx, input) => preparePeriod(ctx, input as never),

@@ -6,10 +6,18 @@
     "queue": {
       "checklistItemsDue": "Checklists: items due"
     },
+    "queueLabel": {
+      "checklist_items_due": "Checklists"
+    },
     "item": {
       "checklistItem": {
         "title": "{period}: {title}",
-        "subtitle": "{template}, owner: {owner}"
+        "subtitle": "{template}",
+        "subtitleOwner": {
+          "human": "{template}, owner: you",
+          "agent": "{template}, owner: an agent",
+          "system": "{template}, owner: the system"
+        }
       }
     },
     "act": {
@@ -46,6 +54,15 @@
     "error": {
       "transport": "The checklists could not be loaded.",
       "refused": "Refused: {code}"
+    },
+    "sealRefusal": {
+      "prerequisite_open": "The year cannot be closed yet because an earlier step is still open.",
+      "run_abandoned": "This checklist was abandoned, so it does not close the year.",
+      "run_year_mismatch": "This checklist belongs to a different fiscal year.",
+      "run_not_year_close": "Only a year-end close can close a fiscal year.",
+      "not_found": "This checklist was not found, reload the page.",
+      "year_already_closed": "This fiscal year is already closed.",
+      "year_close_unverified": "The close could not be verified, so nothing was posted and the year was not sealed."
     },
     "empty": {
       "title": "No checklist yet",
@@ -338,6 +355,7 @@
       "unavailable": "The posting check is unavailable: {reason}",
       "posted": "Posted. Entries: {entries}.",
       "noEntry": "none",
+      "yearResult": "Year result",
       "reversalOn": "Reversal on {date}.",
       "nothingToSettle": "Nothing to settle: the VAT accounts of this period are at zero.",
       "willPost": "To post: {total}."

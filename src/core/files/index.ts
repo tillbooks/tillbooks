@@ -10,6 +10,7 @@ export {
   updateFile,
   newFileVersion,
   linkFile,
+  fileLinkedTo,
   listLinkedFiles,
   searchFiles,
   getFileContent,
@@ -60,6 +61,7 @@ export {
   accountingRecordDate,
   ACCOUNTING_DATE_COLUMNS,
   ACCOUNTING_POSTED_CLAUSES,
+  ACCOUNTING_DATE_ALSO,
   later,
 } from './retention.js';
 export type { RetentionSource, RetentionFacts } from './retention.js';

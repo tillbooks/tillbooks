@@ -3,13 +3,13 @@
     "mwst": {
       "group": "MWST",
       "abrechnung": "Abrechnung",
-      "settings": "Einstellungen"
+      "settings": "MWST-Einstellungen"
     }
   },
   "vat": {
     "return": {
       "title": "MWST-Abrechnung",
-      "subtitle": "{method} · {timing} · {from} bis {to}",
+      "subtitle": "{method} · {timing}",
       "subtitlePending": "Abrechnungsart und Zeitraum werden geladen.",
       "method": {
         "effektiv": "Effektiv",
@@ -27,7 +27,6 @@
       "cancel": "Abbrechen",
       "confirmClose": "Dialog schliessen",
       "rangeTo": "bis",
-      "activePeriodLabel": "Aktive Abrechnungsperiode",
       "pickPeriod": "Zeitraum wählen",
       "periodTrigger": "Zeitraum: {period}",
       "periodMenu": "Abrechnungsperiode wählen",
@@ -66,7 +65,6 @@
       "empty": "Keine steuerbare Tätigkeit in diesem Zeitraum.",
       "emptyHint": "Die Abrechnung wird trotzdem erwartet. Du reichst sie als Nullmeldung ein.",
       "emptyCta": "Journal öffnen",
-      "exportNote": "Schritt 3: TILL erstellt die eCH-0217-Datei (Version 2.0.0) und du lädst sie herunter. In Schritt 4 lädst du sie selbst im ESTV ePortal hoch: eine Schnittstelle zur ESTV gibt es nicht.",
       "export": {
         "action": "eCH-0217-Datei exportieren",
         "working": "Datei wird erstellt …",
@@ -133,7 +131,9 @@
         "unexplained": "ungeklärt",
         "matchNote": "Die geschuldete Steuer entspricht der Bewegung auf dem MWST-Konto.",
         "noCauses": "TILL ordnet die Differenz noch keiner Ursache zu, darum steht sie ganz unter ungeklärt. Häufig ist es eine MWST-Zahlung an die ESTV für eine frühere Periode oder eine Buchung direkt auf das MWST-Konto ohne MWST-Code.",
-        "investigate": "Buchungen auf den MWST-Konten prüfen"
+        "investigate": "Buchungen auf den MWST-Konten prüfen",
+        "info": "Was die Abstimmung bedeutet",
+        "disclosure": "Abstimmung im Detail"
       },
       "filedBanner": "Eingereicht: {period} ist gesperrt.",
       "filedRecomputed": "Es können keine Buchungen mehr dazukommen. Die Zahlen unten werden neu berechnet und sind keine gespeicherte Kopie.",
@@ -160,7 +160,32 @@
           "istTiming": "Ist-Abrechnung ist noch nicht gebaut"
         }
       },
-      "istNotImplementedCite": "MWSTG Art. 39 Abs. 2"
+      "istNotImplementedCite": "MWSTG Art. 39 Abs. 2",
+      "markFiledMore": "Weitere Aktionen zur Abrechnung",
+      "filedInfo": "Was die Sperre bedeutet",
+      "steps": {
+        "line": "Schritt {n} von {total}: {step}",
+        "allDone": "Alle {total} Schritte erledigt",
+        "running": "Periode läuft noch",
+        "info": "Was dieser Schritt bedeutet",
+        "disclosure": "Alle Schritte der Abrechnung",
+        "next": {
+          "1": "berechnen",
+          "3": "exportieren",
+          "4": "im ePortal einreichen",
+          "5": "als eingereicht markieren",
+          "6": "MWST-Konten saldieren"
+        },
+        "why": {
+          "1": "TILL berechnet die Abrechnung aus deinen verbuchten Belegen.",
+          "3": "TILL erstellt die eCH-0217-Datei (Version 2.0.0) und du lädst sie herunter. In Schritt 4 lädst du sie selbst im ESTV ePortal hoch: eine Schnittstelle zur ESTV gibt es nicht.",
+          "4": "Lade die Datei selbst im ESTV ePortal hoch: eine Schnittstelle zur ESTV gibt es nicht. Danach markierst du die Periode hier als eingereicht, und TILL sperrt sie.",
+          "5": "Die Einreichung im ePortal ist bestätigt. Markiere die Periode jetzt als eingereicht, und TILL sperrt sie.",
+          "6": "Die Periode ist eingereicht und gesperrt. Zum Schluss überträgst du die Salden der MWST-Konten auf 2201.",
+          "done5": "Die Periode ist eingereicht und gesperrt.",
+          "done6": "Die Periode ist eingereicht, gesperrt und die MWST-Konten sind saldiert."
+        }
+      }
     },
     "settlement": {
       "title": "MWST-Konten saldieren",

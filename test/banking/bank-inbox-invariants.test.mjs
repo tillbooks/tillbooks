@@ -23,7 +23,7 @@ import {
   createPaymentBatch,
   generatePain001,
 } from '../../dist/core/banking/index.js';
-import { compactReference } from '../../dist/core/banking/pain001.js';
+import { frozenPmtInfId, frozenEndToEndId } from './frozen-refs-support.mjs';
 import { postEntry } from '../../dist/core/ledger/index.js';
 import { makeContext } from '../../dist/core/context.js';
 import { SqliteStore } from '../../dist/core/store/sqlite-store.js';
@@ -187,7 +187,7 @@ test('[INVARIANT idempotent-on-rows] every A39 write, called twice with its key,
     entries: [
       { ref: 'ACC', amountMinor: 1081, cd: 'DBIT' },
       { ref: 'PAY', amountMinor: GROSS, cd: 'CRDT' },
-      { ref: 'RUN', amountMinor: 100000, cd: 'DBIT', pmtInfId: compactReference('P', batch.batchId) },
+      { ref: 'RUN', amountMinor: 100000, cd: 'DBIT', pmtInfId: frozenPmtInfId(t, batch.batchId) },
       { ref: 'MAT', amountMinor: 900, cd: 'DBIT' },
       { ref: 'IGN', amountMinor: 300, cd: 'DBIT' },
     ],

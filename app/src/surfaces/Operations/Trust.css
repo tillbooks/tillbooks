@@ -13,9 +13,8 @@
 
 .trust-head {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--t-space-2);
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
   flex-wrap: wrap;
 }
 
@@ -23,9 +22,67 @@
   margin: 0;
 }
 
-.trust-scope {
+/* The (i) sits right after the state it explains; the one action closes the line on the right. */
+.trust-info {
+  display: inline-flex;
+  margin-left: calc(-1 * var(--t-space-1));
+}
+
+.trust-info-trigger {
   color: var(--t-text-dim);
-  max-width: 60ch;
+}
+
+.trust-run {
+  margin-left: auto;
+}
+
+/* The (i) card (D152 rule 4): the shared tooltip, widened to a reading measure because it holds the
+   panel's whole explanation (scope, location, the wifi instruction, the limits, the model note). It
+   opens below the line and anchors to the trigger's LEFT edge, so it never runs off the column. */
+.trust-info .tooltip {
+  left: 0;
+  transform: none;
+  max-width: min(30rem, calc(100vw - 2 * var(--t-space-2)));
+}
+
+.trust-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.trust-card-para,
+.trust-card-title,
+.trust-limit {
+  display: block;
+}
+
+.trust-card-title {
+  margin-top: var(--t-space-0-5);
+  font-weight: 600;
+}
+
+.trust-limits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+/* The limits keep their list form inside the card, marked with a small drawn dot. */
+.trust-limit {
+  position: relative;
+  padding-left: var(--t-space-2);
+}
+
+.trust-limit::before {
+  content: '';
+  position: absolute;
+  left: var(--t-space-0-5);
+  top: 0.6em;
+  width: 4px;
+  height: 4px;
+  border-radius: var(--t-radius-full);
+  background: currentColor;
 }
 
 /* M02: the publishing-on availability line. Plain ink (not a status colour, not the accent): a
@@ -42,18 +99,6 @@
 .trust-publishing-glyph {
   flex: 0 0 auto;
    color: var(--t-text-dim);
-}
-
-.trust-check {
-  display: flex;
-  align-items: center;
-  gap: var(--t-space-2);
-  flex-wrap: wrap;
-}
-
-.trust-prompt {
-  margin: 0;
-  max-width: 48ch;
 }
 
 .trust-passed {
@@ -79,26 +124,6 @@
   line-height: var(--t-lh-body);
 }
 
-.trust-limits ul {
-  margin: var(--t-space-1) 0 0;
-  padding-left: var(--t-space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-}
-
-.trust-limits li {
-  max-width: 72ch;
-  color: var(--t-text-dim);
-}
-
-.trust-model-note {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
-  max-width: 72ch;
-}
-
 /* --- M03 journey (N4a): the data-location line ------------------------------------------------- */
 
 .trust-location {
@@ -107,6 +132,12 @@
   gap: var(--t-space-2);
   flex-wrap: wrap;
   margin: 0;
+  color: var(--t-text-dim);
+}
+
+/* A long path breaks inside itself rather than pushing the links off the line. */
+.trust-location-value {
+  overflow-wrap: anywhere;
 }
 
 .trust-location-link {

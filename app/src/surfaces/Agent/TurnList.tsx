@@ -109,6 +109,10 @@ function TraceRow({ call }: { call: AgentCall }) {
         {call.mode === 'draft' && call.draftStatus === 'executed' && (
           <span className="trace-decision" data-decision="executed">{t('agent.trace.approved')}</span>
         )}
+        {/* N1: the proposal is void because its record changed after it was made; nothing ran. */}
+        {call.mode === 'draft' && call.draftStatus === 'stale' && (
+          <span className="trace-decision" data-decision="stale">{t('agent.trace.stale')}</span>
+        )}
         <span className="trace-duration">{call.durationMs} ms</span>
         <button
           type="button"

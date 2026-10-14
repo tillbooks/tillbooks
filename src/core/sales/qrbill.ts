@@ -28,6 +28,7 @@
  */
 
 import { isQrIban } from '../setup/iban.js';
+import { qrAddressValueIssues, isQrCreditorIban } from './qrRules.js';
 
 /** The SIX IG QR-bill version this emitter conforms to. Bumping to v2.4 (D28) is a reviewed change. */
 export const SWISS_QR_IG_VERSION = '2.3' as const;
@@ -400,6 +401,8 @@ export interface QrValidationIssue {
   reason: string;
   /** Human-actionable context, e.g. which code point put a field outside §4.1.1. */
   detail?: string;
+  /** For `too_long`: the IG maximum the value overran. */
+  max?: number;
 }
 
 /**
@@ -426,8 +429,10 @@ function validateAddressCharset(prefix: string, address: QrStructuredAddress | n
   validateCharset(`${prefix}.country`, address.country, issues);
 }
 
-/** The IG v2.3 Table 8 per-field maximum lengths for a structured address (m-2). */
-const ADDRESS_FIELD_MAX = { name: 70, street: 70, buildingNo: 16, postalCode: 16, town: 35 } as const;
+// The value rules live in the dependency-free `qrRules.ts` so the Studio can import the same
+// definition (critic phase0-installable r2, R2-2); re-exported here for every engine caller.
+export { QR_ADDRESS_FIELD_MAX, qrAddressValueIssues, isQrCreditorIban } from './qrRules.js';
+export type { QrValueIssue, QrAddressValues } from './qrRules.js';
 
 /** A structured-address block is complete when name, postal code, town, and a 2-letter country exist. */
 function validateAddress(prefix: string, address: QrStructuredAddress | null | undefined, issues: QrValidationIssue[], required: boolean): void {
@@ -438,14 +443,9 @@ function validateAddress(prefix: string, address: QrStructuredAddress | null | u
   if (!address.name || address.name.length === 0) issues.push({ field: `${prefix}.name`, reason: 'empty' });
   if (!address.postalCode || address.postalCode.length === 0) issues.push({ field: `${prefix}.postalCode`, reason: 'empty' });
   if (!address.town || address.town.length === 0) issues.push({ field: `${prefix}.town`, reason: 'empty' });
-  if (!/^[A-Za-z]{2}$/.test(address.country ?? '')) issues.push({ field: `${prefix}.country`, reason: 'not_iso_3166' });
-  // m-2: the IG's per-field caps. A QR reader truncates or rejects an over-long element, so an
-  // overrun is a flagged, fixable error here, never a silently mangled payment part.
-  if (address.name != null && address.name.length > ADDRESS_FIELD_MAX.name) issues.push({ field: `${prefix}.name`, reason: 'too_long' });
-  if (address.street != null && address.street.length > ADDRESS_FIELD_MAX.street) issues.push({ field: `${prefix}.street`, reason: 'too_long' });
-  if (address.buildingNo != null && address.buildingNo.length > ADDRESS_FIELD_MAX.buildingNo) issues.push({ field: `${prefix}.buildingNo`, reason: 'too_long' });
-  if (address.postalCode != null && address.postalCode.length > ADDRESS_FIELD_MAX.postalCode) issues.push({ field: `${prefix}.postalCode`, reason: 'too_long' });
-  if (address.town != null && address.town.length > ADDRESS_FIELD_MAX.town) issues.push({ field: `${prefix}.town`, reason: 'too_long' });
+  // An absent country is refused here; a present one that is not alpha-2 by the shared rule below.
+  if (!address.country || address.country.length === 0) issues.push({ field: `${prefix}.country`, reason: 'not_iso_3166' });
+  for (const issue of qrAddressValueIssues(address)) issues.push({ ...issue, field: `${prefix}.${issue.field}` });
 }
 
 /**
@@ -458,9 +458,7 @@ function validateAddress(prefix: string, address: QrStructuredAddress | null | u
 export function validateQrBill(input: BuildQrBillInput): QrValidationIssue[] {
   const issues: QrValidationIssue[] = [];
   const iban = input.iban.replace(/\s+/g, '').toUpperCase();
-  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban) || !(iban.startsWith('CH') || iban.startsWith('LI'))) {
-    issues.push({ field: 'iban', reason: 'not_ch_li_iban' });
-  }
+  if (!isQrCreditorIban(iban)) issues.push({ field: 'iban', reason: 'not_ch_li_iban' });
   if (!isQrCurrency(input.currency)) issues.push({ field: 'currency', reason: 'not_chf_or_eur' });
   if (input.amountMinor !== null && (input.amountMinor < 1 || input.amountMinor > 99_999_999_999)) {
     issues.push({ field: 'amount', reason: 'out_of_range' });

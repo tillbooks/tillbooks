@@ -89,9 +89,13 @@ function setup() {
   store.db
     .prepare(
       `INSERT INTO contact (id, workspace_id, party_role, name, address_street, address_house_no, address_zip, address_city, address_country, email, default_currency, payment_terms_days, created_at)
-       VALUES ('ct_1', ?, 'customer', 'Muster AG', 'Musterstrasse', '5', '3000', 'Bern', 'CH', 'billing@muster.example', 'CHF', 30, ?)`,
+       VALUES ('ct_1', ?, 'customer', 'Muster AG', 'Musterstrasse', '5', '3000', 'Bern', 'CH', 'billing@muster.example', 'CHF', 0, ?)`,
     )
     .run(workspaceId, AT);
+  // Terms 0 ("due immediately"), not the 30 days this world had when the BASELINE was captured. Then
+  // the invoice carried no due date at all; since D163 the engine stamps one at issue, and 30 days
+  // would add a /40/ tag the baseline symbol never held. Due on the issue date emits no /40/ (Swico S1
+  // MINOR 3), so the symbol drawn is the one the baseline describes.
   return { ctx, store };
 }
 

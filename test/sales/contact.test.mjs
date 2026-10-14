@@ -65,9 +65,11 @@ test('createContact rejects an unknown currency and a negative/non-integer term'
   const { ctx } = setup();
   assert.equal(createContact(ctx, { partyRole: 'customer', name: 'A', defaultCurrency: 'GBP' }).error, 'invalid_currency');
   const neg = createContact(ctx, { partyRole: 'customer', name: 'A', paymentTermsDays: -1 });
-  assert.equal(neg.error, 'invalid_input');
+  // D163 / critic M1: a structured code with the bound, the same one the workspace default uses.
+  assert.equal(neg.error, 'invalid_payment_terms_days');
   assert.equal(neg.field, 'paymentTermsDays');
   assert.equal(createContact(ctx, { partyRole: 'customer', name: 'A', paymentTermsDays: 3.5 }).field, 'paymentTermsDays');
+  assert.equal(createContact(ctx, { partyRole: 'customer', name: 'A', paymentTermsDays: 366 }).error, 'invalid_payment_terms_days');
 });
 
 test('updateContact patches fields and rejects a bad patch value', () => {

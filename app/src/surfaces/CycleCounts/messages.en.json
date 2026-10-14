@@ -14,7 +14,6 @@
     "recount": "Recount",
     "freeze": "Freeze date",
     "progress": "Progress",
-    "selectHint": "Select a session to count and review.",
     "listLabel": "Stocktake sessions",
     "detailLabel": "Session detail",
     "noLines": "This session has no lines.",

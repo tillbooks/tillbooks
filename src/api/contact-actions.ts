@@ -26,11 +26,12 @@ import {
   importContacts,
   anonymiseContact,
 } from '../core/sales/index.js';
+import type { ActionKind } from './actionKind.js';
 
 export interface ContactActionHelpers {
   ctxAction(
     name: string,
-    kind: 'read' | 'write',
+    kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
@@ -48,14 +49,14 @@ export function contactActions(h: ContactActionHelpers): readonly ActionDef[] {
   return [
     ctxAction(
       'contacts_tag',
-      'write',
+      'write:reversible:internal',
       'Tag a contact: merge role and segment values into its roles/segments (deduplicated, case-preserving). Unlike update_contact, which sets the arrays absolutely, this UNIONS the new values into the existing set. Tags are free-text (trimmed, at most 40 chars each, at most 50 per contact), never a fixed enum.',
       ctxSchema({ contactId: STR, roles: STR_LIST, segments: STR_LIST, idempotencyKey: STR }, ['contactId']),
       (ctx, input) => tagContact(ctx, input as never),
     ),
     ctxAction(
       'contacts_log_activity',
-      'write',
+      'write:correctable:internal',
       'Log a note, call, email, meeting or task on a contact (the OP5 activity seam). occurredAt may be backdated but never future-dated; the stream is append-only (a wrong note is corrected by a new note). kind is one of note|call|email|meeting|task.',
       ctxSchema(
         { contactId: STR, dealId: STR, kind: STR, body: STR, occurredAt: STR, idempotencyKey: STR },
@@ -72,21 +73,21 @@ export function contactActions(h: ContactActionHelpers): readonly ActionDef[] {
     ),
     ctxAction(
       'contacts_merge',
-      'write',
+      'write:final:erase',
       'Merge a duplicate contact into a survivor: re-points every live foreign key that names the source (documents, activities, employer links) to the target and tombstones the source. No posting and no journal effect. It does NOT freeze what an already-issued invoice re-renders as: A11 keeps no snapshot and reads the live contact row, so the survivor identity is what a re-rendered QR-bill carries. When the two roles differ the survivor is promoted to partyRole "both" and the result says so. Idempotent; a self-merge or a tombstone target is refused.',
       ctxSchema({ sourceId: STR, targetId: STR, idempotencyKey: STR }, ['sourceId', 'targetId']),
       (ctx, input) => mergeContacts(ctx, input as never),
     ),
     ctxAction(
       'contacts_import',
-      'write',
+      'write:correctable:internal',
       'Import already-parsed contact rows with duplicate detection. Each row is validated like create_contact; rows matching an existing contact on email, UID, or name+postcode come back in duplicates[] (never auto-merged) so the operator resolves each. Returns {created, createdIds, skipped, duplicates}.',
       ctxSchema({ rows: ROWS, idempotencyKey: STR }, ['rows', 'idempotencyKey']),
       (ctx, input) => importContacts(ctx, input as never),
     ),
     ctxAction(
       'contacts_anonymise',
-      'write',
+      'write:final:erase',
       'Anonymise a contact on a valid revDSG deletion request, bounded by OR 958f: blanks the personal fields and redacts the activity bodies while keeping the row ids so posted-document FKs stay intact. Erases the whole merge identity (the contact plus every duplicate merged into it), so pass the SURVIVOR: a merge tombstone is refused and names it. Refuses while any unsettled receivable or obligation is still live (draft, issued, sent, accepted, confirmed, partially_paid), because an unpaid claim is an overriding interest and OR 958f Abs. 3 needs the retained record to stay readable.',
       ctxSchema({ contactId: STR, idempotencyKey: STR }, ['contactId', 'idempotencyKey']),
       (ctx, input) => anonymiseContact(ctx, input as never),
