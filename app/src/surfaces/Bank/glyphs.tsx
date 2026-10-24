@@ -132,14 +132,6 @@ export function BackGlyph(props: GlyphProps) {
   );
 }
 
-/** Remove a split position. */
-export function RemoveGlyph(props: GlyphProps) {
-  return (
-    <svg {...base(props)}>
-      <path d="M6 6l12 12M18 6 6 18" />
-    </svg>
-  );
-}
 
 /** The bank: the drawer face (the TILL mark's vocabulary). */
 export function BankGlyph(props: GlyphProps) {
@@ -161,38 +153,8 @@ export function PaperclipGlyph(props: GlyphProps) {
   );
 }
 
-/** Aufteilen: one line forking into two. */
-export function SplitGlyph(props: GlyphProps) {
-  return (
-    <svg {...base(props)}>
-      <path d="M4 12h6" />
-      <path d="M10 12c3 0 4-5 8-5h2" />
-      <path d="M10 12c3 0 4 5 8 5h2" />
-      <path d="M17.5 4.5 20 7l-2.5 2.5" />
-      <path d="M17.5 14.5 20 17l-2.5 2.5" />
-    </svg>
-  );
-}
 
-/** Mit Buchung abgleichen: two links of a chain. */
-export function LinkGlyph(props: GlyphProps) {
-  return (
-    <svg {...base(props)}>
-      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
-      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
-    </svg>
-  );
-}
 
-/** Ignorieren: a circle struck through. */
-export function IgnoreGlyph(props: GlyphProps) {
-  return (
-    <svg {...base(props)}>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M6.5 17.5 17.5 6.5" />
-    </svg>
-  );
-}
 
 /** Money in: an arrow arriving at the lower left. */
 export function InGlyph(props: GlyphProps) {
@@ -232,6 +194,29 @@ export function InfoGlyph(props: GlyphProps) {
       <circle cx="12" cy="12" r="9" />
       <path d="M12 11v5.5" />
       <path d="M12 7.5v.01" />
+    </svg>
+  );
+}
+
+/**
+ * D167: the counterparty's standard. Filled when one is set (the ★ before a prefilled account and the
+ * set toggle), an outline when none is (the ☆ that sets it). The control or the tooltip says it in words.
+ */
+export function StandardGlyph({ filled = true, ...props }: GlyphProps & { filled?: boolean }) {
+  return (
+    <svg {...base(props)} strokeWidth={1.5}>
+      <path d="M12 3.2l2.75 5.6 6.15.9-4.45 4.35 1.05 6.1L12 17.25 6.5 20.15l1.05-6.1L3.1 9.7l6.15-.9z" fill={filled ? 'currentColor' : 'none'} />
+    </svg>
+  );
+}
+
+/** A filter: three lines narrowing (the toolbar's one "Filter" menu, D167). */
+export function FilterGlyph(props: GlyphProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 6h16" />
+      <path d="M7 12h10" />
+      <path d="M10 18h4" />
     </svg>
   );
 }

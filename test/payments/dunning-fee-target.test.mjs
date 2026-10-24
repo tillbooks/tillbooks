@@ -28,7 +28,11 @@ import {
 import { setDunningConfig, proposeDunningRun, issueDunningRun } from '../../dist/core/dunning/index.js';
 import { listOpenItems } from '../../dist/core/debtors/index.js';
 import { setCreditorProfile } from '../../dist/core/setup/index.js';
-import { lockPeriod, reverseEntry } from '../../dist/core/ledger/index.js';
+import { lockPeriod } from '../../dist/core/ledger/index.js';
+// D169: a run's fee entry is owned by `dunning_fee_reverse`; these fixtures need a reversal on a chosen
+// date (a book whose raw Storno predates D169), so they reverse under the owner token.
+import { reverseOwnedEntry } from '../../dist/core/ledger/reverseEntry.js';
+const reverseEntry = (ctx, input) => reverseOwnedEntry(ctx, input, 'dunning_fee_reverse');
 import { setup, issueInvoice, legsOf, accountBalance, counts, secondWorkspace, GROSS_MINOR } from './support.mjs';
 
 const FEE_MINOR = 2000;

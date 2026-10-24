@@ -21,7 +21,7 @@
  * (that face does not exist on this host) rather than 403 (it exists and you may not have it).
  *
  * THE GUARD IS NOT AN IDENTITY. Host and Origin stop a browser page; they say nothing about which
- * local program is calling. The human `studio` seat is therefore held only with the per-launch Studio
+ * local program is calling. The human `studio` seat is therefore held only with the Studio
  * key (`session.ts`), checked AFTER the guard on both faces: `/mcp` seats a session without it as the
  * governed `agent`, and `/api/:action` refuses a call without it (critic probe P6, 2026-10-12).
  */
@@ -31,7 +31,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { rejectNonLocal } from './local-guard.js';
 import { createMcpHttpHandler } from './mcp-http.js';
 import { handleRestAsync } from './rest.js';
-import { checkStudioKey, resolveServedActor, STUDIO_ACTOR } from './session.js';
+import { checkStudioKey, resolveServedActor, STUDIO_ACTOR, type HostStudioKey } from './session.js';
+import { createStudioDoorHandler, STUDIO_DOOR_PREFIX, STUDIO_REOPEN_PATH, type StudioDoor } from './studio-door.js';
 import { extractSubject, type ServedModeConfig } from './served-mode.js';
 import type { ApiDeps } from './registry.js';
 
@@ -85,13 +86,18 @@ export interface LocalHttpOptions {
    */
   servedMode?: ServedModeConfig;
   /**
-   * The per-launch Studio key (`session.ts`), minted by the host that SERVES the Studio (`till up`,
-   * the dev bridge). In local mode it is the only way to the human `studio` seat on either face: the
+   * The Studio key (`session.ts`) of the host that SERVES the Studio (`till up`, the dev bridge), as a
+   * string or a live source read on every request (D166 rotation). In local mode it is the only way to the human `studio` seat on either face: the
    * MCP face seats a session without it as the governed `agent`, and the REST face refuses a call
    * without it. Absent, no request on this router can be the Studio (the REST face then refuses every
    * call, which is fail-closed for a host that mounts it without a Studio to hand the key to).
    */
-  studioKey?: string;
+  studioKey?: HostStudioKey;
+  /**
+   * D166: the Studio door (`studio-door.ts`), `POST /studio/reopen` and `POST /studio/rotate-key`.
+   * `till up` mounts it in local mode only; absent, the face does not exist on this host.
+   */
+  studioDoor?: StudioDoor;
 }
 
 export interface LocalHttpRouter {
@@ -183,7 +189,7 @@ export function createLocalHttpRouter(deps: ApiDeps, opts: LocalHttpOptions = {}
       message:
         key === 'absent'
           ? 'The REST bridge is the Studio\'s own door and needs the Studio key. An agent speaks MCP on /mcp.'
-          : 'This request carries a Studio key this TILL did not issue. TILL mints a new key on every start: open the Studio through the link till up printed.',
+          : 'This request carries a Studio key this TILL does not hold (it was never issued here, or it was rotated). The Studio reopens itself with the current key.',
     });
     return { refused: true };
   }
@@ -279,7 +285,23 @@ export function createLocalHttpRouter(deps: ApiDeps, opts: LocalHttpOptions = {}
     },
   };
 
-  const faces: readonly LocalFace[] = opts.rest === true ? [mcpFace, restFace] : [mcpFace];
+  // D166: the door is a face like the others, so the guard below runs in front of it too.
+  const door = opts.studioDoor === undefined ? undefined : createStudioDoorHandler(opts.studioDoor);
+  const doorFace: LocalFace | undefined =
+    door === undefined
+      ? undefined
+      : {
+          name: 'studio-door',
+          probePath: STUDIO_REOPEN_PATH,
+          matches: (pathname) => pathname.startsWith(STUDIO_DOOR_PREFIX),
+          serve: (req, res) => door(req, res),
+        };
+
+  const faces: readonly LocalFace[] = [
+    mcpFace,
+    ...(opts.rest === true ? [restFace] : []),
+    ...(doorFace !== undefined ? [doorFace] : []),
+  ];
 
   return {
     faces,

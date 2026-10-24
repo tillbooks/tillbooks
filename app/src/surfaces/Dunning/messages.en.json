@@ -58,12 +58,14 @@
       "interest": "Interest"
     },
     "downloadLetter": "Download reminder letter for {debtor}",
+    "letterReissuedWithoutFee": "re-issued without the reversed fee",
     "letterSent": "sent",
     "changed": {
       "paid": "paid",
       "partiallyPaid": "partially paid",
       "cancelled": "cancelled",
-      "credited": "credited"
+      "credited": "credited",
+      "feeReversed": "fee reversed"
     },
     "changedBadge": "{reason} since issue",
     "changedLetterHeld": "{reason} since issue: do not mail this letter as issued, the amount it demands is no longer correct. The residual rides the next reminder.",
@@ -107,7 +109,32 @@
     },
     "unknownDebtor": "Unknown debtor",
     "unnumbered": "No number",
-    "rowOpen": "Open the dunning run of {date}"
+    "rowOpen": "Open the dunning run of {date}",
+    "reverseFee": "Reverse reminder fees",
+    "reverseFeeTitle": "Reverse the reminder fees of this run?",
+    "reverseFeeBody": "TILL books a correcting entry that takes this run’s reminder fees back. The reminder levels stay, and a letter already sent cannot be called back.",
+    "reverseFeeReason": "Reason",
+    "reverseFeeCancel": "Cancel",
+    "reverseFeeConfirm": "Reverse fees",
+    "feeReversed": "The reminder fees of this run are reversed.",
+    "feeSettled": "The reminder fee has already been paid. Reverse the payment first (under Payments), then the fee.",
+    "feeAlreadyReversed": "The reminder fees of this run are already reversed.",
+    "reverseFeeUnsentReissue": "A letter not yet sent is re-issued without the fee and can then be sent.",
+    "reverseFeeUnsentHold": "A letter not yet sent is held as it is and is not sent (your setting under Setup, Settings).",
+    "overrideToggle": "Handle this run differently from the settings",
+    "overrideRefreeze": "Letters not yet sent",
+    "overrideLetterDate": "Date of a re-issued letter",
+    "overrideReason": "Why this run differs",
+    "overrideReasonRequired": "Say why this run differs from the settings.",
+    "refreeze": {
+      "reissue": "Re-issue without the fee",
+      "hold": "Hold"
+    },
+    "letterDate": {
+      "runDate": "Date of the run",
+      "today": "Today"
+    },
+    "letterDated": "dated {date}"
   },
   "help": {
     "Dunning": {

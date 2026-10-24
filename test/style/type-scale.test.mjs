@@ -11,8 +11,9 @@
  * design law bans by name, and a `lowercase` misspelt the German nouns in the palette).
  *
  * THE RULES.
- *   - The seven `--t-font-*` steps and their `--t-lh-*` line heights exist once each, in the bare
- *     `:root` block (never a theme block: type is not themed), with the values D137 chose.
+ *   - The `--t-font-*` steps (seven from D137, two from D154) and their `--t-lh-*` line heights
+ *     exist once each, in the bare `:root` block (never a theme block: type is not themed), with
+ *     the values D137 and D154 chose.
  *   - DESIGN.md names every one of them in its Type section.
  *   - The shared core (`tokens.css`, `global.css`, `motion.css`) carries NO literal font size and
  *     NO case transform. Surfaces reach for a step; the core is where the steps are defined.
@@ -39,7 +40,7 @@ const DESIGN_FILE = 'brand/DESIGN.md';
 /** The shared core: the one place type steps are defined, so it spells none of its own. */
 const CORE_FILES = [TOKENS_FILE, 'app/src/styles/global.css', 'app/src/styles/motion.css'];
 
-/** The scale, exactly as D137 (K-37) chose it: size and line height per step, in px. */
+/** The scale, exactly as D137 (K-37) chose it and D154 extended it: size and line height per step, in px. */
 const SCALE = {
   xs: [11, 16],
   sm: [12, 16],
@@ -48,6 +49,9 @@ const SCALE = {
   lg: [16, 24],
   xl: [20, 28],
   '2xl': [24, 32],
+  // Ruhig 3 (D154, 07.10.2026): a surface title may reach 28/34, and a surface's one key figure 32/40.
+  '3xl': [28, 34],
+  display: [32, 40],
 };
 
 /**
@@ -220,7 +224,7 @@ test('mechanism: literal sizes, case transforms and literal radii are caught; to
 // The scale itself
 // -------------------------------------------------------------------------------------------
 
-test('the seven size steps and their line heights exist once each, in the bare :root block, with the D137 values', () => {
+test('the size steps and their line heights exist once each, in the bare :root block, with the D137 and D154 values', () => {
   const decls = declarations(read(TOKENS_FILE));
   for (const [step, [size, lineHeight]] of Object.entries(SCALE)) {
     for (const [name, px] of [[`--t-font-${step}`, size], [`--t-lh-${step}`, lineHeight]]) {

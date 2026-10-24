@@ -38,7 +38,7 @@ import { resetDeliveryRuntime } from '../../dist/api/runtime-state.js';
 import { createWorkspace } from '../../dist/core/setup/index.js';
 import { fixedClock } from '../../dist/core/clock.js';
 import { systemIdGen } from '../../dist/core/ids.js';
-import { studioHeaders, studioKeyFromLink, mintStudioKey } from './studio-key-support.mjs';
+import { studioHeaders, sessionFromLink, mintStudioKey } from './studio-key-support.mjs';
 
 /**
  * Critic R3-B2: a local session that declares the Studio's name WITHOUT the key is refused, never
@@ -160,8 +160,8 @@ test('till up: an unrecognised MCP client (Claude Desktop) is the governed seat;
   assert.equal(up.started, true);
   try {
     const { workspaceId, accId } = await assertUnknownClientIsGoverned(up.url, up.store, 'till up');
-    // The key comes out of the printed link's fragment, exactly the way the browser gets it.
-    const studioKey = studioKeyFromLink(up.studioUrl);
+    // The seat comes out of the opened link's one-time ticket, exactly the way the browser gets it (D166).
+    const studioKey = await sessionFromLink(up.studioUrl);
     await assertStudioNameWithoutKeyIsRefused(up.url, 'till up');
     await assertStudioClientKeepsItsSeat(up.url, up.store, workspaceId, accId, 'till up', studioKey);
   } finally {

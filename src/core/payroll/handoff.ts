@@ -33,6 +33,8 @@ import { uploadFile, linkFile, fileLinkedTo, getFileContent } from '../files/ind
 import type { LineInput } from '../ledger/postEntry.js';
 import { postEntryInternalChecked } from '../ledger/innerPosting.js';
 import { applySavedView } from '../customization/views.js';
+import { wageJournalReversalOf, wageJournalChain } from './reverse.js';
+import { getSetting } from '../settings/settings.js';
 
 /** `journal_entry.source` for the wage journal: the existing §D0 `import` value (no enum change). */
 export const WAGE_JOURNAL_SOURCE = 'import';
@@ -106,6 +108,7 @@ interface PostingRow {
   line_count: number;
   actor: string;
   created_at: string;
+  run_kind: string;
 }
 
 // --- Export --------------------------------------------------------------------------------------
@@ -364,8 +367,95 @@ export interface WageJournalPostInput {
   description?: string;
   ref?: string;
   confirm?: boolean;
+  /**
+   * D173 (owner Q8): a supplementary posting for a month whose journal stands. Skips the month guard
+   * for THIS call only; requires a non-blank `supplementaryReason`, which is audited and written into
+   * the entry description.
+   */
+  supplementary?: boolean;
+  supplementaryReason?: string;
+  /** D173 (owner Q12): the kind of run, default `regular`. Only a regular run meets the month guard. */
+  runKind?: WageRunKind;
+  /**
+   * D173 (owner Q14): why a non-regular run (bonus, thirteenth, correction) is posted. Required when the
+   * setting `payroll.nonregular_reason` asks for it (default: corrections only); written into the entry
+   * description whenever given. Refused `invalid_input` on a regular run.
+   */
+  runKindReason?: string;
   idempotencyKey: string;
 }
+
+/**
+ * D173 (owner Q12, generation 14): the kind of payroll run a wage journal books (§H-ENUM, single-sourced;
+ * the column CHECK in `handoffSchema.ts` lists the same four). The month guard counts only `regular`.
+ */
+export const WAGE_RUN_KINDS = ['regular', 'bonus', 'thirteenth', 'correction'] as const;
+export type WageRunKind = (typeof WAGE_RUN_KINDS)[number];
+export function isWageRunKind(v: unknown): v is WageRunKind {
+  return typeof v === 'string' && (WAGE_RUN_KINDS as readonly string[]).includes(v);
+}
+
+/** D173 (owner Q14): the de-CH word a non-regular run's reason is prefixed with in the entry description. */
+const RUN_KIND_LABEL_DE: Readonly<Record<Exclude<WageRunKind, 'regular'>, string>> = {
+  bonus: 'Bonus',
+  thirteenth: '13. Monatslohn',
+  correction: 'Korrektur',
+};
+
+/** D173 (owner Q14): the `payroll.nonregular_reason` setting values. */
+export type NonregularReasonMode = 'none' | 'correction' | 'all';
+
+/** D173 (owner Q14): the audit-chain entity kind of a non-regular run, one per kind (the row has no payload). */
+export const NONREGULAR_AUDIT_KIND: Readonly<Record<Exclude<WageRunKind, 'regular'>, string>> = {
+  bonus: 'payroll_run_bonus',
+  thirteenth: 'payroll_run_thirteenth',
+  correction: 'payroll_run_correction',
+};
+
+/**
+ * D173 (owner Q14): the STATIC run-kind checks (the enum, a reason's type, no reason on a regular run).
+ * They read no state, so they run first on every face, a replay included.
+ */
+export function validateRunKindStatic(input: { runKind?: unknown; runKindReason?: unknown }): Result | undefined {
+  if (input.runKind !== undefined && !isWageRunKind(input.runKind)) {
+    return err('invalid_input', { field: 'runKind', allowed: [...WAGE_RUN_KINDS] });
+  }
+  if (input.runKindReason !== undefined && typeof input.runKindReason !== 'string') {
+    return err('invalid_input', { field: 'runKindReason' });
+  }
+  const kind: WageRunKind = (input.runKind as WageRunKind | undefined) ?? 'regular';
+  if (kind === 'regular') {
+    if (input.runKindReason !== undefined) {
+      return err('invalid_input', { field: 'runKindReason', reason: 'a run-kind reason is given only for a bonus, thirteenth or correction run' });
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
+/**
+ * D173 (owner Q14): the SETTING-DEPENDENT reason check. It reads `payroll.nonregular_reason`, so it runs
+ * only where a call is fresh: after the idempotent replay in confirm mode, before the preview's return,
+ * and in the API's pre-draft validation only when the key has no stored result (critic r3 HIGH: a replay
+ * must answer its stored original even after the setting was tightened). Assumes the static checks passed.
+ */
+export function runKindReasonRequired(
+  ctx: WorkspaceContext,
+  input: { runKind?: unknown; runKindReason?: unknown },
+): Result | undefined {
+  const kind: WageRunKind = (input.runKind as WageRunKind | undefined) ?? 'regular';
+  if (kind === 'regular') return undefined;
+  const reason = typeof input.runKindReason === 'string' ? input.runKindReason.trim() : '';
+  const mode = getSetting<NonregularReasonMode>(ctx, 'payroll.nonregular_reason');
+  const required = mode === 'all' || (mode === 'correction' && kind === 'correction');
+  if (required && reason === '') {
+    return err('reason_required', { field: 'runKindReason', runKind: kind, setting: 'payroll.nonregular_reason', mode });
+  }
+  return undefined;
+}
+
+/** D173: the `payroll.month_guard` setting values (registry `src/core/settings/registry.ts`). */
+export type WageMonthGuardMode = 'refuse' | 'warn' | 'off';
 
 /** A wage-journal line normalised to a resolved account id and integer Rappen sides. */
 interface PreparedWageLine {
@@ -574,6 +664,76 @@ function previewPayload(entryDate: string, lines: PreparedWageLine[]): Record<st
 }
 
 /**
+ * D173: the wage journal postings of this workspace whose month (the `YYYY-MM` of `entry_date`, the
+ * only period field the hand-off carries) equals `entryDate`'s and whose entry still STANDS: an EVEN
+ * chain of posted mirrors, zero included, by the one chain walk D171 owns (`wageJournalChain`). A
+ * reversed posting (odd chain) frees its month for the corrected re-import. Oldest first. §H-TENANT.
+ */
+export function standingWageJournalsForMonth(
+  ctx: WorkspaceContext,
+  entryDate: string,
+): { wageJournalPostId: string; postedEntryId: string; entryDate: string }[] {
+  const rows = ctx.store.db
+    .prepare(
+      `SELECT id, posted_entry_id, entry_date FROM wage_journal_posts
+        WHERE workspace_id = ? AND substr(entry_date, 1, 7) = ? AND run_kind = 'regular' ORDER BY created_at, rowid`,
+    )
+    .all(ctx.workspaceId, entryDate.slice(0, 7)) as { id: string; posted_entry_id: string; entry_date: string }[];
+  return rows
+    .filter((r) => wageJournalChain(ctx, r.posted_entry_id).links % 2 === 0)
+    .map((r) => ({ wageJournalPostId: r.id, postedEntryId: r.posted_entry_id, entryDate: r.entry_date }));
+}
+
+function monthAlreadyPosted(
+  entryDate: string,
+  standing: { wageJournalPostId: string; postedEntryId: string; entryDate: string }[],
+): Result {
+  const first = standing[0]!;
+  return err('month_already_posted', {
+    month: entryDate.slice(0, 7),
+    wageJournalPostId: first.wageJournalPostId,
+    postedEntryId: first.postedEntryId,
+    standing,
+    hint: 'reverse the standing posting with wage_journal_reverse first, then post the corrected journal',
+  });
+}
+
+/**
+ * D173 (owner Q8): the pure check of the supplementary override, shared by the engine and the API's
+ * pre-draft validation (`withPrevalidate`), so a reasonless supplementary call is refused
+ * `reason_required` on every face and never queued as a Vorschlag that could only fail at approval.
+ */
+export function validateSupplementary(input: { supplementary?: unknown; supplementaryReason?: unknown }): Result | undefined {
+  if (input.supplementary !== undefined && typeof input.supplementary !== 'boolean') {
+    return err('invalid_input', { field: 'supplementary' });
+  }
+  if (input.supplementaryReason !== undefined && typeof input.supplementaryReason !== 'string') {
+    return err('invalid_input', { field: 'supplementaryReason' });
+  }
+  const reason = typeof input.supplementaryReason === 'string' ? input.supplementaryReason.trim() : '';
+  if (input.supplementary === true && reason === '') {
+    return err('reason_required', { field: 'supplementaryReason', reason: 'a supplementary wage journal names why it is posted next to the standing one' });
+  }
+  if (input.supplementary !== true && input.supplementaryReason !== undefined) {
+    return err('invalid_input', { field: 'supplementaryReason', reason: 'a reason is given only with supplementary:true' });
+  }
+  return undefined;
+}
+
+/** D173: the `warn`-mode (and preview) notice naming the standing posting(s) of the month. */
+function monthWarning(
+  entryDate: string,
+  standing: { wageJournalPostId: string; postedEntryId: string; entryDate: string }[],
+): Record<string, unknown> {
+  return {
+    code: 'month_already_posted',
+    month: entryDate.slice(0, 7),
+    standing,
+    hint: 'a wage journal for this month already stands; reverse it with wage_journal_reverse if this one replaces it',
+  };
+}
+
+/**
  * Preview then post the month's wage journal. Exactly ONE of `lines[]` (agent path) or `fileRef`
  * (parsed provider file) supplies the rows; both meet at one balanced-payload builder.
  *
@@ -591,6 +751,16 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
   if (typeof input.entryDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input.entryDate)) {
     return err('invalid_input', { field: 'entryDate' });
   }
+  // D173 (owner Q8): the supplementary override is validated before anything else is read, so a
+  // supplementary call without its reason is refused `reason_required` on every face, preview included.
+  const supInvalid = validateSupplementary(input);
+  if (supInvalid !== undefined) return supInvalid;
+  const supplementary = input.supplementary === true;
+  const supplementaryReason = (input.supplementaryReason ?? '').trim();
+  const kindInvalid = validateRunKindStatic(input);
+  if (kindInvalid !== undefined) return kindInvalid;
+  const runKind: WageRunKind = input.runKind ?? 'regular';
+  const runKindReason = (input.runKindReason ?? '').trim();
   const hasLines = Array.isArray(input.lines);
   const hasFile = typeof input.fileRef === 'string' && input.fileRef.length > 0;
   if (hasLines === hasFile) {
@@ -633,15 +803,35 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
     return err('unbalanced', { diffRappen: bal.diffRappen, debitMinor: bal.debitMinor, creditMinor: bal.creditMinor });
   }
 
-  // P8: the dial-off preview writes nothing and does not consume the key.
+  // D173: the month guard's mode. `supplementary` skips it for this call (the override is audited).
+  // A bonus, 13th or correction run is never checked (it neither blocks nor is blocked, owner Q12).
+  // Read where it is used: the preview below, and inside `run()` AFTER the idempotent replay (critic
+  // LOW, 15.10.2026), so a replay never reads the setting at all.
+  const guardModeNow = (): WageMonthGuardMode =>
+    supplementary || runKind !== 'regular' ? 'off' : getSetting<WageMonthGuardMode>(ctx, 'payroll.month_guard');
+
+  // P8: the dial-off preview writes nothing and does not consume the key. It is never refused by the
+  // guard; under `refuse` or `warn` it names the standing posting(s) so the person sees it before confirming.
   if (input.confirm !== true) {
-    return ok({ preview: previewPayload(input.entryDate, prepared.lines) });
+    const reasonMissing = runKindReasonRequired(ctx, input);
+    if (reasonMissing !== undefined) return reasonMissing;
+    const guardMode = guardModeNow();
+    const standingNow = guardMode === 'off' ? [] : standingWageJournalsForMonth(ctx, input.entryDate);
+    return ok({
+      preview: previewPayload(input.entryDate, prepared.lines),
+      monthGuard: guardMode,
+      runKind,
+      ...(standingNow.length > 0 ? { warnings: [monthWarning(input.entryDate, standingNow)] } : {}),
+    });
   }
 
   // Replay a completed post before the state-dependent guards, so a retry returns the original
   // posted entry rather than posting a second one (§H-IDEMPOTENT, asserted on ROWS).
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey, 'wage_journal_post');
   if (replayed !== undefined) return replayed;
+  // The setting-dependent reason check, only for a fresh call (critic r3 HIGH).
+  const reasonMissing = runKindReasonRequired(ctx, input);
+  if (reasonMissing !== undefined) return reasonMissing;
 
   const entryDate = input.entryDate;
   const postingLines: LineInput[] = prepared.lines.map((l) => ({
@@ -651,6 +841,19 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
   }));
 
   const run = (): Result => {
+    // D173 (owner Q7, 15.10.2026): one STANDING wage journal per month. Checked inside the write
+    // transaction, after the replay above, so a retry of the first post still replays.
+    // The setting `payroll.month_guard` decides: `refuse` (default) aborts, `warn` posts and carries
+    // a warning naming the standing posting(s), `off` (or a supplementary call) does not check.
+    const guardMode = guardModeNow();
+    const standing = guardMode === 'off' ? [] : standingWageJournalsForMonth(ctx, entryDate);
+    if (standing.length > 0 && guardMode === 'refuse') throw new HandoffAbort(monthAlreadyPosted(entryDate, standing));
+    const baseDescription = input.description ?? 'Lohnbuchung';
+    const notes = [
+      ...(supplementary ? [`Nachtragsbuchung: ${supplementaryReason}`] : []),
+      ...(runKind !== 'regular' && runKindReason !== '' ? [`${RUN_KIND_LABEL_DE[runKind]}: ${runKindReason}`] : []),
+    ];
+    const description = notes.length > 0 ? `${baseDescription} (${notes.join('; ')})` : baseDescription;
     // THE ONE posting (P3): A02 is the only path to the ledger. A02 asserts `post`, checks the
     // period lock and the balance, and is itself idempotent. A `{ok:false}` MUST be raised, not
     // returned, or the surrounding tx would commit the partial write.
@@ -659,7 +862,7 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
     const posted = postEntryInternalChecked(ctx, {
       date: entryDate,
       ...(input.ref !== undefined ? { ref: input.ref } : {}),
-      description: input.description ?? 'Lohnbuchung',
+      description,
       lines: postingLines,
       source: WAGE_JOURNAL_SOURCE,
       idempotencyKey: `${input.idempotencyKey}:wjp`,
@@ -672,8 +875,8 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
     ctx.store.db
       .prepare(
         `INSERT INTO wage_journal_posts
-           (id, workspace_id, posted_entry_id, entry_date, mapping_id, source_sha256, line_count, actor, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, workspace_id, posted_entry_id, entry_date, mapping_id, source_sha256, line_count, actor, created_at, run_kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         wjpId,
@@ -685,11 +888,29 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
         prepared.lines.length,
         ctx.actor,
         at,
+        runKind,
       );
     ctx.audit.record({ entityKind: 'payroll_handoff', entityId: wjpId, action: 'post', actor: ctx.actor, at });
+    // D173: the supplementary override is its own audit row (the reason stands in the entry description).
+    if (supplementary) {
+      ctx.audit.record({ entityKind: 'payroll_supplementary', entityId: wjpId, action: 'post', actor: ctx.actor, at });
+    }
+    // D173 (owner Q14): EVERY non-regular run is audited, whatever the reason setting says. The chain row
+    // carries kind (its entity kind), actor and time; the reason, when given, stands in the entry description.
+    if (runKind !== 'regular') {
+      ctx.audit.record({ entityKind: NONREGULAR_AUDIT_KIND[runKind], entityId: wjpId, action: 'post', actor: ctx.actor, at });
+    }
     // `entryId` is present so the `payroll.wage_journal_posted` automation event resolves (a preview,
     // which returns no `entryId`, emits nothing).
-    return ok({ wageJournalPostId: wjpId, postedEntryId, entryId: postedEntryId });
+    return ok({
+      wageJournalPostId: wjpId,
+      postedEntryId,
+      entryId: postedEntryId,
+      runKind,
+      ...(runKind !== 'regular' && runKindReason !== '' ? { runKindReason } : {}),
+      ...(supplementary ? { supplementary: true, supplementaryReason } : {}),
+      ...(standing.length > 0 ? { warnings: [monthWarning(entryDate, standing)] } : {}),
+    });
   };
 
   return runGuarded(() => ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, 'wage_journal_post', run));
@@ -759,8 +980,13 @@ export function listPayrollHandoffs(ctx: WorkspaceContext, input: ListPayrollHan
       createdAt: p.created_at,
       entryDate: p.entry_date,
       postedEntryId: p.posted_entry_id,
+      // D171: the mirror that reversed this posting (derived from the ledger chain, never stored, since
+      // the row is append-only by trigger), or null while it stands.
+      reversalEntryId: wageJournalReversalOf(ctx, p.posted_entry_id),
       mappingId: p.mapping_id,
       lineCount: p.line_count,
+      // D173 (Q12): legacy rows read 'regular' through the generation-14 column default.
+      runKind: p.run_kind,
     });
   });
   rows.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));

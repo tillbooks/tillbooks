@@ -740,8 +740,11 @@ export function transmitManagedBatch(
   if (msgId === null) return err('references_not_frozen', { batchId, missing: ['msg_id'] });
   const orderRef = `${conn.id}-pss-${batchId}`;
 
-  // 2) INTENT BEFORE SUBMIT: append the intent row and COMMIT, before any relay I/O (spec §4).
-  ctx.store.tx(() => {
+  // 2) INTENT BEFORE SUBMIT: append the intent row and COMMIT, before any relay I/O (spec §4). The
+  //    intent and a `failed` order are the transmit's own bookkeeping, not the payment: they never mark
+  //    an approval's act as having run (D165, `withoutCommitMark`), so a `bank_rejected` approval stays
+  //    rejectable. A relay that THROWS leaves the outcome unknown, and that marks (`commitMarkNow`).
+  ctx.store.withoutCommitMark(() => ctx.store.tx(() => {
     appendOrder(ctx, {
       connectionId: conn.id,
       orderRef,
@@ -754,13 +757,23 @@ export function transmitManagedBatch(
       status: 'intent',
     });
     return ok({});
-  });
+  }));
 
   // 3) Submit over PSS. A THROW is UNKNOWN: the intent stands and the batch surfaces as
   //    transmit_in_doubt (the port contract). A returned {ok:false} means the relay refused: failed.
-  const submitted = port.submitPayment({ connection: connectionRef(conn), orderRef, payloadBase64 });
+  let submitted: ReturnType<typeof port.submitPayment>;
+  try {
+    submitted = port.submitPayment({ connection: connectionRef(conn), orderRef, payloadBase64 });
+  } catch (e) {
+    try {
+      ctx.store.commitMarkNow();
+    } catch {
+      // The relay's error is the one the caller sees; a failed stamp must not replace it.
+    }
+    throw e;
+  }
   if (!submitted.ok) {
-    ctx.store.tx(() => {
+    ctx.store.withoutCommitMark(() => ctx.store.tx(() => {
       appendOrder(ctx, {
         connectionId: conn.id,
         orderRef,
@@ -774,7 +787,7 @@ export function transmitManagedBatch(
         bankReason: submitted.reason,
       });
       return ok({});
-    });
+    }));
     return err('bank_rejected', { batchId, orderRef, reason: submitted.reason });
   }
 

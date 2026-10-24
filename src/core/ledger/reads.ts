@@ -11,6 +11,7 @@ import { requireString, optionalText } from './inputGuards.js';
 import { statesConversionBasis } from './postEntry.js';
 import { baseCurrencyOf } from '../fx/rates.js';
 import { applySavedView } from '../customization/views.js';
+import { plainIntegerOf } from './entryNumber.js';
 
 interface EntryRow {
   id: string;
@@ -24,6 +25,8 @@ interface EntryRow {
   source: string;
   created_by: string | null;
   created_at: string;
+  /** The Belegnummer's display (A02 §4b), joined from `journal_entry_number`; null on a draft. */
+  entry_number: string | null;
 }
 
 interface LineRow {
@@ -63,6 +66,12 @@ export type JournalEntryView = {
   readonly source: string;
   readonly createdBy: string | null;
   readonly createdAt: string;
+  /**
+   * The Belegnummer (D178 point 2, A02 §4b) as a person reads it (`118`, `2026-0007`, `B17`), or null for
+   * a draft and for an entry posted while numbering was off and not yet caught up. Read from the
+   * append-only `journal_entry_number` row, never derived here.
+   */
+  readonly number: string | null;
 };
 
 /** One journal line as `get_entry` publishes it, with BOTH money pairs denominated (see `mapLine`). */
@@ -120,6 +129,7 @@ function mapEntry(row: EntryRow): JournalEntryView {
     source: row.source,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    number: row.entry_number ?? null,
   };
 }
 
@@ -271,7 +281,13 @@ export function getEntry(ctx: WorkspaceContext, input: { entryId: string }): Res
   if (guard) return guard;
 
   const row = ctx.store.db
-    .prepare('SELECT * FROM journal_entry WHERE workspace_id = ? AND id = ?')
+    .prepare(
+      `SELECT journal_entry.*,
+              (SELECT display FROM journal_entry_number
+                WHERE journal_entry_number.entry_id = journal_entry.id
+                  AND journal_entry_number.workspace_id = journal_entry.workspace_id) AS entry_number
+         FROM journal_entry WHERE workspace_id = ? AND id = ?`,
+    )
     .get(ctx.workspaceId, input.entryId) as EntryRow | undefined;
   if (row === undefined) {
     return err('not_found', { entryId: input.entryId });
@@ -294,6 +310,11 @@ export interface JournalFilter {
   account?: string;
   source?: string;
   status?: string;
+  /**
+   * The Belegnummer (A02 §4b.6): an exact match on its display (`2026-0007`, `B17`), or, when the value
+   * is a plain integer, every entry whose number is that integer in any series (`7` finds `2026-0007`).
+   */
+  number?: string;
   savedViewId?: string;
 }
 
@@ -313,11 +334,12 @@ export function listJournal(ctx: WorkspaceContext, filter: JournalFilter = {}): 
     optionalText(filter.to, 'to') ??
     optionalText(filter.account, 'account') ??
     optionalText(filter.source, 'source') ??
-    optionalText(filter.status, 'status');
+    optionalText(filter.status, 'status') ??
+    optionalText(filter.number, 'number');
   if (guard) return guard;
 
   const clauses = ['workspace_id = ?'];
-  const params: string[] = [ctx.workspaceId];
+  const params: (string | number)[] = [ctx.workspaceId];
   if (filter.from !== undefined) {
     clauses.push('date >= ?');
     params.push(filter.from);
@@ -337,6 +359,17 @@ export function listJournal(ctx: WorkspaceContext, filter: JournalFilter = {}): 
   if (filter.account !== undefined) {
     clauses.push('id IN (SELECT entry_id FROM journal_line WHERE account_id = ?)');
     params.push(filter.account);
+  }
+  if (filter.number !== undefined) {
+    const wanted = filter.number.trim();
+    const asInteger = plainIntegerOf(wanted);
+    clauses.push(
+      asInteger === null
+        ? 'id IN (SELECT entry_id FROM journal_entry_number WHERE workspace_id = ? AND display = ?)'
+        : 'id IN (SELECT entry_id FROM journal_entry_number WHERE workspace_id = ? AND (display = ? OR number = ?))',
+    );
+    params.push(ctx.workspaceId, wanted);
+    if (asInteger !== null) params.push(asInteger);
   }
   // §H-FX, derived per row and never persisted (see `mapJournalEntry`):
   //  - `currency` off the entry's first line, which speaks for all of them because one write stamps
@@ -366,7 +399,10 @@ export function listJournal(ctx: WorkspaceContext, filter: JournalFilter = {}): 
                 WHERE journal_line.entry_id = journal_entry.id
                   AND journal_entry.status = 'posted'
                   AND fx_rate IS NOT NULL
-                ORDER BY rowid LIMIT 1) AS fx_rate
+                ORDER BY rowid LIMIT 1) AS fx_rate,
+              (SELECT display FROM journal_entry_number
+                WHERE journal_entry_number.entry_id = journal_entry.id
+                  AND journal_entry_number.workspace_id = journal_entry.workspace_id) AS entry_number
          FROM journal_entry
         WHERE ${clauses.join(' AND ')}
         ORDER BY date DESC, created_at DESC, id DESC`,

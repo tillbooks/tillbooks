@@ -14,7 +14,7 @@ import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type Transport } from '../../lib/client';
 import { WorkspaceProvider } from '../../app/workspace';
 import { Agent } from './index';
-import { VorschlagCard } from './VorschlagCard';
+import { VorschlagLine } from './VorschlagLine';
 import { Turn } from './TurnList';
 import type { AgentTurn, DraftedAction } from './model';
 
@@ -32,6 +32,11 @@ function wrap(node: React.ReactNode) {
       </I18nProvider>
     </TillClientProvider>,
   );
+}
+
+/** D167: the read-back lives behind the line's Details disclosure (the title button). */
+function openDetails() {
+  fireEvent.click(document.querySelector('.vorschlag-line-title') as HTMLElement);
 }
 
 const postDraft: DraftedAction = {
@@ -55,8 +60,9 @@ const postDraft: DraftedAction = {
 };
 
 describe('CP1-CP3: the Vorschlag card as an oversight control', () => {
-  it('CP1 shows the AMOUNT a human is about to approve, above the raw Details disclosure', () => {
-    wrap(<VorschlagCard action={postDraft} accent onApprove={() => undefined} onReject={() => undefined} />);
+  it('CP1 shows the AMOUNT a human is about to approve, in Details as words', () => {
+    wrap(<VorschlagLine action={postDraft} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
     const readback = document.querySelector('.vorschlag-readback')?.textContent ?? '';
     expect(readback).toContain("1'200.00");
   });
@@ -69,14 +75,16 @@ describe('CP1-CP3: the Vorschlag card as an oversight control', () => {
       actionTool: 'record_payment',
       payload: { workspaceId: 'ws_test', direction: 'in', date: '2026-06-12', amountMinor: 120000, idempotencyKey: 'k2' },
     };
-    wrap(<VorschlagCard action={payment} accent onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<VorschlagLine action={payment} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
     const readback = (document.querySelector('.vorschlag-readback') as HTMLElement).textContent ?? '';
     expect(readback).not.toContain('120000');
     expect(readback).toContain("1'200.00");
   });
 
   it('CP3 labels the read-back fields in de-CH, not with raw payload keys', () => {
-    wrap(<VorschlagCard action={postDraft} accent onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<VorschlagLine action={postDraft} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
     const terms = [...document.querySelectorAll('.vorschlag-readback dt')].map((n) => n.textContent);
     expect(terms).not.toContain('date');
     expect(terms).not.toContain('source');
@@ -95,7 +103,8 @@ describe('CP1-CP3: the Vorschlag card as an oversight control', () => {
       payload: { workspaceId: 'ws_test', vendorId: 'ct_77', iban: 'CH5604835012345678009', idempotencyKey: 'kv' },
       payloadLabels: { vendorId: 'Lieferant AG' },
     };
-    wrap(<VorschlagCard action={vendorIban} accent onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<VorschlagLine action={vendorIban} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
     const rows = [...document.querySelectorAll('.vorschlag-readback-row')].map((row) => ({
       term: row.querySelector('dt')?.textContent,
       value: row.querySelector('dd')?.textContent,
@@ -114,8 +123,75 @@ describe('CP1-CP3: the Vorschlag card as an oversight control', () => {
       actionTool: 'set_creditor_bank_profile',
       payload: { workspaceId: 'ws_test', vendorId: 'ct_99', iban: 'CH5604835012345678009', idempotencyKey: 'ku' },
     };
-    wrap(<VorschlagCard action={unnamed} accent onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<VorschlagLine action={unnamed} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
     expect(document.querySelector('.vorschlag-readback')?.textContent ?? '').toContain('ct_99');
+  });
+});
+
+describe('D167 browser walk: Details name accounts and sources in words', () => {
+  const realIds: DraftedAction = {
+    ...postDraft,
+    actionId: 'aa_r',
+    payload: {
+      workspaceId: 'ws_test',
+      date: '2026-10-10',
+      source: 'manual',
+      description: 'Büromaterial',
+      idempotencyKey: 'kr',
+      lines: [
+        { account: 'acc_7be45fed-0164-415a-9990-7ebc8b391531', debit: 4850 },
+        { account: 'acc_f9de836e-9c4e-469d-af62-11bd786739a4', credit: 4850 },
+      ],
+    },
+  };
+  const names = new Map([
+    ['acc_7be45fed-0164-415a-9990-7ebc8b391531', '6500 Verwaltungs- und Bürokosten'],
+    ['acc_f9de836e-9c4e-469d-af62-11bd786739a4', '1021 Sparkonto'],
+  ]);
+
+  it('a posting line names its account by number and name, the id only as the tooltip', () => {
+    wrap(<VorschlagLine action={realIds} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
+    const rows = [...document.querySelectorAll('.vorschlag-readback-row')].map((r) => `${r.querySelector('dt')?.textContent} = ${r.querySelector('dd')?.textContent}`);
+    // D167 polish 11: one line per leg; no Quelle row, no Betrag row repeating the legs, no description
+    // row (the description is the line's title).
+    expect(rows).toContain('Soll = 6500 Verwaltungs- und Bürokosten · CHF 48.50');
+    expect(rows).toContain('Haben = 1021 Sparkonto · CHF 48.50');
+    expect(rows.some((r) => r.startsWith('Quelle') || r.startsWith('Betrag') || r.startsWith('Beschreibung'))).toBe(false);
+    expect(document.querySelector('.vorschlag-line-title')).toHaveTextContent('Büromaterial');
+    expect(document.querySelector('.vorschlag-line-verb')).toHaveTextContent('Buchung erfassen');
+    const text = document.querySelector('.vorschlag-readback')?.textContent ?? '';
+    expect(text).not.toMatch(/acc_[0-9a-f]/);
+    expect(text).not.toContain('manual');
+  });
+
+  it('a booking leg names its account too, and an account the chart cannot name never prints its id', () => {
+    const leg: DraftedAction = {
+      ...postDraft,
+      actionId: 'aa_b',
+      actionTool: 'book_bank_line',
+      payload: {
+        workspaceId: 'ws_test',
+        bankTxnId: 'bt_9',
+        target: { kind: 'accounts', legs: [{ accountId: 'acc_7be45fed-0164-415a-9990-7ebc8b391531', amountMinor: 1654, taxCode: 'VST-I' }] },
+        accountId: 'acc_0000aaaa-1111-2222-3333-444455556666',
+        idempotencyKey: 'kb',
+      },
+    };
+    wrap(<VorschlagLine action={leg} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
+    const text = document.querySelector('.vorschlag-readback')?.textContent ?? '';
+    expect(text).toContain('6500 Verwaltungs- und Bürokosten');
+    expect(text).not.toMatch(/acc_[0-9a-f]/);
+  });
+
+  it('without the chart, a posting line says "Konto" and never the id', () => {
+    wrap(<VorschlagLine action={realIds} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
+    const text = document.querySelector('.vorschlag-readback')?.textContent ?? '';
+    expect(text).toContain('Konto');
+    expect(text).not.toMatch(/acc_[0-9a-f]/);
   });
 });
 

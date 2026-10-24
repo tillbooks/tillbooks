@@ -37,6 +37,12 @@
   gap: var(--t-space-1);
 }
 
+/* D178 point 2: the Beleg-Nr. filter holds a short number (`118`, `2026-0007`). Its tabular figures come
+   from the shared `.t-num` on the input (the `input.field:is(.t-num, ...)` restore rule); this only sizes it. */
+.journal-field .journal-field--number {
+  width: 14ch;
+}
+
 /* The archive's hand-rolled table, on the same row tokens as DataTable (K-20): a text row is
    `--t-row-h`, the head `--t-row-head-h` in 12px/500 dim (K-23), the cell sides `--t-cell-pad-x`. */
 .journal-table {
@@ -682,4 +688,36 @@ button.journal-xref:hover {
   color: var(--t-text-dim);
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
+}
+
+/* --- D176: the composer's Vorlage -------------------------------------------------------------------- */
+
+/* The one quiet picker above the lines. */
+.journal-vorlage-picker {
+  max-width: 320px;
+}
+
+.journal-vorlage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+/* The asked amounts, side by side where they fit, each with its label above. */
+.journal-vorlage-asks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.journal-vorlage-asks .journal-field {
+  min-width: 160px;
+}
+
+.journal-vorlage-save {
+  align-self: flex-start;
+}
+
+.journal-vorlage-form {
+  max-width: 480px;
 }

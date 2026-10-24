@@ -1,5 +1,5 @@
 /**
- * F00's two verbs, defined here and spread into `ACTIONS` as one line (the `fxActions` /
+ * F00's three verbs, defined here and spread into `ACTIONS` as one line (the `fxActions` /
  * `costingActions` precedent), so several agents appending to the append-only registry at once
  * collide over a line rather than a block.
  *
@@ -28,7 +28,7 @@
 import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
-import { dashboardOverview, dashboardTile, DASHBOARD_TILES } from '../core/dashboards/index.js';
+import { dashboardOverview, dashboardSeries, dashboardTile, DASHBOARD_TILES, SERIES_MAX_MONTHS, SERIES_TOP_DEFAULT, SERIES_TOP_MAX } from '../core/dashboards/index.js';
 import { getDeliveryRuntime } from './runtime-state.js';
 import type { ActionKind } from './actionKind.js';
 
@@ -42,6 +42,7 @@ export interface DashboardActionHelpers {
   ): ActionDef;
   ctxSchema(props?: Record<string, unknown>, required?: string[]): JsonSchema;
   STR: { readonly type: 'string' };
+  INT: { readonly type: 'integer' };
 }
 
 /** Widen an `ActionInput` to the engine's own input shape (the same cast `registry.ts` uses). */
@@ -68,7 +69,7 @@ function withProcessFacts(result: Result): Result {
 
 /** The F00 verbs, in append order. */
 export function dashboardActions(h: DashboardActionHelpers): readonly ActionDef[] {
-  const { ctxAction, ctxSchema, STR } = h;
+  const { ctxAction, ctxSchema, STR, INT } = h;
 
   return [
     ctxAction(
@@ -84,6 +85,15 @@ export function dashboardActions(h: DashboardActionHelpers): readonly ActionDef[
       `Eine Kachel der Übersicht in voller Tiefe: the same figure dashboard_overview shows for '${DASHBOARD_TILES.join("' | '")}', plus its detail block (the aging buckets behind the Debitoren figure, the top and bottom projects behind the Marge, the MWST settlement period and filed flag, the per-bank-account closing balances) and the drill descriptor naming the source tool that owns the rows. The value is the source verb's own answer, recomputed on every call; F00 fabricates nothing. An unknown tile id answers unknown_tile naming the valid set; a tile the caller's A24 role may not see answers permission_denied outright (the same per-tile gate the overview applies as an omission); an unavailable module answers the tile with ok:false and the source's own structured code.`,
       ctxSchema({ tile: STR, from: STR, to: STR }, ['tile', 'from', 'to']),
       (ctx, input) => withProcessFacts(dashboardTile(ctx, as(input))),
+    ),
+    // D178 point 13: the series behind the Übersicht's charts. Gated `read_books` at the boundary (one
+    // domain: every figure is the ledger's), unlike the two per-tile verbs above.
+    ctxAction(
+      'dashboard_series',
+      'read',
+      `Die Diagramme der Übersicht: Geld rein und raus pro Monat und die grössten Aufwände (pure read, posts nothing). months[] holds every calendar month the range touches (clipped to it, at most ${SERIES_MAX_MONTHS}), each with inMinor and outMinor in integer base-currency Rappen: the money in and out of the A19 Bankkonten's ledger accounts, netted per journal entry, so a transfer between two own bank accounts is neither in nor out, and the engine's own opening postings (Eröffnungsbilanz, Bank-Eröffnungssaldo) are left out because no money moved. totals sums them; Σ in − Σ out equals the bank accounts' net Kontoblatt movement over the window (general_ledger) minus those openings. topExpenses[] names the ${SERIES_TOP_DEFAULT} (top, 1 to ${SERIES_TOP_MAX}) largest Aufwand accounts of the range from income_statement (accountId, number, name, amountMinor), otherExpensesMinor is the rest of the expense accounts with a debit balance, grossExpenseMinor their sum (Σ top + other = gross), expenseReductionsMinor the expense accounts with a credit balance in the range (zero or negative: an Aufwandminderung or a stock change booked against material), and expenseTotalMinor the Erfolgsrechnung's net expense total (gross + reductions = total). bankAccounts counts the Bankkonten that fed the series (0 means no bank account yet: every month is 0, never an error). from > to answers invalid_range, a window over ${SERIES_MAX_MONTHS} months range_too_long, a workspace with no chart needs_chart.`,
+      ctxSchema({ from: STR, to: STR, top: INT }, ['from', 'to']),
+      (ctx, input) => dashboardSeries(ctx, as(input)),
     ),
   ];
 }

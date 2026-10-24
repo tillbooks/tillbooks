@@ -203,6 +203,27 @@ function refuseMovedOnBook(deps: ApiDeps, name: string): Result | undefined {
   }
 }
 
+/** The one verb that still answers while the adopted book is unavailable: it is how the Studio learns it. */
+export const ADOPTED_BOOK_UNAVAILABLE_ALLOWED: ReadonlySet<string> = new Set(['delivery_status']);
+export const ADOPTED_BOOK_UNAVAILABLE = 'adopted_book_unavailable';
+
+/**
+ * D166 point 8 (critic N1), THE CHOKEPOINT: while `till up` runs on an in-memory stand-in for an
+ * adopted book it could not open, EVERY transport call (MCP and REST, every seat, every verb a later
+ * capability adds) is refused here, before the trace, the dial or the verb, except `delivery_status`.
+ * A per-verb list would miss the next verb; this cannot.
+ */
+function refuseUnavailableBook(deps: ApiDeps, name: string): Result | undefined {
+  const unavailable = deps.adoptedBookUnavailable;
+  if (unavailable === undefined || ADOPTED_BOOK_UNAVAILABLE_ALLOWED.has(name)) return undefined;
+  return err(ADOPTED_BOOK_UNAVAILABLE, {
+    action: name,
+    path: unavailable.path,
+    reason: unavailable.reason,
+    message: `The TILL book you adopted is not reachable: ${unavailable.path}. Nothing was done. Open TILL to try again, choose another book or forget it.`,
+  });
+}
+
 /**
  * What the governed seam decided BEFORE the verb runs: either a finished answer (a refusal, a denial, a
  * draft), or the verb is to run and `execute` records its outcome afterwards. Splitting the decision
@@ -218,6 +239,8 @@ const PASS_THROUGH: GovernedPlan = { execute: (outcome) => outcome };
  * the agent seat it records the call, and for a dial-governed write it routes execute/draft/deny.
  */
 export function runGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Result {
+  const unavailable = refuseUnavailableBook(deps, action.name);
+  if (unavailable !== undefined) return unavailable;
   return withinStoredRuleTx(deps, action, () => {
     const plan = planGoverned(deps, action, input);
     if ('done' in plan) return plan.done;
@@ -256,6 +279,8 @@ function withinStoredRuleTx(deps: ApiDeps, action: ActionDef, run: () => Result)
  * `runGoverned`. The trace, the dial and the refusals are the ones `planGoverned` decides for both.
  */
 export async function runGovernedAsync(deps: ApiDeps, action: ActionDef, input: ActionInput): Promise<Result> {
+  const unavailable = refuseUnavailableBook(deps, action.name);
+  if (unavailable !== undefined) return unavailable;
   // A stored-rule write has no `runAsync`: it takes the synchronous door, so its read and its write
   // share one transaction there (critic L2).
   if (action.runAsync === undefined && readsStoredRule(action.name)) return runGoverned(deps, action, input);
@@ -383,6 +408,9 @@ function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Gov
             actionTool: action.name,
             payload: input,
             dialCapability,
+            // D177 (critic D177-C1): a draft supersedes older Vorschläge only after the verb's own full
+            // pre-draft screen passed (the `prevalidate` above answered nothing).
+            screened: action.prevalidate !== undefined,
           }),
         );
       } catch (e) {
@@ -430,6 +458,8 @@ function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Gov
         reason: decision.reason,
         replayed,
         approveAt: pointerFor(deps),
+        // D177 (critic D177-C3): the drafting agent learns which of its Vorschläge this one replaced.
+        ...(Array.isArray(drafted.supersededActionIds) ? { supersededActionIds: drafted.supersededActionIds } : {}),
       });
       record(deps, workspaceId, {
         verb: action.name, kind: action.kind, input, mode: 'draft', reason: replayed ? 'replayed' : decision.reason,

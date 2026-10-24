@@ -1018,3 +1018,180 @@ describe('Dunning: a failed run read never leaves the previous card live (critic
     expect(screen.queryByRole('button', { name: 'Ausstellen' })).toBeNull();
   });
 });
+
+// D169: the run's fee undo. It sits under Mehr on an issued or sent run whose fee entry stands, is
+// marked destructive, and runs only after an explicit confirm with a reason; nothing is sent before.
+describe('Dunning: reversing a run\'s Mahngebühr (D169)', () => {
+  const ISSUED_ITEM = { ...ITEM, feeBooked: true, demandedFeeMinor: 2000 };
+  const feeRun = (status: string, extra: Record<string, unknown> = {}): Canned => ({
+    ...OPTION_READS,
+    get_dunning_config: CONFIG,
+    list_dunning_runs: ok({ runs: [runSummary(status, { feeEntryId: 'je_fee' })], truncated: false }),
+    get_dunning_run: ok(runDetail(status, { feeEntryId: 'je_fee', feeReversalEntryId: null, items: [ISSUED_ITEM], ...extra })),
+  });
+  const ALL = [CAP.dun, CAP.send, CAP.post, 'read_sales'];
+
+  it('offers Mahngebühren stornieren under Mehr and calls dunning_fee_reverse only after the confirm with a reason', async () => {
+    const reverse = vi.fn((_input: Record<string, unknown>) => ok({ runId: 'run_1', reversalEntryId: 'je_rev', lettersSent: 0 }));
+    renderDunning({ ...feeRun('issued'), dunning_fee_reverse: reverse as unknown as Canned[string] }, { held: ALL });
+    const current = await screen.findByTestId('dunning-current');
+    expect(within(current).queryByRole('button', { name: 'Mahngebühren stornieren' })).not.toBeInTheDocument();
+    await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahngebühren stornieren' }));
+
+    const dialog = await screen.findByRole('alertdialog', { name: 'Mahngebühren dieses Laufs stornieren?' });
+    expect(dialog).toHaveTextContent('Korrekturbuchung');
+    // Critic L2, as amended by D174: what happens to an unsent letter is said BEFORE the confirm.
+    expect(dialog).toHaveTextContent('Ein noch nicht versandter Brief wird ohne die Gebühr neu ausgestellt und kann danach versandt werden.');
+    expect(dialog).not.toHaveTextContent('bleibt, wie er ist, und wird nicht versandt');
+    expect(reverse).not.toHaveBeenCalled();
+    const confirm = within(dialog).getByRole('button', { name: 'Gebühren stornieren' });
+    expect(confirm).toBeDisabled();
+    expect(confirm.className).toContain('btn--danger');
+    expect(confirm).not.toHaveAttribute('data-money-commit');
+
+    await userEvent.type(within(dialog).getByLabelText('Grund'), 'Gebühr erlassen');
+    expect(confirm).toBeEnabled();
+    await userEvent.click(confirm);
+    await waitFor(() => expect(reverse).toHaveBeenCalledTimes(1));
+    expect(reverse.mock.calls[0]?.[0]).toMatchObject({ workspaceId: 'ws_test', runId: 'run_1', reason: 'Gebühr erlassen' });
+    expect(typeof reverse.mock.calls[0]?.[0]?.['idempotencyKey']).toBe('string');
+    expect(await screen.findByText('Die Mahngebühren dieses Laufs sind storniert.')).toBeInTheDocument();
+  });
+
+  it('cancelling the confirm sends nothing', async () => {
+    const reverse = vi.fn((_input: Record<string, unknown>) => ok({ runId: 'run_1' }));
+    renderDunning({ ...feeRun('sent'), dunning_fee_reverse: reverse as unknown as Canned[string] }, { held: ALL });
+    const current = await screen.findByTestId('dunning-current');
+    await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahngebühren stornieren' }));
+    const dialog = await screen.findByRole('alertdialog');
+    const footerCancel = within(dialog).getAllByRole('button', { name: 'Abbrechen' }).find((b) => b.className.includes('btn--secondary'));
+    expect(footerCancel).toBeDefined();
+    await userEvent.click(footerCancel as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(reverse).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing on a run without a fee entry, on a reversed fee (which says so), or without post', async () => {
+    renderDunning(happy('issued'), { held: ALL });
+    const noFee = await screen.findByTestId('dunning-current');
+    expect(within(noFee).queryByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' })).not.toBeInTheDocument();
+    cleanup();
+    renderDunning(feeRun('issued', { feeReversalEntryId: 'je_rev' }), { held: ALL });
+    const reversed = await screen.findByTestId('dunning-current');
+    expect(within(reversed).getByText('Die Mahngebühren dieses Laufs sind storniert.')).toBeInTheDocument();
+    expect(within(reversed).queryByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' })).not.toBeInTheDocument();
+    cleanup();
+    renderDunning(feeRun('issued'), { held: [CAP.dun, CAP.send, 'read_sales'] });
+    const noPost = await screen.findByTestId('dunning-current');
+    expect(within(noPost).queryByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' })).not.toBeInTheDocument();
+  });
+
+  it('names the settled-fee refusal in words, and an unsent letter demanding a reversed fee carries the warning', async () => {
+    renderDunning({
+      ...feeRun('issued'),
+      dunning_fee_reverse: reject({ error: 'fee_settled', runId: 'run_1', paymentIds: ['pay_1'] }),
+    }, { held: ALL });
+    const current = await screen.findByTestId('dunning-current');
+    await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahngebühren stornieren' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.type(within(dialog).getByLabelText('Grund'), 'Falsch');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Gebühren stornieren' }));
+    expect(await screen.findByText(/Storniere zuerst die Zahlung/)).toBeInTheDocument();
+    cleanup();
+
+    renderDunning(feeRun('issued', {
+      feeReversalEntryId: 'je_rev',
+      items: [{ ...ISSUED_ITEM, changeSinceIssue: 'fee_reversed' }],
+      debtors: [{ ...GROUP, changedSinceIssue: true, changeReason: 'fee_reversed', changedDocumentIds: ['doc_1'] }],
+    }), { held: ALL });
+    const held = await screen.findByTestId('dunning-current');
+    expect(within(held).getByText('seit Ausstellung Gebühr storniert')).toBeInTheDocument();
+    expect(within(held).getByText(/Seit Ausstellung Gebühr storniert: diesen Brief nicht wie ausgestellt versenden/)).toBeInTheDocument();
+  });
+
+  it('D174 setting hold: the dialog says an unsent letter is held, not re-issued', async () => {
+    renderDunning({
+      ...feeRun('issued'),
+      get_dunning_config: ok({ levels: LEVELS, configured: false, interestFloorBp: 500, settings: { refreeze: 'hold', letterDate: 'run_date' } }),
+    }, { held: ALL });
+    const current = await screen.findByTestId('dunning-current');
+    await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahngebühren stornieren' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Ein noch nicht versandter Brief bleibt, wie er ist, und wird nicht versandt');
+    expect(dialog).not.toHaveTextContent('ohne die Gebühr neu ausgestellt und kann danach versandt werden');
+  });
+
+  it('D174 override: deviating for one run needs its own reason, and the call carries refreeze, letterDate and overrideReason', async () => {
+    const reverse = vi.fn((_input: Record<string, unknown>) => ok({ runId: 'run_1', reversalEntryId: 'je_rev', lettersSent: 0 }));
+    renderDunning({ ...feeRun('issued'), dunning_fee_reverse: reverse as unknown as Canned[string] }, { held: ALL });
+    const current = await screen.findByTestId('dunning-current');
+    await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahngebühren stornieren' }));
+    const dialog = await screen.findByRole('alertdialog');
+    const confirm = within(dialog).getByRole('button', { name: 'Gebühren stornieren' });
+    await userEvent.type(within(dialog).getByLabelText('Grund'), 'Gebühr erlassen');
+    expect(confirm).toBeEnabled();
+    await userEvent.click(within(dialog).getByLabelText('Diesen Mahnlauf anders als eingestellt behandeln'));
+    expect(confirm).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole('combobox', { name: 'Noch nicht versandte Briefe' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Zurückhalten' }));
+    expect(dialog).toHaveTextContent('Ein noch nicht versandter Brief bleibt, wie er ist');
+    await userEvent.type(within(dialog).getByLabelText('Warum dieser Lauf abweicht'), 'Kundin ruft zurück');
+    expect(confirm).toBeEnabled();
+    await userEvent.click(confirm);
+    await waitFor(() => expect(reverse).toHaveBeenCalledTimes(1));
+    expect(reverse.mock.calls[0]?.[0]).toMatchObject({
+      reason: 'Gebühr erlassen',
+      refreeze: 'hold',
+      letterDate: 'run_date',
+      overrideReason: 'Kundin ruft zurück',
+    });
+  });
+
+  it('D174 without an override the call carries no override fields', async () => {
+    const reverse = vi.fn((_input: Record<string, unknown>) => ok({ runId: 'run_1', reversalEntryId: 'je_rev', lettersSent: 0 }));
+    renderDunning({ ...feeRun('issued'), dunning_fee_reverse: reverse as unknown as Canned[string] }, { held: ALL });
+    const current = await screen.findByTestId('dunning-current');
+    await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahngebühren stornieren' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.type(within(dialog).getByLabelText('Grund'), 'Gebühr erlassen');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Gebühren stornieren' }));
+    await waitFor(() => expect(reverse).toHaveBeenCalledTimes(1));
+    const input = reverse.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect('refreeze' in input || 'letterDate' in input || 'overrideReason' in input).toBe(false);
+  });
+
+  it('D174 (Q9): a letter re-issued under the today setting names its own date; one on the run date does not', async () => {
+    renderDunning(feeRun('issued', {
+      feeReversalEntryId: 'je_rev',
+      items: [{ ...ISSUED_ITEM, demandedFeeMinor: 0, changeSinceIssue: null, reissuedWithoutFee: true }],
+      debtors: [{ ...GROUP, reissuedWithoutFee: true, letterDate: '2026-07-23' }],
+    }), { held: ALL });
+    const current = await screen.findByTestId('dunning-current');
+    expect(within(current).getByText(/datiert 23\.07\.2026/)).toBeInTheDocument();
+    cleanup();
+    renderDunning(feeRun('issued', { debtors: [{ ...GROUP, letterDate: '2026-07-16' }] }), { held: ALL });
+    const plain = await screen.findByTestId('dunning-current');
+    expect(within(plain).queryByText(/datiert/)).not.toBeInTheDocument();
+  });
+
+  it('D174: a letter re-issued without the reversed fee says so and is not held', async () => {
+    renderDunning(feeRun('issued', {
+      feeReversalEntryId: 'je_rev',
+      items: [{ ...ISSUED_ITEM, demandedFeeMinor: 0, changeSinceIssue: null, reissuedWithoutFee: true }],
+      debtors: [{ ...GROUP, reissuedWithoutFee: true }],
+    }), { held: ALL });
+    const current = await screen.findByTestId('dunning-current');
+    expect(within(current).getByText(/ohne die stornierte Gebühr neu ausgestellt/)).toBeInTheDocument();
+    expect(within(current).queryByText(/diesen Brief nicht wie ausgestellt versenden/)).not.toBeInTheDocument();
+    cleanup();
+    renderDunning(feeRun('issued'), { held: ALL });
+    const plain = await screen.findByTestId('dunning-current');
+    expect(within(plain).queryByText(/ohne die stornierte Gebühr neu ausgestellt/)).not.toBeInTheDocument();
+  });
+});

@@ -1358,6 +1358,16 @@ function phase17() {
   const txnByRef = (res, ref) => [...(res.matched || []), ...(res.unmatched || []), ...(res.partial || [])].find((t) => t.entryRef === ref);
   const r1 = txnByRef(recTxns, 'R1');
   const r2 = txnByRef(recTxns, 'R2');
+  // D178 point 19 (the E2 re-cut, A20 §11.4): earlier seeded statements already cover this month with other
+  // balances, so this one does not extend the chain and its lines wait for the person's answer. They are
+  // this month's real bookings: the person answers "Kein Duplikat" before matching them.
+  for (const r of [r1, r2]) {
+    if (!r) continue;
+    const line = call('list_bank_inbox', { workspaceId: W.main, bankTxnId: r.bankTxnId, status: 'all' }).lines[0];
+    if (line && line.needsDuplicateDecision) {
+      call('resolve_possible_duplicate', { workspaceId: W.main, bankTxnId: r.bankTxnId, decision: 'distinct', idempotencyKey: k('p17', 'distinct', r.entryRef) }, { date: TODAY });
+    }
+  }
   if (r1) call('confirm_match', { workspaceId: W.main, bankTxnId: r1.bankTxnId, vendorBillId: bill.vendorBillId, idempotencyKey: k('p17', 'confirm', 1) }, { date: M1 + '-07' });
   if (r2) call('create_entry_for_txn', { workspaceId: W.main, bankTxnId: r2.bankTxnId, contraAccountId: accId(W.main, '6900'), description: 'Bankspesen', idempotencyKey: k('p17', 'fee', 1) }, { date: M1 + '-15' });
   const recCheck = call('list_reconciliation', { workspaceId: W.main, statementId: recStmtId });

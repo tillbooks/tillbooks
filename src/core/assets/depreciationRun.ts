@@ -42,6 +42,7 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { postEntryInternalChecked } from '../ledger/innerPosting.js';
 import { reverseOwnedEntry, DEPRECIATION_RUN_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
+import { rawReversedEvent } from './reversal.js';
 import { getEntry } from '../ledger/reads.js';
 import { calculateDepreciation, isPeriod, daysInPeriod } from './depreciation/engine.js';
 import type { AssetSnapshot, CalcContext } from './depreciation/types.js';
@@ -270,6 +271,9 @@ function eligibleAssets(
     if (a.depreciation_method === 'none') return 'non_depreciable';
     if (a.status === 'disposed' || a.status === 'archived' || a.status === 'draft') return 'asset_terminal';
     if (a.accumulated_depr_rappen >= a.acquisition_cost_rappen - a.residual_value_rappen) return 'already_at_residual';
+    // D170: a cost event whose entry a raw Storno took out (a book from before the undo verb) would be
+    // depreciated on a cost the GL no longer carries; asset_transaction_reverse closes it first.
+    if (rawReversedEvent(ctx, a.id, ['acquisition', 'opening', 'additional_capitalisation']) !== null) return 'asset_posting_reversed';
     if (a.last_depreciation_period !== null && period <= a.last_depreciation_period) return 'period_already_processed';
     if (filter.categoryId !== undefined && a.category_id !== filter.categoryId) return 'filtered_out';
     // Cost-centre filter: an asset's cost centre is its category's default (there is no per-asset cost

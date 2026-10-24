@@ -56,6 +56,7 @@ import Attention from '../surfaces/Attention';
 import Checklists from '../surfaces/Checklists';
 import Correspondence from '../surfaces/Correspondence';
 import WritingStyle from '../surfaces/WritingStyle';
+import MySettings from '../surfaces/MySettings';
 import DocumentTemplates from '../surfaces/DocumentTemplates';
 import Dispatch from '../surfaces/Dispatch';
 import Deals from '../surfaces/Deals';
@@ -141,6 +142,8 @@ const SURFACES: Record<string, ReactElement> = {
   '/checklisten': <Checklists />,
   '/correspondence': <Correspondence />,
   '/writing-style': <WritingStyle />,
+  // D178 point 7: the person's own preferences (G00 spec §10).
+  '/my-settings': <MySettings />,
   '/document-templates': <DocumentTemplates />,
   '/dispatch': <Dispatch />,
   '/deals': <Deals />,

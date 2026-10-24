@@ -25,6 +25,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { usePref } from './prefs';
+
 /** The token names, so a caller never spells a custom property by hand. */
 export const MOTION_TOKENS = {
   navOut: '--t-motion-nav-out',
@@ -37,6 +39,9 @@ export const MOTION_TOKENS = {
   stagger: '--t-motion-stagger',
   hover: '--t-motion-hover',
   loop: '--t-motion-loop',
+  grow: '--t-motion-grow',
+  growStandard: '--t-motion-grow-standard',
+  growStagger: '--t-motion-grow-stagger',
 } as const;
 
 export type MotionToken = (typeof MOTION_TOKENS)[keyof typeof MOTION_TOKENS];
@@ -57,6 +62,9 @@ export const MOTION_DEFAULT_MS: Readonly<Record<MotionToken, number>> = {
   '--t-motion-stagger': 30,
   '--t-motion-hover': 120,
   '--t-motion-loop': 1400,
+  '--t-motion-grow': 700,
+  '--t-motion-grow-standard': 400,
+  '--t-motion-grow-stagger': 60,
 };
 
 /** The class `rowClassName` stamps on the row `useCommitAck` should acknowledge. */
@@ -71,9 +79,83 @@ export const NAV_DIRECTION_ATTR = 'data-motion-nav';
 export type NavDirection = 'forward' | 'back';
 
 /** True when the OS asks to minimise motion. Guarded for environments without matchMedia (jsdom). */
-export function prefersReducedMotion(): boolean {
+function osReducesMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// --- Motion levels (D178 point 14) ----------------------------------------------------------------
+
+/** The four levels of the person's `appearance.motion` preference. */
+export type MotionLevel = 'lively' | 'standard' | 'calm' | 'off';
+
+/** The engine preference key (`src/core/customization/prefDefs/overview.ts`). */
+export const MOTION_PREF = 'appearance.motion';
+
+/** The attribute on `<html>` that carries the level; `motion.css` maps it to what charts and tiles read. */
+export const MOTION_LEVEL_ATTR = 'data-motion';
+
+/** The level stamped on the root, Lively (the default) when nothing is stamped yet. */
+export function motionLevel(): MotionLevel {
+  const raw = typeof document === 'undefined' ? null : document.documentElement.getAttribute(MOTION_LEVEL_ATTR);
+  return raw === 'standard' || raw === 'calm' || raw === 'off' ? raw : 'lively';
+}
+
+/**
+ * True when nothing may move: the OS asks to minimise motion, or the person chose Off (which DESIGN.md
+ * defines as "the same as the OS setting"). Every primitive below stamps nothing under it.
+ */
+export function prefersReducedMotion(): boolean {
+  return osReducesMotion() || motionLevel() === 'off';
+}
+
+/**
+ * Stamp the person's motion level on the root, the deliberate twin of `DensityProvider`'s `data-density`.
+ * Mounted once, beside the density provider (`main.tsx`). Renders nothing.
+ */
+export function MotionLevelStamp(): null {
+  const [level] = usePref<MotionLevel>(MOTION_PREF);
+  useEffect(() => {
+    if (typeof document !== 'undefined') document.documentElement.setAttribute(MOTION_LEVEL_ATTR, level);
+  }, [level]);
+  return null;
+}
+
+/**
+ * The Übersicht's headline count-up (Lively only): `target` counted up from zero over `--t-motion-grow`,
+ * eased out, final from the first frame under every other level and under reduced motion. ONLY for a
+ * headline figure: never in a table, an input, a bank amount or anything a person acts on (DESIGN.md,
+ * Motion levels). Integers in, integers out: the caller formats.
+ */
+export function useCountUp(target: number): number {
+  const previous = useRef(0);
+  const [shown, setShown] = useState(() => (motionLevel() === 'lively' && !prefersReducedMotion() ? 0 : target));
+  useEffect(() => {
+    if (motionLevel() !== 'lively' || prefersReducedMotion() || typeof window.requestAnimationFrame !== 'function') {
+      setShown(target);
+      return undefined;
+    }
+    const duration = motionMs(MOTION_TOKENS.grow);
+    if (duration <= 0) {
+      setShown(target);
+      return undefined;
+    }
+    // A changed figure counts on from the one on screen, never from zero again.
+    const from = previous.current;
+    previous.current = target;
+    let frame = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      // The vocabulary's ease-out, approximated by a cubic: fast start, gentle landing.
+      const eased = 1 - (1 - t) ** 3;
+      setShown(t >= 1 ? target : Math.round(from + (target - from) * eased));
+      if (t < 1) frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [target]);
+  return shown;
 }
 
 /**

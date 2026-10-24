@@ -547,8 +547,8 @@ body {
 
 /* The tree itself (A1): a flat column of rows. A row's depth reads from the inset of its
    role="group" container, not from per-row padding, so nesting stays legible without a second glyph
-   column. The tree owns the whole nav region; the middle band still scrolls only if a user expands
-   more than fits, which the default-collapsed state avoids (the rail never scrolls, DESIGN.md). */
+   column. The tree owns the menu section; the middle band still scrolls only if a user expands more
+   than fits, which the default-collapsed state avoids (the rail never scrolls, DESIGN.md). */
 .rail-tree {
   display: flex;
   flex-direction: column;
@@ -556,29 +556,58 @@ body {
 }
 
 /* ONE RAIL RHYTHM (owner decision, UI polish round 2, A4; pitch set by D138): every row in the
-   rail, a leaf at any level, a group heading, a nested parent, the Favoriten header and a Favoriten
-   row, is the same 28px band with a 2px gap, so the pitch is 30px everywhere. D138 (option B of the
-   rail density picker) took the band from 32px to 28px: the rail is a stated exception to D116's
-   32px dense floor, still above the 24px WCAG 2.2 target minimum. The band is `min-height: 28px`,
-   which is also the row's natural height: a 20px line inside a 4px block inset (3px padding inside
-   a transparent 1px border since K-10), so the band is set by the type, not stretched around it.
-   The controls inside a row (the 24px pin star, an 18px badge, an 18px icon) never push a row
-   taller (see .rail-pin). Type keeps its hierarchy (leaf 14px, group label 12px/500 since K-23):
-   hierarchy is carried by type, not by rhythm. Measured before A4: leaves ran 40px (the pin star
-   sat in flow inside 8px padding), group rows 32, parents 34, and the Favoriten header a 37px <p>
-   with 14px UA margins, four rhythms in one column. Both densities (Komfortabel, Kompakt) share this
-   one band: the density toggle never touches the rail. Below 767px the drawer rows grow to 44px (the
-   mobile rule near the responsive collapse), so the dense band never reaches a touch layout. */
+   rail, a leaf at any level, a group heading, a nested parent, the Favoriten and Menü section
+   headers, a favourite and a row of the menu editor, is the same 28px band with a 2px gap, so the
+   pitch is 30px everywhere. D138 (option B of the rail density picker) took the band from 32px to
+   28px: the rail is a stated exception to D116's 32px dense floor, still above the 24px WCAG 2.2
+   target minimum. The band is `min-height: 28px`, which is also the row's natural height: a 20px
+   line inside a 4px block inset (3px padding inside a transparent 1px border since K-10), so the
+   band is set by the type, not stretched around it. The controls inside a row (the 24px pin star,
+   an 18px badge, an 18px icon) never push a row taller (see .rail-pin). Both densities share this
+   one band: the density toggle never touches the rail. Below 767px the drawer rows grow to 44px.
 
-/* A collapsible node's header row: a group heading or a nested parent, icon + label + a chevron
-   pushed to the right edge. It is a heading, never a link, so it never wears the active pill; the
-   whole row is the toggle, so hover is the neutral background step. */
-.rail-treeitem {
+   ONE TYPE SIZE, ONE TEXT EDGE (D178 point 17). Hierarchy is carried by weight and by the person's
+   header style (`data-header-style` on `.rail-nav`), never by a second row height: by default a
+   header is 14px/600 in --t-text with its text at the rows' icon column and its rows flush below;
+   `icon_14` gives it a group icon at 14px/500 and nests its rows at the text column; `label_12` is
+   the K-23 12px/500 dim label. `--rail-text-indent` is the icon plus its gap, the step from the icon
+   column to the text column, so a nested row's text lines up with its parent's text. */
+.rail-nav {
+  --rail-icon-size: 18px;
+  --rail-text-indent: calc(var(--rail-icon-size) + var(--t-space-1));
+}
+
+/* THE FIT (owner, 21.10.2026: "shrink when needed depending on screen size"). The 30px pitch holds
+   while the rows fit the band; when they would overflow, Shell.tsx (`useRailFit`) steps the pitch
+   down one notch at a time, and only as far as needed: 28 (a 26px row), 26, then 24 (a 22px row
+   whose targets sit 24px apart, the WCAG 2.2 spacing floor). Past that the band scrolls. Only the
+   block padding gives way; the type, the icon column and the gap stay. The phone drawer keeps its
+   44px rows and is never stepped. */
+.rail-nav[data-pitch='28'] {
+  --rail-row: 26px;
+  --rail-row-pad: calc(var(--t-space-0-5) - 2px);
+}
+
+.rail-nav[data-pitch='26'] {
+  --rail-row: 24px;
+  --rail-row-pad: calc(var(--t-space-0-5) - 3px);
+}
+
+.rail-nav[data-pitch='24'] {
+  --rail-row: 22px;
+  --rail-row-pad: 0px;
+}
+
+/* A collapsible node's header row (a group heading or a nested parent) and a section header's
+   toggle: icon (when its style has one) + label + a chevron pushed to the right edge. A header is
+   never a link, so it never wears the active pill; hover is the neutral background step. */
+.rail-treeitem,
+.rail-section-toggle {
   display: flex;
   align-items: center;
   gap: var(--t-space-1);
-  min-height: 28px; /* D138: the rail band (see ONE RAIL RHYTHM) */
-  padding: calc(var(--t-space-0-5) - 1px) calc(var(--t-space-2) - 1px);
+  min-height: var(--rail-row, 28px); /* D138: the rail band (see ONE RAIL RHYTHM and THE FIT) */
+  padding: var(--rail-row-pad, calc(var(--t-space-0-5) - 1px)) calc(var(--t-space-2) - 1px);
   /* K-10: the edge the focus cue turns brass (an arrow key lands here first). */
   border: 1px solid transparent;
   border-radius: var(--t-radius-md);
@@ -594,22 +623,119 @@ body {
     color var(--t-motion-hover) var(--t-ease-out);
 }
 
-.rail-treeitem:hover {
+/* THE RAIL'S HOVER FILL (judge round 1 M2). Rail-scoped, never the global token: in light the D138 hover
+   (--t-bg-soft, 1.21:1 on the rail) read stronger than the selected pill (--t-accent-soft, 1.16:1), so
+   a row under the pointer looked more chosen than the open page. `--rail-hover` is the page ground
+   (--t-bg, one step under the rail's --t-bg-elev) in light, a plain token so every checker can read
+   it (a color-mix() left axe unable to judge the text on it); dark keeps --t-bg-soft, where the pill
+   already reads stronger. Every rail
+   hover fill sits under `(hover: hover)`, so a tap on a touch screen never leaves a second filled row
+   behind (the sticky hover the owner read as two active rows). */
+.rail {
+  --rail-hover: var(--t-bg);
+}
+
+[data-theme='dark'] .rail {
+  --rail-hover: var(--t-bg-soft);
+}
+
+.rail-treeitem:hover,
+.rail-section-toggle:hover {
   color: var(--t-text);
-  background: var(--t-bg-soft);
   text-decoration: none;
 }
 
-/* The group heading is quiet, small and in SENTENCE CASE (F-05, friction ledger Phase 2: the
-   design law's "no all-caps, sentence case everywhere" applies to the rail too, and CSS uppercase
-   hurt the German compounds it was set over). It NAMES a nav cluster, so it carries meaning and
-   cannot sit on --t-text-faint, which the design law reserves for text with none (faint measured
-   3.6:1 here, under the 4.5:1 AA floor); it inherits --t-text-dim from the row, which clears AA in
-   both themes. A section label is 12px/500 (K-23): smaller and dimmer than a leaf, never bold AND
-   dim. */
-.rail-group-row .rail-group-label {
+@media (hover: hover) {
+  .rail-treeitem:hover,
+  .rail-section-toggle:hover {
+    background: var(--rail-hover, var(--t-bg-soft));
+  }
+}
+
+/* A section toggle is a real <button>: it drops the UA chrome and spans the column. */
+.rail-section-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+/* A SECTION HEADER IS ONE STEP QUIETER THAN A GROUP (judge round 1 M1, the owner's picker): the chevron
+   in the icon column, the label at the rows' text column, in the 12px label type. Under the 14px group
+   styles that is 12px/500 in --t-text-dim (dim clears AA in both themes); under the 12px group label it
+   is 12px/600 in --t-text, still one step from the groups' 12px/500 dim. "Favoriten" and "Menü" never
+   pass for a group such as "Projekte" again. */
+.rail-section-chevron {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--rail-icon-size);
+}
+
+.rail-section-chevron .rail-chevron {
+  margin-left: 0;
+}
+
+/* D178 point 17 (the B5 final judge): a section header starts where a group's name starts, x=32, not at the
+   rows' text column. The chevron follows the label (order) instead of holding the icon column before it,
+   so "Favoriten" and "Menü" line up with "Projekte"; the Menü pencil keeps the row's right edge. */
+.rail-section-toggle > .rail-section-chevron {
+  order: 1;
+  width: auto;
+}
+
+.rail-section-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.rail-nav[data-header-style='label_12'] .rail-section-label {
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+/* The folded section that holds the open page (judge round 1 M4): accent ink, no fill. */
+.rail-section-toggle[aria-current='location'],
+.rail-section-toggle[aria-current='location'] .rail-section-label,
+.rail-section-toggle[aria-current='location'] .rail-chevron {
+  color: var(--t-accent);
+}
+
+/* THE HEADER TYPE (D178 point 17), one rule for a group heading, the Favoriten and Menü section
+   headers and the editor's group rows. Default `text_14_bold`: the leaf's size in a heavier weight and
+   the full ink, so it reads as a heading without a smaller, greyer second rhythm. Sentence case always
+   (F-05: no CSS case transform over German compounds). */
+.rail-header-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   margin: 0;
   padding: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+/* `icon_14`: the same size at the row's weight, with a group icon: uniform rows. */
+.rail-nav[data-header-style='icon_14'] .rail-header-label {
+  font-weight: 500;
+}
+
+/* `label_12`: the K-23 section label, 12px/500 in the row's dim ink (dim clears AA in both themes;
+   faint would not). */
+.rail-nav[data-header-style='label_12'] .rail-header-label {
   font-size: var(--t-font-sm);
   line-height: var(--t-lh-sm);
   font-weight: 500;
@@ -626,20 +752,40 @@ body {
   transition: transform var(--t-motion-reveal) var(--t-ease-out);
 }
 
-.rail-treeitem[aria-expanded='true'] .rail-chevron {
+.rail-treeitem[aria-expanded='true'] .rail-chevron,
+.rail-section-toggle[aria-expanded='true'] .rail-chevron,
+.rail-edit-expand[aria-expanded='true'] .rail-chevron {
   transform: rotate(90deg);
 }
 
-/* The child list of an expanded node (role="group"). Each level insets its children one step; the
-   inset compounds naturally because a parent's group nests inside its group's group. It is the
-   disclosure pattern of the Reveal moment (D122 D-I): the body fades under its chevron in
-   `--t-motion-reveal` (motion.css, `.motion-reveal--under`); collapse is instant (the node unmounts). */
+/* The child list of an expanded node (role="group"). The disclosure pattern of the Reveal moment
+   (D122 D-I): the body fades under its chevron in `--t-motion-reveal`; collapse is instant. Under the
+   default and the `label_12` header style a GROUP's rows sit flush with the top-level rows (the
+   owner's "why have indented menu items"); a nested PARENT's rows start at its text column. */
 .rail-tree-group {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-left: var(--t-space-2);
   animation: motion-reveal-under var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.rail-tree-group--parent {
+  padding-left: var(--rail-text-indent);
+}
+
+/* `icon_14`: a group's rows nest at the header's text column and drop their own icons (the header
+   carries the group's), and a parent's rows step in once more. */
+.rail-nav[data-header-style='icon_14'] .rail-tree-group--group {
+  padding-left: var(--rail-text-indent);
+}
+
+.rail-nav[data-header-style='icon_14'] .rail-tree-group--group > .rail-leaf > .rail-icon,
+.rail-nav[data-header-style='icon_14'] .rail-tree-group--group > .rail-parent-row > .rail-icon {
+  display: none;
+}
+
+.rail-nav[data-header-style='icon_14'] .rail-tree-group--parent {
+  padding-left: var(--t-space-2);
 }
 
 /* A destination row: icon plus label. The active state is a soft accent-tinted PILL (tint fill +
@@ -648,8 +794,8 @@ body {
   display: flex;
   align-items: center;
   gap: var(--t-space-1);
-  min-height: 28px; /* D138: the rail band (see ONE RAIL RHYTHM) */
-  padding: calc(var(--t-space-0-5) - 1px) calc(var(--t-space-2) - 1px);
+  min-height: var(--rail-row, 28px); /* D138: the rail band (see ONE RAIL RHYTHM and THE FIT) */
+  padding: var(--rail-row-pad, calc(var(--t-space-0-5) - 1px)) calc(var(--t-space-2) - 1px);
   /* K-10: the edge the focus cue turns brass; it comes out of the padding above. */
   border: 1px solid transparent;
   border-radius: var(--t-radius-md);
@@ -660,13 +806,6 @@ body {
   transition:
     background-color var(--t-motion-pill) var(--t-ease-out),
     color var(--t-motion-pill) var(--t-ease-out);
-}
-
-/* A nested destination (a parent's child). Its indentation is carried by the role="group" container,
-   so the row keeps the standard inset and only drops its glyph (see nav.ts). It keeps every state a
-   top-level link has: hover, the accent pill, aria-current, the focus ring. */
-.rail-link--nested {
-  padding-left: calc(var(--t-space-2) - 1px);
 }
 
 .rail-icon {
@@ -682,8 +821,13 @@ body {
    state so no inherited anchor rule can ever add one back). */
 .rail-link:hover {
   color: var(--t-text);
-  background: var(--t-bg-soft);
   text-decoration: none;
+}
+
+@media (hover: hover) {
+  .rail-link:hover {
+    background: var(--rail-hover, var(--t-bg-soft));
+  }
 }
 
 .rail-link[aria-current='page'] {
@@ -699,6 +843,21 @@ body {
   text-decoration: none;
 }
 
+/* `both_soft` (D178 point 16's alternative): the menu copy of a pinned, open page is accent ink with
+   no fill and no aria-current, so there is still exactly one pill. */
+.rail-link[data-soft-current] {
+  color: var(--t-accent);
+  font-weight: 500;
+}
+
+/* The collapsed group or parent that holds the open page, when the person closed it (judge round 1
+   M4): `aria-current="location"` and the accent ink, no fill, so the rail keeps exactly one mark. */
+.rail-treeitem[aria-current='location'],
+.rail-treeitem[aria-current='location'] .rail-header-label,
+.rail-treeitem[aria-current='location'] .rail-label {
+  color: var(--t-accent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rail-chevron {
     transition: none;
@@ -708,41 +867,61 @@ body {
   }
 }
 
-/* --- The Favoriten lane (A3): the per-user personal shortcut section, above the canonical tree ---
-   It renders only when non-empty, and its rows carry pointer drag (a grip) AND keyboard reorder
-   (move up/down buttons), rename and unpin. The controls are quiet by default and surface on hover
-   or keyboard focus, so a resting lane reads as a short list of destinations, not a wall of icons. */
-/* "Kompakter" (the owner's round-1 pick) survives as SPACING, not as a second row height: the lane
-   carries no divider, no margin and no padding of its own, so the only gap between its last row and
-   the tree is the nav's gap, the rows' own 2px since D138 (one row step). Its rows and its header sit on the same 28px band as the
-   tree (A4 made it one rhythm, one column; D138 set that band to 28px for every row, so the lane
-   and the tree still share it). */
-.rail-favourites {
+/* --- The two sections (D178): Favoriten and Menü, each under a folding header -------------------
+   A section is a column of rows on the one rhythm; its header is the first row. No divider, no
+   margin: the Favoriten section's last row and the Menü header sit one row step apart (the 2px gap). */
+.rail-section {
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 0;
   padding: 0;
-  border-bottom: none;
 }
 
-/* The Favoriten header: the group header's quiet, small, sentence-case type (12px/500, --t-text-dim)
-   on the rows' 28px band (D138) and inset, so the lane reads as one more group of the column. It is a
-   plain <p> label (the lane is a section, always shown when non-empty, never a collapsible node),
-   so the UA paragraph margins are reset here: unreset they made it a 37px block with 14px above
-   and below, the tallest thing in the rail. */
-.rail-fav-label {
+/* The header row holds the toggle and, on the Menü, the "Menü anpassen" pencil, which overlays the
+   row's right edge (the chevron sits at the left since M1) and shows on hover and keyboard focus at
+   the desktop rail; in the drawer and on a touch screen it is always shown (judge round 1 M5). */
+.rail-section-head {
+  position: relative;
   display: flex;
   align-items: center;
-  min-height: 28px; /* D138: the rail band */
+}
+
+.rail-section-head > .tooltip-wrap {
+  position: absolute;
+  top: 50%;
+  right: var(--t-space-1);
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity var(--t-motion-pill) var(--t-ease-out);
+}
+
+.rail-section-head:hover > .tooltip-wrap,
+.rail-section-head:focus-within > .tooltip-wrap {
+  opacity: 1;
+}
+
+.rail-section-head .rail-section-action {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+
+/* A write the engine refused, said once in words (the rail keeps the change for the session). */
+.rail-save-note {
   margin: 0;
   padding: var(--t-space-0-5) var(--t-space-2);
   font-size: var(--t-font-sm);
-  font-weight: 500;
   line-height: var(--t-lh-sm);
-  color: var(--t-text-dim);
+  color: var(--t-warn);
 }
 
+/* --- The Favoriten rows (A3, D178 point 15) ------------------------------------------------------
+   A favourite IS a menu row: same band, gap, inset and type, its title at a top-level leaf's x. No
+   column is reserved for the drag grip (the D118 grip held 20px at opacity 0 and pushed the icon to
+   54px against a leaf's 32px); the grip overlays the icon slot and shows on hover and focus, and in
+   the menu editor. The trailing controls overlay the right edge on hover and focus. */
 .rail-fav-list {
   list-style: none;
   margin: 0;
@@ -752,73 +931,91 @@ body {
   gap: 2px;
 }
 
-/* One favourite row: the grip, the link (taking the free width) and the trailing controls. The row is
-   the positioning context for the controls, which overlay the row's right edge on hover/focus rather
-   than reserving width, so the label keeps the full row until a user reaches for a control. */
 .rail-fav-row {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 2px;
   border-radius: var(--t-radius-md);
 }
 
-/* While a row is being dragged it rides above its neighbours and dims slightly, so the drop target
-   reads clearly. dnd-kit drives the transform inline; this is only the lift treatment. */
+/* While a row is being dragged it rides above its neighbours and dims slightly. */
 .rail-fav-row--dragging {
   opacity: 0.85;
   background: var(--t-bg-soft);
   z-index: var(--t-z-raised);
 }
 
-/* The pointer-only drag grip. touch-action:none lets the pointer sensor claim the gesture on touch.
-   It is hidden from assistive tech and out of the tab order: the keyboard reorder is the move
-   buttons (WCAG 2.5.7), not this grip. */
-.rail-fav-grip {
+.rail-fav-link {
+  text-decoration: none;
+}
+
+/* The row, not just the link, carries the hover fill: the grip that overlays the icon slot is the
+   link's sibling, so a pointer on the grip must not drop the fill under it. */
+@media (hover: hover) {
+  .rail-fav-row:hover > .rail-fav-link:not([aria-current='page']) {
+    color: var(--t-text);
+    background: var(--rail-hover, var(--t-bg-soft));
+  }
+}
+
+.rail-fav-link .rail-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* `icon_star` (the default): a filled star at the right edge marks the row as the person's own; the
+   unpin star of the controls lands exactly on it. `star_only` draws the star in the icon slot. */
+.rail-fav-star,
+.rail-fav-slot-star {
   flex: 0 0 auto;
+  color: var(--t-accent);
+}
+
+/* The pointer-only drag grip, over the icon slot (the link's 1px border plus its 15px inset). Hidden
+   from assistive tech and out of the tab order: the keyboard reorder is the move buttons (WCAG
+   2.5.7). touch-action:none lets the pointer sensor claim the gesture. */
+.rail-fav-grip {
+  position: absolute;
+  top: 0;
+  left: var(--t-space-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 28px;
-  color: var(--t-text-faint);
+  bottom: 0;
+  width: var(--rail-icon-size);
+  /* L4: a grip is a control's mark, so it clears 3:1 (faint was 2.8:1 light, 2.6:1 dark). */
+  color: var(--t-text-dim);
   cursor: grab;
   touch-action: none;
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--t-motion-pill) var(--t-ease-out);
-}
-
-.rail-fav-row:hover .rail-fav-grip,
-.rail-fav-row:focus-within .rail-fav-grip {
-  opacity: 1;
 }
 
 .rail-fav-grip:active {
   cursor: grabbing;
 }
 
-/* The favourite's navigation link: the rail-link treatment (hover, active pill, focus ring), taking
-   the free width so the controls trail at the right edge. */
-.rail-fav-link {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-decoration: none;
+.rail-fav-row:hover .rail-fav-grip,
+.rail-fav-row:focus-within .rail-fav-grip,
+.rail-nav[data-customising] .rail-fav-grip {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.rail-fav-link .rail-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* The grip TAKES the icon's place: the slot's own glyph steps out while the grip is shown. */
+.rail-fav-row:hover .rail-fav-link > .rail-icon,
+.rail-fav-row:focus-within .rail-fav-link > .rail-icon,
+.rail-nav[data-customising] .rail-fav-link > .rail-icon {
+  opacity: 0;
 }
 
-/* The inline rename field: sits where the link is, sized to the row, using the app's field tokens.
-   D138: the 28px band, and the link's 3px block padding inside the 1px border, so the row keeps its
-   height when rename swaps the link for the field (4px padding would make it 30px). */
+/* The inline rename field: sits where the link is, the 28px band and the link's inset. */
 .rail-fav-input {
-  flex: 1 1 auto;
-  min-width: 0;
+  display: block;
+  width: 100%;
   min-height: 28px;
-  padding: calc(var(--t-space-0-5) - 1px) var(--t-space-2);
+  padding: calc(var(--t-space-0-5) - 1px) calc(var(--t-space-2) - 1px);
   border: 1px solid var(--t-focus-border);
   border-radius: var(--t-radius-md);
   background: var(--t-bg);
@@ -827,29 +1024,24 @@ body {
   line-height: var(--t-lh-body);
 }
 
-/* The rename field is already accent-bordered at rest; on focus it takes the shared soft ring. */
 .rail-fav-input:focus {
   outline: none;
   border-color: var(--t-focus-border);
   box-shadow: var(--t-focus-ring);
 }
 
-/* The trailing control cluster: move up, move down, rename, unpin. It OVERLAYS the row's right edge
-   (absolute, so it reserves no width and the label stays full-length), quiet until the row is hovered
-   or holds keyboard focus. It stays in the DOM and focusable throughout, so the keyboard reorder path
-   is real: a Tab into a hidden control reveals the cluster via :focus-within. A soft background lifts
-   it off the label it sits over. */
+/* The trailing controls: Mehr (move up, move down, rename) and unpin. They OVERLAY the row's right edge (no
+   reserved width), the unpin star centred where the resting star is, quiet until the row is hovered or
+   holds keyboard focus; the row's trailing marks step out and the label makes room for them. They stay
+   in the DOM and focusable throughout, so the keyboard reorder path is real. */
 .rail-fav-controls {
   position: absolute;
-  right: 2px;
+  right: calc(var(--t-space-1) + var(--t-space-0-5));
   top: 0;
   bottom: 0;
   display: inline-flex;
   align-items: center;
   gap: 0;
-  padding-left: var(--t-space-1);
-  border-radius: var(--t-radius-md);
-  background: var(--t-bg-soft);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--t-motion-pill) var(--t-ease-out);
@@ -859,6 +1051,18 @@ body {
 .rail-fav-row:focus-within .rail-fav-controls {
   opacity: 1;
   pointer-events: auto;
+}
+
+.rail-fav-row:hover .rail-fav-link,
+.rail-fav-row:focus-within .rail-fav-link {
+  padding-right: calc(2 * 24px + var(--t-space-1) + var(--t-space-0-5));
+}
+
+.rail-fav-row:hover .rail-fav-star,
+.rail-fav-row:focus-within .rail-fav-star,
+.rail-fav-row:hover .rail-badge,
+.rail-fav-row:focus-within .rail-badge {
+  visibility: hidden;
 }
 
 .rail-fav-btn {
@@ -890,25 +1094,37 @@ body {
   color: var(--t-accent);
 }
 
-.rail-fav-glyph {
-  flex: 0 0 auto;
+/* "Menü anpassen" open (judge round 1 H2): a favourite row is an editor row. Mehr (Nach oben, Nach
+   unten, Umbenennen, Entfernen) is always shown, never only on hover, so a touch screen reorders
+   without the drag; the unpin star and the resting marks step out ("Entfernen" is in Mehr). */
+.rail-nav[data-customising] .rail-fav-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rail-nav[data-customising] .rail-fav-btn--unpin {
+  display: none;
+}
+
+.rail-nav[data-customising] .rail-fav-link {
+  padding-right: calc(24px + var(--t-space-1) + var(--t-space-0-5));
+}
+
+.rail-nav[data-customising] .rail-fav-star,
+.rail-nav[data-customising] .rail-fav-link .rail-badge {
+  visibility: hidden;
 }
 
 /* --- The tree leaf pin affordance: a star at each destination's right edge (A3) ------------------
-   There is no wrapper: the treeitem row itself (F-05: a real anchor, `.rail-leaf.rail-link`) lays
-   its icon, label, badge and pin star in one flex row and carries the hover/active pill and the
-   focus ring. The star is quiet until the leaf is hovered or focused, and stays lit when the surface
-   is already pinned, so the tree reads unchanged until a user reaches for a row. The label eats the
-   free width so the star trails at the right edge; a count badge, when present, sits just before
-   it. */
+   The treeitem row itself (F-05: a real anchor, `.rail-leaf.rail-link`) lays its icon, label, badge
+   and pin star in one flex row. Since D178 the star shows on hover and keyboard focus only, filled
+   when the page is pinned: a pinned page draws no second accent mark in the menu. */
 .rail-leaf > .rail-label {
   flex: 1 1 auto;
 }
 
 /* A 24px target inside a 28px band (D138): the negative block margin takes the star out of the
-   row's height calculation (it is the row's 20px line that sets the band, never its tallest child),
-   while the star keeps its full 24px hit area, centred with 2px to spare inside the band. This is
-   what took every leaf from 40px to 32px (A4), and it holds unchanged at 28px. */
+   row's height calculation, while the star keeps its full 24px hit area. */
 .rail-pin {
   flex: 0 0 auto;
   display: inline-flex;
@@ -929,8 +1145,7 @@ body {
 
 .rail-leaf:hover .rail-pin,
 .rail-leaf:focus-within .rail-pin,
-.rail-pin:focus-visible,
-.rail-pin--on {
+.rail-pin:focus-visible {
   opacity: 1;
 }
 
@@ -939,7 +1154,7 @@ body {
   background: var(--t-bg-soft);
 }
 
-/* A pinned surface's star rests in the accent, matching the unpin star in the lane above. */
+/* A pinned surface's star is filled in the accent, matching the unpin star in the lane above. */
 .rail-pin--on {
   color: var(--t-accent);
 }
@@ -948,27 +1163,307 @@ body {
   flex: 0 0 auto;
 }
 
+/* --- Menü anpassen (D178 point 6): the editor that replaces the tree while it is open -----------
+   The same rows on the same rhythm, each with its grip, its visibility checkbox and its Mehr menu.
+   An edit mode may scroll the nav band; the resting rail never does. */
+.rail-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rail-edit-bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--t-z-raised);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+  padding: var(--t-space-0-5) 0;
+  background: var(--t-bg-elev);
+}
+
+/* L2: Zurücksetzen is a text action whose word starts at the icon column, like every row's first mark;
+   full ink when there is something to reset, the disabled ink only while there is not. */
+/* Two classes, so it outranks `.btn--sm`'s padding, which the stylesheet states later. */
+.rail-edit-bar .rail-edit-reset {
+  padding-inline: 0;
+  margin-left: calc(var(--t-space-2) - 1px);
+}
+
+.rail-edit-hint,
+.rail-edit-empty {
+  margin: 0;
+  padding: 0 var(--t-space-2) var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.rail-edit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rail-edit-list--nested {
+  padding-left: var(--t-space-2);
+}
+
+.rail-edit-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: var(--t-radius-md);
+}
+
+.rail-edit-item--dragging {
+  opacity: 0.85;
+  background: var(--t-bg-soft);
+  z-index: var(--t-z-raised);
+}
+
+/* An editor row at the desktop rail (judge round 1 H3): the grip in the row's inset, the checkbox in
+   the ICON column (edit mode drops the page icon), the name at the rows' text column, Mehr at the
+   right edge. The name keeps the width the icon gave up. */
+.rail-edit-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 28px;
+  padding: 0 var(--t-space-0-5) 0 calc(var(--t-space-2) - 1px);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  color: var(--t-text-dim);
+  line-height: var(--t-lh-body);
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+@media (hover: hover) {
+  .rail-edit-row:hover {
+    background: var(--rail-hover, var(--t-bg-soft));
+  }
+}
+
+.rail-edit-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--t-space-2) - 1px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* L4: a grip is a control's mark, so it clears 3:1 (faint was 2.8:1 light, 2.6:1 dark). */
+  color: var(--t-text-dim);
+  cursor: grab;
+  touch-action: none;
+}
+
+.rail-edit-checkwrap {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--rail-icon-size);
+  cursor: pointer;
+}
+
+.rail-edit-check {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.rail-edit-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A group's or a parent's name is the disclosure that shows its rows. */
+.rail-edit-expand {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent; /* K-10: the edge the focus cue turns brass */
+  border-radius: var(--t-radius-sm);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rail-edit-expand.rail-label {
+  color: inherit;
+}
+
+.rail-edit-expand .rail-chevron {
+  margin-left: auto;
+}
+
+/* A hidden row (or a row inside a hidden group) is drawn in the disabled ink, its checkbox clear. */
+.rail-edit-item[data-hidden] > .rail-edit-row .rail-edit-label,
+.rail-edit-item[data-hidden] > .rail-edit-row .rail-header-label,
+.rail-edit-item[data-hidden] > .rail-edit-row .rail-icon {
+  color: var(--t-text-faint);
+}
+
+/* The Mehr trigger shrinks into the band; its target is the 28px row height, not the 44px square,
+   so two rows' targets never overlap. */
+.rail-edit-more .overflow-menu-trigger,
+.rail-fav-more .overflow-menu-trigger {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+
+.rail-edit-more .overflow-menu-trigger::after,
+.rail-fav-more .overflow-menu-trigger::after {
+  width: 28px;
+  height: 28px;
+}
+
+/* THE TOUCH EDITOR (judge round 1 H1, H3, L3): on a touch pointer or a phone-width drawer every
+   control of an editor row is a 44px target, in one line: grip 44 | checkbox 44 | name | Mehr 44. The
+   row stays the drawer's 44px band: the targets give the row's 1px edges back through a -1px block
+   margin, so an editor row is 44px at a 46px pitch like every drawer row. Fertig and Zurücksetzen keep
+   their look and reach 44px through an invisible box, like the help trigger. */
+@media (pointer: coarse), (max-width: 767px) {
+  .rail-edit-row {
+    min-height: 44px;
+    gap: 0;
+    padding: 0;
+  }
+  .rail-edit-grip {
+    position: static;
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    margin-block: -1px;
+  }
+  .rail-edit-checkwrap {
+    width: 44px;
+    height: 44px;
+    margin-block: -1px;
+  }
+  .rail-edit-more .overflow-menu-trigger,
+  .rail-nav[data-customising] .rail-fav-more .overflow-menu-trigger {
+    width: 44px;
+    height: 42px;
+    min-height: 42px;
+  }
+  .rail-edit-more .overflow-menu-trigger::after,
+  .rail-nav[data-customising] .rail-fav-more .overflow-menu-trigger::after {
+    width: 44px;
+    height: 44px;
+  }
+  .rail-edit-bar .btn {
+    position: relative;
+  }
+  .rail-edit-bar .btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+  /* A favourite in the editor: grip 44 | name | Mehr 44; the page icon and the star step out. */
+  .rail-nav[data-customising] .rail-fav-row {
+    display: flex;
+    align-items: center;
+  }
+  .rail-nav[data-customising] .rail-fav-grip {
+    position: static;
+    order: -1;
+    flex: 0 0 auto;
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .rail-nav[data-customising] .rail-fav-link {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .rail-nav[data-customising] .rail-fav-link > .rail-icon,
+  .rail-nav[data-customising] .rail-fav-star {
+    display: none;
+  }
+  .rail-nav[data-customising] .rail-fav-controls {
+    position: static;
+  }
+}
+
+.rail-edit-move {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: 0 0 var(--t-space-0-5) var(--t-space-2);
+}
+
+.rail-edit-move > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rail-fav-grip,
   .rail-fav-controls,
-  .rail-pin {
+  .rail-pin,
+  .rail-section-head > .tooltip-wrap {
     transition: none;
   }
 }
 
 /* Touch devices have no hover, so a reveal-on-hover control would be unreachable. On a pointer that
    cannot hover, the favourite controls and the pin star are always shown; the controls flow inline
-   (not as a right-edge overlay) so they never sit invisibly over the navigation target. */
+   (not as a right-edge overlay) so they never sit invisibly over the navigation target, the grip
+   stays out (the move buttons are the reorder there) and the page icon keeps its slot. */
 @media (hover: none) {
+  .rail-fav-row {
+    display: flex;
+    align-items: center;
+  }
+  .rail-fav-link {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
   .rail-fav-controls {
     position: static;
     opacity: 1;
     pointer-events: auto;
-    background: transparent;
-    padding-left: 0;
   }
-  .rail-fav-grip,
-  .rail-pin {
+  .rail-fav-row:hover .rail-fav-link,
+  .rail-fav-row:focus-within .rail-fav-link {
+    padding-right: calc(var(--t-space-2) - 1px);
+  }
+  .rail-fav-row .rail-fav-grip {
+    display: none;
+  }
+  .rail-fav-row:hover .rail-fav-link > .rail-icon,
+  .rail-fav-row:focus-within .rail-fav-link > .rail-icon {
+    opacity: 1;
+  }
+  .rail-pin,
+  .rail-section-head > .tooltip-wrap {
     opacity: 1;
   }
 }
@@ -1792,6 +2287,11 @@ textarea.field:disabled {
   z-index: var(--t-z-popover);
   width: max-content;
   max-width: 240px;
+  /* The bubble wraps inside its 240px whatever its host says: a tooltip in a nowrap table cell (the
+     bank row) used to run its text out of the bubble, and that hidden text widened <main> into a
+     sideways scroll (D167 point 7). */
+  white-space: normal;
+  overflow-wrap: anywhere;
   padding: var(--t-space-0-5) var(--t-space-1);
   border-radius: var(--t-radius-sm);
   background: var(--t-text);
@@ -1813,9 +2313,48 @@ textarea.field:disabled {
   top: calc(100% + var(--t-space-0-5));
 }
 
+/* Beside the trigger, on its left (D177 polish); the overlay layer places it by the component. */
+.tooltip-left {
+  top: 50%;
+  right: calc(100% + var(--t-space-1));
+  left: auto;
+  transform: translateY(-50%);
+}
+
 .tooltip.is-open {
   opacity: 1;
   visibility: visible;
+}
+
+/* D177: a bubble in the overlay layer (TooltipPortalContext): fixed to its trigger by the component,
+   above every panel's overflow. */
+.tooltip--portal {
+  z-index: var(--t-z-listbox);
+}
+
+/* A bubble a mouse or pen opened takes the pointer, so it can be hovered and read (WCAG 2.2
+   SC 1.4.13). One opened by focus or a long press stays click-through, so it never catches a click
+   meant for the control beneath it. */
+.tooltip.is-open.is-hoverable {
+  pointer-events: auto;
+}
+
+/* The bridge across the gap between trigger and bubble, so the pointer does not leave the wrapper on
+   its way to the bubble. Invisible; only a hover-opened bubble has it. */
+.tooltip.is-hoverable::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--t-space-0-5);
+}
+
+.tooltip-top.is-hoverable::after {
+  top: 100%;
+}
+
+.tooltip-bottom.is-hoverable::after {
+  bottom: 100%;
 }
 
 /* Help affordance: a small "?" that discloses a titled popover with an optional link. The popover is
@@ -2340,9 +2879,29 @@ textarea.field:disabled {
      touch pitch. */
   .rail-link,
   .rail-treeitem,
-  .rail-fav-label,
+  .rail-section-toggle,
+  .rail-edit-row,
   .rail-fav-input {
     min-height: 44px;
+  }
+  /* "Menü anpassen" in the drawer (judge round 1 H3): the drawer widens to hold grip, checkbox, a
+     whole name and Mehr, and still leaves a strip of the page beside it to tap back to. */
+  .rail:has(.rail-nav[data-customising]) {
+    width: min(calc(100vw - 56px), 360px);
+    padding-inline: var(--t-space-1);
+  }
+  /* The way into "Menü anpassen" is always shown in the drawer (judge round 1 M5), a 44px target. */
+  .rail-section-head > .tooltip-wrap {
+    opacity: 1;
+  }
+  .rail-section-head .rail-section-action::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
   }
 }
 
@@ -2461,8 +3020,15 @@ textarea.field:disabled {
 }
 
 .rail-icon-btn:hover {
-  background: var(--t-bg-soft);
   color: var(--t-text);
+}
+
+/* The icon strip's hover follows the rail's (judge round 1 M2): weaker than the active pill, and only
+   on a pointer that hovers. */
+@media (hover: hover) {
+  .rail-icon-btn:hover {
+    background: var(--rail-hover, var(--t-bg-soft));
+  }
 }
 
 /* The active surface's icon: the same soft accent-tinted pill the tree's active row uses, so the
@@ -2470,6 +3036,28 @@ textarea.field:disabled {
 .rail-icon-btn--active {
   background: var(--t-accent-soft);
   color: var(--t-accent);
+}
+
+/* `both_soft` (D178): the group holding the menu copy of a pinned, open page, accent ink, no fill. */
+.rail-icon-btn--soft {
+  color: var(--t-accent);
+}
+
+/* D178 (US-G16.15): the favourites lead the icon strip, one hairline above the menu's icons. */
+.rail-icons-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  width: 100%;
+}
+
+.rail-icons-sep {
+  flex: 0 0 auto;
+  width: var(--t-space-3);
+  height: 1px;
+  margin: var(--t-space-0-5) 0;
+  background: var(--t-border);
 }
 
 /* K-05: the inert pre-workspace rail. Its icons are an outline of the product, not controls yet, so

@@ -80,10 +80,19 @@
   flex-direction: column;
 }
 
+.att-strip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
 .att-strip-item {
   position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--t-space-1);
   min-height: 36px;
   padding: var(--t-space-0-5) var(--t-space-1);
@@ -100,7 +109,6 @@
 /* The urgency is the Status glyph's SHAPE; its word stays for assistive tech only in this compact list. */
 .att-strip-urgency {
   flex: 0 0 auto;
-  padding-top: 2px;
 }
 
 .att-strip-urgency .status-word-label {
@@ -114,22 +122,8 @@
   white-space: nowrap;
 }
 
-.att-strip-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
 .att-strip-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.att-strip-sub {
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  color: var(--t-text-dim);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

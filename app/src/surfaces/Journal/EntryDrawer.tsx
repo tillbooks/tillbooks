@@ -74,6 +74,7 @@ import {
 import type { ComposeCaption, ComposeExpandOk } from '../../../../src/core/ledger/compose';
 import { BalanceStatus, BelegControl, MwstControl, VatCaption, type PendingBeleg } from './ComposerParts';
 import { PlusGlyph, SplitGlyph } from './glyphs';
+import { SaveAsVorlage, TEMPLATE_REFUSALS, VorlageFields, VorlagePicker, composerLookups, templateOf, useVorlagen, type ComposedIntent } from './VorlageParts';
 import '../Vat/Vat.css';
 import './Journal.css';
 
@@ -90,6 +91,12 @@ export interface EntryDrawerProps {
    * with the Commit moment (D122 D-I); a reversal answers with `reversalId` and passes nothing.
    */
   onWritten: (entryId?: string) => void;
+  /**
+   * D176: open the composer with this Vorlage picked (the bank row's "Nächster Schritt", `?vorlage=`), and
+   * the date the line was decided on. `create` mode only.
+   */
+  initialVorlageId?: string;
+  initialDate?: string;
 }
 
 /** The two faces of the composer: the Buchungssatz, and the line grid "Aufteilen" opens. */
@@ -169,6 +176,11 @@ const OWNER_SURFACE: Readonly<Record<string, string>> = {
   transition_document: '/documents',
   asset_depreciation_run_reverse: '/assets',
   inventory_valuation_reverse: '/inventory-valuation-runs',
+  landed_cost_reverse: '/landed-costs',
+  expense_claim_reverse: '/personal',
+  dunning_fee_reverse: '/dunning',
+  asset_transaction_reverse: '/assets',
+  wage_journal_reverse: '/personal',
 };
 
 /**
@@ -243,7 +255,7 @@ const INLINE_VERDICTS: ReadonlySet<string> = new Set([
   'cost_center_unplaced',
 ]);
 
-export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: EntryDrawerProps) {
+export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten, initialVorlageId, initialDate }: EntryDrawerProps) {
   const t = useT();
   const client = useClient();
   const workspaceId = useWorkspaceId();
@@ -273,7 +285,7 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
   const [loadErr, setLoadErr] = useState<Err | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useState(mode === 'create' && initialDate !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? initialDate : todayIso());
   // F-10 J8.6: the date input, so the period-lock "way out" can move the entered date to the nearest
   // open period and land focus there without discarding the composed lines.
   const dateInputRef = useRef<HTMLInputElement>(null);
@@ -326,6 +338,25 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
   // succeeds; a refusal is never memoised by the engine, so reusing its key after a refusal is safe.
   const postIntents = useRef(new Map<string, string>());
   const draftIntents = useRef(new Map<string, string>());
+
+  // D176 (A39 §15.4): the composer's Vorlagen. A picked Vorlage replaces the Buchungssatz: its asked amounts
+  // are typed, the engine composes the lines from the template, and Buchen posts `post_entry { template }`.
+  const pickerId = useId();
+  const { vorlagen, reload: reloadVorlagen } = useVorlagen(workspaceId, mode === 'create');
+  const [vorlageId, setVorlageId] = useState('');
+  const [typed, setTyped] = useState<Record<number, string>>({});
+  const [vorlageAnswer, setVorlageAnswer] = useState<{ signature: string; body: (ComposeExpandOk & { ok: true; template?: unknown }) | Err } | null>(null);
+  const [vorlageSaved, setVorlageSaved] = useState<string | null>(null);
+  const appliedInitialVorlage = useRef(false);
+  useEffect(() => {
+    if (appliedInitialVorlage.current || initialVorlageId === undefined || vorlagen.length === 0) return;
+    appliedInitialVorlage.current = true;
+    if (vorlagen.some((v) => v.id === initialVorlageId)) setVorlageId(initialVorlageId);
+  }, [vorlagen, initialVorlageId]);
+  // Critic D176-C1: an invalid Vorlage is never the composer's, whoever names it (the picker, `?vorlage=`).
+  const vorlage = mode === 'create' ? vorlagen.find((v) => v.id === vorlageId && v.invalidReason === null) : undefined;
+  const template = vorlage === undefined ? null : templateOf(vorlage, typed);
+  const templateSignature = JSON.stringify({ date, template });
 
   // A Beleg is upload THEN link (D62 / F8), so attaching costs `manage_files` AND the journal entry's own
   // edit right, derived from the kind by the engine's own map, exactly the LinkedFiles gate. Fail-open
@@ -483,6 +514,7 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
       ref,
       description,
       face,
+      vorlage: [vorlageId, typed],
       satz: [satz.soll, satz.haben, satz.amount, satz.taxCode, satz.costCenter],
       lines: lines.map(({ account, debit, credit, costCenter, taxCode }) => [account, debit, credit, costCenter, taxCode]),
       beleg: beleg?.name ?? null,
@@ -552,6 +584,25 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature, editable, loading]);
 
+  // D176: the same for a Vorlage: the engine composes the template's lines, debounced, for exactly what is
+  // typed; Buchen stands on that answer's verdict and nothing else.
+  useEffect(() => {
+    if (!editable || workspaceId === null || loading || template === null) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      void client.call('compose_entry', { workspaceId, mode: 'expand', date, template }).then(({ body }) => {
+        if (live) setVorlageAnswer({ signature: templateSignature, body: body as unknown as (ComposeExpandOk & { ok: true }) | Err });
+      });
+    }, COMPOSE_DEBOUNCE_MS);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+    // Keyed on the template's signature (date and amounts), the one thing the answer depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateSignature, editable, loading]);
+  const vorlageCurrent = template !== null && vorlageAnswer !== null && vorlageAnswer.signature === templateSignature ? vorlageAnswer.body : undefined;
+
   /** The answer for what is on screen now, or undefined while it is in flight (or for an empty composer). */
   const current: ExpandAnswer | Err | undefined = answer !== null && answer.signature === signature ? answer.body : undefined;
   const composedAnswer = current !== undefined && current.ok ? current : undefined;
@@ -610,7 +661,17 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
   const belegSettled = beleg === null || beleg.status === 'ready';
   const effectiveCanPost = canPost && !denied;
   /** The engine's verdict on what is on screen: `{ok:true}`, its refusal, or undefined while in flight. */
-  const verdict = composedAnswer?.verdict ?? (current !== undefined && !current.ok ? current : undefined);
+  const verdict =
+    vorlage !== undefined
+      ? vorlageCurrent === undefined
+        ? undefined
+        : vorlageCurrent.ok
+          ? vorlageCurrent.verdict
+          : vorlageCurrent
+      : (composedAnswer?.verdict ?? (current !== undefined && !current.ok ? current : undefined));
+  // D176: a Vorlage posts once every ask is filled and the engine's answer for exactly that says yes.
+  const canSubmitTemplate =
+    effectiveCanPost && !busy && template !== null && vorlageCurrent !== undefined && vorlageCurrent.ok && vorlageCurrent.verdict.ok && belegSettled && linkFailure === null;
   const canSubmitPost =
     effectiveCanPost &&
     balanced &&
@@ -631,8 +692,28 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
   // Critic C4/C3: a draft keeps exactly the lines the engine composed for what is on screen, so "Entwurf
   // speichern" holds while that answer is in flight, exactly as Buchen does. A draft may be unbalanced: it
   // needs the engine to have COMPOSED it, not to accept it as a posting.
+  // D176: ☆ "Als Vorlage speichern" offers the composed entry's lines as a Vorlage's legs: only an entry on
+  // the derived path whose engine answer is a booking (every line an intent with its account and side).
+  const composedIntents: ComposedIntent[] | null =
+    request.derive && composedAnswer !== undefined && composedAnswer.verdict.ok && request.lines.length >= 2
+      ? request.lines.every((l) => 'side' in l && l.account !== '')
+        ? request.lines.map((l) => {
+            const line = l as { account: string; side: 'debit' | 'credit'; taxCode?: string };
+            return { account: line.account, side: line.side, ...(line.taxCode !== undefined ? { taxCode: line.taxCode } : {}) };
+          })
+        : null
+      : null;
+  const bankLedgerSet = useMemo(() => new Set((accounts ?? []).filter((a) => (a as { bankLedger?: boolean }).bankLedger === true).map((a) => a.id)), [accounts]);
+
   const canSaveDraft =
-    effectiveCanPost && !busy && hasAnyAccount && composedAnswer !== undefined && composedAnswer.composed && belegSettled && linkFailure === null;
+    vorlage === undefined &&
+    effectiveCanPost &&
+    !busy &&
+    hasAnyAccount &&
+    composedAnswer !== undefined &&
+    composedAnswer.composed &&
+    belegSettled &&
+    linkFailure === null;
 
   // A registered workspace always seeds codes, so an empty list means MWST is not configured (P9): the
   // picker shows the banner-CTA into /vat rather than a control that could post untaxed.
@@ -750,6 +831,24 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
     const signature = JSON.stringify(content);
     const input = { workspaceId, ...content, idempotencyKey: intentKey(postIntents, signature) };
     const { body } = await client.call('post_entry', input);
+    if (!isErr(body)) postIntents.current.delete(signature);
+    await afterWrite(body, 'post');
+    setBusy(false);
+  }
+
+  /**
+   * D176: Buchen with a Vorlage: `post_entry { template }`, so the engine expands it exactly as it composed the
+   * preview. One key per content (date, template, text), as for typed lines (critic C7, K3).
+   */
+  async function submitTemplatePost() {
+    if (workspaceId === null || !canSubmitTemplate || template === null) return;
+    setBusy(true);
+    setWriteErr(null);
+    const content: Record<string, unknown> = { date, template, source: 'manual' };
+    if (ref !== '') content.ref = ref;
+    if (description !== '') content.description = description;
+    const signature = JSON.stringify(content);
+    const { body } = await client.call('post_entry', { workspaceId, ...content, idempotencyKey: intentKey(postIntents, signature) });
     if (!isErr(body)) postIntents.current.delete(signature);
     await afterWrite(body, 'post');
     setBusy(false);
@@ -899,7 +998,7 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
             items={[{ key: 'delete', label: t('entry.delete'), onSelect: () => setConfirmDelete(true), danger: true }]}
           />
         )}
-        {editable && face === 'grid' && linkFailure === null && (
+        {editable && face === 'grid' && vorlage === undefined && linkFailure === null && (
           <BalanceStatus debitTotal={debitTotal} creditTotal={creditTotal} currency={baseCurrency} />
         )}
         <span className="journal-spacer" />
@@ -945,10 +1044,10 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
               type="button"
               className="btn btn--accent"
               data-money-commit="post_entry"
-              disabled={!canSubmitPost}
+              disabled={vorlage !== undefined ? !canSubmitTemplate : !canSubmitPost}
               aria-describedby={consequenceId}
               title={!canPost ? t('entry.requiresBookkeeper') : undefined}
-              onClick={submitPost}
+              onClick={vorlage !== undefined ? submitTemplatePost : submitPost}
             >
               {t('entry.post')}
             </button>
@@ -1281,7 +1380,14 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
   // cost centre the book does not hold). An unfinished entry is not refused at the person (QUIET_VERDICTS),
   // and what a control already names inline (a code, a missing VAT account) is not said twice.
   const verdictShown =
-    verdict !== undefined && !verdict.ok && !QUIET_VERDICTS.has(verdict.error) && !INLINE_VERDICTS.has(verdict.error) ? verdict : null;
+    verdict !== undefined &&
+    !verdict.ok &&
+    !QUIET_VERDICTS.has(verdict.error) &&
+    !INLINE_VERDICTS.has(verdict.error) &&
+    // D176: a template's own refusal is said under its amounts (`VorlageFields`), not twice.
+    !(vorlage !== undefined && TEMPLATE_REFUSALS.has(verdict.error))
+      ? verdict
+      : null;
   const shownErr: Err | null = writeErr ?? verdictShown;
   const refusal =
     shownErr !== null && shownErr.error === 'period_locked' ? (
@@ -1370,7 +1476,53 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
       {belegErr !== null && beleg !== null && (
         <ErrorBanner error={belegErr} onRetry={() => void upload({ ...beleg, status: 'uploading' })} />
       )}
-      {face === 'satz' ? satzRow : grid}
+      {mode === 'create' && vorlagen.length > 0 && (
+        <VorlagePicker
+          id={pickerId}
+          vorlagen={vorlagen}
+          value={vorlage?.id ?? ''}
+          disabled={busy}
+          onChange={(id) => {
+            setVorlageId(id);
+            setTyped({});
+            setVorlageSaved(null);
+          }}
+        />
+      )}
+      {vorlage !== undefined ? (
+        <VorlageFields
+          idPrefix={pickerId}
+          vorlage={vorlage}
+          typed={typed}
+          onType={(legIndex, value) => setTyped((prev) => ({ ...prev, [legIndex]: value }))}
+          answer={vorlageCurrent}
+          accountLabel={accountLabel}
+          currency={baseCurrency}
+          disabled={busy}
+        />
+      ) : face === 'satz' ? (
+        satzRow
+      ) : (
+        grid
+      )}
+      {mode === 'create' && vorlage === undefined && workspaceId !== null && effectiveCanPost && composedIntents !== null && (
+        <SaveAsVorlage
+          workspaceId={workspaceId}
+          lines={composedIntents}
+          lookups={composerLookups(accounts ?? [], taxCodes, bankLedgerSet)}
+          currency={baseCurrency}
+          disabled={busy}
+          onSaved={(name) => {
+            setVorlageSaved(t('entry.vorlage.saved', { name }));
+            reloadVorlagen();
+          }}
+        />
+      )}
+      {vorlageSaved !== null && (
+        <p role="status" className="journal-drawer-hint">
+          {vorlageSaved}
+        </p>
+      )}
       {verdict !== undefined && !verdict.ok && verdict.error === 'vat_account_missing' && (
         /* The chart lacks the account the derived leg books to: say which, and where it is added. Buchen
            holds until it exists, so this is the reason on screen, never a silent disabled button. */
@@ -1507,7 +1659,9 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten }: Entr
       <DetailDrawer
         open
         onClose={linkFailure !== null ? onClose : requestClose}
-        title={t(titleKey)}
+        // D178 point 2: a posted entry is named by its Belegnummer, so the drawer's accessible name says
+        // which record is open; a draft (or an entry posted while numbering was off) keeps the plain title.
+        title={mode === 'view' && entry?.number != null ? t('entry.viewTitleNumbered', { number: entry.number }) : t(titleKey)}
         closeLabel={t('entry.close')}
         // K-30: the composer is a grid, so it takes the wide drawer (720px); a posted entry read in view
         // mode keeps the default width.

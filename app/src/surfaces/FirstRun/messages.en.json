@@ -37,11 +37,42 @@
     },
     "adopt": {
       "label": "Adopt an existing database",
-      "hint": "Already have a .till.db? Point TILL at it and restart. TILL never copies or moves the file.",
-      "path_label": "Database path",
-      "path_placeholder": "/path/to/till.db",
-      "cmd_label": "Command to adopt this database",
-      "verb": "A path is configuration, not tenant data: adoption is config plus restart, not a verb."
+      "hint": "Already have a TILL book on this machine? Choose the file and TILL opens it. It is never copied or moved.",
+      "pick": "Choose file …",
+      "picked": "Chosen: {name}",
+      "path_label": "Path to your book",
+      "path_placeholder": "/Users/you/Documents/till.db",
+      "path_hint": "In the Finder: right-click the file, hold the Option key (⌥) and choose “Copy as Pathname”.",
+      "action": "Adopt",
+      "busy": "Checking …",
+      "opening_title": "Opening your book …",
+      "opening_body": "TILL restarts briefly to open it. This only takes a moment.",
+      "opening_agents": "Agents that are already connected see the new book once they restart.",
+      "error": {
+        "book_path_pinned": "This installation sets its own book. It cannot be changed here.",
+        "book_path_not_absolute": "Enter the full path; it starts with a /.",
+        "book_not_found": "There is no file at this path. Check the path and try again.",
+        "book_unreadable": "TILL may not read and write this file. Check its permissions and try again.",
+        "not_a_till_database": "That file is not a TILL book. It was left untouched. Choose another.",
+        "book_already_open": "This book is already open.",
+        "book_not_saved": "TILL could not remember the book. Nothing was changed. Try again.",
+        "book_not_forgotten": "TILL could not forget the book. Nothing was changed. Try again.",
+        "restart_unavailable": "This installation cannot switch its book by itself. Nothing was changed.",
+        "fallback": "That did not work. Nothing was changed. Try again."
+      }
+    },
+    "unavailable": {
+      "title": "Your adopted book is not reachable",
+      "missing": "TILL cannot find the file any more: {path}. It may have been moved, or its drive is not connected.",
+      "unopenable": "TILL cannot open the file: {path}. A permission may be missing, or it is no longer a TILL book.",
+      "nothing_written": "TILL changed nothing and created no new book anywhere. Choose how to go on.",
+      "retry": "Try again",
+      "choose_other": "Choose another book",
+      "forget": "Forget it and start over",
+      "forget_confirm": "TILL only forgets where this book is. The file {path} stays as it is, and you can adopt it again later. TILL then opens this device's default book.",
+      "forget_yes": "Forget",
+      "forget_no": "Cancel",
+      "forgetting_title": "TILL is starting over …"
     },
     "error": {
       "generic": "That did not work: {code}.",
@@ -79,7 +110,7 @@
   "help": {
     "FirstRun": {
       "title": "First run",
-      "body": "This is the first screen when TILL has no workspace open. You choose one of three doors: create a fresh workspace, restore one from a backup file, or adopt a store that already lives on this machine. Nothing is created silently, since each door confirms before it writes, and until you pick one, no books exist yet.",
+      "body": "This is the first screen when TILL has no workspace open. You choose one of three doors: create a fresh workspace, restore one from a backup file, or adopt a TILL book that already lives on this machine. To adopt, TILL restarts briefly and then opens that book; the file stays where it is. Nothing is created silently, since each door confirms before it writes, and until you pick one, no books exist yet. When an adopted book is not reachable, this screen says so and offers to try again, choose another book or forget it.",
       "concepts": [],
       "docsPath": "introduction"
     }

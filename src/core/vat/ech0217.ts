@@ -68,7 +68,7 @@ import type { Result } from '../result.js';
 import { computeVatReturn } from './abrechnung.js';
 import type { VatReturnLine } from './abrechnung.js';
 import { generationsGoverning } from './saldoGenerations.js';
-import { nextUnfiledMonthStart } from './config.js';
+import { earliestMethodChangeFrom } from './config.js';
 import { TILL_PACKAGE_VERSION } from '../version.js';
 
 /** The eCH-0217 v2.0.0 target namespace, and the two namespaces its `generalInformation` imports. */
@@ -352,7 +352,7 @@ function periodLengthRefusal(method: string, periodStart: string, periodEnd: str
     method,
     months,
     permittedMonths: permitted,
-    nextStep: `eCH-0217 Kap. 7.3 fixes the Abrechnungsperiode for this method at ${permitted.join(', ')} whole months (rejection rule MWST-0003), and this period is not one of them. Use \`vat_periods\` to get the exact boundaries of the reporting periods for the year. If the ESTV sanctioned this period (a Schlussabrechnung, or the start or end of Steuerpflicht), re-run the export with \`periodDeviationApproved: true\`.`,
+    nextStep: `eCH-0217 Kap. 7.3 fixes the Abrechnungsperiode for this method at ${permitted.join(', ')} whole months (rejection rule MWST-0003), and this period is not one of them. Use \`vat_periods\` to get the exact boundaries of the reporting periods for the year. If the ESTV sanctioned this period (a Schlussabrechnung, the start or end of Steuerpflicht, or the part of a switch year before or after a method switch under MWSTV Art. 81 Abs. 2, which \`vat_periods\` lists as a stub), re-run the export with \`periodDeviationApproved: true\`.`,
   });
 }
 
@@ -1124,9 +1124,10 @@ function withNextStep(ctx: WorkspaceContext, refusal: Result): Result {
   const code = refusal.error as string;
   // ONCE A PERIOD IS FILED, `set_vat_method` refuses a change of method or timing
   // (`vat_method_change_undated`, D160.5), so a next step naming it would be a dead end. The remedy
-  // is then `vat_configure` with a dated `methodChange` from the first day not yet filed.
-  const firstUnfiledFrom = nextUnfiledMonthStart(ctx);
-  const filedStep = firstUnfiledFrom === null ? undefined : NEXT_STEP_WHEN_FILED[code]?.(firstUnfiledFrom);
+  // is then `vat_configure` with a dated `methodChange` from the first start of a Steuerperiode not yet
+  // filed (MWSTG Art. 37 Abs. 4, Art. 39 Abs. 3: never a day inside a year, critic O1).
+  const changeFrom = earliestMethodChangeFrom(ctx);
+  const filedStep = changeFrom === null ? undefined : NEXT_STEP_WHEN_FILED[code]?.(changeFrom);
   const nextStep = filedStep ?? NEXT_STEP_BY_ERROR[code] ?? DEFAULT_NEXT_STEP;
   return { ...refusal, nextStep };
 }
@@ -1135,11 +1136,11 @@ function withNextStep(ctx: WorkspaceContext, refusal: Result): Result {
  * The two next steps that name `set_vat_method`, restated for a workspace with a filed period, where
  * that verb refuses (D160.5 critic F1). Each hands over the day to date the change from.
  */
-const NEXT_STEP_WHEN_FILED: Readonly<Record<string, (firstUnfiledFrom: string) => string>> = {
+const NEXT_STEP_WHEN_FILED: Readonly<Record<string, (changeFrom: string) => string>> = {
   needs_vat_config: (from) =>
-    `Configure MWST first: \`vat_configure\` with the method (effektiv or saldo) and the timing (soll or ist) the ESTV granted this business, and \`methodChange: { validFrom: '${from}' }\`, the first day not yet filed (Studio: Einstellungen, MWST). \`set_vat_method\` refuses here, because periods are already filed. Nothing can be computed or exported until then.`,
+    `Configure MWST first: \`vat_configure\` with the method (effektiv or saldo) and the timing (soll or ist) the ESTV granted this business, and \`methodChange: { validFrom: '${from}' }\`, the first start of a Steuerperiode not yet filed (Studio: Einstellungen, MWST). \`set_vat_method\` refuses here, because periods are already filed. Nothing can be computed or exported until then.`,
   unsupported: (from) =>
-    `This workspace files on vereinnahmte Entgelte (Ist). A07 computes the vereinbarte (Soll) basis only, and handing an Ist filer Soll figures would produce a file that looks right and is not. Either file this period in the ESTV ePortal by hand, or, if the ESTV granted this business the vereinbarte basis, record it with \`vat_configure\` (timing: soll) and \`methodChange: { validFrom: '${from}' }\`, the first day not yet filed. \`set_vat_method\` refuses here, because periods are already filed.`,
+    `This workspace files on vereinnahmte Entgelte (Ist). A07 computes the vereinbarte (Soll) basis only, and handing an Ist filer Soll figures would produce a file that looks right and is not. Either file this period in the ESTV ePortal by hand, or, if the ESTV granted this business the vereinbarte basis, record it with \`vat_configure\` (timing: soll) and \`methodChange: { validFrom: '${from}' }\`, the first start of a Steuerperiode not yet filed (MWSTG Art. 39 Abs. 3: a change of the Abrechnungsart takes effect then, or alongside a switch from Saldo to effektiv under MWSTV Art. 81 Abs. 2 and Abs. 5); the periods before it are filed in the ESTV ePortal by hand. \`set_vat_method\` refuses here, because periods are already filed.`,
 };
 
 const DEFAULT_NEXT_STEP =

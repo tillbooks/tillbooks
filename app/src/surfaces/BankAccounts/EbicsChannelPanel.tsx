@@ -25,7 +25,7 @@ import { OverflowMenu } from '../../components/OverflowMenu';
 import { maskIban, type BankAccount } from './model';
 import { AutoSyncControl, type AutoSyncDto } from './AutoSyncControl';
 import { channelRefusal, jumpsOfSync, numberJumpText, type NumberJump } from './channelWording';
-import { gapExplanation, gapTitle, parseStatementGaps } from '../Bank/statementGaps';
+import { gapsSummary, parseStatementGaps } from '../Bank/statementGaps';
 
 interface OrderDto {
   id: string;
@@ -590,18 +590,24 @@ export function EbicsChannelPanel({ accounts, onRepairGap }: EbicsChannelPanelPr
                         <span className="bank-channel-newest">{t('channel.noStatement')}</span>
                       )}
                       {a.statementGaps !== undefined
-                        ? parseStatementGaps(a.statementGaps).map((g) => (
-                            <div key={g.gapId} className="bank-channel-note bank-channel-jump bank-channel-gap">
-                              <p>
-                                <strong>{gapTitle(t, g)}</strong> {gapExplanation(t, g)}
-                              </p>
-                              {canPay && onRepairGap !== undefined && (
-                                <button type="button" className="btn btn--secondary btn--sm" onClick={() => onRepairGap(a.bankAccountId, g.gapId)}>
-                                  {t('attention.act.closeGap')}
-                                </button>
-                              )}
-                            </div>
-                          ))
+                        ? (() => {
+                            // One line and ONE button for all of the account's gaps (owner, 18.10.2026).
+                            const sum = gapsSummary(t, parseStatementGaps(a.statementGaps));
+                            if (sum === null) return null;
+                            return (
+                              <div className="bank-channel-note bank-channel-jump bank-channel-gap">
+                                <p>
+                                  <strong>{sum.title}</strong>
+                                  {sum.note !== null && ` ${sum.note}`}
+                                </p>
+                                {canPay && onRepairGap !== undefined && (
+                                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => onRepairGap(a.bankAccountId, sum.gapId)}>
+                                    {t(sum.many ? 'attention.act.closeGaps' : 'attention.act.closeGap')}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()
                         : a.lastNumberJump !== undefined &&
                           a.lastNumberJump !== null && <p className="bank-channel-note bank-channel-jump">{numberJumpText(t, a.lastNumberJump)}</p>}
                     </li>

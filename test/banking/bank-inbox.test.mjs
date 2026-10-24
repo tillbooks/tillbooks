@@ -1,6 +1,6 @@
 // A39, the bank inbox: the engine claims that matter (spec A39 §4, §8), each walk row the brief named
-// written as a regression test against the row's own measured failure (docs/ux/bank-process-walk.md on
-// claude/ux-bank-process). The invariants (append-only, idempotent on rows, §H-TENANT) live in
+// written as a regression test against the row's own measured failure (docs/ux/bank-process-walk.md).
+// The invariants (append-only, idempotent on rows, §H-TENANT) live in
 // bank-inbox-invariants.test.mjs, marked as such for the non-author critic.
 //
 // SYNTHETIC DATA ONLY: every statement is spelled by hand in bank-inbox-support.mjs.
@@ -55,6 +55,7 @@ import {
   SAVINGS_IBAN,
   TELCO_IBAN,
 } from './bank-inbox-support.mjs';
+import { chainedOpening, answerDistinct } from './e2-adapt.mjs';
 
 // Critic A39R2-4: the claim invariant is asserted after EVERY scenario of this suite.
 afterEach(assertClaimInvariantHolds);
@@ -251,7 +252,8 @@ test('B6.5: a credit with no invoice (interest, a refund) books to an account, c
     ['3000', 0, 10000],
   ]);
   // The A20 wrapper books a credit too now (it used to refuse use_qr_queue).
-  const { lines: more } = importLines(t, { statementId: 'V-4b', seqNb: '2', entries: [{ ref: 'INT2', amountMinor: 99, cd: 'CRDT' }] });
+// D178 point 19 (re-cut): the next statement opens where the last one closed, as a bank's do.
+  const { lines: more } = importLines(t, { statementId: 'V-4b', seqNb: '2', openingMinor: chainedOpening(t), entries: [{ ref: 'INT2', amountMinor: 99, cd: 'CRDT' }] });
   must(createEntryForTxn(t.ctx, { bankTxnId: more.INT2, contraAccountId: t.acc('3000'), idempotencyKey: 'int2' }));
   refused(
     bookBankLine(t.ctx, { bankTxnId: lines.INT, target: { kind: 'accounts', legs: [{ accountId: t.acc('6500'), amountMinor: 1234, taxCode: 'NOPE' }] }, idempotencyKey: 'int-again' }),
@@ -326,7 +328,8 @@ test('B9.3: ONE entry that books two bank movements backs two lines, each on its
   const b = must(bookBankLine(t.ctx, { bankTxnId: lines.B, target: { kind: 'existing_entry', entryId: both.entryId }, idempotencyKey: 'b' }));
   const claimed = t.store.db.prepare('SELECT journal_line_id FROM bank_line_decision WHERE link_id IN (?, ?)').all(a.linkId, b.linkId).map((r) => r.journal_line_id);
   assert.equal(new Set(claimed).size, 2, 'each line claimed its own leg');
-  const { lines: c } = importLines(t, { statementId: 'E-3', seqNb: '2', entries: [{ ref: 'C', amountMinor: 3000, cd: 'DBIT' }] });
+// D178 point 19 (re-cut): the next statement opens where the last one closed, as a bank's do.
+  const { lines: c } = importLines(t, { statementId: 'E-3', seqNb: '2', openingMinor: chainedOpening(t), entries: [{ ref: 'C', amountMinor: 3000, cd: 'DBIT' }] });
   refused(bookBankLine(t.ctx, { bankTxnId: c.C, target: { kind: 'existing_entry', entryId: both.entryId }, idempotencyKey: 'c' }), 'entry_already_linked');
 });
 
@@ -489,7 +492,8 @@ test('L6: a run booked one line per payment (camt.053 mit Details): EndToEndId n
   assert.equal(rowCounts(t.store, t.workspaceId).entries, before.entries);
   assert.equal(balanceOf(t.store, t.workspaceId, '1020'), -100000, 'the bank moved once per payment');
   // An item line whose amount is not its item's refuses, naming both.
-  const { lines: odd } = importLines(t, { statementId: 'IT-2', seqNb: '2', entries: [{ ref: 'I3', amountMinor: 1, cd: 'DBIT', e2e: frozenEndToEndId(t, items[0].id) }] });
+// D178 point 19 (re-cut): the next statement opens where the last one closed, as a bank's do.
+  const { lines: odd } = importLines(t, { statementId: 'IT-2', seqNb: '2', openingMinor: chainedOpening(t), entries: [{ ref: 'I3', amountMinor: 1, cd: 'DBIT', e2e: frozenEndToEndId(t, items[0].id) }] });
   const res = refused(bookBankLine(t.ctx, { bankTxnId: odd.I3, target: { kind: 'payment_batch', batchId: r.batchId }, idempotencyKey: 'i3' }), 'amount_mismatch');
   assert.equal(res.itemAmountMinor, 60000);
 });
@@ -770,7 +774,8 @@ test('history pre-fills the account and VAT code this counterparty was booked to
   const t = world();
   const { lines } = importLines(t, { statementId: 'H-1', entries: [{ ref: 'T1', amountMinor: 8990, cd: 'DBIT', name: 'Alpina Telecom AG', iban: TELCO_IBAN, date: '2026-07-05' }] });
   must(bookBankLine(t.ctx, { bankTxnId: lines.T1, target: { kind: 'accounts', legs: [{ accountId: t.acc('6500'), amountMinor: 8990, taxCode: 'VST-M' }] }, idempotencyKey: 't1' }));
-  const { lines: next } = importLines(t, { statementId: 'H-2', seqNb: '2', entries: [{ ref: 'T2', amountMinor: 9120, cd: 'DBIT', name: 'Alpina Telecom AG', iban: TELCO_IBAN, date: '2026-07-28' }] });
+// D178 point 19 (re-cut): the next statement opens where the last one closed, as a bank's do.
+  const { lines: next } = importLines(t, { statementId: 'H-2', seqNb: '2', openingMinor: chainedOpening(t), entries: [{ ref: 'T2', amountMinor: 9120, cd: 'DBIT', name: 'Alpina Telecom AG', iban: TELCO_IBAN, date: '2026-07-28' }] });
   const p = lineOf(must(listBankInbox(t.ctx, {})), next.T2).proposal;
   assert.equal(p.certainty, 'learned');
   assert.equal(p.reasonCode, 'history');

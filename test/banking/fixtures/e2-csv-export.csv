@@ -1,0 +1,11 @@
+Kontoauszug;Geschäftskonto Beispiel
+IBAN;CH93 0076 2011 6238 5295 7
+Zeitraum;01.09.2026 - 03.09.2026
+
+Buchungsdatum;Valuta;Buchungstext;Belastung;Gutschrift;Saldo
+02.09.2026;01.09.2026;"Kartenzahlung Buchladen Seefeld Corp; USD 60.78, abgerechnet in CHF, Kurs 0.810464, Kommission CHF 0.62";49.88;;950.12
+02.09.2026;02.09.2026;Velowerkstatt Alpenblick Annecy;40.23;;909.89
+02.09.2026;02.09.2026;Druckerei Lindenhof AG Rechnung 2026-118;120.00;;789.89
+03.09.2026;03.09.2026;Gutschrift Herr Max Beispiel Rechnung 1041;;688.35;1'478.24
+03.09.2026;03.09.2026;Rückbuchung Lastschrift Fitnessclub Tannenberg;;15.00;1'493.24
+;;Total;210.11;703.35;

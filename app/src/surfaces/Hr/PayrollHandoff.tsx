@@ -7,6 +7,11 @@
  * previews the ONE balanced entry, and posts it through A02 on confirm (P8). The engine is the real
  * gate (this surface only pre-hides the affordances an actor is about to be refused, the standing
  * Studio rule); `wage_journal_post` posts nothing without `confirm` and nothing without `post`.
+ *
+ * D171: a posting row whose journal stands offers Stornieren behind its one row overflow, destructive
+ * and behind an alertdialog with the consequence line and a required reason (the D168 claim-reverse
+ * shape). The engine decides; a refusal (already reversed, a bank line holding the entry, a locked
+ * period) is said in words and the history reloads to show the real state.
  */
 import { useCallback, useEffect, useState } from 'react';
 
@@ -20,8 +25,16 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { EmptyState, ErrorBanner, refusalText } from '../../components/states';
 import { FileDrop } from '../../components/FileDrop';
 import { Status } from '../../components/Status';
+import { Modal } from '../../components/Modal';
+import { ConsequenceLine } from '../../components/ConsequenceLine';
 
 const newKey = () => crypto.randomUUID();
+// The confirm's role, passed as a value the way LandedCosts does (the modal-role guard reads literals).
+const ALERT_DIALOG = 'alertdialog' as const;
+
+/** D173 (owner Q12): the run kinds of a wage journal, the engine's `WAGE_RUN_KINDS`. */
+const RUN_KINDS = ['regular', 'bonus', 'thirteenth', 'correction'] as const;
+type RunKind = (typeof RUN_KINDS)[number];
 
 interface HandoffRow {
   type: 'export' | 'posting';
@@ -34,6 +47,10 @@ interface HandoffRow {
   artifactDocumentId?: string;
   entryDate?: string;
   postedEntryId?: string;
+  /** D171: the mirror that reversed this posting (derived by the engine from the ledger), or null. */
+  reversalEntryId?: string | null;
+  /** D173: the posting's run kind (legacy postings read 'regular'). */
+  runKind?: string;
 }
 
 interface PreviewLine {
@@ -47,6 +64,18 @@ interface Preview {
   lines: PreviewLine[];
   totalDebitMinor: number;
   balanced: boolean;
+  /** D173: the month whose wage journal already stands (from the engine's `warnings[]`), or null. */
+  standingMonth: string | null;
+}
+
+/** D173: the month named by the engine's `month_already_posted` warning, if any. */
+function warnedMonth(body: Record<string, unknown>): string | null {
+  const list = body.warnings;
+  if (!Array.isArray(list)) return null;
+  const w = list.find((x) => typeof x === 'object' && x !== null && (x as Record<string, unknown>).code === 'month_already_posted') as
+    | Record<string, unknown>
+    | undefined;
+  return w !== undefined && typeof w.month === 'string' ? w.month : null;
 }
 
 function rows(body: unknown): Record<string, unknown>[] {
@@ -84,6 +113,22 @@ export function PayrollHandoff() {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [entryDate, setEntryDate] = useState('');
+  // D173 (owner Q8): a supplementary posting skips the month guard for this one call, with a reason.
+  const [supplementary, setSupplementary] = useState(false);
+  // D173 (owner Q12): the run kind, default regular; only a regular run meets the month guard.
+  const [runKind, setRunKind] = useState<RunKind>('regular');
+  // D173 (owner Q14): when a non-regular run needs a reason (`payroll.nonregular_reason`, read from the
+  // registry; the engine's default `correction` until it answers). The engine is the real gate.
+  const [reasonMode, setReasonMode] = useState<'none' | 'correction' | 'all'>('correction');
+  const [runKindReason, setRunKindReason] = useState('');
+  const reasonRequired = runKind !== 'regular' && (reasonMode === 'all' || (reasonMode === 'correction' && runKind === 'correction'));
+  const [supplementaryReason, setSupplementaryReason] = useState('');
+  const [postedWarnMonth, setPostedWarnMonth] = useState<string | null>(null);
+  // D171: the posting a person is about to reverse, the reason they give, and what came of it.
+  const [reversing, setReversing] = useState<HandoffRow | null>(null);
+  const [reverseReason, setReverseReason] = useState('');
+  const [reverseError, setReverseError] = useState<Err | null>(null);
+  const [reversedNote, setReversedNote] = useState(false);
 
   const load = useCallback(async () => {
     if (workspaceId === null) { setLoading(false); return; }
@@ -103,12 +148,22 @@ export function PayrollHandoff() {
         artifactDocumentId: typeof r.artifactDocumentId === 'string' ? r.artifactDocumentId : undefined,
         entryDate: typeof r.entryDate === 'string' ? r.entryDate : undefined,
         postedEntryId: typeof r.postedEntryId === 'string' ? r.postedEntryId : undefined,
+        reversalEntryId: typeof r.reversalEntryId === 'string' ? r.reversalEntryId : null,
+        runKind: typeof r.runKind === 'string' ? r.runKind : undefined,
       })),
     );
     setLoading(false);
   }, [client, workspaceId]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (workspaceId === null) return;
+    void client.call('settings_get', { workspaceId, key: 'payroll.nonregular_reason' }).then((res) => {
+      if (isErr(res.body)) return;
+      const v = ((res.body as Record<string, unknown>).setting as Record<string, unknown> | undefined)?.value;
+      if (v === 'none' || v === 'correction' || v === 'all') setReasonMode(v);
+    });
+  }, [client, workspaceId]);
 
   const doExport = useCallback(async () => {
     if (workspaceId === null) return;
@@ -125,6 +180,7 @@ export function PayrollHandoff() {
     if (workspaceId === null || file === undefined) return;
     setError(null);
     setPreview(null);
+    setPostedWarnMonth(null);
     setBusy(true);
     const up = await client.call('files_upload', {
       workspaceId,
@@ -136,7 +192,12 @@ export function PayrollHandoff() {
     if (isErr(up.body)) { setBusy(false); setError(up.body); return; }
     const fileRef = String(((up.body as Record<string, unknown>).file as Record<string, unknown>).id);
     const date = entryDate === '' ? new Date().toISOString().slice(0, 10) : entryDate;
-    const pv = await client.call('wage_journal_post', { workspaceId, fileRef, entryDate: date, idempotencyKey: newKey() });
+    const pv = await client.call('wage_journal_post', {
+      workspaceId, fileRef, entryDate: date, runKind,
+      // The engine refuses a preview without a required reason too, so the reason travels with it.
+      ...(runKind !== 'regular' && runKindReason.trim() !== '' ? { runKindReason } : {}),
+      idempotencyKey: newKey(),
+    });
     setBusy(false);
     if (isErr(pv.body)) { setError(pv.body); return; }
     const body = pv.body as Record<string, unknown>;
@@ -147,12 +208,13 @@ export function PayrollHandoff() {
       entryDate: date,
       totalDebitMinor: Number(p.totalDebitMinor ?? 0),
       balanced: p.balanced === true,
+      standingMonth: warnedMonth(body),
       lines: (Array.isArray(p.lines) ? p.lines : []).map((l) => {
         const line = l as Record<string, unknown>;
         return { accountNumber: String(line.accountNumber ?? ''), debitMinor: Number(line.debitMinor ?? 0), creditMinor: Number(line.creditMinor ?? 0) };
       }),
     });
-  }, [client, workspaceId, entryDate]);
+  }, [client, workspaceId, entryDate, runKind, runKindReason]);
 
   const post = useCallback(async () => {
     if (workspaceId === null || preview === null) return;
@@ -163,13 +225,45 @@ export function PayrollHandoff() {
       fileRef: preview.fileRef,
       entryDate: preview.entryDate,
       confirm: true,
+      runKind,
+      ...(runKind !== 'regular' && runKindReason.trim() !== '' ? { runKindReason } : {}),
+      ...(supplementary ? { supplementary: true, supplementaryReason } : {}),
       idempotencyKey: newKey(),
     });
     setBusy(false);
     if (isErr(res.body)) { setError(res.body); return; }
+    setPostedWarnMonth(warnedMonth(res.body as Record<string, unknown>));
     setPreview(null);
+    setSupplementary(false);
+    setSupplementaryReason('');
+    setRunKind('regular');
+    setRunKindReason('');
     await load();
-  }, [client, workspaceId, preview, load]);
+  }, [client, workspaceId, preview, supplementary, supplementaryReason, runKind, runKindReason, load]);
+
+  const confirmReverse = useCallback(async () => {
+    if (workspaceId === null || reversing === null || reverseReason.trim() === '') return;
+    const wageJournalPostId = reversing.id;
+    const reason = reverseReason.trim();
+    setReversing(null);
+    setReverseError(null);
+    setReversedNote(false);
+    setBusy(true);
+    const res = await client.call('wage_journal_reverse', { workspaceId, wageJournalPostId, reason, idempotencyKey: newKey() });
+    setBusy(false);
+    setReverseReason('');
+    if (isErr(res.body)) setReverseError(res.body);
+    else setReversedNote(true);
+    await load();
+  }, [client, workspaceId, reversing, reverseReason, load]);
+
+  // K-21: a posting's one verb sits behind its row's overflow, destructive. Only a posting whose journal
+  // stands, and only for someone who may post (the engine asserts `post`).
+  // TODO(Ruhig 3, E-step): migrate this action to the icon vocabulary once IconButton lands.
+  const rowActions = (r: HandoffRow) =>
+    r.type === 'posting' && (r.reversalEntryId ?? null) === null
+      ? [{ key: 'reverse', label: t('payroll.reverse.action'), danger: true, onSelect: () => { setReverseReason(''); setReversing(r); } }]
+      : [];
 
   const lastExport = history.find((r) => r.type === 'export');
 
@@ -195,7 +289,16 @@ export function PayrollHandoff() {
             />
           </>
         ) : (
-          t('payroll.history.posted', { entry: r.postedEntryId ?? '' })
+          <>
+            {t('payroll.history.posted', { entry: r.postedEntryId ?? '' })}
+            {r.runKind !== undefined && r.runKind !== 'regular' && <>{' · '}{t(`payroll.runKind.${r.runKind}`)}</>}
+            {(r.reversalEntryId ?? null) !== null && (
+              <>
+                {' · '}
+                <Status kind="inactive" label={t('payroll.history.reversed')} />
+              </>
+            )}
+          </>
         ),
     },
   ];
@@ -204,6 +307,8 @@ export function PayrollHandoff() {
     <div className="hr-panel payroll">
       <p className="hr-hint payroll-oss">{t('payroll.oss.note')}</p>
       {error !== null && <ErrorBanner error={error} message={refusalText(t, error, { own: 'payroll.err' })} />}
+      {reverseError !== null && <ErrorBanner error={reverseError} message={refusalText(t, reverseError, { own: 'payroll.reverse.err' })} />}
+      {reversedNote && <p className="hr-hint" role="status">{t('payroll.reverse.done')}</p>}
       {/* Three steps, three panels on the elevated ground, separated by the step and the gap (K-09). */}
 
       <section className="payroll-card" aria-labelledby="payroll-export-h">
@@ -242,17 +347,64 @@ export function PayrollHandoff() {
           <span>{t('payroll.import.date')}</span>
           <input className="field" type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} aria-label={t('payroll.import.date')} />
         </label>
+        <label className="payroll-field">
+          <span>{t('payroll.runKind.label')}</span>
+          <select
+            className="field"
+            value={runKind}
+            onChange={(e) => { setRunKind(e.target.value as RunKind); setPreview(null); }}
+            aria-label={t('payroll.runKind.label')}
+          >
+            {RUN_KINDS.map((k) => <option key={k} value={k}>{t(`payroll.runKind.${k}`)}</option>)}
+          </select>
+        </label>
+        {runKind !== 'regular' && (
+          <label className="payroll-field">
+            <span>{t(reasonRequired ? 'payroll.runKind.reason' : 'payroll.runKind.reasonOptional')}</span>
+            <input
+              className="field"
+              value={runKindReason}
+              onChange={(e) => setRunKindReason(e.target.value)}
+              aria-label={t(reasonRequired ? 'payroll.runKind.reason' : 'payroll.runKind.reasonOptional')}
+            />
+          </label>
+        )}
         {/* The shared FileDrop (K-13): the real file input behind a labelled button, a CSV dropped on
             the zone filtered by the same accept list. */}
         <FileDrop
           accept=".csv,text/csv"
           label={t('payroll.import.cta')}
-          disabled={busy || !canPost}
+          disabled={busy || !canPost || (reasonRequired && runKindReason.trim() === '')}
           onFiles={(files) => void onFile(files[0])}
         />
         {!canPost && <p className="hr-hint">{t('payroll.requiresPost')}</p>}
+        {postedWarnMonth !== null && (
+          <p className="hr-hint" role="status">
+            <Status kind="warn" label={t('payroll.import.postedWithWarning', { month: postedWarnMonth })} />
+          </p>
+        )}
         {preview !== null && (
           <div className="payroll-preview">
+            {preview.standingMonth !== null && (
+              <p className="hr-hint" role="status">
+                <Status kind="warn" label={t('payroll.import.warnStanding', { month: preview.standingMonth })} />
+              </p>
+            )}
+            <label className="payroll-field">
+              <input type="checkbox" checked={supplementary} onChange={(e) => setSupplementary(e.target.checked)} />
+              <span>{t('payroll.import.supplementary')}</span>
+            </label>
+            {supplementary && (
+              <label className="payroll-field">
+                <span>{t('payroll.import.supplementaryReason')}</span>
+                <input
+                  className="field"
+                  value={supplementaryReason}
+                  onChange={(e) => setSupplementaryReason(e.target.value)}
+                  aria-label={t('payroll.import.supplementaryReason')}
+                />
+              </label>
+            )}
             <DataTable
               columns={previewColumns}
               rows={preview.lines.map((l, i) => ({ ...l, rowIndex: i }))}
@@ -264,7 +416,7 @@ export function PayrollHandoff() {
               type="button"
               className="btn btn--accent payroll-action"
               data-money-commit="wage_journal_post"
-              disabled={!canPost || busy || !preview.balanced}
+              disabled={!canPost || busy || !preview.balanced || (supplementary && supplementaryReason.trim() === '') || (reasonRequired && runKindReason.trim() === '')}
               onClick={() => void post()}
               title={canPost ? undefined : t('payroll.requiresPost')}
             >
@@ -285,11 +437,41 @@ export function PayrollHandoff() {
             rowKey={(r) => r.id}
             loading={loading}
             caption={t('payroll.history.title')}
+            rowActions={canPost ? rowActions : undefined}
+            rowActionsLabel={(r) => t('payroll.history.rowActions', { date: r.entryDate === undefined ? '' : formatCalendar(r.entryDate) })}
             skeletonRows={3}
             emptyState={<EmptyState title={t('payroll.history.empty')} />}
           />
         )}
       </section>
+
+      <Modal
+        open={reversing !== null}
+        onClose={() => setReversing(null)}
+        role={ALERT_DIALOG}
+        title={t('payroll.reverse.title', { date: reversing?.entryDate === undefined ? '' : formatCalendar(reversing.entryDate) })}
+        closeLabel={t('payroll.reverse.cancel')}
+        describedById="payroll-reverse-body"
+        footer={
+          <>
+            <button type="button" className="btn btn--secondary" onClick={() => setReversing(null)}>
+              {t('payroll.reverse.cancel')}
+            </button>
+            <button type="button" className="btn btn--danger" disabled={reverseReason.trim() === ''} onClick={() => void confirmReverse()}>
+              {t('payroll.reverse.confirm')}
+            </button>
+          </>
+        }
+      >
+        <div id="payroll-reverse-body">
+          <p>{t('payroll.reverse.body')}</p>
+          <ConsequenceLine verb="wage_journal_reverse" />
+          <label className="payroll-field">
+            <span>{t('payroll.reverse.reason')}</span>
+            <input className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
+          </label>
+        </div>
+      </Modal>
     </div>
   );
 }

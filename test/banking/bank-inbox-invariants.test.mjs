@@ -44,6 +44,7 @@ import {
   MAIN_IBAN,
   SAVINGS_IBAN,
 } from './bank-inbox-support.mjs';
+import { chainedOpening } from './e2-adapt.mjs';
 
 // Critic A39R2-4: the claim invariant is asserted after EVERY scenario of this suite.
 afterEach(assertClaimInvariantHolds);
@@ -128,7 +129,8 @@ test('[INVARIANT one-active] a second live link on a line is refused by the data
 function claimWorld() {
   const { t, lines, e } = busyWorld();
   const sav = must(createBankAccount(t.ctx, { name: 'Sparkonto', iban: SAVINGS_IBAN, currency: 'CHF', ledgerAccountId: t.acc('1000'), idempotencyKey: 'cw-sav' })).bankAccountId;
-  const main = importLines(t, { statementId: 'CW-MAIN', seqNb: '2', entries: [{ ref: 'OUT', amountMinor: 50000, cd: 'DBIT', iban: SAVINGS_IBAN, date: '2026-07-25' }] });
+  // D178 point 19 (re-cut): the next statement opens where the last one closed, as a bank's do.
+  const main = importLines(t, { statementId: 'CW-MAIN', seqNb: '2', openingMinor: chainedOpening(t), entries: [{ ref: 'OUT', amountMinor: 50000, cd: 'DBIT', iban: SAVINGS_IBAN, date: '2026-07-25' }] });
   const savings = importLines(t, { statementId: 'CW-SAV', iban: SAVINGS_IBAN, entries: [{ ref: 'IN', amountMinor: 50000, cd: 'CRDT', iban: MAIN_IBAN, date: '2026-07-25' }] }, { bankAccountId: sav });
   const out = must(listBankInbox(t.ctx, { status: 'open' })).lines.find((l) => l.bankTxnId === main.lines.OUT).proposal;
   must(bookBankLine(t.ctx, { bankTxnId: main.lines.OUT, target: out.target, idempotencyKey: 'cw-out' }));
@@ -142,7 +144,7 @@ test('[INVARIANT one-leg-one-line] every decision claims its bank legs, and no l
   assert.deepEqual(legClaimViolations(t.store, t.workspaceId), []);
   // The ENGINE refuses a second line on a leg a live line holds, naming the holder, and moves nothing:
   // a twin of the matched line (same account, same amount) aimed at the entry the MAT line already backs.
-  const { lines: twin } = importLines(t, { statementId: 'CW-TWIN', entries: [{ ref: 'TWIN', amountMinor: 900, cd: 'DBIT' }] });
+  const { lines: twin } = importLines(t, { statementId: 'CW-TWIN', seqNb: '3', openingMinor: chainedOpening(t), entries: [{ ref: 'TWIN', amountMinor: 900, cd: 'DBIT' }] });
   const beforeTwin = rowCounts(t.store, t.workspaceId);
   const twinTry = bookBankLine(t.ctx, { bankTxnId: twin.TWIN, target: { kind: 'existing_entry', entryId: e.entryId }, idempotencyKey: 'cw-twin' });
   assert.equal(twinTry.error, 'entry_already_linked', JSON.stringify(twinTry));

@@ -16,7 +16,7 @@ import { TillClient, type Transport } from '../../lib/client';
 import { WorkspaceProvider } from '../../app/workspace';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { consequenceSentence, dialCapabilityForVerb } from '../../lib/approval-tiers';
-import { VorschlagCard } from './VorschlagCard';
+import { VorschlagLine } from './VorschlagLine';
 import type { DraftedAction } from './model';
 
 const transport: Transport = async () => ({ status: 200, body: { ok: true } });
@@ -76,12 +76,18 @@ describe('one consequence, two faces (D156)', () => {
         const line = confirm.container.querySelector('.consequence-line-text')?.textContent ?? null;
         cleanup();
 
-        const card = wrap(<VorschlagCard action={draftOf(verb, family as string)} accent onApprove={() => undefined} onReject={() => undefined} />, locale);
+        const card = wrap(<VorschlagLine action={draftOf(verb, family as string)} onApprove={() => undefined} onReject={() => undefined} />, locale);
+        // D167: the line carries the sentence behind its (i) tooltip and as the Genehmigen description.
         const onCard = card.container.querySelector('.vorschlag-consequence')?.textContent ?? null;
+        const tip = card.container.querySelector('[role="tooltip"]')?.textContent ?? null;
+        const describedBy = card.container.querySelector('.vorschlag-approve')?.getAttribute('aria-describedby') ?? '';
+        const description = describedBy === '' ? null : (card.container.ownerDocument.getElementById(describedBy)?.textContent ?? null);
         cleanup();
 
         expect(line).toBe(expected);
         expect(onCard).toBe(expected);
+        expect(tip).toBe(expected);
+        expect(description).toBe(expected);
       });
     }
   }

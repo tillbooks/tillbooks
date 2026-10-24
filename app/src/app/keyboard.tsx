@@ -98,15 +98,6 @@ interface KeyboardApi {
   helpOpen: boolean;
   openHelp: () => void;
   closeHelp: () => void;
-  /**
-   * C1 (D118), the omnibox bridge. The palette's "Frag den Agenten" lane runs `agent_ask` itself and
-   * then asks the dock to open and refresh onto the new turn. The provider is the common ancestor of
-   * both the palette and the dock (both mount inside it), so this monotonic counter carries the
-   * request between two siblings without a window event or a shared store: the dock watches the
-   * number and acts once per increment. It is a request, not the answer: the dock owns the display.
-   */
-  agentDockRequest: number;
-  requestAgentDock: () => void;
 }
 
 const KeyboardContext = createContext<KeyboardApi | null>(null);
@@ -127,7 +118,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [agentDockRequest, setAgentDockRequest] = useState(0);
   const leaderRef = useRef<{ at: number } | null>(null);
   const leaderTimer = useRef<number | null>(null);
 
@@ -143,7 +133,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   }, []);
   const openHelp = useCallback(() => setHelpOpen(true), []);
   const closeHelp = useCallback(() => setHelpOpen(false), []);
-  const requestAgentDock = useCallback(() => setAgentDockRequest((n) => n + 1), []);
 
   const clearLeader = useCallback(() => {
     leaderRef.current = null;
@@ -216,10 +205,8 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       helpOpen,
       openHelp,
       closeHelp,
-      agentDockRequest,
-      requestAgentDock,
     }),
-    [paletteOpen, openPalette, paletteSeed, closePalette, togglePalette, helpOpen, openHelp, closeHelp, agentDockRequest, requestAgentDock],
+    [paletteOpen, openPalette, paletteSeed, closePalette, togglePalette, helpOpen, openHelp, closeHelp],
   );
 
   return <KeyboardContext.Provider value={api}>{children}</KeyboardContext.Provider>;

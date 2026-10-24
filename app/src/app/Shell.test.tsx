@@ -161,6 +161,17 @@ describe('Shell rail: the collapsible tree (D118 A1)', () => {
     expect(document.querySelector('.rail--icon')).not.toBeNull();
   });
 
+  it('opens "Menü anpassen" from the status pill menu, the second door to the menu editor (D178)', async () => {
+    await renderShell();
+    await userEvent.click(screen.getByRole('button', { name: /Lokal, keine Verbindung/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Menü anpassen' }));
+    const editor = screen.getByRole('region', { name: 'Menü anpassen' });
+    expect(within(editor).getByRole('button', { name: 'Fertig' })).toHaveFocus();
+    // The rail's model rides on the nav band: the editor shows every favourite grip.
+    expect(document.querySelector('.rail-nav')).toHaveAttribute('data-customising');
+    expect(document.querySelector('.rail-nav')).toHaveAttribute('data-header-style', 'text_14_bold');
+  });
+
   it('has no head tagline: the wordmark and the switcher share one row (K-01)', async () => {
     await renderShell('/setup', { workspaceId: 'ws_1' });
     const row = document.querySelector('.rail-head-row') as HTMLElement;
@@ -291,7 +302,7 @@ describe('Shell: the G16 frame additions', () => {
 
   it('toggles the responsive drawer from the hamburger', async () => {
     await renderShell();
-    const hamburger = screen.getByRole('button', { name: 'Menü' });
+    const hamburger = screen.getByRole('button', { name: 'Navigation' });
     expect(hamburger).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(hamburger);
     expect(hamburger).toHaveAttribute('aria-expanded', 'true');
@@ -301,7 +312,7 @@ describe('Shell: the G16 frame additions', () => {
 
   it('traps focus inside the collapse drawer while it is open (spec: a focus-trapped overlay drawer)', async () => {
     await renderShell();
-    await userEvent.click(screen.getByRole('button', { name: 'Menü' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Navigation' }));
     const nav = screen.getByRole('navigation', { name: 'Hauptnavigation' });
     // Opening the drawer moves focus into it.
     expect(nav.contains(document.activeElement)).toBe(true);
@@ -322,7 +333,7 @@ describe('Shell: the G16 frame additions', () => {
 
   it('has no axe violations with the drawer open', async () => {
     const { container } = await renderShell();
-    await userEvent.click(screen.getByRole('button', { name: 'Menü' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Navigation' }));
     expect(await axe(container)).toHaveNoViolations();
   });
 });

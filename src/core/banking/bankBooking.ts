@@ -33,21 +33,40 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Err, Result } from '../result.js';
 import { requireString, optionalText } from '../ledger/inputGuards.js';
-import { postEntry } from '../ledger/postEntry.js';
+import { postEntry, previewPostingLines } from '../ledger/postEntry.js';
 import type { LineInput } from '../ledger/postEntry.js';
 import { reverseOwnedEntry } from '../ledger/reverseEntry.js';
-import { recordPayment, reversePayment, PAYMENT_INTENTS, settledMinor, writeOffThresholdOf } from '../payments/payment.js';
+import { recordPayment, reversePayment, PAYMENT_INTENTS, settledMinor, writeOffThresholdOf, openGuthabenOf, recordRefundNetting } from '../payments/payment.js';
 import { resolveRole, isRejection } from '../payments/accounts.js';
 import { computeLineTax, buildVatLines, mirrorVatLine, vatIntentRules } from '../vat/applyVat.js';
 import { baseCurrencyOf } from '../fx/rates.js';
+import { RATE_MAX_SCALED, RATE_SCALE, formatRate, isCurrencyCode } from '../fx/rateMath.js';
+import { reimburseClaim } from '../hr/claims.js';
+import { MAX_TARGET_ITEMS, planAllocations, planContact, planExpenseClaims } from './bankTargets.js';
+import type { AllocationDocView, BankTargetRemainder, ClaimView } from './bankTargets.js';
+import { FX_COUNTER_LEG_CONSEQUENCE, bankTargetRefusal } from './bankTargetCatalogue.js';
+import { anzahlungVatClearingsOf, anzahlungVatCorrectionsOfLink, clearAnzahlungVat, planAnzahlungVat, refundableVatGuthabenOf } from './anzahlungVat.js';
+import { getSetting } from '../settings/settings.js';
+import type { AnzahlungVatPlan } from './anzahlungVat.js';
+import type { BankTargetConsequence } from './bankTargetCatalogue.js';
 import { settledOnVendorBill } from '../purchase/reads.js';
 import { invoiceSettlementFigures, planInvoiceSettlement } from './qrMatch.js';
 import { markBatchPaid, liveBatchOfBill } from './pain001.js';
+import { expandEntry } from '../ledger/compose.js';
+import { pinFor } from '../agent/vorschlagPin.js';
+import { appendDraftHistory } from '../agent/draftHistory.js';
+import { DRAFT_SUPERSEDED_REASON } from '../agent/draftedActions.js';
+import type { ComposeExpandOk } from '../ledger/compose.js';
+import { counterpartyKeyOf } from './bankProposals.js';
+import { directionOf, factorAmountMinor, invalidViaReason, readLiveRule, recipeOfRow, restLegIndex } from './bankStandards.js';
 import {
   BankAbort,
   BANK_LINE_IGNORE_REASONS,
   BANK_LINE_REMAINDER_MODES,
   BOOK_BANK_LINE_TARGET_KINDS,
+  CONTACT_BOOKING_MODES,
+  CONTACT_COUNTERPARTY_KINDS,
+  DRAFT_LINE_DECIDED_REASON,
   HAS_REVERSAL_SQL,
   bankLegsOf,
   reversalOf,
@@ -62,14 +81,20 @@ import {
   supersedeActiveLink,
   writeLineLink,
 } from './bankLines.js';
+import { duplicateDecisionPending } from './statementDedupe.js';
 import type {
   ActiveLink,
+  BankLineAllocation,
   BankLineIgnoreReason,
   BankLineLeg,
+  BankLineLegFx,
   BankLineRemainderMode,
   BankLineState,
   BankTxnRow,
+  BookableBankLineTarget,
   BookBankLineTarget,
+  ContactBookingMode,
+  ContactCounterpartyKind,
 } from './bankLines.js';
 
 // --- Internals -----------------------------------------------------------------------------------
@@ -134,14 +159,44 @@ function validateTarget(raw: unknown): { target: BookBankLineTarget } | { error:
     return { error: err('invalid_input', { field: 'target.kind', allowed: [...BOOK_BANK_LINE_TARGET_KINDS] }) };
   }
   if (kind === 'open_item') {
-    const g = requireString(t['documentId'], 'target.documentId');
-    if (g) return { error: g };
     const remainder = t['remainder'];
     if (remainder !== undefined && !(BANK_LINE_REMAINDER_MODES as readonly unknown[]).includes(remainder)) {
       return { error: err('invalid_input', { field: 'target.remainder', allowed: [...BANK_LINE_REMAINDER_MODES] }) };
     }
     const w = t['writeOffAccountId'];
     if (w !== undefined && (typeof w !== 'string' || w.length === 0)) return { error: err('invalid_input', { field: 'target.writeOffAccountId' }) };
+    // D178 E3 (A39 §17.2): several documents, each with the cash applied to it, instead of one documentId.
+    if (t['allocations'] !== undefined) {
+      if (t['documentId'] !== undefined) {
+        return { error: err('invalid_input', { field: 'target.allocations', reason: 'name documentId (one document) or allocations (several), not both' }) };
+      }
+      if (w !== undefined) return { error: err('invalid_input', { field: 'target.writeOffAccountId', reason: 'with allocations a write-off books to the A14 role account; leave it out' }) };
+      const raw = t['allocations'];
+      if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_TARGET_ITEMS) {
+        return { error: err('invalid_input', { field: 'target.allocations', reason: `one to ${MAX_TARGET_ITEMS} documents` }) };
+      }
+      const allocations: BankLineAllocation[] = [];
+      for (let i = 0; i < raw.length; i += 1) {
+        const a = raw[i] as Record<string, unknown> | null;
+        if (typeof a !== 'object' || a === null || Array.isArray(a)) return { error: err('invalid_input', { field: `target.allocations[${i}]` }) };
+        const g = requireString(a['documentId'], `target.allocations[${i}].documentId`);
+        if (g) return { error: g };
+        const amount = a['amountMinor'];
+        if (!Number.isSafeInteger(amount) || (amount as number) <= 0) {
+          return { error: err('invalid_input', { field: `target.allocations[${i}].amountMinor`, reason: 'a positive amount in Rappen' }) };
+        }
+        allocations.push({ documentId: a['documentId'] as string, amountMinor: amount as number });
+      }
+      return {
+        target: {
+          kind: 'open_item',
+          allocations,
+          ...(remainder !== undefined ? { remainder: remainder as BankLineRemainderMode } : {}),
+        },
+      };
+    }
+    const g = requireString(t['documentId'], 'target.documentId');
+    if (g) return { error: g };
     return {
       target: {
         kind: 'open_item',
@@ -150,6 +205,52 @@ function validateTarget(raw: unknown): { target: BookBankLineTarget } | { error:
         ...(w !== undefined ? { writeOffAccountId: w as string } : {}),
       },
     };
+  }
+  if (kind === 'contact') {
+    // D178 E3 (A39 §17.1): a line booked to a contact with no document.
+    const g =
+      requireString(t['contactId'], 'target.contactId') ??
+      (t['overrideReason'] !== undefined ? optionalText(t['overrideReason'], 'target.overrideReason') : null);
+    if (g) return { error: g };
+    const cpk = t['counterpartyKind'];
+    if (cpk !== undefined && !(CONTACT_COUNTERPARTY_KINDS as readonly unknown[]).includes(cpk)) {
+      return { error: err('invalid_input', { field: 'target.counterpartyKind', allowed: [...CONTACT_COUNTERPARTY_KINDS] }) };
+    }
+    const mode = t['mode'];
+    if (mode !== undefined && !(CONTACT_BOOKING_MODES as readonly unknown[]).includes(mode)) {
+      return { error: err('invalid_input', { field: 'target.mode', allowed: [...CONTACT_BOOKING_MODES] }) };
+    }
+    const refundVat = t['refundVat'];
+    if (refundVat !== undefined && refundVat !== 'reverse' && refundVat !== 'keep') {
+      return { error: err('invalid_input', { field: 'target.refundVat', allowed: ['reverse', 'keep'] }) };
+    }
+    const beyond = t['beyondGuthaben'];
+    if (beyond !== undefined && typeof beyond !== 'boolean') {
+      return { error: err('invalid_input', { field: 'target.beyondGuthaben', expected: 'boolean' }) };
+    }
+    return {
+      target: {
+        kind: 'contact',
+        contactId: t['contactId'] as string,
+        ...(cpk !== undefined ? { counterpartyKind: cpk as ContactCounterpartyKind } : {}),
+        ...(mode !== undefined ? { mode: mode as ContactBookingMode } : {}),
+        ...(typeof t['overrideReason'] === 'string' ? { overrideReason: t['overrideReason'] as string } : {}),
+        ...(refundVat !== undefined ? { refundVat: refundVat as 'reverse' | 'keep' } : {}),
+        ...(beyond === true ? { beyondGuthaben: true } : {}),
+      },
+    };
+  }
+  if (kind === 'expense_claims') {
+    // D178 E3 (A39 §17.3): approved Spesen paid from a debit line through E02's reimbursement path.
+    const raw = t['claimIds'];
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_TARGET_ITEMS) {
+      return { error: err('invalid_input', { field: 'target.claimIds', reason: `one to ${MAX_TARGET_ITEMS} expense claims` }) };
+    }
+    for (let i = 0; i < raw.length; i += 1) {
+      const g = requireString(raw[i], `target.claimIds[${i}]`);
+      if (g) return { error: g };
+    }
+    return { target: { kind: 'expense_claims', claimIds: [...(raw as string[])] } };
   }
   if (kind === 'payment_batch') {
     const g = requireString(t['batchId'], 'target.batchId');
@@ -176,6 +277,26 @@ function validateTarget(raw: unknown): { target: BookBankLineTarget } | { error:
       },
     };
   }
+  if (kind === 'rule') {
+    // D175 (A39 §14.2): the SHAPE only. The amounts are checked against the rule's recipe by `expandRule`,
+    // which needs the line, and the expansion then passes through this function again as `accounts`.
+    const g = requireString(t['standardId'], 'target.standardId');
+    if (g) return { error: g };
+    const asksRaw = t['asks'] ?? {};
+    if (typeof asksRaw !== 'object' || asksRaw === null || Array.isArray(asksRaw)) {
+      return { error: err('invalid_input', { field: 'target.asks', reason: 'an object of amounts in Rappen keyed by the leg index' }) };
+    }
+    const asks: Record<string, number> = {};
+    for (const [k, v] of Object.entries(asksRaw as Record<string, unknown>)) {
+      if (!/^(0|[1-9]\d*)$/.test(k)) return { error: err('invalid_input', { field: `target.asks.${k}`, reason: 'a key is a leg index' }) };
+      if (v === null || v === undefined) continue;
+      if (!Number.isSafeInteger(v)) return { error: err('invalid_input', { field: `target.asks.${k}`, reason: 'an amount in Rappen' }) };
+      asks[k] = v as number;
+    }
+    return { target: { kind: 'rule', standardId: t['standardId'] as string, asks } };
+  }
+  const via = t['viaAccountId'];
+  if (via !== undefined && (typeof via !== 'string' || via.length === 0)) return { error: err('invalid_input', { field: 'target.viaAccountId' }) };
   const legsRaw = t['legs'];
   if (!Array.isArray(legsRaw) || legsRaw.length === 0 || legsRaw.length > MAX_LEGS) {
     return { error: err('invalid_input', { field: 'target.legs', reason: `one to ${MAX_LEGS} legs` }) };
@@ -194,14 +315,517 @@ function validateTarget(raw: unknown): { target: BookBankLineTarget } | { error:
       return { error: err('invalid_input', { field: `target.legs[${i}].amountMinor`, reason: 'a non-zero amount in Rappen' }) };
     }
     const taxCode = typeof l['taxCode'] === 'string' && l['taxCode'].length > 0 && l['taxCode'] !== 'none' ? (l['taxCode'] as string) : undefined;
+    // D178 E3 (A39 §17.4): the leg's amount in the transaction currency. Shape only here; the rules (one
+    // foreign currency, no MWST, an income or expense account, the line's direction) need the line.
+    let fx: BankLineLegFx | undefined;
+    if (l['fx'] !== undefined) {
+      const f = l['fx'] as Record<string, unknown> | null;
+      if (typeof f !== 'object' || f === null || Array.isArray(f)) return { error: err('invalid_input', { field: `target.legs[${i}].fx` }) };
+      if (!isCurrencyCode(f['currency'])) {
+        return { error: err('invalid_input', { field: `target.legs[${i}].fx.currency`, reason: 'an ISO 4217 code such as USD' }) };
+      }
+      if (!Number.isSafeInteger(f['amountMinor']) || (f['amountMinor'] as number) <= 0) {
+        return { error: err('invalid_input', { field: `target.legs[${i}].fx.amountMinor`, reason: 'a positive amount in the minor unit of the currency' }) };
+      }
+      fx = { currency: f['currency'] as string, amountMinor: f['amountMinor'] as number };
+    }
     legs.push({
       accountId: l['accountId'] as string,
       amountMinor: amount as number,
       ...(taxCode !== undefined ? { taxCode } : {}),
       ...(typeof l['description'] === 'string' ? { description: l['description'] as string } : {}),
+      ...(fx !== undefined ? { fx } : {}),
     });
   }
-  return { target: { kind: 'accounts', legs } };
+  const ack = t['acknowledgeFx'];
+  if (ack !== undefined && typeof ack !== 'boolean') return { error: err('invalid_input', { field: 'target.acknowledgeFx' }) };
+  return {
+    target: {
+      kind: 'accounts',
+      legs,
+      ...(typeof via === 'string' ? { viaAccountId: via } : {}),
+      ...(ack === true ? { acknowledgeFx: true } : {}),
+    },
+  };
+}
+
+// --- D175: a Buchungsregel, expanded ---------------------------------------------------------------
+
+type AccountsTarget = Extract<BookBankLineTarget, { kind: 'accounts' }>;
+type RuleTarget = Extract<BookBankLineTarget, { kind: 'rule' }>;
+
+/**
+ * D175 (A39 §14.2): a `rule` target as the `accounts` target it stands for, on THIS line. Every asked leg
+ * takes its amount from `asks` (positive Rappen, in the line's direction unless the leg runs `against`
+ * it), the rest leg the line amount minus the others (either sign), in the recipe's order, routed through
+ * the rule's Durchlaufkonto when it has one. Refuses `rule_not_found` (another workspace's rule, a
+ * superseded one, an id that names nothing), `rule_not_applicable` (the rule's counterparty or direction
+ * is not the line's: the match text is NOT checked, the person may pick a rule whose text the line lacks),
+ * `ask_missing` (an asked leg without a positive amount), `rest_is_zero`, and `invalid_input` for an ask
+ * keyed to a leg that is not asked. D176: a `same` leg takes the amount of the asked leg it names (in its
+ * own direction, `against` read per leg); a Vorlage on a bank line refuses `wrong_scope`, and a "Nicht
+ * buchen" rule refuses `wrong_outcome` (`ignore_bank_line` with the rule's reason, note and `standardId`
+ * decides such a line). Reads only; the booking validates the expansion like any other.
+ */
+export function expandRule(ctx: WorkspaceContext, row: BankTxnRow, target: Pick<RuleTarget, 'standardId' | 'asks'>): { target: AccountsTarget } | { error: Err } {
+  const rule = readLiveRule(ctx, target.standardId);
+  if (rule === undefined) return { error: err('rule_not_found', { standardId: target.standardId }) };
+  if (rule.scope !== 'bank') {
+    return { error: err('wrong_scope', { standardId: rule.id, scope: rule.scope, reason: 'a Vorlage books in the composer (post_entry with template), never a bank line' }) };
+  }
+  if (rule.outcome === 'ignore') {
+    return {
+      error: err('wrong_outcome', {
+        standardId: rule.id,
+        outcome: rule.outcome,
+        ignoreReason: rule.ignore_reason,
+        reason: 'this rule says "Nicht buchen": decide the line with ignore_bank_line and the rule\'s reason, note and standardId',
+      }),
+    };
+  }
+  const key = counterpartyKeyOf(row, readBankTxnDetail(ctx, row.id));
+  if (key !== rule.counterparty_key || directionOf(row) !== rule.direction) {
+    return {
+      error: err('rule_not_applicable', {
+        standardId: rule.id,
+        bankTxnId: row.id,
+        reason: key !== rule.counterparty_key ? 'the rule is for another counterparty' : 'the rule is for the other direction',
+      }),
+    };
+  }
+  const legs = recipeOfRow(rule);
+  if (legs === null) return { error: err('rule_not_applicable', { standardId: rule.id, bankTxnId: row.id, reason: 'recipe_unreadable' }) };
+  for (const k of Object.keys(target.asks)) {
+    // D177: a computed (`factor`) leg takes an ask too: the person's override of the computed amount.
+    const kind = legs[Number(k)]?.amount.kind;
+    if (kind !== 'ask' && kind !== 'factor') {
+      return { error: err('invalid_input', { field: `target.asks.${k}`, reason: 'this leg of the rule is neither asked nor computed' }) };
+    }
+  }
+  const restAt = restLegIndex(legs);
+  const out: BankLineLeg[] = [];
+  let others = 0;
+  for (let i = 0; i < legs.length; i += 1) {
+    const leg = legs[i]!;
+    let amountMinor = 0;
+    if (leg.amount.kind === 'factor') {
+      // D177 (A39 §16.1): the person's override when given, else round-half-up(|line| x num / den). Either
+      // must be positive: a line too small for the fraction asks the person (`computed: true`).
+      const given = target.asks[String(i)];
+      const amount = given !== undefined ? given : factorAmountMinor(row.amount_minor, leg.amount.num, leg.amount.den);
+      if (amount === null) return { error: err('rule_not_applicable', { standardId: rule.id, bankTxnId: row.id, legIndex: i, reason: 'factor_overflow' }) };
+      if (amount <= 0) {
+        return { error: err('ask_missing', { standardId: rule.id, legIndex: i, label: leg.amount.label, computed: true }) };
+      }
+      amountMinor = leg.against === true ? -amount : amount;
+      others += amountMinor;
+    } else if (leg.amount.kind === 'ask' || leg.amount.kind === 'same') {
+      // D176: `same` reads the asked leg it names (the recipe check guarantees that leg asks).
+      const askedAt = leg.amount.kind === 'same' ? leg.amount.legIndex : i;
+      const asked = legs[askedAt]!.amount;
+      const given = target.asks[String(askedAt)];
+      if (given === undefined || given <= 0) {
+        return { error: err('ask_missing', { standardId: rule.id, legIndex: askedAt, label: asked.kind === 'ask' ? asked.label : '' }) };
+      }
+      amountMinor = leg.against === true ? -given : given;
+      others += amountMinor;
+    }
+    out.push({
+      accountId: leg.accountId,
+      amountMinor,
+      ...(leg.taxCode !== null ? { taxCode: leg.taxCode } : {}),
+      ...(leg.description !== undefined ? { description: leg.description } : {}),
+    });
+  }
+  const rest = row.amount_minor - others;
+  if (rest === 0) return { error: err('rest_is_zero', { standardId: rule.id, legIndex: restAt, reason: 'the asked amounts leave nothing for the rest leg' }) };
+  out[restAt] = { ...out[restAt]!, amountMinor: rest };
+  return { target: { kind: 'accounts', legs: out, ...(rule.via_account_id !== null ? { viaAccountId: rule.via_account_id } : {}) } };
+}
+
+// --- D175: compose_entry for a bank line -----------------------------------------------------------
+
+export interface ComposeBankLineInput {
+  bankTxnId?: string;
+  target?: unknown;
+}
+
+/** D178 E3 (A39 §17.5): one journal line of a previewed booking, with its account number and CHF. */
+export type BankPreviewLine = LineInput & {
+  readonly accountNumber: string;
+  readonly currency: string;
+  readonly fxRate: string | null;
+  readonly baseDebit: number;
+  readonly baseCredit: number;
+};
+
+/**
+ * D178 E3 (A39 §17.5): what `book_bank_line` would do with ANY target on this line, beside the composer's
+ * lines: whether it would book now (`bookable`, else `blockedBy` names the refusal and `verdict` carries its
+ * sentence), the deviation and the remainder outcomes, the documents, the contact, the claims, the FX
+ * conversion, and the consequence the caller must acknowledge. Built from the same plans the booking books
+ * from; for a settlement the verdict and the lines come from the booking itself, run and rolled back.
+ */
+export type BankBookingPreview = {
+  readonly targetKind: BookBankLineTarget['kind'];
+  readonly bookable: boolean;
+  readonly blockedBy: string | null;
+  readonly verdict: { readonly ok: true } | Err;
+  /** Line minus what the target accounts for (legs, allocations or claims); null where it means nothing. */
+  readonly deviationMinor: number | null;
+  readonly remainder: BankTargetRemainder | null;
+  readonly remainderOptions: BankLineRemainderMode[];
+  readonly documents: AllocationDocView[];
+  readonly contact: {
+    contactId: string;
+    name: string;
+    counterpartyKind: ContactCounterpartyKind;
+    mode: ContactBookingMode;
+    settingMode: ContactBookingMode;
+    overridden: boolean;
+    accountNumber: string | null;
+  } | null;
+  readonly claims: ClaimView[];
+  readonly fx: { currency: string; foreignMinor: number; baseMinor: number; rate: string; conversionLines: BankPreviewLine[] } | null;
+  /** Every entry the booking would post, in order, each with its own lines (a Spesen booking posts one per claim). */
+  readonly entries: { currency: string; lines: BankPreviewLine[] }[];
+  readonly warnings: string[];
+  readonly consequences: BankTargetConsequence[];
+  /** What the caller must acknowledge on the target before it books (`fx_counter_leg`: `acknowledgeFx: true`). */
+  readonly acknowledgementsRequired: string[];
+};
+
+/** `compose_entry`'s answer for a bank line: the composer's answer, the line, and the expanded target. */
+export type ComposeBankLineOk = ComposeExpandOk & {
+  readonly bankTxnId: string;
+  /** The `accounts` target a `rule` expands to on this line (the target itself when given as `accounts`); null when it could not be expanded. */
+  readonly target: AccountsTarget | null;
+  /** D178 E3 (A39 §17.5): the booking preview for every target kind. */
+  readonly booking?: BankBookingPreview;
+};
+
+/** The empty preview a refusal starts from. */
+function bookingPreviewOf(kind: BookBankLineTarget['kind'], verdict: { ok: true } | Err, extra: Partial<BankBookingPreview> = {}): BankBookingPreview {
+  return {
+    targetKind: kind,
+    bookable: verdict.ok,
+    blockedBy: verdict.ok ? null : (verdict as Err).error,
+    verdict,
+    deviationMinor: null,
+    remainder: null,
+    remainderOptions: [],
+    documents: [],
+    contact: null,
+    claims: [],
+    fx: null,
+    entries: [],
+    warnings: [],
+    consequences: [],
+    acknowledgementsRequired: [],
+    ...extra,
+  };
+}
+
+/** Lines as a preview shows them, read off posted rows (the settlement preview's rolled-back booking). */
+function previewLinesOfEntry(ctx: WorkspaceContext, entryId: string): { currency: string; lines: BankPreviewLine[] } {
+  const rows = ctx.store.db
+    .prepare(
+      `SELECT l.account_id AS account, a.number AS number, l.debit_minor AS debit, l.credit_minor AS credit, l.currency AS currency,
+              l.fx_rate AS fxRate, l.base_debit_minor AS baseDebit, l.base_credit_minor AS baseCredit, l.tax_code AS taxCode,
+              l.tax_base_minor AS taxBase, l.tax_amount_minor AS taxAmount
+         FROM journal_line l JOIN journal_entry e ON e.id = l.entry_id AND e.workspace_id = ? JOIN account a ON a.id = l.account_id
+        WHERE l.entry_id = ? ORDER BY l.rowid`,
+    )
+    .all(ctx.workspaceId, entryId) as {
+    account: string;
+    number: string;
+    debit: number;
+    credit: number;
+    currency: string;
+    fxRate: string | null;
+    baseDebit: number;
+    baseCredit: number;
+    taxCode: string | null;
+    taxBase: number | null;
+    taxAmount: number | null;
+  }[];
+  return {
+    currency: rows[0]?.currency ?? baseCurrencyOf(ctx),
+    lines: rows.map((r) => ({
+      account: r.account,
+      ...(r.debit > 0 ? { debit: r.debit } : {}),
+      ...(r.credit > 0 ? { credit: r.credit } : {}),
+      ...(r.taxCode !== null ? { taxCode: r.taxCode } : {}),
+      ...(r.taxBase !== null ? { taxBase: r.taxBase } : {}),
+      ...(r.taxAmount !== null ? { taxAmount: r.taxAmount } : {}),
+      accountNumber: r.number,
+      currency: r.currency,
+      fxRate: r.fxRate,
+      baseDebit: r.baseDebit,
+      baseCredit: r.baseCredit,
+    })),
+  };
+}
+
+/** Plain composer lines as preview lines (an entry in `currency`; CHF equal to the amounts in the base). */
+function previewLinesOf(ctx: WorkspaceContext, lines: readonly LineInput[], currency: string, base?: readonly { baseDebit: number; baseCredit: number }[], fxRate: string | null = null): BankPreviewLine[] {
+  const numberOf = ctx.store.db.prepare('SELECT number FROM account WHERE workspace_id = ? AND id = ?');
+  return lines.map((l, i) => ({
+    ...l,
+    accountNumber: (numberOf.get(ctx.workspaceId, l.account) as { number: string } | undefined)?.number ?? '',
+    currency,
+    fxRate,
+    baseDebit: base?.[i]?.baseDebit ?? (l.debit ?? 0),
+    baseCredit: base?.[i]?.baseCredit ?? (l.credit ?? 0),
+  }));
+}
+
+/**
+ * D178 E3 (A39 §17.5): run the booking of a settlement, contact or Spesen target and roll it back, keeping
+ * only its answer and the lines of every entry it posted. The same code a direct call runs, so the preview
+ * IS the booking; nothing it wrote survives (the D177-C1 dry run, extended to read its lines first).
+ */
+function dryRunCapture(
+  ctx: WorkspaceContext,
+  row: BankTxnRow,
+  target: BookableBankLineTarget,
+): { result: Result<BookBankLineOk>; entries: { currency: string; lines: BankPreviewLine[] }[] } {
+  try {
+    ctx.store.discardingChanges(() =>
+      ctx.store.tx(() => {
+        const result = runGuarded(() => performBooking(ctx, row, target, {}));
+        let entries: { currency: string; lines: BankPreviewLine[] }[] = [];
+        if (result.ok) {
+          const done = result as unknown as BookBankLineOk;
+          const ids = done.entryIds ?? [
+            ...(done.entryId !== null ? [done.entryId] : []),
+            ...done.paymentIds.map((p) => paymentEntryOf(ctx, p)).filter((e): e is string => e !== null && e !== done.entryId),
+          ];
+          entries = ids.map((id) => previewLinesOfEntry(ctx, id));
+        }
+        throw new DryRunDone(result, entries);
+      }),
+    );
+  } catch (e) {
+    if (e instanceof DryRunDone) return { result: e.result as Result<BookBankLineOk>, entries: e.entries };
+    throw e;
+  }
+  return { result: err('internal_error', { reason: 'the dry run answered nothing' }), entries: [] };
+}
+
+/**
+ * D178 E3 (A39 §17.5): the preview of a target that is not booked to accounts: the plan's figures (the
+ * documents and deviation, the contact and mode, the claims) and the booking's own verdict and lines.
+ */
+function composeSettlement(ctx: WorkspaceContext, row: BankTxnRow, given: Exclude<BookableBankLineTarget, { kind: 'accounts' }>): Result<ComposeBankLineOk> {
+  const bank = bankLedgerOf(ctx, row.bank_account_id);
+  let extra: Partial<BankBookingPreview> = {};
+  if (bank !== undefined) {
+    if (given.kind === 'open_item' && given.allocations !== undefined) {
+      const planned = planAllocations(ctx, row, bank.ledgerAccountId, { allocations: given.allocations, ...(given.remainder !== undefined ? { remainder: given.remainder } : {}) });
+      if ('plan' in planned) {
+        extra = {
+          deviationMinor: planned.plan.deviationMinor,
+          remainder: planned.plan.remainder,
+          remainderOptions: planned.plan.remainderOptions,
+          documents: planned.plan.documents,
+        };
+      }
+    } else if (given.kind === 'contact') {
+      const planned = planContact(ctx, row, bank.ledgerAccountId, given);
+      if ('plan' in planned) {
+        const p = planned.plan;
+        extra = {
+          contact: {
+            contactId: p.contactId,
+            name: p.contactName,
+            counterpartyKind: p.counterpartyKind,
+            mode: p.mode,
+            settingMode: p.settingMode,
+            overridden: p.overridden,
+            accountNumber: p.entry?.account.number ?? null,
+          },
+          ...(p.mode === 'guthaben' ? { remainder: { kind: 'on_account', amountMinor: row.amount_minor } } : {}),
+        };
+      }
+    } else if (given.kind === 'expense_claims') {
+      const planned = planExpenseClaims(ctx, row, given.claimIds);
+      if ('plan' in planned) extra = { claims: planned.plan.claims, deviationMinor: planned.plan.deviationMinor };
+    }
+  }
+  const run = dryRunCapture(ctx, row, given);
+  const verdict: { ok: true } | Err = run.result.ok ? { ok: true } : (run.result as Err);
+  const done = run.result.ok ? (run.result as unknown as BookBankLineOk) : null;
+  if (done !== null && done.remainder !== null && extra.remainder === undefined) {
+    extra = { ...extra, remainder: { kind: done.remainder.kind, amountMinor: done.remainder.amountMinor } };
+  }
+  const booking = bookingPreviewOf(given.kind, verdict, { ...extra, entries: run.entries, warnings: done?.warnings ?? [] });
+  return ok<ComposeBankLineOk>({
+    mode: 'expand',
+    composed: verdict.ok,
+    stamped: false,
+    lines: run.entries.flatMap((e) => e.lines),
+    captions: [],
+    verdict,
+    bankTxnId: row.id,
+    target: null,
+    booking,
+  });
+}
+
+/**
+ * D178 E3 (A39 §17.4, §17.5): the preview of an `accounts` target with a foreign-currency leg: the bank
+ * entry's lines through the composer (as any `accounts` booking), the conversion entry's lines with their
+ * CHF, the effective rate, and the `fx_counter_leg` consequence the booking needs acknowledged.
+ */
+function composeFx(ctx: WorkspaceContext, row: BankTxnRow, bankLedgerId: string, target: AccountsTarget): Result<ComposeBankLineOk> {
+  const consequenceExtra: Partial<BankBookingPreview> = {
+    consequences: [FX_COUNTER_LEG_CONSEQUENCE],
+    acknowledgementsRequired: ['fx_counter_leg'],
+    // Critic E3-L1: the preview names every warning the booking gives, from the same function.
+    warnings: fxBookingWarnings(ctx, row, target),
+  };
+  const refusedFx = (verdict: Err): Result<ComposeBankLineOk> =>
+    ok<ComposeBankLineOk>({
+      mode: 'expand',
+      composed: false,
+      stamped: false,
+      lines: [],
+      captions: [],
+      verdict,
+      bankTxnId: row.id,
+      target,
+      booking: bookingPreviewOf('accounts', verdict, consequenceExtra),
+    });
+  const planned = planFxAccounts(ctx, row, bankLedgerId, target);
+  if ('error' in planned) return refusedFx(planned.error);
+  const plan = planned.plan;
+  const composed = expandEntry(ctx, { date: lineBookingDate(row), lines: plan.bankLines });
+  if (!composed.ok) return composed;
+  const conversion = previewPostingLines(ctx, { date: lineBookingDate(row), source: 'camt', lines: plan.conversionLines, currency: plan.currency, fxRate: plan.rate });
+  const conversionLines = previewLinesOf(ctx, plan.conversionLines, plan.currency, conversion.ok ? conversion.lines : undefined, plan.rate);
+  const acknowledged = target.acknowledgeFx === true;
+  const verdict: { ok: true } | Err = !composed.verdict.ok
+    ? composed.verdict
+    : !conversion.ok
+      ? conversion.error
+      : acknowledged
+        ? { ok: true }
+        : bankTargetRefusal('fx_ack_required', { consequence: FX_COUNTER_LEG_CONSEQUENCE, acknowledge: 'target.acknowledgeFx' });
+  const base = baseCurrencyOf(ctx);
+  const booking = bookingPreviewOf('accounts', verdict, {
+    ...consequenceExtra,
+    deviationMinor: row.amount_minor - target.legs.reduce((s, l) => s + l.amountMinor, 0),
+    fx: { currency: plan.currency, foreignMinor: plan.foreignMinor, baseMinor: plan.baseMinor, rate: plan.rate, conversionLines },
+    entries: [
+      { currency: plan.currency, lines: conversionLines },
+      { currency: base, lines: previewLinesOf(ctx, composed.lines, base) },
+    ],
+  });
+  return ok<ComposeBankLineOk>({ ...composed, verdict, bankTxnId: row.id, target, booking });
+}
+
+/**
+ * D175 (A39 §14.2): what `book_bank_line` would post for an `accounts` or `rule` target on this line,
+ * WITHOUT posting: the rule expanded on the line (`expandRule`), the lines built exactly as the booking
+ * builds them (`buildAccountsLines`, the Durchlaufkonto included), then A02's composer (`expandEntry`,
+ * which runs `previewPostingLines`, the pre-write half of `postEntry`) stamps them and gives its verdict.
+ * So the preview IS the booking (`test/banking/bank-compose-parity.test.mjs`). A refusal the booking would
+ * give (`rule_not_found`, `ask_missing`, `rest_is_zero`, `legs_do_not_sum`, `line_not_open`, ...) is the
+ * VERDICT of the read, not a failure of it; a malformed input or an unknown line is the read's own refusal.
+ * Writes nothing.
+ */
+export function composeBankLine(ctx: WorkspaceContext, input: ComposeBankLineInput): Result<ComposeBankLineOk> {
+  const guard = requireString(input.bankTxnId, 'bankTxnId');
+  if (guard) return guard;
+  const validated = validateTarget(input.target);
+  if ('error' in validated) return validated.error;
+  const given = validated.target;
+  // D178 E3 (security review of 1de8bcd23): the preview of a Spesen target answers the claims and that of a
+  // contact target the contact, so each asks the read right of what it reveals (`hr.read`, the right
+  // `expense_claim_get` declares; `read_master_data`, the right of `get_contact`), the same rule A24
+  // declares for `compose_entry`. Asserted before the line is even read, so a seat without it learns nothing.
+  if (given.kind === 'expense_claims') {
+    const reads = ctx.capabilities.assert('hr.read');
+    if (!reads.ok) return reads;
+  }
+  if (given.kind === 'contact') {
+    const reads = ctx.capabilities.assert('read_master_data');
+    if (!reads.ok) return reads;
+  }
+  const row = readBankTxn(ctx, input.bankTxnId as string);
+  if (row === undefined) return err('not_found', { bankTxnId: input.bankTxnId });
+  const refused = (verdict: Err, target: AccountsTarget | null = null): Result<ComposeBankLineOk> =>
+    ok<ComposeBankLineOk>({
+      mode: 'expand',
+      composed: false,
+      stamped: false,
+      lines: [],
+      captions: [],
+      verdict,
+      bankTxnId: row.id,
+      target,
+      booking: bookingPreviewOf(given.kind, verdict),
+    });
+  const current = lineStateOf(ctx, row);
+  if (current.state !== 'open') return refused(lineNotOpen(row, current.state, current.link));
+  // D178 E3 (A39 §17.5): every other target previews through its plan and the booking itself.
+  if (given.kind !== 'accounts' && given.kind !== 'rule') return composeSettlement(ctx, row, given);
+  let target: AccountsTarget;
+  if (given.kind === 'rule') {
+    const expanded = expandRule(ctx, row, given);
+    if ('error' in expanded) return refused(expanded.error);
+    const again = validateTarget(expanded.target);
+    if ('error' in again) return refused(again.error);
+    target = again.target as AccountsTarget;
+  } else {
+    target = given;
+  }
+  const bank = bankLedgerOf(ctx, row.bank_account_id);
+  if (bank === undefined) return refused(err('needs_bank_account', { bankAccountId: row.bank_account_id }), target);
+  if (row.currency !== bank.currency) {
+    return refused(err('currency_mismatch', { bankTxnId: row.id, lineCurrency: row.currency, accountCurrency: bank.currency }), target);
+  }
+  // D178 E3 (A39 §17.4): a leg in the transaction currency books through the conversion entry.
+  if (target.legs.some((l) => l.fx !== undefined)) return composeFx(ctx, row, bank.ledgerAccountId, target);
+  const deviationMinor = row.amount_minor - target.legs.reduce((s, l) => s + l.amountMinor, 0);
+  const built = buildAccountsLines(ctx, row, bank.ledgerAccountId, target.legs, lineBookingDate(row), target.viaAccountId);
+  if ('error' in built) {
+    return ok<ComposeBankLineOk>({
+      mode: 'expand',
+      composed: false,
+      stamped: false,
+      lines: [],
+      captions: [],
+      verdict: built.error,
+      bankTxnId: row.id,
+      target,
+      booking: bookingPreviewOf('accounts', built.error, { deviationMinor }),
+    });
+  }
+  const base = baseCurrencyOf(ctx);
+  const composed = expandEntry(ctx, { date: lineBookingDate(row), lines: built.lines }, row.currency !== base ? { currency: row.currency } : {});
+  if (!composed.ok) return composed;
+  const warnings = target.legs.some((l) => controlAccountRoleOf(ctx, l.accountId) !== null) ? ['control_account_leg'] : [];
+  // A line in its Bankkonto's own foreign currency books at the stored rate: read the CHF the posting
+  // would store off the same pre-write half `postEntry` runs.
+  const priced =
+    row.currency !== base ? previewPostingLines(ctx, { date: lineBookingDate(row), source: 'camt', lines: [...composed.lines], currency: row.currency }) : null;
+  return ok<ComposeBankLineOk>({
+    ...composed,
+    bankTxnId: row.id,
+    target,
+    booking: bookingPreviewOf('accounts', composed.verdict, {
+      deviationMinor,
+      warnings,
+      entries: [
+        {
+          currency: row.currency,
+          lines: previewLinesOf(ctx, composed.lines, row.currency, priced !== null && priced.ok ? priced.lines : undefined, priced !== null && priced.ok ? priced.fx.rate : null),
+        },
+      ],
+    }),
+  });
 }
 
 // --- book_bank_line --------------------------------------------------------------------------------
@@ -236,6 +860,20 @@ export type BookBankLineOk = {
   differenceMinor: number | null;
   /** Stable codes a surface may render: `reversal_line`, `accepted_difference`, `control_account_leg`. */
   warnings: string[];
+  /**
+   * D178 E3: every journal entry the decision posted (a booking to accounts with a foreign counter-leg
+   * posts two: the conversion and the bank entry; a settlement its payments' entries). Present on the
+   * E3 targets and the FX booking; absent where `entryId` / `paymentIds` already say it all.
+   */
+  entryIds?: string[];
+  /** D178 E3 (A39 §17.1): a `contact` booking's contact, its side, the mode used and whether it overrode the setting. */
+  contact?: { contactId: string; counterpartyKind: ContactCounterpartyKind; mode: ContactBookingMode; overridden: boolean; accountNumber: string | null };
+  /** D178 E3 (A39 §17.2): a several-document settlement's deviation (line minus allocations). */
+  deviationMinor?: number;
+  /** D178 E3 (A39 §17.3): the claims a Spesen booking reimbursed. */
+  claimIds?: string[];
+  /** D178 E3 (A39 §17.4): the counter-leg in the transaction currency and the effective rate it was booked at. */
+  fx?: { currency: string; foreignMinor: number; baseMinor: number; rate: string };
 };
 
 /**
@@ -257,10 +895,15 @@ export function bookBankLine(ctx: WorkspaceContext, input: BookBankLineInput): R
   }
   const validated = validateTarget(input.target);
   if ('error' in validated) return validated.error;
-  const target = validated.target;
-  if (target.kind === 'open_item' || target.kind === 'payment_batch') {
+  const given = validated.target;
+  // D178 E3: a contact booking and a Spesen settlement are settlement acts too (A24 keys them on `pay`).
+  if (given.kind === 'open_item' || given.kind === 'payment_batch' || given.kind === 'contact' || given.kind === 'expense_claims') {
     const pays = ctx.capabilities.assert('pay');
     if (!pays.ok) return pays;
+  }
+  if (given.kind === 'expense_claims') {
+    const approves = ctx.capabilities.assert('spesen.approve');
+    if (!approves.ok) return approves;
   }
 
   const scopedKey = JSON.stringify(['book_bank_line', input.bankTxnId, input.idempotencyKey]);
@@ -271,12 +914,102 @@ export function bookBankLine(ctx: WorkspaceContext, input: BookBankLineInput): R
   if (row === undefined) return err('not_found', { bankTxnId: input.bankTxnId });
   const current = lineStateOf(ctx, row);
   if (current.state !== 'open') return lineNotOpen(row, current.state, current.link);
+  // D175: a Buchungsregel is expanded on THIS line before it is validated, then booked as the `accounts`
+  // target it stands for (the decision row says `accounts`; the rule id stays in the verb's input).
+  let target: BookableBankLineTarget;
+  if (given.kind === 'rule') {
+    const expanded = expandRule(ctx, row, given);
+    if ('error' in expanded) return expanded.error;
+    const again = validateTarget(expanded.target);
+    if ('error' in again) return again.error;
+    target = again.target as BookableBankLineTarget;
+  } else {
+    target = given;
+  }
 
   return runGuarded(() =>
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'book_bank_line', () =>
-      performBooking(ctx, row, target, { text: input.text }),
+      performBooking(ctx, row, target, { text: input.text, ...(given.kind === 'rule' ? { ruleId: given.standardId } : {}) }),
     ),
   );
+}
+
+/**
+ * D177 (A39 §16.1): `book_bank_line`'s own validation with NOTHING written, the dial's pre-draft screen
+ * (`ActionDef.prevalidate`). A governed seat's call is refused here with the very Result a direct call
+ * would answer, BEFORE it is pinned or drafted, so a Vorschlag the approval can only fail never reaches a
+ * person (the defect behind D177: a draft whose legs carried the wrong sign sat in the queue, unbookable).
+ *
+ * What it checks: the input guards and the target's shape (`invalid_input`), the line (`not_found`,
+ * `line_not_open`), and for an `accounts` or `rule` target everything `compose_entry` checks, which IS the
+ * booking's pre-write half (`composeBankLine`: the rule expanded on the line, the legs summing to it, every
+ * account and code, the currency, the Durchlaufkonto, and A02's verdict on the lines). A settlement
+ * (`open_item`, `payment_batch`) or a match (`existing_entry`) is screened by RUNNING the booking itself
+ * (`performBooking`, the very code a direct call runs: the document, run or entry exists in this
+ * workspace, is still open, fits the line's currency and amount) inside a transaction that is always
+ * rolled back (critic D177-C1), so nothing it wrote survives. A same-key replay answers undefined: the
+ * verb would replay its key.
+ */
+export function prevalidateBookBankLine(ctx: WorkspaceContext, input: BookBankLineInput): Err | undefined {
+  const guard =
+    requireString(input.bankTxnId, 'bankTxnId') ??
+    requireString(input.idempotencyKey, 'idempotencyKey') ??
+    optionalText(input.text, 'text');
+  if (guard) return guard;
+  if (input.date !== undefined) return noDateOverride();
+  if (typeof input.text === 'string' && input.text.length > MAX_TEXT) return err('invalid_input', { field: 'text', maxLength: MAX_TEXT });
+  const validated = validateTarget(input.target);
+  if ('error' in validated) return validated.error;
+  const scopedKey = JSON.stringify(['book_bank_line', input.bankTxnId, input.idempotencyKey]);
+  if (ctx.store.recallIdempotent<Result<BookBankLineOk>>(ctx.workspaceId, scopedKey, 'book_bank_line') !== undefined) {
+    // Critic D177-R2-1: the memo answers a genuine retry of a decision still in force. A line that is OPEN
+    // again (booked, then reopened) under a key that already decided it would replay the old answer and
+    // book nothing, so such a draft is never "screened" (it would supersede a valid Vorschlag).
+    return spentKeyOnOpenLine(ctx, input.bankTxnId as string, input.idempotencyKey as string);
+  }
+  const row = readBankTxn(ctx, input.bankTxnId as string);
+  if (row === undefined) return err('not_found', { bankTxnId: input.bankTxnId });
+  const current = lineStateOf(ctx, row);
+  if (current.state !== 'open') return lineNotOpen(row, current.state, current.link);
+  // D178 point 19 (E2): a possible duplicate's booking is never drafted before the person's decision.
+  const duplicate = duplicateDecisionPending(ctx, row.id);
+  if (duplicate !== null) return duplicate;
+  const given = validated.target;
+  if (given.kind !== 'accounts' && given.kind !== 'rule') return dryRunBooking(ctx, row, given, input.text);
+  const composed = composeBankLine(ctx, { bankTxnId: row.id, target: input.target });
+  if (!composed.ok) return composed;
+  const verdict = (composed as ComposeBankLineOk).verdict;
+  return verdict.ok ? undefined : (verdict as Err);
+}
+
+/** Carries a dry run's answer (and, for a preview, the lines it posted) out of the transaction it rolls back. */
+class DryRunDone {
+  constructor(
+    readonly result: Result,
+    readonly entries: { currency: string; lines: BankPreviewLine[] }[] = [],
+  ) {}
+}
+
+/**
+ * D177 (critic D177-C1): the booking's answer for a settlement or match target WITHOUT keeping anything:
+ * `performBooking` runs inside a transaction that is always rolled back (a savepoint when the caller is in
+ * one), and only its answer leaves. Every write it made (the payment, the entry, the link, the audit row,
+ * the memo) is undone with it.
+ */
+function dryRunBooking(ctx: WorkspaceContext, row: BankTxnRow, target: BookableBankLineTarget, text: string | undefined): Err | undefined {
+  try {
+    // Critic D177-R2-2: every write here is rolled back, so the store's change count must not count it,
+    // or an unexpected throw from inside would be reported as a refusal that changed the book.
+    ctx.store.discardingChanges(() =>
+      ctx.store.tx(() => {
+        throw new DryRunDone(runGuarded(() => performBooking(ctx, row, target, { text })));
+      }),
+    );
+  } catch (e) {
+    if (e instanceof DryRunDone) return e.result.ok ? undefined : (e.result as Err);
+    throw e;
+  }
+  return undefined;
 }
 
 /**
@@ -287,32 +1020,51 @@ export function bookBankLine(ctx: WorkspaceContext, input: BookBankLineInput): R
 export function performBooking(
   ctx: WorkspaceContext,
   row: BankTxnRow,
-  target: BookBankLineTarget,
-  opts: { text?: string | undefined },
+  target: BookableBankLineTarget,
+  opts: { text?: string | undefined; ruleId?: string },
 ): Result<BookBankLineOk> {
   const current = lineStateOf(ctx, row);
   if (current.state !== 'open') abort(lineNotOpen(row, current.state, current.link));
+  // D178 point 19 (E2, critic R2-1): a possible duplicate waits for the person's decision, by every path.
+  const duplicate = duplicateDecisionPending(ctx, row.id);
+  if (duplicate !== null) abort(duplicate);
   const bank = bankLedgerOf(ctx, row.bank_account_id);
   if (bank === undefined) abort(err('needs_bank_account', { bankAccountId: row.bank_account_id }));
   // A line in ANOTHER currency than its Bankkonto (a EUR movement reported on a CHF account) cannot be
   // posted onto that account's ledger account: the conversion the bank applied is not a fact these
   // books hold (§H-FX, A20 note 9). A line in the account's own foreign currency posts at the stored
   // rate. Matching an existing entry compares currencies leg by leg instead.
-  if (row.currency !== bank.currency && (target.kind === 'accounts' || target.kind === 'open_item')) {
+  if (
+    row.currency !== bank.currency &&
+    (target.kind === 'accounts' || target.kind === 'open_item' || target.kind === 'contact' || target.kind === 'expense_claims')
+  ) {
     abort(err('currency_mismatch', { bankTxnId: row.id, lineCurrency: row.currency, accountCurrency: bank.currency }));
   }
   const warnings = row.reversal_ind === 1 ? ['reversal_line'] : [];
   switch (target.kind) {
     case 'open_item':
-      return bookOpenItem(ctx, row, bank.ledgerAccountId, target, opts, warnings);
+      // D178 E3 (A39 §17.2): several documents in one payment; one document keeps its own path.
+      if (target.allocations !== undefined) return bookAllocations(ctx, row, bank.ledgerAccountId, target, warnings);
+      return bookOpenItem(ctx, row, bank.ledgerAccountId, target as OpenItemTarget, opts, warnings);
     case 'payment_batch':
       return bookPaymentBatch(ctx, row, bank.ledgerAccountId, target.batchId, warnings);
     case 'existing_entry':
       return matchExistingEntry(ctx, row, bank.ledgerAccountId, target.entryId, target.acceptDifference === true ? (target.differenceReason ?? '') : null, warnings);
     case 'accounts':
-      return bookToAccounts(ctx, row, bank.ledgerAccountId, target.legs, opts, warnings);
+      // D178 E3 (A39 §17.4): a leg in the transaction currency books through the conversion entry.
+      if (target.legs.some((l) => l.fx !== undefined)) {
+        return bookToAccountsFx(ctx, row, bank.ledgerAccountId, target, opts, warnings);
+      }
+      return bookToAccounts(ctx, row, bank.ledgerAccountId, target.legs, opts, warnings, target.viaAccountId);
+    case 'contact':
+      return bookContact(ctx, row, bank.ledgerAccountId, target, opts, warnings);
+    case 'expense_claims':
+      return bookExpenseClaims(ctx, row, bank.ledgerAccountId, target.claimIds, warnings);
   }
 }
+
+/** The single-document `open_item` target (`documentId` set; `validateTarget` guarantees it). */
+type OpenItemTarget = Extract<BookBankLineTarget, { kind: 'open_item' }> & { documentId: string };
 
 /** The A21 queue row of a credit follows its line: `applied` on a settlement, `dismissed` otherwise. */
 function syncCreditRow(
@@ -359,7 +1111,7 @@ function bookOpenItem(
   ctx: WorkspaceContext,
   row: BankTxnRow,
   bankLedgerId: string,
-  target: Extract<BookBankLineTarget, { kind: 'open_item' }>,
+  target: OpenItemTarget,
   opts: { text?: string | undefined },
   warnings: string[],
 ): Result<BookBankLineOk> {
@@ -548,6 +1300,639 @@ function bookOpenItem(
     differenceMinor: null,
     warnings,
   });
+}
+
+// --- D178 E3: the new targets (A39 §17.1 to §17.4) -----------------------------------------------------
+
+/** The bank legs of `entryIds` on this line's ledger: what a decision claims. */
+function claimsOf(ctx: WorkspaceContext, bankLedgerId: string, entryIds: readonly (string | null)[]): string[] {
+  return bankLegsOf(ctx, bankLedgerId, entryIds).map((l) => l.lineId);
+}
+
+/** The journal entry an A14 payment posted. */
+function paymentEntryOf(ctx: WorkspaceContext, paymentId: string): string | null {
+  const row = ctx.store.db
+    .prepare('SELECT journal_entry_id AS e FROM payment WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, paymentId) as { e: string | null } | undefined;
+  return row?.e ?? null;
+}
+
+/**
+ * `open_item { allocations[] }` (A39 §17.2): several invoices or bills of ONE contact in ONE A14 payment,
+ * from the plan the preview shows (`planAllocations`). Cash left over parks as the contact's Guthaben only
+ * when the person chose `on_account`; a partly allocated invoice stays open or is written off within the
+ * A14 threshold. Every refusal of the plan aborts the booking before anything is written.
+ */
+function bookAllocations(
+  ctx: WorkspaceContext,
+  row: BankTxnRow,
+  bankLedgerId: string,
+  target: Extract<BookBankLineTarget, { kind: 'open_item' }>,
+  warnings: string[],
+): Result<BookBankLineOk> {
+  const planned = planAllocations(ctx, row, bankLedgerId, { allocations: target.allocations ?? [], ...(target.remainder !== undefined ? { remainder: target.remainder } : {}) });
+  if ('error' in planned) abort(planned.error);
+  const plan = planned.plan;
+  if (plan.refusal !== null) abort(plan.refusal);
+  if (plan.payment === null) abort(err('internal_error', { reason: 'an allocation plan without a refusal carries its payment' }));
+  const generation = lineGeneration(ctx, row.id);
+  const paid = recordPayment(ctx, { ...plan.payment, idempotencyKey: `bankline-${row.id}-g${generation}` });
+  if (!paid.ok) abort(paid);
+  const paymentId = paid['paymentId'] as string;
+  const entryId = typeof paid['entryId'] === 'string' ? (paid['entryId'] as string) : null;
+  const remainder: BankLineRemainder = {
+    kind: plan.remainder.kind,
+    amountMinor: plan.remainder.amountMinor,
+    documentOpenMinor: plan.documents.reduce((s, d) => s + d.openAfterMinor, 0),
+    feeOpenMinor: null,
+  };
+  const linkId = writeLineLink(ctx, {
+    bankTxnId: row.id,
+    kind: 'payment',
+    targetId: paymentId,
+    state: 'booked',
+    targetKind: 'open_item',
+    paymentId,
+    entryId,
+    remainderMode: remainder.kind === 'none' ? null : remainder.kind === 'written_off' ? 'write_off' : remainder.kind === 'on_account' ? 'on_account' : 'leave_open',
+    remainderMinor: remainder.amountMinor,
+    claims: claimsOf(ctx, bankLedgerId, [entryId]),
+  });
+  // A credit's A21 queue row follows its line, naming the first invoice it settled.
+  syncCreditRow(ctx, row, 'applied', { invoiceId: plan.documents[0]?.documentId ?? null, paymentId, appliedMode: remainder.kind === 'written_off' ? 'full' : 'partial' });
+  ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'book', actor: ctx.actor, at: ctx.clock.now() });
+  return ok<BookBankLineOk>({
+    bankTxnId: row.id,
+    state: 'booked',
+    targetKind: 'open_item',
+    linkId,
+    entryId,
+    paymentId,
+    paymentIds: [paymentId],
+    remainder,
+    differenceMinor: null,
+    warnings,
+    entryIds: entryId === null ? [] : [entryId],
+    deviationMinor: plan.deviationMinor,
+  });
+}
+
+/**
+ * `contact` (A39 §17.1, bexio's "Kundenbuchung"): the plan decides the mode. `guthaben` is ONE A14 payment
+ * with the contact as counterparty and no allocation (the whole amount is its Guthaben, applied later by
+ * `allocate_payment`); `anzahlung` is ONE A02 entry between the bank and the Anzahlungen account. The
+ * contact is recorded on the decision either way, and an override of the setting with its reason.
+ */
+function bookContact(
+  ctx: WorkspaceContext,
+  row: BankTxnRow,
+  bankLedgerId: string,
+  target: Extract<BookBankLineTarget, { kind: 'contact' }>,
+  opts: { text?: string | undefined },
+  warnings: string[],
+): Result<BookBankLineOk> {
+  const pays = ctx.capabilities.assert('pay');
+  if (!pays.ok) abort(pays);
+  const planned = planContact(ctx, row, bankLedgerId, target);
+  if ('error' in planned) abort(planned.error);
+  const plan = planned.plan;
+  const note = plan.overridden ? `abweichend: ${plan.mode}; Grund: ${plan.overrideReason ?? ''}`.slice(0, MAX_TEXT) : null;
+  const contactAnswer = {
+    contactId: plan.contactId,
+    counterpartyKind: plan.counterpartyKind,
+    mode: plan.mode,
+    overridden: plan.overridden,
+    accountNumber: plan.entry?.account.number ?? null,
+  };
+  // Owner, 21.10.2026: the receipt VAT of a customer Anzahlung, when the setting asks for it. Priced on the
+  // base-currency gross: the line itself, or a foreign line's fixed base amount. A foreign Anzahlung held
+  // in its own currency (the setting `foreign`) has no base-currency figure to tax and is refused by name.
+  const moneyIn = row.credit_debit === 'CRDT';
+  const grossBase = plan.entry?.conversion?.baseMinor ?? (row.currency === baseCurrencyOf(ctx) ? row.amount_minor : null);
+  let vat: AnzahlungVatPlan | null = null;
+  if (plan.counterpartyKind === 'customer' && moneyIn) {
+    if (grossBase === null) {
+      const wouldTax = planAnzahlungVat(ctx, { counterpartyKind: 'customer', moneyIn, grossBaseMinor: row.amount_minor, date: lineBookingDate(row) });
+      if ('error' in wouldTax || wouldTax.vat !== null) {
+        abort(err('unsupported', {
+          bankTxnId: row.id,
+          reason: 'anzahlung_vat_needs_base_currency',
+          sentence: {
+            en: 'VAT on a prepayment is booked in the book currency: fix the prepayment in it (setting bank.anzahlung_fx_mode fixed), or turn VAT on prepayments off.',
+            'de-CH': 'Die MWST auf einer Anzahlung wird in der Buchungswährung gebucht: Halte die Anzahlung darin fest (Einstellung bank.anzahlung_fx_mode fixed) oder schalte die MWST auf Anzahlungen aus.',
+          },
+        }));
+      }
+    } else {
+      const planned = planAnzahlungVat(ctx, { counterpartyKind: 'customer', moneyIn, grossBaseMinor: grossBase, date: lineBookingDate(row) });
+      if ('error' in planned) abort(planned.error);
+      vat = planned.vat;
+    }
+  }
+  // Owner, 21.10.2026 (critic E3-R2-2): a REFUND of a customer's Guthaben that carried receipt VAT is an
+  // Entgeltsminderung. `bank.anzahlung_vat_refund` decides: `reverse` (the default) corrects the matching
+  // share of the receipt VAT automatically, oldest Guthaben first; `refuse` books no refund until the call
+  // states the correction (`target.refundVat`); `warn` books the refund and warns. A stated `refundVat`
+  // other than the setting's own answer needs `overrideReason` (D172), recorded on the decision's note.
+  // D178 E3: a REFUND through the contact target (money back to a customer, or back from a supplier) nets
+  // against that contact's open Guthaben in A14, oldest first, so the cash it hands back is no longer there
+  // to allocate. A refund larger than the open Guthaben is refused unless the call states it
+  // (`target.beyondGuthaben`), which books the rest on account as before.
+  const netting: { paymentId: string; amountMinor: number; cashMinor: number }[] = [];
+  const isRefund = plan.payment !== null && ((plan.counterpartyKind === 'customer' && !moneyIn) || (plan.counterpartyKind === 'supplier' && moneyIn));
+  if (isRefund) {
+    const guthaben = openGuthabenOf(ctx, plan.contactId, moneyIn ? 'outgoing' : 'incoming');
+    const openMinor = guthaben.reduce((n, g) => n + g.openMinor, 0);
+    if (row.amount_minor > openMinor && target.beyondGuthaben !== true) {
+      abort(err('refund_exceeds_guthaben', {
+        bankTxnId: row.id,
+        field: 'target.beyondGuthaben',
+        amountMinor: row.amount_minor,
+        openGuthabenMinor: openMinor,
+        sentence: {
+          en: 'This refund is larger than the open credit (Guthaben) of the contact. Book it to an invoice or a credit note, or state that it goes beyond the credit (beyondGuthaben).',
+          'de-CH': 'Diese Rückzahlung ist grösser als das offene Guthaben des Kontakts. Buche sie auf eine Rechnung oder Gutschrift, oder gib an, dass sie über das Guthaben hinausgeht (beyondGuthaben).',
+        },
+      }));
+    }
+    let left = row.amount_minor;
+    for (const g of guthaben) {
+      if (left <= 0) break;
+      const cash = Math.min(left, g.openMinor);
+      netting.push({ paymentId: g.paymentId, amountMinor: g.amountMinor, cashMinor: cash });
+      left -= cash;
+    }
+  }
+  let refundCorrection: { paymentId: string; amountMinor: number; cashMinor: number }[] = [];
+  if (plan.counterpartyKind === 'customer' && !moneyIn && plan.payment !== null) {
+    // Security review: the correction is tied to the Guthaben this refund nets against, at most the cash it
+    // hands back from each.
+    const vatOpen = new Map(refundableVatGuthabenOf(ctx, plan.contactId).map((o) => [o.paymentId, o] as const));
+    const open = netting
+      .flatMap((n) => {
+        const v = vatOpen.get(n.paymentId);
+        return v === undefined ? [] : [{ paymentId: n.paymentId, amountMinor: v.amountMinor, openMinor: Math.min(n.cashMinor, v.openMinor) }];
+      })
+      .filter((o) => o.openMinor > 0);
+    if (open.length > 0) {
+      const setting = getSetting<string>(ctx, 'bank.anzahlung_vat_refund');
+      const stated = target.refundVat;
+      if (setting === 'refuse' && stated === undefined) {
+        abort(err('anzahlung_vat_refund_needs_decision', {
+          bankTxnId: row.id,
+          field: 'target.refundVat',
+          allowed: ['reverse', 'keep'],
+          guthabenPaymentIds: open.map((o) => o.paymentId),
+          sentence: {
+            en: 'This refund hands back a prepayment whose VAT was declared. State whether its VAT is corrected (reverse) or kept (keep).',
+            'de-CH': 'Diese Rückzahlung gibt eine Anzahlung zurück, deren MWST deklariert wurde. Gib an, ob die MWST korrigiert (reverse) oder belassen (keep) wird.',
+          },
+        }));
+      }
+      const own = setting === 'warn' ? 'keep' : 'reverse';
+      const act = stated ?? own;
+      const reason = typeof target.overrideReason === 'string' ? target.overrideReason.trim() : '';
+      // Security review: departing from the setting's answer (or keeping the VAT where the setting asks the
+      // call to decide) changes a filed figure, so it needs the setting owner's right, `manage_vat_config`
+      // (A24 and the `vat-file` dial family declare the same for a stated `refundVat`), and a reason.
+      const departs = stated !== undefined && (setting === 'refuse' ? stated === 'keep' : stated !== own);
+      if (departs) {
+        const vatRight = ctx.capabilities.assert('manage_vat_config');
+        if (!vatRight.ok) abort(vatRight as Err);
+        if (reason.length === 0) {
+          abort(bankTargetRefusal('reason_required', { field: 'target.overrideReason', settingKey: 'bank.anzahlung_vat_refund', setting, refundVat: stated }));
+        }
+      }
+      if (act === 'reverse') {
+        let left = row.amount_minor;
+        for (const o of open) {
+          if (left <= 0) break;
+          const cash = Math.min(left, o.openMinor);
+          refundCorrection.push({ paymentId: o.paymentId, amountMinor: o.amountMinor, cashMinor: cash });
+          left -= cash;
+        }
+      } else {
+        warnings.push('anzahlung_vat_refund_uncorrected');
+      }
+    }
+  }
+  if (plan.payment !== null) {
+    const generation = lineGeneration(ctx, row.id);
+    const paid = recordPayment(ctx, { ...plan.payment, idempotencyKey: `bankline-${row.id}-g${generation}` });
+    if (!paid.ok) abort(paid);
+    const paymentId = paid['paymentId'] as string;
+    const entryId = typeof paid['entryId'] === 'string' ? (paid['entryId'] as string) : null;
+    recordRefundNetting(ctx, paymentId, netting);
+    // Owner, 21.10.2026 (setting `bank.anzahlung_vat`, default off): the Umsatzsteuer on a received customer
+    // Anzahlung, booked now on 1300 and cleared when A14 applies the Guthaben to the invoice. The decision
+    // names this entry (so the raw Storno refuses it, L3); the payment's entry is held by the line's claim.
+    let vatEntryId: string | null = null;
+    if (vat !== null) {
+      const vatPosted = postEntry(ctx, {
+        date: lineBookingDate(row),
+        source: 'camt',
+        description: `MWST auf Anzahlung ${plan.contactName}`.slice(0, MAX_TEXT),
+        // MINTED, never derived from the line alone (the A20 rule against a squattable key).
+        idempotencyKey: `bankline-entry-${row.id}-${ctx.ids.next('ble')}`,
+        lines: vat.lines,
+      });
+      if (!vatPosted.ok) abort(vatPosted);
+      vatEntryId = vatPosted.entryId;
+      warnings.push('anzahlung_vat');
+    }
+    const remainder: BankLineRemainder = { kind: 'on_account', amountMinor: row.amount_minor, documentOpenMinor: null, feeOpenMinor: null };
+    const linkId = writeLineLink(ctx, {
+      bankTxnId: row.id,
+      kind: 'payment',
+      targetId: paymentId,
+      state: 'booked',
+      targetKind: 'contact',
+      paymentId,
+      entryId: vatEntryId ?? entryId,
+      remainderMode: 'on_account',
+      remainderMinor: row.amount_minor,
+      note: refundNote(note, target),
+      contactId: plan.contactId,
+      claims: claimsOf(ctx, bankLedgerId, [entryId]),
+    });
+    // The Entgeltsminderung of a refunded Guthaben (owner, 21.10.2026), dated the refund line's date and
+    // recorded against the refund line's decision, whose reopen reverses it.
+    const correctionIds: string[] = [];
+    for (const c of refundCorrection) {
+      const done = clearAnzahlungVat(ctx, { id: c.paymentId, amountMinor: c.amountMinor }, c.cashMinor, { kind: 'refund', date: lineBookingDate(row), linkId });
+      if ('error' in done) abort(done.error);
+      if (done.entryId !== null) correctionIds.push(done.entryId);
+    }
+    if (correctionIds.length > 0) warnings.push('anzahlung_vat_refund_corrected');
+    syncCreditRow(ctx, row, 'dismissed');
+    ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'book', actor: ctx.actor, at: ctx.clock.now() });
+    return ok<BookBankLineOk>({
+      bankTxnId: row.id,
+      state: 'booked',
+      targetKind: 'contact',
+      linkId,
+      entryId,
+      paymentId,
+      paymentIds: [paymentId],
+      remainder,
+      differenceMinor: null,
+      warnings,
+      entryIds: [entryId, vatEntryId, ...correctionIds].filter((e): e is string => e !== null),
+      contact: contactAnswer,
+    });
+  }
+  const entry = plan.entry;
+  if (entry === null) abort(err('internal_error', { reason: 'a contact plan carries a payment or an entry' }));
+  const base = baseCurrencyOf(ctx);
+  const description = (opts.text ?? entry.description).slice(0, MAX_TEXT);
+  // Owner, 21.10.2026: on a Bankkonto in another currency the Anzahlung is FIXED in the base currency at
+  // the receipt rate (the default of `bank.anzahlung_fx_mode`): a CONVERSION entry in the line's currency
+  // carries the bank leg (claimed by the line) against the realised-FX account, and the base-currency
+  // entry books that account against the Anzahlungen account. The decision names the base-currency entry
+  // (the raw Storno refuses it, L3) and `reopen_bank_line` reverses both. Without a conversion (a
+  // base-currency line, or the setting `foreign`) ONE entry in the line's own currency, as before.
+  let conversionId: string | null = null;
+  if (entry.conversion !== null) {
+    const conv = postEntry(ctx, {
+      date: lineBookingDate(row),
+      source: 'camt',
+      description: `${description}: Umrechnung ${entry.conversion.currency} zum Kurs ${entry.conversion.rate}`.slice(0, MAX_TEXT),
+      // MINTED, never derived from the line alone (the A20 rule against a squattable key).
+      idempotencyKey: `bankline-entry-${row.id}-${ctx.ids.next('ble')}`,
+      lines: entry.conversion.lines,
+      currency: entry.conversion.currency,
+      fxRate: entry.conversion.rate,
+    });
+    if (!conv.ok) abort(conv);
+    conversionId = conv.entryId;
+  }
+  const posted = postEntry(ctx, {
+    date: lineBookingDate(row),
+    source: 'camt',
+    description,
+    // MINTED, never derived from the line alone (the A20 rule against a squattable key).
+    idempotencyKey: `bankline-entry-${row.id}-${ctx.ids.next('ble')}`,
+    // The receipt VAT (owner, 21.10.2026) rides the base-currency entry: with the Anzahlungen account there is
+    // no application step in TILL, so the manual reclassification to 1100 must reverse it (warned below).
+    lines: vat === null ? entry.lines : [...entry.lines, ...vat.lines],
+    // A line in its Bankkonto's own currency (the setting `foreign`) books in that currency at the stored
+    // rate, exactly as an `accounts` booking does; a fixed Anzahlung's own entry is in the base currency.
+    ...(row.currency !== base && entry.conversion === null ? { currency: row.currency } : {}),
+  });
+  if (!posted.ok) abort(posted);
+  const entryId = posted.entryId;
+  if (vat !== null) warnings.push('anzahlung_vat', 'anzahlung_vat_clears_on_reclassification');
+  const linkId = writeLineLink(ctx, {
+    bankTxnId: row.id,
+    kind: 'journal_entry',
+    targetId: entryId,
+    state: 'booked',
+    targetKind: 'contact',
+    entryId,
+    note,
+    contactId: plan.contactId,
+    claims: claimsOf(ctx, bankLedgerId, [conversionId ?? entryId]),
+  });
+  syncCreditRow(ctx, row, 'dismissed');
+  ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'book', actor: ctx.actor, at: ctx.clock.now() });
+  return ok<BookBankLineOk>({
+    bankTxnId: row.id,
+    state: 'booked',
+    targetKind: 'contact',
+    linkId,
+    entryId,
+    paymentId: null,
+    paymentIds: [],
+    remainder: null,
+    differenceMinor: null,
+    warnings,
+    entryIds: conversionId === null ? [entryId] : [conversionId, entryId],
+    ...(entry.conversion !== null
+      ? { fx: { currency: entry.conversion.currency, foreignMinor: entry.conversion.foreignMinor, baseMinor: entry.conversion.baseMinor, rate: entry.conversion.rate } }
+      : {}),
+    contact: contactAnswer,
+  });
+}
+
+/**
+ * `expense_claims` (A39 §17.3): approved Spesen paid from a debit line, each through E02's OWN
+ * reimbursement (`reimburseClaim`, the function `expense_claim_reimburse` runs), dated the line's booking
+ * date, from the line's Bankkonto: one A14 payment per claim clearing 2260 (D95). Never a second posting
+ * path. The line claims every payment's bank leg (their sum is the line, by the plan's check).
+ */
+function bookExpenseClaims(
+  ctx: WorkspaceContext,
+  row: BankTxnRow,
+  bankLedgerId: string,
+  claimIds: readonly string[],
+  warnings: string[],
+): Result<BookBankLineOk> {
+  const pays = ctx.capabilities.assert('pay');
+  if (!pays.ok) abort(pays);
+  const planned = planExpenseClaims(ctx, row, claimIds);
+  if ('error' in planned) abort(planned.error);
+  if (planned.plan.refusal !== null) abort(planned.plan.refusal);
+  const date = lineBookingDate(row);
+  const paymentIds: string[] = [];
+  for (const claim of planned.plan.claims) {
+    const paid = reimburseClaim(
+      ctx,
+      {
+        claimId: claim.claimId,
+        bankAccountId: bankLedgerId,
+        confirm: true,
+        // MINTED: E02 memoises under (claim, key), and no caller can know this one.
+        idempotencyKey: `bankline-spesen-${row.id}-${ctx.ids.next('bls')}`,
+      },
+      { date, source: 'camt' },
+    );
+    if (!paid.ok) abort(paid as Err);
+    if (paid['alreadyReimbursed'] === true || typeof paid['paymentId'] !== 'string') {
+      abort(bankTargetRefusal('claim_not_approved', { claimId: claim.claimId, status: 'reimbursed' }));
+    }
+    paymentIds.push(paid['paymentId'] as string);
+  }
+  const entryIds = paymentIds.map((p) => paymentEntryOf(ctx, p)).filter((e): e is string => e !== null);
+  const linkId = writeLineLink(ctx, {
+    bankTxnId: row.id,
+    kind: 'payment',
+    targetId: paymentIds[0] as string,
+    state: 'booked',
+    targetKind: 'expense_claims',
+    paymentId: paymentIds[0] ?? null,
+    entryId: entryIds[0] ?? null,
+    claims: claimsOf(ctx, bankLedgerId, entryIds),
+  });
+  ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'book', actor: ctx.actor, at: ctx.clock.now() });
+  return ok<BookBankLineOk>({
+    bankTxnId: row.id,
+    state: 'booked',
+    targetKind: 'expense_claims',
+    linkId,
+    entryId: entryIds[0] ?? null,
+    paymentId: paymentIds[0] ?? null,
+    paymentIds,
+    remainder: null,
+    differenceMinor: null,
+    warnings,
+    entryIds,
+    claimIds: planned.plan.claims.map((c) => c.claimId),
+  });
+}
+
+/** What an `accounts` target with foreign-currency legs books: both entries' lines and the effective rate. */
+export interface FxBookingPlan {
+  currency: string;
+  foreignMinor: number;
+  baseMinor: number;
+  rate: string;
+  /** The realised-FX account the conversion runs through (A14's role, by the line's direction). */
+  conversionAccountId: string;
+  /** The conversion entry, in `currency` at `rate`: each FX leg against the conversion account. */
+  conversionLines: LineInput[];
+  /** The bank entry, in the base currency: the bank against the conversion account and every base leg. */
+  bankLines: LineInput[];
+}
+
+/**
+ * D178 E3 (A39 §17.4): the plan of an `accounts` booking whose legs carry `fx`. Pure reads. Because an
+ * entry carries ONE currency (A02 §H-FX), the counter-legs in the transaction currency are booked in a
+ * CONVERSION entry against the realised-FX account (4906 on a debit line, 3806 on a credit line) at the
+ * EFFECTIVE rate (their CHF divided by their foreign amount, twelve decimals), and the bank entry books the
+ * bank against that same account in CHF beside every base leg. The realised-FX account nets to zero, and
+ * no foreign line ever lands on a balance-sheet account: the bank ledger only holds CHF, so neither A22's
+ * revaluation nor A40's liquidity sees a foreign position that does not exist.
+ */
+export function planFxAccounts(
+  ctx: WorkspaceContext,
+  row: BankTxnRow,
+  bankLedgerId: string,
+  target: Extract<BookBankLineTarget, { kind: 'accounts' }>,
+): { plan: FxBookingPlan } | { error: Err } {
+  const base = baseCurrencyOf(ctx);
+  if (row.currency !== base) return { error: bankTargetRefusal('fx_leg_needs_base_line', { bankTxnId: row.id, lineCurrency: row.currency, baseCurrency: base }) };
+  if (target.viaAccountId !== undefined) {
+    return { error: err('invalid_input', { field: 'target.viaAccountId', reason: 'a booking with a foreign-currency leg runs through the conversion entry, not a Durchlaufkonto' }) };
+  }
+  const fxLegs = target.legs.map((l, i) => ({ leg: l, i })).filter((x) => x.leg.fx !== undefined);
+  const currency = fxLegs[0]!.leg.fx!.currency;
+  // An own-account transfer is never part of a booking with a foreign leg: it books on its own, where the
+  // transfer guard of `bookToAccounts` (critic A39R2-2) can see it.
+  for (let i = 0; i < target.legs.length; i += 1) {
+    const own = ctx.store.db
+      .prepare('SELECT 1 AS p FROM bank_account WHERE workspace_id = ? AND ledger_account_id = ? LIMIT 1')
+      .get(ctx.workspaceId, target.legs[i]!.accountId);
+    if (own !== undefined) {
+      return { error: err('invalid_input', { field: `target.legs[${i}].accountId`, reason: 'a transfer between own accounts books on its own, without a foreign-currency leg' }) };
+    }
+  }
+  for (const { leg, i } of fxLegs) {
+    const fx = leg.fx!;
+    if (fx.currency !== currency || fx.currency === base) {
+      return { error: bankTargetRefusal('fx_currency_mismatch', { field: `target.legs[${i}].fx.currency`, currency: fx.currency, expectedCurrency: currency, baseCurrency: base }) };
+    }
+    if (leg.taxCode !== undefined) return { error: bankTargetRefusal('fx_leg_vat_refused', { field: `target.legs[${i}].taxCode`, taxCode: leg.taxCode }) };
+    if (leg.amountMinor <= 0) {
+      return { error: err('invalid_input', { field: `target.legs[${i}].amountMinor`, reason: "a foreign-currency leg runs in the line's direction" }) };
+    }
+    const account = ctx.store.db
+      .prepare('SELECT id, number, type, archived FROM account WHERE workspace_id = ? AND id = ?')
+      .get(ctx.workspaceId, leg.accountId) as { id: string; number: string; type: string; archived: number } | undefined;
+    if (account === undefined) return { error: err('not_found', { field: `target.legs[${i}].accountId`, accountId: leg.accountId }) };
+    if (account.archived === 1) return { error: err('account_archived', { accountId: leg.accountId }) };
+    if (account.type !== 'income' && account.type !== 'expense') {
+      return { error: bankTargetRefusal('invalid_fx_leg_account', { field: `target.legs[${i}].accountId`, accountId: account.id, accountNumber: account.number, accountType: account.type }) };
+    }
+  }
+  const moneyIn = row.credit_debit === 'CRDT';
+  const role = resolveRole(ctx, moneyIn ? 'salesFxRealised' : 'purchaseFxRealised');
+  if (isRejection(role)) return { error: role as Err };
+  const baseMinor = fxLegs.reduce((s, x) => s + x.leg.amountMinor, 0);
+  const foreignMinor = fxLegs.reduce((s, x) => s + x.leg.fx!.amountMinor, 0);
+  // THE EFFECTIVE RATE: the CHF the bank booked for these legs over their foreign amount, half up at twelve
+  // decimals. Its conversion of the foreign total gives back the CHF exactly (checked below), so nothing is
+  // left for a revaluation to find.
+  const scaled = (BigInt(baseMinor) * RATE_SCALE * 2n + BigInt(foreignMinor)) / (BigInt(foreignMinor) * 2n);
+  if (scaled <= 0n || scaled > RATE_MAX_SCALED) {
+    return { error: err('invalid_input', { field: 'target.legs', reason: 'the CHF and foreign amounts give no usable rate' }) };
+  }
+  const rate = formatRate(scaled);
+  // The conversion entry: each FX leg in the transaction currency against the conversion account.
+  const conversionLines: LineInput[] = [];
+  for (const { leg } of fxLegs) {
+    const f = leg.fx!.amountMinor;
+    conversionLines.push(moneyIn ? { account: leg.accountId, credit: f } : { account: leg.accountId, debit: f });
+  }
+  conversionLines.push(moneyIn ? { account: role.id, debit: foreignMinor } : { account: role.id, credit: foreignMinor });
+  const previewed = previewPostingLines(ctx, { date: lineBookingDate(row), source: 'camt', lines: conversionLines, currency, fxRate: rate });
+  if (!previewed.ok) return { error: previewed.error };
+  // Every FX leg's CHF must be what the one rate gives it (an entry has one rate, allocated by largest
+  // remainder); the conversion account's CHF must be the legs' total.
+  const yielded = previewed.lines.slice(0, fxLegs.length).map((l) => l.baseDebit + l.baseCredit);
+  const convBase = previewed.lines[fxLegs.length]!;
+  const mismatch = fxLegs.some((x, k) => yielded[k] !== x.leg.amountMinor) || convBase.baseDebit + convBase.baseCredit !== baseMinor;
+  if (mismatch) {
+    return {
+      error: bankTargetRefusal('fx_leg_amounts_inconsistent', {
+        rate,
+        legs: fxLegs.map((x, k) => ({ legIndex: x.i, amountMinor: x.leg.amountMinor, foreignMinor: x.leg.fx!.amountMinor, yieldedMinor: yielded[k] ?? null })),
+      }),
+    };
+  }
+  // The bank entry: the FX legs collapse into ONE leg on the conversion account (their CHF, no MWST),
+  // beside every base leg, built exactly as any `accounts` booking.
+  const bankLegs: BankLineLeg[] = [
+    { accountId: role.id, amountMinor: baseMinor, description: `Umrechnung ${currency}` },
+    ...target.legs.filter((l) => l.fx === undefined),
+  ];
+  const built = buildAccountsLines(ctx, row, bankLedgerId, bankLegs, lineBookingDate(row));
+  if ('error' in built) return { error: built.error };
+  return { plan: { currency, foreignMinor, baseMinor, rate, conversionAccountId: role.id, conversionLines, bankLines: built.lines } };
+}
+
+/**
+ * D178 E3 (A39 §17.4): book an `accounts` target with foreign-currency legs: the caller's acknowledgement of
+ * the `fx_counter_leg` consequence first, then the CONVERSION entry and the BANK entry (`planFxAccounts`),
+ * one decision. The decision names the conversion entry (so the raw Storno refuses it, L3) and claims the
+ * bank entry's bank leg; `reopen_bank_line` reverses both.
+ */
+function bookToAccountsFx(
+  ctx: WorkspaceContext,
+  row: BankTxnRow,
+  bankLedgerId: string,
+  target: Extract<BookBankLineTarget, { kind: 'accounts' }>,
+  opts: { text?: string | undefined; ruleId?: string },
+  warnings: string[],
+): Result<BookBankLineOk> {
+  const planned = planFxAccounts(ctx, row, bankLedgerId, target);
+  if ('error' in planned) abort(planned.error);
+  const plan = planned.plan;
+  if (target.acknowledgeFx !== true) {
+    abort(bankTargetRefusal('fx_ack_required', { consequence: FX_COUNTER_LEG_CONSEQUENCE, acknowledge: 'target.acknowledgeFx' }));
+  }
+  // Critic E3-L1: one source for these warnings, shared with the preview (`composeFx`). `performBooking`
+  // has already put `reversal_line` first when the line carries the reversal flag.
+  for (const w of fxBookingWarnings(ctx, row, target)) if (!warnings.includes(w)) warnings.push(w);
+  const date = lineBookingDate(row);
+  const description = (opts.text ?? defaultBankText(ctx, row)).slice(0, MAX_TEXT);
+  const major = (minor: number) => (minor / 100).toFixed(2);
+  const conversion = postEntry(ctx, {
+    date,
+    source: 'camt',
+    description: `${description}: Umrechnung ${plan.currency} ${major(plan.foreignMinor)} zum Kurs ${plan.rate}`.slice(0, MAX_TEXT),
+    // MINTED, never derived from the line alone (the A20 rule against a squattable key).
+    idempotencyKey: `bankline-entry-${row.id}-${ctx.ids.next('ble')}`,
+    lines: plan.conversionLines,
+    currency: plan.currency,
+    fxRate: plan.rate,
+  });
+  if (!conversion.ok) abort(conversion);
+  const bankEntry = postEntry(ctx, {
+    date,
+    source: 'camt',
+    description,
+    idempotencyKey: `bankline-entry-${row.id}-${ctx.ids.next('ble')}`,
+    lines: plan.bankLines,
+  });
+  if (!bankEntry.ok) abort(bankEntry);
+  const linkId = writeLineLink(ctx, {
+    bankTxnId: row.id,
+    kind: 'journal_entry',
+    targetId: conversion.entryId,
+    state: 'booked',
+    targetKind: 'accounts',
+    entryId: conversion.entryId,
+    ruleId: opts.ruleId ?? null,
+    claims: claimsOf(ctx, bankLedgerId, [bankEntry.entryId]),
+  });
+  syncCreditRow(ctx, row, 'dismissed');
+  ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'book', actor: ctx.actor, at: ctx.clock.now() });
+  return ok<BookBankLineOk>({
+    bankTxnId: row.id,
+    state: 'booked',
+    targetKind: 'accounts',
+    linkId,
+    entryId: conversion.entryId,
+    paymentId: null,
+    paymentIds: [],
+    remainder: null,
+    differenceMinor: null,
+    warnings,
+    entryIds: [conversion.entryId, bankEntry.entryId],
+    fx: { currency: plan.currency, foreignMinor: plan.foreignMinor, baseMinor: plan.baseMinor, rate: plan.rate },
+  });
+}
+
+/**
+ * Critic E3-L1: the warnings a booking with a foreign-currency leg answers, in the order the booking gives
+ * them: `reversal_line` (a reversal-flagged line), `control_account_leg` (a leg on 1100/2000) and
+ * `fx_counter_leg`. The preview and the booking both read them here, so they cannot disagree.
+ */
+function fxBookingWarnings(ctx: WorkspaceContext, row: BankTxnRow, target: Extract<BookBankLineTarget, { kind: 'accounts' }>): string[] {
+  const out = row.reversal_ind === 1 ? ['reversal_line'] : [];
+  if (target.legs.some((l) => controlAccountRoleOf(ctx, l.accountId) !== null)) out.push('control_account_leg');
+  out.push('fx_counter_leg');
+  return out;
+}
+
+/** The decision note with a stated refund-VAT choice that differs from the setting, and its reason. */
+function refundNote(note: string | null, target: Extract<BookBankLineTarget, { kind: 'contact' }>): string | null {
+  if (target.beyondGuthaben === true) note = (note === null ? 'Rückzahlung über das Guthaben hinaus' : `${note}; Rückzahlung über das Guthaben hinaus`).slice(0, MAX_TEXT);
+  if (target.refundVat === undefined) return note;
+  const reason = typeof target.overrideReason === 'string' ? target.overrideReason.trim() : '';
+  const stated = `MWST bei Rückzahlung: ${target.refundVat}${reason.length > 0 ? `; Grund: ${reason}` : ''}`;
+  return (note === null ? stated : `${note}; ${stated}`).slice(0, MAX_TEXT);
+}
+
+/** The default text of a booking from a bank line: the counterparty and the remittance, else the line's reference. */
+function defaultBankText(ctx: WorkspaceContext, row: BankTxnRow): string {
+  const detail = ctx.store.db
+    .prepare('SELECT counterparty_name, remittance_text FROM bank_txn_detail WHERE workspace_id = ? AND bank_txn_id = ?')
+    .get(ctx.workspaceId, row.id) as { counterparty_name: string | null; remittance_text: string | null } | undefined;
+  const fallback = [detail?.counterparty_name ?? row.payer_name, detail?.remittance_text ?? row.entry_ref]
+    .filter((s): s is string => typeof s === 'string' && s.length > 0)
+    .join(', ');
+  return fallback.length > 0 ? `Bank: ${fallback}` : `Bankbuchung ${row.entry_ref ?? row.id}`;
 }
 
 /**
@@ -824,6 +2209,12 @@ function matchExistingEntry(
  * The balanced line set of an `accounts` booking, built leg by leg with A06's `buildVatLines`, exactly
  * as a manual journal line is (spec §4.3): the bank legs are merged into one, and A02's post-boundary
  * VAT gate re-verifies every trace when the entry posts. Exported for the preview a surface shows.
+ *
+ * D175 (A39 §14.2): with `viaAccountId` the entry runs through that Durchlaufkonto: the bank leg against
+ * it for the line amount, then each leg against it with the leg's own VAT expansion (unchanged), one
+ * Durchlaufkonto line per leg, so it nets to zero inside the one entry. The Durchlaufkonto must pass the
+ * account check (`invalid_account` with the field `target.viaAccountId`): not archived, no Bankkonto's
+ * ledger, no control or VAT account, no income or expense account, and no leg's own account.
  */
 export function buildAccountsLines(
   ctx: WorkspaceContext,
@@ -831,11 +2222,25 @@ export function buildAccountsLines(
   bankLedgerId: string,
   legs: readonly BankLineLeg[],
   supplyDate: string,
+  viaAccountId?: string,
 ): { lines: LineInput[] } | { error: Err } {
   const sum = legs.reduce((s, l) => s + l.amountMinor, 0);
   if (sum !== row.amount_minor) {
     return { error: err('legs_do_not_sum', { bankTxnId: row.id, expectedMinor: row.amount_minor, sumMinor: sum }) };
   }
+  if (viaAccountId !== undefined) {
+    const via = ctx.store.db
+      .prepare('SELECT id, number, type, archived FROM account WHERE workspace_id = ? AND id = ?')
+      .get(ctx.workspaceId, viaAccountId) as { id: string; number: string; type: string | null; archived: number } | undefined;
+    if (via === undefined) return { error: err('not_found', { field: 'target.viaAccountId', accountId: viaAccountId }) };
+    const invalid = via.id === bankLedgerId ? 'bank_ledger' : invalidViaReason(ctx, via);
+    if (invalid !== null) return { error: err('invalid_account', { field: 'target.viaAccountId', accountId: via.id, accountNumber: via.number, reason: invalid }) };
+    if (legs.some((l) => l.accountId === via.id)) {
+      return { error: err('invalid_account', { field: 'target.viaAccountId', accountId: via.id, accountNumber: via.number, reason: 'via_is_a_leg' }) };
+    }
+  }
+  // Every leg books against this account: the bank's ledger, or the Durchlaufkonto.
+  const counter = viaAccountId ?? bankLedgerId;
   const base = baseCurrencyOf(ctx);
   const moneyIn = row.credit_debit === 'CRDT';
   const out: LineInput[] = [];
@@ -853,7 +2258,7 @@ export function buildAccountsLines(
     const abs = Math.abs(leg.amountMinor);
     if (leg.taxCode === undefined) {
       out.push(legIn ? { account: leg.accountId, credit: abs } : { account: leg.accountId, debit: abs });
-      out.push(legIn ? { account: bankLedgerId, debit: abs } : { account: bankLedgerId, credit: abs });
+      out.push(legIn ? { account: counter, debit: abs } : { account: counter, credit: abs });
       continue;
     }
     if (row.currency !== base) {
@@ -870,7 +2275,7 @@ export function buildAccountsLines(
     const kind = probe['kind'] as string;
     if (kind === 'none') {
       out.push(legIn ? { account: leg.accountId, credit: abs } : { account: leg.accountId, debit: abs });
-      out.push(legIn ? { account: bankLedgerId, debit: abs } : { account: bankLedgerId, credit: abs });
+      out.push(legIn ? { account: counter, debit: abs } : { account: counter, credit: abs });
       continue;
     }
     // A06's kind rules, shared with `compose_entry` (D152 amendment): the natural direction (an output,
@@ -882,7 +2287,7 @@ export function buildAccountsLines(
     let built: LineInput[];
     try {
       built = buildVatLines(ctx, {
-        counterAccount: bankLedgerId,
+        counterAccount: counter,
         revenueOrExpenseAccount: leg.accountId,
         amountMinor: abs,
         amountIsGross: !rules.pricesOnBase,
@@ -896,6 +2301,26 @@ export function buildAccountsLines(
     // A leg running against its code's natural direction (a refund on an input code, a customer refund
     // on an output code) is the SAME booking mirrored: the tax is reduced, never invented.
     out.push(...(legIn === naturalIn ? built : built.map(mirrorVatLine)));
+  }
+  if (viaAccountId !== undefined) {
+    // The Durchlaufkonto keeps ONE line per leg (each leg's counter-line), so a reader sees which leg each
+    // movement belongs to; the bank moves once, against it, for the line amount.
+    let viaNet = 0;
+    const kept: LineInput[] = [];
+    for (const l of out) {
+      if ((l.debit ?? 0) === 0 && (l.credit ?? 0) === 0) continue;
+      if (l.account === viaAccountId && l.taxCode === undefined) viaNet += (l.debit ?? 0) - (l.credit ?? 0);
+      kept.push(l);
+    }
+    if (viaNet !== signedAmountOf(row)) {
+      return { error: err('vat_split_mismatch', { bankTxnId: row.id, expectedMinor: signedAmountOf(row), bankLegMinor: viaNet }) };
+    }
+    const amount = Math.abs(viaNet);
+    const head: LineInput[] =
+      viaNet >= 0
+        ? [{ account: bankLedgerId, debit: amount }, { account: viaAccountId, credit: amount }]
+        : [{ account: bankLedgerId, credit: amount }, { account: viaAccountId, debit: amount }];
+    return { lines: [...head, ...kept] };
   }
   // Merge every bank leg into one line: the entry names the bank movement once, with the line's amount.
   let bankNet = 0;
@@ -920,11 +2345,12 @@ function bookToAccounts(
   row: BankTxnRow,
   bankLedgerId: string,
   legs: readonly BankLineLeg[],
-  opts: { text?: string | undefined },
+  opts: { text?: string | undefined; ruleId?: string },
   warnings: string[],
+  viaAccountId?: string,
 ): Result<BookBankLineOk> {
   const date = lineBookingDate(row);
-  const built = buildAccountsLines(ctx, row, bankLedgerId, legs, lineBookingDate(row));
+  const built = buildAccountsLines(ctx, row, bankLedgerId, legs, lineBookingDate(row), viaAccountId);
   if ('error' in built) abort(built.error);
   // Critic A39R2-2: an own-account transfer is booked ONCE. A leg onto another own Bankkonto's ledger while
   // an unclaimed leg with this line's signed amount already sits on THIS ledger, in a live entry that also
@@ -992,6 +2418,8 @@ function bookToAccounts(
     state: 'booked',
     targetKind: 'accounts',
     entryId,
+    // Critic D175-C5: the Buchungsregel that booked the line, on the decision row itself.
+    ruleId: opts.ruleId ?? null,
     claims: bankLegsOf(ctx, bankLedgerId, [entryId]).map((l) => l.lineId),
   });
   syncCreditRow(ctx, row, 'dismissed');
@@ -1016,6 +2444,12 @@ export interface IgnoreBankLineInput {
   bankTxnId?: string;
   reason?: string;
   note?: string;
+  /**
+   * D176: the "Nicht buchen" Buchungsregel the person accepts. Recorded on the decision (`rule_id`), so the
+   * rule's next step (its follow-up Vorlage) is offered once the line is ignored. It must be a live bank rule
+   * of this workspace with the outcome `ignore`, for the line's counterparty and direction.
+   */
+  standardId?: string;
   idempotencyKey?: string;
 }
 
@@ -1033,35 +2467,93 @@ export type IgnoreBankLineOk = {
  * dismissed credit IS an ignored line). An already ignored line answers ok with `alreadyIgnored`;
  * `reopen_bank_line` brings it back.
  */
-export function ignoreBankLine(ctx: WorkspaceContext, input: IgnoreBankLineInput): Result<IgnoreBankLineOk> {
-  const capable = ctx.capabilities.assert('post');
-  if (!capable.ok) return capable;
+/**
+ * D177 (critic D177-C1): `ignore_bank_line`'s own validation with NOTHING written, the dial's pre-draft
+ * screen (`ActionDef.prevalidate`): the input guards, the reason and the note, the line (`not_found`,
+ * `line_not_open`), and the §15.6 `standardId` checks, answering the direct call's own refusal. An already
+ * ignored line answers nothing (the direct call answers ok, `alreadyIgnored`), and so does a same-key replay.
+ */
+export function prevalidateIgnoreBankLine(ctx: WorkspaceContext, input: IgnoreBankLineInput): Err | undefined {
+  const screened = screenIgnore(ctx, input);
+  if ('error' in screened) return screened.error;
+  // Critic D177-R2-1: as for a booking, a key whose decision was undone does not screen a new one.
+  if ('replayed' in screened) return spentKeyOnOpenLine(ctx, input.bankTxnId as string, input.idempotencyKey as string);
+  return undefined;
+}
+
+/**
+ * Critic D177-R2-1: the pre-draft screen's answer for an idempotency key whose memo exists. While the line
+ * is still decided the memo is a genuine retry (undefined: the verb replays it). While the line is OPEN
+ * again, the key already decided it once and its replay would answer that old decision and do nothing, so
+ * the draft is refused `idempotency_key_conflict` (a new decision takes a new key) and never counts as
+ * screened.
+ */
+function spentKeyOnOpenLine(ctx: WorkspaceContext, bankTxnId: string, idempotencyKey: string): Err | undefined {
+  const row = readBankTxn(ctx, bankTxnId);
+  if (row === undefined || lineStateOf(ctx, row).state !== 'open') return undefined;
+  return err('idempotency_key_conflict', {
+    bankTxnId: row.id,
+    idempotencyKey,
+    reason: 'this key already decided the line before it was reopened; its replay would decide nothing. Propose the new decision under a new key',
+  });
+}
+
+/** The checks `ignore_bank_line` makes before it writes, shared with its pre-draft screen. */
+function screenIgnore(
+  ctx: WorkspaceContext,
+  input: IgnoreBankLineInput,
+): { error: Err } | { replayed: Result<IgnoreBankLineOk> } | { already: IgnoreBankLineOk } | { row: BankTxnRow; scopedKey: string } {
   const guard =
     requireString(input.bankTxnId, 'bankTxnId') ??
     requireString(input.idempotencyKey, 'idempotencyKey') ??
     requireString(input.reason, 'reason') ??
-    optionalText(input.note, 'note');
-  if (guard) return guard;
+    optionalText(input.note, 'note') ??
+    (input.standardId !== undefined ? requireString(input.standardId, 'standardId') : null);
+  if (guard) return { error: guard };
   if (!(BANK_LINE_IGNORE_REASONS as readonly string[]).includes(input.reason as string)) {
-    return err('invalid_input', { field: 'reason', allowed: [...BANK_LINE_IGNORE_REASONS] });
+    return { error: err('invalid_input', { field: 'reason', allowed: [...BANK_LINE_IGNORE_REASONS] }) };
   }
-  if (typeof input.note === 'string' && input.note.length > MAX_TEXT) return err('invalid_input', { field: 'note', maxLength: MAX_TEXT });
+  if (typeof input.note === 'string' && input.note.length > MAX_TEXT) return { error: err('invalid_input', { field: 'note', maxLength: MAX_TEXT }) };
   const scopedKey = JSON.stringify(['ignore_bank_line', input.bankTxnId, input.idempotencyKey]);
   const replayed = ctx.store.recallIdempotent<Result<IgnoreBankLineOk>>(ctx.workspaceId, scopedKey, 'ignore_bank_line');
-  if (replayed !== undefined) return replayed;
+  if (replayed !== undefined) return { replayed };
   const row = readBankTxn(ctx, input.bankTxnId as string);
-  if (row === undefined) return err('not_found', { bankTxnId: input.bankTxnId });
+  if (row === undefined) return { error: err('not_found', { bankTxnId: input.bankTxnId }) };
   const current = lineStateOf(ctx, row);
   if (current.state === 'ignored') {
-    return ok<IgnoreBankLineOk>({
-      bankTxnId: row.id,
-      state: 'ignored',
-      linkId: current.link?.linkId ?? null,
-      reason: current.link?.ignoreReason ?? 'other',
-      alreadyIgnored: true,
-    });
+    return {
+      already: {
+        bankTxnId: row.id,
+        state: 'ignored',
+        linkId: current.link?.linkId ?? null,
+        reason: current.link?.ignoreReason ?? 'other',
+        alreadyIgnored: true,
+      },
+    };
   }
-  if (current.state !== 'open') return lineNotOpen(row, current.state, current.link);
+  if (current.state !== 'open') return { error: lineNotOpen(row, current.state, current.link) };
+  if (input.standardId !== undefined) {
+    const rule = readLiveRule(ctx, input.standardId);
+    if (rule === undefined) return { error: err('rule_not_found', { standardId: input.standardId }) };
+    if (rule.scope !== 'bank') return { error: err('wrong_scope', { standardId: rule.id, scope: rule.scope, reason: 'a Vorlage never decides a bank line' }) };
+    if (rule.outcome !== 'ignore') {
+      return { error: err('wrong_outcome', { standardId: rule.id, outcome: rule.outcome, reason: 'this rule books its legs: book_bank_line with target {kind: rule}' }) };
+    }
+    if (counterpartyKeyOf(row, readBankTxnDetail(ctx, row.id)) !== rule.counterparty_key || directionOf(row) !== rule.direction) {
+      return { error: err('rule_not_applicable', { standardId: rule.id, bankTxnId: row.id, reason: 'the rule is for another counterparty or direction' }) };
+    }
+  }
+  return { row, scopedKey };
+}
+
+export function ignoreBankLine(ctx: WorkspaceContext, input: IgnoreBankLineInput): Result<IgnoreBankLineOk> {
+  const capable = ctx.capabilities.assert('post');
+  if (!capable.ok) return capable;
+  const screened = screenIgnore(ctx, input);
+  if ('error' in screened) return screened.error;
+  if ('replayed' in screened) return screened.replayed;
+  if ('already' in screened) return ok<IgnoreBankLineOk>(screened.already);
+  const { row, scopedKey } = screened;
   return runGuarded(() =>
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'ignore_bank_line', () => {
       const linkId = writeLineLink(ctx, {
@@ -1072,6 +2564,7 @@ export function ignoreBankLine(ctx: WorkspaceContext, input: IgnoreBankLineInput
         targetKind: 'ignore',
         ignoreReason: input.reason as BankLineIgnoreReason,
         note: input.note ?? null,
+        ...(input.standardId !== undefined ? { ruleId: input.standardId } : {}),
       });
       syncCreditRow(ctx, row, 'dismissed');
       ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'discard', actor: ctx.actor, at: ctx.clock.now() });
@@ -1113,6 +2606,8 @@ export type ReopenBankLineOk = {
   /** Stable codes: `batch_payments_kept` (a run booked from the line keeps its payments). */
   warnings: string[];
   alreadyOpen: boolean;
+  /** D177: the Vorschläge the undone decision had closed as "Zeile entschieden" and that are pending again. */
+  revivedActionIds?: string[];
 };
 
 /**
@@ -1204,16 +2699,48 @@ export function reopenBankLine(ctx: WorkspaceContext, input: ReopenBankLineInput
         if (link.kind === 'payment_batch') {
           warnings.push('batch_payments_kept');
         } else if (link.kind === 'payment' && link.paymentId !== null) {
-          reverseOnePayment(ctx, row, link.paymentId);
-          reversedPaymentIds.push(link.paymentId);
+          // D178 E3: a Spesen settlement created one payment per claim; every one of them is the
+          // decision's, read off its own claims (the declared bank legs), never guessed.
+          const paymentIds = link.targetKind === 'expense_claims' ? paymentsOfLink(ctx, link.linkId) : [link.paymentId];
+          for (const paymentId of paymentIds) {
+            reverseOnePayment(ctx, row, paymentId);
+            reversedPaymentIds.push(paymentId);
+          }
+          // Owner, 21.10.2026: a Guthaben whose receipt VAT was booked. Reversing the payment unwound its
+          // applications, so every VAT clearing they posted is reversed, then the receipt VAT (the entry the
+          // decision names when it is not the payment's own).
+          if (link.targetKind === 'contact') {
+            // A refund line's own Entgeltsminderung corrections (owner, 21.10.2026).
+            for (const correction of anzahlungVatCorrectionsOfLink(ctx, link.linkId)) {
+              if (reversalOf(ctx, correction) !== null) continue;
+              reverseOneEntry(ctx, row, correction, input.reason as string);
+              reversedEntryIds.push(correction);
+            }
+            for (const clearing of anzahlungVatClearingsOf(ctx, link.paymentId)) {
+              if (reversalOf(ctx, clearing) !== null) continue;
+              reverseOneEntry(ctx, row, clearing, input.reason as string);
+              reversedEntryIds.push(clearing);
+            }
+            const paymentEntry = paymentEntryOf(ctx, link.paymentId);
+            if (link.entryId !== null && link.entryId !== paymentEntry) {
+              reverseOneEntry(ctx, row, link.entryId, input.reason as string);
+              reversedEntryIds.push(link.entryId);
+            }
+          }
           creditPaymentReversed = link.paymentId;
         } else if (link.kind === 'journal_entry' && link.entryId !== null) {
-          reverseOneEntry(ctx, row, link.entryId, input.reason as string);
-          reversedEntryIds.push(link.entryId);
+          // D178 E3: a booking with a foreign counter-leg posted a conversion entry (the decision's
+          // `entryId`) and a bank entry (its claim); both are the decision's and both are reversed.
+          for (const entryId of entriesOfLink(ctx, link.linkId, link.entryId)) {
+            reverseOneEntry(ctx, row, entryId, input.reason as string);
+            reversedEntryIds.push(entryId);
+          }
         }
       }
       syncCreditRow(ctx, row, 'open', { reversedPaymentId: creditPaymentReversed });
       ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'reopen', actor: ctx.actor, at: ctx.clock.now() });
+      // D177 (the UX walk): undoing the decision gives back the Vorschläge it closed.
+      const revivedActionIds = supersededLinkId === null ? [] : reviveLineDraftsOnReopen(ctx, row, supersededLinkId);
       return ok<ReopenBankLineOk>({
         bankTxnId: row.id,
         previousState: current.state,
@@ -1223,9 +2750,146 @@ export function reopenBankLine(ctx: WorkspaceContext, input: ReopenBankLineInput
         reversedPaymentIds,
         warnings,
         alreadyOpen: false,
+        ...(revivedActionIds.length > 0 ? { revivedActionIds } : {}),
       });
     }),
   );
+}
+
+/** D177: the reason a Vorschlag keeps when the undo of the decision that closed it cannot give it back. */
+export const DRAFT_NOT_REVIVED_STALE = 'Zeile entschieden; nach Rückgängig nicht wiederhergestellt, weil sich die Daten seither geändert haben';
+export const DRAFT_NOT_REVIVED_INVALID = 'Zeile entschieden; nach Rückgängig nicht wiederhergestellt, weil der Vorschlag so nicht mehr gebucht werden kann';
+
+/**
+ * D177 (the UX walk on a real-shaped book, 16.10.2026): an UNDO restores the state before it. When
+ * `reopen_bank_line` undoes a decision (an ignore, or a booking it reverses), every Vorschlag THAT
+ * decision closed as "Zeile entschieden" (`closed_by_link_id`) is pending again, in the reopen's own
+ * transaction, tenant-bound, and its drafting call's trace resolution is cleared. Only a draft that can
+ * still run: not committed (D165), its pin unchanged since it was drafted (else it stays rejected, with
+ * the reason saying the data changed since), and passing the same screen as at draft time (the verb's
+ * `prevalidate`; else it stays rejected, with the reason saying it can no longer book). A draft a person
+ * rejected or a newer one replaced ("ersetzt") is never touched: only the decision's own closures are.
+ * A draft that stays rejected loses its `closed_by_link_id`, so a later reopen never considers it again.
+ */
+function reviveLineDraftsOnReopen(ctx: WorkspaceContext, row: BankTxnRow, linkId: string): string[] {
+  const rows = ctx.store.db
+    .prepare(
+      `SELECT id, action_tool, payload_json, pin_digest FROM agent_action
+        WHERE workspace_id = ? AND status = 'rejected' AND reject_reason = ? AND closed_by_link_id = ? AND committed_at IS NULL
+        ORDER BY created_at, rowid`,
+    )
+    .all(ctx.workspaceId, DRAFT_LINE_DECIDED_REASON, linkId) as { id: string; action_tool: string; payload_json: string; pin_digest: string | null }[];
+  const revive = ctx.store.db.prepare(
+    `UPDATE agent_action SET status = 'pending', resolved_at = NULL, resolved_by = NULL, reject_reason = NULL, closure_kind = NULL, closed_by_link_id = NULL
+      WHERE workspace_id = ? AND id = ? AND status = 'rejected' AND closed_by_link_id = ?`,
+  );
+  const keepStmt = ctx.store.db.prepare('UPDATE agent_action SET reject_reason = ?, closed_by_link_id = NULL WHERE workspace_id = ? AND id = ?');
+  // Critic D177-R4-1: a Vorschlag that stays closed says why in its history too.
+  const keep = {
+    run(reason: string, workspaceId: string, id: string): void {
+      keepStmt.run(reason, workspaceId, id);
+      appendDraftHistory(ctx, id, { event: 'not_revived', at: ctx.clock.now(), by: ctx.actor, undoneLinkId: linkId, reason });
+    },
+  };
+  const trace = ctx.store.db.prepare('UPDATE agent_call SET resolved_by = NULL, resolved_at = NULL, entity_ref = NULL WHERE workspace_id = ? AND agent_action_id = ?');
+  const revived: string[] = [];
+  for (const r of rows) {
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(r.payload_json) as Record<string, unknown>;
+    } catch {
+      keep.run(DRAFT_NOT_REVIVED_INVALID, ctx.workspaceId, r.id);
+      continue;
+    }
+    if (payload['bankTxnId'] !== row.id) continue;
+    if (r.pin_digest !== null && pinFor(ctx, r.action_tool, payload)?.digest !== r.pin_digest) {
+      keep.run(DRAFT_NOT_REVIVED_STALE, ctx.workspaceId, r.id);
+      continue;
+    }
+    const screened =
+      r.action_tool === 'book_bank_line'
+        ? prevalidateBookBankLine(ctx, payload as BookBankLineInput)
+        : r.action_tool === 'ignore_bank_line'
+          ? prevalidateIgnoreBankLine(ctx, payload as IgnoreBankLineInput)
+          : err('invalid_input', { field: 'actionTool' });
+    if (screened !== undefined) {
+      keep.run(DRAFT_NOT_REVIVED_INVALID, ctx.workspaceId, r.id);
+      continue;
+    }
+    if (revive.run(ctx.workspaceId, r.id, linkId).changes === 0) continue;
+    // Critic D177-R4-1: the round trip stays on record (closed by the decision, revived by its undo). The
+    // drafting call's trace describes the CURRENT state, so its resolution is cleared.
+    appendDraftHistory(ctx, r.id, { event: 'revived', at: ctx.clock.now(), by: ctx.actor, undoneLinkId: linkId });
+    trace.run(ctx.workspaceId, r.id);
+    revived.push(r.id);
+  }
+  // Critic D177-R4-2: one pending Vorschlag per seat and line, as at draft time. Among a seat's pending
+  // Vorschläge for the line (the revived ones included), the newest stays and every older one is
+  // "ersetzt" by it, recorded exactly as a draft-time supersede.
+  const pendingOfLine = (
+    ctx.store.db
+      .prepare(
+        `SELECT id, actor, payload_json FROM agent_action
+          WHERE workspace_id = ? AND status = 'pending' AND committed_at IS NULL AND action_tool IN ('book_bank_line', 'ignore_bank_line')
+          ORDER BY created_at DESC, rowid DESC`,
+      )
+      .all(ctx.workspaceId) as { id: string; actor: string; payload_json: string }[]
+  ).filter((p) => {
+    try {
+      return (JSON.parse(p.payload_json) as { bankTxnId?: unknown }).bankTxnId === row.id;
+    } catch {
+      return false;
+    }
+  });
+  const newestOfSeat = new Map<string, string>();
+  const supersede = ctx.store.db.prepare(
+    `UPDATE agent_action SET status = 'rejected', resolved_at = ?, resolved_by = ?, reject_reason = ?, closure_kind = 'superseded'
+      WHERE workspace_id = ? AND id = ? AND status = 'pending' AND committed_at IS NULL`,
+  );
+  const superseded = new Set<string>();
+  for (const p of pendingOfLine) {
+    const newest = newestOfSeat.get(p.actor);
+    if (newest === undefined) {
+      newestOfSeat.set(p.actor, p.id);
+      continue;
+    }
+    const now = ctx.clock.now();
+    if (supersede.run(now, ctx.actor, DRAFT_SUPERSEDED_REASON, ctx.workspaceId, p.id).changes === 0) continue;
+    appendDraftHistory(ctx, p.id, { event: 'closed', kind: 'superseded', at: now, by: ctx.actor, reason: DRAFT_SUPERSEDED_REASON, replacedBy: newest });
+    ctx.store.db.prepare('UPDATE agent_call SET resolved_by = ?, resolved_at = ?, entity_ref = ? WHERE workspace_id = ? AND agent_action_id = ?').run(ctx.actor, now, newest, ctx.workspaceId, p.id);
+    superseded.add(p.id);
+  }
+  return revived.filter((id) => !superseded.has(id));
+}
+
+/**
+ * D178 E3: the entries a BOOKED journal decision created: its own `entryId` first, then every other
+ * entry whose bank leg the decision claims and that a bank line posted (source `camt`): the bank entry of a
+ * booking with a foreign counter-leg. For every other booking the claim names the same entry, so this is
+ * the one entry it always was.
+ */
+function entriesOfLink(ctx: WorkspaceContext, linkId: string, entryId: string): string[] {
+  const claimed = ctx.store.db
+    .prepare(
+      `SELECT c.entry_id AS e FROM bank_line_claim c JOIN journal_entry e ON e.id = c.entry_id AND e.workspace_id = c.workspace_id
+        WHERE c.workspace_id = ? AND c.link_id = ? AND e.source = 'camt' ORDER BY c.rowid`,
+    )
+    .all(ctx.workspaceId, linkId) as { e: string }[];
+  const out = [entryId];
+  for (const c of claimed) if (!out.includes(c.e)) out.push(c.e);
+  return out;
+}
+
+/** D178 E3: the posted payments whose entries a decision claims (a Spesen settlement's one per claim). */
+function paymentsOfLink(ctx: WorkspaceContext, linkId: string): string[] {
+  const rows = ctx.store.db
+    .prepare(
+      `SELECT p.id AS id FROM bank_line_claim c
+         JOIN payment p ON p.workspace_id = c.workspace_id AND p.journal_entry_id = c.entry_id
+        WHERE c.workspace_id = ? AND c.link_id = ? AND p.status = 'posted' ORDER BY c.rowid`,
+    )
+    .all(ctx.workspaceId, linkId) as { id: string }[];
+  return [...new Set(rows.map((r) => r.id))];
 }
 
 /** Reverse the payment a line settled, on the payment's own date (A14). Aborts on any refusal. */

@@ -52,27 +52,65 @@
   max-width: 40ch;
 }
 
-/* The adopt door's closing sentence sits at the door's foot, like the buttons of the other two. */
-.firstrun-door-foot {
-  margin-top: auto;
-}
-
 .firstrun-field {
   display: flex;
   flex-direction: column;
   gap: var(--t-space-1);
 }
 
-.firstrun-adopt-cmd {
+/* D166 point 8: the adopt door. A field (or, inside TILL.app, the native picker and the picked file's
+   name) over the one action, like the other two doors; no command block, nothing to copy. */
+.firstrun-adopt-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+}
+
+.firstrun-adopt-form > .firstrun-field {
+  align-self: stretch;
+}
+
+.firstrun-adopt-pick {
+  align-self: flex-start;
+}
+
+.firstrun-adopt-file {
   margin: 0;
-  padding: var(--t-space-2);
-  background: var(--t-bg);
-  border-radius: var(--t-radius-md);
-  font-family: var(--t-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.firstrun-adopt-path-hint {
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
-  overflow-x: auto;
-  white-space: pre;
+}
+
+/* D166 point 8: the adopted book is not reachable. The three choices in one row (wrapping on a
+   narrow viewport); the picker or the forget confirmation opens beneath them on the door ground. */
+.firstrun-unavailable-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.firstrun-unavailable-panel {
+  max-width: 32rem;
+}
+
+.firstrun-intro .firstrun-lead {
+  overflow-wrap: anywhere;
+}
+
+/* After an adopt: one calm sentence while TILL restarts onto the book, nothing to press. */
+.firstrun-opening {
+  min-height: 40vh;
+  justify-content: center;
+}
+
+.firstrun-opening-title {
+  margin: 0;
+  font-size: var(--t-font-xl);
+  line-height: var(--t-lh-xl);
 }
 
 /* F-05: the demo line under the doors. Prose-weight, wraps on a narrow viewport, the hint dimmer. */

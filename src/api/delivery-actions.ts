@@ -67,6 +67,8 @@ export function deliveryActions(h: DeliveryActionHelpers): readonly ActionDef[] 
             lastTickAt: rt.scheduler.lastTickAt,
             nextTickAt: rt.scheduler.nextTickAt,
           },
+          // D166 point 8: the adopted book this `till up` could not open ({ path, reason }), or null.
+          adoptedBookUnavailable: rt.adoptedBookUnavailable,
         });
       },
     ),

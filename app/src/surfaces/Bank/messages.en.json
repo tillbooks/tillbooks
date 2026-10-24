@@ -22,7 +22,7 @@
       "importFile": "Import a file"
     },
     "bulk": {
-      "bookSure": "Book all sure ones ({count})"
+      "bookSure": "Book all proposed ({count})"
     },
     "pick": {
       "label": "Selected lines",
@@ -105,13 +105,14 @@
       "decision": "Decision",
       "vat": "VAT",
       "amount": "Amount",
-      "actions": "Actions"
+      "actions": "Actions",
+      "resize": "Width: {column}",
+      "ignore": "More"
     },
     "row": {
       "unnamed": "Bank line without a name",
       "book": "Book",
       "match": "Match",
-      "review": "Review",
       "busy": "Booking …",
       "targetLabel": "Book to, {party}",
       "targetPlaceholder": "Book to what?",
@@ -119,13 +120,29 @@
       "vatNamed": "VAT, {party}, {code} {name}",
       "more": "More actions for {party}, {amount}",
       "needsPost": "You lack the right to post.",
-      "needsPay": "Settling an invoice or a payment run needs the right to book payments."
+      "needsPay": "Settling an invoice or a payment run needs the right to book payments.",
+      "vatOff": "VAT",
+      "vatOffLabel": "VAT, {party}",
+      "vatNeedsAccount": "Choose an account first.",
+      "vatNotApplicable": "No VAT applies on {account}.",
+      "vatGroupOut": "Input tax (money out)",
+      "vatGroupIn": "Output tax (money in)",
+      "vatGroupOther": "More",
+      "ignoreRule": "Do not book",
+      "ignore": "Ignore, {party}, {amount}",
+      "ignoreTip": "Do not book, with a reason",
+      "vatSummary": "VAT, {party}: {vat}",
+      "vatSummaryTip": "VAT per position in the details",
+      "moreTip": "Rule, receipt, ignore",
+      "menu": {
+        "ruleSave": "Save as booking rule",
+        "ruleOpen": "Open booking rule",
+        "ruleClear": "Remove booking rule",
+        "ignoreAs": "Ignore: {reason}"
+      }
     },
     "menu": {
-      "split": "Split or book manually",
-      "link": "Match an existing entry",
       "agent": "Ask the agent",
-      "ignore": "Ignore",
       "attach": "Attach receipt"
     },
     "certainty": {
@@ -151,16 +168,25 @@
       "groupInvoices": "Open invoices",
       "groupBills": "Open supplier bills",
       "groupAccounts": "Accounts",
-      "groupMore": "More",
       "currentMeta": "as it stands",
       "proposalMeta": "TILL's proposal",
       "agentMeta": "The agent's proposal",
-      "moreLink": "Match an existing entry …",
-      "moreLinkMeta": "already booked, for example by hand",
-      "moreLinkKeywords": "match existing entry journal",
-      "moreSplit": "Split or book manually …",
-      "moreSplitMeta": "several accounts or own text",
-      "moreSplitKeywords": "split several manual"
+      "groupActions": "Instead of an account",
+      "actSplit": "Split across several accounts …",
+      "actSplitKeywords": "split several manual",
+      "actLink": "Match an existing entry …",
+      "actLinkKeywords": "match existing entry journal",
+      "actIgnore": "Do not book (ignore) …",
+      "actIgnoreKeywords": "ignore do not book",
+      "actDenied": "you lack the right to post",
+      "groupRules": "This counterparty's rules",
+      "groupBatches": "Payment runs",
+      "batchLabel": {
+        "one": "Payment run, {count} bill",
+        "other": "Payment run, {count} bills"
+      },
+      "clear": "Remove the choice",
+      "clearKeywords": "clear remove none empty"
     },
     "vat": {
       "none": "without VAT",
@@ -169,7 +195,8 @@
       "fromEntry": "from the entry",
       "fromBills": "from the bills",
       "fromInvoice": "from the invoice",
-      "fromBill": "from the bill"
+      "fromBill": "from the bill",
+      "mixed": "mixed"
     },
     "target": {
       "split": "Split across {count} accounts",
@@ -181,7 +208,23 @@
       "billName": "open supplier bill",
       "batchCode": "Payment run",
       "batch": "several supplier bills",
-      "entry": "existing entry"
+      "entry": "existing entry",
+      "ignore": "Do not book: {reason}",
+      "invoices": {
+        "one": "{count} invoice",
+        "other": "{count} invoices"
+      },
+      "bills": {
+        "one": "{count} supplier bill",
+        "other": "{count} supplier bills"
+      },
+      "contactCode": "Contact",
+      "contact": "Contact",
+      "claimsCode": "Expenses",
+      "claims": {
+        "one": "{count} expense claim",
+        "other": "{count} expense claims"
+      }
     },
     "reason": {
       "existing_entry_reference": "The books already hold an entry of {date} with the same reference: {description}. Matching links both; no new entry is made.",
@@ -212,12 +255,39 @@
       "payment_batch_total_differs_paid": "The bank reports the reference of a payment run, but the amount differs: run {batch}, bank {line}. The run is already marked paid and can no longer be discarded: ignore this line as \"Booked elsewhere\" and reverse under Payments every payment of the run the bank did not carry out.",
       "payment_batch_item_amount_differs_paid": "The reference names one payment of a payment run, but the amount differs: payment {item}, bank {line}. The run is already marked paid and can no longer be discarded: ignore this line as \"Booked elsewhere\" and reverse under Payments every payment of the run the bank did not carry out.",
       "own_account_transfer_booked_other_month": "The transfer from \"{name}\" is booked there on {date}, in another month than this line. It cannot be matched that way: take the other side back and book each side on its own day through a transit account you add to the chart.",
-      "model_suggested": "An AI model on this device suggests {account}, {percent} % likely ({count} accounts to choose from). Nobody has checked it yet: look before you book."
+      "model_suggested": "An AI model on this device suggests {account}, {percent} % likely ({count} accounts to choose from). Nobody has checked it yet: look before you book.",
+      "standard": "Your booking rule for this counterparty: {account}, {vat}.",
+      "standardVatDropped": "Your booking rule for this counterparty: {account}, here without {vat}. The line is in {currency}, and no VAT can be booked on a line in a foreign currency. Check that you want to book it gross like this.",
+      "journal_history": "Booked like this in the journal on {date}: {account}, {vat}.",
+      "rule": "Your booking rule \"{name}\": {route}.",
+      "rule_needs_amount": "Your booking rule \"{name}\" fits. Enter {asks}, TILL works out the rest.",
+      "several_rules": "{count} booking rules fit this counterparty, and the text does not decide. Pick one or book it another way.",
+      "rule_ignore": "Your booking rule \"{name}\" says: do not book ({reason}). The line never reaches the books, so you decide it yourself.",
+      "rule_computed": "Buchungsregel «{name}» computes {asks}. Check the figure, then book."
     },
     "panel": {
       "cancel": "Cancel",
       "close": "Close",
-      "linkMissing": "This bank line is not in this book."
+      "linkMissing": "This bank line is not in this book.",
+      "label": "Bank line details",
+      "closeDetails": "Close details",
+      "amounts": "Amounts the rule needs",
+      "computed": "computed",
+      "byYou": "yours",
+      "recompute": "compute",
+      "computedTip": "{label} computed from {amount}",
+      "text": "Booking text",
+      "private": "Paid privately: to {account}",
+      "splitContext": "{party} over several accounts",
+      "linkContext": "{party} with an entry",
+      "ruleContext": "Future lines from {party}",
+      "attachContext": "Receipt for {party}",
+      "more": "More for {party}",
+      "formulaWords": "{label} from {amount}: {how}",
+      "howPlatform": "VAT {vat} % and a fee of {fee} % of the net",
+      "howVat": "VAT {vat} %",
+      "howFee": "a fee of {fee} % of the net",
+      "howFactor": "times {factor}"
     },
     "legs": {
       "title": "This is what posts",
@@ -228,7 +298,8 @@
       "computing": "Computing the entry.",
       "noRight": "The preview needs the right to read the books and the VAT.",
       "unavailable": "The preview is not available.",
-      "unknownAccount": "Account not found"
+      "unknownAccount": "Account not found",
+      "entryOf": "Entry {n} of {count} ({currency})"
     },
     "item": {
       "titleInvoice": "Invoice",
@@ -239,10 +310,12 @@
       "surplusCredit": "Overpayment: {rest} stays as the customer's credit, {item} is paid in full.",
       "surplusDebit": "Paid more than owed: {rest} stays as a credit with the supplier, {item} is paid in full.",
       "unknownOpen": "The open amount of {item} could not be read. TILL works it out when booking.",
-      "remainderLegend": "What happens to the rest of {rest}?",
+      "remainderLegend": "Rest {rest}",
       "leaveOpen": "Leave open",
       "writeOff": "Write off",
-      "fees": "Includes dunning fees of {fees}."
+      "fees": "Includes dunning fees of {fees}.",
+      "onAccount": "Keep as credit",
+      "surplusLegend": "{rest} too much"
     },
     "batch": {
       "title": "Payment run",
@@ -292,11 +365,28 @@
       "vat": "VAT",
       "vatOf": "VAT of position {n}",
       "amount": "Amount",
-      "add": "Add position",
+      "add": "+ Position",
       "restOpen": "Still to distribute: {amount}",
       "restOver": "Distributed too much: {amount}",
       "accountMissing": "Amount distributed, an account is missing",
-      "complete": "Fully distributed"
+      "via": "Book through a clearing account",
+      "viaLabel": "Clearing account",
+      "viaPick": "Choose a clearing account",
+      "viaRemove": "No clearing account",
+      "viaHint": "The bank books against this account, every position away from it. It nets to zero.",
+      "amountOf": "Amount of position {n}, {party}",
+      "removeShort": "Remove",
+      "rowLabel": {
+        "one": "Split: {count} position",
+        "other": "Split: {count} positions"
+      },
+      "restShort": "{amount} left",
+      "overShort": "{amount} too much",
+      "accountShort": "Account missing",
+      "viaTip": "The line runs through an account that ends at zero",
+      "close": "Stop splitting",
+      "restZero": "Rest {amount}",
+      "viaAdd": "Book through a clearing account"
     },
     "link": {
       "title": "Match an existing entry",
@@ -347,7 +437,8 @@
           "label": "Other reason",
           "hint": "with a note in your own words"
         }
-      }
+      },
+      "undoReason": "Ignore undone"
     },
     "reopen": {
       "title": "Reverse",
@@ -376,6 +467,7 @@
     "decided": {
       "booked": "to accounts",
       "bookedTo": "to {account}",
+      "bookedToVat": "to {account} · {vat}",
       "bookedSplit": {
         "one": "to {count} account",
         "other": "split across {count} accounts"
@@ -400,7 +492,10 @@
       "reversal_line": "The line is a reversal by the bank.",
       "batch_payments_kept": "The payment run's payments stay booked. Reverse one of them under Payments.",
       "not_day_end_statement": "This is not a day-end statement: it has no sequence number or no closing balance. Import the day-end camt.053 for this day as well.",
-      "statement_number_jump": "The statement number jumps: numbers are missing between the last statement in the books and this one. Import those statements by hand if they exist."
+      "statement_number_jump": "The statement number jumps: numbers are missing between the last statement in the books and this one. Import those statements by hand if they exist.",
+      "possible_cross_format_duplicate": "A new line resembles a line from another file format. TILL imported it and marked it: check it in the bank inbox and ignore it as a duplicate if it is one.",
+      "overlap_same_movement": "New lines match movements already in the books. TILL imported and marked them: decide line by line, or all exact matches at once.",
+      "covered_period_new_line": "New lines fall on days a statement already covers. TILL marked them: check whether they are new."
     },
     "vorschlag": {
       "kicker": "The agent's proposal",
@@ -419,9 +514,6 @@
     },
     "trust": {
       "label": "Reconciliation {name}",
-      "ok": "Bank and books agree.",
-      "pending": "Agrees, apart from the lines still to book.",
-      "difference": "Bank and books differ by {amount}.",
       "unknown": {
         "no_statement": "Cannot be judged: no statement yet.",
         "no_balance": "Cannot be judged: the statement has no closing balance.",
@@ -430,16 +522,9 @@
       },
       "bank": "Bank",
       "books": "Books",
-      "sentence": "Bank {bank} equals books {books} plus open lines {open}.",
-      "openLines": {
-        "one": "{count} line open, {amount}",
-        "other": "{count} lines open, {amount}"
-      },
-      "asOf": "As of the statement of {date}",
-      "openTerm": "open lines",
       "differenceTerm": "difference",
-      "sentenceDifference": "Bank {bank} equals books {books} plus open lines {open} plus a difference of {difference}.",
-      "differenceHint": "A difference arises when an ignored line is not in the books, an entry on the bank account has no bank line, a difference was accepted at a match, or a line is matched to an entry dated after the statement (until the next statement).",
+      "differenceHint": "Possible cause: an ignored line, an entry without a bank line, or an accepted difference.",
+      "startGap": "Movements before {date} are missing (the bank starts at {bank}): import earlier statements.",
       "differenceShort": "Difference {amount}",
       "noDifference": "No difference",
       "gapMark": "A statement is missing",
@@ -467,6 +552,11 @@
           "other": "{count} cannot be judged"
         },
         "rowLabel": "{name}: {state}. Figures and explanation"
+      },
+      "asOfShort": "As of {date}",
+      "openRow": {
+        "one": "{count} open line",
+        "other": "{count} open lines"
       }
     },
     "import": {
@@ -484,7 +574,102 @@
       "commit": "Import",
       "busy": "Importing …",
       "commitMany": "Import {count} files",
-      "done": "Done"
+      "done": "Done",
+      "leadAny": "Load the statement from your e-banking: camt.053 (XML), MT940 or CSV. TILL reads the account from a camt or MT940 file.",
+      "dropAny": "Drop statement files here",
+      "hintAny": "camt.053 (XML), MT940 (.sta, .mt940, .txt) or CSV",
+      "notStatement": "That is not a statement file. Download it from your e-banking as camt.053, MT940 or CSV.",
+      "oneAtATime": "An MT940 or CSV file is imported one at a time: TILL takes \"{name}\".",
+      "detected": "Recognised: {format}",
+      "reading": "Reading the file …",
+      "formats": {
+        "camt": "camt.053",
+        "mt940": "MT940",
+        "csv": "CSV"
+      },
+      "csv": {
+        "title": "Assign the columns",
+        "lead": "Pick the column of your file for each item. TILL saves the assignment for this bank account and uses it next time.",
+        "pickAccount": "Choose the bank account first, so TILL can find its saved assignment.",
+        "saved": "The saved assignment of this bank account is selected.",
+        "guessed": "TILL suggested the columns from their headings. Check them.",
+        "none": "not assigned",
+        "required": "required",
+        "amountRule": "Either one amount column with a sign, or a debit and a credit column.",
+        "preview": "The first rows of the file",
+        "rows": "{count} rows in the file",
+        "dateFormat": "Date format",
+        "decimal": "Decimal separator",
+        "decimalAuto": "detect",
+        "decimalDot": "point (1'234.50)",
+        "decimalComma": "comma (1234,50)",
+        "delimiter": "Separator",
+        "delimiterChoice": {
+          "semicolon": "semicolon ( ; )",
+          "comma": "comma ( , )",
+          "tab": "tab"
+        },
+        "headerRow": "Row with the column names",
+        "headerRowN": "row {n}",
+        "missing": {
+          "bookingDate": "The column for the booking date is missing.",
+          "amount": "The column for the amount (or for debit and credit) is missing."
+        },
+        "unknown": "The file has no column \"{column}\". Pick another one.",
+        "field": {
+          "bookingDate": "Booking date",
+          "valueDate": "Value date",
+          "amount": "Amount (with sign)",
+          "debit": "Debit",
+          "credit": "Credit",
+          "text": "Booking text",
+          "counterparty": "Counterparty",
+          "counterpartyIban": "Counterparty IBAN",
+          "reference": "Reference",
+          "currency": "Currency",
+          "instructedAmount": "Original amount",
+          "instructedCurrency": "Original currency",
+          "rate": "Exchange rate",
+          "fee": "Fee"
+        }
+      },
+      "result": {
+        "counts": "New: {imported} · Already in the books: {duplicates} · Not read: {refused}",
+        "statementRefused": "Statement {part} not imported: {why}",
+        "skipRow": "Row {row}: {why}",
+        "skipLine": "One line: {why}",
+        "more": "and {count} more",
+        "skip": {
+          "duplicate_entry": "already in the books",
+          "cross_format_duplicate": "already in the books from another file format",
+          "pending": "expected, not booked yet",
+          "unreadable_amount": "amount not readable",
+          "unreadable_date": "date not readable",
+          "unsupported_status": "neither booked nor pending",
+          "zero_amount": "amount of zero",
+          "currency_differs": "another currency than the bank account",
+          "not_a_movement": "no booking (a total or a note)"
+        },
+        "warning": {
+          "account_unverified": "The account in the file is not an IBAN: check that it is the right bank account.",
+          "possible_cross_format_duplicate": "A new line resembles a line from another file format. Check it in the bank inbox.",
+          "overlap_same_movement": "Some lines are already in the books from another delivery of the same days. They wait in the bank inbox: answer Duplikat or Kein Duplikat.",
+          "covered_period_new_line": "Some lines fall on days the books already hold a statement for and match nothing there. Check them in the bank inbox.",
+          "not_day_end_statement": "The file is not a day-end statement: import that day's day-end statement too."
+        },
+        "refused": {
+          "account_mismatch": "the file belongs to another account",
+          "currency_mismatch": "the file is in another currency than the bank account",
+          "schema_invalid": "the file cannot be read",
+          "statement_amended": "the bank changed this statement since it was imported",
+          "other": "refused ({code})"
+        }
+      },
+      "refusal": {
+        "bankFeed": "This bank account is fed over EBICS. Import camt.053 only here; TILL does not take MT940 or CSV for this account.",
+        "mapping": "The column assignment does not fit the file.",
+        "severalAccounts": "The file holds statements of several accounts ({accounts}), and none of them is recognisably this bank account. Import each account's statements onto its own bank account."
+      }
     },
     "ack": {
       "dismiss": "Dismiss",
@@ -544,7 +729,12 @@
       "importedFilesRefused": {
         "one": "One statement was not imported; the reason was shown in the window.",
         "other": "{count} statements were not imported; the reasons were shown in the window."
-      }
+      },
+      "selfBooked": "This closed the agent's proposal.",
+      "selfBookedOpen": "The agent's proposal is still open: reject it under Attention.",
+      "vorschlagLeftOpen": "The agent's proposal stays open: someone allowed to decide proposals can close it.",
+      "ignoredWhy": "Ignored: {party} ({reason})",
+      "undoShort": "Undo"
     },
     "agent": {
       "question": "How do I book this bank line: {date}, {party}, {amount}?"
@@ -883,6 +1073,74 @@
       "vorschlagStale": {
         "title": "Not run: this proposal is out of date.",
         "body": "The record behind it changed after the agent made it. Ask the agent to propose it again."
+      },
+      "noCounterparty": {
+        "title": "This line names no counterparty.",
+        "body": "A booking rule applies per counterparty (IBAN or name). Book this line by hand."
+      },
+      "invalidAccount": {
+        "title": "This account cannot carry a booking rule.",
+        "body": "A bank account, a control account (1100, 2000), a VAT account or an archived account does not work for a booking rule. Choose another account."
+      },
+      "invalidTaxCode": {
+        "title": "This VAT code no longer exists.",
+        "body": "Choose an active code or no VAT, then save the booking rule."
+      },
+      "vatNotApplicable": {
+        "title": "No VAT applies on this account.",
+        "body": "Choose no VAT or an income or expense account, then save the booking rule."
+      },
+      "invalidRecipe": {
+        "title": "The booking rule cannot be saved like this.",
+        "body": "A rule needs exactly one rest, a label for every amount it asks for, and accounts that can be booked to. A clearing account is a balance sheet account that no position uses."
+      },
+      "ruleNotFound": {
+        "title": "This booking rule no longer exists.",
+        "body": "Reload the lines and choose how to book this one."
+      },
+      "ruleNotApplicable": {
+        "title": "This booking rule does not fit this line.",
+        "body": "It applies to another counterparty or the other direction. Choose an account for this line."
+      },
+      "askMissing": {
+        "title": "An amount is missing.",
+        "body": "Enter every amount the rule asks for, above zero."
+      },
+      "restIsZero": {
+        "title": "The rest would be 0.00.",
+        "body": "Check the amount you entered."
+      },
+      "invalidRecipeSame": {
+        "title": "The booking rule cannot be saved like this.",
+        "body": "\"Same amount as\" always points at an asked amount, never at the rest and never at its own line."
+      },
+      "invalidRecipeSide": {
+        "title": "The template cannot be saved like this.",
+        "body": "Every line of a template is a debit or a credit. A rule for bank lines follows the direction of the line."
+      },
+      "invalidRecipeIgnore": {
+        "title": "The booking rule cannot be saved like this.",
+        "body": "\"Do not book\" needs a reason and has no lines. A template always books."
+      },
+      "invalidRecipeFollowUp": {
+        "title": "This next step does not work.",
+        "body": "Only a template that still exists can be the next step. Reload the templates and pick one."
+      },
+      "wrongScope": {
+        "title": "This booking rule does not fit here.",
+        "body": "A template books in the journal, a rule for bank lines books a bank line. Pick the one that fits."
+      },
+      "wrongOutcome": {
+        "title": "This booking rule says \"Do not book\".",
+        "body": "Set the line aside with \"Do not book\", or book it another way."
+      },
+      "restChangesSide": {
+        "title": "The rest would land on the other side.",
+        "body": "With these amounts the rest would no longer be where the template books it. Check the amounts."
+      },
+      "labelTaken": {
+        "title": "A template already has this name.",
+        "body": "Choose another name, or replace the existing template."
       }
     },
     "receipts": {
@@ -893,7 +1151,15 @@
         "other": "{count} receipts attached"
       },
       "missing": "No receipt",
-      "lineGone": "This bank line no longer exists."
+      "lineGone": "This bank line no longer exists.",
+      "clip": "Receipts, {party}",
+      "clipNone": "Attach a receipt (or drop a file on the line)",
+      "clipSome": {
+        "one": "{count} receipt. Click to see or attach.",
+        "other": "{count} receipts. Click to see or attach."
+      },
+      "clipMissing": "No receipt. Click to attach one.",
+      "clipMissingLabel": "Receipts, {party}, no receipt"
     },
     "ai": {
       "tag": "AI",
@@ -917,45 +1183,428 @@
     },
     "direction": {
       "label": "Direction",
-      "in": "Money in only",
-      "out": "Money out only"
+      "in": "Credits",
+      "out": "Debits",
+      "all": "All",
+      "allCount": "All ({count})",
+      "inCount": "Credits ({count})",
+      "outCount": "Debits ({count})"
     },
-    "strip": {
-      "label": "Bank line context",
-      "split": "Split",
-      "link": "Match an existing entry",
-      "agent": "Ask the agent",
-      "ignore": "Ignore",
+    "source": {
+      "standard": "Your booking rule",
+      "history": "From earlier bookings",
+      "agent": "Proposed by the agent",
+      "tip": "{source}: {reason}",
+      "agentReason": "Book approves the proposal.",
+      "rule": "Booking rule \"{name}\""
+    },
+    "standard": {
+      "set": "Save as booking rule, {party}",
+      "setTip": "Save as booking rule: future lines from {party} are proposed like this.",
+      "show": "Show booking rule, {party}",
+      "showTip": "A booking rule applies to {party}. Click to see or remove it.",
+      "title": "Booking rule for {party}",
+      "body": "{account}, {vat}. Future lines are proposed like this.",
+      "bodyUnknown": "Future lines of this counterparty are proposed by this booking rule.",
+      "remove": "Remove booking rule",
+      "close": "Close",
+      "done": "Booking rule saved: {party} to {account}.",
+      "unchanged": "This booking rule was already set: {party} to {account}.",
+      "removed": "Booking rule removed: {party}.",
+      "busy": "Saving …",
+      "showTipNamed": "Booking rule \"{name}\". Click to see or remove it.",
+      "bodyRoute": "{route}. Future lines are proposed like this.",
+      "doneNamed": "Booking rule \"{name}\" saved.",
+      "unchangedNamed": "The booking rule \"{name}\" was already like this."
+    },
+    "filter": {
+      "label": "Filter",
+      "labelActive": "Filter ({count})",
+      "needs": "Need you ({count})",
+      "sure": "Sure ({count})",
+      "in": "Money in only",
+      "out": "Money out only",
+      "noReceipt": "No receipt ({count})"
+    },
+    "rules": {
+      "unnamed": "Booking rule",
+      "askFallback": "an amount",
+      "vatRate": "VAT {rate} %",
+      "route": {
+        "via": "through {via}",
+        "ask": "{leg}: you enter {label} when booking",
+        "rest": "Rest: {leg}",
+        "same": "{leg}: same amount as {other}",
+        "factorPlatform": "{leg}: computed from VAT {vat} % and a fee of {fee} % of the net",
+        "factorPlain": "{leg}: computed with factor {factor}"
+      },
+      "match": {
+        "in": "{party}, money in",
+        "out": "{party}, money out",
+        "withText": "{base}, text contains \"{text}\"",
+        "vorlage": "Template for the journal"
+      },
+      "invalid": {
+        "account_archived": "An account of this rule is archived, so it no longer proposes anything.",
+        "vat_not_applicable": "No VAT applies on an account of this rule, so it no longer proposes anything.",
+        "other": "An account or a VAT code of this rule no longer applies, so it no longer proposes anything.",
+        "state": "Proposes nothing",
+        "account_not_bookable": "An account of this rule can no longer be booked to, so it no longer proposes anything.",
+        "tax_code_inactive": "A VAT code of this rule no longer applies, so it no longer proposes anything.",
+        "recipe_unreadable": "This rule can no longer be read, so it no longer proposes anything. Save it again with Edit."
+      },
+      "header": "Booking rules",
+      "headerCount": "Booking rules ({count})",
+      "sheet": {
+        "title": "Booking rules",
+        "close": "Close booking rules",
+        "empty": "No booking rule yet. Save one with ☆ when you book a line.",
+        "loading": "Loading the booking rules.",
+        "lead": "A booking rule only proposes. Nothing is booked until you click.",
+        "editContext": "Booking rule \"{name}\"",
+        "more": "More actions for \"{name}\"",
+        "remove": "Remove",
+        "removed": "Booking rule \"{name}\" removed.",
+        "saved": "Booking rule \"{name}\" saved.",
+        "groupBank": "Bank lines",
+        "groupManual": "Templates",
+        "newVorlage": "New template",
+        "savedVorlage": "Template \"{name}\" saved.",
+        "manualInfo": "A template books a recurring journal entry."
+      },
+      "confirm": {
+        "title": "Remove booking rule?",
+        "body": "\"{name}\" will no longer propose anything. What is already booked stays as it is.",
+        "yes": "Remove",
+        "no": "Cancel",
+        "close": "Close"
+      },
+      "chooser": {
+        "label": "Which booking rule, {party}",
+        "placeholder": "Which booking rule?",
+        "other": "Book another way",
+        "otherKeywords": "account other manual split",
+        "group": "Booking rules",
+        "search": "Search booking rules"
+      },
+      "ask": {
+        "label": "{label}, {party}",
+        "restZero": "The rest would be 0.00; check the amount.",
+        "missing": "Enter {label}, then you can book."
+      },
+      "pop": {
+        "title": "Save as booking rule",
+        "titleEdit": "Edit booking rule",
+        "name": "Name",
+        "text": "Only when the text contains",
+        "textHint": "Empty: applies to every line of this counterparty.",
+        "textClear": "Remove the condition",
+        "rest": "Which amount is the rest?",
+        "restNone": "Choose which amount is the rest.",
+        "nameMissing": "Give the booking rule a name.",
+        "askLabel": "Label for {account}",
+        "askLabelMissing": "Every amount the rule asks for needs a label.",
+        "restMeta": "the rest",
+        "via": "Through {account}",
+        "legAccount": "Account of position {n}",
+        "legVat": "VAT of position {n}",
+        "save": "Save",
+        "busy": "Saving …",
+        "open": "Save as booking rule",
+        "restOf": "Rest: {account}",
+        "restChoice": "Takes the rest",
+        "closeContext": "Close without saving"
+      },
+      "vorlage": {
+        "title": "Save as template",
+        "titleEdit": "Edit template",
+        "titleNew": "New template",
+        "nameMissing": "Give the template a name.",
+        "twoLegs": "A template needs at least two lines.",
+        "accountMissing": "Pick an account for every line.",
+        "sameInvalid": "\"Same amount as\" points at an asked amount, never at the rest.",
+        "position": "Line {n}:",
+        "noAccount": "Pick an account",
+        "side": {
+          "debit": "Debit",
+          "credit": "Credit"
+        },
+        "sideLabel": "Debit or credit, line {n}",
+        "ownAmount": "Its own amount",
+        "sameOption": "as line {n}, {label}",
+        "sameLabel": "Same amount as, line {n}",
+        "removeLeg": "Remove line {n}",
+        "addLeg": "+ Line",
+        "labelTaken": "A template is already called \"{name}\". Replace it or choose another name?",
+        "replace": "Replace"
+      },
+      "outcome": {
+        "label": "What happens to these lines?",
+        "legs": "Book",
+        "ignore": "Do not book",
+        "reason": "Reason",
+        "noteMissing": "Add a note for the other reason.",
+        "ignoreHint": "A line that is not booked never reaches the books. So TILL only proposes it, and you set each line aside yourself.",
+        "noLegs": "This rule has no lines. Split a line and save it with ☆."
+      },
+      "next": {
+        "label": "Next step",
+        "none": "No next step",
+        "hint": "Once the line is decided, it offers this template in the journal.",
+        "words": "Then: template \"{name}\"",
+        "link": "Next step: \"{name}\""
+      },
+      "factor": {
+        "modeLabel": "Amount for {account}",
+        "ask": "Enter each time",
+        "compute": "Compute",
+        "label": "Label for {account}",
+        "preset": "Computation",
+        "platform": "Platform payout (VAT rate, fee on the net)",
+        "plain": "Factor",
+        "vatPct": "VAT in %",
+        "feePct": "Fee in % of the net",
+        "plainField": "Factor, e.g. 6.0056 or 1081/180",
+        "invalid": "Check the computation",
+        "refused": "This factor is too large. Use a simpler one.",
+        "wordsPlatform": "computed from VAT {vat} % and a fee of {fee} % of the net",
+        "wordsPlain": "computed with factor {factor}",
+        "wordsOnLine": "{how}: {from} → {to}"
+      },
+      "group": {
+        "match": "Recognition",
+        "booking": "Booking"
+      },
+      "leg": {
+        "rest": "What is left",
+        "same": "Same amount as position {n}",
+        "computed": "Computed",
+        "computedHow": "Computed: {how}",
+        "asked": "Entered each time: {label}",
+        "askedBare": "Entered each time"
+      }
+    },
+    "woher": {
+      "agent": "The agent's proposal",
+      "agentTip": "Booking approves it",
+      "history": "As booked on {date}",
+      "model": "AI suggestion",
+      "entryReference": "Same reference",
+      "sameAmount": "Same amount",
+      "qrReference": "QR reference",
+      "qrDiffers": "QR reference, amount differs",
+      "batch": "Payment run",
+      "batchDiffers": "Payment run, amount differs",
+      "billReference": "Supplier reference",
+      "transfer": "Own transfer",
+      "several": {
+        "one": "{count} rule",
+        "other": "{count} rules"
+      },
+      "switch": "Switch",
+      "rule": "Rule {name}",
+      "glyph": {
+        "rule": "Booking rule",
+        "history": "As booked before",
+        "agent": "From the agent",
+        "model": "AI model, unchecked",
+        "sure": "Reference matches",
+        "check": "To check",
+        "match": "Match with an entry"
+      }
+    },
+    "facts": {
+      "title": "Bank line",
+      "date": "Date",
+      "text": "Bank description",
+      "reference": "Reference",
+      "iban": "IBAN",
+      "account": "Bank account",
+      "dates": "Booking date and value date",
+      "valuta": "Value date",
+      "info": "Additional information",
+      "qrRef": "QR reference",
+      "e2e": "End-to-end",
+      "e2eLong": "End-to-end reference",
+      "bankRef": "Bank reference",
+      "bankRefLong": "The bank's reference",
+      "code": "Bank transaction code",
+      "fx": "Foreign currency",
+      "fxRate": "Rate",
+      "fxEffective": "effective",
+      "fxFee": "Fee",
       "receipts": {
         "one": "{count} receipt",
         "other": "{count} receipts"
-      },
-      "vatSplit": "incl. VAT {tax} on {account} · net {net}",
-      "vatSplitMany": "incl. VAT {tax} · net {net}",
-      "vatOnTop": "plus VAT {parts}",
-      "vatPart": "{tax} on {account}",
+      }
+    },
+    "book": {
+      "why": {
+        "account": "Pick an account",
+        "amount": "Amount missing",
+        "positions": "Positions do not add up to {amount}",
+        "target": "Pick an account",
+        "ask": "{label} missing",
+        "restZero": "Rest would be {amount}",
+        "difference": "Reason for the difference missing",
+        "rule": "Pick a rule",
+        "restZeroShort": "Nothing is left for {account}",
+        "overrideReason": "State a reason for differing from the default.",
+        "remainder": "{amount} is left over: choose what happens to it."
+      }
+    },
+    "details": {
       "vatFailed": "The VAT could not be computed. Check the code.",
       "model": "AI model {model} on this device: {percent} % likely, measured error {ece} percentage points (ECE). Nobody has checked it yet.",
       "modelNoEce": "AI model {model} on this device: {percent} % likely, error not measured. Nobody has checked it yet.",
       "entry": "Entry of {date}: {text}.",
       "entryDiffers": "The amount differs by {amount}. Reason:",
       "openEntry": "Open entry",
-      "reason": {
-        "history": "Booked like this last on {date} ({count} times).",
-        "qr_reference_exact": "QR reference and amount match {number} to the cent.",
-        "existing_entry_reference": "Same reference as the entry of {date}: match it, no new entry."
-      },
       "satz": "{debit} to {credit}",
       "satzMore": "+{count}",
-      "vatImport": "the payment is the import VAT, on {account}",
-      "vatOnly": "incl. VAT {tax} on {account}",
-      "vatOnlyMany": "incl. VAT {tax}",
-      "reference": "Ref. {value}",
-      "iban": "IBAN {value}",
       "batchBills": {
         "one": "{count} bill: {names}",
         "other": "{count} bills: {names}"
+      },
+      "openEntryNumber": "Open voucher {number}",
+      "entryNumbered": "Voucher {number}, entry of {date}: {text}."
+    },
+    "area": {
+      "listLabel": "Bank lines",
+      "dockLabel": "Position of the details",
+      "dockRight": "Right",
+      "dockBottom": "Bottom",
+      "closeContext": "Details of the bank line",
+      "resize": "Size of the details",
+      "sizeText": "{size} pixels"
+    },
+    "duplicate": {
+      "title": "Possible duplicate of",
+      "titleCovered": "Possible duplicate",
+      "mark": "Possible duplicate: decision open",
+      "show": "Show",
+      "isDuplicate": "Duplicate",
+      "isDistinct": "Not a duplicate",
+      "bookWhy": "Decide first: duplicate?",
+      "allExact": "All exact matches are duplicates",
+      "ackDuplicate": "Ignored as a duplicate: {party}.",
+      "ackDistinct": "Not a duplicate: {party} is a normal line again.",
+      "ackDelivery": {
+        "one": "{count} line ignored as a duplicate.",
+        "other": "{count} lines ignored as duplicates."
+      },
+      "reason": {
+        "shared_reference": "same bank reference",
+        "same_movement": "same movement: amount, date, counterparty",
+        "same_date": "same amount on the same day",
+        "near_date": "same amount, a few days apart",
+        "covered_period_new_line": "A new line on a day a statement in the books already covers."
+      },
+      "short": "Duplicate?"
+    },
+    "period": {
+      "legend": "Period",
+      "from": "From",
+      "to": "To",
+      "inverted": "“From” is after “To”."
+    },
+    "count": {
+      "one": "{count} line",
+      "other": "{count} lines",
+      "range": "{first} to {last} of {total}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "mode": {
+      "label": "Booking kind",
+      "konto": "Account",
+      "zuordnen": "Match",
+      "kontakt": "Contact",
+      "spesen": "Expenses",
+      "smartLabel": "Book to what?",
+      "smartPlaceholder": "Search an account, invoice, contact or expense claim",
+      "noMatch": "Nothing found.",
+      "account": "Account",
+      "accountPlaceholder": "Search an account"
+    },
+    "zuordnen": {
+      "noInvoices": "No open invoices in this currency.",
+      "noBills": "No open supplier bills in this currency.",
+      "invoices": "Open invoices",
+      "bills": "Open supplier bills",
+      "search": "Search documents",
+      "openTip": "Still open",
+      "amountFor": "Amount for {code}",
+      "openAfter": "open afterwards {amount}",
+      "remainderLegend": "What happens to the rest",
+      "link": "Match an existing entry"
+    },
+    "kontakt": {
+      "contact": "Contact",
+      "match": "Fits the counterparty",
+      "all": "All contacts",
+      "loading": "Loading contacts",
+      "placeholder": "Search a contact",
+      "unreadable": "The contacts could not be read.",
+      "role": {
+        "customer": "Customer",
+        "vendor": "Supplier",
+        "both": "Customer and supplier"
+      },
+      "modeLabel": "How it is booked",
+      "modeDefault": "{mode} (default)",
+      "mode": {
+        "guthaben": "Credit balance",
+        "anzahlung": "Prepayment"
+      },
+      "reason": "Reason for differing from the default",
+      "side": {
+        "customer": "of the customer",
+        "supplier": "with the supplier"
+      },
+      "lands": {
+        "guthaben": "Stays as a credit balance {side} on {account}.",
+        "anzahlung": "Is booked as a prepayment {side} on {account}."
       }
+    },
+    "spesen": {
+      "legend": "Approved expense claims",
+      "loading": "Loading expense claims.",
+      "none": "No approved expense claims are open.",
+      "noRight": "You lack the right to read expense claims.",
+      "unreadable": "The expense claims could not be read.",
+      "someone": "Employee"
+    },
+    "fee": {
+      "offer": "Split the fee of {fee} onto {account}?",
+      "apply": "Split it off",
+      "pickFirst": "Choose an account first.",
+      "dismiss": "No, thanks",
+      "applied": "Fee of {fee} split onto {account}.",
+      "undo": "Take back"
+    },
+    "fx": {
+      "counterLeg": "Counter-leg in {amount}",
+      "acknowledge": "I have read the consequences.",
+      "noConsequence": "The consequences of the counter-leg could not be shown, so they cannot be confirmed here.",
+      "rate": "rate {rate}",
+      "fee": "fee {fee}"
+    },
+    "figures": {
+      "amount": "Amount",
+      "distributed": "allocated",
+      "deviation": "Deviation"
+    },
+    "focus": {
+      "previous": "Previous",
+      "next": "Next",
+      "place": "Line {n} of {count}",
+      "outside": "Not in the list ({count} lines)",
+      "hideList": "Hide the list"
+    },
+    "foot": {
+      "split": "Split",
+      "ignore": "Ignore"
     }
   },
   "qrmatch": {
@@ -978,7 +1627,7 @@
   "help": {
     "Bank": {
       "title": "Bank",
-      "body": "Every line of your bank statements is here, from every account. You decide each one on its own row: book it, settle an open invoice, match it to an existing entry, or ignore it with a reason. Click a line to see, right under it, why TILL proposes it. Above the list stands the difference (one line for several accounts); the (i) shows, per account, bank equals books plus open lines.\n\nThe overview counts \"Need you\" and \"Sure\" the same way. Drop a receipt on its line, before or after booking. Once the line is booked, TILL keeps it for ten years. \"No receipt\" under \"Booked\" shows where one is still missing.",
+      "body": "Every line of your bank statements is here, from every account. You decide each one on its own row: book it, settle an open invoice, match it to an existing entry, or ignore it with the ×. Click a line and the details beside it show what will be booked and where the proposal comes from. Above the list stands the difference between bank and books.\n\nThe ☆ saves a booking rule for the counterparty. A booking rule only proposes. Nothing is booked until you click. You can overwrite a computed amount. Attach a receipt with the paperclip or drop it on its line. TILL keeps it for ten years.",
       "concepts": [],
       "docsPath": "introduction"
     }
@@ -1017,7 +1666,8 @@
     "titleIncomplete": "Statement {n} is not complete in the books",
     "titleConflicting": "Statement {n} is in the books twice, with different balances",
     "conflicting": "The bank delivered statement {n} twice, with different balances. Whether money is missing cannot be said this way: check both copies under Bank.",
-    "confirmationVoid": "The earlier confirmation that nothing is missing no longer holds."
+    "confirmationVoid": "The earlier confirmation that nothing is missing no longer holds.",
+    "titleList": "Statements {ranges} are missing"
   },
   "gapRepair": {
     "title": "Close the gap",
@@ -1025,8 +1675,8 @@
     "loading": "Loading the gap.",
     "loadError": "The gap could not be loaded. Close this window and try again.",
     "notFound": "This gap no longer exists: the statements are in the books now.",
-    "leadZkb": "In ZKB e-banking, download the camt.053 statements for {dates} and drop them here. The first and the last day are already in the books: the days before and after do no harm, TILL counts nothing twice. Several files at once are fine, in any order.",
-    "leadOther": "In your bank's e-banking, download the camt.053 statements for {dates} and drop them here. The first and the last day are already in the books: the days before and after do no harm, TILL counts nothing twice. Several files at once are fine, in any order.",
+    "leadZkb": "In ZKB e-banking, download the camt.053 statements for {dates} and drop them here. Overlapping days do no harm.",
+    "leadOther": "In your bank's e-banking, download the camt.053 statements for {dates} and drop them here. Overlapping days do no harm.",
     "steps": {
       "zkb": {
         "1": "Open «Konto & Zahlungen», then «Datentransfer».",
@@ -1074,7 +1724,7 @@
       "amended": "The bank delivered this statement again with different content. Check it under Bank.",
       "other": "Code {code}."
     },
-    "confirmLead": "Were there surely no bookings on these days? Then confirm, with a reason, that nothing is missing in the gap {range}. You can withdraw it later.",
+    "confirmLead": "No bookings on these days? Then confirm it with a reason.",
     "reason": "Reason",
     "reasonPlaceholder": "e.g. public holidays without bookings",
     "confirm": "Nothing is missing, confirm",
@@ -1085,6 +1735,9 @@
       "human_only": "A person confirms this, not the agent.",
       "needs_bank_account": "This bank account no longer exists.",
       "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on: money is missing from the books. It cannot be confirmed: import the missing statements."
-    }
+    },
+    "titleAll": "Statements {ranges} are missing",
+    "whyAllChain": "No money is missing: the balances chain exactly.",
+    "titleMany": "Close gaps"
   }
 }

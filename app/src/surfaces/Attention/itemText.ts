@@ -3,8 +3,8 @@
  * Übersicht list, so the two can never word the same item differently.
  *
  *  - A param named `...At` that carries an ISO instant (the engine sends data, never a rendered date) is
- *    shown in Swiss time as `02.10.2026, 07:02`. A param named `...Date` carrying a calendar day
- *    (`2026-09-23`) is shown as `23.09.2026` (D150), and a number named `...Minor` beside a `currency`
+ *    shown in Swiss time as `02.10.2026, 07:02`. A param named `date` or `...Date` carrying a calendar day
+ *    (`2026-09-23`) is shown as `23.09.2026` (D150, D178), and a number named `...Minor` beside a `currency`
  *    param as money (`CHF 500.00`). Every other param passes through untouched.
  *  - A queue is named by `attention.queueLabel.<queueId>`; when that key is missing (a queue registered
  *    in the engine before its Studio label landed) the provider's OWN `labelKey` from the payload names
@@ -43,7 +43,7 @@ export function formatItemParams(params: Readonly<Record<string, string | number
   const currency = typeof params.currency === 'string' && params.currency !== '' ? params.currency : null;
   for (const [key, value] of Object.entries(params)) {
     if (typeof value === 'string' && key.endsWith('At') && ISO_INSTANT.test(value)) out[key] = formatInstant(value);
-    else if (typeof value === 'string' && key.endsWith('Date') && ISO_DAY.test(value)) out[key] = formatDate(value);
+    else if (typeof value === 'string' && (key === 'date' || key.endsWith('Date')) && ISO_DAY.test(value)) out[key] = formatDate(value);
     else if (typeof value === 'number' && key.endsWith('Minor') && currency !== null) out[key] = formatMoney(value, currency);
     else out[key] = value;
   }
@@ -64,7 +64,8 @@ export function itemTitle(t: T, item: WordedItem): string {
 
 /** The subtitle line, or null when the item carries none. A Vorschlag names its verb in words. */
 export function itemSubtitle(t: T, item: WordedItem): string | null {
-  if (item.queueId === 'agent_action') return verbLabel(t, String(item.subtitleParams?.tool ?? ''));
+  // D178: the Vorschläge are two queues (bank, and everything else); both name the drafted verb.
+  if (item.queueId === 'agent_action' || item.queueId === 'agent_action_bank') return verbLabel(t, String(item.subtitleParams?.tool ?? ''));
   if (item.subtitleKey === undefined) return null;
   return t(item.subtitleKey, formatItemParams(item.subtitleParams ?? {}));
 }

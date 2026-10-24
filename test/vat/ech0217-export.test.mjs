@@ -769,7 +769,11 @@ test('eCH-0217 refusals (D160.5 critic F1): once a period is filed, the IST next
   const r = exportVatReturnEch0217(ctx, Q2);
   assert.equal(r.error, 'unsupported');
   assert.match(r.nextStep, /`vat_configure`/);
-  assert.match(r.nextStep, /methodChange: \{ validFrom: '2026-04-01' \}/, 'the first unfiled day is handed over');
+  // MWSTG Art. 39 Abs. 3 / Art. 37 Abs. 4 (critic O1, 14.10.2026): a dated change lands on the start of
+  // a Steuerperiode, so the step hands over the next 01.01 at or after the first unfiled day (2026-04-01),
+  // never that mid-year day itself, which vat_configure refuses.
+  assert.match(r.nextStep, /methodChange: \{ validFrom: '2027-01-01' \}/, 'the next start of a Steuerperiode is handed over');
+  assert.doesNotMatch(r.nextStep, /2026-04-01/);
   assert.doesNotMatch(r.nextStep, /correct it with `set_vat_method`/, 'set_vat_method refuses once a period is filed');
 
   // The step is not a dead end: set_vat_method refuses, the named route records the change.
@@ -779,11 +783,20 @@ test('eCH-0217 refusals (D160.5 critic F1): once a period is filed, the IST next
     method: 'effektiv',
     timing: 'soll',
     registered: true,
-    asOf: '2026-04-01',
-    methodChange: { validFrom: '2026-04-01' },
+    asOf: '2027-01-01',
+    methodChange: { validFrom: '2027-01-01' },
     idempotencyKey: 'f1-soll',
   });
   assert.equal(viaConfigure.ok, true, JSON.stringify(viaConfigure));
+  // The mid-year day the step used to hand over is refused.
+  const midYear = configureVat(ctx, {
+    method: 'effektiv',
+    timing: 'soll',
+    registered: true,
+    methodChange: { validFrom: '2027-04-01' },
+    idempotencyKey: 'f1-mid',
+  });
+  assert.equal(midYear.error, 'vat_method_change_not_period_start', JSON.stringify(midYear));
 
   // With nothing filed, the ordinary onboarding verb stays the named remedy.
   const open = exportVatReturnEch0217(istWorld(), Q2);

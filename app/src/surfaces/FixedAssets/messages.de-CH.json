@@ -244,7 +244,12 @@
         "depreciation": "Abschreibung",
         "disposal": "Abgang",
         "revaluation": "Neubewertung",
-        "adjustment": "Korrektur"
+        "adjustment": "Korrektur",
+        "depreciation_reversal": "Abschreibung storniert",
+        "acquisition_reversal": "Anschaffung storniert",
+        "additional_capitalisation_reversal": "Zusatzaktivierung storniert",
+        "opening_reversal": "Eröffnungsbilanz storniert",
+        "disposal_reversal": "Abgang storniert"
       }
     },
     "ledger": {
@@ -260,6 +265,14 @@
       "date": "Eröffnungsdatum",
       "description": "Beschreibung",
       "post": "Eröffnungsbilanz buchen",
+      "reverse": "Stornieren",
+      "reversed": "Storniert",
+      "reverseTitle": "{type} vom {date} stornieren",
+      "reverseBody": "Das bucht eine Korrekturbuchung mit heutigem Datum und passt das Verzeichnis an; die Originalbuchung bleibt sichtbar. Eine stornierte Anschaffung oder Eröffnungsbilanz schliesst die Anlage.",
+      "reverseReason": "Grund",
+      "reverseConfirm": "Stornieren",
+      "reverseCancel": "Abbrechen",
+      "reverseActionsLabel": "Aktionen für die Buchung vom {date}",
       "nbv": "Buchwert",
       "col": {
         "date": "Datum",
@@ -697,6 +710,13 @@
     "asset_not_acquirable": "Eine abgegangene oder archivierte Anlage kann nicht aktiviert werden.",
     "source_document_not_found": "Der verknüpfte Beleg wurde in diesem Mandanten nicht gefunden.",
     "period_locked": "Das gewählte Datum liegt in einer gesperrten Periode. Öffne die Periode wieder oder wähle ein anderes Datum.",
+    "depreciation_posted": "Ein gebuchter Abschreibungslauf umfasst diese Anlage noch. Storniere zuerst diesen Lauf (den neusten zuerst), dann diese Buchung.",
+    "capitalisation_stands": "Auf dieser Anlage stehen noch Zusatzaktivierungen. Storniere sie zuerst, dann die Anschaffung.",
+    "asset_disposed": "Diese Anlage ist abgegangen, was auch diese Kosten ausgebucht hat. Storniere zuerst den Abgang.",
+    "asset_posting_reversed": "Eine Buchung dieser Anlage wurde im Journal storniert, das Verzeichnis führt sie aber noch. Storniere diese Buchung zuerst im Journal der Anlage.",
+    "not_reversible": "Diese Buchung lässt sich hier nicht stornieren: eine Abschreibung geht mit ihrem Lauf zurück, eine Korrektur wird neu gebucht.",
+    "already_reversed": "Diese Buchung ist bereits storniert.",
+    "reason_required": "Gib einen Grund für die Stornierung an.",
     "invalid_account_type": "Dieses Konto hat den falschen Typ für dieses Feld.",
     "invalid_cost_center": "Diese Kostenstelle besteht in diesem Mandanten nicht.",
     "invalid_cost": "Der Anschaffungswert muss grösser als null sein.",

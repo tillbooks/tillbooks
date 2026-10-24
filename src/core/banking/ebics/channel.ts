@@ -1654,16 +1654,23 @@ export function syncLeaseCutoff(now: string): string {
   return new Date(Date.parse(now) - SYNC_LEASE_MS).toISOString();
 }
 
-/** Take the connection's sync lease, or refuse `sync_in_progress` naming when the running one began. */
+/**
+ * Take the connection's sync lease, or refuse `sync_in_progress` naming when the running one began.
+ * The lease and its release are the sync's own bookkeeping, not the sync: they never mark an approved
+ * `bank_sync` as having run (D165, `withoutCommitMark`), so an approval whose sync imported nothing
+ * stays rejectable, while one that imported a statement keeps its mark.
+ */
 function takeSyncLease(ctx: WorkspaceContext, connectionId: string): { ok: true; stamp: string } | Err {
   const stamp = ctx.clock.now();
-  const taken = ctx.store.tx(() =>
-    ctx.store.db
-      .prepare(
-        `UPDATE ebics_connection SET sync_started_at = ?, sync_lease_owner = ?
-          WHERE workspace_id = ? AND id = ? AND (sync_started_at IS NULL OR sync_started_at < ?)`,
-      )
-      .run(stamp, leaseHolder, ctx.workspaceId, connectionId, syncLeaseCutoff(stamp)).changes,
+  const taken = ctx.store.withoutCommitMark(() =>
+    ctx.store.tx(() =>
+      ctx.store.db
+        .prepare(
+          `UPDATE ebics_connection SET sync_started_at = ?, sync_lease_owner = ?
+            WHERE workspace_id = ? AND id = ? AND (sync_started_at IS NULL OR sync_started_at < ?)`,
+        )
+        .run(stamp, leaseHolder, ctx.workspaceId, connectionId, syncLeaseCutoff(stamp)).changes,
+    ),
   );
   if (Number(taken) === 1) return { ok: true, stamp };
   const running = ctx.store.db
@@ -1684,10 +1691,12 @@ function takeSyncLease(ctx: WorkspaceContext, connectionId: string): { ok: true;
 
 /** Clear the lease this sync took (and only that one: a stale lease another process took over stays). */
 function releaseSyncLease(ctx: WorkspaceContext, connectionId: string, stamp: string): void {
-  ctx.store.tx(() =>
-    ctx.store.db
-      .prepare('UPDATE ebics_connection SET sync_started_at = NULL, sync_lease_owner = NULL WHERE workspace_id = ? AND id = ? AND sync_started_at = ?')
-      .run(ctx.workspaceId, connectionId, stamp),
+  ctx.store.withoutCommitMark(() =>
+    ctx.store.tx(() =>
+      ctx.store.db
+        .prepare('UPDATE ebics_connection SET sync_started_at = NULL, sync_lease_owner = NULL WHERE workspace_id = ? AND id = ? AND sync_started_at = ?')
+        .run(ctx.workspaceId, connectionId, stamp),
+    ),
   );
 }
 

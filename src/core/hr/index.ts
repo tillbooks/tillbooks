@@ -19,6 +19,7 @@ export {
   approveClaim,
   rejectClaim,
   reimburseClaim,
+  reverseClaim,
   listClaims,
   getClaim,
 } from './claims.js';

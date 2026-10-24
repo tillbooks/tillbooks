@@ -17,6 +17,8 @@ export interface IgnoreFormProps {
   lookups: Lookups;
   busy: boolean;
   canPost: boolean;
+  /** D177: the reason the form opens on ("Anderer Grund" from the row's ×, which asks for a note). */
+  initialReason?: IgnoreReason;
   onIgnore: (reason: IgnoreReason, note: string) => void;
   /** Book it to the owner's account instead: the row takes the draft and the panel returns. */
   onBookInstead: (target: DraftTarget) => void;
@@ -30,10 +32,10 @@ export interface IgnoreFormProps {
  */
 const PRIVATE_ACCOUNTS = ['2261', '2850'];
 
-export function IgnoreForm({ line, lookups, busy, canPost, onIgnore, onBookInstead, onCancel }: IgnoreFormProps) {
+export function IgnoreForm({ line, lookups, busy, canPost, initialReason = 'booked_elsewhere', onIgnore, onBookInstead, onCancel }: IgnoreFormProps) {
   const t = useT();
   const baseId = useId();
-  const [reason, setReason] = useState<IgnoreReason>('booked_elsewhere');
+  const [reason, setReason] = useState<IgnoreReason>(initialReason);
   const [note, setNote] = useState('');
   const privateAccount = PRIVATE_ACCOUNTS.map((n) => lookups.chartByNumber.get(n)).find((a) => a !== undefined);
   const noteRequired = reason === 'other';

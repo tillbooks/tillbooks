@@ -34,6 +34,8 @@
 import type Database from 'better-sqlite3';
 import { randomBytes } from 'node:crypto';
 
+import { tillTables } from '../store/schemaShape.js';
+
 /** How one secret column is neutralized. */
 export type SecretStrategy =
   /** Set the column to NULL (a nullable column: the honest "this env holds no such secret"). */
@@ -141,12 +143,12 @@ export function looksLikeSecretColumnName(name: string): boolean {
 
 const CURATED = new Set(SECRET_COLUMNS.map((s) => `${s.table}.${s.column}`));
 
+/**
+ * TILL's tables only (`tillTables`, the one chokepoint): a tool's table inside the file (Litestream's
+ * `_litestream_*`, any `_`-prefixed one) is neither neutralized nor named as unclassified drift.
+ */
 function allTables(db: Database.Database): string[] {
-  return (
-    db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-      .all() as { name: string }[]
-  ).map((r) => r.name);
+  return tillTables(db);
 }
 
 function columnNames(db: Database.Database, table: string): string[] {

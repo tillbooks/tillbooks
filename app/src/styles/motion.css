@@ -164,3 +164,119 @@ tr[data-just-committed] > th {
     opacity: 1;
   }
 }
+
+/* ─── Motion levels (D178 point 14) ───────────────────────────────────────────────────────────────
+   The person's level is stamped as `data-motion` on <html> (motion.ts, `MotionLevelStamp`). Charts and
+   tiles never read the level: they read the three properties below, which the level sets. Lively is
+   the default and also what an unstamped root gets. The OS reduce-motion block in tokens.css zeroes
+   every duration whatever the level says. */
+:root {
+  --motion-zero: 0s;
+  --chart-grow: var(--t-motion-grow);
+  --chart-stagger: var(--t-motion-grow-stagger);
+  --tile-lift: var(--t-lift);
+}
+
+html[data-motion='standard'] {
+  --chart-grow: var(--t-motion-grow-standard);
+  --chart-stagger: var(--t-motion-stagger);
+  --tile-lift: 0px;
+}
+
+html[data-motion='calm'],
+html[data-motion='off'] {
+  --chart-grow: var(--motion-zero);
+  --chart-stagger: var(--motion-zero);
+  --tile-lift: 0px;
+}
+
+/* The hover lift of an interactive tile is Lively's alone; under the other levels nothing moves on
+   hover but colour (the K-41 hover beat). The press scale stays, it is the Commit moment's. */
+html .panel--interactive:hover {
+  transform: translateY(calc(-1 * var(--tile-lift)));
+}
+
+html .panel--interactive:active {
+  transform: scale(var(--t-press-scale));
+}
+
+/* Off is "the same as the OS setting": the kill switch of tokens.css, repeated for the level. */
+html[data-motion='off'] *,
+html[data-motion='off'] *::before,
+html[data-motion='off'] *::after {
+  animation-duration: var(--motion-zero) !important;
+  animation-delay: var(--motion-zero) !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: var(--motion-zero) !important;
+  transition-delay: var(--motion-zero) !important;
+  scroll-behavior: auto !important;
+}
+
+/* A chart mark's entrance: it grows from its baseline (a bar), its centre (a donut segment) or along
+   its path (a line, drawn with pathLength="1"), one stagger step per mark index `--i`. Layout holds
+   still: the mark's box is final from the first frame, only its scale or its stroke changes. */
+:where(.chart-grow) {
+  /* The mark's index in its chart; a chart sets it inline per mark, the first mark is 0. */
+  --i: 0;
+}
+
+.chart-grow {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: chart-grow-y var(--chart-grow) var(--t-ease-out) both;
+  animation-delay: calc(var(--i, 0) * var(--chart-stagger));
+}
+
+.chart-grow--x {
+  transform-origin: 0% 50%;
+  animation-name: chart-grow-x;
+}
+
+.chart-grow--arc {
+  transform-origin: 50% 50%;
+  transform-box: view-box;
+  animation-name: chart-grow-arc;
+}
+
+.chart-draw {
+  stroke-dasharray: 1;
+  animation: chart-draw var(--chart-grow) var(--t-ease-out) both;
+}
+
+@keyframes chart-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes chart-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes chart-grow-arc {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes chart-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}

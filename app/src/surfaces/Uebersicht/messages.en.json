@@ -10,7 +10,8 @@
       "allClear": "Nothing is waiting for you right now.",
       "count": "{count} waiting for you",
       "countOne": "1 waiting for you",
-      "all": "All waiting work"
+      "all": "All waiting work",
+      "more": "More on: {title}"
     },
     "mandates": {
       "label": "Mandates",
@@ -80,12 +81,55 @@
       "default": "Default view",
       "personalGroup": "My views",
       "sharedGroup": "Shared views",
-      "save": "Save view",
       "name": "Name",
       "shared": "Shared with the workspace",
-      "confirm": "Save",
       "save_failed": "The view could not be saved.",
-      "fallback_note": "Saved view unavailable, showing the default."
+      "customised": "Customised"
+    },
+    "edit": {
+      "customize": "Arrange the key figures and cards",
+      "done": "Stop arranging",
+      "widthFull": "{name}: full width",
+      "widthHalf": "{name}: half width",
+      "bankSize": "Resize: {name}",
+      "bankSizeTip": "Now: {place}",
+      "more": "More for {name}",
+      "moreTip": "Move {name}",
+      "forward": "Move forward",
+      "back": "Move back",
+      "hidden": "Hidden",
+      "tilesLabel": "Key figures",
+      "pageMore": "More for the overview",
+      "pageMoreTip": "Save as a view or restore the standard",
+      "saveView": "Save as a view",
+      "reset": "Restore the standard",
+      "saveConfirm": "Save the view",
+      "saveCancel": "Close without saving",
+      "undo": "Undo",
+      "undone": "Undone.",
+      "resetDone": "Standard restored.",
+      "viewApplied": "View “{name}” applied.",
+      "bankPlace": {
+        "tile": "Tile",
+        "card": "Card on top",
+        "bar": "Slim bar"
+      },
+      "announce": {
+        "start": "Arranging: drag the grip, or move with Alt and an arrow key. Every change is saved at once.",
+        "end": "Arranging finished.",
+        "moved": "{name} moved, place {position} of {count}.",
+        "hidden": "{name} hidden.",
+        "shown": "{name} shown.",
+        "full": "{name} now full width.",
+        "half": "{name} now half width.",
+        "bank": {
+          "tile": "Bank now as a tile.",
+          "card": "Bank now as a card on top.",
+          "bar": "Bank now as a slim bar."
+        }
+      },
+      "ghostName": "{name}, hidden",
+      "unavailable": "Unavailable"
     },
     "doors": {
       "label": "Common actions",
@@ -220,12 +264,85 @@
       "nothingWaiting": "Nothing is waiting for you",
       "openShort": "{count} open",
       "withVorschlag": "{count} with a proposal"
+    },
+    "bank": {
+      "title": "Bank",
+      "open": "{count} open",
+      "openOne": "1 open",
+      "toBank": "Go to bank",
+      "book": "Book bank lines"
+    },
+    "widget": {
+      "denied": "You lack the right to read these figures.",
+      "error": "This widget could not be loaded.",
+      "window": "{from} to {to}",
+      "amount": "Amount",
+      "month": "Month",
+      "asTable": "As a table",
+      "overdueSince": "overdue since {date}",
+      "dueOn": "due on {date}",
+      "name": {
+        "expense_donut": "Top expenses (ring)",
+        "money_in_out": "Money in and out",
+        "open_creditors": "Open payables",
+        "open_tasks": "Open tasks",
+        "cash_flow": "Cash flow",
+        "expense_bars": "Top expenses (bars)"
+      },
+      "expenses": {
+        "title": "Top expenses",
+        "empty": "No expenses yet.",
+        "emptyHint": "Once you book expenses, the largest show here.",
+        "rest": "Other",
+        "summary": "Expenses total {total}, the {count} largest accounts shown one by one",
+        "total": "Expenses",
+        "account": "Account",
+        "share": "Share",
+        "infoLabel": "How the top expenses are calculated",
+        "infoTitle": "Top expenses",
+        "info": "The ring shows the expense accounts debited more than credited in the period: {gross} together.",
+        "infoReductions": "Not in the ring are expense accounts with more credits, for example a stock change booked against material: {reductions} together. With them, the expenses in the income statement come to {net}."
+      },
+      "money": {
+        "title": "Money in and out",
+        "in": "Money in",
+        "out": "Money out",
+        "summary": "Money in {in}, money out {out} per month",
+        "noBank": "No bank account yet.",
+        "noBankHint": "With a bank account, this shows what comes in and goes out.",
+        "addBank": "Add bank account",
+        "empty": "No movements yet.",
+        "emptyHint": "Booked bank lines appear here.",
+        "toBank": "Go to bank"
+      },
+      "cashflow": {
+        "title": "Cash flow",
+        "summary": "Cash flow per month, net {net}",
+        "net": "Net"
+      },
+      "creditors": {
+        "title": "Open payables",
+        "empty": "No open payables.",
+        "emptyHint": "Supplier bills you capture show here until they are paid.",
+        "capture": "Capture a bill",
+        "unnamed": "No supplier",
+        "total": "Total open",
+        "all": "All {count} open"
+      },
+      "tasks": {
+        "title": "Open tasks",
+        "empty": "No open tasks.",
+        "emptyHint": "Tasks you give yourself or others show here.",
+        "create": "Add a task",
+        "today": "due today",
+        "all": "All {count} open"
+      }
     }
   },
   "help": {
     "Uebersicht": {
       "title": "Overview",
-      "body": "Your key figures, each with its value, its date and a way into the screen behind it.\n\nThe bank inbox above shows the open bank lines as one number, with three symbols: the person for lines that need you, the check mark for sure proposals, the crossed-out paperclip for lines without a receipt. Each number opens the bank screen. Your bank sits on the right with a dot: green runs, orange waits, red failed, grey means the automatic fetch is off. Point at its name for the words. Under till up, TILL fetches every morning and, during setup, asks daily whether the bank has activated the access.\n\nA tile never shows a false zero.",
+      "body": "Your key figures, each with its value, its date and a way into the screen behind it. A tile never shows a false zero.\n\nArrange key figures and cards here: drag the grip, move with Alt and an arrow key or through More, hide or show with the eye, widen with Resize. Every change is saved at once. The content in My settings sets which cards you start with.\n\nThe slim bar of the bank has three symbols: the person for lines that need you, the check mark for sure proposals, the crossed-out paperclip for lines without a receipt. The dot by your bank: green runs, orange waits, red failed, grey is off.",
       "concepts": [],
       "docsPath": "quickstart"
     }

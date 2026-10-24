@@ -14,7 +14,7 @@
  *  - **The fee's money effect lives in the LEDGER**, as one posted `journal_entry`
  *    (`source='dunning'`) whose id is `fee_entry_id`. The `fee_minor` per item is the letter's
  *    figure and A16's per-document attribution key; the Rappen that move are the entry's, and a
- *    mistaken run's fee is corrected by `reverse_entry`, never by editing a row here.
+ *    mistaken run's fee is reversed by `dunning_fee_reverse` (D169), never by editing a row here.
  *  - **The Verzugszins note is display-only** (`interest_minor`, frozen at issue): Art. 104 OR
  *    default interest is computed for the debtor's information and never posted. The "never booked"
  *    rule is §6b-fixed; there is deliberately no column that could carry an interest entry id.

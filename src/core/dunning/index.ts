@@ -11,6 +11,9 @@ export {
   DUNNING_LEVELS,
   DUNNING_RUN_STATUSES,
   INTEREST_FLOOR_BP,
+  DUNNING_REFREEZE_MODES,
+  DUNNING_LETTER_DATES,
+  validateRefreezeOverride,
 } from './config.js';
 export type { DunningLevelConfig, DunningRunStatus, SetDunningConfigInput } from './config.js';
 
@@ -18,12 +21,13 @@ export {
   proposeDunningRun,
   discardDunningRun,
   issueDunningRun,
+  reverseDunningFee,
   sendDunningRun,
   interestNoteMinor,
   dunningEmailSubject,
   DUNNING_SOURCE,
 } from './run.js';
-export type { ProposeDunningRunInput, DiscardDunningRunInput, IssueDunningRunInput, SendDunningRunInput } from './run.js';
+export type { ProposeDunningRunInput, DiscardDunningRunInput, IssueDunningRunInput, DunningFeeReverseInput, SendDunningRunInput } from './run.js';
 
 export { renderDunningPdf, letterTitle } from './pdf.js';
 export type { RenderDunningPdfInput } from './pdf.js';

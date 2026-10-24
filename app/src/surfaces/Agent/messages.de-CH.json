@@ -2,7 +2,7 @@
   "help": {
     "Agent": {
       "title": "Agent",
-      "body": "Hier behältst du den Agenten im Blick. Lies das Gespräch, um zu sehen, was er getan hat und warum, und arbeite dann die Vorschläge ab.\n\nDer Agent erfasst jeden Schreibvorgang als Vorschlag, statt ihn zu buchen; du genehmigst oder lehnst jeden einzeln ab. Unter Vertrauen legst du fest, wie weit jede Art von Handlung als vertraut gilt, von immer fragen bis automatisch ausführen.\n\nDiese Freigabe erteilst nur du: Kein Agent kann sein eigenes Vertrauen erhöhen.",
+      "body": "Hier liest du, was der Agent getan hat: jedes Gespräch mit jedem Schritt, in Worten.\n\nDer Agent erfasst jeden Schreibvorgang als Vorschlag, statt ihn zu buchen. Du entscheidest ihn in den Pendenzen, eine Zeile pro Vorschlag; die ganze Liste steht auch hier unter Vorschläge. Unter Berechtigungen legst du fest, wie weit jede Art von Handlung als vertraut gilt, von immer fragen bis automatisch ausführen.\n\nDiese Freigabe erteilst nur du: Kein Agent kann sein eigenes Vertrauen erhöhen.",
       "concepts": [],
       "docsPath": "introduction"
     }
@@ -82,7 +82,9 @@
         "verweigert": "verweigert",
         "fehlgeschlagen": "fehlgeschlagen"
       },
-      "stale": "Verfallen: nach dem Vorschlag geändert"
+      "stale": "Verfallen: nach dem Vorschlag geändert",
+      "refusal": "Abgewiesen",
+      "args": "Angaben"
     },
     "card": {
       "title": "Vorschlag",
@@ -117,9 +119,60 @@
         "gross": "Total"
       }
     },
+    "line": {
+      "more": "Mehr zu: {title}",
+      "details": "Details",
+      "hideDetails": "Details ausblenden",
+      "detailsOf": "Details: {title}",
+      "consequence": "Was das bewirkt",
+      "origin": "Vorschlag des Agenten",
+      "proposed": "Vorgeschlagen",
+      "proposedValue": "am {date} von {actor}",
+      "agentActor": "Agent",
+      "level": "Freigabe",
+      "levelAsk": "Fragt nach",
+      "levelAskAlways": "Fragt immer",
+      "levelAuto": "Künftig automatisch",
+      "levelLink": "einstellbar",
+      "toBankLine": "Zur Bankzeile",
+      "period": "{period} ({from} bis {to})",
+      "moreRows": "{n} weitere",
+      "grantConfirm": "{capability} künftig ohne Nachfrage ausführen? Die Freigabe gilt für alle Vorschläge dieser Art, wird dir zugeschrieben und bleibt jederzeit widerrufbar.",
+      "grantYes": "Genehmigen und erlauben",
+      "grantNo": "Abbrechen",
+      "yes": "Ja",
+      "no": "Nein",
+      "targetKind": {
+        "accounts": "Auf Konten buchen",
+        "open_item": "Offenen Posten begleichen",
+        "payment_batch": "Zahlungslauf abgleichen",
+        "existing_entry": "Mit Buchung abgleichen"
+      },
+      "argsEmpty": "Keine weiteren Angaben.",
+      "month": {
+        "1": "Jan.",
+        "2": "Feb.",
+        "3": "März",
+        "4": "Apr.",
+        "5": "Mai",
+        "6": "Juni",
+        "7": "Juli",
+        "8": "Aug.",
+        "9": "Sept.",
+        "10": "Okt.",
+        "11": "Nov.",
+        "12": "Dez."
+      },
+      "essentials": {
+        "pair": "{debit} an {credit}",
+        "onto": "auf {account}",
+        "many": "{count} Konten",
+        "recipient": "an {recipient}"
+      }
+    },
     "queue": {
       "empty": "Nichts zu genehmigen.",
-      "emptyHint": "Der Agent erfasst Vorschläge, statt direkt zu buchen. Was er darf, steuerst du unter Vertrauen.",
+      "emptyHint": "Der Agent erfasst Vorschläge, statt direkt zu buchen. Was er darf, steuerst du unter Berechtigungen.",
       "group": {
         "geld": "Geld",
         "system": "System"
@@ -169,26 +222,13 @@
         "hint": "Kopiere diesen Block in die MCP-Einstellungen deines Clients. Er startet TILL lokal über npx, in derselben Version wie dieses Studio.",
         "samePath": "Er öffnet dasselbe Hauptbuch wie dieses Studio:",
         "memory": "Dieses Studio läuft auf einem Hauptbuch im Arbeitsspeicher, das kein zweiter Prozess öffnen kann. Verbinde deinen Client stattdessen mit der Adresse oben.",
-        "approve": "Was dein Agent vorschlägt, gibst du hier unter Agent > Vorschläge frei, oder in den Pendenzen.",
+        "approve": "Was dein Agent vorschlägt, entscheidest du in den Pendenzen. Die ganze Liste steht unter Agent > Vorschläge.",
         "copy": "Konfiguration kopieren"
       },
       "clients": {
         "heading": "Zuletzt verbunden",
         "empty": "Noch kein Client verbunden. Sobald einer TILL aufruft, steht er hier."
       }
-    },
-    "dock": {
-      "toggle": "Agent",
-      "close": "Einklappen",
-      "session": "Sitzung",
-      "since": "seit {time}",
-      "running": "läuft",
-      "empty": "Die Sitzung läuft. Noch keine Schritte.",
-      "openArchive": "Im Verlauf öffnen",
-      "narrowHint": "Zu wenig Platz für Tabelle und Agent nebeneinander. Der Verlauf hat eine eigene Seite.",
-      "composerPlaceholder": "Frag deine Bücher …",
-      "composerSend": "Fragen",
-      "noRuntime": "Gespräche laufen heute in deinem MCP-Client. Ein lokales Modell richtest du unter Schreibstil ein."
     },
     "capability": {
       "post": "Buchen",
@@ -214,6 +254,7 @@
       "propose_dunning_run": "Mahnlauf vorschlagen",
       "discard_dunning_run": "Mahnlauf verwerfen",
       "issue_dunning_run": "Mahnlauf ausstellen",
+      "dunning_fee_reverse": "Mahngebühren stornieren",
       "send_dunning_run": "Mahnlauf senden",
       "record_payment": "Zahlung erfassen",
       "allocate_payment": "Zahlung zuordnen",
@@ -316,6 +357,9 @@
       "set_qr_auto_apply": "Automatisches Begleichen schalten",
       "import_camt": "Kontoauszug importieren",
       "import_camt_files": "Kontoauszüge importieren",
+      "import_bank_statement": "Kontoauszugsdatei importieren",
+      "set_bank_csv_mapping": "CSV-Spaltenzuordnung speichern",
+      "resolve_possible_duplicate": "Mögliches Duplikat entscheiden",
       "create_payment_batch": "Zahlungslauf entwerfen",
       "generate_pain001": "Zahlungsdatei erstellen",
       "discard_payment_batch": "Zahlungslauf verwerfen",
@@ -396,7 +440,23 @@
       "vendorId": "Lieferant",
       "iban": "IBAN",
       "qrIban": "QR-IBAN",
-      "creditorName": "Name Zahlungsempfänger"
+      "creditorName": "Name Zahlungsempfänger",
+      "accountId": "Konto",
+      "taxCode": "MWST-Code",
+      "bankTxnId": "Bankzeile",
+      "kind": "Art",
+      "note": "Notiz",
+      "reason": "Grund",
+      "text": "Text",
+      "documentId": "Beleg",
+      "remainder": "Restbetrag",
+      "writeOffAccountId": "Ausbuchungskonto",
+      "batchId": "Zahlungslauf",
+      "acceptDifference": "Differenz akzeptieren",
+      "differenceReason": "Grund der Differenz",
+      "question": "Frage",
+      "year": "Jahr",
+      "method": "Methode"
     }
   }
 }

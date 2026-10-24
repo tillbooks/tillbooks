@@ -37,11 +37,42 @@
     },
     "adopt": {
       "label": "Bestehende Datenbank übernehmen",
-      "hint": "Hast du schon eine .till.db? Zeige TILL darauf und starte neu. TILL kopiert oder verschiebt die Datei nie.",
-      "path_label": "Datenbankpfad",
-      "path_placeholder": "/pfad/zu/till.db",
-      "cmd_label": "Befehl, um diese Datenbank zu übernehmen",
-      "verb": "Ein Pfad ist Konfiguration, keine Mandantendaten: Übernehmen heisst konfigurieren und neu starten, kein Verb."
+      "hint": "Hast du schon ein TILL-Hauptbuch auf diesem Gerät? Wähle die Datei, und TILL öffnet sie. Kopiert oder verschoben wird sie nie.",
+      "pick": "Datei wählen …",
+      "picked": "Gewählt: {name}",
+      "path_label": "Pfad zum Hauptbuch",
+      "path_placeholder": "/Users/du/Dokumente/till.db",
+      "path_hint": "Im Finder: Datei mit der rechten Maustaste anklicken, die Wahltaste (⌥) halten und «Als Pfadname kopieren» wählen.",
+      "action": "Übernehmen",
+      "busy": "Wird geprüft …",
+      "opening_title": "TILL öffnet dein Hauptbuch …",
+      "opening_body": "TILL startet dafür kurz neu. Das dauert nur einen Moment.",
+      "opening_agents": "Agenten, die schon verbunden sind, sehen das neue Hauptbuch, sobald sie neu starten.",
+      "error": {
+        "book_path_pinned": "Diese Installation legt ihr Hauptbuch selbst fest. Hier lässt es sich nicht wechseln.",
+        "book_path_not_absolute": "Gib den vollständigen Pfad an, er beginnt mit einem /.",
+        "book_not_found": "Unter diesem Pfad liegt keine Datei. Prüfe den Pfad und versuche es noch einmal.",
+        "book_unreadable": "TILL darf diese Datei nicht lesen und schreiben. Prüfe die Berechtigung und versuche es noch einmal.",
+        "not_a_till_database": "Diese Datei ist kein TILL-Hauptbuch. Sie blieb unberührt. Wähle eine andere.",
+        "book_already_open": "Dieses Hauptbuch ist bereits geöffnet.",
+        "book_not_saved": "TILL konnte sich das Hauptbuch nicht merken. Es wurde nichts verändert. Versuche es noch einmal.",
+        "book_not_forgotten": "TILL konnte das Hauptbuch nicht vergessen. Es wurde nichts verändert. Versuche es noch einmal.",
+        "restart_unavailable": "Diese Installation kann ihr Hauptbuch nicht selbst wechseln. Es wurde nichts verändert.",
+        "fallback": "Das hat nicht geklappt. Es wurde nichts verändert. Versuche es noch einmal."
+      }
+    },
+    "unavailable": {
+      "title": "Dein übernommenes Hauptbuch ist nicht erreichbar",
+      "missing": "TILL findet die Datei nicht mehr: {path}. Vielleicht wurde sie verschoben, oder das Laufwerk ist nicht verbunden.",
+      "unopenable": "TILL kann die Datei nicht öffnen: {path}. Vielleicht fehlt die Berechtigung, oder sie ist kein TILL-Hauptbuch mehr.",
+      "nothing_written": "TILL hat nichts verändert und nirgends ein neues Hauptbuch angelegt. Wähle, wie es weitergeht.",
+      "retry": "Erneut versuchen",
+      "choose_other": "Anderes Hauptbuch wählen",
+      "forget": "Vergessen und neu beginnen",
+      "forget_confirm": "TILL vergisst nur, wo dieses Hauptbuch liegt. Die Datei {path} bleibt, wie sie ist, und du kannst sie später wieder übernehmen. Danach öffnet TILL das Standard-Hauptbuch dieses Geräts.",
+      "forget_yes": "Vergessen",
+      "forget_no": "Abbrechen",
+      "forgetting_title": "TILL beginnt neu …"
     },
     "error": {
       "generic": "Das hat nicht geklappt: {code}.",
@@ -79,7 +110,7 @@
   "help": {
     "FirstRun": {
       "title": "Erster Start",
-      "body": "Das ist der erste Bildschirm, wenn TILL keinen Arbeitsbereich geöffnet hat. Du wählst eine von drei Türen: einen neuen Arbeitsbereich erstellen, einen aus einer Sicherung wiederherstellen oder einen Speicher übernehmen, der auf diesem Gerät schon vorhanden ist. Nichts entsteht im Stillen, denn jede Tür bestätigt, bevor sie schreibt, und bis du eine wählst, gibt es noch keine Bücher.",
+      "body": "Das ist der erste Bildschirm, wenn TILL keinen Arbeitsbereich geöffnet hat. Du wählst eine von drei Türen: einen neuen Arbeitsbereich erstellen, einen aus einer Sicherung wiederherstellen oder ein TILL-Hauptbuch übernehmen, das auf diesem Gerät schon liegt. Beim Übernehmen startet TILL kurz neu und öffnet dann dieses Hauptbuch; die Datei bleibt, wo sie ist. Nichts entsteht im Stillen, denn jede Tür bestätigt, bevor sie schreibt, und bis du eine wählst, gibt es noch keine Bücher. Ist ein übernommenes Hauptbuch nicht erreichbar, sagt dir dieser Bildschirm das und bietet an, es erneut zu versuchen, ein anderes zu wählen oder es zu vergessen.",
       "concepts": [],
       "docsPath": "introduction"
     }

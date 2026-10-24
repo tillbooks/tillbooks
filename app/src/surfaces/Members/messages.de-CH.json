@@ -109,6 +109,19 @@
       "actor_already_bound": "Diese Sitzung gehört bereits zu einer anderen Person. Nimm die Einladung aus der Sitzung an, für die sie gedacht ist.",
       "actor_already_member": "Diese Sitzung hat hier bereits Zugriff. Ändere ihre Rolle in der Liste, statt sie einzuladen.",
       "member_kind_mismatch": "Diese Adresse ist TILL schon als etwas anderes bekannt (Person oder Agent). Die Art gehört zur Identität und lässt sich nicht per Einladung ändern."
+    },
+    "device": {
+      "title": "Browser auf diesem Computer",
+      "body": "Jeder Browser, in dem du TILL einmal geöffnet hast, bleibt angemeldet, auch nach einem Neustart. Meldest du ab, gilt ein neuer Schlüssel: Alle anderen Browser und jede Kopie des alten Schlüssels verlieren den Zugang.",
+      "signOutAll": "Auf allen Geräten abmelden",
+      "confirm": {
+        "title": "Auf allen Geräten abmelden?",
+        "body": "TILL ersetzt den Schlüssel zu deinen Büchern. Dieser Tab bleibt angemeldet. Alle anderen Browser und Fenster brauchen den neuen Schlüssel; auf diesem Computer öffnet sich TILL dafür von selbst neu, in der TILL-App oder in deinem Standardbrowser.",
+        "confirm": "Abmelden",
+        "cancel": "Abbrechen"
+      },
+      "done": "Neuer Schlüssel gesetzt. Alle anderen Browser sind abgemeldet.",
+      "failed": "Das hat nicht geklappt. Der bisherige Schlüssel gilt weiter."
     }
   },
   "capability": {
@@ -236,7 +249,7 @@
   "help": {
     "Members": {
       "title": "Zugriff",
-      "body": "Wer diese Bücher öffnen darf und was jede Rolle dabei kann. Der Reiter Mitglieder zeigt alle Personen mit Zugriff und ihrer Rolle; hier lädst du ein, änderst Rollen und entziehst Zugriff. Der Reiter Rollen beschreibt, welche Rechte hinter einer Rolle stehen. Solange niemand eingeladen wurde, ist der Arbeitsbereich offen; mit der ersten Einladung übernimmt die einladende Person die Eigentümerrolle.",
+      "body": "Wer diese Bücher öffnen darf und was jede Rolle dabei kann. Der Reiter Mitglieder zeigt alle Personen mit Zugriff und ihrer Rolle; hier lädst du ein, änderst Rollen und entziehst Zugriff. Der Reiter Rollen beschreibt, welche Rechte hinter einer Rolle stehen. Solange niemand eingeladen wurde, ist der Arbeitsbereich offen; mit der ersten Einladung übernimmt die einladende Person die Eigentümerrolle. Unter «Browser auf diesem Computer» meldest du alle anderen Browser ab, falls ein Schlüssel in falsche Hände geraten ist.",
       "concepts": [],
       "docsPath": "introduction"
     }

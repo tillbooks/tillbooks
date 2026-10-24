@@ -19,10 +19,10 @@ test('seedTaxCodes is idempotent: a second seed adds nothing, no duplicates', ()
   const { ctx } = setup({ registered: true, seed: false });
   const first = seedTaxCodes(ctx);
   assert.equal(first.ok, true);
-  assert.equal(first.seeded.length, 9);
+  assert.equal(first.seeded.length, 13);
   const second = seedTaxCodes(ctx);
   assert.equal(second.seeded.length, 0, 'nothing new on re-seed');
-  assert.equal(listTaxCodes(ctx).taxCodes.length, 9);
+  assert.equal(listTaxCodes(ctx).taxCodes.length, 13);
 });
 
 test('configureVat writes method/timing/registration and reflects it in getVatConfig', () => {
@@ -35,7 +35,7 @@ test('configureVat writes method/timing/registration and reflects it in getVatCo
   assert.equal(res.config.vatNumber, 'CHE-123.456.789 MWST');
   // Enabling MWST with no codes seeds the default set.
   assert.equal(getVatConfig(ctx).ok, true);
-  assert.equal(listTaxCodes(ctx).taxCodes.length, 9);
+  assert.equal(listTaxCodes(ctx).taxCodes.length, 13);
 });
 
 test('configureVat rejects a malformed vatNumber', () => {

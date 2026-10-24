@@ -34,7 +34,7 @@ import { useT, formatDate } from '../../i18n';
 import { useSkeletonHold } from '../../components/states/useSkeletonTiming';
 import { COMMITTED_ATTR, commitAck } from '../../lib/motion';
 import { channelRefusal, numberJumpText, returnCodeText, type NumberJump } from '../BankAccounts/channelWording';
-import { gapExplanation, gapRepairHref, gapTitle, parseStatementGaps, type StatementGapDto } from '../Bank/statementGaps';
+import { gapRepairHref, gapsSummary, parseStatementGaps, type StatementGapDto } from '../Bank/statementGaps';
 import { useBankFetch } from '../Bank/useBankFetch';
 import { ATTENTION_CHANGED_EVENT, ATTENTION_REFRESH_MS } from '../Attention/attentionSummary';
 import './BankBand.css';
@@ -557,16 +557,22 @@ function BankMark({ lamp, bank, accountName }: { lamp: Lamp; bank: string; accou
             </Link>
           </p>
         ))}
-        {lamp.gaps.map((g) => (
-          <div key={g.gapId} className="bank-mark__gap">
-            <p className="bank-mark__line">
-              <strong>{`${accountName(g.bankAccountId)}: ${gapTitle(t, g)}`}</strong> {gapExplanation(t, g)}
-            </p>
-            <Link to={gapRepairHref(g)} className="btn btn--secondary btn--sm bank-mark__action">
-              {t('attention.act.closeGap')}
-            </Link>
-          </div>
-        ))}
+        {[...new Set(lamp.gaps.map((g) => g.bankAccountId))].map((accountId) => {
+          // One line and ONE button per account, whatever the number of its gaps (owner, 18.10.2026).
+          const sum = gapsSummary(t, lamp.gaps.filter((g) => g.bankAccountId === accountId));
+          if (sum === null) return null;
+          return (
+            <div key={accountId} className="bank-mark__gap">
+              <p className="bank-mark__line">
+                <strong>{`${accountName(accountId)}: ${sum.title}`}</strong>
+                {sum.note !== null && ` ${sum.note}`}
+              </p>
+              <Link to={gapRepairHref({ bankAccountId: accountId, gapId: sum.gapId })} className="btn btn--secondary btn--sm bank-mark__action">
+                {t(sum.many ? 'attention.act.closeGaps' : 'attention.act.closeGap')}
+              </Link>
+            </div>
+          );
+        })}
         {lamp.meta.length > 0 && <p className="bank-mark__meta">{lamp.meta.join(' · ')}</p>}
         {lamp.steps !== null && (
           <ol className="bank-mark__steps" aria-label={t('dashboard.bankBand.steps.label')}>

@@ -300,6 +300,18 @@ function expandIntent(ctx: WorkspaceContext, date: string, line: IntentLine, vat
   };
 }
 
+/**
+ * D176: what ONE intent line moves in all, signed (+ debit, - credit): the sum of the lines its expansion
+ * books (its own account and its VAT legs). For every kind but a deductible Einfuhrsteuer this is its amount
+ * on its side; a Vorlage reads it to find the amount its rest leg must carry. The expansion's own refusal
+ * (an unknown code, a missing VAT account) is the answer when it cannot be composed. Reads only.
+ */
+export function intentLineEffect(ctx: WorkspaceContext, date: string, line: IntentLine, index: number): { ok: true; effect: number } | { ok: false; error: Err } {
+  const expanded = expandIntent(ctx, date, line, vatAccountIds(ctx), index);
+  if (!expanded.ok) return expanded;
+  return { ok: true, effect: expanded.own.reduce((sum, l) => sum + (l.debit ?? 0) - (l.credit ?? 0), 0) };
+}
+
 /** A plain coded line's net-forward readout (the manual path's caption), or the code's own refusal. */
 function plainCaption(ctx: WorkspaceContext, date: string, line: LineInput): ComposeCaption | null {
   if (line.taxCode === undefined || line.taxCode === 'none') return null;
@@ -370,8 +382,12 @@ function inStoredOrder(ctx: WorkspaceContext, entryId: string | undefined, lines
   return ordered;
 }
 
-/** `expand`: intent and plain lines to the exact `post_entry` lines, with the engine's verdict. */
-export function expandEntry(ctx: WorkspaceContext, input: Omit<ComposeExpandInput, 'mode'>): Result<ComposeExpandOk> {
+/**
+ * `expand`: intent and plain lines to the exact `post_entry` lines, with the engine's verdict. `opts.currency`
+ * is the entry's transaction currency when a caller composes a foreign-currency booking (the bank inbox's
+ * preview of a line in its Bankkonto's own foreign currency, D175); absent, the base currency, as always.
+ */
+export function expandEntry(ctx: WorkspaceContext, input: Omit<ComposeExpandInput, 'mode'>, opts: { currency?: string } = {}): Result<ComposeExpandOk> {
   const guard = requireDate(input.date, 'date') ?? optionalId(input.entryId, 'entryId');
   if (guard) return guard;
   if (!Array.isArray(input.lines)) return err('invalid_input', { field: 'lines', reason: 'lines must be an array' });
@@ -414,6 +430,7 @@ export function expandEntry(ctx: WorkspaceContext, input: Omit<ComposeExpandInpu
     // are treated differently by the gate), so the composer's own source stands for all of them.
     source: 'manual',
     lines: composed.map((l) => ({ ...l })),
+    ...(opts.currency !== undefined ? { currency: opts.currency } : {}),
   });
   if (preview.ok) {
     return ok<ComposeExpandOk>({

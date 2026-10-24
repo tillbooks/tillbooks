@@ -507,17 +507,21 @@ export function createVendorGrant(ctx: WorkspaceContext, input: CreateVendorGran
     }
   }
   // The vendor door's replays. Its own namespace first; then, for a replay stored before the
-  // namespaces were split, the shared one, which `mintGrant` accepts only when the stored grant is a
-  // vendor grant (a customer result under the same key is refused, never handed out).
+  // namespaces were split (D157), the shared `portal_grant_create` one.
+  //
+  // THE LEGACY REPLAY HAS A CUTOFF (D165, independent critic A2-1). Since D157 `portal_grant_create`
+  // mints CUSTOMER grants only (`createGrant`), so a VENDOR result in the shared scope can only have
+  // been written by a build from before the split: that, and only that, is replayed. Anything else
+  // there was written by the free customer verb, possibly by an agent seat under `["vendor",K]` while
+  // the person's `vendor_portal_grant {K}` Vorschlag waited, and until D165 it made the approval refuse
+  // `idempotency_key_conflict` for good: a public verb decided the outcome of a governed one. It is
+  // now not consulted at all; the vendor door mints its own grant in its own scope, never adopting
+  // the customer grant (the K1 defect) and never refusing over it.
   if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {
     const own = ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey, 'vendor_portal_grant');
     if (own === undefined) {
       const legacy = ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey, 'portal_grant_create');
-      if (legacy !== undefined) {
-        return storedGrantKind(legacy) === 'vendor'
-          ? legacy
-          : err('idempotency_key_conflict', { idempotencyKey: input.idempotencyKey, reason: 'this key belongs to another kind of grant' });
-      }
+      if (legacy !== undefined && storedGrantKind(legacy) === 'vendor') return legacy;
     }
   }
   return mintGrant(
@@ -753,6 +757,18 @@ function ctxForGrant(deps: PortalTokenDeps, row: PortalGrantRow): WorkspaceConte
 }
 
 /**
+ * The audited portal denial (revDSG access trail). It is a refusal's own record, never the act: under
+ * an approval it runs under `withoutCommitMark` (D165, critic round 2 on the follow-ups), so a governed
+ * `portal_quote_accept` whose grant lapsed before the person decided stays rejectable instead of being
+ * marked as run and stuck.
+ */
+function auditDenial(ctx: WorkspaceContext, grantId: string, at: string): void {
+  ctx.store.withoutCommitMark(() =>
+    ctx.audit.record({ entityKind: 'portal_grant', entityId: grantId, action: 'deny', actor: ctx.actor, at }),
+  );
+}
+
+/**
  * Resolve a token to exactly what it may see (spec §4, the single verb the hosted page calls). Hashes
  * the presented token, loads the grant, enforces expiry/revocation and the THREE FENCES, and returns
  * the scoped read model: invoices (number, dates, total + open amount from A11/A14, QR reference),
@@ -775,7 +791,7 @@ export function resolveToken(deps: PortalTokenDeps, input: { token?: unknown }):
   // a vendor grant is live at mint and must never reach the customer portal. The denial is audited
   // (revDSG access trail) and NO scoped data is read.
   if (row.kind !== 'customer' || !isLive(row, day)) {
-    ctx.audit.record({ entityKind: 'portal_grant', entityId: row.id, action: 'deny', actor: ctx.actor, at: now });
+    auditDenial(ctx, row.id, now);
     return GRANT_DENIED();
   }
 
@@ -906,7 +922,7 @@ export function portalQuoteAccept(
   // FENCE 0: expired, revoked, a draft (D157) or not a customer grant (critic F1) denies identically,
   // and the attempt is audited. A pre-check: the quote is not touched.
   if (row.kind !== 'customer' || !isLive(row, day)) {
-    ctx.audit.record({ entityKind: 'portal_grant', entityId: row.id, action: 'deny', actor: ctx.actor, at: now });
+    auditDenial(ctx, row.id, now);
     return GRANT_DENIED();
   }
 
@@ -921,7 +937,7 @@ export function portalQuoteAccept(
   const scopes = parseScopes(row.scopes);
   const inScope = scopes.some((s) => s.kind === 'quote' && s.id === quoteId);
   if (!inScope || !entityBelongsToContact(ctx, 'quote', quoteId, row.contact_id)) {
-    ctx.audit.record({ entityKind: 'portal_grant', entityId: row.id, action: 'deny', actor: ctx.actor, at: now });
+    auditDenial(ctx, row.id, now);
     return GRANT_DENIED();
   }
 
@@ -953,20 +969,27 @@ export function portalQuoteAccept(
   // `quotes_accept` under the key `["<grant>","<quote>","K"]` (on any quote) landed exactly where this
   // call looks, and the portal accept replayed it. The delegated accept now memoises in this
   // composite's own idempotency scope (`portal_quote_accept>quotes_accept`), which no public verb writes.
-  const accepted = ctx.store.innerWrite('portal_quote_accept', () =>
-    acceptQuote(ctx, {
-      quoteId,
-      actor: `portal:${row.id}`,
-      ...(scopedIdempotencyKey !== undefined ? { idempotencyKey: scopedIdempotencyKey } : {}),
-    }),
-  );
+  //
+  // The accept and its portal-side audit commit as ONE unit (D165 round 2: the mid-act crash census
+  // found that a death between the two left an accepted quote whose replay, finding it no longer
+  // `sent`, never wrote the portal attribution). A refusal from C02 writes nothing, so returning it
+  // from inside the transaction commits nothing.
+  const accepted = ctx.store.tx(() => {
+    const result = ctx.store.innerWrite('portal_quote_accept', () =>
+      acceptQuote(ctx, {
+        quoteId,
+        actor: `portal:${row.id}`,
+        ...(scopedIdempotencyKey !== undefined ? { idempotencyKey: scopedIdempotencyKey } : {}),
+      }),
+    );
+    // Audit the portal-side attribution ONLY on the real transition (spec §3/§7: the accept lands in
+    // audit_log). The C02 transition keeps its own trail; this is the portal act, written once.
+    if (result.ok && preStatus === 'sent') {
+      ctx.audit.record({ entityKind: 'portal_grant', entityId: row.id, action: 'accept', actor: ctx.actor, at: ctx.clock.now() });
+    }
+    return result;
+  });
   if (!accepted.ok) return accepted;
-
-  // Audit the portal-side attribution ONLY on the real transition (spec §3/§7: the accept lands in
-  // audit_log). The C02 transition keeps its own trail; this is the portal act, written once.
-  if (preStatus === 'sent') {
-    ctx.audit.record({ entityKind: 'portal_grant', entityId: row.id, action: 'accept', actor: ctx.actor, at: ctx.clock.now() });
-  }
 
   return ok({
     grantId: row.id,

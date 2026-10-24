@@ -99,6 +99,30 @@ async function withServer(deps, body) {
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * The thread a stand-in worker pretends to be. A real `worker_threads` Worker is a REF'D handle: while
+ * its thread runs it keeps the host's event loop alive, and that is what lets the runner's timeout fire
+ * (that timer is unref'd, `src/api/bank-sync-offload.ts`, so it never holds `till up` open by itself).
+ * A stand-in passed through the `createWorker` seam holds no handle of its own, so without this the
+ * job's only pending timer is unref'd and the loop drains before the timeout fires. Node 22's node:test
+ * then cancels the test and every one after it ("Promise resolution is still pending but the event loop
+ * has already resolved"); Node 24+ keeps the loop alive for a pending test and hid the gap.
+ *
+ * `start()` when the stand-in is spawned, `gone()` when its thread would have exited (idempotent). A
+ * stand-in that never exits is let go by the test's `finally`, as the process ending would.
+ */
+function standInThread() {
+  let handle;
+  return {
+    start() {
+      handle ??= setInterval(() => {}, 60_000);
+    },
+    gone() {
+      clearInterval(handle);
+    },
+  };
+}
+
 test('an in-memory book is never offloaded: a thread cannot open it', () => {
   assert.equal(isSharableDbPath(undefined), false);
   assert.equal(isSharableDbPath(':memory:'), false);
@@ -334,11 +358,13 @@ test('F2: a process killed mid-sync, then `till up` restarted on the same book, 
 
 test('critic R2-3b: on a timeout the host clears the lease only AFTER the worker is gone, so a lease taken in that window is cleared too', async () => {
   const w = fileWorld();
+  const thread = standInThread();
   try {
     // A stand-in worker that never answers, and whose termination takes a moment during which it takes
     // its job's lease: the window the critic named (a worker that takes its lease as the host gives up).
     const createWorker = (_url, { workerData }) => {
       const handlers = {};
+      thread.start();
       return {
         once(event, fn) {
           handlers[event] = fn;
@@ -350,6 +376,7 @@ test('critic R2-3b: on a timeout the host clears the lease only AFTER the worker
               w.store.db
                 .prepare('UPDATE ebics_connection SET sync_started_at = ?, sync_lease_owner = ? WHERE id = ?')
                 .run(new Date().toISOString(), workerData.leaseHolder, w.connectionId);
+              thread.gone();
               resolveTerminate(1);
               handlers.exit?.(1);
             }, 30);
@@ -364,6 +391,7 @@ test('critic R2-3b: on a timeout the host clears the lease only AFTER the worker
     await delay(100);
     assert.deepEqual(leaseOf(w), { s: null, o: null }, 'the lease the worker took while terminating is cleared');
   } finally {
+    thread.gone();
     w.cleanup();
   }
 });
@@ -372,11 +400,13 @@ test('critic R2-3b: on a timeout the host clears the lease only AFTER the worker
 
 /**
  * A stand-in worker that takes its job's lease the moment it starts (bank_sync only), never answers, and
- * whose `terminate()` never resolves: a thread parked in a native call that cannot be interrupted.
+ * whose `terminate()` never resolves: a thread parked in a native call that cannot be interrupted. It
+ * holds the loop like that thread would, until the test's `finally` lets it go.
  */
-function wedgedWorker(w, spawned) {
+function wedgedWorker(w, spawned, thread) {
   return (_url, { workerData }) => {
     spawned.push(workerData);
+    thread.start();
     if (workerData.kind === 'bank_sync') {
       w.store.db
         .prepare('UPDATE ebics_connection SET sync_started_at = ?, sync_lease_owner = ? WHERE id = ?')
@@ -397,12 +427,14 @@ const within = (promise, ms) => Promise.race([promise, delay(ms).then(() => 'hun
 for (const kind of ['bank_sync', 'activation_check']) {
   test(`critic R3-1: a worker (${kind}) whose terminate() never resolves settles sync_worker_failed within the grace period`, async () => {
     const w = fileWorld();
+    // Never gone: the thread is parked for good, so only the test's end lets it go.
+    const thread = standInThread();
     try {
       const spawned = [];
       const timeoutMs = 40;
       const terminateGraceMs = 300;
       const make = kind === 'bank_sync' ? createBankSyncOffload : createBankActivationOffload;
-      const runner = make({ dbPath: w.dbPath, timeoutMs, terminateGraceMs, createWorker: wedgedWorker(w, spawned) });
+      const runner = make({ dbPath: w.dbPath, timeoutMs, terminateGraceMs, createWorker: wedgedWorker(w, spawned, thread) });
       const started = Date.now();
       const pending = runner({ ...w.deps, actor: 'studio' }, { workspaceId: w.workspaceId, connectionId: w.connectionId, idempotencyKey: `r31-${kind}` });
       assert.equal(spawned[0].kind, kind);
@@ -421,6 +453,7 @@ for (const kind of ['bank_sync', 'activation_check']) {
       assert.ok(elapsed < timeoutMs + terminateGraceMs + 2000, `settled within the grace period (took ${elapsed} ms)`);
       assert.deepEqual(leaseOf(w), { s: null, o: null }, 'the lease is released when the grace period ends');
     } finally {
+      thread.gone();
       w.cleanup();
     }
   });
@@ -442,16 +475,22 @@ const stampLease = (w, holder) =>
 /**
  * A stand-in worker that never answers and whose `terminate()` stays pending until the test calls
  * `finish()`: the wedged worker of R3-1, but one the test can let go of. With `takeLease`, it takes its
- * job's lease the moment it starts.
+ * job's lease the moment it starts. Its thread holds the loop from spawn until `finish()` (the exit);
+ * `letGo()` drops that hold without an exit, for the test's `finally`.
  */
 function controllableWorker(w, { takeLease }) {
   const spawned = [];
+  const thread = standInThread();
   let finish = () => {};
   const gone = new Promise((resolveGone) => {
-    finish = () => resolveGone(1);
+    finish = () => {
+      thread.gone();
+      resolveGone(1);
+    };
   });
   const createWorker = (_url, { workerData }) => {
     spawned.push(workerData);
+    thread.start();
     if (takeLease) stampLease(w, workerData.leaseHolder);
     return {
       once() {
@@ -460,15 +499,15 @@ function controllableWorker(w, { takeLease }) {
       terminate: () => gone,
     };
   };
-  return { createWorker, spawned, finish: () => finish() };
+  return { createWorker, spawned, finish: () => finish(), letGo: () => thread.gone() };
 }
 
 const FOREIGN = 'pid:9191:boot:another-job:job:foreign';
 
 test('critic LA-1: the late release after a wedged worker exits leaves a lease another job took', async () => {
   const w = fileWorld();
+  const wedged = controllableWorker(w, { takeLease: true });
   try {
-    const wedged = controllableWorker(w, { takeLease: true });
     const runner = createBankSyncOffload({ dbPath: w.dbPath, timeoutMs: 30, terminateGraceMs: 150, createWorker: wedged.createWorker });
     const result = await within(runner({ ...w.deps, actor: 'studio' }, { workspaceId: w.workspaceId, connectionId: w.connectionId, idempotencyKey: 'la1-late' }), 5000);
     assert.notEqual(result, 'hung');
@@ -483,16 +522,17 @@ test('critic LA-1: the late release after a wedged worker exits leaves a lease a
     assert.equal(leaseOf(w).o, FOREIGN, 'the late release cleared a lease the second job holds (holder fence lost)');
     assert.notEqual(leaseOf(w).s, null);
   } finally {
+    wedged.letGo();
     w.cleanup();
   }
 });
 
 test('critic LA-1: the release at the grace, and the late one, leave a lease another holder took', async () => {
   const w = fileWorld();
+  // The wedged worker never reached its lease (parked before it, in the key unlock or the wire), while
+  // another process (an MCP agent beside till up) holds the connection's lease.
+  const wedged = controllableWorker(w, { takeLease: false });
   try {
-    // The wedged worker never reached its lease (parked before it, in the key unlock or the wire), while
-    // another process (an MCP agent beside till up) holds the connection's lease.
-    const wedged = controllableWorker(w, { takeLease: false });
     stampLease(w, FOREIGN);
     const runner = createBankSyncOffload({ dbPath: w.dbPath, timeoutMs: 30, terminateGraceMs: 150, createWorker: wedged.createWorker });
     const result = await within(runner({ ...w.deps, actor: 'studio' }, { workspaceId: w.workspaceId, connectionId: w.connectionId, idempotencyKey: 'la1-grace' }), 5000);
@@ -503,6 +543,7 @@ test('critic LA-1: the release at the grace, and the late one, leave a lease ano
     await delay(50);
     assert.equal(leaseOf(w).o, FOREIGN, 'the late release cleared a lease another holder took');
   } finally {
+    wedged.letGo();
     w.cleanup();
   }
 });
@@ -511,12 +552,12 @@ test("critic LA-2: when the release at the grace fails on the write lock, the la
   const w = fileWorld();
   // The wedged worker's own connection, parked inside its persist transaction: it holds the write lock.
   const parked = new Database(w.dbPath);
+  const wedged = controllableWorker(w, { takeLease: true });
   try {
     // The host's release waits this long for the lock before it fails (5 s by default, A36 §12).
     w.store.db.pragma('busy_timeout = 100');
     const failures = [];
     const deps = { ...w.deps, actor: 'studio', diagnostics: { record: (event) => failures.push(event) } };
-    const wedged = controllableWorker(w, { takeLease: true });
     const runner = createBankSyncOffload({ dbPath: w.dbPath, timeoutMs: 30, terminateGraceMs: 150, createWorker: wedged.createWorker });
     const pending = runner(deps, { workspaceId: w.workspaceId, connectionId: w.connectionId, idempotencyKey: 'la2' });
     const holder = wedged.spawned[0].leaseHolder;
@@ -538,6 +579,7 @@ test("critic LA-2: when the release at the grace fails on the write lock, the la
     await delay(50);
     assert.deepEqual(leaseOf(w), { s: null, o: null }, "the late release did not free the job's lease (it would wait for the 15-minute expiry)");
   } finally {
+    wedged.letGo();
     if (parked.inTransaction) parked.prepare('ROLLBACK').run();
     parked.close();
     w.cleanup();

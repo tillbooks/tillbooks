@@ -134,7 +134,8 @@
  * A10`s lifecycle gates before any money exists, the `deals_to_quote` shape one family over.
  * `delivery_note_render` files a local Beleg and transmits nothing (OP4).
  *
- * E02 HR-lite: all fourteen verbs are DELIBERATELY automatable, and spec §5/§6b names the four
+ * E02 HR-lite: fourteen of its fifteen verbs are DELIBERATELY automatable (the fifteenth,
+ * `expense_claim_reverse`, D168, is denylisted under (b) below), and spec §5/§6b names the four
  * consequence-bearing ones (`expense_claim_approve`, `expense_claim_reject`, `expense_claim_reimburse`,
  * `hr_absence_record`) as accepted rule actions, the auto-approve-under-threshold automation being the
  * worked example. No leg holds, and the reasoning is worth stating because approve and reimburse look
@@ -384,6 +385,9 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // `post_fx_revaluation` / `approve_entry` shape. `payroll_handoff_export` stays automatable (a local
   // artifact, no posting) and `list_payroll_handoffs` is a read the fire path refuses structurally.
   'wage_journal_post',
+  // (b) A34's undo (D171): it walks the posted wage journal back, a correction a person decides on a
+  // specific month's booking (the `landed_cost_reverse` reasoning), never a rule firing unattended.
+  'wage_journal_reverse',
   // (e) A26's own oversight surface is the safety rail, and a rail a rule can operate is no rail.
   // `set_agent_dial` arms or disarms unattended agent execution: a rule flipping it to `auto` would
   // let the safety valve disable itself (§6b Fixed, verbatim). `approve_drafted_action` holds an
@@ -531,6 +535,19 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // agent-native pipeline can still collect the costs and propose the allocation a human confirms.
   'landed_cost_allocate_confirm',
   'landed_cost_reverse',
+  // (b) E02's reverse (D168). The four E02 verbs the spec names as rule actions stay automatable (the
+  // block comment above says why); the reverse is not one of them. It walks a posted liability back
+  // and closes the claim for good, a correction a person decides on a specific wrong booking, the
+  // `landed_cost_reverse` reasoning one family over.
+  'expense_claim_reverse',
+  // (b) A15's fee reverse (D169). The three run verbs stay automatable (spec §5, D70); the reverse is
+  // not one of them. It walks a posted receivable and its output VAT back, a correction a person
+  // decides on a specific fee (a waiver, a mistake), the `landed_cost_reverse` reasoning.
+  'dunning_fee_reverse',
+  // (b) the asset register's undo (D170). The forward asset verbs stay automatable; the undo walks a
+  // posted acquisition, capitalisation, opening or disposal back and can close the asset for good, a
+  // correction a person decides on a specific wrong booking, the `landed_cost_reverse` reasoning.
+  'asset_transaction_reverse',
   // (f)+(e) M02's two publish dials, the egress-consent shape one family over from `set_creditor_profile`
   // and `set_agent_dial`. `sync_publish_enable` turns ON any egress of the ledger from the local file
   // (the one act that starts the publish stream leaving the machine), and `sync_publish_disable` is its
@@ -585,6 +602,11 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // D144 (A39 §12): `suggest_bank_lines` consults the local decision model and records what it said.
   // A model nobody asked is a model nobody watches: a person or an agent asks, a stored rule never does.
   'suggest_bank_lines',
+  // D167 (A39 §13.1): a standard decides what every later line of a counterparty is proposed booked to,
+  // `sure`, so the bulk button books it. Setting or clearing one is the person's judgment about future
+  // bank facts (leg (c)); a stored rule never makes it.
+  'set_bank_standard',
+  'clear_bank_standard',
   // (c)+(e) A39 critic round 1 (A39-3/A39-4), ONE rule for unattended money movement: a stored rule never
   // DECIDES A BANK FACT. `create_entry_for_txn` and `confirm_match` are, since A39, wrappers that decide a
   // bank line exactly as `book_bank_line` does (probe p7: a rule booked every imported line as revenue
@@ -601,6 +623,14 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   'import_camt',
   // A36 §4.7 (D150): the multi-file hand repair is `import_camt` repeated, so it is denied with it.
   'import_camt_files',
+  // D178 (A20 §11.4): the one statement door for camt, MT940 and CSV asserts bank facts exactly as
+  // `import_camt` does; saving a CSV mapping decides which column a later import reads as the amount or
+  // the date (a swapped debit and credit column is a wrong bank fact on every line), so a stored rule
+  // makes neither.
+  'import_bank_statement',
+  'set_bank_csv_mapping',
+  // D178 point 19: whether a line is a duplicate is the person's judgment (the owner's decision), never a rule's.
+  'resolve_possible_duplicate',
   'set_write_off_threshold',
   // (c)+(e) A39 critic round 2 (A39R2-5, OWNER DECISION 25.09.2026): a stored rule never moves a bank
   // ledger. The round-1 exemption of `record_payment` ("the author typed every figure") was false: G01
@@ -614,6 +644,20 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   'allocate_payment',
   'reverse_payment',
   'set_bank_opening_balance',
+  // (e) D172, the workspace settings registry: a setting decides how TILL behaves for everyone in the
+  // workspace, the automation that would fire it included. A stored rule rewriting the settings it runs
+  // under administers the unattended subsystem itself, the `set_qr_auto_apply` / `set_write_off_threshold`
+  // shape. Both directions are denied (a reset can loosen as much as a set). The verbs land in this
+  // commit, so no stored rule can predate the denial and no data migration accompanies it.
+  'settings_set',
+  'settings_reset',
+  // (d) D178 point 7, the per-person preferences: a `person`-scope preference (the colour scheme, the
+  // density) is ONE value for the actor in every workspace of the book, so a rule firing the write reaches
+  // beyond the tenant it lives in and the fire path's tenant overwrite cannot bind it. A stored rule has no
+  // business rearranging a person's Studio either way. Both directions are denied; the verbs land in this
+  // commit, so no stored rule can predate the denial and no data migration accompanies it.
+  'prefs_set',
+  'prefs_reset',
 ]);
 
 /**
@@ -724,6 +768,7 @@ export const NOT_AUTOMATABLE_LEGS: Readonly<Record<string, readonly DenylistLeg[
   vat_settlement_post: ['b'],
   vat_settlement_reverse: ['b'],
   wage_journal_post: ['b'],
+  wage_journal_reverse: ['b'],
   // (e) A26/A35's own oversight surface; the prose delete also erases for good (a)
   set_agent_dial: ['e'],
   approve_drafted_action: ['e'],
@@ -757,6 +802,9 @@ export const NOT_AUTOMATABLE_LEGS: Readonly<Record<string, readonly DenylistLeg[
   goods_receipt_reverse: ['b'],
   landed_cost_allocate_confirm: ['b'],
   landed_cost_reverse: ['b'],
+  expense_claim_reverse: ['b'],
+  dunning_fee_reverse: ['b'],
+  asset_transaction_reverse: ['b'],
   // (f)+(e) M02's two publish dials, as their block names them
   sync_publish_enable: ['f', 'e'],
   sync_publish_disable: ['f', 'e'],
@@ -774,17 +822,28 @@ export const NOT_AUTOMATABLE_LEGS: Readonly<Record<string, readonly DenylistLeg[
   reopen_bank_line: ['c'],
   ignore_bank_line: ['c'],
   suggest_bank_lines: ['e'],
+  set_bank_standard: ['c'],
+  clear_bank_standard: ['c'],
   // (c)+(e) a stored rule never decides a bank fact or moves a bank ledger
   create_entry_for_txn: ['c', 'e'],
   confirm_match: ['c', 'e'],
   record_incoming_credit: ['c', 'e'],
   import_camt: ['c', 'e'],
   import_camt_files: ['c', 'e'],
+  import_bank_statement: ['c', 'e'],
+  set_bank_csv_mapping: ['c'],
+  resolve_possible_duplicate: ['c'],
   set_write_off_threshold: ['c', 'e'],
   record_payment: ['c', 'e'],
   allocate_payment: ['c', 'e'],
   reverse_payment: ['c', 'e'],
   set_bank_opening_balance: ['c', 'e'],
+  // (e) D172: a rule never rewrites the settings it runs under
+  settings_set: ['e'],
+  settings_reset: ['e'],
+  // (d) D178 point 7: a person-scope preference reaches beyond the rule's tenant
+  prefs_set: ['d'],
+  prefs_reset: ['d'],
 };
 
 /** The denylisted verbs tagged with `leg`, in `NOT_AUTOMATABLE_LEGS` order. */

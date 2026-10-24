@@ -175,8 +175,8 @@
       "fromTermsImmediate": "{name} zahlt sofort: Bleibt das Feld leer, ist die Rechnung an ihrem Ausstellungsdatum fällig.",
       "fromDefault": "Bleibt das Feld leer, setzt TILL die Fälligkeit beim Ausstellen: {name} hat keine eigene Zahlungsfrist, also gilt die Standardfrist von {days} Tagen.",
       "fromNone": "Weder {name} noch der Arbeitsbereich hat eine Zahlungsfrist: Bleibt das Feld leer, ist die Rechnung an ihrem Ausstellungsdatum fällig.",
-      "derivedDays": "Ergibt sich beim Ausstellen: {days} Tage ab Rechnungsdatum.",
-      "derivedImmediate": "Ergibt sich beim Ausstellen: fällig am Rechnungsdatum.",
+      "derivedDays": "Ergibt sich beim Ausstellen: {days} Tage ab Ausstellungsdatum.",
+      "derivedImmediate": "Ergibt sich beim Ausstellen: fällig am Ausstellungsdatum.",
       "reference": "Zahlungsreferenz",
       "referencePending": "Die Zahlungsreferenz entsteht beim Ausstellen aus der Rechnungsnummer."
     },

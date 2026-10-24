@@ -334,7 +334,10 @@ describe('Dispatch', () => {
     // The paragraphs the audit measured at rest are gone from the surface.
     expect(document.querySelector('.dispatch-lede')).toBeNull();
     expect(document.querySelectorAll('.dispatch-editor p')).toHaveLength(0);
-    // The preview keeps its one-line state ("Eingebauter Standardtext" / "Eigener Text") only.
+    // The preview keeps its one-line state ("Eingebauter Standardtext" / "Eigener Text") only. It arrives
+    // from its own `dispatch_preview` call, a round trip after the editor's, so wait for it before counting:
+    // read synchronously, a loaded box saw [] here and failed the gate (15.10.2026).
+    await screen.findByText(de.dispatch.texts.previewSaved);
     expect([...document.querySelectorAll('.dispatch-preview p.dispatch-muted')].map((p) => p.textContent)).toEqual([
       de.dispatch.texts.previewSaved,
     ]);

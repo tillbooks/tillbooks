@@ -142,4 +142,33 @@ BEFORE DELETE ON payment_allocation
 BEGIN
   SELECT RAISE(ABORT, 'payment_allocation_immutable');
 END;
+
+-- D178 E3: a REFUND through the bank inbox's contact target (money back to a customer, or back from a
+-- supplier) nets against that contact's open Guthaben: the cash it hands back is no longer available to
+-- allocate on either payment. Append-only like an allocation; a netting counts only while BOTH payments
+-- are posted, so reversing either (reopen_bank_line) gives the cash back without a row rewritten.
+CREATE TABLE IF NOT EXISTS payment_refund_netting (
+  refund_payment_id   TEXT NOT NULL REFERENCES payment(id),
+  guthaben_payment_id TEXT NOT NULL REFERENCES payment(id),
+  workspace_id        TEXT NOT NULL REFERENCES workspace(id),
+  amount_minor        INTEGER NOT NULL CHECK (amount_minor > 0),
+  created_by          TEXT,
+  created_at          TEXT NOT NULL,
+  PRIMARY KEY (refund_payment_id, guthaben_payment_id)
+);
+
+CREATE INDEX IF NOT EXISTS payment_refund_netting_guthaben
+ON payment_refund_netting (workspace_id, guthaben_payment_id);
+
+CREATE TRIGGER IF NOT EXISTS payment_refund_netting_no_update
+BEFORE UPDATE ON payment_refund_netting
+BEGIN
+  SELECT RAISE(ABORT, 'payment_refund_netting_immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS payment_refund_netting_no_delete
+BEFORE DELETE ON payment_refund_netting
+BEGIN
+  SELECT RAISE(ABORT, 'payment_refund_netting_immutable');
+END;
 `;

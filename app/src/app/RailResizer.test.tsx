@@ -1,18 +1,22 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useState } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { axe } from 'jest-axe';
 
 import { I18nProvider } from '../i18n';
+import { resetPrefsModuleForTests } from '../lib/prefs';
 import { RailResizer } from './RailResizer';
 import {
   clampRailWidth,
-  readRailPrefs,
-  writeRailPrefs,
+  parseRailPrefs,
+  resetNavPrefsForTests,
+  useRailPrefs,
   RAIL_DEFAULT_WIDTH,
   RAIL_MAX_WIDTH,
   RAIL_MIN_WIDTH,
+  RAIL_WRITE_DELAY_MS,
 } from './nav-prefs';
+import { fakePrefsEngine, renderWithRail } from './rail-test-kit';
 
 /** A controlled harness that mirrors the Shell's ownership of the geometry: it clamps a width change
  *  and expands (exactly as `useRailPrefs.setWidth` does), collapses on request, and resets. The
@@ -148,8 +152,12 @@ describe('RailResizer: the WAI-ARIA window splitter (D118 A4)', () => {
   });
 });
 
-describe('nav-prefs: the rail geometry round-trips through storage (D118 A4)', () => {
-  beforeEach(() => window.localStorage.clear());
+describe('nav-prefs: the rail geometry is the nav.rail preference (D118 A4, D178)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    resetPrefsModuleForTests();
+    resetNavPrefsForTests();
+  });
 
   it('clamps a width into [200, 400] and rounds to a pixel', () => {
     expect(clampRailWidth(120)).toBe(RAIL_MIN_WIDTH);
@@ -158,21 +166,54 @@ describe('nav-prefs: the rail geometry round-trips through storage (D118 A4)', (
     expect(clampRailWidth(Number.NaN)).toBe(RAIL_DEFAULT_WIDTH);
   });
 
-  it('reads the default geometry when nothing is stored', () => {
-    expect(readRailPrefs('ws_1')).toEqual({ width: RAIL_DEFAULT_WIDTH, collapsed: false });
+  it('reads a malformed or out-of-range value as the default, re-clamped, never trusted', () => {
+    expect(parseRailPrefs(undefined)).toEqual({ width: RAIL_DEFAULT_WIDTH, collapsed: false });
+    expect(parseRailPrefs('not an object')).toEqual({ width: RAIL_DEFAULT_WIDTH, collapsed: false });
+    expect(parseRailPrefs({ width: 9999, collapsed: 'yes' })).toEqual({ width: RAIL_MAX_WIDTH, collapsed: false });
+    expect(parseRailPrefs({ width: 320, collapsed: true })).toEqual({ width: 320, collapsed: true });
   });
 
-  it('persists and reloads the width and the collapsed flag per workspace', () => {
-    writeRailPrefs('ws_1', { width: 320, collapsed: true });
-    expect(readRailPrefs('ws_1')).toEqual({ width: 320, collapsed: true });
-    // A different workspace does not see it.
-    expect(readRailPrefs('ws_2')).toEqual({ width: RAIL_DEFAULT_WIDTH, collapsed: false });
+  /** Drives `useRailPrefs` the way the splitter does. */
+  function Probe() {
+    const { width, collapsed, setWidth, setCollapsed } = useRailPrefs();
+    return (
+      <>
+        <output data-testid="w">{width}</output>
+        <output data-testid="c">{String(collapsed)}</output>
+        <button type="button" onClick={() => [250, 260, 270, 280].forEach((w) => setWidth(w))}>
+          drag
+        </button>
+        <button type="button" onClick={() => setCollapsed(true)}>
+          collapse
+        </button>
+      </>
+    );
+  }
+
+  it('moves the rail at once during a drag and writes ONE preference once the resize rests', async () => {
+    const engine = fakePrefsEngine();
+    renderWithRail(<Probe />, { engine });
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'drag' }));
+    expect(screen.getByTestId('w').textContent).toBe('280');
+    expect(engine.calls.filter((c) => c.action === 'prefs_set')).toHaveLength(0);
+    await waitFor(() => expect(engine.get('ws_a', 'nav.rail')).toEqual({ width: 280, collapsed: false }), {
+      timeout: RAIL_WRITE_DELAY_MS * 5,
+    });
+    expect(engine.calls.filter((c) => c.action === 'prefs_set' && c.input.key === 'nav.rail')).toHaveLength(1);
   });
 
-  it('discards a corrupted or out-of-range stored value rather than trusting it', () => {
-    window.localStorage.setItem('till-nav-rail:ws_1', 'not json');
-    expect(readRailPrefs('ws_1')).toEqual({ width: RAIL_DEFAULT_WIDTH, collapsed: false });
-    writeRailPrefs('ws_1', { width: 9999, collapsed: false });
-    expect(readRailPrefs('ws_1').width).toBe(RAIL_MAX_WIDTH); // re-clamped on read
+  it('keeps the stored width while collapsed, per workspace', async () => {
+    const engine = fakePrefsEngine();
+    engine.put('ws_a', 'nav.rail', { width: 320, collapsed: false });
+    const { unmount } = renderWithRail(<Probe />, { engine });
+    await waitFor(() => expect(screen.getByTestId('w').textContent).toBe('320'));
+    fireEvent.click(screen.getByRole('button', { name: 'collapse' }));
+    await waitFor(() => expect(engine.get('ws_a', 'nav.rail')).toEqual({ width: 320, collapsed: true }));
+    unmount();
+    renderWithRail(<Probe />, { engine, workspaceId: 'ws_b' });
+    await act(async () => {});
+    expect(screen.getByTestId('w').textContent).toBe(String(RAIL_DEFAULT_WIDTH));
+    expect(screen.getByTestId('c').textContent).toBe('false');
   });
 });

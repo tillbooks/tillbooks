@@ -64,6 +64,12 @@ const ASSET_TRANSACTION_TYPES: ReadonlySet<string> = new Set([
   'disposal',
   'revaluation',
   'adjustment',
+  // The compensating types: H04's run reverse, and D170's `asset_transaction_reverse`.
+  'depreciation_reversal',
+  'acquisition_reversal',
+  'additional_capitalisation_reversal',
+  'opening_reversal',
+  'disposal_reversal',
 ]);
 
 interface AssetRow {
@@ -121,6 +127,8 @@ interface LedgerEvent {
   costAfterRappen: number;
   accumulatedDeprAfterRappen: number;
   netBookValueAfterRappen: number;
+  /** D170: the compensating row that took this event back, or null while it stands. */
+  reversedByTransactionId: string | null;
 }
 
 function readAsset(ctx: WorkspaceContext, id: string): AssetRow | undefined {
@@ -147,6 +155,11 @@ function readAccount(ctx: WorkspaceContext, id: string): { id: string; type: str
  * so the running NBV is the book value AS AT each event. Money never leaves integer Rappen.
  */
 function foldEvents(rows: TransactionRow[]): LedgerEvent[] {
+  // D170: a compensating row names the event it corrects; index them so each event says so.
+  const reversedBy = new Map<string, string>();
+  for (const row of rows) {
+    if (row.source_document_type === 'asset_transaction' && row.source_document_id !== null) reversedBy.set(row.source_document_id, row.id);
+  }
   let cost = 0;
   let accum = 0;
   const events: LedgerEvent[] = [];
@@ -171,6 +184,7 @@ function foldEvents(rows: TransactionRow[]): LedgerEvent[] {
       costAfterRappen: cost,
       accumulatedDeprAfterRappen: accum,
       netBookValueAfterRappen: cost - accum,
+      reversedByTransactionId: reversedBy.get(row.id) ?? null,
     });
   }
   return events;

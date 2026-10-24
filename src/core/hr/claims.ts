@@ -23,6 +23,11 @@
  *  - **TX-ATOMICITY.** Every refusal (wrong state, self-approval, locked period, cross-tenant, no
  *    contact, already reimbursed) is a PRE-CHECK before any write, or a throw inside the tx. A
  *    refused approve/reimburse writes zero rows and posts nothing.
+ *  - **Reverse is the one correction of an approved claim (D168).** `reverseClaim` mirrors the approve
+ *    posting through A02 `reverseOwnedEntry` under the owner token `expense_claim_reverse` (the raw
+ *    `reverse_entry` refuses the claim's entry and its mirror) and moves the claim `approved ->
+ *    reversed` in the SAME transaction. A reimbursed claim is refused: money that left is unwound by
+ *    `reverse_payment` first, never silently.
  *  - **§H-TENANT** on every read and write; a foreign id gets the same answer as an unknown one.
  */
 
@@ -31,6 +36,7 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { requireString, requireDate, optionalText, optionalId } from '../ledger/inputGuards.js';
 import { postEntry } from '../ledger/postEntry.js';
+import { reverseOwnedEntry, EXPENSE_CLAIM_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
 import type { LineInput } from '../ledger/postEntry.js';
 import { buildVatLines, computeLineTax } from '../vat/applyVat.js';
 import { resolveFxRate, baseCurrencyOf } from '../fx/rates.js';
@@ -561,6 +567,40 @@ export function rejectClaim(ctx: WorkspaceContext, input: ClaimRejectInput): Res
   });
 }
 
+// --- the posting's standing (critic r1 on D168: books written before the reverse verb) ------------
+
+/**
+ * Walk the chain of POSTED mirrors from a claim's approve entry: E, its reversal R1, R1's reversal R2,
+ * and so on. Before D168 the raw `reverse_entry` could reverse E (and a later raw call its mirror)
+ * while the claim stayed `approved`. An ODD chain means the posting is gone and `last` is the mirror
+ * that took it out; an EVEN chain (0 included) means it stands, and `last` is the newest link standing
+ * in E's direction. §H-TENANT on every hop; the bound is a guard, the chain is short by construction.
+ */
+function postingChain(ctx: WorkspaceContext, entryId: string): { links: number; last: string } {
+  let last = entryId;
+  let links = 0;
+  for (let hops = 0; hops < 16; hops += 1) {
+    const next = ctx.store.db
+      .prepare("SELECT id FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ? AND status = 'posted' ORDER BY rowid LIMIT 1")
+      .get(ctx.workspaceId, last) as { id: string } | undefined;
+    if (next === undefined) break;
+    last = next.id;
+    links += 1;
+  }
+  return { links, last };
+}
+
+/**
+ * D178 E3 (A39 §17.3): the mirror that took a claim's approve posting out, or null when the posting stands
+ * (or the claim has none). The bank line's Spesen preview asks this before it offers a claim, with the same
+ * chain `reimburseClaim` refuses `claim_posting_reversed` on.
+ */
+export function claimPostingReversal(ctx: WorkspaceContext, claim: Pick<ClaimRow, 'posted_entry_id'>): string | null {
+  if (claim.posted_entry_id === null) return null;
+  const chain = postingChain(ctx, claim.posted_entry_id);
+  return chain.links % 2 === 1 ? chain.last : null;
+}
+
 // --- reimburse (pays via A14) ---------------------------------------------------------------------
 
 export interface ClaimReimburseInput {
@@ -570,7 +610,18 @@ export interface ClaimReimburseInput {
   idempotencyKey: string;
 }
 
-export function reimburseClaim(ctx: WorkspaceContext, input: ClaimReimburseInput): Result {
+/**
+ * D178 E3 (A39 §17.3): what a reimbursement paid FROM A BANK LINE states that the public verb does not.
+ * Engine-internal (no wire field reaches it: `expense_claim_reimburse` calls with none): the payment is
+ * dated the line's booking date (A39 L5, a bank line books on its own date) instead of today, and its
+ * source is the bank statement. Everything else (the claim gate, 2260, the payee, A14) is the verb's own.
+ */
+export interface ClaimReimburseFromBank {
+  date: string;
+  source: 'camt';
+}
+
+export function reimburseClaim(ctx: WorkspaceContext, input: ClaimReimburseInput, fromBank?: ClaimReimburseFromBank): Result {
   const capable = ctx.capabilities.assert('spesen.approve');
   if (!capable.ok) return capable;
   const guard = requireString(input.claimId, 'claimId') ?? requireString(input.idempotencyKey, 'idempotencyKey');
@@ -588,6 +639,18 @@ export function reimburseClaim(ctx: WorkspaceContext, input: ClaimReimburseInput
   }
   if (claim.status !== 'approved' || !canTransition('approved', 'reimbursed')) {
     return err('invalid_transition', { claimId: claim.id, status: claim.status });
+  }
+  // Critic r1 on D168: a claim whose approve posting a raw Storno took out (a book written before the
+  // owned reverse) carries no 2260 liability any more; paying it would drive 2260 negative.
+  if (claim.posted_entry_id !== null) {
+    const chain = postingChain(ctx, claim.posted_entry_id);
+    if (chain.links % 2 === 1) {
+      return err('claim_posting_reversed', {
+        claimId: claim.id,
+        reversalEntryId: chain.last,
+        hint: 'the claim\'s posting was reversed in the journal, so nothing is owed: close the claim with expense_claim_reverse (it adopts the existing reversal) and pay a fresh claim if one is due',
+      });
+    }
   }
   const employee = employeeRow(ctx, claim.employee_id);
   if (employee === undefined) return err('not_found', { employeeId: claim.employee_id });
@@ -614,7 +677,8 @@ export function reimburseClaim(ctx: WorkspaceContext, input: ClaimReimburseInput
   const totalBase = claim.total_base_minor ?? 0;
   if (!isPositiveMinor(totalBase)) return err('invalid_input', { field: 'total_base_minor', reason: 'nothing to reimburse' });
 
-  const date = ctx.clock.now().slice(0, 10);
+  // D178 E3: a bank line pays on its own booking date; the public verb pays today.
+  const date = fromBank?.date ?? ctx.clock.now().slice(0, 10);
   const periodOpen = ctx.periods.assertOpen(date);
   if (!periodOpen.ok) return periodOpen;
 
@@ -645,6 +709,7 @@ export function reimburseClaim(ctx: WorkspaceContext, input: ClaimReimburseInput
         counterpartyKind: 'supplier',
         counterpartyId: employee.contact_id as string,
         payableAccountId: employeePayable.id,
+        ...(fromBank !== undefined ? { source: fromBank.source } : {}),
         intent: PAYMENT_INTENTS.record,
         idempotencyKey: paymentKey,
       });
@@ -656,6 +721,108 @@ export function reimburseClaim(ctx: WorkspaceContext, input: ClaimReimburseInput
         .run(paymentId, now, ctx.workspaceId, claim.id);
       ctx.audit.record({ entityKind: 'expense_claim', entityId: claim.id, action: 'reimburse', actor: ctx.actor, at: now });
       return ok({ claimId: claim.id, paymentId, artifact, transmitted: false, reason: 'cloud_tier', confirmed: true, claim: claimEcho(ctx, readClaimRow(ctx, claim.id) as ClaimRow) });
+    }),
+  );
+}
+
+// --- reverse (D168: the owned A02 correction of an approved claim) ---------------------------------
+
+export interface ClaimReverseInput {
+  claimId: string;
+  reason: string;
+  idempotencyKey: string;
+}
+
+/**
+ * Reverse an APPROVED claim: post the faithful mirror of its approve entry and close the claim as
+ * `reversed`, atomically (D168, 14.10.2026, the D141.3 follow-up).
+ *
+ * ACCEPTED STATE: `approved` only (posted, not paid; this includes a claim whose reimbursement payment
+ * was itself reversed, which `reverse_payment` walks back to `approved`).
+ * REFUSALS, each a pre-check that writes nothing:
+ *  - `reimbursed` -> `claim_reimbursed`: the employee was paid, so the 2260 liability is already
+ *    cleared; reversing the posting alone would leave 2260 in debit and the payment standing. The hint
+ *    names `reverse_payment`, which walks the claim back to `approved`, after which this verb runs.
+ *  - `reversed` -> `already_reversed` naming the mirror (idempotent on ROWS under a new key; the same
+ *    key replays the memo).
+ *  - any other state -> `invalid_transition`; a blank reason -> `reason_required`;
+ *    a locked period on the reversal date -> `period_locked`.
+ * THE DATE is today (OR 957a: correct in the open period), the convention `reverse_entry` and
+ * `void_vendor_bill` share; the VAT trace and its Leistungsdatum ride the mirror (A02), so the
+ * Vorsteuer comes back on the Ziffer it was claimed on. A VAT-filed period is never touched: the mirror
+ * lands in the current one.
+ * A BOOK WRITTEN BEFORE D168 (critic r1): a raw Storno may already have reversed the posting. The chain
+ * of posted mirrors decides. Odd: the posting is gone, so the claim ADOPTS the standing mirror
+ * (`adopted: true`, nothing posted). Even and non-empty: the posting stands again, and A02 reverses an
+ * entry at most once, so the fresh mirror is posted against the chain's last link (which carries the
+ * approve's direction, and whose own owner walk ends at the claim).
+ */
+export function reverseClaim(ctx: WorkspaceContext, input: ClaimReverseInput): Result {
+  const capable = ctx.capabilities.assert('spesen.approve');
+  if (!capable.ok) return capable;
+  const posting = ctx.capabilities.assert('post');
+  if (!posting.ok) return posting;
+  const guard = requireString(input.claimId, 'claimId') ?? requireString(input.idempotencyKey, 'idempotencyKey');
+  if (guard) return guard;
+  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) return err('reason_required', { field: 'reason' });
+  const reason = input.reason.trim();
+
+  const scopedKey = JSON.stringify(['expense_claim_reverse', input.claimId, input.idempotencyKey]);
+  const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'expense_claim_reverse');
+  if (replayed !== undefined) return replayed;
+
+  const claim = readClaimRow(ctx, input.claimId);
+  if (claim === undefined) return err('not_found', { claimId: input.claimId });
+  if (claim.status === 'reversed') {
+    return err('already_reversed', { claimId: claim.id, reversalEntryId: claim.reversal_entry_id });
+  }
+  if (claim.status === 'reimbursed') {
+    return err('claim_reimbursed', {
+      claimId: claim.id,
+      paymentId: claim.payment_id,
+      hint: 'the employee was already paid: reverse the reimbursement payment first (reverse_payment), then reverse the claim',
+    });
+  }
+  if (claim.status !== 'approved' || claim.posted_entry_id === null || !canTransition('approved', 'reversed')) {
+    return err('invalid_transition', { claimId: claim.id, status: claim.status });
+  }
+  const postedEntryId = claim.posted_entry_id;
+
+  const date = ctx.clock.now().slice(0, 10);
+  // §H-PERIOD: pre-checked BEFORE the tx, a structured refusal with the claim untouched.
+  const periodOpen = ctx.periods.assertOpen(date);
+  if (!periodOpen.ok) return periodOpen;
+
+  return runGuarded(() =>
+    ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'expense_claim_reverse', () => {
+      const chain = postingChain(ctx, postedEntryId);
+      const adopted = chain.links % 2 === 1;
+      const reversed = adopted ? ok({ reversalId: chain.last }) : reverseOwnedEntry(
+        ctx,
+        {
+          entryId: chain.last,
+          date,
+          description: `Storno Spesen ${claim.title}: ${reason}`,
+          // One mirror per claim, whatever key the caller used: the identity is the claim.
+          idempotencyKey: JSON.stringify(['expense_claim_reversal', claim.id]),
+        },
+        EXPENSE_CLAIM_REVERSAL_OWNER,
+      );
+      if (!reversed.ok) throw new ClaimAbort(reversed);
+      const now = ctx.clock.now();
+      const moved = ctx.store.db
+        .prepare("UPDATE expense_claim SET status = 'reversed', reversal_entry_id = ? WHERE workspace_id = ? AND id = ? AND status = 'approved'")
+        .run(reversed.reversalId, ctx.workspaceId, claim.id);
+      if (moved.changes !== 1) throw new ClaimAbort(err('invalid_transition', { claimId: claim.id, reason: 'claim_moved' }));
+      ctx.audit.record({ entityKind: 'expense_claim', entityId: claim.id, action: 'reverse', actor: ctx.actor, at: now });
+      return ok({
+        claimId: claim.id,
+        reversalEntryId: reversed.reversalId,
+        postedEntryId,
+        adopted,
+        reason,
+        claim: claimEcho(ctx, readClaimRow(ctx, claim.id) as ClaimRow),
+      });
     }),
   );
 }

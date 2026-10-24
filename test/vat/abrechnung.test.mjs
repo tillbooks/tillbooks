@@ -206,6 +206,26 @@ test('A07: the return reconciles to the booked movement on 2200, read from the l
   assert.equal(r.reconciliation.driftMinor, 0);
 });
 
+test('A07 (D167, D167-4): the reduced-rate input codes land on 400 (VST-M26/M38) and 405 (VST-I26/I38), their tax on 1170 and 1171', () => {
+  const { ctx } = setup({ method: 'effektiv', timing: 'soll' });
+  sale(ctx, { net: 1000000, taxCode: 'UST81' });
+  purchase(ctx, { net: 100000, taxCode: 'VST-M26' }); // 2.6% of 1000.00 -> 26.00, Ziffer 400
+  purchase(ctx, { net: 100000, taxCode: 'VST-M38' }); // 3.8% of 1000.00 -> 38.00, Ziffer 400
+  purchase(ctx, { net: 200000, taxCode: 'VST-I26' }); // 2.6% of 2000.00 -> 52.00, Ziffer 405
+  purchase(ctx, { net: 200000, taxCode: 'VST-I38' }); // 3.8% of 2000.00 -> 76.00, Ziffer 405
+
+  const r = computeVatReturn(ctx, Q2);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assertOneLinePerZiffer(r);
+  assert.equal(ziff(r, '400').taxMinor, 6400);
+  assert.equal(ziff(r, '405').taxMinor, 12800);
+  assert.equal(r.totalInputTaxMinor, 19200); // Ziffer 479
+  assert.equal(r.payableMinor, 81000 - 19200); // Ziffer 500
+  // The 1171 movement is exactly Ziffer 405, the 1170 movement exactly Ziffer 400 (debits, so negative here).
+  assert.equal(-bookedMovement(ctx, '1171', Q2.periodStart, Q2.periodEnd), 12800);
+  assert.equal(-bookedMovement(ctx, '1170', Q2.periodStart, Q2.periodEnd), 6400);
+});
+
 test('A07: Vorsteuer lands on 400 and 405 by code, and 500 is 399 minus 479', () => {
   const { ctx } = setup({ method: 'effektiv', timing: 'soll' });
   sale(ctx, { net: 1000000, taxCode: 'UST81' });
@@ -977,8 +997,10 @@ test('A07 §H-TENANT: another workspace’s postings, config and locks never ent
   assert.ok(theirs.length > 0, 'fixture sanity: the other tenant really did post');
   for (const id of theirs) assert.equal(ids.has(id), false, `the drill-down leaked ${id}`);
 
-  // And the filed flag: the other tenant seals 2026-Q2, which must leave this tenant's Q2 open.
-  const filed = markVatPeriodFiled(other.ctx, { period: '2026-Q2', idempotencyKey: 'other-f1' });
+  // And the filed flag: the other tenant (Saldo) seals 2026-H1, its own filing period, whose months
+  // cover Q2 entirely; that must leave this tenant's Q2 open. (It sealed 2026-Q2 until 14.10.2026,
+  // which a Saldo book can no longer file: critic L2, not_a_filing_period.)
+  const filed = markVatPeriodFiled(other.ctx, { period: '2026-H1', idempotencyKey: 'other-f1' });
   assert.equal(filed.ok, true, JSON.stringify(filed));
   const periods = listVatPeriods(own.ctx, { year: '2026' });
   assert.equal(periods.ok, true, JSON.stringify(periods));

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC BY CONSTRUCTION (D178, A20 §11): invented merchants, amounts, rates and references; the
+     account IBAN is the published PostFinance sample the A19 suite uses. Element paths per SIX SPS 2.3. -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr><MsgId>E2-FX-MSG-1</MsgId><CreDtTm>2026-09-02T20:00:00</CreDtTm></GrpHdr>
+    <Stmt>
+      <Id>E2-FX-STMT-1</Id>
+      <ElctrncSeqNb>41</ElctrncSeqNb>
+      <FrToDt><FrDtTm>2026-09-02T00:00:00</FrDtTm><ToDtTm>2026-09-02T23:59:59</ToDtTm></FrToDt>
+      <Acct><Id><IBAN>CH9300762011623852957</IBAN></Id></Acct>
+      <Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">1000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+      <Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">789.89</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+      <Ntry>
+        <NtryRef>E2FX-001</NtryRef>
+        <Amt Ccy="CHF">49.88</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-09-02</Dt></BookgDt>
+        <ValDt><Dt>2026-09-01</Dt></ValDt>
+        <AcctSvcrRef>E2FX-ASR-001</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>CCRD</Cd><SubFmlyCd>POSD</SubFmlyCd></Fmly></Domn><Prtry><Cd>KARTE-POS</Cd><Issr>BANK</Issr></Prtry></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs><AcctSvcrRef>E2FX-TX-001</AcctSvcrRef><InstrId>E2FX-INSTR-1</InstrId><EndToEndId>NOTPROVIDED</EndToEndId><TxId>E2FX-TXID-1</TxId></Refs>
+            <Amt Ccy="CHF">49.88</Amt>
+            <CdtDbtInd>DBIT</CdtDbtInd>
+            <AmtDtls>
+              <InstdAmt>
+                <Amt Ccy="USD">60.78</Amt>
+                <CcyXchg><SrcCcy>USD</SrcCcy><TrgtCcy>CHF</TrgtCcy><UnitCcy>USD</UnitCcy><XchgRate>0.810464</XchgRate></CcyXchg>
+              </InstdAmt>
+              <TxAmt><Amt Ccy="CHF">49.26</Amt></TxAmt>
+            </AmtDtls>
+            <Chrgs>
+              <TtlChrgsAndTaxAmt Ccy="CHF">0.62</TtlChrgsAndTaxAmt>
+              <Rcrd><Amt Ccy="CHF">0.62</Amt><CdtDbtInd>DBIT</CdtDbtInd><ChrgInclInd>true</ChrgInclInd><Tp><Prtry><Id>FX-KOMM</Id></Prtry></Tp></Rcrd>
+            </Chrgs>
+            <RltdPties><Cdtr><Pty><Nm>Buchladen Seefeld Corp</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Kartenzahlung Buchladen Seefeld Corp Portland</Ustrd></RmtInf>
+            <AddtlTxInf>Debitkarte xxxx 4417</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Kartenbezug Ausland</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <NtryRef>E2FX-002</NtryRef>
+        <Amt Ccy="CHF">40.23</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-09-02</Dt></BookgDt>
+        <ValDt><Dt>2026-09-02</Dt></ValDt>
+        <AcctSvcrRef>E2FX-ASR-002</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>CCRD</Cd><SubFmlyCd>POSD</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs><AcctSvcrRef>E2FX-TX-002</AcctSvcrRef></Refs>
+            <Amt Ccy="CHF">40.23</Amt>
+            <CdtDbtInd>DBIT</CdtDbtInd>
+            <RmtInf><Ustrd>Velowerkstatt Alpenblick Annecy, EUR 41.50, abgerechnet in CHF, Kurs 0.951234, 03.09.2026, Kommission CHF 0.75</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <Ntry>
+        <NtryRef>E2FX-003</NtryRef>
+        <Amt Ccy="CHF">120.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-09-02</Dt></BookgDt>
+        <ValDt><Dt>2026-09-02</Dt></ValDt>
+        <AcctSvcrRef>E2FX-ASR-003</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>AUTT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs><AcctSvcrRef>E2FX-TX-003</AcctSvcrRef><EndToEndId>E2FX-E2E-3</EndToEndId></Refs>
+            <Amt Ccy="CHF">120.00</Amt>
+            <CdtDbtInd>DBIT</CdtDbtInd>
+            <RltdPties><Cdtr><Pty><Nm>Druckerei Lindenhof AG</Nm></Pty></Cdtr><CdtrAcct><Id><IBAN>CH4431999123000889012</IBAN></Id></CdtrAcct></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-118 Flyer</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

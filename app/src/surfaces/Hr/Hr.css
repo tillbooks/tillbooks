@@ -70,3 +70,17 @@
 }
 
 .payroll-preview { display: flex; flex-direction: column; gap: var(--t-space-2); }
+
+/* D168: the reason field in the reverse confirm, the payroll-field shape. */
+.hr-reverse-reason {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin-top: var(--t-space-2);
+}
+
+.hr-reverse-reason span {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}

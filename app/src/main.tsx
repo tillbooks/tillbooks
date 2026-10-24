@@ -4,9 +4,11 @@ import { RouterProvider } from 'react-router-dom';
 
 import './styles/global.css';
 import { TillClientProvider } from './lib/client-context';
+import { PrefsProvider } from './lib/prefs';
 import { I18nProvider } from './i18n';
 import { ThemeProvider } from './app/theme';
 import { DensityProvider } from './app/density';
+import { MotionLevelStamp } from './lib/motion';
 import { WorkspaceProvider } from './app/workspace';
 import { FeedbackProvider } from './components/FeedbackProvider';
 import { ErrorBoundary } from './app/ErrorBoundary';
@@ -25,24 +27,32 @@ if (!root) throw new Error('No #root element. index.html is the only place it sh
 
 createRoot(root).render(
   <StrictMode>
-    <ThemeProvider>
-      <DensityProvider>
-        <TillClientProvider>
-          <I18nProvider>
-            <WorkspaceProvider>
-              {/* The feedback context sits OUTSIDE the boundary on purpose: a render throw must not
-                  take the thing that reports it with it. The boundary then wraps the router, so a
-                  throw inside any surface lands on a recoverable panel instead of blanking the
-                  document, which is what happens today. */}
-              <FeedbackProvider>
-                <ErrorBoundary>
-                  <RouterProvider router={router} />
-                </ErrorBoundary>
-              </FeedbackProvider>
-            </WorkspaceProvider>
-          </I18nProvider>
-        </TillClientProvider>
-      </DensityProvider>
-    </ThemeProvider>
+    <TillClientProvider>
+      <I18nProvider>
+        <WorkspaceProvider>
+          {/* D178 point 7: the person's preferences live in the engine, so the theme and the density
+              read them through the one preference store, which needs the client and the workspace.
+              Nothing above this line paints, so the order costs no flash; the store's boot cache
+              answers the stored theme before the engine does. */}
+          <PrefsProvider>
+            <ThemeProvider>
+              <DensityProvider>
+                {/* D178 point 14: the person's motion level, stamped on the root like the density. */}
+                <MotionLevelStamp />
+                {/* The feedback context sits OUTSIDE the boundary on purpose: a render throw must not
+                    take the thing that reports it with it. The boundary then wraps the router, so a
+                    throw inside any surface lands on a recoverable panel instead of blanking the
+                    document, which is what happens today. */}
+                <FeedbackProvider>
+                  <ErrorBoundary>
+                    <RouterProvider router={router} />
+                  </ErrorBoundary>
+                </FeedbackProvider>
+              </DensityProvider>
+            </ThemeProvider>
+          </PrefsProvider>
+        </WorkspaceProvider>
+      </I18nProvider>
+    </TillClientProvider>
   </StrictMode>,
 );

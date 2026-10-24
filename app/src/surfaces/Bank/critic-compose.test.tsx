@@ -265,9 +265,15 @@ async function findRow(name: RegExp): Promise<HTMLElement> {
   await screen.findAllByRole('row', { name });
   return rowOf(name);
 }
-/** The context strip under a line, or null. */
+/** D177: the line's Details panel (the context strip retired), or null. */
 function stripOf(bankTxnId: string): HTMLElement | null {
-  return document.querySelector<HTMLElement>(`tr.bank-strip[data-strip-for="${bankTxnId}"]`);
+  return document.querySelector<HTMLElement>(`[data-panel-for="${bankTxnId}"]`);
+}
+/** The Soll/Haben rows "So wird gebucht" shows: account number, Soll, Haben. */
+function previewRows(panel: HTMLElement): string[][] {
+  return Array.from(panel.querySelectorAll('.bank-legs__table tbody tr')).map((tr) =>
+    Array.from(tr.querySelectorAll('td')).map((td, i) => (i === 0 ? (td.textContent ?? '').split(' ')[0] ?? '' : (td.textContent ?? '').trim())),
+  );
 }
 function selectedRows(): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>('tr.bank-row[aria-current="true"]'));
@@ -319,18 +325,25 @@ describe('critic probes on the compose_entry preview', () => {
       ...over,
     });
 
-  it('C1 Bezugsteuer (effektiv): the strip names BOTH paired legs, "dazu"', async () => {
+  // D177: the strip's VAT sentence became the panel's Soll/Haben table ("So wird gebucht"), the engine's lines.
+  it('C1 Bezugsteuer (effektiv): the panel\'s lines carry BOTH paired legs, 2200 and 1170', async () => {
     const L = taxed('bt_bez', 'Cloud Anbieter Ltd', 10_000, '6500', 'BEZUG');
     renderBank(fakeTransport(happy({ list_bank_inbox: inboxFor([L]), ...noVorschlag })));
     await clickRow(await findRow(/Cloud Anbieter Ltd/));
-    expect(await within(stripOf('bt_bez') as HTMLElement).findByText(/^dazu MWST 8\.10 auf 2200, 8\.10 auf 1170$/)).toBeInTheDocument();
+    await waitFor(() => expect(previewRows(stripOf('bt_bez') as HTMLElement).length).toBeGreaterThan(0));
+    const rows = previewRows(stripOf('bt_bez') as HTMLElement);
+    expect(rows.find((r) => r[0] === '2200')).toEqual(['2200', '', '8.10']);
+    expect(rows.find((r) => r[0] === '1170')).toEqual(['1170', '8.10', '']);
   });
 
-  it('C2 Bezugsteuer (saldo): the input half folds into the account, the strip names only 2200', async () => {
+  it('C2 Bezugsteuer (saldo): the input half folds into the account, the lines carry only 2200', async () => {
     const L = taxed('bt_bez2', 'Cloud Anbieter Ltd', 10_000, '6500', 'BEZUG');
     renderBank(fakeTransport(happy({ list_bank_inbox: inboxFor([L]), compose_entry: composeEngine({ method: 'saldo' }), ...noVorschlag })));
     await clickRow(await findRow(/Cloud Anbieter Ltd/));
-    expect(await within(stripOf('bt_bez2') as HTMLElement).findByText(/^dazu MWST 8\.10 auf 2200$/)).toBeInTheDocument();
+    await waitFor(() => expect(previewRows(stripOf('bt_bez2') as HTMLElement).length).toBeGreaterThan(0));
+    const rows = previewRows(stripOf('bt_bez2') as HTMLElement);
+    expect(rows.find((r) => r[0] === '2200')).toEqual(['2200', '', '8.10']);
+    expect(rows.find((r) => r[0] === '1170')).toBeUndefined();
   });
 
   it('C3 FOREIGN CURRENCY (fixed): a EUR line with a taxed leg asks compose_entry nothing and says book_bank_line\'s sentence', async () => {
@@ -339,17 +352,17 @@ describe('critic probes on the compose_entry preview', () => {
     renderBank(transport);
     await clickRow(await findRow(/Fournisseur Exemple SA/));
     expect(await within(stripOf('bt_eur') as HTMLElement).findByText('MWST auf einer Zeile in Fremdwährung bucht TILL hier nicht.')).toBeInTheDocument();
-    expect(within(stripOf('bt_eur') as HTMLElement).queryByText(/davon MWST/)).toBeNull();
+    expect((stripOf('bt_eur') as HTMLElement).querySelector('.bank-legs__table')).toBeNull();
     expect(calls.some((c) => c.action === 'compose_entry')).toBe(false);
   });
 
-  it('C4 a compose_entry transport failure (fixed): the strip says so in one neutral line, never a figure', async () => {
+  it('C4 a compose_entry transport failure (fixed): the panel says so in one neutral line, never a figure', async () => {
     const L = taxed('bt_tx', 'Transport Fehler AG', 8_990, '6500', 'VST-M');
     renderBank(fakeTransport(happy({ list_bank_inbox: inboxFor([L]), compose_entry: { status: 0, body: { ok: false, error: 'transport_error' } }, ...noVorschlag })));
     await clickRow(await findRow(/Transport Fehler AG/));
     const strip = stripOf('bt_tx') as HTMLElement;
     expect(await within(strip).findByText('Die Vorschau ist nicht verfügbar.')).toBeInTheDocument();
-    expect(within(strip).queryByText(/davon MWST|MWST liess sich nicht/)).toBeNull();
+    expect(strip.querySelector('.bank-legs__table')).toBeNull();
   });
 
   it('C5 only read_vat (no read_books): no split, no error banner, compose_entry never asked', async () => {
@@ -358,11 +371,11 @@ describe('critic probes on the compose_entry preview', () => {
     renderBank(transport, '/bank', { held: [CAP.readSales, CAP.post, 'read_vat'] });
     await clickRow(await findRow(/Nur MWST AG/));
     const strip = stripOf('bt_rv') as HTMLElement;
-    await waitFor(() => expect(within(strip).getByText(/So gebucht wie zuletzt/)).toBeInTheDocument());
+    await waitFor(() => expect(within(strip).getByText('Wie am 01.08.2026 gebucht')).toBeInTheDocument());
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));
     });
-    expect(within(strip).queryByText(/davon MWST|dazu MWST|MWST liess sich nicht/)).toBeNull();
+    expect(strip.querySelector('.bank-legs__table')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(calls.some((c) => c.action === 'compose_entry')).toBe(false);
   });

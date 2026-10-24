@@ -14,7 +14,8 @@
         "2026-05",
         "2026-06"
       ],
-      "filed": false
+      "filed": false,
+      "method": "saldo"
     },
     {
       "label": "2026-H2",
@@ -28,8 +29,10 @@
         "2026-11",
         "2026-12"
       ],
-      "filed": false
+      "filed": false,
+      "method": "saldo"
     }
   ],
+  "stubs": [],
   "ok": true
 }

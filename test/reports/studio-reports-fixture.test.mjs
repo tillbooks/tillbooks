@@ -124,7 +124,8 @@ test('a Kontoblatt line carries exactly the keys the engine emits', () => {
   for (const line of LEDGER.lines) {
     assert.deepEqual(
       Object.keys(line).sort(),
-      ['creditMinor', 'date', 'debitMinor', 'description', 'entryId', 'ref', 'runningMinor', 'source'],
+      // D178 point 2: `number` is the entry's Belegnummer, read from its append-only number row.
+      ['creditMinor', 'date', 'debitMinor', 'description', 'entryId', 'number', 'ref', 'runningMinor', 'source'],
       JSON.stringify(line),
     );
   }

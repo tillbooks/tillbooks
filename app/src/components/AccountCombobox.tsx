@@ -55,7 +55,7 @@ import {
 import { createPortal } from 'react-dom';
 
 import { CheckGlyph } from './states/glyphs';
-import { ChevronDownGlyph } from './icons';
+import { ChevronDownGlyph, CloseGlyph } from './icons';
 import './AccountCombobox.css';
 
 export interface ComboboxOption {
@@ -83,6 +83,11 @@ export interface ComboboxGroup {
   label: string;
   /** The group steps aside while a query is typed (the current value, the suggestions). */
   hideWhileSearching?: boolean;
+  /**
+   * With no query typed, the list opens with this group's first option highlighted, so Enter takes it
+   * (D167 polish 9: the bank picker's first TILL suggestion, not the actions above it).
+   */
+  defaultActive?: boolean;
 }
 
 export interface ComboboxProps {
@@ -228,6 +233,19 @@ export function Combobox({
   const matches = useMemo(() => sections.flatMap((s) => s.options), [sections]);
   const offersCreate = onCreate !== undefined && text.trim() !== '' && matches.length === 0;
   const rowCount = matches.length + (offersCreate ? 1 : 0);
+
+  // The option the list rests on with no query: a `defaultActive` group's first pickable option, else the
+  // first row. Typing ranks the matches and starts from the top again.
+  const restIndex = useMemo(() => {
+    if (text.trim() !== '' || groups === undefined) return 0;
+    const preferred = new Set(groups.filter((g) => g.defaultActive === true).map((g) => g.key));
+    if (preferred.size === 0) return 0;
+    const at = matches.findIndex((o) => o.group !== undefined && preferred.has(o.group) && o.disabled !== true);
+    return at < 0 ? 0 : at;
+  }, [text, groups, matches]);
+  useEffect(() => {
+    if (open) setActive(restIndex);
+  }, [open, restIndex]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -545,6 +563,24 @@ export interface PickerButtonProps {
   triggerRef?: (el: HTMLButtonElement | null) => void;
   /** Extra attributes for the trigger (a test id, a describedby). */
   'aria-describedby'?: string;
+  /**
+   * Opt-in (D167): an icon button INSIDE the field that clears the value without opening the list.
+   * Off by default, so every existing consumer renders exactly as before. Shown only while there is a
+   * value (`value !== ''`) and the picker is enabled; `onClear` and `clearLabel` (its accessible name)
+   * come with it.
+   */
+  clearable?: boolean;
+  onClear?: () => void;
+  clearLabel?: string;
+  /**
+   * Forwarded to the trigger, so a `Tooltip` wrapped around the picker opens on the trigger's hover and
+   * focus and ties its description to the trigger (`aria-describedby`).
+   */
+  onMouseEnter?: (event: React.MouseEvent) => void;
+  onMouseLeave?: (event: React.MouseEvent) => void;
+  onFocus?: (event: React.FocusEvent) => void;
+  onBlur?: (event: React.FocusEvent) => void;
+  onKeyDown?: (event: React.KeyboardEvent) => void;
 }
 
 interface PopPosition {
@@ -580,6 +616,14 @@ export function PickerButton({
   width = 400,
   triggerRef,
   'aria-describedby': describedBy,
+  clearable = false,
+  onClear,
+  clearLabel,
+  onMouseEnter,
+  onMouseLeave,
+  onFocus,
+  onBlur,
+  onKeyDown,
 }: PickerButtonProps) {
   const [openState, setOpenState] = useState(false);
   const open = openProp ?? openState;
@@ -658,32 +702,63 @@ export function PickerButton({
           ['--picker-max-h' as string]: `${pos.maxHeight}px`,
         };
 
+  const showClear = clearable && onClear !== undefined && value !== '' && !disabled;
+  const trigger = (
+    <button
+      type="button"
+      ref={(el) => {
+        buttonRef.current = el;
+        triggerRef?.(el);
+      }}
+      className={`picker-trigger${showClear ? ' picker-trigger--clearable' : ''}${className !== undefined ? ` ${className}` : ''}`}
+      aria-label={label}
+      aria-haspopup="listbox"
+      aria-expanded={open}
+      aria-controls={open ? popId : undefined}
+      aria-describedby={describedBy}
+      disabled={disabled}
+      onClick={() => setOpen(!open)}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      onKeyDown={(e) => {
+        onKeyDown?.(e);
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          setOpen(true);
+        }
+      }}
+    >
+      <span className="picker-trigger__value">{children}</span>
+      <ChevronDownGlyph className="picker-trigger__caret" size={16} />
+    </button>
+  );
+
   return (
     <>
-      <button
-        type="button"
-        ref={(el) => {
-          buttonRef.current = el;
-          triggerRef?.(el);
-        }}
-        className={`picker-trigger${className !== undefined ? ` ${className}` : ''}`}
-        aria-label={label}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={open ? popId : undefined}
-        aria-describedby={describedBy}
-        disabled={disabled}
-        onClick={() => setOpen(!open)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-            e.preventDefault();
-            setOpen(true);
-          }
-        }}
-      >
-        <span className="picker-trigger__value">{children}</span>
-        <ChevronDownGlyph className="picker-trigger__caret" size={16} />
-      </button>
+      {showClear ? (
+        // A button may not hold a button, so the clear control is the trigger's SIBLING, laid over the
+        // field's trailing edge; the trigger keeps room for it (`picker-trigger--clearable`).
+        <span className="picker-field">
+          {trigger}
+          <button
+            type="button"
+            className="picker-clear"
+            aria-label={clearLabel}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+              onClear?.();
+              buttonRef.current?.focus();
+            }}
+          >
+            <CloseGlyph size={14} />
+          </button>
+        </span>
+      ) : (
+        trigger
+      )}
       {open &&
         createPortal(
           <div id={popId} ref={popRef} className="picker-pop" style={style} data-placement={pos?.anchor.edge ?? 'top'}>

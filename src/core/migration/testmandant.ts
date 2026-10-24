@@ -44,6 +44,7 @@ import { makeContext } from '../context.js';
 import { createWorkspace, type SetupDeps } from '../setup/workspace.js';
 import { appendAuditLog } from '../ledger/auditLog.js';
 import { allowAllCapabilities } from '../ports.js';
+import { tillTables } from '../store/schemaShape.js';
 import { listVatPeriods, markVatPeriodFiled } from '../vat/index.js';
 import { runCheck } from './check.js';
 import type { PlanRow, StepRow } from './plan.js';
@@ -772,9 +773,9 @@ export function hardDeleteWorkspace(ctx: WorkspaceContext, workspaceId: string):
     .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'trigger'")
     .all() as { name: string; sql: string | null }[];
   for (const t of triggers) db.exec(`DROP TRIGGER IF EXISTS ${t.name}`);
-  const tables = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
-    .all() as { name: string }[];
+  // TILL's tables only (`tillTables`, the one chokepoint): a tool's table inside the file (a
+  // `_`-prefixed one such as Litestream's) is the tool's, even when it carries a `workspace_id`.
+  const tables = tillTables(db).map((name) => ({ name }));
   const columnsOf = (name: string): string[] =>
     (db.pragma(`table_info(${name})`) as { name: string }[]).map((c) => c.name);
   // FIRST the child tables that carry NO tenant column of their own and fence by parent instead

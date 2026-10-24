@@ -30,6 +30,7 @@
 import type Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 
+import { tillTables } from '../store/schemaShape.js';
 import type { Sanitization } from './model.js';
 
 /** A stable salt so a pseudonym is deterministic across re-runs (idempotent), keyed on the row id. */
@@ -197,6 +198,10 @@ const PII_COLUMNS: readonly PiiColumn[] = [
   // TILL's own on debits and the per-item match key of a payment run.
   { table: 'bank_txn_detail', column: 'counterparty_name', category: 'name' },
   { table: 'bank_txn_detail', column: 'counterparty_iban', category: 'iban' },
+  // D167: a standard repeats the counterparty it recognises: the name as the line showed it, and the key
+  // (`iban:<IBAN>` or `name:<normalised name>`). Both are masked as names; a masked key simply matches no line.
+  { table: 'bank_standard', column: 'counterparty_label', category: 'name' },
+  { table: 'bank_standard', column: 'counterparty_key', category: 'name' },
   { table: 'reconciliation_match', column: 'payer_name', category: 'name' },
   { table: 'gl_archive_line', column: 'source_account_name', category: 'name' },
   { table: 'document', column: 'sent_to_email', category: 'email' },
@@ -237,12 +242,12 @@ function moneyColumns(db: Database.Database, table: string): string[] {
     .filter((n) => /_minor$|_rappen$/i.test(n));
 }
 
+/**
+ * TILL's tables only (`tillTables`, the one chokepoint): a tool's table inside the file is never masked,
+ * redacted or scaled, even when it carries a `workspace_id`, a `_minor` column or a `notes` column.
+ */
 function allTables(db: Database.Database): string[] {
-  return (
-    db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-      .all() as { name: string }[]
-  ).map((r) => r.name);
+  return tillTables(db);
 }
 
 /**

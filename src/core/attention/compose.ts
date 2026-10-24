@@ -18,15 +18,36 @@
  */
 
 import type { WorkspaceContext } from '../context.js';
-import { ok } from '../result.js';
+import { err, ok } from '../result.js';
 import type { Result } from '../result.js';
 import { CAPABILITIES } from '../access/capabilities.js';
-import type { AttentionItem, AttentionQueueSummary, AttentionUrgency, QueueProvider } from './types.js';
-import { ATTENTION_LIST_CAP, URGENCY_RANK } from './types.js';
+import { getSetting } from '../settings/index.js';
+import type {
+  AttentionGrouping,
+  AttentionItem,
+  AttentionKind,
+  AttentionQueueSummary,
+  AttentionSection,
+  AttentionUrgency,
+  QueueProvider,
+} from './types.js';
+import { ATTENTION_AREA_ORDER, ATTENTION_GROUPINGS, ATTENTION_KINDS, ATTENTION_LIST_CAP, URGENCY_RANK } from './types.js';
 import { ATTENTION_PROVIDERS, ROUTED_SURFACES } from './providers.js';
 
 /** The `attention_list` page size when the caller names none. */
 const LIST_PAGE_SIZE = 20;
+
+/** D178: the page size of ONE section of the grouped list when the caller names none. */
+export const SECTION_PAGE_SIZE = 25;
+
+/** D178: the workspace setting that says how Pendenzen batches bank approvals (D172 registry). */
+export const APPROVAL_BATCH_MODE_SETTING = 'attention.approval_batch_mode';
+
+/**
+ * D178: the entity kind of the one remainder row a queue gets when its list yields fewer units than its
+ * true COUNT. Hoisted (the audit-vocabulary scraper must not read the hub as an audit emitter).
+ */
+export const REMAINDER_ENTITY_KIND = 'attention_remainder';
 
 /** Every capability id the registry knows, for the registration guard. */
 const KNOWN_CAPABILITIES: ReadonlySet<string> = new Set(CAPABILITIES.map((c) => c.id));
@@ -51,7 +72,15 @@ export function assertProvidersRegistrable(
     if (!routed.has(p.deepLinkRoute)) {
       problems.push(`${p.queueId} deep-links to '${p.deepLinkRoute}', which is not a routed surface`);
     }
+    // D178 point 11: every registered queue says what it asks of the person (`withKind` at the
+    // registration line for a module the hub does not own).
+    if (p.kind === undefined || !(ATTENTION_KINDS as readonly string[]).includes(p.kind)) {
+      problems.push(`${p.queueId} declares no kind (approve | do | note)`);
+    }
   }
+  const ids = providers.map((p) => p.queueId);
+  const twice = ids.filter((id, i) => ids.indexOf(id) !== i);
+  if (twice.length > 0) problems.push(`these queue ids register twice: ${[...new Set(twice)].join(', ')}`);
   if (problems.length > 0) {
     throw new Error(`G15: these attention providers cannot register: ${problems.join('; ')}.`);
   }
@@ -184,6 +213,7 @@ export function attentionSummary(
       queueId: r.provider.queueId,
       labelKey: r.provider.labelKey,
       area: r.provider.area,
+      ...(r.provider.kind !== undefined ? { kind: r.provider.kind } : {}),
       count: r.count,
       topUrgency: topUrgencyOf(r.items),
     }));
@@ -209,18 +239,225 @@ export interface AttentionListInput {
   urgency?: string;
   limit?: number;
   cursor?: string;
+  /** D178: cut the WHOLE list into sections (`by_area` | `by_kind`); absent keeps the flat page. */
+  grouping?: string;
+  /** D178, with `grouping`: answer this one section from `cursor`. */
+  section?: string;
+}
+
+// --- D178 point 11, the grouped list -----------------------------------------------------------------
+
+/** How many units a row stands for: its declared `count`, else 1. */
+export function unitsOf(item: Pick<AttentionItem, 'count'>): number {
+  return typeof item.count === 'number' && Number.isInteger(item.count) && item.count > 0 ? item.count : 1;
+}
+
+/** A queue's kind. The registration guard holds every REGISTERED queue to one; a test fake may have none. */
+function kindOf(p: QueueProvider): AttentionKind {
+  return p.kind ?? 'note';
+}
+
+/** The order of an area among the sections: the fixed order first, any other area after it. */
+function areaIndex(area: string | undefined, extra: readonly string[]): number {
+  const fixed = ATTENTION_AREA_ORDER.indexOf(area ?? '');
+  if (fixed >= 0) return fixed;
+  const later = extra.indexOf(area ?? '');
+  return ATTENTION_AREA_ORDER.length + (later >= 0 ? later : extra.length);
+}
+
+/**
+ * One entity, one row, for the grouped list: the survivor is the queue with the LOWER rank number (the
+ * collapse tie-break, independent of urgency), it names the collapsed queue, and it takes over the
+ * collapsed row's units, so no unit is lost and none is counted twice.
+ */
+function collapseByRank(items: AttentionItem[], rank: Map<string, number>): AttentionItem[] {
+  const byRank = items
+    .map((item, i) => ({ item, i }))
+    .sort((a, b) => (rank.get(a.item.queueId) ?? 0) - (rank.get(b.item.queueId) ?? 0) || a.i - b.i);
+  const survivors = new Map<string, { item: AttentionItem; i: number }>();
+  for (const entry of byRank) {
+    const key = `${entry.item.entityKind}::${entry.item.entityId}`;
+    const seen = survivors.get(key);
+    if (seen === undefined) {
+      survivors.set(key, entry);
+      continue;
+    }
+    seen.item = {
+      ...seen.item,
+      count: unitsOf(seen.item) + unitsOf(entry.item),
+      ...(seen.item.collapsedWithQueueId === undefined && seen.item.queueId !== entry.item.queueId ? { collapsedWithQueueId: entry.item.queueId } : {}),
+    };
+  }
+  // Back to the input order (provider order, each queue's own order), which the section sort keeps stable.
+  return [...survivors.values()].sort((a, b) => a.i - b.i).map((e) => e.item);
+}
+
+/**
+ * The row that carries the units a queue's list did not yield (D178: "every counted unit is reachable").
+ * It opens the owning surface, where the rest are, and names how many. None of today's queues needs it on
+ * a normal book; it is the honest answer to a list with an internal cap.
+ */
+function remainderRow(p: QueueProvider, missing: number, urgency: AttentionUrgency): AttentionItem {
+  const deepLink = { route: p.deepLinkRoute, params: {} };
+  return {
+    queueId: p.queueId,
+    entityKind: REMAINDER_ENTITY_KIND,
+    entityId: `${p.queueId}:remainder`,
+    titleKey: 'attention.remainder.title',
+    titleParams: { count: missing, queueId: p.queueId },
+    count: missing,
+    since: '',
+    urgency,
+    deepLink,
+    decisionOptions: [{ id: 'open', verb: null, labelKey: 'attention.remainder.open', role: 'link', input: {}, deepLink }],
+    reasonCode: null,
+    reasonKey: null,
+    consequenceKey: null,
+    consequence: null,
+  };
+}
+
+/**
+ * The order inside a section (the owner's words: "Bank transactions must be all the way on top"): under
+ * `by_kind` the area order first (Bank, Buchhaltung, Verkauf, System); then the Vorschläge; then the area's
+ * lead queue (the bank lines inside Bank); then urgency, queue rank and `since`. The sort is stable, so a
+ * queue's own order survives inside it.
+ */
+function sectionComparator(grouping: AttentionGrouping, rank: Map<string, number>, lead: ReadonlySet<string>, extraAreas: readonly string[]) {
+  return (a: AttentionItem, b: AttentionItem): number => {
+    if (grouping === 'by_kind') {
+      const area = areaIndex(a.area, extraAreas) - areaIndex(b.area, extraAreas);
+      if (area !== 0) return area;
+    }
+    // The approvals first, then the Vorschläge that can no longer be approved (beside their siblings,
+    // before the lines), then the lead queue, then the rest.
+    const head = (i: AttentionItem): number => (i.kind === 'approve' ? 0 : i.entityKind === 'agent_action' ? 1 : 2);
+    const approve = head(a) - head(b);
+    if (approve !== 0) return approve;
+    const leading = (lead.has(a.queueId) ? 0 : 1) - (lead.has(b.queueId) ? 0 : 1);
+    if (leading !== 0) return leading;
+    const u = URGENCY_RANK[b.urgency] - URGENCY_RANK[a.urgency];
+    if (u !== 0) return u;
+    const r = (rank.get(a.queueId) ?? 0) - (rank.get(b.queueId) ?? 0);
+    if (r !== 0) return r;
+    return a.since < b.since ? -1 : a.since > b.since ? 1 : 0;
+  };
+}
+
+/** The workspace's batch mode for bank approvals, the default when the setting cannot be read. */
+function approvalBatchMode(ctx: WorkspaceContext): string {
+  try {
+    return getSetting<string>(ctx, APPROVAL_BATCH_MODE_SETTING);
+  } catch {
+    return 'tick';
+  }
+}
+
+/**
+ * `attention_list { grouping }` (D178 point 11): EVERY item of every visible queue, cut into sections.
+ * Each provider is read completely (its list asked for as many rows as its true COUNT), so the rows ARE
+ * the queue; a list that falls short gets one remainder row for the difference. A section's `count` is
+ * the units of all its rows; `total` is the sum of the sections and equals `attention_summary.total`.
+ */
+function groupedList(ctx: WorkspaceContext, input: AttentionListInput, providers: readonly QueueProvider[]): Result {
+  const grouping = input.grouping as AttentionGrouping;
+  if (!(ATTENTION_GROUPINGS as readonly string[]).includes(grouping)) {
+    return err('invalid_input', { field: 'grouping', allowed: [...ATTENTION_GROUPINGS] });
+  }
+  const computedAt = ctx.clock.now();
+  const batchMode = approvalBatchMode(ctx);
+  const limit = typeof input.limit === 'number' && input.limit > 0 ? Math.floor(input.limit) : SECTION_PAGE_SIZE;
+  const offset = typeof input.cursor === 'string' && /^\d+$/.test(input.cursor) ? Number(input.cursor) : 0;
+
+  let visible = visibleProviders(ctx, providers);
+  // An actor holding no read capability of any provider: the padlock, never an empty list.
+  if (visible.length === 0) {
+    return ok({ computedAt, grouping, visibleQueues: 0, total: null, incomplete: false, failed: [], approvalBatchMode: batchMode, sections: [] });
+  }
+  const visibleQueues = visible.length;
+  if (typeof input.queueId === 'string') visible = visible.filter((p) => p.queueId === input.queueId);
+  if (typeof input.area === 'string') visible = visible.filter((p) => p.area === input.area);
+
+  const rank = rankOf(providers);
+  const lead = new Set(visible.filter((p) => p.lead === true).map((p) => p.queueId));
+  const extraAreas = [...new Set(visible.map((p) => p.area).filter((a) => !ATTENTION_AREA_ORDER.includes(a)))];
+
+  const items: AttentionItem[] = [];
+  const failed: string[] = [];
+  for (const p of visible) {
+    let count: number;
+    let listed: AttentionItem[];
+    try {
+      count = p.count(ctx);
+      listed = count > 0 ? p.list(ctx, { limit: count }) : [];
+    } catch {
+      failed.push(p.queueId);
+      continue;
+    }
+    const kind = kindOf(p);
+    // The row's own kind wins (a Vorschlag that can no longer be approved is `do`); else the queue's.
+    const rows = listed.map((item) => ({ ...item, area: p.area, kind: item.kind ?? kind }));
+    const units = rows.reduce((n, item) => n + unitsOf(item), 0);
+    if (units < count) {
+      const urgency = rows.reduce<AttentionUrgency>((best, i) => (URGENCY_RANK[i.urgency] > URGENCY_RANK[best] ? i.urgency : best), 'open');
+      rows.push({ ...remainderRow(p, count - units, urgency), area: p.area, kind });
+    }
+    items.push(...rows);
+  }
+
+  let all = collapseByRank(items, rank);
+  if (typeof input.urgency === 'string') all = all.filter((i) => i.urgency === input.urgency);
+
+  const keyOf = (item: AttentionItem): string => (grouping === 'by_area' ? (item.area ?? '') : (item.kind ?? 'note'));
+  const order =
+    grouping === 'by_area'
+      ? [...ATTENTION_AREA_ORDER, ...extraAreas]
+      : [...ATTENTION_KINDS];
+  const compare = sectionComparator(grouping, rank, lead, extraAreas);
+
+  const sections: AttentionSection[] = [];
+  for (const key of order) {
+    if (typeof input.section === 'string' && input.section !== key) continue;
+    const rows = all.filter((i) => keyOf(i) === key).sort(compare);
+    if (rows.length === 0) continue;
+    const page = rows.slice(offset, offset + limit);
+    const queueIds = new Set(rows.map((i) => i.queueId));
+    sections.push({
+      key,
+      count: rows.reduce((n, i) => n + unitsOf(i), 0),
+      queues: providers.map((p) => p.queueId).filter((id) => queueIds.has(id)),
+      items: page,
+      ...(rows.length > offset + limit ? { nextCursor: String(offset + limit) } : {}),
+    });
+  }
+  // The total is the whole list's, whichever single section a paging call asked for.
+  const total = all.reduce((n, i) => n + unitsOf(i), 0);
+
+  return ok({
+    computedAt,
+    grouping,
+    visibleQueues,
+    total,
+    incomplete: failed.length > 0,
+    failed,
+    approvalBatchMode: batchMode,
+    sections,
+  });
 }
 
 /**
  * `attention_list`: page one queue or one area. Same providers, same capability filter, same collapse
  * and ranking as the summary, so the two faces cannot describe the queue differently. The cursor is an
  * opaque offset over the ranked, collapsed result.
+ *
+ * D178 point 11: with `grouping`, the whole list in sections instead (`groupedList`).
  */
 export function attentionList(
   ctx: WorkspaceContext,
   input: AttentionListInput = {},
   providers: readonly QueueProvider[] = ATTENTION_PROVIDERS,
 ): Result {
+  if (input.grouping !== undefined) return groupedList(ctx, input, providers);
   const computedAt = ctx.clock.now();
   const limit = typeof input.limit === 'number' && input.limit > 0 ? Math.floor(input.limit) : LIST_PAGE_SIZE;
   const offset = typeof input.cursor === 'string' && /^\d+$/.test(input.cursor) ? Number(input.cursor) : 0;

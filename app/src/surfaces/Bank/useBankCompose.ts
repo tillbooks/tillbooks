@@ -94,6 +94,59 @@ export type BankComposeState =
   | { status: 'answered'; answer: ComposeAnswer };
 
 /**
+ * D175 (A39 §14.2): `compose_entry` for a bank line's booking TARGET, the target `book_bank_line` takes:
+ * a Buchungsregel (`{ kind: 'rule', standardId, asks }`) or an `accounts` target routed through a
+ * Durchlaufkonto (`viaAccountId`). The ENGINE expands it exactly as the booking does (`expandRule`, the via
+ * route), so the Studio states no rest, no route and no VAT leg of its own: it sends the line and the
+ * target and shows the lines that come back. A refusal (`rest_is_zero`, `ask_missing`, ...) is the
+ * `failed` state, with the engine's code. The same signature rule as `useBankCompose`: an answer counts
+ * only for the request on screen.
+ */
+export function useTargetCompose(
+  workspaceId: string,
+  bankTxnId: string,
+  target: Record<string, unknown> | null,
+  opts: { debounceMs?: number } = {},
+): BankComposeState {
+  const client = useClient();
+  const { can } = useCapabilities();
+  const allowed = COMPOSE_CAPABILITIES.every((c) => can(c));
+  const signature = target === null ? '' : JSON.stringify([workspaceId, bankTxnId, target]);
+  const debounceMs = opts.debounceMs ?? 0;
+  const [answer, setAnswer] = useState<{ signature: string; body: ComposeAnswer | Err } | null>(null);
+
+  useEffect(() => {
+    if (!allowed || target === null) return undefined;
+    let live = true;
+    const ask = () => {
+      client.call('compose_entry', { workspaceId, mode: 'expand', bankTxnId, target }).then(
+        ({ body }) => {
+          if (live) setAnswer({ signature, body: body as unknown as ComposeAnswer | Err });
+        },
+        () => {
+          if (live) setAnswer({ signature, body: { ok: false, error: 'transport_error' } as Err });
+        },
+      );
+    };
+    const timer = debounceMs > 0 ? setTimeout(ask, debounceMs) : null;
+    if (timer === null) ask();
+    return () => {
+      live = false;
+      if (timer !== null) clearTimeout(timer);
+    };
+    // Keyed on the signature, which names the workspace, the line and the whole target.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, signature, allowed, debounceMs]);
+
+  if (!allowed) return { status: 'denied' };
+  if (target === null) return { status: 'none' };
+  if (answer === null || answer.signature !== signature) return { status: 'pending' };
+  if (isErr(answer.body)) return { status: 'failed', error: answer.body };
+  if (answer.body.mode !== 'expand') return { status: 'pending' };
+  return { status: 'answered', answer: answer.body };
+}
+
+/**
  * Ask the engine for the current request, debounced by `debounceMs` (the split editor waits for the typing
  * to settle, as the composer does; the strip asks at once). `currency` is the bank line's own currency.
  */

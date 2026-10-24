@@ -334,6 +334,45 @@ export function explainRefusal(t: T, e: Err, ctx: RefusalContext): Refusal {
     // Critic N1: the record behind the Vorschlag changed after the proposal; nothing ran.
     case 'vorschlag_stale':
       return make('vorschlagStale', {}, { kind: 'reload' });
+    // D167: the standard verbs' refusals (`set_bank_standard`), each with what the person can do instead.
+    case 'no_counterparty':
+      return make('noCounterparty');
+    case 'invalid_account':
+      return make('invalidAccount');
+    case 'invalid_tax_code':
+      return make('invalidTaxCode', {}, { kind: 'link', to: '/vat', label: t('bankInbox.error.toVat') });
+    case 'vat_not_applicable':
+      return make('vatNotApplicable');
+    // D175 (A39 §14.1, §14.2): a recipe the engine will not store, and the rule target's refusals. The
+    // engine's `detail` is its own English, so it is never shown: the sentence names what a rule needs.
+    case 'invalid_recipe': {
+      // D176: the four new rules each say what to change.
+      const detail = s(f.detail);
+      if (detail === 'same_target') return make('invalidRecipeSame');
+      if (detail === 'side') return make('invalidRecipeSide');
+      if (detail === 'ignore_outcome') return make('invalidRecipeIgnore');
+      if (detail === 'follow_up') return make('invalidRecipeFollowUp');
+      return make('invalidRecipe');
+    }
+    case 'rule_not_found':
+      return make('ruleNotFound', {}, { kind: 'reload' });
+    case 'rule_not_applicable':
+      return make('ruleNotApplicable');
+    case 'ask_missing':
+      return make('askMissing');
+    case 'rest_is_zero':
+      return make('restIsZero');
+    // D176 (A39 §15.2): a Vorlage on a bank line or a bank rule as a template; a "Nicht buchen" rule booked;
+    // a Vorlage whose amounts would put its rest on the other side.
+    case 'wrong_scope':
+      return make('wrongScope');
+    // Critic D176-C2: the form says it at the name field with "Ersetzen"; this is the sentence elsewhere.
+    case 'label_taken':
+      return make('labelTaken');
+    case 'wrong_outcome':
+      return make('wrongOutcome');
+    case 'rest_changes_side':
+      return make('restChangesSide');
     case 'entity_not_found':
       return make('notFound', {}, { kind: 'reload' });
     case 'not_found':

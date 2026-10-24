@@ -155,8 +155,15 @@ export const CONSEQUENCE_FOR_VERB: Readonly<Record<string, Consequence>> = {
     reversibility: 'correctable',
   },
   wage_journal_post: {
-    en: "Books the month's wage journal from your payroll as one entry. If it is wrong, you correct it with a correcting entry; both stay visible.",
-    'de-CH': 'Bucht das Lohnjournal des Monats aus deiner Lohnbuchhaltung als eine Buchung. Ist es falsch, korrigierst du es mit einer Korrekturbuchung; das Original bleibt sichtbar.',
+    en: "Books the month's wage journal from your payroll as one entry. One journal per month: if it is wrong, you reverse it under Payroll and then post the corrected one; both stay visible.",
+    'de-CH': 'Bucht das Lohnjournal des Monats aus deiner Lohnbuchhaltung als eine Buchung. Pro Monat gilt ein Lohnjournal: Ist es falsch, stornierst du es unter Lohn und buchst danach das korrigierte; beides bleibt sichtbar.',
+    reversibility: 'correctable',
+  },
+  // D171. Verified against `wageJournalReverse`: one owned A02 mirror of the posting's entry; the
+  // hand-off row stays; payments, declarations and the Lohnausweis are outside TILL and untouched.
+  wage_journal_reverse: {
+    en: 'Reverses the wage journal with a correcting entry; the original stays visible. Salary payments and social insurance declarations are not touched.',
+    'de-CH': 'Storniert das Lohnjournal mit einer Korrekturbuchung; das Original bleibt sichtbar. Lohnzahlungen und Meldungen an die Sozialversicherungen bleiben unberührt.',
     reversibility: 'correctable',
   },
   post_vendor_bill: {
@@ -224,32 +231,42 @@ export const CONSEQUENCE_FOR_VERB: Readonly<Record<string, Consequence>> = {
     'de-CH': 'Korrigiert die MWST-Saldierung mit einer Korrekturbuchung per Periodenende; die Saldierung bleibt als korrigiert erhalten. Danach kannst du für die Periode eine neue Saldierung buchen.',
     reversibility: 'correctable',
   },
-  // The row-backed sources with no undo verb (asset acquisition, capitalisation and disposal, expense
-  // claims): a raw correcting entry reverses the BOOKING but leaves the register row, which is what
-  // these sentences say (`reverseEntry.ts`, the design call recorded there).
+  // D168: an approved claim is reversed by its own verb, which mirrors the booking and closes the claim.
   expense_claim_approve: {
-    en: 'Approves the expense claim and books what you owe the employee. A correcting entry can reverse the booking, but the claim stays approved.',
-    'de-CH': 'Genehmigt die Spesenabrechnung und bucht, was du der mitarbeitenden Person schuldest. Eine Korrekturbuchung kann die Buchung korrigieren, die Abrechnung bleibt aber genehmigt.',
+    en: 'Approves the expense claim and books what you owe the employee. If it is wrong, you reverse the claim with a correcting entry; the original stays visible.',
+    'de-CH': 'Genehmigt die Spesenabrechnung und bucht, was du der mitarbeitenden Person schuldest. Ist das falsch, stornierst du die Abrechnung mit einer Korrekturbuchung; das Original bleibt sichtbar.',
     reversibility: 'correctable',
   },
+  expense_claim_reverse: {
+    en: 'Reverses an approved expense claim with a correcting entry; nothing in the original is edited. The claim stays on record as reversed; to claim again, you start a new one.',
+    'de-CH': 'Storniert eine genehmigte Spesenabrechnung mit einer Korrekturbuchung; am Original wird nichts geändert. Die Abrechnung bleibt als storniert erhalten; neu abrechnen kannst du mit einer neuen.',
+    reversibility: 'correctable',
+  },
+  // D170: the asset register's four events are taken back by its own undo verb, booking and register
+  // together.
   asset_acquire: {
-    en: "Books the asset's purchase and adds it to the register, which locks its cost figures. A correcting entry can reverse the booking, but the register keeps the purchase.",
-    'de-CH': 'Bucht die Anschaffung der Anlage und nimmt sie ins Anlagenverzeichnis auf; ihre Kostenwerte sind danach gesperrt. Eine Korrekturbuchung kann die Buchung korrigieren, das Verzeichnis behält sie aber.',
+    en: "Books the asset's purchase and adds it to the register, which locks its cost figures. If it is wrong, you reverse the purchase; the asset is closed and you record it anew.",
+    'de-CH': 'Bucht die Anschaffung und nimmt die Anlage ins Verzeichnis auf; ihre Kostenwerte sind danach gesperrt. Ist das falsch, stornierst du die Anschaffung; die Anlage wird geschlossen und du erfasst sie neu.',
     reversibility: 'correctable',
   },
   asset_add_capitalisation: {
-    en: 'Books additional cost onto the asset and raises its book value. A correcting entry can reverse the booking, but the register keeps the added cost.',
-    'de-CH': 'Bucht zusätzliche Kosten auf die Anlage und erhöht ihren Buchwert. Eine Korrekturbuchung kann die Buchung korrigieren, das Anlagenverzeichnis behält die Kosten aber.',
+    en: 'Books additional cost onto the asset and raises its book value. If it is wrong, you reverse it with a correcting entry and the book value falls back.',
+    'de-CH': 'Bucht zusätzliche Kosten auf die Anlage und erhöht ihren Buchwert. Ist das falsch, stornierst du sie mit einer Korrekturbuchung und der Buchwert sinkt wieder.',
     reversibility: 'correctable',
   },
   asset_opening_balance: {
-    en: "Books the asset's carried-over cost and depreciation into the opening position and locks its cost figures. A correcting entry can reverse the booking, but the register keeps the figures.",
-    'de-CH': 'Bucht die übernommenen Kosten und Abschreibungen der Anlage in die Eröffnungsbilanz und sperrt ihre Kostenwerte. Eine Korrekturbuchung kann die Buchung korrigieren, das Verzeichnis behält die Werte aber.',
+    en: "Books the asset's carried-over cost and depreciation into the opening position and locks its cost figures. If it is wrong, you reverse it; the asset is closed and you record it anew.",
+    'de-CH': 'Bucht die übernommenen Kosten und Abschreibungen der Anlage in die Eröffnungsbilanz und sperrt ihre Kostenwerte. Ist das falsch, stornierst du sie; die Anlage wird geschlossen und du erfasst sie neu.',
     reversibility: 'correctable',
   },
   asset_dispose: {
-    en: "Books the asset's sale or write-off with its gain or loss and takes it out of the register. A correcting entry reverses the booking; to have the asset in the register again, you record it anew.",
-    'de-CH': 'Bucht Verkauf oder Ausbuchung der Anlage mit Gewinn oder Verlust und nimmt sie aus dem Verzeichnis. Eine Korrekturbuchung korrigiert die Buchung; ins Verzeichnis kommt die Anlage nur neu erfasst zurück.',
+    en: "Books the asset's sale or write-off with its gain or loss and takes it out of the register. If it is wrong, you reverse the disposal and the asset is back in the register.",
+    'de-CH': 'Bucht Verkauf oder Ausbuchung der Anlage mit Gewinn oder Verlust und nimmt sie aus dem Verzeichnis. Ist das falsch, stornierst du den Abgang und die Anlage ist wieder im Verzeichnis.',
+    reversibility: 'correctable',
+  },
+  asset_transaction_reverse: {
+    en: 'Reverses a purchase, added cost, opening or disposal of the asset with a correcting entry and updates the register; the original stays. A reversed purchase closes the asset; you record it anew.',
+    'de-CH': 'Storniert Anschaffung, Zusatzaktivierung, Eröffnung oder Abgang der Anlage mit einer Korrekturbuchung und passt das Verzeichnis an; das Original bleibt. Eine stornierte Anschaffung schliesst die Anlage.',
     reversibility: 'correctable',
   },
   asset_depreciation_run_post: {
@@ -367,9 +384,17 @@ export const CONSEQUENCE_FOR_VERB: Readonly<Record<string, Consequence>> = {
     reversibility: 'final',
   },
   issue_dunning_run: {
-    en: 'Raises each invoice in the run one reminder level for good and books any reminder fee. The level is never lowered again; a wrong fee is corrected with a correcting entry.',
-    'de-CH': 'Hebt jede Rechnung im Lauf endgültig um eine Mahnstufe an und bucht allfällige Mahngebühren. Die Stufe sinkt nie wieder; eine falsche Gebühr korrigierst du mit einer Korrekturbuchung.',
+    en: 'Raises each invoice in the run one reminder level for good and books any reminder fee. The level is never lowered again; a wrong fee is reversed from the run with a correcting entry.',
+    'de-CH': 'Hebt jede Rechnung im Lauf endgültig um eine Mahnstufe an und bucht allfällige Mahngebühren. Die Stufe sinkt nie wieder; eine falsche Gebühr stornierst du im Lauf mit einer Korrekturbuchung.',
     reversibility: 'final',
+  },
+  // D169. Verified against `reverseDunningFee`: one owned A02 mirror of the run's fee entry; the run,
+  // its levels and its sent letters stand; an unsent letter is re-issued without the fee, or held under
+  // `dunning.refreeze = hold` (D174).
+  dunning_fee_reverse: {
+    en: "Reverses the run's reminder fees with a correcting entry; the original stays visible. Levels and sent letters stand; an unsent letter is re-issued without the fee, or held if your settings say so.",
+    'de-CH': 'Storniert die Mahngebühren mit einer Korrekturbuchung; das Original bleibt sichtbar. Stufen und versandte Briefe bleiben; offene Briefe werden ohne Gebühr neu ausgestellt oder, je nach Einstellung, zurückgehalten.',
+    reversibility: 'correctable',
   },
   send_dunning_run: {
     en: "Emails the reminder letters, one per customer, skipping any letter whose invoices changed since the run was issued. A sent letter can't be called back; a correction goes out separately.",
@@ -437,6 +462,22 @@ export const CONSEQUENCE_FOR_VERB: Readonly<Record<string, Consequence>> = {
   ignore_bank_line: {
     en: 'Takes the bank line out of the inbox with your reason and books nothing. Its money still has to reach the books elsewhere; you can reopen the line at any time.',
     'de-CH': 'Nimmt die Bankzeile mit deiner Begründung aus dem Eingang und bucht nichts. Das Geld darauf muss anderswo in die Bücher; du kannst die Zeile jederzeit wieder öffnen.',
+    reversibility: 'reversible',
+  },
+  // D178 point 19: the answer to a possible duplicate across statement formats.
+  resolve_possible_duplicate: {
+    en: 'Answers a possible duplicate: Duplikat ignores the line with that reason, Kein Duplikat keeps it as its own line. You can reopen an ignored line and decide again.',
+    'de-CH': 'Entscheidet ein mögliches Duplikat: Duplikat ignoriert die Zeile mit diesem Grund, Kein Duplikat behält sie als eigene Zeile. Eine ignorierte Zeile öffnest du wieder und entscheidest neu.',
+    reversibility: 'reversible',
+  },
+  set_bank_standard: {
+    en: 'Saves a standard: later bank lines of this counterparty in this direction are proposed to this account and MWST code, ready for the bulk button. Nothing is booked now; you can remove it any time.',
+    'de-CH': 'Speichert einen Standard: Spätere Bankzeilen dieser Gegenpartei in diese Richtung werden auf dieses Konto und diesen MWST-Code vorgeschlagen. Gebucht wird jetzt nichts; du kannst ihn jederzeit entfernen.',
+    reversibility: 'reversible',
+  },
+  clear_bank_standard: {
+    en: 'Removes a standard: later bank lines of this counterparty are no longer prefilled by it. Nothing already booked changes; the standard stays on record and you can set it again.',
+    'de-CH': 'Entfernt einen Standard: Spätere Bankzeilen dieser Gegenpartei werden nicht mehr damit vorbelegt. Bereits Gebuchtes bleibt, wie es ist; der Standard bleibt erhalten, und du kannst ihn wieder setzen.',
     reversibility: 'reversible',
   },
   reopen_bank_line: {
@@ -961,6 +1002,17 @@ export const CONSEQUENCE_FOR_VERB: Readonly<Record<string, Consequence>> = {
     'de-CH': 'Nimmt eine eingegangene Zahlung in die Abgleich-Warteschlange und schlägt passende Rechnungen vor; gebucht wird noch nichts. Passt die Zuordnung nicht, ordnest du sie neu zu oder löst sie.',
     reversibility: 'correctable',
   },
+  // D172: the workspace settings registry. The card names the key, the new value and the reason.
+  settings_set: {
+    en: 'Changes a workspace setting for everyone here from the next action on; nothing already booked or sent changes. The old value stays in its history, so you can set it back or reset it at any time.',
+    'de-CH': 'Ändert eine Einstellung für alle hier ab der nächsten Aktion; Gebuchtes oder Versendetes bleibt. Der alte Wert bleibt im Verlauf, du kannst ihn jederzeit wieder setzen oder zurücksetzen.',
+    reversibility: 'reversible',
+  },
+  settings_reset: {
+    en: 'Returns a workspace setting to its default for everyone here from the next action on; nothing already booked or sent changes. The removed value stays in its history, so you can set it again.',
+    'de-CH': 'Setzt eine Einstellung für alle hier ab der nächsten Aktion auf den Standard; Gebuchtes oder Versendetes bleibt. Der entfernte Wert bleibt im Verlauf, du kannst ihn wieder setzen.',
+    reversibility: 'reversible',
+  },
   set_qr_auto_apply: {
     en: 'Turns automatic settling on or off: when on, a received payment whose reference and amount match exactly settles its invoice with no separate confirmation. You can turn it off at any time.',
     'de-CH': 'Schaltet das automatische Begleichen ein oder aus: eingeschaltet begleicht eine Zahlung mit genau passender Referenz und Betrag ihre Rechnung ohne eigene Bestätigung. Ausschalten geht jederzeit.',
@@ -975,6 +1027,16 @@ export const CONSEQUENCE_FOR_VERB: Readonly<Record<string, Consequence>> = {
     en: 'Imports several bank statements in number order to close a gap; each new bank line waits in the bank inbox, and nothing is booked yet. Imported statements cannot be taken out again.',
     'de-CH': 'Importiert mehrere Kontoauszüge in Nummernfolge, um eine Lücke zu schliessen; jede neue Bankzeile wartet im Bankeingang, gebucht wird nichts. Importierte Auszüge lassen sich nicht entfernen.',
     reversibility: 'final',
+  },
+  import_bank_statement: {
+    en: 'Imports the statement file (camt, MT940 or CSV): new lines wait in the bank inbox, nothing is booked, lines already in the books are skipped and a CSV mapping is saved. Imported statements cannot be removed.',
+    'de-CH': 'Importiert die Auszugsdatei (camt, MT940 oder CSV): neue Zeilen warten im Bankeingang, gebucht wird nichts, Zeilen schon im Buch werden übersprungen, eine CSV-Zuordnung wird gespeichert. Importierte Auszüge bleiben.',
+    reversibility: 'final',
+  },
+  set_bank_csv_mapping: {
+    en: "Saves how this bank account's CSV exports are read (date, amount, debit and credit columns): later CSV imports read amounts and signs this way. Saving another mapping replaces it.",
+    'de-CH': 'Speichert, wie die CSV-Exporte dieses Bankkontos gelesen werden (Spalten für Datum, Betrag, Belastung, Gutschrift): spätere Importe lesen Beträge und Vorzeichen so. Eine neue Zuordnung ersetzt diese.',
+    reversibility: 'reversible',
   },
   create_payment_batch: {
     en: 'Drafts a payment run from the selected open bills; nothing is paid or sent yet. You can discard the draft, and its bills become payable again.',

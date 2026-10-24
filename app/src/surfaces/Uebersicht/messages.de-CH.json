@@ -10,7 +10,8 @@
       "allClear": "Im Moment wartet nichts auf dich.",
       "count": "{count} warten auf dich",
       "countOne": "1 wartet auf dich",
-      "all": "Alle Pendenzen"
+      "all": "Alle Pendenzen",
+      "more": "Mehr zu: {title}"
     },
     "mandates": {
       "label": "Mandate",
@@ -80,12 +81,55 @@
       "default": "Standardansicht",
       "personalGroup": "Meine Ansichten",
       "sharedGroup": "Geteilte Ansichten",
-      "save": "Ansicht speichern",
       "name": "Name",
       "shared": "Für alle im Arbeitsbereich",
-      "confirm": "Speichern",
       "save_failed": "Ansicht konnte nicht gespeichert werden.",
-      "fallback_note": "Gespeicherte Ansicht nicht verfügbar, Standardansicht wird angezeigt."
+      "customised": "Angepasst"
+    },
+    "edit": {
+      "customize": "Kennzahlen und Karten anordnen",
+      "done": "Anordnen beenden",
+      "widthFull": "{name}: volle Breite",
+      "widthHalf": "{name}: halbe Breite",
+      "bankSize": "Grösse ändern: {name}",
+      "bankSizeTip": "Jetzt: {place}",
+      "more": "Mehr zu {name}",
+      "moreTip": "{name} verschieben",
+      "forward": "Nach vorne",
+      "back": "Nach hinten",
+      "hidden": "Ausgeblendet",
+      "tilesLabel": "Kennzahlen",
+      "pageMore": "Mehr zur Übersicht",
+      "pageMoreTip": "Als Ansicht speichern oder Standard wiederherstellen",
+      "saveView": "Als Ansicht speichern",
+      "reset": "Standard wiederherstellen",
+      "saveConfirm": "Ansicht speichern",
+      "saveCancel": "Ohne Speichern schliessen",
+      "undo": "Rückgängig",
+      "undone": "Rückgängig gemacht.",
+      "resetDone": "Standard wiederhergestellt.",
+      "viewApplied": "Ansicht «{name}» angewendet.",
+      "bankPlace": {
+        "tile": "Kachel",
+        "card": "Karte oben",
+        "bar": "Schmale Leiste"
+      },
+      "announce": {
+        "start": "Anpassen: ziehe am Griff oder verschiebe mit Alt und einer Pfeiltaste. Jede Änderung ist sofort gespeichert.",
+        "end": "Anpassen beendet.",
+        "moved": "{name} verschoben, Platz {position} von {count}.",
+        "hidden": "{name} ausgeblendet.",
+        "shown": "{name} eingeblendet.",
+        "full": "{name} jetzt volle Breite.",
+        "half": "{name} jetzt halbe Breite.",
+        "bank": {
+          "tile": "Bank jetzt als Kachel.",
+          "card": "Bank jetzt als Karte oben.",
+          "bar": "Bank jetzt als schmale Leiste."
+        }
+      },
+      "ghostName": "{name}, ausgeblendet",
+      "unavailable": "Nicht verfügbar"
     },
     "doors": {
       "label": "Häufige Aktionen",
@@ -220,12 +264,85 @@
       "nothingWaiting": "Nichts wartet auf dich",
       "openShort": "{count} offen",
       "withVorschlag": "{count} mit Vorschlag"
+    },
+    "bank": {
+      "title": "Bank",
+      "open": "{count} offen",
+      "openOne": "1 offen",
+      "toBank": "Zur Bank",
+      "book": "Bankzeilen buchen"
+    },
+    "widget": {
+      "denied": "Dir fehlt das Recht, diese Zahlen zu lesen.",
+      "error": "Dieses Element konnte nicht geladen werden.",
+      "window": "{from} bis {to}",
+      "amount": "Betrag",
+      "month": "Monat",
+      "asTable": "Als Tabelle",
+      "overdueSince": "überfällig seit {date}",
+      "dueOn": "fällig am {date}",
+      "name": {
+        "expense_donut": "Grösste Aufwände (Ring)",
+        "money_in_out": "Geld rein und raus",
+        "open_creditors": "Offene Kreditoren",
+        "open_tasks": "Offene Aufgaben",
+        "cash_flow": "Geldfluss",
+        "expense_bars": "Grösste Aufwände (Balken)"
+      },
+      "expenses": {
+        "title": "Grösste Aufwände",
+        "empty": "Noch keine Aufwände.",
+        "emptyHint": "Sobald du Aufwände buchst, siehst du hier die grössten.",
+        "rest": "Übrige",
+        "summary": "Aufwände total {total}, die {count} grössten Konten einzeln",
+        "total": "Aufwand",
+        "account": "Konto",
+        "share": "Anteil",
+        "infoLabel": "Wie die grössten Aufwände gerechnet sind",
+        "infoTitle": "Grösste Aufwände",
+        "info": "Der Ring zeigt die Aufwandkonten, auf denen im Zeitraum mehr belastet als gutgeschrieben wurde: zusammen {gross}.",
+        "infoReductions": "Nicht im Ring sind Aufwandkonten mit mehr Gutschriften, zum Beispiel eine Bestandesänderung auf dem Materialaufwand: zusammen {reductions}. Mit ihnen beträgt der Aufwand in der Erfolgsrechnung {net}."
+      },
+      "money": {
+        "title": "Geld rein und raus",
+        "in": "Geld rein",
+        "out": "Geld raus",
+        "summary": "Geld rein {in}, Geld raus {out} pro Monat",
+        "noBank": "Noch kein Bankkonto.",
+        "noBankHint": "Mit einem Bankkonto siehst du hier, was rein- und rausgeht.",
+        "addBank": "Bankkonto erfassen",
+        "empty": "Noch keine Bewegungen.",
+        "emptyHint": "Sobald Bankbuchungen gebucht sind, erscheinen sie hier.",
+        "toBank": "Zur Bank"
+      },
+      "cashflow": {
+        "title": "Geldfluss",
+        "summary": "Geldfluss pro Monat, netto {net}",
+        "net": "Netto"
+      },
+      "creditors": {
+        "title": "Offene Kreditoren",
+        "empty": "Keine offenen Kreditoren.",
+        "emptyHint": "Erfasste Rechnungen von Lieferanten erscheinen hier, bis sie bezahlt sind.",
+        "capture": "Kreditor erfassen",
+        "unnamed": "Ohne Lieferant",
+        "total": "Total offen",
+        "all": "Alle {count} offenen"
+      },
+      "tasks": {
+        "title": "Offene Aufgaben",
+        "empty": "Keine offenen Aufgaben.",
+        "emptyHint": "Aufgaben, die du dir oder anderen gibst, erscheinen hier.",
+        "create": "Aufgabe erfassen",
+        "today": "heute fällig",
+        "all": "Alle {count} offenen"
+      }
     }
   },
   "help": {
     "Uebersicht": {
       "title": "Übersicht",
-      "body": "Die Startseite deiner Bücher: Kennzahlen mit Wert, Stand und Weg in die Fläche dahinter.\n\nDer Bankeingang darüber zeigt die offenen Bankbuchungen als Zahl und daneben drei Symbole: die Person für Zeilen, die dich brauchen, das Häkchen für sichere Vorschläge, die durchgestrichene Büroklammer für Gebuchtes ohne Beleg. Jede Zahl führt in die Bank. Rechts steht deine Bank mit einem Punkt: grün läuft der Abruf, orange wartet etwas, rot ist etwas gestört, grau ist die Automatik aus. Zeig auf den Namen, dann steht alles in Worten da. Mit till up ruft TILL jeden Morgen selbst ab und fragt während der Einrichtung täglich nach der Freischaltung.\n\nEine Kachel ohne eingerichtetes Modul zeigt keine falsche Null.",
+      "body": "Die Startseite deiner Bücher: Kennzahlen mit Wert, Stand und Weg in die Fläche dahinter. Eine Kachel ohne eingerichtetes Modul zeigt keine falsche Null.\n\nMit Anpassen ordnest du Kennzahlen und Karten hier: am Griff ziehen, mit Alt und Pfeiltaste oder über Mehr verschieben, mit dem Auge aus- und einblenden, mit Grösse ändern breiter machen. Alles ist sofort gespeichert. Welche Karten am Anfang stehen, legt der Inhalt in Meine Einstellungen fest.\n\nIn der schmalen Leiste der Bank stehen drei Symbole: die Person für Zeilen, die dich brauchen, das Häkchen für sichere Vorschläge, die durchgestrichene Büroklammer für Gebuchtes ohne Beleg. Der Punkt bei deiner Bank: grün läuft, orange wartet, rot ist gestört, grau ist aus.",
       "concepts": [],
       "docsPath": "quickstart"
     }

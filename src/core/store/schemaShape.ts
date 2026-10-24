@@ -80,17 +80,23 @@ export function tillTables(db: Database.Database): string[] {
   return fileTables(db).filter(isTillTable);
 }
 
-/**
- * The shape of the database behind `db`, read from the file itself: TILL's tables only. With
- * `includeForeignTables` it describes the whole FILE, a tool's tables included: the shape a backup
- * taken before `isTillTable` existed computed its fingerprint over (see `fingerprintMatches`).
- */
-export function schemaShapeOf(db: Database.Database, opts: { includeForeignTables?: boolean } = {}): SchemaShape {
+/** The shape of `tables` in `db`: each table to its sorted column names. */
+function shapeOfTables(db: Database.Database, tables: readonly string[]): SchemaShape {
   const shape: Record<string, readonly string[]> = {};
-  for (const table of opts.includeForeignTables === true ? fileTables(db) : tillTables(db)) {
+  for (const table of tables) {
     shape[table] = (db.pragma(`table_info("${table}")`) as { name: string }[]).map((c) => c.name).sort();
   }
   return shape;
+}
+
+/**
+ * The shape of the database behind `db`, read from the file itself: TILL's tables only, always. The
+ * whole-FILE shape (a tool's tables included) is module-private and serves `fingerprintMatches` alone:
+ * exported, it was a way to list a tool's table that no catalogue scan could see (critic L3,
+ * 14.10.2026), so no caller outside this module can ask for it.
+ */
+export function schemaShapeOf(db: Database.Database): SchemaShape {
+  return shapeOfTables(db, tillTables(db));
 }
 
 /** The sha256 of a shape's canonical JSON (tables and columns sorted). */
@@ -110,7 +116,7 @@ export function schemaFingerprint(shape: SchemaShape): string {
  */
 export function fingerprintMatches(recorded: string, snap: Database.Database): boolean {
   if (recorded === schemaFingerprint(schemaShapeOf(snap))) return true;
-  return recorded === schemaFingerprint(schemaShapeOf(snap, { includeForeignTables: true }));
+  return recorded === schemaFingerprint(shapeOfTables(snap, fileTables(snap)));
 }
 
 /**

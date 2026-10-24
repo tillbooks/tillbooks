@@ -144,7 +144,7 @@ export function reportActions(h: ReportActionHelpers): ActionDef[] {
     ctxAction(
       'general_ledger',
       'read',
-      `Kontoblatt (general ledger) for ONE account: the opening carry, every posted line in the period in date order with its running balance, and the closing balance. Each line carries the entryId to drill into with get_entry. Debit-positive like the Saldenbilanz, with naturalSide naming which way the account is expected to lean. Drafts never appear. groupBy accepts '${SUPPORTED_GROUP_BY.join("', '")}' today and refuses anything else.`,
+      `Kontoblatt (general ledger) for ONE account: the opening carry, every posted line in the period in date order with its running balance, and the closing balance. Each line carries the entryId to drill into with get_entry and the entry's Belegnummer (number). Debit-positive like the Saldenbilanz, with naturalSide naming which way the account is expected to lean. Drafts never appear. groupBy accepts '${SUPPORTED_GROUP_BY.join("', '")}' today and refuses anything else.`,
       ctxSchema({ accountId: STR, periodStart: STR, periodEnd: STR, groupBy: STR }, [
         'accountId',
         'periodStart',

@@ -19,6 +19,7 @@ import type { ResolvedRate } from '../fx/rates.js';
 // The LEAF module, never the files barrel: the barrel pulls `node:crypto` in through the upload
 // hash, and this file's runtime closure is held browser-pure by `studio-sees-payloads.test.mjs`.
 import { deriveStatutoryOnPost } from '../files/postedFloor.js';
+import { assignEntryNumber } from './entryNumber.js';
 
 /**
  * §H-FX disclosure, the ONE predicate: does this posting state a conversion basis?
@@ -1033,6 +1034,12 @@ function writePostedEntry(
 
   // The final flip. OLD.status is 'draft' here, so the immutability trigger does not fire.
   db.prepare("UPDATE journal_entry SET status = 'posted' WHERE id = ?").run(entryId);
+
+  // D178 point 2 (A02 §4b.2): THE Belegnummer chokepoint. This flip is the one statement in `src/` that
+  // makes an entry `posted`, so numbering it here, in the same transaction, numbers every posting path
+  // (a reversal, a promoted draft, every composite) without a list, spends nothing on a rollback, and is
+  // never reached by an idempotent replay.
+  assignEntryNumber(ctx, entryId);
 
   // D63 (E00): a file linked while this entry was a draft carried no statutory floor; the floor
   // attaches at this moment, in the same transaction as the flip that makes the entry evidence.

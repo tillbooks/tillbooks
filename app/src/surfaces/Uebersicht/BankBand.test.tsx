@@ -738,7 +738,8 @@ describe('the Bankeingang band', () => {
     expect((await mark('ZKB: Auszüge fehlen')).tone).toBe('warn');
     const c = await card('ZKB: Auszüge fehlen');
     expect(c).toHaveTextContent('Seeblick Geschäftskonto: Auszüge 183–186 fehlen (23.09.2026 bis 28.09.2026)');
-    expect(c).toHaveTextContent('Der Saldo von Auszug 182 geht genau in Auszug 187 über: es fehlt kein Geld.');
+    // A chained gap misses no money, so the band says only which statements (owner, 18.10.2026: less text).
+    expect(c).not.toHaveTextContent('Der Saldo von Auszug 182');
     const repair = within(c).getByRole('link', { name: 'Lücke schliessen' });
     expect(repair).toHaveAttribute('href', '/bank-accounts?repair=ba_chf&gap=bst_182%3Abst_187');
   });

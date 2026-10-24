@@ -60,6 +60,10 @@ const VOCABULARY_MS = {
   '--t-motion-stagger': 30,
   '--t-motion-hover': 120,
   '--t-motion-loop': 1400,
+  // D178 point 14, the motion levels: Lively's mark growth and count-up, Standard's growth, Lively's stagger.
+  '--t-motion-grow': 700,
+  '--t-motion-grow-standard': 400,
+  '--t-motion-grow-stagger': 60,
 };
 
 /** The rest of the vocabulary: the one ease pair, the travel distance, the press scale. */
@@ -68,6 +72,7 @@ const SHAPE_TOKENS = {
   '--t-ease-in': 'cubic-bezier(0.4, 0, 1, 1)',
   '--t-travel': '8px',
   '--t-press-scale': '0.98',
+  '--t-lift': '2px',
 };
 
 /** The sentence D122 D-I added to DESIGN.md, verbatim. */

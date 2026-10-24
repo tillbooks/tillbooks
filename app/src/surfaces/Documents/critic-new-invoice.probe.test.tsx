@@ -263,7 +263,7 @@ describe('PROBE 4 (F3): an untouched due date is never stored; the issue derives
     renderAt({ ...base([{ id: 'ct_1', name: 'Muster AG', paymentTermsDays: 30 }]), create_document: createSpy }, '/documents/new-invoice');
     await pickCustomer();
     expect(screen.getByLabelText('Zahlbar bis')).toHaveValue('');
-    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Rechnungsdatum.');
+    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Ausstellungsdatum.');
     await userEvent.click(screen.getByLabelText('Einzelpreis 1'));
     await userEvent.paste('150');
     await userEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }));
@@ -313,7 +313,7 @@ describe('PROBE 4 (F3): an untouched due date is never stored; the issue derives
     const sent = createSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(sent).not.toHaveProperty('date');
     expect(sent).not.toHaveProperty('dueDate');
-    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription(/ab Rechnungsdatum/);
+    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription(/ab Ausstellungsdatum/);
   });
 });
 

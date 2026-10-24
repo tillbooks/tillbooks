@@ -1,155 +1,98 @@
 /**
- * Where the rail remembers which tree nodes a user has expanded (D118, modernisation phase 1, A1).
+ * The rail's personal state and looks (D118 A1/A3/A4, rebuilt on the engine preferences by D178).
  *
- * The rail is a real tree now: groups and parents collapse, and every collapsible node DEFAULTS TO
- * COLLAPSED so a fresh workspace shows roughly a dozen rows and the rail never has to scroll (the
- * DESIGN.md "the rail never scrolls" law). A user's own expansions have to survive a reload, so they
- * live here in `localStorage`, keyed per workspace (the closest the app has to "per user per
- * workspace" until a real user-preference verb exists: the audit's stated migration target is the
- * G00 saved-view seam, and this module is the seam's local stand-in).
+ * WHERE IT LIVES. Until D178 the pins, the open groups and the rail width sat in `localStorage` per
+ * workspace (`till-nav-*`), so a second browser lost them and no agent could read them. They are now G00
+ * §10 preferences in the `nav` area (`src/core/customization/prefDefs/nav.ts`), read and written through
+ * `usePref`, which holds the ONE preference store of the Studio:
+ *   - `person` scope, the same in every workspace: `nav.favourite_style`, `nav.active_rule`,
+ *     `nav.group_header_style` (the looks, D178 points 15 to 17);
+ *   - `workspace` scope, per person per workspace: `nav.favourites`, `nav.expanded`, `nav.sections`,
+ *     `nav.menu_layout`, `nav.rail`.
+ * The old browser keys move into the engine ONCE (`useLegacyNavImport`, `importLegacyPref`).
  *
- * WHAT IS STORED. Not the full expanded set, but the user's explicit OVERRIDES: a map of node navId
- * to a boolean the user chose by toggling. A node with no entry falls back to its computed default
- * (collapsed, unless it is an ancestor of the active route, which auto-expands so the active item is
- * always visible: see `useNavExpansion`). Storing overrides rather than the whole set is what keeps
- * the default-collapsed rhythm: visiting a group to read it does not permanently pin it open, only a
- * deliberate toggle does.
+ * A REFUSED WRITE NEVER BREAKS THE RAIL. A rail that cannot remember its open groups still navigates:
+ * every hook here keeps a value the engine refused for the rest of the session (the preference store
+ * would otherwise roll it back under the person's pointer), and reports the refusal on `error` so a
+ * surface that should say so (the Favoriten lane, the menu editor) can.
  *
- * FAILURE IS SILENT. `localStorage` can throw outright (Safari private mode, a hardened profile) and
- * a Studio that cannot remember which groups were open must still open, so a read failure is "no
- * overrides remembered" and a write failure is a no-op, never an exception. This mirrors
- * `lib/workspace-store.ts`, the sibling store for the tenant id.
+ * ONE MODEL FOR THE WHOLE RAIL. `RailStateProvider` reads every one of these once and computes the one
+ * answer the lane, the tree, the editor and the icon strip all render from: the personal tree, the
+ * resolved favourites, the folded sections and the ONE active row (`resolveRailActive`, nav.ts). Before
+ * D178 the lane and the tree each matched the URL on their own and both lit for a pinned page.
  */
-import { useCallback, useEffect, useState } from 'react';
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { useLocation } from 'react-router-dom';
 
+import { importLegacyPref, PREF_CACHE_KEY, usePref, type PrefValue } from '../lib/prefs';
+import type { Err } from '../lib/client';
+import {
+  isCanonicalMenuLayout,
+  normalizeMenuLayout,
+  personalNavTree,
+  resolveNavTree,
+  resolveOpenTopGroup,
+  resolveRailActive,
+  resolveSectionLocation,
+  surfaceByNavId,
+  type ActiveRule,
+  type MenuLayout,
+  type NavGroup,
+  type NavItem,
+  type RailActive,
+  type RailLocation,
+} from './nav';
 import { useWorkspaceId } from './workspace';
 
-/** The `localStorage` key prefix. One entry per workspace scope, sibling of `till-workspace`. */
+// --- The preference keys and the legacy browser keys ----------------------------------------------
+
+export const NAV_PREF = {
+  favouriteStyle: 'nav.favourite_style',
+  activeRule: 'nav.active_rule',
+  groupHeaderStyle: 'nav.group_header_style',
+  favourites: 'nav.favourites',
+  expanded: 'nav.expanded',
+  sections: 'nav.sections',
+  menuLayout: 'nav.menu_layout',
+  rail: 'nav.rail',
+} as const;
+
+/** The D118 browser key prefixes, read once per workspace by the legacy import and then cleared. */
 export const NAV_EXPANDED_KEY_PREFIX = 'till-nav-expanded:';
-
-/** The favourites `localStorage` key prefix (A3). One ordered list per workspace scope, sibling of
- *  the expanded-overrides entry above, so a Treuhänder's pins are a property of the books in front of
- *  them, not of the session. */
 export const NAV_FAVOURITES_KEY_PREFIX = 'till-nav-favourites:';
+export const NAV_RAIL_KEY_PREFIX = 'till-nav-rail:';
 
-/** A user's explicit expand/collapse choices: node navId to the state the user toggled it into. */
-export type NavOverrides = Record<string, boolean>;
+/** How a favourite row is drawn (D178 point 15). */
+export type FavouriteStyle = 'icon_star' | 'star_only' | 'icon_only';
+/** How a section or group header is set (D178 point 17). */
+export type GroupHeaderStyle = 'text_14_bold' | 'icon_14' | 'label_12';
 
-/** The scope a set of overrides is filed under: the workspace, or a shared fallback when none is
- *  selected yet (the rail still renders on the no-workspace setup screen). */
-function scopeKey(workspaceId: string | null): string {
-  return `${NAV_EXPANDED_KEY_PREFIX}${workspaceId ?? 'global'}`;
-}
+const FAVOURITE_STYLES: readonly FavouriteStyle[] = ['icon_star', 'star_only', 'icon_only'];
+const ACTIVE_RULES: readonly ActiveRule[] = ['favourite', 'tree', 'both_soft'];
+const HEADER_STYLES: readonly GroupHeaderStyle[] = ['text_14_bold', 'icon_14', 'label_12'];
 
-/** The favourites scope key, keyed exactly like `scopeKey` so a workspace's pins reload with it. */
-function favouritesScopeKey(workspaceId: string | null): string {
-  return `${NAV_FAVOURITES_KEY_PREFIX}${workspaceId ?? 'global'}`;
-}
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** Read a scope's stored overrides. Any parse or storage failure reads as "nothing remembered". A
- *  stored value that is not a flat object of booleans is discarded rather than trusted. */
-export function readNavOverrides(workspaceId: string | null): NavOverrides {
-  try {
-    const raw = window.localStorage.getItem(scopeKey(workspaceId));
-    if (raw === null) return {};
-    const parsed: unknown = JSON.parse(raw);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    const out: NavOverrides = {};
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-      if (typeof value === 'boolean') out[key] = value;
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
+// --- Parsers: what the engine (or an old browser) holds, read defensively --------------------------
 
-/** Persist a scope's overrides. Never throws: a Studio that cannot persist still works this session. */
-export function writeNavOverrides(workspaceId: string | null, overrides: NavOverrides): void {
-  try {
-    window.localStorage.setItem(scopeKey(workspaceId), JSON.stringify(overrides));
-  } catch {
-    // A rail that cannot remember its open groups still navigates.
-  }
-}
-
-/**
- * The rail's expand/collapse state, resolved and persisted.
- *
- * `isExpanded(navId)` answers for one collapsible node: a stored user override wins; otherwise the
- * node auto-expands exactly when it is an ancestor of the ACTIVE route (so a deep link is never
- * hidden inside a collapsed group), and is collapsed by default everywhere else. `toggle(navId)`
- * records the opposite of the node's current resolved state as an explicit override and persists it.
- *
- * ACCORDION (D135). `toggle(navId, exclusiveWith)` takes an optional set of sibling navIds that must
- * behave as an accordion: when this toggle OPENS the node and `exclusiveWith` is given, every other id
- * in that set is forced collapsed, so at most one of them is open at a time. The caller passes the
- * top-level headed groups here and nothing for a nested parent, which is what scopes the accordion to
- * the top-level groups while nested parents keep their independent expand state. Collapsing a node
- * never touches its siblings (there is nothing to close), so the set only ever bites on an open.
- *
- * `activeAncestors` is the set of group/parent navIds on the path to the active leaf; the caller
- * computes it from the route so this hook stays free of routing. The stored overrides reload when
- * the workspace changes, because a Treuhänder's open groups are a property of the books in front of
- * them, not of the session.
- */
-export function useNavExpansion(activeAncestors: ReadonlySet<string>): {
-  isExpanded: (navId: string) => boolean;
-  toggle: (navId: string, exclusiveWith?: readonly string[]) => void;
-} {
-  const workspaceId = useWorkspaceId();
-  const [overrides, setOverrides] = useState<NavOverrides>(() => readNavOverrides(workspaceId));
-
-  // Reload the remembered overrides when the workspace changes: a different set of books carries a
-  // different set of open groups. Not on first mount (the initializer already read them).
-  const [loadedScope, setLoadedScope] = useState<string | null>(workspaceId);
-  useEffect(() => {
-    if (loadedScope === workspaceId) return;
-    setLoadedScope(workspaceId);
-    setOverrides(readNavOverrides(workspaceId));
-  }, [workspaceId, loadedScope]);
-
-  const isExpanded = useCallback(
-    (navId: string): boolean => {
-      const override = overrides[navId];
-      return override === undefined ? activeAncestors.has(navId) : override;
-    },
-    [overrides, activeAncestors],
-  );
-
-  const toggle = useCallback(
-    (navId: string, exclusiveWith?: readonly string[]): void => {
-      setOverrides((current) => {
-        const resolved = current[navId] === undefined ? activeAncestors.has(navId) : current[navId];
-        const opened = !resolved;
-        const next: NavOverrides = { ...current, [navId]: opened };
-        // Accordion (D135): opening one node in an exclusive set forces every sibling in that set
-        // collapsed, so at most one is open. Only on OPEN, and only over the named set (the top-level
-        // headed groups); a nested parent passes no set and keeps its independent state.
-        if (opened && exclusiveWith !== undefined) {
-          for (const sibling of exclusiveWith) {
-            if (sibling !== navId) next[sibling] = false;
-          }
-        }
-        writeNavOverrides(workspaceId, next);
-        return next;
-      });
-    },
-    [workspaceId, activeAncestors],
-  );
-
-  return { isExpanded, toggle };
-}
-
-// --- Favourites: the personal lane above the canonical tree (D118 A3) ----------------------------
+/** The longest alias a favourite may carry: a label in a 240px rail, not a paragraph. */
+export const MAX_ALIAS_LENGTH = 60;
 
 /**
  * One pinned favourite: the `navId` of the catalog surface it points at, and an OPTIONAL per-user
- * alias. The alias is a rename that shows IN PLACE of the canonical label in the Favoriten lane ONLY;
- * the canonical name always survives (it is what the row's tooltip carries, and it is the label the
- * canonical tree below keeps). Aliasing is favourites-only by design (A3 / OD-10 recommendation A):
- * the canonical tree keeps one shared vocabulary for documentation, support and the agent, and only
- * the personal lane on top bends to a single user's wording.
+ * alias. The alias shows IN PLACE of the canonical label in the Favoriten lane ONLY; the canonical name
+ * always survives as the row's tooltip and as the tree's label (D118 A3).
  */
 export interface NavFavourite {
   navId: string;
@@ -159,67 +102,227 @@ export interface NavFavourite {
 /** The stored favourites: an ORDERED list. Order is the user's reorder, top to bottom. */
 export type NavFavourites = readonly NavFavourite[];
 
-/** Read a scope's stored favourites. Any parse or storage failure reads as "nothing pinned". A stored
- *  value that is not an array of `{ navId: string, alias?: string }` records is discarded whole rather
- *  than trusted, mirroring `readNavOverrides`. A blank or non-string alias is dropped to undefined. */
-export function readNavFavourites(workspaceId: string | null): NavFavourite[] {
+/** Read a favourites value: an array of `{ navId, alias? }`; duplicates, non-records and pins of a
+ *  surface this build does not know are dropped (validated against the catalog on every read), a blank
+ *  alias cleared, an alias over the limit cut. Anything else reads as "nothing pinned". */
+export function parseNavFavourites(value: unknown): NavFavourite[] {
+  if (!Array.isArray(value)) return [];
+  const out: NavFavourite[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
+    const navId = entry.navId;
+    if (typeof navId !== 'string' || seen.has(navId) || surfaceByNavId(navId) === undefined) continue;
+    seen.add(navId);
+    const rawAlias = entry.alias;
+    const alias = typeof rawAlias === 'string' ? rawAlias.trim().slice(0, MAX_ALIAS_LENGTH) : '';
+    out.push(alias.length > 0 ? { navId, alias } : { navId });
+  }
+  return out;
+}
+
+/** A user's explicit expand/collapse choices: node navId to the state the user toggled it into. */
+export type NavOverrides = Record<string, boolean>;
+
+/** Read an overrides value: a flat object of booleans; anything else reads as "nothing remembered". */
+export function parseNavOverrides(value: unknown): NavOverrides {
+  if (!isRecord(value)) return {};
+  const out: NavOverrides = {};
+  for (const [key, flag] of Object.entries(value)) if (typeof flag === 'boolean') out[key] = flag;
+  return out;
+}
+
+/** The two folding sections of the rail (D178): which are folded away. */
+export interface NavSections {
+  favourites: boolean;
+  menu: boolean;
+}
+
+export function parseNavSections(value: unknown): NavSections {
+  const rec = isRecord(value) ? value : {};
+  return { favourites: rec.favourites === true, menu: rec.menu === true };
+}
+
+/** Only the folded flags are stored, so unfolding both returns to the default `{}`. */
+function serialiseSections(sections: NavSections): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  if (sections.favourites) out.favourites = true;
+  if (sections.menu) out.menu = true;
+  return out;
+}
+
+/** The rail's width bounds and its snapping widths (A4). */
+export const RAIL_MIN_WIDTH = 200;
+export const RAIL_MAX_WIDTH = 400;
+export const RAIL_DEFAULT_WIDTH = 240;
+export const RAIL_ICON_WIDTH = 56;
+
+/** The persisted rail geometry: the last EXPANDED width (kept while collapsed) and the icon mode. */
+export interface RailPrefs {
+  width: number;
+  collapsed: boolean;
+}
+
+/** Clamp a candidate width into the allowed range, rounding to a whole pixel; non-finite reads as default. */
+export function clampRailWidth(width: number): number {
+  if (!Number.isFinite(width)) return RAIL_DEFAULT_WIDTH;
+  return Math.min(RAIL_MAX_WIDTH, Math.max(RAIL_MIN_WIDTH, Math.round(width)));
+}
+
+/** Read a rail geometry: an out-of-range width is re-clamped, anything malformed reads as the default. */
+export function parseRailPrefs(value: unknown): RailPrefs {
+  if (!isRecord(value)) return { width: RAIL_DEFAULT_WIDTH, collapsed: false };
+  return {
+    width: typeof value.width === 'number' ? clampRailWidth(value.width) : RAIL_DEFAULT_WIDTH,
+    collapsed: typeof value.collapsed === 'boolean' ? value.collapsed : false,
+  };
+}
+
+/** A raw `localStorage` string as JSON, or undefined. The legacy import's first step. */
+function parseJson(raw: string): unknown {
   try {
-    const raw = window.localStorage.getItem(favouritesScopeKey(workspaceId));
-    if (raw === null) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const out: NavFavourite[] = [];
-    const seen = new Set<string>();
-    for (const entry of parsed) {
-      if (entry === null || typeof entry !== 'object') continue;
-      const navId = (entry as Record<string, unknown>).navId;
-      if (typeof navId !== 'string' || navId.length === 0 || seen.has(navId)) continue;
-      seen.add(navId);
-      const rawAlias = (entry as Record<string, unknown>).alias;
-      const alias = typeof rawAlias === 'string' && rawAlias.trim().length > 0 ? rawAlias.trim() : undefined;
-      out.push(alias === undefined ? { navId } : { navId, alias });
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+// --- The one-time legacy import (D178 point 7, G00 §10.5) ------------------------------------------
+
+/** The legacy parsers: a value that does not parse is discarded, one that does is moved once. */
+export function parseLegacyFavourites(raw: string): PrefValue | undefined {
+  const parsed = parseJson(raw);
+  return Array.isArray(parsed) ? (parseNavFavourites(parsed) as unknown as PrefValue) : undefined;
+}
+
+export function parseLegacyOverrides(raw: string): PrefValue | undefined {
+  const parsed = parseJson(raw);
+  return isRecord(parsed) ? parseNavOverrides(parsed) : undefined;
+}
+
+export function parseLegacyRail(raw: string): PrefValue | undefined {
+  const parsed = parseJson(raw);
+  return isRecord(parsed) ? (parseRailPrefs(parsed) as unknown as PrefValue) : undefined;
+}
+
+/** The workspaces whose legacy keys this tab already queued (the import is once, not once per render). */
+const importedWorkspaces = new Set<string>();
+
+/** Move one workspace's D118 browser keys into the engine, once. Answers when all three settled. */
+export function importLegacyNavPrefs(workspaceId: string): Promise<unknown> {
+  importedWorkspaces.add(workspaceId);
+  return Promise.all([
+    importLegacyPref(NAV_PREF.favourites, `${NAV_FAVOURITES_KEY_PREFIX}${workspaceId}`, parseLegacyFavourites),
+    importLegacyPref(NAV_PREF.expanded, `${NAV_EXPANDED_KEY_PREFIX}${workspaceId}`, parseLegacyOverrides),
+    importLegacyPref(NAV_PREF.rail, `${NAV_RAIL_KEY_PREFIX}${workspaceId}`, parseLegacyRail),
+  ]);
+}
+
+/** Run the legacy import for the open workspace, once per workspace per tab. */
+export function useLegacyNavImport(): void {
+  const workspaceId = useWorkspaceId();
+  useEffect(() => {
+    if (workspaceId === null || importedWorkspaces.has(workspaceId)) return;
+    void importLegacyNavPrefs(workspaceId);
+  }, [workspaceId]);
+}
+
+/** Test seam: forget which workspaces were imported and the palette's mirror. */
+export function resetNavPrefsForTests(): void {
+  importedWorkspaces.clear();
+  liveFavourites.clear();
+}
+
+// --- The session-keeping preference hook -----------------------------------------------------------
+
+/**
+ * One rail preference, parsed, with a write that never breaks the rail. `set` takes a value or an
+ * updater over the CURRENT value (so two quick clicks compose); the store shows it at once; when the
+ * engine refuses it, the value is kept for this session (keyed to the workspace) and `error` names
+ * the refusal. The next write starts clean.
+ */
+function useNavPref<T>(
+  key: string,
+  parse: (value: unknown) => T,
+  serialise: (value: T) => PrefValue,
+): { value: T; set: (next: T | ((current: T) => T)) => void; error: Err | null; isDefault: boolean; reset: () => void } {
+  const workspaceId = useWorkspaceId();
+  const [raw, setRaw, meta] = usePref<PrefValue>(key);
+  const parsed = useMemo(() => parse(raw), [raw, parse]);
+  const [kept, setKept] = useState<{ ws: string | null; value: T } | null>(null);
+  const value = kept !== null && kept.ws === workspaceId ? kept.value : parsed;
+  const latest = useRef(value);
+  latest.current = value;
+
+  const set = useCallback(
+    (next: T | ((current: T) => T)): void => {
+      const resolved = typeof next === 'function' ? (next as (current: T) => T)(latest.current) : next;
+      latest.current = resolved;
+      setKept(null);
+      void setRaw(serialise(resolved)).then((accepted) => {
+        if (!accepted) setKept({ ws: workspaceId, value: resolved });
+      });
+    },
+    [setRaw, serialise, workspaceId],
+  );
+  const reset = useCallback((): void => {
+    setKept(null);
+    void meta.reset();
+  }, [meta]);
+  return { value, set, error: meta.error, isDefault: meta.isDefault, reset };
+}
+
+/** A `person` look: an enum read defensively (a value this build does not know reads as the default). */
+function useLook<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  const [value] = usePref<PrefValue>(key);
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+/** The three looks (D178 points 15 to 17). */
+export function useNavLook(): { favouriteStyle: FavouriteStyle; activeRule: ActiveRule; groupHeaderStyle: GroupHeaderStyle } {
+  return {
+    favouriteStyle: useLook(NAV_PREF.favouriteStyle, FAVOURITE_STYLES, 'icon_star'),
+    activeRule: useLook(NAV_PREF.activeRule, ACTIVE_RULES, 'favourite'),
+    groupHeaderStyle: useLook(NAV_PREF.groupHeaderStyle, HEADER_STYLES, 'text_14_bold'),
+  };
+}
+
+const asPref = <T,>(value: T): PrefValue => value as unknown as PrefValue;
+
+// --- Favourites (A3, D178 point 15) ------------------------------------------------------------------
+
+/**
+ * The palette's mirror of the pins, per workspace (the Favoriten section of the command palette reads
+ * them synchronously, outside React). Updated by every rail render that knows them.
+ */
+const liveFavourites = new Map<string, NavFavourite[]>();
+
+/**
+ * The pins of `workspaceId`, synchronously: the rail's live value, else the preference store's boot
+ * cache (the engine's last answer), else the D118 browser key not yet imported. Never throws.
+ */
+export function readNavFavourites(workspaceId: string | null): NavFavourite[] {
+  const scope = workspaceId ?? 'global';
+  const live = liveFavourites.get(scope);
+  if (live !== undefined) return live;
+  try {
+    if (workspaceId !== null) {
+      const cache = parseJson(window.localStorage.getItem(PREF_CACHE_KEY) ?? 'null');
+      const ws = isRecord(cache) && isRecord(cache.ws) ? cache.ws[workspaceId] : undefined;
+      if (isRecord(ws) && NAV_PREF.favourites in ws) return parseNavFavourites(ws[NAV_PREF.favourites]);
     }
-    return out;
+    const legacy = window.localStorage.getItem(`${NAV_FAVOURITES_KEY_PREFIX}${scope}`);
+    return legacy === null ? [] : parseNavFavourites(parseJson(legacy));
   } catch {
     return [];
   }
 }
 
-/** Persist a scope's favourites. Never throws: a rail that cannot remember its pins still navigates. */
-export function writeNavFavourites(workspaceId: string | null, favourites: NavFavourites): void {
-  try {
-    window.localStorage.setItem(favouritesScopeKey(workspaceId), JSON.stringify(favourites));
-  } catch {
-    // A rail that cannot persist its favourites still works this session.
-  }
-}
+const serialiseFavourites = (f: NavFavourite[]): PrefValue => asPref(f);
 
 /**
- * A tiny in-memory pub/sub so EVERY `useNavFavourites` instance stays in sync within one tab.
- *
- * The favourites hook is consumed in two places at once: the pin star on each tree leaf (NavTree) and
- * the Favoriten lane itself (FavouritesRail). Without a shared channel, pinning in the tree would
- * write localStorage but leave the lane's local state stale until a reload. localStorage is the source
- * of truth; a mutation writes it and then broadcasts, and every subscriber re-reads. (localStorage's
- * own `storage` event fires across TABS, never in the writing tab, so it cannot serve this same-tab
- * need.) */
-const favouriteSubscribers = new Set<() => void>();
-function broadcastFavourites(): void {
-  for (const notify of favouriteSubscribers) notify();
-}
-
-/**
- * The favourites lane's state, resolved and persisted per workspace.
- *
- * `favourites` is the ordered pin list. `isFavourite(navId)` answers whether a leaf is pinned (the
- * tree's star affordance reads it). `pin`/`unpin` add or remove a pin (a new pin lands at the END of
- * the lane, the natural "most recently added" spot). `move(navId, 'up'|'down')` is the WCAG 2.5.7
- * keyboard reorder: a single-pointer, non-dragging alternative to the drag handle, and the primary
- * path for keyboard users. `reorder(from, to)` is the drag-drop commit (dnd-kit hands it index moves).
- * `setAlias(navId, alias)` sets or clears the per-user rename (a blank alias clears it).
- *
- * Every mutation persists synchronously, so the lane survives a reload. The stored list reloads when
- * the workspace changes, exactly like the expand overrides.
+ * The favourites lane's state. `pin` lands a new pin at the END; `move` is the WCAG 2.5.7 keyboard and
+ * single-pointer reorder; `reorder` is the drag commit; `setAlias` sets or clears the rename.
  */
 export function useNavFavourites(): {
   favourites: NavFavourite[];
@@ -230,83 +333,44 @@ export function useNavFavourites(): {
   move: (navId: string, direction: 'up' | 'down') => void;
   reorder: (fromIndex: number, toIndex: number) => void;
   setAlias: (navId: string, alias: string | null) => void;
+  error: Err | null;
 } {
   const workspaceId = useWorkspaceId();
-  const [favourites, setFavourites] = useState<NavFavourite[]>(() => readNavFavourites(workspaceId));
+  const { value: favourites, set, error } = useNavPref(NAV_PREF.favourites, parseNavFavourites, serialiseFavourites);
 
-  // Re-read whenever the workspace changes OR another instance in this tab mutates the pins (the pin
-  // star and the lane are two consumers of one store). One effect covers both: it reloads immediately
-  // for the current scope and subscribes to the broadcast, re-reading on every notification.
   useEffect(() => {
-    const reload = (): void => setFavourites(readNavFavourites(workspaceId));
-    reload();
-    favouriteSubscribers.add(reload);
-    return () => {
-      favouriteSubscribers.delete(reload);
-    };
-  }, [workspaceId]);
+    liveFavourites.set(workspaceId ?? 'global', favourites);
+  }, [workspaceId, favourites]);
 
-  // Every mutator reads the CURRENT persisted list (never a stale closure), computes the next list,
-  // persists it, and broadcasts so all instances re-read. This keeps localStorage the single truth.
-  const mutate = useCallback(
-    (fn: (current: NavFavourite[]) => NavFavourite[]): void => {
-      const next = fn(readNavFavourites(workspaceId));
-      writeNavFavourites(workspaceId, next);
-      broadcastFavourites();
-    },
-    [workspaceId],
-  );
-
-  const isFavourite = useCallback(
-    (navId: string): boolean => favourites.some((f) => f.navId === navId),
-    [favourites],
-  );
-
+  const isFavourite = useCallback((navId: string) => favourites.some((f) => f.navId === navId), [favourites]);
   const pin = useCallback(
-    (navId: string): void =>
-      mutate((current) => (current.some((f) => f.navId === navId) ? current : [...current, { navId }])),
-    [mutate],
+    (navId: string) => set((current) => (current.some((f) => f.navId === navId) ? current : [...current, { navId }])),
+    [set],
   );
-
-  const unpin = useCallback(
-    (navId: string): void => mutate((current) => current.filter((f) => f.navId !== navId)),
-    [mutate],
-  );
-
+  const unpin = useCallback((navId: string) => set((current) => current.filter((f) => f.navId !== navId)), [set]);
   const toggleFavourite = useCallback(
-    (navId: string): void =>
-      mutate((current) =>
-        current.some((f) => f.navId === navId)
-          ? current.filter((f) => f.navId !== navId)
-          : [...current, { navId }],
+    (navId: string) =>
+      set((current) =>
+        current.some((f) => f.navId === navId) ? current.filter((f) => f.navId !== navId) : [...current, { navId }],
       ),
-    [mutate],
+    [set],
   );
-
   const move = useCallback(
-    (navId: string, direction: 'up' | 'down'): void =>
-      mutate((current) => {
+    (navId: string, direction: 'up' | 'down') =>
+      set((current) => {
         const index = current.findIndex((f) => f.navId === navId);
-        if (index === -1) return current;
         const target = direction === 'up' ? index - 1 : index + 1;
-        if (target < 0 || target >= current.length) return current;
+        if (index === -1 || target < 0 || target >= current.length) return current;
         const next = [...current];
         [next[index], next[target]] = [next[target], next[index]];
         return next;
       }),
-    [mutate],
+    [set],
   );
-
   const reorder = useCallback(
-    (fromIndex: number, toIndex: number): void =>
-      mutate((current) => {
-        if (
-          fromIndex === toIndex ||
-          fromIndex < 0 ||
-          toIndex < 0 ||
-          fromIndex >= current.length ||
-          toIndex >= current.length
-        ) {
+    (fromIndex: number, toIndex: number) =>
+      set((current) => {
+        if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= current.length || toIndex >= current.length) {
           return current;
         }
         const next = [...current];
@@ -314,97 +378,119 @@ export function useNavFavourites(): {
         next.splice(toIndex, 0, moved);
         return next;
       }),
-    [mutate],
+    [set],
   );
-
   const setAlias = useCallback(
-    (navId: string, alias: string | null): void =>
-      mutate((current) => {
+    (navId: string, alias: string | null) =>
+      set((current) => {
         const index = current.findIndex((f) => f.navId === navId);
         if (index === -1) return current;
-        const trimmed = alias === null ? '' : alias.trim();
+        const trimmed = alias === null ? '' : alias.trim().slice(0, MAX_ALIAS_LENGTH);
         const next = [...current];
         next[index] = trimmed.length > 0 ? { navId, alias: trimmed } : { navId };
         return next;
       }),
-    [mutate],
+    [set],
   );
 
-  return { favourites, isFavourite, pin, unpin, toggleFavourite, move, reorder, setAlias };
+  return { favourites, isFavourite, pin, unpin, toggleFavourite, move, reorder, setAlias, error };
 }
 
-// --- Resizable rail: the width and the collapsed icon mode (D118 A4) ------------------------------
+// --- Expand state (A1) and the two sections (D178) ---------------------------------------------------
+
+const serialiseOverrides = (o: NavOverrides): PrefValue => o;
+
+/** No accordion: the default for a caller that holds no top-level groups (one stable identity). */
+const NO_GROUPS: readonly string[] = [];
 
 /**
- * The rail's width bounds and its snapping widths (A4, recommendation A). The splitter clamps a free
- * resize to [MIN, MAX]; a double-click on the separator resets to DEFAULT; dragging the separator
- * below MIN snaps the rail to the ICON strip. These are exported so the separator component and its
- * tests read one source of truth rather than each restating the numbers.
+ * The rail's expand/collapse state. A stored override wins; otherwise a node is open exactly when it is
+ * in `autoExpand` (the ancestors of the lit tree row, which `resolveRailActive` names), and collapsed
+ * everywhere else. The top-level headed groups (`topLevel`) are an accordion held at render: at most ONE
+ * is open (`resolveOpenTopGroup`: the lit row's group unless closed by hand, else the first opened).
+ * `toggle(navId)` stores the opposite of the RESOLVED state, so a group shown closed because another
+ * holds the lit row opens on the first click; opening a top-level group closes its siblings.
  */
-export const RAIL_MIN_WIDTH = 200;
-export const RAIL_MAX_WIDTH = 400;
-export const RAIL_DEFAULT_WIDTH = 240;
-export const RAIL_ICON_WIDTH = 56;
-
-/** The `localStorage` key prefix for the rail's width and collapsed flag. One entry per workspace
- *  scope, a sibling of the expand-overrides and favourites entries above, so a Treuhänder's rail
- *  width is a property of the books in front of them rather than of the session. */
-export const NAV_RAIL_KEY_PREFIX = 'till-nav-rail:';
-
-/** The persisted rail geometry: the last EXPANDED width (always kept, even while collapsed, so
- *  expanding restores the width the user chose) and whether the rail is collapsed to the icon strip. */
-export interface RailPrefs {
-  width: number;
-  collapsed: boolean;
+export function useNavExpansion(
+  autoExpand: ReadonlySet<string>,
+  topLevel: readonly string[] = NO_GROUPS,
+): {
+  isExpanded: (navId: string) => boolean;
+  toggle: (navId: string, exclusiveWith?: readonly string[]) => void;
+} {
+  const { value: overrides, set } = useNavPref(NAV_PREF.expanded, parseNavOverrides, serialiseOverrides);
+  const resolvedIn = useCallback(
+    (current: NavOverrides, navId: string): boolean =>
+      topLevel.includes(navId)
+        ? resolveOpenTopGroup(topLevel, current, autoExpand) === navId
+        : (current[navId] ?? autoExpand.has(navId)),
+    [topLevel, autoExpand],
+  );
+  const isExpanded = useCallback((navId: string): boolean => resolvedIn(overrides, navId), [overrides, resolvedIn]);
+  const toggle = useCallback(
+    (navId: string, exclusiveWith?: readonly string[]): void =>
+      set((current) => {
+        const opened = !resolvedIn(current, navId);
+        const next: NavOverrides = { ...current, [navId]: opened };
+        const siblings = exclusiveWith ?? (topLevel.includes(navId) ? topLevel : undefined);
+        if (opened && siblings !== undefined) {
+          // The accordion closes an open sibling with an explicit override; a sibling that is closed
+          // by default keeps NO override, so a later deep link into it still opens it (the active row
+          // is never hidden in a group the person merely passed by).
+          for (const sibling of siblings) {
+            if (sibling === navId) continue;
+            if (autoExpand.has(sibling)) next[sibling] = false;
+            else delete next[sibling];
+          }
+        }
+        return next;
+      }),
+    [set, autoExpand, resolvedIn, topLevel],
+  );
+  return { isExpanded, toggle };
 }
 
-function railScopeKey(workspaceId: string | null): string {
-  return `${NAV_RAIL_KEY_PREFIX}${workspaceId ?? 'global'}`;
+const serialiseSectionsPref = (s: NavSections): PrefValue => serialiseSections(s);
+
+/** The two folding sections, Favoriten and Menü (D178), persisted in `nav.sections`. */
+export function useNavSections(): { sections: NavSections; toggleSection: (section: keyof NavSections) => void } {
+  const { value: sections, set } = useNavPref(NAV_PREF.sections, parseNavSections, serialiseSectionsPref);
+  const toggleSection = useCallback(
+    (section: keyof NavSections) => set((current) => ({ ...current, [section]: !current[section] })),
+    [set],
+  );
+  return { sections, toggleSection };
 }
 
-/** Clamp a candidate width into the allowed range, rounding to a whole pixel. A non-finite value
- *  (a corrupted store, a bad drag maths) falls back to the default rather than to NaN. */
-export function clampRailWidth(width: number): number {
-  if (!Number.isFinite(width)) return RAIL_DEFAULT_WIDTH;
-  return Math.min(RAIL_MAX_WIDTH, Math.max(RAIL_MIN_WIDTH, Math.round(width)));
+// --- The personal menu (D178 point 6) ------------------------------------------------------------------
+
+/** The canonical layout is stored as `{}`, so a reset and an untouched menu are the same row. */
+const serialiseLayout = (layout: MenuLayout): PrefValue =>
+  isCanonicalMenuLayout(layout) ? {} : asPref({ v: 1, ...layout });
+
+/** The personal menu order, normalised against the catalog on every read. */
+export function useMenuLayout(): {
+  layout: MenuLayout;
+  setLayout: (next: MenuLayout | ((current: MenuLayout) => MenuLayout)) => void;
+  resetLayout: () => void;
+  isCustom: boolean;
+  error: Err | null;
+} {
+  const { value: layout, set, reset, error } = useNavPref(NAV_PREF.menuLayout, normalizeMenuLayout, serialiseLayout);
+  return { layout, setLayout: set, resetLayout: reset, isCustom: !isCanonicalMenuLayout(layout), error };
 }
 
-/** Read a scope's stored rail geometry. Any parse or storage failure, or a stored value that is not
- *  the expected shape, reads as the default geometry (240px, expanded), mirroring `readNavOverrides`. */
-export function readRailPrefs(workspaceId: string | null): RailPrefs {
-  const fallback: RailPrefs = { width: RAIL_DEFAULT_WIDTH, collapsed: false };
-  try {
-    const raw = window.localStorage.getItem(railScopeKey(workspaceId));
-    if (raw === null) return fallback;
-    const parsed: unknown = JSON.parse(raw);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return fallback;
-    const rec = parsed as Record<string, unknown>;
-    const width = typeof rec.width === 'number' ? clampRailWidth(rec.width) : RAIL_DEFAULT_WIDTH;
-    const collapsed = typeof rec.collapsed === 'boolean' ? rec.collapsed : false;
-    return { width, collapsed };
-  } catch {
-    return fallback;
-  }
-}
+// --- The resizable rail (A4) ------------------------------------------------------------------------
 
-/** Persist a scope's rail geometry. Never throws: a rail that cannot remember its width still works. */
-export function writeRailPrefs(workspaceId: string | null, prefs: RailPrefs): void {
-  try {
-    window.localStorage.setItem(railScopeKey(workspaceId), JSON.stringify(prefs));
-  } catch {
-    // A rail that cannot persist its width still navigates this session.
-  }
-}
+const serialiseRail = (r: RailPrefs): PrefValue => asPref(r);
+
+/** How long a resize must rest before it is written: a drag is one write, not one per pointer move. */
+export const RAIL_WRITE_DELAY_MS = 400;
 
 /**
- * The rail's width and collapsed state, resolved and persisted per workspace.
- *
- * `setWidth(px)` records a free-resize or a keyboard step: it clamps into [MIN, MAX] and, because a
- * chosen width is inherently an expanded rail, it also clears the collapsed flag. `setCollapsed(b)`
- * flips the icon mode while KEEPING the stored width, so expanding restores the last width the user
- * chose. `reset()` returns to the default width, expanded (the separator's double-click). Every
- * mutation persists synchronously, and the stored geometry reloads when the workspace changes,
- * exactly like the expand overrides and the favourites.
+ * The rail's width and icon mode. `setWidth` (a drag step, an arrow key) moves the rail at once and is
+ * written once the resize rests; it also clears the icon mode, since a chosen width is an expanded rail.
+ * `setCollapsed` keeps the stored width, so expanding restores it. `reset` is the double-click.
  */
 export function useRailPrefs(): {
   width: number;
@@ -413,43 +499,182 @@ export function useRailPrefs(): {
   setCollapsed: (collapsed: boolean) => void;
   reset: () => void;
 } {
-  const workspaceId = useWorkspaceId();
-  const [prefs, setPrefs] = useState<RailPrefs>(() => readRailPrefs(workspaceId));
+  const { value: prefs, set } = useNavPref(NAV_PREF.rail, parseRailPrefs, serialiseRail);
+  const [draft, setDraft] = useState<number | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pending = useRef<number | null>(null);
 
-  // Reload the remembered geometry when the workspace changes. Not on first mount (the initializer
-  // already read it), mirroring the expand-overrides reload above.
-  const [loadedScope, setLoadedScope] = useState<string | null>(workspaceId);
-  useEffect(() => {
-    if (loadedScope === workspaceId) return;
-    setLoadedScope(workspaceId);
-    setPrefs(readRailPrefs(workspaceId));
-  }, [workspaceId, loadedScope]);
+  const flush = useCallback((): void => {
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
+    const width = pending.current;
+    pending.current = null;
+    if (width !== null) set({ width, collapsed: false });
+    setDraft(null);
+  }, [set]);
+
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const setWidth = useCallback(
     (width: number): void => {
-      const next: RailPrefs = { width: clampRailWidth(width), collapsed: false };
-      writeRailPrefs(workspaceId, next);
-      setPrefs(next);
+      const next = clampRailWidth(width);
+      pending.current = next;
+      setDraft(next);
+      if (timer.current !== null) clearTimeout(timer.current);
+      timer.current = setTimeout(flush, RAIL_WRITE_DELAY_MS);
     },
-    [workspaceId],
+    [flush],
   );
-
   const setCollapsed = useCallback(
     (collapsed: boolean): void => {
-      setPrefs((current) => {
-        const next: RailPrefs = { width: current.width, collapsed };
-        writeRailPrefs(workspaceId, next);
-        return next;
-      });
+      if (timer.current !== null) clearTimeout(timer.current);
+      timer.current = null;
+      const width = pending.current ?? prefs.width;
+      pending.current = null;
+      setDraft(null);
+      set({ width, collapsed });
     },
-    [workspaceId],
+    [set, prefs.width],
   );
-
   const reset = useCallback((): void => {
-    const next: RailPrefs = { width: RAIL_DEFAULT_WIDTH, collapsed: false };
-    writeRailPrefs(workspaceId, next);
-    setPrefs(next);
-  }, [workspaceId]);
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
+    pending.current = null;
+    setDraft(null);
+    set({ width: RAIL_DEFAULT_WIDTH, collapsed: false });
+  }, [set]);
 
-  return { width: prefs.width, collapsed: prefs.collapsed, setWidth, setCollapsed, reset };
+  return {
+    width: draft ?? prefs.width,
+    collapsed: draft !== null ? false : prefs.collapsed,
+    setWidth,
+    setCollapsed,
+    reset,
+  };
+}
+
+// --- The one rail model (D178) ---------------------------------------------------------------------
+
+/** A favourite joined to its catalog surface (a pin whose surface is gone is dropped, never shown broken). */
+export interface ResolvedFavourite {
+  navId: string;
+  surface: NavItem;
+  alias?: string;
+}
+
+export interface RailState {
+  look: ReturnType<typeof useNavLook>;
+  favourites: ReturnType<typeof useNavFavourites>;
+  /** The pins that resolve to a surface, in order. */
+  resolvedFavourites: ResolvedFavourite[];
+  /** The folded sections AS SHOWN: the Menü folds only while it has a header (there are favourites). */
+  sections: NavSections;
+  toggleSection: (section: keyof NavSections) => void;
+  /** The Menü header shows only above favourites (judge round 1 M3): alone, the menu needs no title. */
+  menuHeader: boolean;
+  menu: ReturnType<typeof useMenuLayout>;
+  /** The visible personal tree, resolved (hidden rows and empty headers left out). */
+  rail: readonly NavGroup[];
+  /** The ONE active row (D178 point 16), for the expanded rail. */
+  active: RailActive;
+  /** The folded section header that stands in for the open page (`aria-current="location"`), or null. */
+  location: RailLocation;
+  expansion: ReturnType<typeof useNavExpansion>;
+  /** "Menü anpassen" is open (D178 point 6). */
+  customising: boolean;
+  setCustomising: (open: boolean) => void;
+}
+
+const RailContext = createContext<RailState | null>(null);
+
+/** Read every rail preference once, and compute the rail's one model. */
+function useRailModel(): RailState {
+  const { pathname } = useLocation();
+  const look = useNavLook();
+  const favourites = useNavFavourites();
+  const { sections: stored, toggleSection } = useNavSections();
+  const menu = useMenuLayout();
+  const [customising, setCustomising] = useState(false);
+
+  const resolvedFavourites = useMemo<ResolvedFavourite[]>(
+    () =>
+      favourites.favourites.flatMap((f) => {
+        const surface = surfaceByNavId(f.navId);
+        if (surface === undefined) return [];
+        const item: NavItem = { navId: surface.navId, path: surface.path, labelKey: surface.labelKey, icon: surface.icon };
+        return [f.alias === undefined ? { navId: f.navId, surface: item } : { navId: f.navId, surface: item, alias: f.alias }];
+      }),
+    [favourites.favourites],
+  );
+  const menuHeader = resolvedFavourites.length > 0;
+  // A Menü without a header cannot be unfolded, so it is never shown folded.
+  const sections = useMemo<NavSections>(
+    () => ({ favourites: stored.favourites, menu: stored.menu && menuHeader }),
+    [stored.favourites, stored.menu, menuHeader],
+  );
+  const rail = useMemo(() => resolveNavTree(personalNavTree(menu.layout, { visibleOnly: true })), [menu.layout]);
+  const topLevel = useMemo(() => rail.filter((g) => g.labelKey !== null).map((g) => g.navId), [rail]);
+  const pinned = useMemo(
+    () => resolvedFavourites.map((f) => ({ navId: f.navId, path: f.surface.path })),
+    [resolvedFavourites],
+  );
+  const active = useMemo(
+    () =>
+      resolveRailActive({
+        pathname,
+        favourites: sections.favourites ? [] : pinned,
+        // While "Menü anpassen" is open the editor stands where the tree was: no tree row is on screen.
+        rail: sections.menu || customising ? [] : rail,
+        rule: look.activeRule,
+      }),
+    [pathname, sections, pinned, rail, look.activeRule, customising],
+  );
+  const location = useMemo(
+    () => resolveSectionLocation(active, resolveRailActive({ pathname, favourites: pinned, rail, rule: look.activeRule })),
+    [active, pathname, pinned, rail, look.activeRule],
+  );
+  const expansion = useNavExpansion(active.expand, topLevel);
+
+  return {
+    look,
+    favourites,
+    resolvedFavourites,
+    sections,
+    toggleSection,
+    menuHeader,
+    menu,
+    rail,
+    active,
+    location,
+    expansion,
+    customising,
+    setCustomising,
+  };
+}
+
+/**
+ * The rail's one model, for everything inside it: the Favoriten lane, the menu, its editor, the icon
+ * strip and the status menu's "Menü anpassen". Mount it once around the rail, inside the router.
+ */
+export function RailStateProvider({ children }: { children: ReactNode }) {
+  useLegacyNavImport();
+  const state = useRailModel();
+  return createElement(RailContext.Provider, { value: state }, children);
+}
+
+/** The rail's model. Throws outside `RailStateProvider`, which is a wiring bug, not a runtime state. */
+export function useRail(): RailState {
+  const ctx = useContext(RailContext);
+  if (ctx === null) throw new Error('useRail must be used within a RailStateProvider.');
+  return ctx;
+}
+
+/** The rail's model, or null outside a provider (the status menu renders in isolation in its tests). */
+export function useRailOptional(): RailState | null {
+  return useContext(RailContext);
 }

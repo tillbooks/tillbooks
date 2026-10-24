@@ -11,9 +11,10 @@
  * pointer press outside closes without stealing focus. Focus is roving, so the menu is one tab stop.
  * A disabled item stays focusable and says so (`aria-disabled`), per the APG.
  */
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
-import { CaretGlyph } from './glyphs';
+import { CaretGlyph, SureGlyph } from './glyphs';
 import '../../components/OverflowMenu.css';
 
 export interface MenuButtonItem {
@@ -21,6 +22,11 @@ export interface MenuButtonItem {
   label: string;
   onSelect: () => void;
   disabled?: boolean;
+  /**
+   * A toggle (the toolbar's "Filter" menu, D167): the item is a `menuitemcheckbox` with `aria-checked`,
+   * and the check glyph says it is on (never colour alone).
+   */
+  checked?: boolean;
 }
 
 export interface MenuButtonProps {
@@ -33,14 +39,23 @@ export interface MenuButtonProps {
   caption?: string;
   disabled?: boolean;
   className?: string;
+  /** The quiet trigger (a ghost button), for a tool that is not an action: the toolbar's "Filter". */
+  quiet?: boolean;
+  /**
+   * D177: the list in the overlay layer (a portal on `document.body`), fixed to the trigger: below it, or
+   * above it when there is no room, right-aligned. A clipping container (the Details panel) never cuts it.
+   */
+  portal?: boolean;
 }
 
-export function MenuButton({ label, icon, items, caption, disabled = false, className }: MenuButtonProps) {
+export function MenuButton({ label, icon, items, caption, disabled = false, className, quiet = false, portal = false }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [place, setPlace] = useState<CSSProperties | null>(null);
   const menuId = useId();
   const triggerId = useId();
   const captionId = useId();
@@ -63,20 +78,48 @@ export function MenuButton({ label, icon, items, caption, disabled = false, clas
     setActive(-1);
   }, []);
 
+  // A portalled list is hidden until it is placed; the item takes the focus once it can (a hidden
+  // element refuses it, and Escape would then reach nothing).
+  const placed = !portal || place !== null;
   useEffect(() => {
-    if (!open || active < 0) return;
+    if (!open || active < 0 || !placed) return;
     itemRefs.current[active]?.focus();
-  }, [open, active]);
+  }, [open, active, placed]);
 
   useEffect(() => {
     if (!open) return undefined;
     const onDown = (event: MouseEvent) => {
       const root = rootRef.current;
+      if (listRef.current?.contains(event.target as Node) === true) return;
       if (root !== null && !root.contains(event.target as Node)) closeQuietly();
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [open, closeQuietly]);
+
+  useLayoutEffect(() => {
+    if (!portal || !open) {
+      setPlace(null);
+      return undefined;
+    }
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect === undefined) return undefined;
+    const below = window.innerHeight - rect.bottom;
+    const estimate = items.length * 46 + (caption !== undefined ? 40 : 0) + 16;
+    const right = Math.max(8, window.innerWidth - rect.right);
+    setPlace(below >= estimate || below >= rect.top ? { position: 'fixed', top: rect.bottom + 4, right, left: 'auto' } : { position: 'fixed', bottom: window.innerHeight - rect.top + 4, top: 'auto', right, left: 'auto' });
+    const close = () => closeQuietly();
+    const onScroll = (event: Event) => {
+      if (listRef.current?.contains(event.target as Node) === true) return;
+      closeQuietly();
+    };
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [portal, open, items.length, caption, closeQuietly]);
 
   const onMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     switch (event.key) {
@@ -114,7 +157,7 @@ export function MenuButton({ label, icon, items, caption, disabled = false, clas
         type="button"
         id={triggerId}
         ref={triggerRef}
-        className="btn btn--secondary bank-menu__trigger"
+        className={`btn ${quiet ? 'btn--ghost btn--sm' : 'btn--secondary'} bank-menu__trigger`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -134,8 +177,17 @@ export function MenuButton({ label, icon, items, caption, disabled = false, clas
         <span>{label}</span>
         <CaretGlyph size={16} />
       </button>
-      {open && (
-        <div className="overflow-menu-list bank-menu__list">
+      {open && (portal ? createPortal(list(), document.body) : list())}
+    </div>
+  );
+
+  function list() {
+    return (
+        <div
+          className={`overflow-menu-list bank-menu__list${portal ? ' overflow-menu-list--portal' : ''}`}
+          ref={listRef}
+          style={portal ? (place ?? { position: 'fixed', visibility: 'hidden' }) : undefined}
+        >
           <div
             className="bank-menu__items"
             id={menuId}
@@ -148,7 +200,8 @@ export function MenuButton({ label, icon, items, caption, disabled = false, clas
             <button
               key={item.key}
               type="button"
-              role="menuitem"
+              role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+              aria-checked={item.checked}
               ref={(node) => {
                 itemRefs.current[index] = node;
               }}
@@ -162,6 +215,11 @@ export function MenuButton({ label, icon, items, caption, disabled = false, clas
               }}
               onFocus={() => setActive(index)}
             >
+              {item.checked !== undefined && (
+                <span className="bank-menu__check" aria-hidden="true">
+                  {item.checked ? <SureGlyph size={16} /> : null}
+                </span>
+              )}
               {item.label}
             </button>
           ))}
@@ -172,7 +230,6 @@ export function MenuButton({ label, icon, items, caption, disabled = false, clas
             </p>
           )}
         </div>
-      )}
-    </div>
-  );
+    );
+  }
 }

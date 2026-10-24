@@ -74,9 +74,23 @@ WHERE type = 'acquisition';
 -- the acquisition precedent above. Under D12's supported concurrent-writer topology (Studio plus a
 -- till-mcp subprocess on one SQLite file) two writers can both read the active status before either
 -- commits, so the structural guarantee, not an out-of-tx read, is what makes exactly-one-disposal hold.
-CREATE UNIQUE INDEX IF NOT EXISTS asset_transaction_one_disposal
-ON asset_transaction (workspace_id, asset_id)
-WHERE type = 'disposal';
+--
+-- D170: the guard counts LIVE disposals only. asset_transaction_reverse can take a disposal back (the
+-- asset returns to the register), and a partial unique index cannot see the compensating row, so it
+-- would refuse every later, real disposal of that asset for good. The index is replaced by a trigger
+-- that raises under the same name; the engine's guarded terminal UPDATE still fires first.
+DROP INDEX IF EXISTS asset_transaction_one_disposal;
+CREATE TRIGGER IF NOT EXISTS asset_transaction_one_live_disposal
+BEFORE INSERT ON asset_transaction
+WHEN NEW.type = 'disposal' AND EXISTS (
+  SELECT 1 FROM asset_transaction d
+   WHERE d.workspace_id = NEW.workspace_id AND d.asset_id = NEW.asset_id AND d.type = 'disposal'
+     AND NOT EXISTS (SELECT 1 FROM asset_transaction r
+                      WHERE r.workspace_id = d.workspace_id AND r.source_document_type = 'asset_transaction'
+                        AND r.source_document_id = d.id))
+BEGIN
+  SELECT RAISE(ABORT, 'asset_transaction_one_disposal');
+END;
 
 -- EXACTLY ONE opening baseline per asset (H07). An opening balance seats the migrated carrying cost of
 -- an asset that predates the ledger; seeding it twice double-capitalises silently, because OP11
@@ -90,6 +104,14 @@ WHERE type = 'disposal';
 CREATE UNIQUE INDEX IF NOT EXISTS asset_transaction_one_opening
 ON asset_transaction (workspace_id, asset_id)
 WHERE type = 'opening';
+
+-- D170: EXACTLY ONE compensating row per corrected event. asset_transaction_reverse names the row it
+-- takes back as source_document_type='asset_transaction' / source_document_id; the engine re-checks
+-- inside its write transaction, and this partial unique index is the race guard underneath (the
+-- acquisition / disposal / opening precedents above).
+CREATE UNIQUE INDEX IF NOT EXISTS asset_transaction_one_reversal
+ON asset_transaction (workspace_id, source_document_id)
+WHERE source_document_type = 'asset_transaction';
 
 -- §H-AUDIT: the sub-ledger event is append-only. A recorded transaction can be neither updated nor
 -- deleted; correction is a reversing entry plus a compensating transaction, never a destructive edit.

@@ -15,6 +15,7 @@
       "legend": "Journal filtern",
       "from": "Von",
       "to": "Bis",
+      "number": "Beleg-Nr.",
       "account": "Konto",
       "source": "Quelle",
       "status": "Status",
@@ -24,6 +25,7 @@
     },
     "columns": {
       "date": "Datum",
+      "number": "Beleg-Nr.",
       "ref": "Referenz",
       "description": "Buchungstext",
       "amount": "Betrag",
@@ -86,6 +88,7 @@
     "newTitle": "Neue Buchung",
     "editTitle": "Entwurf bearbeiten",
     "viewTitle": "Buchung ansehen",
+    "viewTitleNumbered": "Beleg-Nr. {number}",
     "date": "Datum",
     "ref": "Referenz",
     "account": "Konto",
@@ -122,7 +125,12 @@
       "void_vendor_bill": "Diese Buchung gehört zu einer Kreditorenrechnung: storniere die Rechnung unter Kreditoren.",
       "transition_document": "Diese Buchung gehört zu einer Rechnung oder Gutschrift: storniere den Beleg unter Belege.",
       "asset_depreciation_run_reverse": "Diese Buchung gehört zu einem Abschreibungslauf: storniere den Lauf im Anlagenregister.",
-      "inventory_valuation_reverse": "Diese Buchung gehört zu einer Lagerbewertung: storniere den Bewertungslauf unter Bewertungsläufe."
+      "inventory_valuation_reverse": "Diese Buchung gehört zu einer Lagerbewertung: storniere den Bewertungslauf unter Bewertungsläufe.",
+      "landed_cost_reverse": "Diese Buchung gehört zu einem Landkostenbeleg: storniere den Beleg unter Landkosten.",
+      "expense_claim_reverse": "Diese Buchung gehört zu einer Spesenabrechnung: storniere die Abrechnung unter Personal.",
+      "dunning_fee_reverse": "Diese Buchung gehört zu den Mahngebühren eines Mahnlaufs: storniere die Gebühren im Mahnlauf unter Mahnwesen.",
+      "asset_transaction_reverse": "Diese Buchung gehört zu einer Anlage: storniere sie im Journal der Anlage im Anlagenregister.",
+      "wage_journal_reverse": "Diese Buchung ist ein Lohnjournal aus deiner Lohnbuchhaltung: storniere es im Tab Lohn unter Personal."
     },
     "ownedByShowLine": "Bankzeile zeigen",
     "ownedByGoTo": {
@@ -134,7 +142,10 @@
       "bills": "Zu den Kreditoren",
       "documents": "Zu den Belegen",
       "assets": "Zum Anlagenregister",
-      "inventory-valuation-runs": "Zu den Bewertungsläufen"
+      "inventory-valuation-runs": "Zu den Bewertungsläufen",
+      "landed-costs": "Zu den Landkosten",
+      "personal": "Zum Personal",
+      "dunning": "Zum Mahnwesen"
     },
     "text": "Text",
     "amount": "Betrag",
@@ -181,7 +192,33 @@
     "vatAccountMissingLink": "Kontenplan öffnen",
     "notFound": "Diese Buchung gibt es in diesem Arbeitsbereich nicht. Schliesse sie und wähle eine Buchung im Journal.",
     "mwstNamed": "{label}, {code} {name}",
-    "supplyDateCaption": "Leistungsdatum {date}"
+    "supplyDateCaption": "Leistungsdatum {date}",
+    "vorlage": {
+      "label": "Vorlage",
+      "none": "Ohne Vorlage",
+      "unnamed": "Vorlage ohne Namen",
+      "preview": "So wird gebucht",
+      "save": "☆ Als Vorlage speichern",
+      "saved": "Vorlage «{name}» gespeichert. Du findest sie oben unter «Vorlage».",
+      "refusal": {
+        "rule_not_found": "Diese Vorlage gibt es nicht mehr. Wähl eine andere oder buch ohne Vorlage.",
+        "wrong_scope": "Das ist eine Regel für Bankzeilen, keine Vorlage. Wähl eine Vorlage.",
+        "ask_missing": "Gib jeden Betrag ein, grösser als null.",
+        "rest_is_zero": "Der Rest wäre 0.00. Prüf die Beträge.",
+        "rest_changes_side": "Mit diesen Beträgen käme der Rest auf die andere Seite. Prüf die Beträge.",
+        "other": "So lässt sich die Vorlage nicht buchen.",
+        "rule_invalid": "Ein Konto oder ein MWST-Code dieser Vorlage gilt nicht mehr, zum Beispiel ist ein Konto jetzt ein Bankkonto. Bearbeite die Vorlage unter «Buchungsregeln»."
+      },
+      "unusable": "{name}: gesperrt, {reason}",
+      "invalid": {
+        "account_archived": "ein Konto ist archiviert",
+        "account_not_bookable": "auf ein Konto darf eine Vorlage nicht mehr buchen",
+        "tax_code_inactive": "ein MWST-Code gilt nicht mehr",
+        "vat_not_applicable": "auf einem Konto fällt keine MWST an",
+        "recipe_unreadable": "sie lässt sich nicht mehr lesen",
+        "other": "ein Konto oder ein MWST-Code gilt nicht mehr"
+      }
+    }
   },
   "errors": {
     "unbalanced": "Die Buchung ist nicht ausgeglichen. Soll muss gleich Haben sein.",
@@ -253,7 +290,7 @@
   "help": {
     "Journal": {
       "title": "Journal",
-      "body": "Das Journal ist die unveränderliche Liste aller in TILL verbuchten Einträge dieses Arbeitsbereichs. Verbuchte Einträge werden nie umgeschrieben: Eine Korrektur ist immer eine Stornobuchung, die den Fehler sichtbar aufhebt.\n\nJede Zeile trägt ihr Konto, ihren Betrag und, wo MWST im Spiel ist, ihren Steuercode. Aus dem Steuercode wird später die Abrechnung gerechnet.\n\nEin übernommenes Altsystem-Journal erscheint daneben als eigenes Archiv. Es gehört nicht zur laufenden Belegkette.",
+      "body": "Das Journal ist die unveränderliche Liste aller in TILL verbuchten Einträge dieses Arbeitsbereichs. Verbuchte Einträge werden nie umgeschrieben: Eine Korrektur ist immer eine Stornobuchung, die den Fehler sichtbar aufhebt.\n\nJede Zeile trägt ihr Konto, ihren Betrag und, wo MWST im Spiel ist, ihren Steuercode. Aus dem Steuercode wird später die Abrechnung gerechnet.\n\nEin übernommenes Altsystem-Journal erscheint daneben als eigenes Archiv. Es gehört nicht zur laufenden Belegkette.\n\nWiederkehrende Buchungen speicherst du als Vorlage: Buchungssatz erfassen, dann «☆ Als Vorlage speichern». Wähl sie später oben unter «Vorlage», gib die gefragten Beträge ein, und TILL rechnet den Rest und die MWST.",
       "concepts": [
         "vorsteuer"
       ]

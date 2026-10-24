@@ -29,6 +29,7 @@ import {
   resolveServedActor,
   resolveSessionActor,
   STUDIO_CLIENT_NAME,
+  type HostStudioKey,
   type ServedIdentity,
   type StudioKeyCheck,
 } from './session.js';
@@ -58,12 +59,13 @@ export interface McpHttpOptions {
    */
   servedMode?: ServedModeConfig;
   /**
-   * The per-launch Studio key of the host that serves the Studio (`till up`, the dev bridge). A session
+   * The Studio key of the host that serves the Studio (`till up`, the dev bridge), read on every
+   * request so a rotation (D166) bites at once, on open sessions too. A session
    * opened with it is the human `studio` seat; a session opened without it is the governed `agent`
    * seat, whatever client name it declares; a session opened with any OTHER key is refused. Absent
    * (`till serve`, which serves no Studio) means no request can hold the Studio seat on this host.
    */
-  studioKey?: string;
+  studioKey?: HostStudioKey;
 }
 
 /** One live MCP session: its transport plus, in served mode, the subject it was opened for. */
@@ -80,7 +82,7 @@ const STUDIO_KEY_INVALID = {
   ok: false,
   error: 'studio_key_invalid',
   message:
-    'This request carries a Studio key this TILL did not issue. TILL mints a new key on every start: open the Studio through the link till up printed.',
+    'This request carries a Studio key this TILL does not hold (it was never issued here, or it was rotated). The Studio reopens itself with the current key.',
 } as const;
 
 /** The refusal for a local session that declares the Studio's name but carries no key. */
@@ -88,7 +90,7 @@ const STUDIO_KEY_REQUIRED = {
   ok: false,
   error: 'studio_key_required',
   message:
-    'The Studio needs the key from the link till up printed (it ends in #k=). An agent connects under its own name.',
+    'The Studio needs the Studio key, which reaches it out of band (TILL.app, the opened link, or a reopen). An agent connects under its own name.',
 } as const;
 
 /** The most an `initialize` body may be before it is refused unread (it is a few hundred bytes). */

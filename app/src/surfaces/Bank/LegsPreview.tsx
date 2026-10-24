@@ -14,21 +14,36 @@ import { useT, formatMoney } from '../../i18n';
 import type { PreviewLine } from './bankCompose';
 import type { Lookups } from './lookups';
 import { accountLabel } from './lookups';
+import { Tooltip } from '../../components/Tooltip';
+
+/**
+ * D177: a line whose figure is not known yet (a Buchungsregel's asked amount still empty): the account
+ * shows, its figure reads "?" on the side named.
+ */
+export type PreviewRow = PreviewLine & {
+  unknownSide?: 'debit' | 'credit';
+  /** D177 final judge, FAIL 1: a rest that comes to 0 shows "0.00" on the side it books. */
+  zeroSide?: 'debit' | 'credit';
+};
 
 export interface LegsPreviewProps {
   title: string;
-  lines: readonly PreviewLine[] | null;
+  lines: readonly PreviewRow[] | null;
   currency: string;
   lookups: Lookups;
   /** Shown instead of the table while the figures are not in, or when there is nothing to show. */
   note?: string;
   /** A second line under the title (the entry stays unchanged, ...). */
   subtitle?: string;
+  /** D177: a Durchlaufkonto's lines, shown in the dim ink (they net to zero), never folded away. */
+  transitIds?: ReadonlySet<string>;
 }
 
-export function LegsPreview({ title, lines, currency, lookups, note, subtitle }: LegsPreviewProps) {
+export function LegsPreview({ title, lines, currency, lookups, note, subtitle, transitIds }: LegsPreviewProps) {
   const t = useT();
   const money = (minor: number) => (minor === 0 ? '' : formatMoney(minor, currency).slice(currency.length + 1));
+  const zero = formatMoney(0, currency).slice(currency.length + 1);
+  const cell = (l: PreviewRow, side: 'debit' | 'credit') => (l.unknownSide === side ? '?' : l.zeroSide === side ? zero : money(side === 'debit' ? l.debit : l.credit));
   return (
     <section className="bank-legs" aria-label={title}>
       <h3 className="bank-section-title">{title}</h3>
@@ -37,6 +52,11 @@ export function LegsPreview({ title, lines, currency, lookups, note, subtitle }:
         <p className="bank-legs__note">{note ?? t('bankInbox.legs.pickFirst')}</p>
       ) : (
         <table className="bank-legs__table">
+          <colgroup>
+            <col />
+            <col className="bank-legs__col-num" />
+            <col className="bank-legs__col-num" />
+          </colgroup>
           <thead>
             <tr>
               <th scope="col">{t('bankInbox.legs.account')}</th>
@@ -52,12 +72,16 @@ export function LegsPreview({ title, lines, currency, lookups, note, subtitle }:
             {lines.map((l, i) => {
               const label = accountLabel(lookups, l.accountId) || t('bankInbox.legs.unknownAccount');
               return (
-              <tr key={`${l.accountId}-${i}`}>
-                <td className="bank-legs__account" title={label}>
-                  {label}
+              <tr key={`${l.accountId}-${i}`} data-transit={transitIds?.has(l.accountId) === true ? 'true' : undefined} data-zero={l.zeroSide !== undefined ? 'true' : undefined}>
+                {/* One line per account (UX judge, item 3): a name the column cannot hold ends in an
+                    ellipsis, the whole of it in its tooltip. */}
+                <td className="bank-legs__account">
+                  <Tooltip content={label}>
+                    <span className="bank-legs__name">{label}</span>
+                  </Tooltip>
                 </td>
-                <td className="bank-legs__num t-num">{money(l.debit)}</td>
-                <td className="bank-legs__num t-num">{money(l.credit)}</td>
+                <td className="bank-legs__num t-num">{cell(l, 'debit')}</td>
+                <td className="bank-legs__num t-num">{cell(l, 'credit')}</td>
               </tr>
               );
             })}

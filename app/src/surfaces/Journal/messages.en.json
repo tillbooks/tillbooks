@@ -15,6 +15,7 @@
       "legend": "Filter the journal",
       "from": "From",
       "to": "To",
+      "number": "Voucher no.",
       "account": "Account",
       "source": "Source",
       "status": "Status",
@@ -24,6 +25,7 @@
     },
     "columns": {
       "date": "Date",
+      "number": "Voucher no.",
       "ref": "Reference",
       "description": "Description",
       "amount": "Amount",
@@ -86,6 +88,7 @@
     "newTitle": "New entry",
     "editTitle": "Edit draft",
     "viewTitle": "View entry",
+    "viewTitleNumbered": "Voucher no. {number}",
     "date": "Date",
     "ref": "Reference",
     "account": "Account",
@@ -122,7 +125,12 @@
       "void_vendor_bill": "This entry belongs to a vendor bill: void the bill under Vendor bills.",
       "transition_document": "This entry belongs to an invoice or credit note: cancel the document under Documents.",
       "asset_depreciation_run_reverse": "This entry belongs to a depreciation run: reverse the run in the Asset register.",
-      "inventory_valuation_reverse": "This entry belongs to an inventory valuation: reverse the valuation run under Valuation runs."
+      "inventory_valuation_reverse": "This entry belongs to an inventory valuation: reverse the valuation run under Valuation runs.",
+      "landed_cost_reverse": "This entry belongs to a landed-cost voucher: reverse the voucher under Landed costs.",
+      "expense_claim_reverse": "This entry belongs to an expense claim: reverse the claim under HR.",
+      "dunning_fee_reverse": "This entry holds a reminder run's fees: reverse the fees on the run under Dunning.",
+      "asset_transaction_reverse": "This entry belongs to an asset in the register: reverse it from the asset's ledger in the Asset register.",
+      "wage_journal_reverse": "This entry is a wage journal from your payroll: reverse it on the Payroll tab under HR."
     },
     "ownedByShowLine": "Show the bank line",
     "ownedByGoTo": {
@@ -134,7 +142,10 @@
       "bills": "Go to vendor bills",
       "documents": "Go to documents",
       "assets": "Go to the asset register",
-      "inventory-valuation-runs": "Go to valuation runs"
+      "inventory-valuation-runs": "Go to valuation runs",
+      "landed-costs": "Go to landed costs",
+      "personal": "Go to HR",
+      "dunning": "Go to dunning"
     },
     "text": "Description",
     "amount": "Amount",
@@ -181,7 +192,33 @@
     "vatAccountMissingLink": "Open the chart of accounts",
     "notFound": "This entry does not exist in this workspace. Close it and pick an entry in the journal.",
     "mwstNamed": "{label}, {code} {name}",
-    "supplyDateCaption": "Supply date {date}"
+    "supplyDateCaption": "Supply date {date}",
+    "vorlage": {
+      "label": "Template",
+      "none": "No template",
+      "unnamed": "Unnamed template",
+      "preview": "What gets booked",
+      "save": "☆ Save as template",
+      "saved": "Template \"{name}\" saved. You find it above under \"Template\".",
+      "refusal": {
+        "rule_not_found": "This template no longer exists. Pick another or book without a template.",
+        "wrong_scope": "This is a rule for bank lines, not a template. Pick a template.",
+        "ask_missing": "Enter every amount, greater than zero.",
+        "rest_is_zero": "The rest would be 0.00. Check the amounts.",
+        "rest_changes_side": "With these amounts the rest would land on the other side. Check the amounts.",
+        "other": "The template cannot be booked like this.",
+        "rule_invalid": "An account or a VAT code of this template is no longer valid, for example an account is now a bank account. Edit the template under \"Booking rules\"."
+      },
+      "unusable": "{name}: blocked, {reason}",
+      "invalid": {
+        "account_archived": "an account is archived",
+        "account_not_bookable": "a template may no longer book to one of its accounts",
+        "tax_code_inactive": "a VAT code is no longer valid",
+        "vat_not_applicable": "VAT does not apply to one of its accounts",
+        "recipe_unreadable": "it can no longer be read",
+        "other": "an account or a VAT code is no longer valid"
+      }
+    }
   },
   "errors": {
     "unbalanced": "The entry does not balance. Debits must equal credits.",
@@ -253,7 +290,7 @@
   "help": {
     "Journal": {
       "title": "Journal",
-      "body": "The journal is the immutable list of every entry posted in TILL for this workspace. Posted entries are never rewritten: a correction is always a reversing entry that cancels the mistake visibly.\n\nEvery line carries its account, its amount and, where VAT is involved, its tax code. The return is later computed from that code.\n\nA taken-over prior-system journal appears beside it as its own archive. It is not part of the live chain of records.",
+      "body": "The journal is the immutable list of every entry posted in TILL for this workspace. Posted entries are never rewritten: a correction is always a reversing entry that cancels the mistake visibly.\n\nEvery line carries its account, its amount and, where VAT is involved, its tax code. The return is later computed from that code.\n\nA taken-over prior-system journal appears beside it as its own archive. It is not part of the live chain of records.\n\nSave a recurring booking as a template: compose it, then \"☆ Save as template\". Pick it later under \"Template\", enter the asked amounts, and TILL works out the rest and the VAT.",
       "concepts": [
         "vorsteuer"
       ]

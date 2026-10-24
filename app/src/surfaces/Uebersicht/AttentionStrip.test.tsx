@@ -105,7 +105,10 @@ describe('the F00 attention block', () => {
     expect(rows).toHaveLength(2);
     // The owner's own words lead the letter step, and the live EBICS state is on the Übersicht in words.
     expect(rows[0]).toHaveTextContent('Unterschreibe den INI-Brief für die Synthbank');
-    expect(rows[0]).toHaveTextContent('Zuletzt bei der Synthbank nachgefragt: 02.10.2026, 07:02.');
+    // B5 (D178): one line per item; the explanation sits behind the (i), not under the title.
+    expect(rows[0]).not.toHaveTextContent('Zuletzt bei der Synthbank nachgefragt');
+    await userEvent.click(within(rows[0] as HTMLElement).getByRole('button', { name: /Mehr zu: Unterschreibe den INI-Brief/ }));
+    expect(await screen.findByRole('dialog', { name: /Unterschreibe den INI-Brief/ })).toHaveTextContent('Zuletzt bei der Synthbank nachgefragt: 02.10.2026, 07:02.');
     expect(within(rows[0]).getByRole('link')).toHaveAttribute('href', '/bank-accounts');
     // The urgency is a glyph with its word for assistive tech, never colour alone.
     expect(rows[0]).toHaveTextContent('offen');

@@ -90,7 +90,7 @@ export const LAPSES_BY_ITSELF: readonly string[] = ['files_upload_begin', 'files
  */
 export const MAP_RESOLUTIONS: Readonly<Record<string, { readonly map: readonly string[]; readonly why: string }>> = {
   fx_revaluation_reverse: { map: ['post_entry'], why: 'classed final, and a final write lists no way back' },
-  issue_dunning_run: { map: ['reverse_entry (the fee only)'], why: 'classed final; the map named prose, not a verb' },
+  issue_dunning_run: { map: ['dunning_fee_reverse (the fee only)'], why: 'classed final; the map named prose, not a verb' },
   inventory_valuation_create: { map: [], why: 'a correctable write needs a way back: a fresh draft run; the earlier draft stays listed and a stale one refuses to post' },
   asset_depreciation_run_create: { map: [], why: 'a correctable write needs a way back: a create over corrected asset data is a new run (the selection hash covers every amount); the draft stays listed' },
   migration_check_step: { map: [], why: 'a correctable write needs a way back: every check is an append-only snapshot, so a re-run adds one; or the control is waived' },
@@ -181,18 +181,27 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   unarchive_bank_account: ['archive_bank_account'],
   set_dunning_config: ['self'],
   propose_dunning_run: ['self'],
+  // D169: a reversed fee is never un-reversed (the mirror is owned); a fee that is due after all is
+  // booked again by hand.
+  dunning_fee_reverse: ['post_entry'],
   record_incoming_credit: ['override_qr_match'],
   apply_qr_match: ['override_qr_match', 'reverse_payment'],
   override_qr_match: ['apply_qr_match'],
   set_qr_auto_apply: ['self'],
   review_bank_txn: ['book_bank_line', 'ignore_bank_line'],
   set_camt_matching: ['self'],
+  // D178 (A20 §11.3): a saved CSV mapping is replaced by saving another.
+  set_bank_csv_mapping: ['self'],
   confirm_match: ['reopen_bank_line'],
   create_entry_for_txn: ['reopen_bank_line'],
   book_bank_line: ['reopen_bank_line', 'reverse_payment'],
   ignore_bank_line: ['reopen_bank_line'],
+  // D178 point 19: a duplicate answer is undone by reopening the ignored line; a distinct one by deciding again.
+  resolve_possible_duplicate: ['reopen_bank_line', 'self'],
   reopen_bank_line: ['book_bank_line', 'ignore_bank_line'],
   suggest_bank_lines: ['book_bank_line', 'ignore_bank_line'],
+  set_bank_standard: ['clear_bank_standard', 'self'],
+  clear_bank_standard: ['set_bank_standard'],
   set_creditor_bank_profile: ['self'],
   create_payment_batch: ['discard_payment_batch'],
   generate_pain001: ['discard_payment_batch'],
@@ -352,7 +361,10 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   tasks_snooze: ['self', 'tasks_update'],
   tasks_cancel: ['tasks_create'],
   payroll_handoff_export: ['self'],
-  wage_journal_post: ['reverse_entry'],
+  wage_journal_post: ['wage_journal_reverse'],
+  // D171: a reversed wage journal is never un-reversed (the mirror is owned); the corrected journal is
+  // posted again from the payroll system.
+  wage_journal_reverse: ['wage_journal_post'],
   project_create: ['project_delete'],
   project_update: ['self'],
   project_set_status: ['self'],
@@ -373,9 +385,10 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   expense_claim_create: ['expense_claim_reject'],
   expense_line_upsert: ['self', 'expense_claim_reject'],
   expense_claim_submit: ['expense_claim_reject'],
-  expense_claim_approve: ['reverse_entry'],
+  expense_claim_approve: ['expense_claim_reverse'],
   expense_claim_reject: ['expense_claim_create'],
   expense_claim_reimburse: ['reverse_payment'],
+  expense_claim_reverse: ['expense_claim_create'],
   asset_category_create: ['asset_category_archive'],
   asset_category_update: ['self'],
   asset_category_archive: ['asset_category_create'],
@@ -383,8 +396,8 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   asset_update: ['self'],
   asset_archive: ['asset_create'],
   asset_depreciation_method_set_enabled: ['self'],
-  asset_acquire: ['reverse_entry'],
-  asset_add_capitalisation: ['reverse_entry'],
+  asset_acquire: ['asset_transaction_reverse'],
+  asset_add_capitalisation: ['asset_transaction_reverse'],
   asset_location_create: ['asset_location_archive'],
   asset_location_update: ['self'],
   asset_location_archive: ['asset_location_create'],
@@ -392,8 +405,10 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   asset_depreciation_run_create: ['self'],
   asset_depreciation_run_post: ['asset_depreciation_run_reverse'],
   asset_depreciation_run_reverse: ['asset_depreciation_run_create', 'asset_depreciation_run_post'],
-  asset_dispose: ['reverse_entry', 'asset_create', 'asset_opening_balance'],
-  asset_opening_balance: ['reverse_entry'],
+  asset_dispose: ['asset_transaction_reverse'],
+  asset_opening_balance: ['asset_transaction_reverse'],
+  // D170: a reversed baseline closes the asset; the corrected purchase is a fresh one.
+  asset_transaction_reverse: ['asset_create'],
   asset_maintenance_log_create: ['asset_maintenance_log_cancel'],
   asset_maintenance_log_update: ['self'],
   asset_maintenance_log_cancel: ['asset_maintenance_log_create'],
@@ -469,6 +484,14 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   voice_build: ['self'],
   runtime_select: ['self'],
   draft_generate: ['draft_regenerate'],
+  // D172: a setting goes back by setting the previous value (its history names it) or by a reset to the
+  // default; a reset goes back by setting the value it removed.
+  settings_set: ['self', 'settings_reset'],
+  settings_reset: ['settings_set'],
+  // D178 point 7: a preference goes back by setting the previous value (the answer names it) or by a reset
+  // to the default; a reset goes back by setting the value it removed.
+  prefs_set: ['self', 'prefs_reset'],
+  prefs_reset: ['prefs_set'],
 };
 
 /** The registry facts `wayBackProblems` needs about one verb (an `ActionDef` satisfies it). */

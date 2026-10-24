@@ -39,6 +39,8 @@ const EXPECTED_NAMES = [
   'list_journal',
   // D152 amendment: the composer's read, spread in right after the A02 block.
   'compose_entry',
+  // D178 point 2: the Belegnummer inspection read, spread in right after the composer's.
+  'journal_numbering_plan',
   // A03
   'close_month',
   'reopen_month',
@@ -359,6 +361,8 @@ const EXPECTED_NAMES = [
   // union read. `wage_journal_post` is the only path a wage journal reaches the ledger (P3).
   'payroll_handoff_export',
   'wage_journal_post',
+  // D171: the wage journal's undo, the third write, before the read.
+  'wage_journal_reverse',
   'list_payroll_handoffs',
   // E00, file management, spread after A17's purchase verbs. Eleven writes and four reads. The prefix is
   // `files_` and not `documents_` because A10 owns that noun sixty lines up this same list, and a
@@ -407,12 +411,14 @@ const EXPECTED_NAMES = [
   'vendor_portal_remittance_create',
   'vendor_portal_remittances',
   // A15, Mahnwesen (dunning-actions.ts, spread after E00's files). Four writes and four reads over
-  // A16's open items. No delete and no un-issue: a mistaken fee is corrected by reverse_entry.
+  // A16's open items. No delete and no un-issue: a mistaken fee is reversed by dunning_fee_reverse
+  // (D169, the fifth write, after issue).
   'get_dunning_config',
   'set_dunning_config',
   'propose_dunning_run',
   'discard_dunning_run',
   'issue_dunning_run',
+  'dunning_fee_reverse',
   'get_dunning_pdf',
   'send_dunning_run',
   'list_dunning_runs',
@@ -440,6 +446,13 @@ const EXPECTED_NAMES = [
   'import_camt',
   // A36 §4.7 (D150): the multi-file hand repair of a statement gap.
   'import_camt_files',
+  // D178 (A20 §11.4): one statement door for camt, MT940 and CSV, and the CSV mapping verbs.
+  'import_bank_statement',
+  'bank_csv_preview',
+  'set_bank_csv_mapping',
+  'get_bank_csv_mapping',
+  // D178 point 19 (owner): the person's answer to a possible duplicate across statement formats.
+  'resolve_possible_duplicate',
   'suggest_matches',
   // A36 (live bank feed): the per-txn needs_review emitter and the matching-tuning setter.
   'review_bank_txn',
@@ -457,6 +470,10 @@ const EXPECTED_NAMES = [
   'reopen_bank_line',
   // D144 (A39 §12): the model rung's write, G01-denied like the rest; it posts nothing.
   'suggest_bank_lines',
+  // D167 (A39 §13.1): the standard per counterparty, two G01-denied writes and one read.
+  'set_bank_standard',
+  'clear_bank_standard',
+  'list_bank_standards',
   // A18, creditor payments (pain001-actions.ts, spread after A21's QR matching). Five writes and
   // three reads. `set_creditor_bank_profile` and `mark_batch_paid` sit on the G01 denylist (D65 leg
   // (f) and the D77 judgment-confirmation leg, respectively); `discard_payment_batch` is the F4
@@ -479,6 +496,16 @@ const EXPECTED_NAMES = [
   'liquidity_plan_get',
   'liquidity_plan_list',
   'liquidity_plan_draft_batches',
+  // G00, workspace settings (D172), spread in right after A40.
+  'settings_list',
+  'settings_get',
+  'settings_set',
+  'settings_reset',
+  // G00, per-person preferences (D178 point 7), spread in right after the workspace settings.
+  'prefs_list',
+  'prefs_get',
+  'prefs_set',
+  'prefs_reset',
   // A23, multi-client workspaces. `list_workspaces` (D12) moved here from its inline slot when A23
   // took ownership of the roster: a tool's position is part of its history, not its meaning, and
   // the NAME (the stable external contract) did not change.
@@ -645,6 +672,8 @@ const EXPECTED_NAMES = [
   // boundary on purpose; per-tile RBAC lives inside the engine (see actionCapabilities.ts).
   'dashboard_overview',
   'dashboard_tile',
+  // D178 point 13: the charts' series, gated read_books at the boundary (one domain, the ledger).
+  'dashboard_series',
   // G15, the attention hub: two reads, spread right after the F00 dashboards. Ungated at the boundary
   // on purpose; per-queue RBAC lives inside the engine (see actionCapabilities.ts / compose.ts).
   'attention_summary',
@@ -720,6 +749,7 @@ const EXPECTED_NAMES = [
   'expense_claim_approve',
   'expense_claim_reject',
   'expense_claim_reimburse',
+  'expense_claim_reverse',
   'expense_claim_list',
   'expense_claim_get',
   // E04, local mail store (in mailActions append order): three writes, four reads, and NO send
@@ -813,6 +843,8 @@ const EXPECTED_NAMES = [
   'asset_reconciliation_report',
   'asset_reconciliation_check',
   'asset_opening_balance',
+  // D170, the register's undo verb, appended at the end of the assetActions spread.
+  'asset_transaction_reverse',
   // H08, Simple Maintenance Log (Wave 12, NON-POSTING): the five asset_maintenance_log_* verbs, spread
   // in right after the asset cluster (maintenanceActions), in this create/update/cancel/get/list order.
   'asset_maintenance_log_create',

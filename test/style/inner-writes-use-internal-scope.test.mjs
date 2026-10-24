@@ -121,6 +121,10 @@ const DECIDED = {
     'the key carries the content hash of a member the bank delivered in this call; a squatter would need the statement bytes before the download',
   'src/core/banking/importCamtFiles.ts|importCamt|`camt-files:${bankAccountId}:${sha256(p.xml)}`':
     'the key IS the content hash of the statement handed in; a replay under it names the same statement',
+  'src/core/banking/statementImport.ts|importCamt|`stmt-file:${account.id}:${sha256(p.xml)}`':
+    'D178: the key IS the content hash of the statement handed in (the import_camt_files rule); a replay under it names the same statement',
+  'src/core/banking/duplicateDecision.ts|ignoreBankLine|`resolve-duplicate:${bankTxnId}:${key}`':
+    'D178 point 19: the ignore IS the duplicate answer of this line under the caller\'s own key, inside its memoised transaction; a replay under it names the same answer',
   'src/core/banking/managed/channel.ts|importCamt|`a37-${conn.id}-${persistedId}`':
     'persistedId is the document the relay file was stored as in this call (minted), so no caller holds the key first',
   'src/core/banking/managed/channel.ts|generatePain001|`a37-transmit-${batchId}`':

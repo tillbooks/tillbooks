@@ -31,6 +31,7 @@ import { join, resolve } from 'node:path';
 import { ok, err, type Result } from '../result.js';
 import { SqliteStore } from '../store/sqlite-store.js';
 import { SCHEMA_GENERATION } from '../store/schema.js';
+import { tillTables } from '../store/schemaShape.js';
 import { createBackup, restoreBackup, remapCopiedWorkspaceIds } from '../data/portability.js';
 import { sweepUnpairedTestmandantLinks, unlinkPlanTestmandant } from '../migration/trialReset.js';
 import { owningPlan } from '../migration/testmandant.js';
@@ -227,13 +228,13 @@ function retireCopiedEbicsConnections(db: Database.Database, wsIds: readonly str
   return info.changes;
 }
 
-/** Delete a workspace and all of its scoped rows from a building db (for the mandate replace-on-refresh). */
+/**
+ * Delete a workspace and all of its scoped rows from a building db (for the mandate replace-on-refresh).
+ * TILL's tables only (`tillTables`): a tool's table in the target (a `_`-prefixed one, even with a
+ * `workspace_id`) is the tool's to keep, and the refresh never deletes from it.
+ */
 function deleteWorkspace(db: Database.Database, wsId: string): void {
-  const tables = (
-    db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-      .all() as { name: string }[]
-  ).map((r) => r.name);
+  const tables = tillTables(db);
 
   // CAPTURE the victim rowids per table AGAINST THE INTACT DB, before deleting anything. `workspaceScope`
   // can fence a table TRANSITIVELY through a parent (e.g. journal_line via account_id -> account); if we

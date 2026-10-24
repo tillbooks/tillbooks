@@ -22,7 +22,7 @@
       "importFile": "Datei importieren"
     },
     "bulk": {
-      "bookSure": "Alle sicheren buchen ({count})"
+      "bookSure": "Alle vorgeschlagenen buchen ({count})"
     },
     "pick": {
       "label": "Ausgewählte Zeilen",
@@ -105,13 +105,14 @@
       "decision": "Entscheid",
       "vat": "MWST",
       "amount": "Betrag",
-      "actions": "Aktionen"
+      "actions": "Aktionen",
+      "resize": "Breite: {column}",
+      "ignore": "Mehr"
     },
     "row": {
       "unnamed": "Bankzeile ohne Namen",
       "book": "Buchen",
       "match": "Abgleichen",
-      "review": "Prüfen",
       "busy": "Wird gebucht …",
       "targetLabel": "Buchen auf, {party}",
       "targetPlaceholder": "Worauf buchen?",
@@ -119,13 +120,29 @@
       "vatNamed": "MWST, {party}, {code} {name}",
       "more": "Weitere Aktionen für {party}, {amount}",
       "needsPost": "Zum Buchen fehlt dir das Recht, zu buchen.",
-      "needsPay": "Eine Rechnung oder einen Zahlungslauf begleichen braucht das Recht, Zahlungen zu buchen."
+      "needsPay": "Eine Rechnung oder einen Zahlungslauf begleichen braucht das Recht, Zahlungen zu buchen.",
+      "vatOff": "MWST",
+      "vatOffLabel": "MWST, {party}",
+      "vatNeedsAccount": "Zuerst ein Konto wählen.",
+      "vatNotApplicable": "Auf {account} fällt keine MWST an.",
+      "vatGroupOut": "Vorsteuer (Geld raus)",
+      "vatGroupIn": "Umsatzsteuer (Geld rein)",
+      "vatGroupOther": "Weitere",
+      "ignoreRule": "Nicht buchen",
+      "ignore": "Ignorieren, {party}, {amount}",
+      "ignoreTip": "Nicht buchen, mit Grund",
+      "vatSummary": "MWST, {party}: {vat}",
+      "vatSummaryTip": "MWST pro Position in den Details",
+      "moreTip": "Regel, Beleg, Ignorieren",
+      "menu": {
+        "ruleSave": "Als Buchungsregel speichern",
+        "ruleOpen": "Buchungsregel öffnen",
+        "ruleClear": "Buchungsregel entfernen",
+        "ignoreAs": "Ignorieren: {reason}"
+      }
     },
     "menu": {
-      "split": "Aufteilen oder manuell buchen",
-      "link": "Mit bestehender Buchung abgleichen",
       "agent": "Agent fragen",
-      "ignore": "Ignorieren",
       "attach": "Beleg anhängen"
     },
     "certainty": {
@@ -151,16 +168,25 @@
       "groupInvoices": "Offene Rechnungen",
       "groupBills": "Offene Lieferantenrechnungen",
       "groupAccounts": "Konten",
-      "groupMore": "Weitere",
       "currentMeta": "so steht es jetzt",
       "proposalMeta": "Vorschlag von TILL",
       "agentMeta": "Vorschlag des Agenten",
-      "moreLink": "Mit bestehender Buchung abgleichen …",
-      "moreLinkMeta": "schon gebucht, zum Beispiel von Hand",
-      "moreLinkKeywords": "abgleichen bestehende buchung journal",
-      "moreSplit": "Aufteilen oder manuell buchen …",
-      "moreSplitMeta": "mehrere Konten oder eigener Text",
-      "moreSplitKeywords": "aufteilen split mehrere manuell"
+      "groupActions": "Statt eines Kontos",
+      "actSplit": "Aufteilen auf mehrere Konten …",
+      "actSplitKeywords": "aufteilen split mehrere manuell",
+      "actLink": "Mit bestehender Buchung abgleichen …",
+      "actLinkKeywords": "abgleichen bestehende buchung journal",
+      "actIgnore": "Nicht buchen (ignorieren) …",
+      "actIgnoreKeywords": "ignorieren nicht buchen",
+      "actDenied": "dazu fehlt dir das Recht, zu buchen",
+      "groupRules": "Buchungsregeln dieser Gegenpartei",
+      "groupBatches": "Zahlungsläufe",
+      "batchLabel": {
+        "one": "Zahlungslauf, {count} Rechnung",
+        "other": "Zahlungslauf, {count} Rechnungen"
+      },
+      "clear": "Auswahl entfernen",
+      "clearKeywords": "leeren entfernen löschen keine"
     },
     "vat": {
       "none": "ohne MWST",
@@ -169,7 +195,8 @@
       "fromEntry": "aus der Buchung",
       "fromBills": "aus den Rechnungen",
       "fromInvoice": "aus der Rechnung",
-      "fromBill": "aus der Rechnung"
+      "fromBill": "aus der Rechnung",
+      "mixed": "gemischt"
     },
     "target": {
       "split": "Aufgeteilt auf {count} Konten",
@@ -181,7 +208,23 @@
       "billName": "offene Lieferantenrechnung",
       "batchCode": "Zahlungslauf",
       "batch": "mehrere Lieferantenrechnungen",
-      "entry": "bestehende Buchung"
+      "entry": "bestehende Buchung",
+      "ignore": "Nicht buchen: {reason}",
+      "invoices": {
+        "one": "{count} Rechnung",
+        "other": "{count} Rechnungen"
+      },
+      "bills": {
+        "one": "{count} Lieferantenrechnung",
+        "other": "{count} Lieferantenrechnungen"
+      },
+      "contactCode": "Kontakt",
+      "contact": "Kontakt",
+      "claimsCode": "Spesen",
+      "claims": {
+        "one": "{count} Spesenabrechnung",
+        "other": "{count} Spesenabrechnungen"
+      }
     },
     "reason": {
       "existing_entry_reference": "In der Buchhaltung steht schon eine Buchung vom {date} mit derselben Referenz: {description}. Abgleichen verbindet beide, es entsteht keine neue Buchung.",
@@ -212,12 +255,39 @@
       "payment_batch_total_differs_paid": "Die Bank meldet die Referenz eines Zahlungslaufs, aber der Betrag weicht ab: Zahlungslauf {batch}, Bank {line}. Der Lauf ist schon als bezahlt markiert und lässt sich nicht mehr verwerfen: ignoriere diese Zeile als «Wird anderswo gebucht» und storniere unter Zahlungen jede Zahlung des Laufs, die die Bank nicht ausgeführt hat.",
       "payment_batch_item_amount_differs_paid": "Die Referenz nennt eine Zahlung eines Zahlungslaufs, aber der Betrag weicht ab: Zahlung {item}, Bank {line}. Der Lauf ist schon als bezahlt markiert und lässt sich nicht mehr verwerfen: ignoriere diese Zeile als «Wird anderswo gebucht» und storniere unter Zahlungen jede Zahlung des Laufs, die die Bank nicht ausgeführt hat.",
       "own_account_transfer_booked_other_month": "Der Übertrag von «{name}» ist dort am {date} gebucht, in einem anderen Monat als diese Zeile. So lässt er sich nicht abgleichen: hol die andere Seite zurück und buche beide Seiten je an ihrem Tag über ein Durchgangskonto, das du im Kontenplan erfasst.",
-      "model_suggested": "Ein KI-Modell auf diesem Gerät schlägt {account} vor, zu {percent} % wahrscheinlich ({count} Konten standen zur Wahl). Das hat noch niemand geprüft: schau es an, bevor du buchst."
+      "model_suggested": "Ein KI-Modell auf diesem Gerät schlägt {account} vor, zu {percent} % wahrscheinlich ({count} Konten standen zur Wahl). Das hat noch niemand geprüft: schau es an, bevor du buchst.",
+      "standard": "Deine Buchungsregel für diese Gegenpartei: {account}, {vat}.",
+      "standardVatDropped": "Deine Buchungsregel für diese Gegenpartei: {account}, hier ohne {vat}. Die Zeile ist in {currency}, und auf einer Zeile in Fremdwährung lässt sich keine MWST buchen. Prüf, ob du sie so brutto buchen willst.",
+      "journal_history": "So im Journal gebucht am {date}: {account}, {vat}.",
+      "rule": "Deine Buchungsregel «{name}»: {route}.",
+      "rule_needs_amount": "Deine Buchungsregel «{name}» passt. Gib {asks} ein, den Rest rechnet TILL.",
+      "several_rules": "Für diese Gegenpartei passen {count} Buchungsregeln, und der Text entscheidet nicht. Wähl eine oder buch anders.",
+      "rule_ignore": "Deine Buchungsregel «{name}» sagt: nicht buchen ({reason}). Die Zeile kommt nie in die Buchhaltung, darum entscheidest du sie selbst.",
+      "rule_computed": "Buchungsregel «{name}» berechnet {asks}. Prüf den Betrag, dann buchen."
     },
     "panel": {
       "cancel": "Abbrechen",
       "close": "Schliessen",
-      "linkMissing": "Diese Bankzeile gibt es hier nicht."
+      "linkMissing": "Diese Bankzeile gibt es hier nicht.",
+      "label": "Details zur Bankzeile",
+      "closeDetails": "Details schliessen",
+      "amounts": "Beträge der Buchungsregel",
+      "computed": "berechnet",
+      "byYou": "von dir",
+      "recompute": "berechnen",
+      "computedTip": "{label} aus {amount} berechnet",
+      "text": "Buchungstext",
+      "private": "Privat bezahlt: auf {account}",
+      "splitContext": "{party} auf mehrere Konten",
+      "linkContext": "{party} mit einer Buchung",
+      "ruleContext": "Künftige Zeilen von {party}",
+      "attachContext": "Beleg zu {party}",
+      "more": "Mehr zu {party}",
+      "formulaWords": "{label} aus {amount}: {how}",
+      "howPlatform": "MWST {vat} % und Gebühr {fee} % vom Netto",
+      "howVat": "MWST {vat} %",
+      "howFee": "Gebühr {fee} % vom Netto",
+      "howFactor": "mal {factor}"
     },
     "legs": {
       "title": "So wird gebucht",
@@ -228,7 +298,8 @@
       "computing": "Die Buchung wird berechnet.",
       "noRight": "Für die Vorschau fehlt dir das Recht, die Buchhaltung und die MWST zu lesen.",
       "unavailable": "Die Vorschau ist nicht verfügbar.",
-      "unknownAccount": "Konto nicht gefunden"
+      "unknownAccount": "Konto nicht gefunden",
+      "entryOf": "Buchung {n} von {count} ({currency})"
     },
     "item": {
       "titleInvoice": "Rechnung",
@@ -239,10 +310,12 @@
       "surplusCredit": "Überzahlung: {rest} bleiben als Guthaben des Kunden stehen, {item} ist ganz bezahlt.",
       "surplusDebit": "Mehr bezahlt als offen: {rest} bleiben als Guthaben beim Lieferanten stehen, {item} ist ganz bezahlt.",
       "unknownOpen": "Der offene Betrag von {item} liess sich nicht lesen. TILL rechnet ihn beim Buchen.",
-      "remainderLegend": "Was passiert mit dem Rest von {rest}?",
+      "remainderLegend": "Rest {rest}",
       "leaveOpen": "Offen lassen",
       "writeOff": "Als Verlust ausbuchen",
-      "fees": "Darin enthalten: Mahngebühren von {fees}."
+      "fees": "Darin enthalten: Mahngebühren von {fees}.",
+      "onAccount": "Als Guthaben",
+      "surplusLegend": "{rest} zu viel"
     },
     "batch": {
       "title": "Zahlungslauf",
@@ -292,11 +365,28 @@
       "vat": "MWST",
       "vatOf": "MWST der Position {n}",
       "amount": "Betrag",
-      "add": "Position hinzufügen",
+      "add": "+ Position",
       "restOpen": "Noch zu verteilen: {amount}",
       "restOver": "Zu viel verteilt: {amount}",
       "accountMissing": "Betrag verteilt, ein Konto fehlt noch",
-      "complete": "Vollständig verteilt"
+      "via": "Über ein Durchlaufkonto buchen",
+      "viaLabel": "Durchlaufkonto",
+      "viaPick": "Durchlaufkonto wählen",
+      "viaRemove": "Ohne Durchlaufkonto",
+      "viaHint": "Die Bankzeile läuft über dieses Konto, und jede Position wird von ihm aus gebucht. Am Ende steht es auf null.",
+      "amountOf": "Betrag der Position {n}, {party}",
+      "removeShort": "Entfernen",
+      "rowLabel": {
+        "one": "Aufteilen: {count} Position",
+        "other": "Aufteilen: {count} Positionen"
+      },
+      "restShort": "Noch {amount}",
+      "overShort": "Zu viel {amount}",
+      "accountShort": "Konto fehlt",
+      "viaTip": "Die Zeile läuft über ein Konto, das am Ende auf null steht",
+      "close": "Aufteilen beenden",
+      "restZero": "Rest {amount}",
+      "viaAdd": "Über Durchlaufkonto buchen"
     },
     "link": {
       "title": "Mit bestehender Buchung abgleichen",
@@ -347,7 +437,8 @@
           "label": "Anderer Grund",
           "hint": "mit einer Notiz in eigenen Worten"
         }
-      }
+      },
+      "undoReason": "Ignorieren rückgängig gemacht"
     },
     "reopen": {
       "title": "Stornieren",
@@ -376,6 +467,7 @@
     "decided": {
       "booked": "auf Konten",
       "bookedTo": "auf {account}",
+      "bookedToVat": "auf {account} · {vat}",
       "bookedSplit": {
         "one": "auf {count} Konto",
         "other": "aufgeteilt auf {count} Konten"
@@ -400,7 +492,10 @@
       "reversal_line": "Die Zeile ist eine Rückbuchung der Bank.",
       "batch_payments_kept": "Die Zahlungen des Zahlungslaufs bleiben gebucht. Eine davon stornierst du unter Zahlungen.",
       "not_day_end_statement": "Das ist kein Tagesendauszug: ihm fehlt die Auszugsnummer oder der Schlusssaldo. Importiere für diesen Tag auch den Tagesendauszug camt.053.",
-      "statement_number_jump": "Die Auszugsnummer springt: zwischen dem letzten Auszug im Buch und diesem fehlen Nummern. Importiere diese Auszüge von Hand, falls es sie gibt."
+      "statement_number_jump": "Die Auszugsnummer springt: zwischen dem letzten Auszug im Buch und diesem fehlen Nummern. Importiere diese Auszüge von Hand, falls es sie gibt.",
+      "possible_cross_format_duplicate": "Eine neue Zeile gleicht einer Zeile aus einem anderen Dateiformat. TILL hat sie importiert und markiert: Prüfe sie im Bankeingang und ignoriere sie als Duplikat, falls sie eines ist.",
+      "overlap_same_movement": "Neue Zeilen gleichen Bewegungen, die schon in den Büchern stehen. TILL hat sie importiert und markiert: Entscheide pro Zeile, oder alle exakten Treffer auf einmal.",
+      "covered_period_new_line": "Neue Zeilen liegen an Tagen, für die schon ein Auszug importiert ist. TILL hat sie markiert: Prüfe, ob sie neu sind."
     },
     "vorschlag": {
       "kicker": "Vorschlag des Agenten",
@@ -419,9 +514,6 @@
     },
     "trust": {
       "label": "Abgleich {name}",
-      "ok": "Bank und Buchhaltung stimmen überein.",
-      "pending": "Stimmt, bis auf die Zeilen, die noch zu buchen sind.",
-      "difference": "Bank und Buchhaltung weichen um {amount} ab.",
       "unknown": {
         "no_statement": "Kann nicht beurteilt werden: noch kein Kontoauszug.",
         "no_balance": "Kann nicht beurteilt werden: der Kontoauszug hat keinen Schlusssaldo.",
@@ -430,16 +522,9 @@
       },
       "bank": "Bank",
       "books": "Buchhaltung",
-      "sentence": "Bank {bank} gleich Buchhaltung {books} plus offene Zeilen {open}.",
-      "openLines": {
-        "one": "{count} Zeile offen, {amount}",
-        "other": "{count} Zeilen offen, {amount}"
-      },
-      "asOf": "Stand Kontoauszug {date}",
-      "openTerm": "offene Zeilen",
       "differenceTerm": "Differenz",
-      "sentenceDifference": "Bank {bank} gleich Buchhaltung {books} plus offene Zeilen {open} plus Differenz {difference}.",
-      "differenceHint": "Eine Differenz entsteht, wenn eine ignorierte Zeile nicht in den Büchern steht, eine Buchung auf dem Bankkonto keine Bankzeile hat, beim Abgleich eine Differenz festgehalten wurde, oder eine Zeile mit einer Buchung nach dem Kontoauszug abgeglichen ist (bis zum nächsten Kontoauszug).",
+      "differenceHint": "Mögliche Ursache: eine ignorierte Zeile, eine Buchung ohne Bankzeile oder eine festgehaltene Differenz.",
+      "startGap": "Vor dem {date} fehlen Bewegungen (die Bank startet bei {bank}): ältere Kontoauszüge importieren.",
       "differenceShort": "Differenz {amount}",
       "noDifference": "Keine Differenz",
       "gapMark": "Ein Kontoauszug fehlt",
@@ -467,6 +552,11 @@
           "other": "{count} nicht beurteilbar"
         },
         "rowLabel": "{name}: {state}. Zahlen und Erklärung"
+      },
+      "asOfShort": "Stand {date}",
+      "openRow": {
+        "one": "{count} offene Zeile",
+        "other": "{count} offene Zeilen"
       }
     },
     "import": {
@@ -484,7 +574,102 @@
       "commit": "Importieren",
       "busy": "Wird importiert …",
       "commitMany": "{count} Dateien importieren",
-      "done": "Fertig"
+      "done": "Fertig",
+      "leadAny": "Lade den Kontoauszug aus deinem E-Banking: camt.053 (XML), MT940 oder CSV. Bei camt und MT940 liest TILL das Konto aus der Datei.",
+      "dropAny": "Kontoauszüge hierher ziehen",
+      "hintAny": "camt.053 (XML), MT940 (.sta, .mt940, .txt) oder CSV",
+      "notStatement": "Das ist keine Kontoauszugsdatei. Lade den Auszug in deinem E-Banking als camt.053, MT940 oder CSV herunter.",
+      "oneAtATime": "MT940 und CSV importierst du Datei für Datei: TILL nimmt «{name}».",
+      "detected": "Erkannt: {format}",
+      "reading": "Datei wird gelesen …",
+      "formats": {
+        "camt": "camt.053",
+        "mt940": "MT940",
+        "csv": "CSV"
+      },
+      "csv": {
+        "title": "Spalten zuordnen",
+        "lead": "Wähle für jede Angabe die Spalte deiner Datei. TILL speichert die Zuordnung für dieses Bankkonto und nimmt sie beim nächsten Mal wieder.",
+        "pickAccount": "Wähle zuerst das Bankkonto, damit TILL seine gespeicherte Zuordnung findet.",
+        "saved": "Die gespeicherte Zuordnung dieses Bankkontos ist ausgewählt.",
+        "guessed": "TILL hat die Spalten anhand der Überschriften vorgeschlagen. Prüfe sie.",
+        "none": "nicht zugeordnet",
+        "required": "Pflicht",
+        "amountRule": "Entweder eine Betragsspalte mit Vorzeichen oder eine Spalte für Belastung und eine für Gutschrift.",
+        "preview": "Die ersten Zeilen der Datei",
+        "rows": "{count} Zeilen in der Datei",
+        "dateFormat": "Datumsformat",
+        "decimal": "Dezimaltrennzeichen",
+        "decimalAuto": "erkennen",
+        "decimalDot": "Punkt (1'234.50)",
+        "decimalComma": "Komma (1234,50)",
+        "delimiter": "Trennzeichen",
+        "delimiterChoice": {
+          "semicolon": "Semikolon ( ; )",
+          "comma": "Komma ( , )",
+          "tab": "Tabulator"
+        },
+        "headerRow": "Zeile mit den Spaltennamen",
+        "headerRowN": "Zeile {n}",
+        "missing": {
+          "bookingDate": "Es fehlt die Spalte für das Buchungsdatum.",
+          "amount": "Es fehlt die Spalte für den Betrag (oder für Belastung und Gutschrift)."
+        },
+        "unknown": "Die Datei hat keine Spalte «{column}». Wähle eine andere.",
+        "field": {
+          "bookingDate": "Buchungsdatum",
+          "valueDate": "Valuta",
+          "amount": "Betrag (mit Vorzeichen)",
+          "debit": "Belastung",
+          "credit": "Gutschrift",
+          "text": "Buchungstext",
+          "counterparty": "Gegenpartei",
+          "counterpartyIban": "IBAN der Gegenpartei",
+          "reference": "Referenz",
+          "currency": "Währung",
+          "instructedAmount": "Originalbetrag",
+          "instructedCurrency": "Originalwährung",
+          "rate": "Kurs",
+          "fee": "Gebühr"
+        }
+      },
+      "result": {
+        "counts": "Neu: {imported} · Schon im Buch: {duplicates} · Nicht gelesen: {refused}",
+        "statementRefused": "Auszug {part} nicht importiert: {why}",
+        "skipRow": "Zeile {row}: {why}",
+        "skipLine": "Eine Zeile: {why}",
+        "more": "und {count} weitere",
+        "skip": {
+          "duplicate_entry": "schon im Buch",
+          "cross_format_duplicate": "schon im Buch, aus einem anderen Dateiformat",
+          "pending": "vorgemerkt, noch nicht gebucht",
+          "unreadable_amount": "Betrag nicht lesbar",
+          "unreadable_date": "Datum nicht lesbar",
+          "unsupported_status": "weder gebucht noch vorgemerkt",
+          "zero_amount": "Betrag null",
+          "currency_differs": "andere Währung als das Bankkonto",
+          "not_a_movement": "keine Buchung (ein Total oder eine Notiz)"
+        },
+        "warning": {
+          "account_unverified": "Das Konto in der Datei ist keine IBAN: Prüfe, dass es das richtige Bankkonto ist.",
+          "possible_cross_format_duplicate": "Eine neue Zeile gleicht einer Zeile aus einem anderen Dateiformat. Prüfe sie im Bankeingang.",
+          "overlap_same_movement": "Einige Zeilen sind schon aus einer anderen Lieferung derselben Tage im Buch. Sie warten im Bankeingang: Entscheide Duplikat oder Kein Duplikat.",
+          "covered_period_new_line": "Einige Zeilen fallen auf Tage, für die schon ein Auszug im Buch ist, und passen dort zu keiner Zeile. Prüfe sie im Bankeingang.",
+          "not_day_end_statement": "Die Datei ist kein Tagesauszug: Importiere auch den Tagesauszug dieses Tages."
+        },
+        "refused": {
+          "account_mismatch": "die Datei gehört zu einem anderen Konto",
+          "currency_mismatch": "die Datei ist in einer anderen Währung als das Bankkonto",
+          "schema_invalid": "die Datei ist nicht lesbar",
+          "statement_amended": "die Bank hat diesen Auszug seit dem Import geändert",
+          "other": "abgelehnt ({code})"
+        }
+      },
+      "refusal": {
+        "bankFeed": "Dieses Bankkonto wird über EBICS beliefert. Importiere hier nur camt.053; MT940 und CSV nimmt TILL für dieses Konto nicht.",
+        "mapping": "Die Spaltenzuordnung passt nicht zur Datei.",
+        "severalAccounts": "Die Datei enthält Auszüge mehrerer Konten ({accounts}), und keines davon ist erkennbar dieses Bankkonto. Importiere die Auszüge jedes Kontos auf sein eigenes Bankkonto."
+      }
     },
     "ack": {
       "dismiss": "Ausblenden",
@@ -544,7 +729,12 @@
       "importedFilesRefused": {
         "one": "Ein Auszug wurde nicht importiert, der Grund stand im Fenster.",
         "other": "{count} Auszüge wurden nicht importiert, die Gründe standen im Fenster."
-      }
+      },
+      "selfBooked": "Den Vorschlag des Agenten hast du damit geschlossen.",
+      "selfBookedOpen": "Der Vorschlag des Agenten ist noch offen: lehn ihn unter Pendenzen ab.",
+      "vorschlagLeftOpen": "Der Vorschlag des Agenten bleibt offen: schliessen kann ihn, wer Vorschläge entscheiden darf.",
+      "ignoredWhy": "Ignoriert: {party} ({reason})",
+      "undoShort": "Rückgängig"
     },
     "agent": {
       "question": "Wie buche ich diese Bankzeile: {date}, {party}, {amount}?"
@@ -883,6 +1073,74 @@
       "vorschlagStale": {
         "title": "Nicht ausgeführt: Der Vorschlag ist veraltet.",
         "body": "Die Daten dahinter haben sich geändert, nachdem der Agent ihn gemacht hat. Bitte den Agenten, ihn neu vorzuschlagen."
+      },
+      "noCounterparty": {
+        "title": "Diese Zeile nennt keine Gegenpartei.",
+        "body": "Eine Buchungsregel gilt pro Gegenpartei (IBAN oder Name). Buch diese Zeile von Hand."
+      },
+      "invalidAccount": {
+        "title": "Auf dieses Konto lässt sich keine Buchungsregel legen.",
+        "body": "Ein Bankkonto, ein Sammelkonto (1100, 2000), ein MWST-Konto oder ein archiviertes Konto taugt nicht für eine Buchungsregel. Wähl ein anderes Konto."
+      },
+      "invalidTaxCode": {
+        "title": "Diesen MWST-Code gibt es nicht mehr.",
+        "body": "Wähl einen aktiven Code oder Ohne MWST und speichere die Buchungsregel dann."
+      },
+      "vatNotApplicable": {
+        "title": "Auf diesem Konto fällt keine MWST an.",
+        "body": "Wähl Ohne MWST oder ein Erfolgskonto und speichere die Buchungsregel dann."
+      },
+      "invalidRecipe": {
+        "title": "So lässt sich die Buchungsregel nicht speichern.",
+        "body": "Eine Regel braucht genau einen Rest, für jeden gefragten Betrag eine Bezeichnung und Konten, auf die gebucht werden darf. Ein Durchlaufkonto ist ein Bilanzkonto, das in keiner Position vorkommt."
+      },
+      "ruleNotFound": {
+        "title": "Diese Buchungsregel gibt es nicht mehr.",
+        "body": "Lade die Zeilen neu und wähl, wie du diese buchst."
+      },
+      "ruleNotApplicable": {
+        "title": "Diese Buchungsregel passt nicht zu dieser Zeile.",
+        "body": "Sie gilt für eine andere Gegenpartei oder die andere Richtung. Wähl ein Konto für diese Zeile."
+      },
+      "askMissing": {
+        "title": "Ein Betrag fehlt.",
+        "body": "Gib jeden gefragten Betrag ein, grösser als null."
+      },
+      "restIsZero": {
+        "title": "Der Rest wäre 0.00.",
+        "body": "Prüf den Betrag, den du eingegeben hast."
+      },
+      "invalidRecipeSame": {
+        "title": "So lässt sich die Buchungsregel nicht speichern.",
+        "body": "«Gleicher Betrag wie» zeigt immer auf einen gefragten Betrag, nie auf den Rest und nie auf die eigene Position."
+      },
+      "invalidRecipeSide": {
+        "title": "So lässt sich die Vorlage nicht speichern.",
+        "body": "Jede Position einer Vorlage steht im Soll oder im Haben. Eine Regel für Bankzeilen folgt der Richtung der Zeile."
+      },
+      "invalidRecipeIgnore": {
+        "title": "So lässt sich die Buchungsregel nicht speichern.",
+        "body": "«Nicht buchen» braucht einen Grund und hat keine Positionen. Eine Vorlage bucht immer."
+      },
+      "invalidRecipeFollowUp": {
+        "title": "Dieser nächste Schritt geht nicht.",
+        "body": "Als nächster Schritt passt nur eine Vorlage, die es noch gibt. Lade die Vorlagen neu und wähl eine."
+      },
+      "wrongScope": {
+        "title": "Diese Buchungsregel passt hier nicht.",
+        "body": "Eine Vorlage bucht im Journal, eine Regel für Bankzeilen bucht eine Bankzeile. Wähl die passende."
+      },
+      "wrongOutcome": {
+        "title": "Diese Buchungsregel sagt «Nicht buchen».",
+        "body": "Leg die Zeile mit «Nicht buchen» beiseite, oder buch sie anders."
+      },
+      "restChangesSide": {
+        "title": "Der Rest käme auf die andere Seite.",
+        "body": "Mit diesen Beträgen stünde der Rest nicht mehr dort, wo die Vorlage ihn bucht. Prüf die Beträge."
+      },
+      "labelTaken": {
+        "title": "Eine Vorlage heisst schon so.",
+        "body": "Wähl einen anderen Namen, oder ersetze die bestehende Vorlage."
       }
     },
     "receipts": {
@@ -893,7 +1151,15 @@
         "other": "{count} Belege angehängt"
       },
       "missing": "Ohne Beleg",
-      "lineGone": "Diese Bankzeile gibt es nicht mehr."
+      "lineGone": "Diese Bankzeile gibt es nicht mehr.",
+      "clip": "Belege, {party}",
+      "clipNone": "Beleg anhängen (oder Datei auf die Zeile ziehen)",
+      "clipSome": {
+        "one": "{count} Beleg. Klick zum Ansehen oder Anhängen.",
+        "other": "{count} Belege. Klick zum Ansehen oder Anhängen."
+      },
+      "clipMissing": "Ohne Beleg. Klick zum Anhängen.",
+      "clipMissingLabel": "Belege, {party}, ohne Beleg"
     },
     "ai": {
       "tag": "KI",
@@ -917,45 +1183,428 @@
     },
     "direction": {
       "label": "Richtung",
-      "in": "Nur Eingänge",
-      "out": "Nur Ausgänge"
+      "in": "Gutschriften",
+      "out": "Belastungen",
+      "all": "Alle",
+      "allCount": "Alle ({count})",
+      "inCount": "Gutschriften ({count})",
+      "outCount": "Belastungen ({count})"
     },
-    "strip": {
-      "label": "Kontext zur Bankzeile",
-      "split": "Aufteilen",
-      "link": "Mit Buchung abgleichen",
-      "agent": "Agent fragen",
-      "ignore": "Ignorieren",
+    "source": {
+      "standard": "Deine Buchungsregel",
+      "history": "Aus früheren Buchungen",
+      "agent": "Vom Agenten vorgeschlagen",
+      "tip": "{source}: {reason}",
+      "agentReason": "Buchen genehmigt den Vorschlag.",
+      "rule": "Buchungsregel «{name}»"
+    },
+    "standard": {
+      "set": "Als Buchungsregel speichern, {party}",
+      "setTip": "Als Buchungsregel speichern: künftige Zeilen von {party} werden so vorgeschlagen.",
+      "show": "Buchungsregel ansehen, {party}",
+      "showTip": "Für {party} gilt eine Buchungsregel. Klick zum Ansehen oder Entfernen.",
+      "title": "Buchungsregel für {party}",
+      "body": "{account}, {vat}. TILL schlägt künftige Zeilen so vor.",
+      "bodyUnknown": "TILL schlägt künftige Zeilen dieser Gegenpartei nach dieser Buchungsregel vor.",
+      "remove": "Buchungsregel entfernen",
+      "close": "Schliessen",
+      "done": "Buchungsregel gespeichert: {party} auf {account}.",
+      "unchanged": "Diese Buchungsregel galt schon: {party} auf {account}.",
+      "removed": "Buchungsregel entfernt: {party}.",
+      "busy": "Wird gespeichert …",
+      "showTipNamed": "Buchungsregel «{name}». Klick zum Ansehen oder Entfernen.",
+      "bodyRoute": "{route}. TILL schlägt künftige Zeilen so vor.",
+      "doneNamed": "Buchungsregel «{name}» gespeichert.",
+      "unchangedNamed": "Die Buchungsregel «{name}» galt schon so."
+    },
+    "filter": {
+      "label": "Filter",
+      "labelActive": "Filter ({count})",
+      "needs": "Brauchen dich ({count})",
+      "sure": "Sicher ({count})",
+      "in": "Nur Eingänge",
+      "out": "Nur Ausgänge",
+      "noReceipt": "Ohne Beleg ({count})"
+    },
+    "rules": {
+      "unnamed": "Buchungsregel",
+      "askFallback": "einen Betrag",
+      "vatRate": "MWST {rate} %",
+      "route": {
+        "via": "über {via}",
+        "ask": "{leg}: {label} gibst du beim Buchen ein",
+        "rest": "Rest: {leg}",
+        "same": "{leg}: gleicher Betrag wie {other}",
+        "factorPlatform": "{leg}: berechnet aus MWST {vat} % und Gebühr {fee} % vom Netto",
+        "factorPlain": "{leg}: berechnet mit Faktor {factor}"
+      },
+      "match": {
+        "in": "{party}, Geld rein",
+        "out": "{party}, Geld raus",
+        "withText": "{base}, Text enthält «{text}»",
+        "vorlage": "Vorlage für das Journal"
+      },
+      "invalid": {
+        "account_archived": "Ein Konto dieser Regel ist archiviert, darum schlägt sie nichts mehr vor.",
+        "vat_not_applicable": "Auf einem Konto dieser Regel fällt keine MWST an, darum schlägt sie nichts mehr vor.",
+        "other": "Ein Konto oder ein MWST-Code dieser Regel gilt nicht mehr, darum schlägt sie nichts mehr vor.",
+        "state": "Schlägt nichts vor",
+        "account_not_bookable": "Auf ein Konto dieser Regel darf nicht mehr gebucht werden, darum schlägt sie nichts mehr vor.",
+        "tax_code_inactive": "Ein MWST-Code dieser Regel gilt nicht mehr, darum schlägt sie nichts mehr vor.",
+        "recipe_unreadable": "Diese Regel lässt sich nicht mehr lesen, darum schlägt sie nichts mehr vor. Speichere sie mit Bearbeiten neu."
+      },
+      "header": "Buchungsregeln",
+      "headerCount": "Buchungsregeln ({count})",
+      "sheet": {
+        "title": "Buchungsregeln",
+        "close": "Buchungsregeln schliessen",
+        "empty": "Noch keine Buchungsregel. Speichere eine mit ☆, wenn du eine Zeile buchst.",
+        "loading": "Die Buchungsregeln werden geladen.",
+        "lead": "Eine Buchungsregel schlägt nur vor. Gebucht wird erst auf deinen Klick.",
+        "editContext": "Buchungsregel «{name}»",
+        "more": "Weitere Aktionen für «{name}»",
+        "remove": "Entfernen",
+        "removed": "Buchungsregel «{name}» entfernt.",
+        "saved": "Buchungsregel «{name}» gespeichert.",
+        "groupBank": "Bankzeilen",
+        "groupManual": "Vorlagen",
+        "newVorlage": "Neue Vorlage",
+        "savedVorlage": "Vorlage «{name}» gespeichert.",
+        "manualInfo": "Eine Vorlage bucht einen wiederkehrenden Buchungssatz im Journal."
+      },
+      "confirm": {
+        "title": "Buchungsregel entfernen?",
+        "body": "«{name}» schlägt danach nichts mehr vor. Was schon gebucht ist, bleibt so.",
+        "yes": "Entfernen",
+        "no": "Abbrechen",
+        "close": "Schliessen"
+      },
+      "chooser": {
+        "label": "Welche Buchungsregel, {party}",
+        "placeholder": "Welche Buchungsregel?",
+        "other": "Anders buchen",
+        "otherKeywords": "konto anders manuell aufteilen",
+        "group": "Buchungsregeln",
+        "search": "Buchungsregel suchen"
+      },
+      "ask": {
+        "label": "{label}, {party}",
+        "restZero": "Der Rest wäre 0.00; Betrag prüfen.",
+        "missing": "Gib {label} ein, dann kannst du buchen."
+      },
+      "pop": {
+        "title": "Als Buchungsregel speichern",
+        "titleEdit": "Buchungsregel bearbeiten",
+        "name": "Name",
+        "text": "Nur wenn der Text enthält",
+        "textHint": "Leer: gilt für jede Zeile dieser Gegenpartei.",
+        "textClear": "Bedingung entfernen",
+        "rest": "Welcher Betrag ist der Rest?",
+        "restNone": "Wähl, welcher Betrag der Rest ist.",
+        "nameMissing": "Gib der Buchungsregel einen Namen.",
+        "askLabel": "Bezeichnung für {account}",
+        "askLabelMissing": "Jeder gefragte Betrag braucht eine Bezeichnung.",
+        "restMeta": "der Rest",
+        "via": "Über {account}",
+        "legAccount": "Konto der Position {n}",
+        "legVat": "MWST der Position {n}",
+        "save": "Speichern",
+        "busy": "Wird gespeichert …",
+        "open": "Als Buchungsregel speichern",
+        "restOf": "Rest: {account}",
+        "restChoice": "Bekommt den Rest",
+        "closeContext": "Ohne Speichern schliessen"
+      },
+      "vorlage": {
+        "title": "Als Vorlage speichern",
+        "titleEdit": "Vorlage bearbeiten",
+        "titleNew": "Neue Vorlage",
+        "nameMissing": "Gib der Vorlage einen Namen.",
+        "twoLegs": "Eine Vorlage braucht mindestens zwei Positionen.",
+        "accountMissing": "Wähl für jede Position ein Konto.",
+        "sameInvalid": "«Gleicher Betrag wie» zeigt auf einen gefragten Betrag, nie auf den Rest.",
+        "position": "Position {n}:",
+        "noAccount": "Konto wählen",
+        "side": {
+          "debit": "Soll",
+          "credit": "Haben"
+        },
+        "sideLabel": "Soll oder Haben, Position {n}",
+        "ownAmount": "Eigener Betrag",
+        "sameOption": "wie Position {n}, {label}",
+        "sameLabel": "Gleicher Betrag wie, Position {n}",
+        "removeLeg": "Position {n} entfernen",
+        "addLeg": "+ Position",
+        "labelTaken": "Eine Vorlage heisst schon «{name}». Ersetzen oder anders nennen?",
+        "replace": "Ersetzen"
+      },
+      "outcome": {
+        "label": "Was passiert mit diesen Zeilen?",
+        "legs": "Buchen",
+        "ignore": "Nicht buchen",
+        "reason": "Grund",
+        "noteMissing": "Gib beim anderen Grund eine Notiz ein.",
+        "ignoreHint": "Eine Zeile, die nicht gebucht wird, erreicht die Buchhaltung nie. Darum schlägt TILL das nur vor, und du legst jede Zeile selbst beiseite.",
+        "noLegs": "Diese Regel hat keine Positionen. Teil eine Zeile auf und speichere sie mit ☆."
+      },
+      "next": {
+        "label": "Nächster Schritt",
+        "none": "Kein nächster Schritt",
+        "hint": "Sobald die Zeile entschieden ist, bietet TILL diese Vorlage im Journal an.",
+        "words": "Danach: Vorlage «{name}»",
+        "link": "Nächster Schritt: «{name}»"
+      },
+      "factor": {
+        "modeLabel": "Betrag für {account}",
+        "ask": "Jedes Mal eingeben",
+        "compute": "Berechnen",
+        "label": "Bezeichnung für {account}",
+        "preset": "Berechnung",
+        "platform": "Plattform-Auszahlung (MWST-Satz, Gebühr vom Netto)",
+        "plain": "Faktor",
+        "vatPct": "MWST in %",
+        "feePct": "Gebühr in % vom Netto",
+        "plainField": "Faktor, z. B. 6.0056 oder 1081/180",
+        "invalid": "Berechnung prüfen",
+        "refused": "Dieser Faktor ist zu gross. Nimm einen einfacheren.",
+        "wordsPlatform": "berechnet aus MWST {vat} % und Gebühr {fee} % vom Netto",
+        "wordsPlain": "berechnet mit Faktor {factor}",
+        "wordsOnLine": "{how}: {from} → {to}"
+      },
+      "group": {
+        "match": "Erkennung",
+        "booking": "Buchung"
+      },
+      "leg": {
+        "rest": "Was übrig bleibt",
+        "same": "Gleicher Betrag wie Position {n}",
+        "computed": "Berechnet",
+        "computedHow": "Berechnet: {how}",
+        "asked": "Jedes Mal eingeben: {label}",
+        "askedBare": "Jedes Mal eingeben"
+      }
+    },
+    "woher": {
+      "agent": "Vorschlag des Agenten",
+      "agentTip": "Buchen genehmigt ihn",
+      "history": "Wie am {date} gebucht",
+      "model": "KI-Vorschlag",
+      "entryReference": "Gleiche Referenz",
+      "sameAmount": "Gleicher Betrag",
+      "qrReference": "QR-Referenz",
+      "qrDiffers": "QR-Referenz, Betrag weicht ab",
+      "batch": "Zahlungslauf",
+      "batchDiffers": "Zahlungslauf, Betrag weicht ab",
+      "billReference": "Lieferantenreferenz",
+      "transfer": "Eigener Übertrag",
+      "several": {
+        "one": "{count} Buchungsregel",
+        "other": "{count} Buchungsregeln"
+      },
+      "switch": "Wechseln",
+      "rule": "Regel {name}",
+      "glyph": {
+        "rule": "Buchungsregel",
+        "history": "Wie früher gebucht",
+        "agent": "Vom Agenten",
+        "model": "KI-Modell, ungeprüft",
+        "sure": "Referenz passt",
+        "check": "Zum Prüfen",
+        "match": "Abgleich mit einer Buchung"
+      }
+    },
+    "facts": {
+      "title": "Bankzeile",
+      "date": "Datum",
+      "text": "Bankbeschreibung",
+      "reference": "Referenz",
+      "iban": "IBAN",
+      "account": "Bankkonto",
+      "dates": "Buchungsdatum und Valuta",
+      "valuta": "Valuta",
+      "info": "Zusätzliche Info",
+      "qrRef": "QR-Referenz",
+      "e2e": "End-to-End",
+      "e2eLong": "End-to-End-Referenz",
+      "bankRef": "Bankreferenz",
+      "bankRefLong": "Referenz der Bank",
+      "code": "Buchungsart der Bank",
+      "fx": "Fremdwährung",
+      "fxRate": "Kurs",
+      "fxEffective": "effektiv",
+      "fxFee": "Gebühr",
       "receipts": {
         "one": "{count} Beleg",
         "other": "{count} Belege"
-      },
-      "vatSplit": "davon MWST {tax} auf {account} · netto {net}",
-      "vatSplitMany": "davon MWST {tax} · netto {net}",
-      "vatOnTop": "dazu MWST {parts}",
-      "vatPart": "{tax} auf {account}",
+      }
+    },
+    "book": {
+      "why": {
+        "account": "Konto wählen",
+        "amount": "Betrag fehlt",
+        "positions": "Positionen ergeben nicht {amount}",
+        "target": "Konto wählen",
+        "ask": "{label} fehlt",
+        "restZero": "Rest wäre {amount}",
+        "difference": "Grund der Differenz fehlt",
+        "rule": "Regel wählen",
+        "restZeroShort": "Für {account} bleibt nichts übrig",
+        "overrideReason": "Gib einen Grund für die Abweichung vom Standard an.",
+        "remainder": "Es bleiben {amount} übrig: wähle, was damit geschieht."
+      }
+    },
+    "details": {
       "vatFailed": "MWST liess sich nicht berechnen. Prüf den Code.",
       "model": "KI-Modell {model} auf diesem Gerät: zu {percent} % wahrscheinlich, gemessener Fehler {ece} Prozentpunkte (ECE). Noch von niemandem geprüft.",
       "modelNoEce": "KI-Modell {model} auf diesem Gerät: zu {percent} % wahrscheinlich, Fehler nicht gemessen. Noch von niemandem geprüft.",
       "entry": "Buchung vom {date}: {text}.",
       "entryDiffers": "Betrag weicht um {amount} ab. Grund:",
       "openEntry": "Buchung öffnen",
-      "reason": {
-        "history": "So gebucht wie zuletzt am {date} ({count} Mal).",
-        "qr_reference_exact": "QR-Referenz und Betrag passen auf den Rappen zu {number}.",
-        "existing_entry_reference": "Dieselbe Referenz wie die Buchung vom {date}: abgleichen, keine neue Buchung."
-      },
       "satz": "{debit} an {credit}",
       "satzMore": "+{count}",
-      "vatImport": "die Zahlung ist die Einfuhrsteuer, auf {account}",
-      "vatOnly": "davon MWST {tax} auf {account}",
-      "vatOnlyMany": "davon MWST {tax}",
-      "reference": "Ref. {value}",
-      "iban": "IBAN {value}",
       "batchBills": {
         "one": "{count} Rechnung: {names}",
         "other": "{count} Rechnungen: {names}"
+      },
+      "openEntryNumber": "Beleg {number} öffnen",
+      "entryNumbered": "Beleg {number}, Buchung vom {date}: {text}."
+    },
+    "area": {
+      "listLabel": "Bankzeilen",
+      "dockLabel": "Position der Details",
+      "dockRight": "Rechts",
+      "dockBottom": "Unten",
+      "closeContext": "Details zur Bankzeile",
+      "resize": "Grösse der Details",
+      "sizeText": "{size} Pixel"
+    },
+    "duplicate": {
+      "title": "Mögliches Duplikat von",
+      "titleCovered": "Mögliches Duplikat",
+      "mark": "Mögliches Duplikat: Entscheid offen",
+      "show": "Zeigen",
+      "isDuplicate": "Duplikat",
+      "isDistinct": "Kein Duplikat",
+      "bookWhy": "Zuerst entscheiden: Duplikat?",
+      "allExact": "Alle exakten Treffer sind Duplikate",
+      "ackDuplicate": "Als Duplikat ignoriert: {party}.",
+      "ackDistinct": "Kein Duplikat: {party} ist wieder eine normale Zeile.",
+      "ackDelivery": {
+        "one": "{count} Zeile als Duplikat ignoriert.",
+        "other": "{count} Zeilen als Duplikat ignoriert."
+      },
+      "reason": {
+        "shared_reference": "gleiche Referenz der Bank",
+        "same_movement": "gleiche Bewegung: Betrag, Datum, Gegenpartei",
+        "same_date": "gleicher Betrag am gleichen Tag",
+        "near_date": "gleicher Betrag, wenige Tage daneben",
+        "covered_period_new_line": "Neue Zeile an einem Tag, für den schon ein Auszug in den Büchern steht."
+      },
+      "short": "Duplikat?"
+    },
+    "period": {
+      "legend": "Zeitraum",
+      "from": "Von",
+      "to": "Bis",
+      "inverted": "«Von» liegt nach «Bis»."
+    },
+    "count": {
+      "one": "{count} Zeile",
+      "other": "{count} Zeilen",
+      "range": "{first} bis {last} von {total}",
+      "previous": "Zurück",
+      "next": "Weiter"
+    },
+    "mode": {
+      "label": "Buchungsart",
+      "konto": "Konto",
+      "zuordnen": "Zuordnen",
+      "kontakt": "Kontakt",
+      "spesen": "Spesen",
+      "smartLabel": "Worauf buchen?",
+      "smartPlaceholder": "Konto, Rechnung, Kontakt oder Spesen suchen",
+      "noMatch": "Nichts gefunden.",
+      "account": "Konto",
+      "accountPlaceholder": "Konto suchen"
+    },
+    "zuordnen": {
+      "noInvoices": "Keine offenen Rechnungen in dieser Währung.",
+      "noBills": "Keine offenen Lieferantenrechnungen in dieser Währung.",
+      "invoices": "Offene Rechnungen",
+      "bills": "Offene Lieferantenrechnungen",
+      "search": "Belege durchsuchen",
+      "openTip": "Noch offen",
+      "amountFor": "Betrag für {code}",
+      "openAfter": "danach offen {amount}",
+      "remainderLegend": "Was mit dem Rest geschieht",
+      "link": "Mit bestehender Buchung abgleichen"
+    },
+    "kontakt": {
+      "contact": "Kontakt",
+      "match": "Passt zur Gegenpartei",
+      "all": "Alle Kontakte",
+      "loading": "Kontakte werden geladen",
+      "placeholder": "Kontakt suchen",
+      "unreadable": "Die Kontakte liessen sich nicht lesen.",
+      "role": {
+        "customer": "Kunde",
+        "vendor": "Lieferant",
+        "both": "Kunde und Lieferant"
+      },
+      "modeLabel": "Wie gebucht wird",
+      "modeDefault": "{mode} (Standard)",
+      "mode": {
+        "guthaben": "Guthaben",
+        "anzahlung": "Anzahlung"
+      },
+      "reason": "Grund für die Abweichung vom Standard",
+      "side": {
+        "customer": "des Kunden",
+        "supplier": "beim Lieferanten"
+      },
+      "lands": {
+        "guthaben": "Bleibt als Guthaben {side} auf {account} stehen.",
+        "anzahlung": "Wird als Anzahlung {side} auf {account} gebucht."
       }
+    },
+    "spesen": {
+      "legend": "Genehmigte Spesen",
+      "loading": "Spesen werden geladen.",
+      "none": "Keine genehmigten Spesen offen.",
+      "noRight": "Dir fehlt das Recht, Spesen zu lesen.",
+      "unreadable": "Die Spesen liessen sich nicht lesen.",
+      "someone": "Mitarbeitende Person"
+    },
+    "fee": {
+      "offer": "Gebühr {fee} abspalten auf {account}?",
+      "apply": "Abspalten",
+      "pickFirst": "Wähle zuerst ein Konto.",
+      "dismiss": "Nein, danke",
+      "applied": "Gebühr {fee} auf {account} abgespalten.",
+      "undo": "Zurücknehmen"
+    },
+    "fx": {
+      "counterLeg": "Gegenbuchung in {amount}",
+      "acknowledge": "Ich habe die Folgen gelesen.",
+      "noConsequence": "Die Folgen der Gegenbuchung liessen sich nicht anzeigen, darum kannst du sie hier nicht bestätigen.",
+      "rate": "Kurs {rate}",
+      "fee": "Gebühr {fee}"
+    },
+    "figures": {
+      "amount": "Betrag",
+      "distributed": "verteilt",
+      "deviation": "Abweichung"
+    },
+    "focus": {
+      "previous": "Vorherige",
+      "next": "Nächste",
+      "place": "Zeile {n} von {count}",
+      "outside": "Nicht in der Liste ({count} Zeilen)",
+      "hideList": "Liste ausblenden"
+    },
+    "foot": {
+      "split": "Aufteilen",
+      "ignore": "Ignorieren"
     }
   },
   "qrmatch": {
@@ -978,7 +1627,7 @@
   "help": {
     "Bank": {
       "title": "Bank",
-      "body": "Hier steht jede Zeile deiner Kontoauszüge, egal von welchem Konto. Du entscheidest sie auf ihrer eigenen Zeile: buchen, eine offene Rechnung begleichen, mit einer Buchung abgleichen oder mit Grund ignorieren. Klick eine Zeile an, dann steht darunter, warum TILL sie so vorschlägt. Über der Liste steht die Differenz, bei mehreren Konten eine Zeile für alle; das (i) zeigt je Konto Bank gleich Buchhaltung plus offene Zeilen.\n\n«Brauchen dich» und «Sicher» zählt die Übersicht genau gleich. Einen Beleg ziehst du auf seine Zeile, vor oder nach dem Buchen. Ist die Zeile gebucht, bewahrt TILL ihn zehn Jahre auf. «Ohne Beleg» unter «Gebucht» zeigt, wo er noch fehlt.",
+      "body": "Hier steht jede Zeile deiner Kontoauszüge, egal von welchem Konto. Du entscheidest sie auf ihrer Zeile: buchen, eine offene Rechnung begleichen, mit einer Buchung abgleichen oder mit dem × ignorieren. Klickst du eine Zeile an, zeigen die Details daneben, was gebucht wird und woher der Vorschlag kommt. Über der Liste steht die Differenz zwischen Bank und Buchhaltung.\n\nMit dem ☆ speicherst du eine Buchungsregel für die Gegenpartei. Eine Buchungsregel schlägt nur vor. Gebucht wird erst auf deinen Klick. Einen berechneten Betrag kannst du überschreiben. Einen Beleg hängst du mit der Büroklammer an oder ziehst ihn auf die Zeile. Ist sie gebucht, bewahrt TILL ihn zehn Jahre auf.",
       "concepts": [],
       "docsPath": "introduction"
     }
@@ -1017,7 +1666,8 @@
     "titleIncomplete": "Auszug {n} ist im Buch nicht vollständig",
     "titleConflicting": "Auszug {n} liegt zweimal mit verschiedenen Salden im Buch",
     "conflicting": "Die Bank hat Auszug {n} zweimal geliefert, mit verschiedenen Salden. Ob Geld fehlt, lässt sich so nicht sagen: prüfe die beiden Kopien unter Bank.",
-    "confirmationVoid": "Die frühere Bestätigung, dass nichts fehlt, gilt nicht mehr."
+    "confirmationVoid": "Die frühere Bestätigung, dass nichts fehlt, gilt nicht mehr.",
+    "titleList": "Auszüge {ranges} fehlen"
   },
   "gapRepair": {
     "title": "Lücke schliessen",
@@ -1025,8 +1675,8 @@
     "loading": "Die Lücke wird geladen.",
     "loadError": "Die Lücke konnte nicht geladen werden. Schliesse das Fenster und versuche es noch einmal.",
     "notFound": "Diese Lücke gibt es nicht mehr: die Auszüge sind inzwischen im Buch.",
-    "leadZkb": "Lade in ZKB eBanking die camt.053-Auszüge für {dates} herunter und lege sie hier ab. Der erste und der letzte Tag sind schon im Buch: die Tage davor und danach schaden nicht, TILL zählt nichts doppelt. Mehrere Dateien auf einmal gehen, die Reihenfolge ist egal.",
-    "leadOther": "Lade im E-Banking deiner Bank die camt.053-Auszüge für {dates} herunter und lege sie hier ab. Der erste und der letzte Tag sind schon im Buch: die Tage davor und danach schaden nicht, TILL zählt nichts doppelt. Mehrere Dateien auf einmal gehen, die Reihenfolge ist egal.",
+    "leadZkb": "Lade in ZKB eBanking die camt.053-Auszüge für {dates} herunter und lege sie hier ab. Doppelte Tage schaden nicht.",
+    "leadOther": "Lade im E-Banking deiner Bank die camt.053-Auszüge für {dates} herunter und lege sie hier ab. Doppelte Tage schaden nicht.",
     "steps": {
       "zkb": {
         "1": "Öffne «Konto & Zahlungen» und dann «Datentransfer».",
@@ -1074,7 +1724,7 @@
       "amended": "Die Bank hat diesen Auszug mit anderem Inhalt erneut geliefert. Prüfe ihn unter Bank.",
       "other": "Code {code}."
     },
-    "confirmLead": "Gab es an diesen Tagen sicher keine Buchung? Dann bestätige mit einem Grund, dass in der Lücke {range} nichts fehlt. Du kannst das später zurücknehmen.",
+    "confirmLead": "Keine Buchungen an diesen Tagen? Dann bestätige es mit einem Grund.",
     "reason": "Grund",
     "reasonPlaceholder": "z. B. Feiertage ohne Buchung",
     "confirm": "Nichts fehlt, bestätigen",
@@ -1085,6 +1735,9 @@
       "human_only": "Das bestätigt eine Person, nicht der Agent.",
       "needs_bank_account": "Dieses Bankkonto gibt es nicht mehr.",
       "gap_has_waiting_statement": "In dieser Lücke wartet ein Auszug, der nicht anschliesst: es fehlt Geld im Buch. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge."
-    }
+    },
+    "titleAll": "Auszüge {ranges} fehlen",
+    "whyAllChain": "Es fehlt kein Geld: die Salden schliessen genau an.",
+    "titleMany": "Lücken schliessen"
   }
 }

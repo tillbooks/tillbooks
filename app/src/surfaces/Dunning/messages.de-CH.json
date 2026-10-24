@@ -58,12 +58,14 @@
       "interest": "Verzugszins"
     },
     "downloadLetter": "Mahnbrief für {debtor} herunterladen",
+    "letterReissuedWithoutFee": "ohne die stornierte Gebühr neu ausgestellt",
     "letterSent": "versendet",
     "changed": {
       "paid": "bezahlt",
       "partiallyPaid": "teilweise bezahlt",
       "cancelled": "storniert",
-      "credited": "gutgeschrieben"
+      "credited": "gutgeschrieben",
+      "feeReversed": "Gebühr storniert"
     },
     "changedBadge": "seit Ausstellung {reason}",
     "changedLetterHeld": "Seit Ausstellung {reason}: diesen Brief nicht wie ausgestellt versenden, die geforderte Summe stimmt nicht mehr. Der Rest folgt mit der nächsten Mahnung.",
@@ -107,7 +109,32 @@
     },
     "unknownDebtor": "Unbekannter Debitor",
     "unnumbered": "Ohne Nummer",
-    "rowOpen": "Mahnlauf vom {date} öffnen"
+    "rowOpen": "Mahnlauf vom {date} öffnen",
+    "reverseFee": "Mahngebühren stornieren",
+    "reverseFeeTitle": "Mahngebühren dieses Laufs stornieren?",
+    "reverseFeeBody": "TILL bucht eine Korrekturbuchung, die die Mahngebühren dieses Laufs aufhebt. Die Mahnstufen bleiben, und ein bereits versandter Brief lässt sich nicht zurückholen.",
+    "reverseFeeReason": "Grund",
+    "reverseFeeCancel": "Abbrechen",
+    "reverseFeeConfirm": "Gebühren stornieren",
+    "feeReversed": "Die Mahngebühren dieses Laufs sind storniert.",
+    "feeSettled": "Die Mahngebühr ist bereits bezahlt. Storniere zuerst die Zahlung (unter Zahlungen), dann die Gebühr.",
+    "feeAlreadyReversed": "Die Mahngebühren dieses Laufs sind bereits storniert.",
+    "reverseFeeUnsentReissue": "Ein noch nicht versandter Brief wird ohne die Gebühr neu ausgestellt und kann danach versandt werden.",
+    "reverseFeeUnsentHold": "Ein noch nicht versandter Brief bleibt, wie er ist, und wird nicht versandt (deine Einstellung unter Einrichtung, Einstellungen).",
+    "overrideToggle": "Diesen Mahnlauf anders als eingestellt behandeln",
+    "overrideRefreeze": "Noch nicht versandte Briefe",
+    "overrideLetterDate": "Datum eines neu ausgestellten Briefs",
+    "overrideReason": "Warum dieser Lauf abweicht",
+    "overrideReasonRequired": "Gib an, warum dieser Lauf von den Einstellungen abweicht.",
+    "refreeze": {
+      "reissue": "Ohne Gebühr neu ausstellen",
+      "hold": "Zurückhalten"
+    },
+    "letterDate": {
+      "runDate": "Datum des Mahnlaufs",
+      "today": "Heute"
+    },
+    "letterDated": "datiert {date}"
   },
   "help": {
     "Dunning": {

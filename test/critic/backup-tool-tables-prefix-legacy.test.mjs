@@ -20,7 +20,17 @@ import Database from 'better-sqlite3';
 import { getAction } from '../../dist/api/registry.js';
 import { SqliteStore } from '../../dist/core/store/sqlite-store.js';
 import { sequenceIdGen } from '../../dist/core/ids.js';
-import { schemaFingerprint, schemaShapeOf } from '../../dist/core/store/schemaShape.js';
+import { schemaFingerprint } from '../../dist/core/store/schemaShape.js';
+
+/** The whole-FILE shape a pre-isTillTable backup fingerprinted (tool tables included), computed here:
+ *  the engine no longer exports a way to ask for it (critic L3, 14.10.2026). */
+function wholeFileShape(db) {
+  const shape = {};
+  for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all()) {
+    shape[name] = db.pragma(`table_info("${name}")`).map((c) => c.name).sort();
+  }
+  return shape;
+}
 
 const OLD = process.env.TILL_CRITIC_OLD_DIST;
 const clock = { now: () => '2026-10-13T10:00:00.000Z' };
@@ -61,7 +71,7 @@ test('critic P9: a backup the PRE-FIX engine took of a Litestream book verifies 
     const manifest = JSON.parse(readFileSync(join(bkp.artifactRef, 'manifest.json'), 'utf8'));
     assert.ok('_litestream_seq' in manifest.schemaShape, 'the pre-fix manifest named the Litestream table');
     const snap = new Database(join(bkp.artifactRef, 'data.sqlite'), { readonly: true });
-    assert.equal(manifest.schemaFingerprint, schemaFingerprint(schemaShapeOf(snap, { includeForeignTables: true })));
+    assert.equal(manifest.schemaFingerprint, schemaFingerprint(wholeFileShape(snap)));
     assert.equal(snap.prepare('SELECT COUNT(*) AS n FROM _litestream_seq').get().n, 0, 'old copy took the DDL, no rows');
     snap.close();
 

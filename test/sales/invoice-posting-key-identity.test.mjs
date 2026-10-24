@@ -234,7 +234,9 @@ function assertNothingWasHalfWritten(store, workspaceId, invoiceId) {
   assert.equal(row.posted_entry_id, null, 'no foreign entry may become the posting');
   assert.equal(row.issue_date, null, 'no issue date may be stamped');
   assert.equal(
-    store.db.prepare('SELECT COUNT(*) AS n FROM document_number_seq WHERE workspace_id = ?').get(workspaceId).n,
+    // The SALES counters only: since D178 point 2 the journal's Belegnummer run shares the table
+    // (type 'journal'), and a squat's own post_entry legitimately spends a journal number.
+    store.db.prepare("SELECT COUNT(*) AS n FROM document_number_seq WHERE workspace_id = ? AND type <> 'journal'").get(workspaceId).n,
     0,
     'the number counter must roll back too',
   );

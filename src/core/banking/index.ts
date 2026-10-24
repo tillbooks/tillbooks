@@ -151,7 +151,7 @@ export type {
   ClaimedLegs,
   BankLeg,
 } from './bankLines.js';
-export { bookBankLine, buildAccountsLines, ignoreBankLine, reopenBankLine } from './bankBooking.js';
+export { bookBankLine, buildAccountsLines, ignoreBankLine, prevalidateBookBankLine, prevalidateIgnoreBankLine, reopenBankLine } from './bankBooking.js';
 export type {
   BookBankLineInput,
   BookBankLineOk,
@@ -168,7 +168,26 @@ export {
   proposalContext,
   proposeForLine,
 } from './bankProposals.js';
-export type { BankLineProposal, BankProposalCertainty, BankProposalReason } from './bankProposals.js';
+export type { BankLineProposal, BankProposalAsk, BankProposalCertainty, BankProposalComputed, BankProposalReason } from './bankProposals.js';
+export {
+  BANK_STANDARD_DIRECTIONS,
+  clearBankStandard,
+  listBankStandards,
+  setBankStandard,
+  vatCanApplyToAccount,
+} from './bankStandards.js';
+export type {
+  BankStandard,
+  BankStandardDirection,
+  RecipeAmount,
+  RecipeFactorExplain,
+  RecipeLeg,
+  ClearBankStandardInput,
+  ClearBankStandardOk,
+  ListBankStandardsOk,
+  SetBankStandardInput,
+  SetBankStandardOk,
+} from './bankStandards.js';
 export {
   BANK_INBOX_MODEL_CONSUMER,
   BANK_INBOX_MODEL_LANGUAGES,
@@ -193,11 +212,13 @@ export {
   bankInboxAttention,
   isProposalBookable,
   vorschlagLineIds,
+  newestVorschlagByLine,
 } from './bankInbox.js';
 export type {
   BankInboxLine,
   BankInboxDecision,
   BankAccountBalance,
+  BankAccountStart,
   ListBankInboxInput,
   ListBankInboxOk,
   BankReconciledAccount,

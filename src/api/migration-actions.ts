@@ -136,7 +136,7 @@ export function migrationActions(h: MigrationActionHelpers): readonly ActionDef[
     ctxAction(
       'migration_rollback_step',
       'write:correctable:books',
-      'Reverse a committed step through A02 reversing entries and archive master rows through their owning verbs. Never a delete: posted entries are append-only. The step returns to the mapped state and the approval is voided. After any commit this verb requires commit_migration.',
+      'Reverse a committed step through A02 reversing entries and archive master rows through their owning verbs. Never a delete: posted entries are append-only. The step returns to the mapped state and the approval is voided. When the opening reversal is refused (a locked period), the rollback refuses with that reason and the step stays committed. After any commit this verb requires commit_migration.',
       ctxSchema({ planId: STR, stepId: STR, confirmed: BOOL, idempotencyKey: STR }, ['planId', 'stepId', 'idempotencyKey']),
       (ctx, input) => rollbackStep(ctx, as(input)),
     ),

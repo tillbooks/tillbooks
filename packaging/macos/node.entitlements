@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Hardened-runtime entitlements for the Node runtime embedded in the release TILL.app
+     (Contents/Resources/runtime/bin/node), and for nothing else: the TILL launcher itself is signed
+     with the hardened runtime and no entitlements.
+
+     V8 compiles JavaScript to machine code at run time, so Node needs both of these under the hardened
+     runtime: allow-jit for the MAP_JIT pages, allow-unsigned-executable-memory for the code pages V8
+     writes without MAP_JIT. build-release.sh proves the pair is enough by running the signed runtime
+     before it packs the dmg.
+
+     Deliberately NOT here (nodejs.org's own binary carries them, this build does not need them):
+       disable-library-validation  the only native addon, better-sqlite3, is re-signed with the same
+                                   Developer ID team, so library validation accepts it as is;
+       disable-executable-page-protection, allow-dyld-environment-variables  not needed to run;
+       get-task-allow              a debugging entitlement, and notarisation rejects it. -->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+</dict>
+</plist>

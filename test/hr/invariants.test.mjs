@@ -16,7 +16,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { lockPeriod, reverseEntry } from '../../dist/core/ledger/index.js';
-import { approveClaim, reimburseClaim, rejectClaim, getClaim } from '../../dist/core/hr/index.js';
+import { approveClaim, reimburseClaim, rejectClaim, getClaim, reverseClaim } from '../../dist/core/hr/index.js';
 import { setup, addEmployee, submittedClaim, counts, payablesBalance, vendorApBalance, accountBalance, claimRow, secondWorkspace } from './support.mjs';
 
 const AMOUNT = 4000; // CHF 40.00, under the receipt threshold, no VAT
@@ -203,7 +203,7 @@ test('E02 tx-atomicity: a refused approve (no employee contact) writes ZERO rows
   assert.equal(claimRow(t.store, t.workspaceId, claimId).status, 'submitted');
 });
 
-test('E02 reversing discipline: an approved claim is immutable and corrected only by reverse_entry', () => {
+test('E02 reversing discipline: an approved claim is immutable and corrected only by expense_claim_reverse (D168)', () => {
   const t = setup();
   const { employeeId } = addEmployee(t.ctx);
   const { claimId } = submittedClaim(t.ctx, employeeId);
@@ -224,9 +224,14 @@ test('E02 reversing discipline: an approved claim is immutable and corrected onl
     t.store.db.prepare('DELETE FROM expense_claim WHERE id = ?').run(claimId);
   }, /expense_claim_immutable/);
 
-  // The lawful correction is an A02 reversing entry, which nets the employee-payable account back to
-  // zero without touching the claim row.
-  const reversed = reverseEntry(t.ctx, { entryId: approved.postedEntryId, idempotencyKey: 'rev' });
-  assert.equal(reversed.ok, true);
+  // D168: the raw A02 reversal is refused, because it would leave the claim `approved` beside a Storno.
+  // The lawful correction is the owning verb, which mirrors the entry AND closes the claim.
+  const raw = reverseEntry(t.ctx, { entryId: approved.postedEntryId, idempotencyKey: 'rev' });
+  assert.equal(raw.ok, false);
+  assert.equal(raw.error, 'owned_by');
+  assert.equal(raw.verb, 'expense_claim_reverse');
+  const reversed = reverseClaim(t.ctx, { claimId, reason: 'falsch gebucht', idempotencyKey: 'rev' });
+  assert.equal(reversed.ok, true, JSON.stringify(reversed));
+  assert.equal(claimRow(t.store, t.workspaceId, claimId).status, 'reversed');
   assert.equal(payablesBalance(t.store, t.workspaceId), 0, 'the reversal cleared employee-payable 2260');
 });

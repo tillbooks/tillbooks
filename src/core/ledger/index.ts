@@ -11,6 +11,12 @@ export { saveDraft, deleteDraft } from './draft.js';
 export type { SaveDraftInput, DeleteDraftInput } from './draft.js';
 export { getEntry, listJournal } from './reads.js';
 export type { JournalFilter } from './reads.js';
+// A02 §4b, the Belegnummer (D178 point 2): the inspection read. Assignment has no public verb: it happens
+// only inside `postEntry`'s own transaction (`./entryNumber.ts`), so nothing here can number an entry.
+export { journalNumberingPlan } from './entryNumberPlan.js';
+export type { JournalNumberingPlanOk, NumberingSeriesView } from './entryNumberPlan.js';
+export { BELEGNUMMER_MODES } from './entryNumber.js';
+export type { BelegnummerMode } from './entryNumber.js';
 
 // A03, audit trail & period locks: the real ports A02 consumes, plus the period/close/log verbs.
 export { appendAuditLog, getAuditLog, makeAuditPort, AUDIT_ACTIONS } from './auditLog.js';

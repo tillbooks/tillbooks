@@ -32,6 +32,7 @@ import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { isErr } from '../lib/client';
 import { useClient } from '../lib/client-context';
+import { ADOPTED_BOOK_EVENT, reportsAdoptedBookUnavailable } from '../lib/adopted-book';
 import { Skeleton } from '../components/states';
 import { isWorkspaceId, resolveInitialWorkspaceId, storeWorkspaceId } from '../lib/workspace-store';
 import { NAV_ITEMS } from './nav';
@@ -227,6 +228,21 @@ export function WorkspaceResolver({ children }: { children: ReactNode }) {
   const [resolution, setResolution] = useState<'pending' | 'empty' | 'failed' | 'picked'>(() =>
     workspaceId === null ? 'pending' : 'picked',
   );
+  /** D166 point 8: the engine says the adopted book is not reachable (delivery_status or a refusal). */
+  const [bookUnavailable, setBookUnavailable] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const onRefused = () => setBookUnavailable(true);
+    window.addEventListener(ADOPTED_BOOK_EVENT, onRefused);
+    void client.call('delivery_status', {}).then((response) => {
+      if (!cancelled && !isErr(response.body) && reportsAdoptedBookUnavailable(response.body)) setBookUnavailable(true);
+    });
+    return () => {
+      cancelled = true;
+      window.removeEventListener(ADOPTED_BOOK_EVENT, onRefused);
+    };
+  }, [client]);
 
   useEffect(() => {
     let cancelled = false;
@@ -257,6 +273,10 @@ export function WorkspaceResolver({ children }: { children: ReactNode }) {
     // One read per selection: a switch re-validates, a same-id re-render does not re-read.
   }, [client, workspaceId, setWorkspaceId]);
 
+  // D166 point 8 (critic N1): the adopted book is not reachable. Decided on landing from
+  // delivery_status, whatever the workspace count, and again whenever any call is refused for it (the
+  // client announces it): the only page that makes sense is the one that says so, on /first-run.
+  if (bookUnavailable && location.pathname !== '/first-run') return <Navigate to="/first-run" replace />;
   if (workspaceId !== null) return <>{children}</>;
   if (resolution === 'pending') return <Skeleton rows={4} height={96} />;
   // No workspace at all: the landing IS the first-run door. Every other route keeps its own state.

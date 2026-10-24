@@ -147,3 +147,24 @@ export function gapRepairHref(gap: Pick<StatementGapDto, 'bankAccountId' | 'gapI
   const qs = new URLSearchParams({ repair: gap.bankAccountId, gap: gap.gapId });
   return `/bank-accounts?${qs.toString()}`;
 }
+
+/**
+ * The gaps of ONE account as one fact (owner, 18.10.2026: "if we want to close holes, one button must be
+ * sufficient"): the title, a short explanation only where money is missing, and the one repair target
+ * (the gap itself, or `all` for two or more). The Bank card, the channel panel and the Übersicht band
+ * all say it this way, so no surface lists a button per gap again.
+ */
+export function gapsSummary(t: T, gaps: readonly StatementGapDto[]): { title: string; note: string | null; gapId: string; many: boolean } | null {
+  if (gaps.length === 0) return null;
+  if (gaps.length === 1) {
+    const g = gaps[0];
+    return { title: gapTitle(t, g), note: g.chains ? null : gapExplanation(t, g), gapId: g.gapId, many: false };
+  }
+  const unchained = gaps.filter((g) => !g.chains);
+  return {
+    title: t('statementGap.titleList', { ranges: gaps.map((g) => gapRangeText(g)).join(', ') }),
+    note: unchained.length === 0 ? null : unchained.map((g) => gapExplanation(t, g)).join(' '),
+    gapId: 'all',
+    many: true,
+  };
+}

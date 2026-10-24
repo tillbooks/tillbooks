@@ -146,7 +146,7 @@ describe('InvoiceEditor, the five states', () => {
     // The field stays the person's: empty, and described by what the issue will derive.
     const due = screen.getByLabelText('Zahlbar bis');
     expect(due).toHaveValue('');
-    expect(due).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Rechnungsdatum.');
+    expect(due).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Ausstellungsdatum.');
     expect(screen.queryByRole('button', { name: /Frist übernehmen/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mehr zu den Konditionen' })).toHaveAccessibleDescription(
       /Ausstellungsdatum plus die Zahlungsfrist von Muster AG \(30 Tage\)/,
@@ -180,7 +180,7 @@ describe('InvoiceEditor, the five states', () => {
     await pickMuster();
     expect(profileFixture.profile.defaultPaymentTermsDays).toBe(30);
     expect(screen.getByLabelText('Zahlbar bis')).toHaveValue('');
-    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Rechnungsdatum.');
+    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Ausstellungsdatum.');
     expect(screen.getByRole('button', { name: 'Mehr zu den Konditionen' })).toHaveAccessibleDescription(
       /Muster AG hat keine eigene Zahlungsfrist, also gilt die Standardfrist von 30 Tagen/,
     );
@@ -190,7 +190,7 @@ describe('InvoiceEditor, the five states', () => {
     renderEditor(base([{ ...COMPLETE_CONTACT, paymentTermsDays: 0 }]));
     await pickMuster();
     expect(screen.getByLabelText('Zahlbar bis')).toHaveValue('');
-    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: fällig am Rechnungsdatum.');
+    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: fällig am Ausstellungsdatum.');
     expect(screen.getByRole('button', { name: 'Mehr zu den Konditionen' })).toHaveAccessibleDescription(/Muster AG zahlt sofort/);
   });
 
@@ -200,7 +200,7 @@ describe('InvoiceEditor, the five states', () => {
       get_company_profile: ok({ profile: { ...profileFixture.profile, defaultPaymentTermsDays: null } }),
     });
     await pickMuster();
-    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: fällig am Rechnungsdatum.');
+    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: fällig am Ausstellungsdatum.');
     expect(screen.getByRole('button', { name: 'Mehr zu den Konditionen' })).toHaveAccessibleDescription(
       /Weder Muster AG noch der Arbeitsbereich hat eine Zahlungsfrist/,
     );
@@ -209,7 +209,7 @@ describe('InvoiceEditor, the five states', () => {
   it('POPULATED (D163): a stored term outside 0 to 365 counts as none and falls through to the default, as in the engine', async () => {
     renderEditor(base([{ ...COMPLETE_CONTACT, paymentTermsDays: 400 }]));
     await pickMuster();
-    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Rechnungsdatum.');
+    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Ausstellungsdatum.');
   });
 
   it('ERROR (D163): a failed Firmenprofil read states no default; a customer with terms of its own still shows them', async () => {
@@ -218,14 +218,14 @@ describe('InvoiceEditor, the five states', () => {
     await pickMuster();
     expect(screen.getByLabelText('Zahlbar bis')).toHaveValue('');
     expect(screen.queryByText(/Ergibt sich beim Ausstellen/)).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Zahlbar bis')).not.toHaveAccessibleDescription(/Rechnungsdatum/);
+    expect(screen.getByLabelText('Zahlbar bis')).not.toHaveAccessibleDescription(/Ausstellungsdatum/);
   });
 
   it('ERROR (D163): with the Firmenprofil unread, a customer with its own 30 days still reads as 30 days', async () => {
     const failed: RestResponse = { status: 500, body: { ok: false, error: 'internal' } };
     renderEditor({ ...base(), get_company_profile: failed });
     await pickMuster();
-    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Rechnungsdatum.');
+    expect(screen.getByLabelText('Zahlbar bis')).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Ausstellungsdatum.');
   });
 
   it('POPULATED: a complete address, an IBAN and CHF read as QR-ready, with no fabricated QR', async () => {
@@ -466,6 +466,6 @@ describe('InvoiceEditor, the due date reaches the engine', () => {
     renderEditor({ ...base(), get_document: draft(null) }, '/documents/doc_1');
     const due = await screen.findByLabelText('Zahlbar bis');
     expect(due).toHaveValue('');
-    await waitFor(() => expect(due).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Rechnungsdatum.'));
+    await waitFor(() => expect(due).toHaveAccessibleDescription('Ergibt sich beim Ausstellen: 30 Tage ab Ausstellungsdatum.'));
   });
 });

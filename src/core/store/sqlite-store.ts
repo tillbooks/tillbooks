@@ -285,6 +285,12 @@ export function makeDirectoryDurably(dir: string): void {
   for (const d of created.reverse()) fsyncDirectory(dirname(d));
 }
 
+/**
+ * D165: a commit mark (`SqliteStore.withCommitMark`). `ran` says whether the transaction it runs in
+ * wrote anything beyond a refusal's own bookkeeping (`withoutCommitMark`).
+ */
+export type CommitMark = (ran: boolean) => void;
+
 export interface SqliteStoreOptions {
   /** File path, or `:memory:` (the default) for an ephemeral test database. */
   location?: string;
@@ -820,14 +826,119 @@ export class SqliteStore {
   private runner(): Database.Transaction<(body: () => unknown) => unknown> {
     this.transactionRunner ??= this.db.transaction((body: () => unknown): unknown => {
       this.assertGenerationKnown();
+      const marking = this.commitMarks.length > 0;
+      const changesBefore = marking ? this.changeCount() : 0;
+      const unmarkedBefore = this.unmarkedChanges;
       this.ownTransactions += 1;
       try {
-        return body();
+        const result = body();
+        // D165: a transaction that wrote while a commit mark is armed writes the mark INSIDE itself,
+        // so the mark commits exactly when (and only if) the write does. See `withCommitMark`. It says
+        // the act RAN only for writes outside every `withoutCommitMark` scope: a transaction opened
+        // inside one never does, and one that merely contains one counts only the writes outside it.
+        if (marking) {
+          const wrote = this.changeCount() - changesBefore;
+          const ran = this.forceMark || (this.noMarkDepth === 0 && wrote - (this.unmarkedChanges - unmarkedBefore) > 0);
+          if (ran) {
+            for (const mark of this.commitMarks) mark(true);
+          } else if (wrote > 0) {
+            // Bookkeeping only: the mark's own write is bookkeeping too, so an enclosing transaction
+            // does not count it as the act having run.
+            this.withoutCommitMark(() => {
+              for (const mark of this.commitMarks) mark(false);
+            });
+          }
+        }
+        return result;
       } finally {
         this.ownTransactions -= 1;
       }
     });
     return this.transactionRunner;
+  }
+
+  /** The commit marks armed right now (`withCommitMark`), innermost last. */
+  private readonly commitMarks: CommitMark[] = [];
+
+  /** How deep `withoutCommitMark` scopes are nested right now. */
+  private noMarkDepth = 0;
+
+  /** Rows changed inside outermost `withoutCommitMark` scopes since the connection opened. */
+  private unmarkedChanges = 0;
+
+  /** Set only while `commitMarkNow` runs its own transaction. */
+  private forceMark = false;
+
+  /**
+   * D165: run `fn` with a COMMIT MARK armed. Every transaction of this store that writes while `fn`
+   * runs also runs `mark` inside itself, as its last statement, so the mark is durable exactly when
+   * one of `fn`'s writes is. This is how an approval knows, after a process death, that the act it
+   * replayed had committed: the drafted action's `committed_at` is stamped in the act's OWN
+   * transaction, whatever verb name or key the act files its idempotency record under.
+   *
+   * It needs no cooperation from the code `fn` runs, because every write on this connection passes
+   * through `tx` (THE WRITE CHOKEPOINT on `GuardedDatabase`: a bare write is wrapped in one). A nested
+   * transaction marks too; a savepoint that rolls back takes its mark with it, and the enclosing
+   * transaction marks again when it wrote. `mark` must be one small idempotent write on this
+   * connection, and it must not throw: a throw there rolls back the transaction it marks.
+   *
+   * `mark(ran)`: `ran` is true when the transaction wrote anything outside `withoutCommitMark` (the act
+   * ran, at least in part), false when everything it wrote was a refusal's own bookkeeping. A mark
+   * records the records as left either way (they are the act's own moves) and says the act ran only for
+   * `ran`.
+   *
+   * SYNCHRONOUS ONLY, like `innerWrite`: the mark is dynamic state on this store.
+   */
+  withCommitMark<T>(mark: CommitMark, fn: () => T): T {
+    this.commitMarks.push(mark);
+    try {
+      const result = fn();
+      if (result !== null && typeof result === 'object' && typeof (result as { then?: unknown }).then === 'function') {
+        throw new Error('withCommitMark: the marked call returned a promise; it must be synchronous');
+      }
+      return result;
+    } finally {
+      this.commitMarks.pop();
+    }
+  }
+
+  /**
+   * D165 (follow-up critic, 14.10.2026): run `fn` as a REFUSAL'S OWN BOOKKEEPING, which never says the
+   * act ran (`mark(false)`). The default fails closed: any write an armed commit mark sees counts as the
+   * act having run, so an approval that answers a refusal after committing business rows keeps its mark
+   * and cannot be recorded as rejected. What a refusal writes about itself (a degraded or failed
+   * dispatch log row, a migration check and its `checked` status, a send intent written and retracted
+   * when the transport said nothing left) runs here instead, so a refusal that wrote only that leaves
+   * the act unmarked and rejectable, while the records it moved still count as the act's own.
+   *
+   * A transaction that opens inside the scope never says the act ran; an enclosing transaction says so
+   * only when it also wrote outside the scope. Only bookkeeping belongs in here: a business write inside
+   * it is an act no approval would know ran. Synchronous only, like `withCommitMark`.
+   */
+  withoutCommitMark<T>(fn: () => T): T {
+    const before = this.changeCount();
+    this.noMarkDepth += 1;
+    try {
+      return fn();
+    } finally {
+      this.noMarkDepth -= 1;
+      if (this.noMarkDepth === 0) this.unmarkedChanges += this.changeCount() - before;
+    }
+  }
+
+  /**
+   * D165: stamp every armed commit mark now, in a transaction of its own, although nothing was written.
+   * For the one moment an act may have run without a row saying so: a transport that THREW after its
+   * unmarked send intent, so the mail may or may not have left. Outside `withCommitMark` it does nothing.
+   */
+  commitMarkNow(): void {
+    if (this.commitMarks.length === 0 || this.noMarkDepth > 0) return;
+    this.forceMark = true;
+    try {
+      this.tx(() => undefined);
+    } finally {
+      this.forceMark = false;
+    }
   }
 
   /**
@@ -946,7 +1057,27 @@ export class SqliteStore {
    */
   changeCount(): number {
     this.changesRead ??= this.db.prepare('SELECT total_changes()').pluck();
-    return this.changesRead.get() as number;
+    return (this.changesRead.get() as number) - this.discardedChanges;
+  }
+
+  /** D177 (critic D177-R2-2): rows changed inside `discardingChanges` scopes, all of them rolled back. */
+  private discardedChanges = 0;
+
+  /**
+   * D177 (critic D177-R2-2): run `fn`, a dry run whose every write is ALWAYS rolled back (the bank inbox's
+   * settlement screen runs the real booking inside a transaction it aborts), and leave `changeCount` as if
+   * it never wrote: whatever `total_changes()` counted inside the scope, on a normal return or a throw, is
+   * subtracted. Without it a throw from inside the dry run was answered `partial: true` although nothing it
+   * changed survived. Only for code that cannot commit anything (the caller's contract).
+   */
+  discardingChanges<T>(fn: () => T): T {
+    this.changesRead ??= this.db.prepare('SELECT total_changes()').pluck();
+    const before = this.changesRead.get() as number;
+    try {
+      return fn();
+    } finally {
+      this.discardedChanges += (this.changesRead.get() as number) - before;
+    }
   }
 
   /**
@@ -1056,11 +1187,17 @@ export class SqliteStore {
     const scope = this.idempotencyScope(verb);
     return this.tx(() => {
       const result = compute();
-      this.db
-        .prepare(
-          'INSERT INTO idempotency (workspace_id, key, verb, result_json, created_at) VALUES (?, ?, ?, ?, ?)',
-        )
-        .run(workspaceId, key, scope, JSON.stringify(result), this.clock.now());
+      // D165 (critic round 2 on the follow-ups, R2-1): the memo is never the act. A route that RETURNS a
+      // refusal is memoised too (G09's `commitStep`), and a memo that marked would leave its approval
+      // neither approvable (every replay answers the memo) nor rejectable. The act's own writes in
+      // `compute` still mark; the record of its answer does not.
+      this.withoutCommitMark(() =>
+        this.db
+          .prepare(
+            'INSERT INTO idempotency (workspace_id, key, verb, result_json, created_at) VALUES (?, ?, ?, ?, ?)',
+          )
+          .run(workspaceId, key, scope, JSON.stringify(result), this.clock.now()),
+      );
       return result;
     });
   }

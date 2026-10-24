@@ -271,3 +271,26 @@
   font-size: var(--t-font-body);
   line-height: var(--t-lh-body);
 }
+
+/* --- D166: the browsers that hold the Studio key ---------------------------------------------- */
+
+/* Install-wide, below the tabs. Separated by space, not a border (DESIGN.md). */
+.members-device {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  margin-top: var(--t-space-6);
+  max-width: 44rem;
+}
+
+.members-device-title {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+  margin: 0;
+}
+
+.members-device-body {
+  margin: 0;
+  color: var(--t-text-dim);
+}

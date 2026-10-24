@@ -141,15 +141,16 @@ function tileOf(overview, id) {
   return tile;
 }
 
-test('F00 registration: two read verbs, zero writes', () => {
+test('F00 registration: three read verbs (D178 point 13 added the series), zero writes', () => {
   const mine = ACTIONS.filter((a) => a.name.startsWith('dashboard_'));
   assert.deepEqual(
     mine.map((a) => [a.name, a.kind]).sort(),
     [
       ['dashboard_overview', 'read'],
+      ['dashboard_series', 'read'],
       ['dashboard_tile', 'read'],
     ],
-    'F00 registers exactly its two reads and never a write',
+    'F00 registers exactly its three reads and never a write',
   );
 });
 

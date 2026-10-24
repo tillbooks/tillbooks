@@ -25,7 +25,10 @@ import { err } from '../result.js';
 import type { Err } from '../result.js';
 import { resolveRole, isRejection } from '../payments/accounts.js';
 import { deriveStatutoryOnPost } from '../files/postedFloor.js';
+import { approvingActionIds } from '../agent/approving.js';
+import { appendDraftHistory } from '../agent/draftHistory.js';
 import type { CamtClassification, CamtCreditDebit } from './camt.js';
+import { duplicateDecisionPending } from './statementDedupe.js';
 
 /**
  * A refusal found INSIDE a memoised write, thrown so nothing commits and nothing is memoised, and unwrapped
@@ -59,6 +62,9 @@ export const BANK_LINE_TARGET_KINDS = [
   'accounts',
   'ignore',
   'legacy',
+  // D178 E3 (A39 §17.1, §17.3): booked to a contact (a Guthaben or an Anzahlung), or settling Spesen.
+  'contact',
+  'expense_claims',
 ] as const;
 export type BankLineTargetKind = (typeof BANK_LINE_TARGET_KINDS)[number];
 
@@ -119,6 +125,10 @@ export interface ActiveLink {
   differenceMinor: number | null;
   createdBy: string | null;
   createdAt: string;
+  /** D175/D176: the Buchungsregel the decision was taken by (`rule_id`), or null. */
+  ruleId: string | null;
+  /** D178 E3: the contact a `contact` target booked the line to (`contact_id`), or null. */
+  contactId: string | null;
 }
 
 /** A line's state and, when it is decided, the decision behind it. */
@@ -180,6 +190,8 @@ interface ActiveRow {
   remainder_minor: number | null;
   accept_difference: number;
   difference_minor: number | null;
+  rule_id: string | null;
+  contact_id: string | null;
 }
 
 /**
@@ -192,7 +204,7 @@ const ACTIVE_LINK_SQL = `
   SELECT l.id, l.kind, l.created_by, l.created_at,
          d.state, d.target_kind, d.entry_id, d.payment_id, d.journal_line_id,
          d.ignore_reason, d.note, d.remainder_mode, d.remainder_minor, d.accept_difference,
-         d.difference_minor
+         d.difference_minor, d.rule_id, d.contact_id
     FROM bank_line_decision d
     JOIN bank_txn_link l ON l.id = d.link_id
    WHERE d.workspace_id = ? AND d.bank_txn_id = ? AND d.superseded_at IS NULL
@@ -235,6 +247,8 @@ export function readActiveLink(ctx: WorkspaceContext, bankTxnId: string): Active
     differenceMinor: row.difference_minor,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    ruleId: row.rule_id,
+    contactId: row.contact_id,
   };
 }
 
@@ -309,6 +323,10 @@ export interface WriteLineLinkInput {
   remainderMinor?: number | null;
   acceptDifference?: boolean;
   differenceMinor?: number | null;
+  /** D175 (critic D175-C5): the Buchungsregel a `rule` target booked the line by; null otherwise. */
+  ruleId?: string | null;
+  /** D178 E3 (A39 §17.7): the contact a `contact` target booked the line to; null otherwise. */
+  contactId?: string | null;
   /**
    * The bank legs (`journal_line` ids on the Bankkonto's ledger account) this decision accounts for
    * (critic A39-1/A39-2). Every booked or matched decision claims at least one; an ignore claims none.
@@ -338,6 +356,13 @@ export function writeLineLink(ctx: WorkspaceContext, input: WriteLineLinkInput):
       err('line_not_open', { bankTxnId: row.id, state: active.state, linkId: active.linkId, targetKind: active.targetKind, staleProposal: true }),
     );
   }
+  // D178 point 19 (A20 §11.4, critic R3-1): the ONE writer of a line decision refuses every decision but
+  // an ignore while the line waits for its duplicate answer, readably, whichever verb called it (booking,
+  // settlement, multi-bill match, payment run, rule). The trigger on bank_line_decision is the second line.
+  if (input.state !== 'ignored') {
+    const pending = duplicateDecisionPending(ctx, row.id);
+    if (pending !== null) throw new BankAbort(pending);
+  }
   const legs = validateClaims(ctx, row, input);
   const now = ctx.clock.now();
   const linkId = ctx.ids.next('btlk');
@@ -358,7 +383,59 @@ export function writeLineLink(ctx: WorkspaceContext, input: WriteLineLinkInput):
   // from the later of the line's date and its claimed entries' dates, in this same transaction. A Beleg
   // attached afterwards derives in `linkFile`. Nothing here, and nothing on reopen, lowers a floor.
   if (input.state === 'booked' || input.state === 'matched') deriveStatutoryOnPost(ctx, 'bank_txn', input.bankTxnId);
+  // D177 (A39 §16.1, critic D177-C6): the line is DECIDED, so no pending Vorschlag for it can still run.
+  resolveLineDraftsOnDecision(ctx, input.bankTxnId, linkId);
   return linkId;
+}
+
+/** D177: the reason a pending Vorschlag carries once its line was decided by anyone. */
+export const DRAFT_LINE_DECIDED_REASON = 'Zeile entschieden';
+
+/** D177: the bank-line verbs whose pending Vorschläge a decision of their line resolves. */
+const LINE_DRAFT_TOOLS: readonly string[] = ['book_bank_line', 'ignore_bank_line'];
+
+/**
+ * D177 (A39 §16.1, critic D177-C6, owner ruling): when a bank line is DECIDED (booked, matched or ignored,
+ * by anyone, through the one link writer), every remaining pending `book_bank_line` / `ignore_bank_line`
+ * draft naming that line is resolved `rejected` with the reason "Zeile entschieden", stamped by the deciding
+ * actor and moment, its drafting call backfilled in the trace, all in the decision's own transaction. It
+ * could only ever refuse `line_not_open`; this is what clears a book's legacy duplicate the moment the line
+ * is booked. Never the draft whose approval is making the decision (`approving.ts`: its commit mark would
+ * roll the booking back), and never a row whose approval already committed (`committed_at`, D165).
+ * Tenant-bound. Each row keeps the deciding link's id (`closed_by_link_id`), so a `reopen_bank_line` of
+ * THAT decision gives the Vorschlag back (`reviveLineDraftsOnReopen` in `bankBooking.ts`).
+ */
+export function resolveLineDraftsOnDecision(ctx: WorkspaceContext, bankTxnId: string, linkId: string): string[] {
+  const busy = approvingActionIds();
+  const rows = ctx.store.db
+    .prepare(
+      `SELECT id, payload_json FROM agent_action
+        WHERE workspace_id = ? AND status = 'pending' AND committed_at IS NULL
+          AND action_tool IN (${LINE_DRAFT_TOOLS.map(() => '?').join(', ')})`,
+    )
+    .all(ctx.workspaceId, ...LINE_DRAFT_TOOLS) as { id: string; payload_json: string }[];
+  const resolve = ctx.store.db.prepare(
+    `UPDATE agent_action SET status = 'rejected', resolved_at = ?, resolved_by = ?, reject_reason = ?, closed_by_link_id = ?, closure_kind = 'line_decided'
+      WHERE workspace_id = ? AND id = ? AND status = 'pending' AND committed_at IS NULL`,
+  );
+  const trace = ctx.store.db.prepare('UPDATE agent_call SET resolved_by = ?, resolved_at = ? WHERE workspace_id = ? AND agent_action_id = ?');
+  const done: string[] = [];
+  for (const r of rows) {
+    if (busy.includes(r.id)) continue;
+    let named: unknown;
+    try {
+      named = (JSON.parse(r.payload_json) as { bankTxnId?: unknown }).bankTxnId;
+    } catch {
+      continue;
+    }
+    if (named !== bankTxnId) continue;
+    const now = ctx.clock.now();
+    if (resolve.run(now, ctx.actor, DRAFT_LINE_DECIDED_REASON, linkId, ctx.workspaceId, r.id).changes === 0) continue;
+    appendDraftHistory(ctx, r.id, { event: 'closed', kind: 'line_decided', at: now, by: ctx.actor, reason: DRAFT_LINE_DECIDED_REASON, linkId });
+    trace.run(ctx.actor, now, ctx.workspaceId, r.id);
+    done.push(r.id);
+  }
+  return done;
 }
 
 /** The claim rules of `writeLineLink`, answering the validated legs or throwing a typed `BankAbort`. */
@@ -468,8 +545,8 @@ function insertDecision(
       `INSERT INTO bank_line_decision
          (link_id, workspace_id, bank_txn_id, state, target_kind, entry_id, payment_id, journal_line_id,
           ignore_reason, note, remainder_mode, remainder_minor, accept_difference, difference_minor,
-          created_by, created_at, superseded_at, superseded_by, supersede_reason)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          created_by, created_at, superseded_at, superseded_by, supersede_reason, rule_id, contact_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       linkId,
@@ -491,6 +568,8 @@ function insertDecision(
       superseded?.at ?? null,
       superseded?.by ?? null,
       superseded?.reason ?? null,
+      input.ruleId ?? null,
+      input.contactId ?? null,
     );
 }
 
@@ -553,21 +632,77 @@ export function claimedLegs(ctx: WorkspaceContext): ClaimedLegs {
 export const BANK_LINE_REMAINDER_MODES = ['leave_open', 'write_off', 'on_account'] as const;
 export type BankLineRemainderMode = (typeof BANK_LINE_REMAINDER_MODES)[number];
 
+/**
+ * D178 E3 (A39 §17.4): the leg's amount in the card transaction's currency. The leg's `amountMinor` stays
+ * the CHF the bank booked for it; the pair fixes the EFFECTIVE rate, so the ledger matches the bank.
+ */
+export interface BankLineLegFx {
+  currency: string;
+  /** Positive minor units of `currency`. */
+  amountMinor: number;
+}
+
 /** One leg of an `accounts` booking. `amountMinor` runs in the LINE's direction; negative runs against it. */
 export interface BankLineLeg {
   accountId: string;
   amountMinor: number;
   taxCode?: string;
   description?: string;
+  /** D178 E3: a counter-leg in the transaction currency (behind the `fx_counter_leg` acknowledgement). */
+  fx?: BankLineLegFx;
 }
+
+/** D178 E3 (A39 §17.2): one document of a several-document settlement, and the cash applied to it. */
+export interface BankLineAllocation {
+  documentId: string;
+  amountMinor: number;
+}
+
+/** D178 E3 (A39 §17.1): how a `contact` target books the money (the setting `bank.contact_booking_mode`). */
+export const CONTACT_BOOKING_MODES = ['guthaben', 'anzahlung'] as const;
+export type ContactBookingMode = (typeof CONTACT_BOOKING_MODES)[number];
+
+/** D178 E3: which side of the books a contact booking is on (A14's `COUNTERPARTY_KINDS`). */
+export const CONTACT_COUNTERPARTY_KINDS = ['customer', 'supplier'] as const;
+export type ContactCounterpartyKind = (typeof CONTACT_COUNTERPARTY_KINDS)[number];
 
 export type BookBankLineTarget =
   | {
       kind: 'open_item';
-      /** An issued invoice (a credit line) or a posted vendor bill (a debit line). */
-      documentId: string;
+      /**
+       * An issued invoice (a credit line) or a posted vendor bill (a debit line). Exactly one of
+       * `documentId` and `allocations` is given (`validateTarget` refuses both or neither).
+       */
+      documentId?: string;
+      /**
+       * D178 E3 (A39 §17.2): several invoices (a credit line) or several vendor bills (a debit line) of ONE
+       * contact, each with the cash applied to it, in ONE A14 payment. Cash left over parks as a Guthaben
+       * only with `remainder: 'on_account'`; `write_off` forgives the principal left on partly paid invoices.
+       */
+      allocations?: BankLineAllocation[];
       remainder?: BankLineRemainderMode;
       writeOffAccountId?: string;
+    }
+  | {
+      /** D178 E3 (A39 §17.1): bexio's "Kundenbuchung", a line booked to a contact with no document. */
+      kind: 'contact';
+      contactId: string;
+      counterpartyKind?: ContactCounterpartyKind;
+      /** Override of `bank.contact_booking_mode` for this line; a differing mode needs `overrideReason`. */
+      mode?: ContactBookingMode;
+      overrideReason?: string;
+      /**
+       * A refund of a Guthaben whose receipt VAT was declared (owner, 21.10.2026): correct that VAT
+       * (`reverse`) or keep it (`keep`). Defaults from `bank.anzahlung_vat_refund`; required when it is `refuse`.
+       */
+      refundVat?: 'reverse' | 'keep';
+      /** D178 E3: a refund larger than the contact's open Guthaben books only when the call states it. */
+      beyondGuthaben?: boolean;
+    }
+  | {
+      /** D178 E3 (A39 §17.3): settle approved expense claims through E02's reimbursement path. */
+      kind: 'expense_claims';
+      claimIds: string[];
     }
   | { kind: 'payment_batch'; batchId: string }
   | {
@@ -578,6 +713,30 @@ export type BookBankLineTarget =
       /** Why the difference is accepted: REQUIRED with `acceptDifference: true` (critic A39-12). */
       differenceReason?: string;
     }
-  | { kind: 'accounts'; legs: BankLineLeg[] };
+  | {
+      kind: 'accounts';
+      legs: BankLineLeg[];
+      /**
+       * D175 (A39 §14.2): route the whole booking through this Durchlaufkonto: the bank leg against it for
+       * the line amount, and it against each leg (with the leg's VAT), in ONE entry, so it nets to zero.
+       */
+      viaAccountId?: string;
+      /** D178 E3 (A39 §17.4): the caller's acknowledgement of the `fx_counter_leg` consequence. */
+      acknowledgeFx?: boolean;
+    }
+  | {
+      /**
+       * D175 (A39 §14.2): book by a Buchungsregel. The engine expands it (`expandRule`, bankBooking.ts) into
+       * an `accounts` target BEFORE validation: each asked leg takes its amount from `asks` (keyed by the
+       * leg's index in the recipe, positive Rappen, in the line's direction unless the leg runs `against`
+       * it), the rest leg takes the line amount minus the others. The decision is stored as `accounts`.
+       */
+      kind: 'rule';
+      standardId: string;
+      asks: Record<string, number>;
+    };
 
-export const BOOK_BANK_LINE_TARGET_KINDS = ['open_item', 'payment_batch', 'existing_entry', 'accounts'] as const;
+/** A target `performBooking` books: a `rule` target is expanded to `accounts` before it gets there. */
+export type BookableBankLineTarget = Exclude<BookBankLineTarget, { kind: 'rule' }>;
+
+export const BOOK_BANK_LINE_TARGET_KINDS = ['open_item', 'payment_batch', 'existing_entry', 'accounts', 'rule', 'contact', 'expense_claims'] as const;

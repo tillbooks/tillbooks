@@ -83,6 +83,16 @@ export const DEFAULT_TAX_CODES: readonly SeedTaxCode[] = [
   { code: 'UST26', kind: 'output', rateBp: 260, formLine: '313', label: 'Umsatzsteuer 2.6% (reduziert)' },
   { code: 'UST38', kind: 'output', rateBp: 380, formLine: '343', label: 'Umsatzsteuer 3.8% (Beherbergung)' },
   { code: 'VST-M', kind: 'input', rateBp: 0, formLine: '400', label: 'Vorsteuer Material, Waren, Dienstleistungen' },
+  // D167: reduced-rate Vorsteuer. The stored rate names the rate CLASS (reduced, accommodation) and the
+  // supply date selects the era in `effectiveRateBp` (2.6 / 3.8 from 1.1.2024, 2.5 / 3.7 before). Ziffer 400
+  // is the one material-and-services Vorsteuer line of form 0550 whatever the rate (VERIFIED against the
+  // ESTV Muster 2024 0550-03, 14.10.2026).
+  { code: 'VST-M26', kind: 'input', rateBp: 260, formLine: '400', label: 'Vorsteuer Material, Waren, Dienstleistungen 2.6% (reduziert)' },
+  { code: 'VST-M38', kind: 'input', rateBp: 380, formLine: '400', label: 'Vorsteuer Material, Waren, Dienstleistungen 3.8% (Beherbergung)' },
+  // D167-4 (owner, 15.10.2026): the Ziffer 405 twins, booked to 1171 exactly as `VST-I` is: a hotel night
+  // on a business trip is übriger Betriebsaufwand, which form 0550 reports under 405, not 400.
+  { code: 'VST-I26', kind: 'input', rateBp: 260, formLine: '405', label: 'Vorsteuer Investitionen und übriger Betriebsaufwand 2.6% (reduziert)' },
+  { code: 'VST-I38', kind: 'input', rateBp: 380, formLine: '405', label: 'Vorsteuer Investitionen und übriger Betriebsaufwand 3.8% (Beherbergung)' },
   { code: 'VST-I', kind: 'input', rateBp: 0, formLine: '405', label: 'Vorsteuer Investitionen und übriger Betriebsaufwand' },
   { code: 'EXPORT0', kind: 'zero', rateBp: 0, formLine: '220', label: 'Export, echt befreit (Art. 23)' },
   { code: 'AUSGENOMMEN', kind: 'exempt', rateBp: 0, formLine: '230', label: 'Von der Steuer ausgenommen (Art. 21)' },

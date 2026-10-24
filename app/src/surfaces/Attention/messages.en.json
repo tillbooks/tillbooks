@@ -9,11 +9,9 @@
     "refresh": "Refresh",
     "stand": "As of {time}",
     "incomplete": "incomplete",
-    "subtitle": {
-      "work": "Waiting for you"
-    },
     "error": {
-      "total": "The attention hub could not be loaded."
+      "total": "The attention hub could not be loaded.",
+      "more": "The next rows could not be loaded. Try again."
     },
     "padlock": {
       "title": "Nothing to show you here",
@@ -21,8 +19,8 @@
       "ask": "Ask a question"
     },
     "empty": {
-      "title": "All clear.",
-      "hint": "Payments, reminders and documents that need a decision from you appear here.",
+      "title": "Nothing is waiting for you.",
+      "hint": "Whatever needs a decision from you appears here.",
       "action": "Go to the overview"
     },
     "area": {
@@ -31,11 +29,6 @@
       "system": "System",
       "accounting": "Accounting"
     },
-    "areaIndex": {
-      "title": "By area"
-    },
-    "allAreas": "All areas",
-    "singleAreaEmpty": "Nothing is waiting in {area}.",
     "new": "new",
     "providerFailed": "{queue} could not be loaded.",
     "urgency": {
@@ -46,12 +39,14 @@
     "queue": {
       "qrMatch": "Reconciliation",
       "dunningRun": "Dunning",
-      "reviewFlag": "Flags"
+      "reviewFlag": "Flags",
+      "agentActionBank": "The agent's bank proposals"
     },
     "queueLabel": {
       "qr_match": "Reconciliation",
       "dunning_run": "Dunning",
       "agent_action": "Proposals",
+      "agent_action_bank": "Bank proposals",
       "review_flag": "Flags",
       "checklist_items_due": "Checklists",
       "bank_keys_review": "Bank keys",
@@ -64,20 +59,33 @@
     "overflow": {
       "label": "Actions for {title}",
       "copyRef": "Copy reference",
-      "createTask": "Create a task"
+      "createTask": "Create a task",
+      "open": "Open"
+    },
+    "remainder": {
+      "title": "{count} more in {queue}",
+      "open": "Open"
     },
     "item": {
+      "bankLines": {
+        "title": {
+          "one": "1 bank line to book",
+          "other": "{count} bank lines to book"
+        },
+        "subtitle": "{bank}"
+      },
       "qrMatch": {
         "title": "Payment without a match",
         "subtitle": "{bank}"
       },
       "dunningRun": {
-        "title": "Dunning run waiting for approval",
-        "subtitle": "{count} invoices, proposed on {date}"
+        "title": "Reminder run ready to issue",
+        "subtitle": "{count} invoices · {date}",
+        "subtitleOne": "1 invoice · {date}"
       },
       "reviewFlag": {
         "title": "Entry flagged",
-        "subtitle": "{date} · {description}",
+        "subtitle": "{description} · {date}",
         "reason": "Flagged by {reviewer}: {reason}",
         "reasonByAgent": "Flagged by the agent: {reason}",
         "reasonByStudio": "Flagged in the Studio: {reason}",
@@ -135,15 +143,120 @@
         "gap_not_chained": "There is money in this gap that is not in the books yet. It cannot be confirmed: import the missing statements.",
         "gap_not_found": "This gap has been closed in the meantime. The list reloads.",
         "human_only": "A person confirms this, not the agent.",
-        "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on. It cannot be confirmed: import the missing statements.",
-        "vorschlag_stale": "Not run: the record behind this proposal changed after the agent made it. Ask the agent to propose it again."
+        "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on. It cannot be confirmed: import the missing statements."
+      },
+      "checkInBank": "Check in the bank",
+      "assign": "Assign",
+      "assignPartial": "Assign in part",
+      "importStatement": "Import statement",
+      "importStatements": "Import statements",
+      "importStatementParts": "Import missing parts",
+      "reimportStatement": "Re-import statement"
+    },
+    "grouping": {
+      "label": "Grouping",
+      "byArea": "By area",
+      "byKind": "By kind"
+    },
+    "kind": {
+      "approve": "Approve",
+      "do": "To do",
+      "note": "Notes"
+    },
+    "section": {
+      "more": "Show {count} more"
+    },
+    "row": {
+      "dueOn": "due {date}",
+      "overdueSince": "overdue since {date}",
+      "checklistTitle": "{template} {period}: {title}"
+    },
+    "vorschlag": {
+      "stale": "Changed since the proposal, can no longer be approved",
+      "target": {
+        "ignore": "Not booked",
+        "openItem": "Open item",
+        "existingEntry": "Existing entry",
+        "paymentBatch": "Payment order",
+        "rule": "Booking rule"
+      },
+      "staleShort": "Changed since the proposal",
+      "titleWith": "{counterparty} · {thing}"
+    },
+    "batch": {
+      "label": "Approve proposals together",
+      "selectAll": "Select all proposals",
+      "selectRow": "Select {title}",
+      "approveSelected": "Approve selected ({count})",
+      "approveAll": "Approve all ({count})",
+      "waiting": "Waiting",
+      "running": "Approving",
+      "ok": "Approved",
+      "notOffered": "Cannot be approved here.",
+      "doneAll": "{count} approved.",
+      "doneSome": "{ok} approved, {refused} not approved.",
+      "refusedLine": "{title}: {reason}",
+      "confirm": {
+        "title": "Approve {count} proposals?",
+        "each": "Each proposal runs on its own, as with its own button. One that changed since the proposal does not run and stays in the list.",
+        "yes": "Approve {count}",
+        "close": "Close",
+        "in": "In {amount}",
+        "out": "Out {amount}",
+        "withoutAmount": "Plus {count} without an amount."
+      },
+      "selectShown": "Select all shown proposals",
+      "approveShown": "Approve shown ({count})",
+      "approvedLine": "{title}: approved",
+      "openEntry": "Open entry",
+      "info": {
+        "label": "What approving does",
+        "summary": "{count} proposals, {amounts}",
+        "summaryOne": "1 proposal, {amounts}",
+        "summaryNoAmount": "{count} proposals",
+        "none": "Nothing selected yet."
+      },
+      "title": "Proposals"
+    },
+    "group": {
+      "payments": "{count} unassigned payments",
+      "hide": "Hide",
+      "assign": "Assign payments",
+      "info": "Payments typed in by hand that no invoice claims yet. Assign each to an invoice or set it aside."
+    },
+    "dunning": {
+      "confirm": {
+        "title": "Issue the reminder run?",
+        "letters": "{count} reminders",
+        "lettersOne": "1 reminder",
+        "invoices": "{count} invoices",
+        "invoicesOne": "1 invoice",
+        "fees": "Fees {amounts}",
+        "noFees": "No fees: nothing is booked.",
+        "needsPost": "The fees are booked, which needs the right to post.",
+        "loading": "Reading the run.",
+        "failed": "The run could not be read. You can issue it in Dunning.",
+        "cancel": "Cancel",
+        "yes": "Issue reminder run",
+        "close": "Close"
       }
+    },
+    "gap": {
+      "one": "Statement {range} missing",
+      "many": "Statements {range} missing",
+      "unknownOne": "A statement may be missing after statement {after}",
+      "unknownMany": "Statements may be missing after statement {after}",
+      "incomplete": "Statement {incomplete} incomplete",
+      "conflicting": "Statement {conflicting} twice",
+      "since": "since {date}",
+      "twoBalances": "2 balances",
+      "partsMissing": "parts missing"
     }
   },
   "help": {
     "Attention": {
       "title": "Attention",
-      "body": "Pendenzen is the one place that shows what is waiting for a decision from you: the most urgent items first, then an index per area and the latest events.\n\nEvery row carries its decision: the two or three buttons its own page also offers, the reason it is waiting, and the sentence saying what the posting does. Only the hard case opens the page.\n\nAreas you may not read do not appear at all. When nothing waits, the list says so plainly.",
+      "body": "Pendenzen shows everything that waits for a decision from you, complete and in sections: by area (the bank first) or by kind (approve, to do, notes). The section counts add up to the number in the menu.\n\nEvery row has one button for the next step; other options sit under ⋯, and the (i) says why the row waits and what the step does.\n\nYou can select the agent's bank proposals and approve them together. Each runs on its own, as with its own button.",
       "concepts": [],
       "docsPath": "introduction"
     }

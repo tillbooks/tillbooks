@@ -144,5 +144,33 @@
       "concepts": [],
       "docsPath": "quickstart"
     }
+  },
+  "workspaceSettings": {
+    "title": "Einstellungen",
+    "yes": "Ja",
+    "no": "Nein",
+    "unit": {
+      "days": "{n} Tage",
+      "items": "{n} Einträge",
+      "percent": "{n} %"
+    },
+    "defaultIs": "Standard: {value}",
+    "isDefault": "Standard",
+    "editTitle": "Ändern: {setting}",
+    "cancel": "Abbrechen",
+    "reset": "Auf Standard zurücksetzen ({value})",
+    "save": "Speichern",
+    "consequence": "Die Änderung gilt ab der nächsten Aktion für alle in diesem Arbeitsbereich und wird mit Begründung im Verlauf der Einstellung festgehalten.",
+    "value": "Wert",
+    "bounds": "Von {min} bis {max}. Standard: {value}.",
+    "reason": "Begründung (Pflicht)",
+    "refusal": {
+      "unknown_setting": "Diese Einstellung kennt diese TILL-Version nicht.",
+      "invalid_setting_value": "Dieser Wert liegt ausserhalb dessen, was die Einstellung erlaubt.",
+      "reason_required": "Bitte gib einen Grund für die Änderung an.",
+      "belegnummer_display_clash": "Mit dieser Änderung könnte eine spätere Belegnummer {display} wiederholen, die schon vergeben ist. Wähle ein anderes Präfix, eine andere Startnummer oder eine andere Nummerierung.",
+      "belegnummer_prefix_invalid": "Ein Präfix ist leer oder hat bis zu 12 Zeichen aus {characters}, beginnt mit einem Buchstaben oder einer Ziffer und endet nicht mit einer Ziffer."
+    },
+    "stale": "Der gespeicherte Wert {stored} passt nicht mehr, der Standard ({value}) gilt. Ändere oder setze ihn zurück."
   }
 }

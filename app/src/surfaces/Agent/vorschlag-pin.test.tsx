@@ -15,9 +15,8 @@ import { CapabilitiesContext, ALLOW_ALL } from '../../lib/capabilities';
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { WorkspaceProvider } from '../../app/workspace';
-import { KeyboardProvider } from '../../app/keyboard';
-import { Agent, AgentDock } from './index';
-import { VorschlagCard } from './VorschlagCard';
+import { Agent } from './index';
+import { VorschlagLine } from './VorschlagLine';
 import { Turn } from './TurnList';
 import { parseDrafted, type AgentTurn, type DraftedAction } from './model';
 
@@ -62,6 +61,11 @@ const issueDraft: DraftedAction = {
   changedSinceProposal: false,
 };
 
+/** D167: the figures live in the line's Details disclosure, one click on the title. */
+function openDetails() {
+  fireEvent.click(document.querySelector('.vorschlag-line-title') as HTMLElement);
+}
+
 const rows = () =>
   [...document.querySelectorAll('.vorschlag-readback-row')].map((row) => [
     row.querySelector('dt')?.textContent ?? '',
@@ -72,9 +76,48 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
+describe('D162 point 1 on the line\'s face: the essentials without opening Details', () => {
+  const names = new Map([
+    ['acc_6500', '6500 Büromaterial'],
+    ['acc_1020', '1020 Bank'],
+    ['acc_6570', '6570 Informatik'],
+  ]);
+  const face = () => document.querySelector('[data-figure="key"]')?.textContent;
+
+  it('an issue: the pinned counterparty, the recipient and the total', () => {
+    wrap(<VorschlagLine action={issueDraft} onApprove={() => undefined} onReject={() => undefined} />);
+    expect(document.querySelector('.vorschlag-readback')).toBeNull();
+    expect(face()).toBe("CHF 1'081.00 · Muster AG · an buchhaltung@muster.example");
+  });
+
+  it('a posting with two lines: debit an credit in words, and the total', () => {
+    const post: DraftedAction = { ...issueDraft, actionId: 'act_p', actionTool: 'post_entry', dialCapability: 'post', figures: null, payload: { workspaceId: 'ws_test', date: '2026-10-10', lines: [{ account: 'acc_6500', debit: 4850 }, { account: 'acc_1020', credit: 4850 }] } };
+    wrap(<VorschlagLine action={post} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
+    expect(document.querySelector('.vorschlag-readback')).toBeNull();
+    expect(face()).toBe('CHF 48.50 · 6500 Büromaterial an 1020 Bank');
+  });
+
+  it('a posting with more lines says how many accounts; a bank booking says where it books', () => {
+    const many: DraftedAction = { ...issueDraft, actionId: 'act_m', actionTool: 'post_entry', dialCapability: 'post', figures: null, payload: { lines: [{ account: 'acc_6500', debit: 4000 }, { account: 'acc_6570', debit: 850 }, { account: 'acc_1020', credit: 4850 }] } };
+    const { unmount } = wrap(<VorschlagLine action={many} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
+    expect(face()).toBe('CHF 48.50 · 3 Konten');
+    unmount();
+    const bank: DraftedAction = { ...issueDraft, actionId: 'act_b', actionTool: 'book_bank_line', dialCapability: 'post', figures: null, payload: { bankTxnId: 'bt_1', target: { kind: 'accounts', legs: [{ accountId: 'acc_6570', amountMinor: 1654, taxCode: 'VST-I' }] } } };
+    wrap(<VorschlagLine action={bank} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
+    expect(face()).toBe('CHF 16.54 · auf 6570 Informatik');
+  });
+
+  it('without the chart a posting still names its sides as "Konto", never an id', () => {
+    const post: DraftedAction = { ...issueDraft, actionId: 'act_n', actionTool: 'post_entry', dialCapability: 'post', figures: null, payload: { lines: [{ account: 'acc_6500aaaa-0000-4000-8000-000000000001', debit: 4850 }, { account: 'acc_1020bbbb-0000-4000-8000-000000000002', credit: 4850 }] } };
+    wrap(<VorschlagLine action={post} onApprove={() => undefined} onReject={() => undefined} />);
+    expect(face()).toBe('CHF 48.50 · Konto an Konto');
+  });
+});
+
 describe('the card shows what is being approved', () => {
   it('leads with the frozen figures: Netto with currency, draft number, counterparty, line count', () => {
-    wrap(<VorschlagCard action={issueDraft} accent onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<VorschlagLine action={issueDraft} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
     const shown = rows();
     expect(shown[0]?.[0]).toBe('Netto');
     expect(shown[0]?.[1]).toContain("1'000.00");
@@ -97,7 +140,8 @@ describe('the card shows what is being approved', () => {
       actionTool: 'payment_batch_transmit',
       figures: { number: 'R-2026-0007', numberPending: false, counterparty: null, recipient: null, amountMinor: 250050, amountBasis: 'amount', currency: 'EUR', taxMinor: null, grossMinor: null, lineCount: 3 },
     };
-    wrap(<VorschlagCard action={run} accent onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<VorschlagLine action={run} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
     const shown = rows();
     expect(shown[0]?.[0]).toBe('Betrag');
     expect(shown[0]?.[1]).toContain('EUR');
@@ -109,17 +153,25 @@ describe('the card shows what is being approved', () => {
 
   it('a Vorschlag with no frozen figures keeps the payload read-back it always had', () => {
     const plain: DraftedAction = { ...issueDraft, actionTool: 'record_payment', figures: null, payload: { workspaceId: 'ws_test', amountMinor: 120000 } };
-    wrap(<VorschlagCard action={plain} accent onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<VorschlagLine action={plain} onApprove={() => undefined} onReject={() => undefined} />);
+    openDetails();
     expect(rows()[0]?.[1]).toContain("1'200.00");
     expect(rows().some(([term]) => term === 'Nummer')).toBe(false);
   });
 
   it('when the record changed since the proposal the card says so and holds the approve', () => {
-    wrap(<VorschlagCard action={{ ...issueDraft, changedSinceProposal: true }} accent onApprove={() => undefined} onReject={() => undefined} />);
-    expect(screen.getByText(/Seit dem Vorschlag geändert/)).toBeInTheDocument();
+    const { container } = wrap(<VorschlagLine action={{ ...issueDraft, changedSinceProposal: true }} onApprove={() => undefined} onReject={() => undefined} />);
+    // Critic N4 L4: on /agent the sentence is VISIBLE under the line at rest, not only in a tooltip (only
+    // Pendenzen's compact line moves the explanation behind the (i)).
+    const said = container.querySelector('.vorschlag-line-changed');
+    expect(said).not.toBeNull();
+    expect(said?.closest('[role="tooltip"]')).toBeNull();
+    expect(said?.textContent).toContain('Seit dem Vorschlag geändert. Genehmigen würde nichts ausführen.');
+    openDetails();
+    expect(screen.getAllByText(/Seit dem Vorschlag geändert/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Genehmigen' })).toBeNull();
     // Rejecting stays possible, from the overflow.
-    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mehr zu: Rechnung ausstellen' }));
     expect(screen.queryByRole('menuitem', { name: 'Genehmigen und künftig automatisch' })).toBeNull();
     expect(screen.getByRole('menuitem', { name: 'Ablehnen' })).toBeEnabled();
   });
@@ -167,47 +219,6 @@ describe('the stale refusal is named in words', () => {
     expect(container.querySelector('[data-just-committed]')).toBeNull();
     expect(screen.queryByText('Genehmigt und ausgeführt')).toBeNull();
     await waitFor(() => expect(screen.queryAllByRole('article')).toHaveLength(0));
-  });
-
-  it('the dock: the same refusal lands as the same words, not as an approval', async () => {
-    let decided = false;
-    const transport: Transport = async (action) => {
-      if (action === 'list_agent_sessions') {
-        return {
-          status: 200,
-          body: { ok: true, sessions: [{ sessionId: 's1', clientLabel: 'Client a', startedAt: '2026-10-11T09:00:00.000Z', lastAt: '2026-10-11T09:00:00.000Z', open: true, calls: 1, writes: 0, drafts: 1 }] },
-        };
-      }
-      if (action === 'get_agent_session') {
-        return { status: 200, body: { ok: true, sessionId: 's1', actor: 'agent', clientLabel: 'Client a', startedAt: '2026-10-11T09:00:00.000Z', lastAt: '2026-10-11T09:00:00.000Z', open: true, turns: [] } };
-      }
-      if (action === 'runtime_status') return { status: 200, body: { ok: true, registered: false } };
-      if (action === 'list_drafted_actions') return { status: 200, body: { ok: true, actions: decided ? [] : [issueDraft] } };
-      if (action === 'approve_drafted_action') {
-        decided = true;
-        return STALE;
-      }
-      return { status: 200, body: { ok: true } };
-    };
-    render(
-      <TillClientProvider client={new TillClient(transport)}>
-        <I18nProvider>
-          <WorkspaceProvider initialId="ws_test">
-            <CapabilitiesContext.Provider value={ALLOW_ALL}>
-              <MemoryRouter>
-                <KeyboardProvider>
-                  <AgentDock />
-                </KeyboardProvider>
-              </MemoryRouter>
-            </CapabilitiesContext.Provider>
-          </WorkspaceProvider>
-        </I18nProvider>
-      </TillClientProvider>,
-    );
-    fireEvent.click(await screen.findByRole('button', { name: /Agent/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Genehmigen' }));
-    expect(await screen.findByText(/Nicht ausgeführt: Die Daten hinter diesem Vorschlag haben sich geändert/)).toBeInTheDocument();
-    expect(screen.queryByText('Genehmigt und ausgeführt')).toBeNull();
   });
 
   it('the trace names a void proposal beside its drafting call', () => {

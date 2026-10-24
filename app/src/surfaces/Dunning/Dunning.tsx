@@ -59,6 +59,9 @@ import {
   parseRuns,
   type DunningConfigView,
   type DunningItemChange,
+  type DunningLetterDate,
+  type DunningRefreezeMode,
+  type DunningRefreezeOverride,
   type DunningItemView,
   type DunningRunSummary,
   type DunningRunView,
@@ -374,6 +377,45 @@ export function Dunning() {
     void load();
   };
 
+  /**
+   * D169: reverse the run's Mahngebühr. One key per run and question; the engine refuses a settled or
+   * already reversed fee by name and writes nothing, and the reload shows the run's real state.
+   */
+  const reverseFeeKey = useIdempotencyKey([workspaceId, 'reverse-fee', current?.runId ?? '']);
+  const reverseFee = async (reason: string, override: DunningRefreezeOverride | null) => {
+    if (workspaceId === null || current === null) return;
+    setBusy('reverse-fee');
+    setNote(null);
+    const response = await client.call('dunning_fee_reverse', {
+      workspaceId,
+      runId: current.runId,
+      reason,
+      // D174: a per-run override of the re-freeze settings carries its required reason.
+      ...(override === null ? {} : override),
+      idempotencyKey: reverseFeeKey,
+    });
+    if (liveWorkspace.current !== workspaceId) return;
+    setBusy(null);
+    if (isErr(response.body)) {
+      const code = response.body.error;
+      setNote(
+        code === 'fee_settled'
+          ? t('dunning.feeSettled')
+          : code === 'already_reversed'
+            ? t('dunning.feeAlreadyReversed')
+            : code === 'reason_required'
+              ? t('dunning.overrideReasonRequired')
+            : code === 'period_locked'
+              ? t('dunning.feeStillLocked')
+                : t('dunning.error.action'),
+      );
+      void load();
+      return;
+    }
+    setNote(t('dunning.feeReversed'));
+    void load();
+  };
+
   const sendKey = useIdempotencyKey([workspaceId, 'send', current?.runId ?? '']);
   const send = async () => {
     if (workspaceId === null || current === null) return;
@@ -554,6 +596,9 @@ export function Dunning() {
               onRecoverFee={() => void issue('recover-fee')}
               onSend={() => void send()}
               onDiscard={() => void discard()}
+              refreezeSetting={config?.refreeze ?? 're-issue'}
+              letterDateSetting={config?.letterDate ?? 'run_date'}
+              onReverseFee={(reason, override) => void reverseFee(reason, override)}
               onDownload={(debtorId, debtorName) => void downloadLetter(debtorId, debtorName)}
             />
           )}
@@ -606,7 +651,7 @@ function StatusChip({ status }: { status: string }) {
 
 /** The i18n key suffix for a change cause: 'partially_paid' becomes the camelCase 'partiallyPaid'. */
 function changeKey(reason: DunningItemChange): string {
-  return reason === 'partially_paid' ? 'partiallyPaid' : reason;
+  return reason === 'partially_paid' ? 'partiallyPaid' : reason === 'fee_reversed' ? 'feeReversed' : reason;
 }
 
 /**
@@ -644,7 +689,10 @@ function CurrentRun({
   onRecoverFee,
   onSend,
   onDiscard,
+  onReverseFee,
   onDownload,
+  refreezeSetting,
+  letterDateSetting,
 }: {
   run: DunningRunView;
   canDun: boolean;
@@ -655,7 +703,11 @@ function CurrentRun({
   onRecoverFee: () => void;
   onSend: () => void;
   onDiscard: () => void;
+  onReverseFee: (reason: string, override: DunningRefreezeOverride | null) => void;
   onDownload: (debtorId: string, debtorName: string | null) => void;
+  /** D174: the workspace settings in force, so the dialog says what happens and can deviate once. */
+  refreezeSetting: DunningRefreezeMode;
+  letterDateSetting: DunningLetterDate;
 }) {
   const t = useT();
   // The card opens under the list by the person's act; bring it into view when a DIFFERENT run opens
@@ -667,6 +719,18 @@ function CurrentRun({
   const issued = run.status !== 'proposed';
   // D161.3: the discard asks first, in a dialog that names what it does (the engine's own sentence).
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  // D169: the fee's undo asks first too, with a required reason that rides the correcting entry.
+  const [confirmingReverse, setConfirmingReverse] = useState(false);
+  const [reverseReason, setReverseReason] = useState('');
+  // D174: deviate from the settings for this run only, with a required reason (audited by the engine).
+  const [overriding, setOverriding] = useState(false);
+  const [overrideRefreeze, setOverrideRefreeze] = useState<DunningRefreezeMode>(refreezeSetting);
+  const [overrideLetterDate, setOverrideLetterDate] = useState<DunningLetterDate>(letterDateSetting);
+  const [overrideReason, setOverrideReason] = useState('');
+  const effectiveRefreeze = overriding ? overrideRefreeze : refreezeSetting;
+  // Offered on an issued or sent run whose fee entry stands, to someone who may operate dunning AND
+  // post (the engine asserts both). A settled fee is the engine's refusal, said in words on the note.
+  const mayReverseFee = issued && run.feeEntryId !== null && run.feeReversalEntryId === null && canDun && canPost;
   // A run whose items carry a fee that is not yet on the ledger BOOKS when issued (or recovered),
   // so issuing it needs `post` as well as `dun`: the engine asserts exactly this, and the courtesy
   // gate says it before the click (critic N2).
@@ -758,6 +822,11 @@ function CurrentRun({
               {t('dunning.feeSkippedLockedPeriod')}
             </p>
           )}
+          {run.feeReversalEntryId !== null && (
+            <p className="dunning-dim" role="note">
+              {t('dunning.feeReversed')}
+            </p>
+          )}
           {/* C3: who proposed this run and when, from the run's own header (`created_by`/`created_at`).
               Rendered only when the read model carries a timestamp, so a legacy row fabricates nothing. */}
           {run.createdAt !== null && (
@@ -814,6 +883,23 @@ function CurrentRun({
               items={[{ key: 'discard', label: t('dunning.discard'), danger: true, onSelect: () => setConfirmingDiscard(true) }]}
             />
           )}
+          {/* D169: the fee's undo, destructive, under Mehr and behind its confirm (the discard shape).
+              TODO(Ruhig 3, E-step): migrate this action to the icon vocabulary once IconButton lands. */}
+          {mayReverseFee && (
+            <OverflowMenu
+              label={t('dunning.moreActions')}
+              disabled={busy !== null}
+              items={[{
+                key: 'reverse-fee',
+                label: t('dunning.reverseFee'),
+                danger: true,
+                onSelect: () => {
+                  setReverseReason('');
+                  setConfirmingReverse(true);
+                },
+              }]}
+            />
+          )}
         </div>
       </div>
 
@@ -837,6 +923,85 @@ function CurrentRun({
         }
       >
         <ConsequenceLine verb="discard_dunning_run" />
+      </Modal>
+
+      <Modal
+        open={confirmingReverse}
+        role={ALERT_DIALOG}
+        onClose={() => setConfirmingReverse(false)}
+        title={t('dunning.reverseFeeTitle')}
+        closeLabel={t('dunning.reverseFeeCancel')}
+        describedById="dunning-reverse-fee-body"
+        footer={
+          <>
+            <button type="button" className="btn btn--secondary" onClick={() => setConfirmingReverse(false)}>
+              {t('dunning.reverseFeeCancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--danger"
+              disabled={reverseReason.trim() === '' || (overriding && overrideReason.trim() === '')}
+              onClick={() => {
+                setConfirmingReverse(false);
+                onReverseFee(
+                  reverseReason.trim(),
+                  overriding
+                    ? { refreeze: overrideRefreeze, letterDate: overrideLetterDate, overrideReason: overrideReason.trim() }
+                    : null,
+                );
+              }}
+            >
+              {t('dunning.reverseFeeConfirm')}
+            </button>
+          </>
+        }
+      >
+        <div id="dunning-reverse-fee-body">
+          <p>{t('dunning.reverseFeeBody')}</p>
+          {/* D174: what happens to an unsent letter follows the setting (or this run's override). */}
+          <p>{effectiveRefreeze === 'hold' ? t('dunning.reverseFeeUnsentHold') : t('dunning.reverseFeeUnsentReissue')}</p>
+          <ConsequenceLine verb="dunning_fee_reverse" />
+          <label className="dunning-reverse-reason">
+            <span>{t('dunning.reverseFeeReason')}</span>
+            <input className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
+          </label>
+          <label className="dunning-reverse-reason">
+            <input type="checkbox" checked={overriding} onChange={(e) => setOverriding(e.target.checked)} />{' '}
+            <span>{t('dunning.overrideToggle')}</span>
+          </label>
+          {overriding && (
+            <>
+              <div className="dunning-reverse-reason">
+                <span>{t('dunning.overrideRefreeze')}</span>
+                <Select
+                  ariaLabel={t('dunning.overrideRefreeze')}
+                  value={overrideRefreeze}
+                  onChange={(value) => setOverrideRefreeze(value === 'hold' ? 'hold' : 're-issue')}
+                  options={[
+                    { value: 're-issue', label: t('dunning.refreeze.reissue') },
+                    { value: 'hold', label: t('dunning.refreeze.hold') },
+                  ]}
+                />
+              </div>
+              <div className="dunning-reverse-reason">
+                <span>{t('dunning.overrideLetterDate')}</span>
+                <Select
+                  ariaLabel={t('dunning.overrideLetterDate')}
+                  value={overrideLetterDate}
+                  onChange={(value) => setOverrideLetterDate(value === 'today' ? 'today' : 'run_date')}
+                  options={[
+                    { value: 'run_date', label: t('dunning.letterDate.runDate') },
+                    { value: 'today', label: t('dunning.letterDate.today') },
+                  ]}
+                />
+              </div>
+              <label className="dunning-reverse-reason">
+                <span>{t('dunning.overrideReason')}</span>
+                <input className="field" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
+              </label>
+            </>
+          )}
+        </div>
       </Modal>
 
       {/* C4: the consequence sentence for the write the commit button will make, the same one an
@@ -865,6 +1030,14 @@ function CurrentRun({
               {group.sent && <span className="dunning-dim"> {t('dunning.letterSent')}</span>}
               {group.sendError !== null && group.sendError === 'no_email' && (
                 <span className="dunning-dim"> {t('dunning.noEmail')}</span>
+              )}
+              {/* D174: the fee was reversed before this letter left, so it was re-issued without it. */}
+              {group.reissuedWithoutFee && (
+                <span className="dunning-dim" role="note"> {t('dunning.letterReissuedWithoutFee')}</span>
+              )}
+              {/* D174 (Q9): a letter re-issued under the `today` setting carries its own date. */}
+              {group.letterDate !== null && group.letterDate !== run.runDate && (
+                <span className="dunning-dim"> {t('dunning.letterDated', { date: formatDate(group.letterDate) })}</span>
               )}
               {/* K-31 f1: a letter naming an invoice changed since issue is HELD. The operator is
                   warned by name and cause here, BEFORE they manually mail or download it: the frozen

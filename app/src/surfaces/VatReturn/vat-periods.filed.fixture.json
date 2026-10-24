@@ -11,7 +11,8 @@
         "2026-02",
         "2026-03"
       ],
-      "filed": false
+      "filed": false,
+      "method": "effektiv"
     },
     {
       "label": "2026-Q2",
@@ -22,7 +23,8 @@
         "2026-05",
         "2026-06"
       ],
-      "filed": true
+      "filed": true,
+      "method": "effektiv"
     },
     {
       "label": "2026-Q3",
@@ -33,7 +35,8 @@
         "2026-08",
         "2026-09"
       ],
-      "filed": false
+      "filed": false,
+      "method": "effektiv"
     },
     {
       "label": "2026-Q4",
@@ -44,8 +47,10 @@
         "2026-11",
         "2026-12"
       ],
-      "filed": false
+      "filed": false,
+      "method": "effektiv"
     }
   ],
+  "stubs": [],
   "ok": true
 }

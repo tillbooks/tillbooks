@@ -5,14 +5,29 @@
  * to `:memory:`. The Studio and the agent were therefore not on one ledger, which quietly falsifies
  * the central product claim: the agent could post an entry the human could never see.
  *
- * The rule is now: `TILL_DB_PATH` if it is set, otherwise `~/.till/till.db`. The default sits in the
- * home directory rather than in the project, so it is the same file whatever directory an agent
- * subprocess happens to be spawned in, and so a checkout is never the place the books live.
- * `:memory:` is honoured verbatim for an ephemeral run.
+ * The rule is now three rungs, most specific first, and every face (`till up`, `till mcp`, `till serve`)
+ * resolves through this one function, so they still land on ONE file:
+ *
+ *   1. `TILL_DB_PATH`, when it is set: a launcher (TILL.app's `app.json` command, a private install's
+ *      script, a test) PINS the book, and nothing below may override it;
+ *   2. the ADOPTED book (D166 point 8, owner 14.10.2026): `<support dir>/book.json`, holding
+ *      `{ "dbPath": "<absolute>" }`, written by the Studio's first-run door "Bestehende Datenbank
+ *      übernehmen" (`book-adopt.ts`) so a person adopts an existing book without a terminal. It is read
+ *      only when it is a plain file (never a symlink), owned by this user, writable by nobody else, and
+ *      names an absolute path; anything else is ignored, never half-trusted. A recorded book that has
+ *      gone (a moved file, an unmounted drive) is NOT replaced by the default (critic F1): the answer
+ *      says it is unavailable and resolves to `:memory:`, so nothing is written anywhere until the
+ *      person decides in the Studio (`resolveDbChoice`);
+ *   3. `~/.till/till.db`.
+ *
+ * The default sits in the home directory rather than in the project, so it is the same file whatever
+ * directory an agent subprocess happens to be spawned in, and so a checkout is never the place the
+ * books live. `:memory:` is honoured verbatim for an ephemeral run.
  */
 
+import { lstatSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, isAbsolute } from 'node:path';
 
 import { makeDirectoryDurably } from '../core/store/sqlite-store.js';
 
@@ -29,13 +44,105 @@ export function defaultDbPath(home = homedir()): string {
   return join(defaultDbDir(home), 'till.db');
 }
 
+/** The adopted-book file, inside the support directory (D166 point 8). */
+export const ADOPTED_BOOK_FILE = 'book.json';
+
+/** Is `TILL_DB_PATH` set to something? A blank value counts as unset, as in `resolveDbPath`. */
+export function isDbPathPinned(env: NodeJS.ProcessEnv = process.env): boolean {
+  const configured = env.TILL_DB_PATH?.trim();
+  return configured !== undefined && configured !== '';
+}
+
 /**
- * The path this process should open. A blank or whitespace-only `TILL_DB_PATH` is treated as unset,
- * because an empty environment variable is a misconfiguration, not a request for a file named ''.
+ * The book `<support dir>/book.json` RECORDS, whether or not that file is there right now, or null
+ * when there is no record worth trusting: no file, a symlink, not a plain file, owned by someone
+ * else, writable by group or world, not JSON, or a `dbPath` that is not an absolute path. Never throws.
+ */
+export function readAdoptedBookPath(env: NodeJS.ProcessEnv = process.env): string | null {
+  const file = join(resolveSupportDir(env), ADOPTED_BOOK_FILE);
+  try {
+    const st = lstatSync(file);
+    if (!st.isFile()) return null;
+    // POSIX only: Windows reports synthetic mode bits and no owner; its ACLs are the user profile's.
+    if (process.platform !== 'win32') {
+      if ((st.mode & 0o022) !== 0) return null;
+      const uid = process.getuid?.();
+      if (uid !== undefined && st.uid !== uid) return null;
+    }
+    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    const dbPath = (parsed as { dbPath?: unknown } | null)?.dbPath;
+    if (typeof dbPath !== 'string' || dbPath.trim() === '' || !isAbsolute(dbPath)) return null;
+    return dbPath;
+  } catch {
+    return null;
+  }
+}
+
+/** Why an adopted book cannot be opened: the file is gone, or it is there and the open failed. */
+export type AdoptedBookUnavailableReason = 'missing' | 'unopenable';
+
+/** An adopted book this process could not open. Reported to the Studio, never papered over. */
+export interface AdoptedBookUnavailable {
+  path: string;
+  reason: AdoptedBookUnavailableReason;
+}
+
+/**
+ * Which book this process should open, and WHY (critic F1 on D166 point 8). The adopted book is
+ * never silently replaced: when `book.json` names a file that is not there, the answer says so
+ * (`adoptedUnavailable`) and `path` is `:memory:`, so a face that does open something writes
+ * nowhere. `till up` then shows the Studio's "not reachable" page; `till mcp` and `till serve` refuse.
+ */
+export interface DbChoice {
+  path: string;
+  source: 'env' | 'adopted' | 'default';
+  adoptedUnavailable?: AdoptedBookUnavailable;
+}
+
+function isMissing(path: string): boolean {
+  try {
+    return !statSync(path).isFile();
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    // Gone (or a path through something that is no longer a directory). Any other stat failure
+    // (a permission) leaves the file to the open, which then reports it as unopenable.
+    return code === 'ENOENT' || code === 'ENOTDIR';
+  }
+}
+
+/** `TILL_DB_PATH`, else the adopted book (or the honest report that it is unavailable), else the default. */
+export function resolveDbChoice(env: NodeJS.ProcessEnv = process.env): DbChoice {
+  if (isDbPathPinned(env)) return { path: (env.TILL_DB_PATH as string).trim(), source: 'env' };
+  const adopted = readAdoptedBookPath(env);
+  if (adopted === null) return { path: defaultDbPath(), source: 'default' };
+  if (isMissing(adopted)) return { path: MEMORY_DB, source: 'adopted', adoptedUnavailable: { path: adopted, reason: 'missing' } };
+  return { path: adopted, source: 'adopted' };
+}
+
+/**
+ * The path this process should open: `TILL_DB_PATH`, else the adopted book, else `~/.till/till.db`.
+ * A blank or whitespace-only `TILL_DB_PATH` is treated as unset, because an empty environment
+ * variable is a misconfiguration, not a request for a file named ''. An adopted book that is missing
+ * resolves to `:memory:`, never to the default (see `resolveDbChoice`).
  */
 export function resolveDbPath(env: NodeJS.ProcessEnv = process.env): string {
-  const configured = env.TILL_DB_PATH?.trim();
-  return configured === undefined || configured === '' ? defaultDbPath() : configured;
+  return resolveDbChoice(env).path;
+}
+
+/**
+ * `resolveDbChoice`, plus the directory of the chosen file made durably (as `ensureDbPath` does). Not
+ * for an unavailable adopted book: its path is `:memory:`, so nothing is created anywhere.
+ */
+export function ensureDbChoice(env: NodeJS.ProcessEnv = process.env): DbChoice {
+  const choice = resolveDbChoice(env);
+  if (choice.path !== MEMORY_DB) makeDirectoryDurably(dirname(choice.path));
+  return choice;
+}
+
+/** The one sentence a terminal face prints when it refuses to start without the adopted book. */
+export function adoptedUnavailableRefusal(face: string, unavailable: AdoptedBookUnavailable): string {
+  const what = unavailable.reason === 'missing' ? 'is not reachable (the file is not there)' : 'cannot be opened';
+  return `${face}: the TILL book you adopted ${what}: ${unavailable.path}. Nothing was opened or created. Open TILL to fix it: it shows what to do.`;
 }
 
 /**

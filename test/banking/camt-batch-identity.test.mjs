@@ -120,14 +120,15 @@ test('L7 (c): a camt.054 fetched over the EBICS channel is refused the same way,
 
 test('L7 (c): a camt.053 without ElctrncSeqNb or without CLBD imports with the warning not_day_end_statement', () => {
   const t = world();
-  const noSeq = camt({ statementId: 'ADHOC-1', entries: [{ ref: 'A', amountMinor: 100, cd: 'DBIT' }] }).replace(/<ElctrncSeqNb>[^<]*<\/ElctrncSeqNb>/, '');
+  // D178 point 19 (re-cut): each statement covers its own day, so none of them overlaps another.
+  const noSeq = camt({ statementId: 'ADHOC-1', from: '2026-07-18', to: '2026-07-18', entries: [{ ref: 'A', amountMinor: 100, cd: 'DBIT', date: '2026-07-18' }] }).replace(/<ElctrncSeqNb>[^<]*<\/ElctrncSeqNb>/, '');
   const a = must(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: noSeq, idempotencyKey: 'a' }));
   assert.deepEqual(a.warnings, ['not_day_end_statement']);
   assert.equal(a.txnCount, 1, 'it imports: the warning says to import the day-end statement too');
-  const noClbd = camt({ statementId: 'ADHOC-2', seqNb: '9', entries: [{ ref: 'B', amountMinor: 200, cd: 'DBIT' }] }).replace(/<Bal><Tp><CdOrPrtry><Cd>CLBD<\/Cd>.*?<\/Bal>/, '');
+  const noClbd = camt({ statementId: 'ADHOC-2', seqNb: '9', from: '2026-07-19', to: '2026-07-19', entries: [{ ref: 'B', amountMinor: 200, cd: 'DBIT', date: '2026-07-19' }] }).replace(/<Bal><Tp><CdOrPrtry><Cd>CLBD<\/Cd>.*?<\/Bal>/, '');
   const b = must(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: noClbd, idempotencyKey: 'b' }));
   assert.deepEqual(b.warnings, ['not_day_end_statement']);
-  const day = must(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: camt({ statementId: 'DAY-1', seqNb: '10', entries: [{ ref: 'C', amountMinor: 300, cd: 'DBIT' }] }), idempotencyKey: 'c' }));
+  const day = must(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: camt({ statementId: 'DAY-1', seqNb: '10', from: '2026-07-20', to: '2026-07-20', entries: [{ ref: 'C', amountMinor: 300, cd: 'DBIT', date: '2026-07-20' }] }), idempotencyKey: 'c' }));
   assert.deepEqual(day.warnings, [], 'a day-end statement carries no warning');
   assert.equal(MAIN_IBAN.length, 21);
 });

@@ -78,12 +78,14 @@ type ListState =
 interface Filters {
   from: string;
   to: string;
+  /** The Belegnummer as typed (D178 point 2): sent as `list_journal { number }`. */
+  number: string;
   account: string;
   source: string;
   status: string;
 }
 
-const EMPTY_FILTERS: Filters = { from: '', to: '', account: '', source: '', status: '' };
+const EMPTY_FILTERS: Filters = { from: '', to: '', number: '', account: '', source: '', status: '' };
 
 /** A stable empty list for the non-`ok` states, so the columns hook keeps one identity across renders. */
 const EMPTY_ENTRIES: readonly JournalEntry[] = [];
@@ -144,6 +146,14 @@ function useJournalColumns(
         key: 'date',
         header: t('journal.columns.date'),
         render: (entry) => formatDate(entry.date),
+      },
+      {
+        // D178 point 2 (A02 §4b): the Belegnummer the engine assigned at posting. Tabular figures and no
+        // wrap (the shared numeric column, K-18), so a run of numbers reads down one edge; a draft has none.
+        key: 'number',
+        header: t('journal.columns.number'),
+        numeric: true,
+        render: (entry) => entry.number ?? '',
       },
       {
         key: 'ref',
@@ -260,7 +270,7 @@ export function Journal() {
   // user edits the form before applying). The empty state branches on these so a filtered miss reads
   // as "no match, clear filters" rather than the first-run "record your first entry" invitation.
   const [appliedFilters, setAppliedFilters] = useState<Filters>(EMPTY_FILTERS);
-  const [drawer, setDrawer] = useState<{ mode: DrawerMode; entryId?: string } | null>(null);
+  const [drawer, setDrawer] = useState<{ mode: DrawerMode; entryId?: string; vorlageId?: string; date?: string } | null>(null);
   // The Commit moment (D122 D-I): the entry the composer just wrote. Its row lands from above with
   // the decaying tint once the refetch has rendered it; the drawer closing is not the ack, the row is.
   const [justWrittenId, setJustWrittenId] = useState<string | null>(null);
@@ -282,6 +292,18 @@ export function Journal() {
   // read first, so the drawer opens once, in the right mode. The param stays while the drawer is open,
   // so the address names what is on screen, and closing removes it. An id the book does not hold (or a
   // read that fails) opens the drawer read-only on its error state, never another entry.
+  // D176 (A39 §15.4): `/journal?vorlage=<id>&date=<YYYY-MM-DD>`, the bank row's "Nächster Schritt": the
+  // composer opens with that Vorlage picked and the line's date. Consumed like `?new=1`.
+  const vorlageParam = searchParams.get('vorlage');
+  useEffect(() => {
+    if (vorlageParam === null || vorlageParam === '') return;
+    const dateParam = searchParams.get('date');
+    setDrawer({ mode: 'create', vorlageId: vorlageParam, ...(dateParam !== null && dateParam !== '' ? { date: dateParam } : {}) });
+    const next = new URLSearchParams(searchParams);
+    next.delete('vorlage');
+    next.delete('date');
+    setSearchParams(next, { replace: true });
+  }, [vorlageParam, searchParams, setSearchParams]);
   const entryParam = searchParams.get('entry');
   useEffect(() => {
     if (entryParam === null || entryParam === '' || workspaceId === null) return;
@@ -327,6 +349,7 @@ export function Journal() {
       const input: Record<string, unknown> = { workspaceId };
       if (applied.from !== '') input.from = applied.from;
       if (applied.to !== '') input.to = applied.to;
+      if (applied.number.trim() !== '') input.number = applied.number.trim();
       if (applied.account !== '') input.account = applied.account;
       if (applied.source !== '') input.source = applied.source;
       if (applied.status !== '') input.status = applied.status;
@@ -405,6 +428,7 @@ export function Journal() {
   const anyFilterActive =
     appliedFilters.from !== '' ||
     appliedFilters.to !== '' ||
+    appliedFilters.number.trim() !== '' ||
     appliedFilters.account !== '' ||
     appliedFilters.source !== '' ||
     appliedFilters.status !== '';
@@ -489,6 +513,18 @@ export function Journal() {
             type="date"
             value={filters.to}
             onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))}
+          />
+        </label>
+        <label className="journal-field">
+          {t('journal.filters.number')}
+          <input
+            className="field t-num journal-field--number"
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={filters.number}
+            onChange={(e) => setFilters((f) => ({ ...f, number: e.target.value }))}
           />
         </label>
         <label className="journal-field">
@@ -586,9 +622,11 @@ export function Journal() {
 
       {drawer !== null && (
         <EntryDrawer
-          key={`${drawer.mode}:${drawer.entryId ?? 'new'}`}
+          key={`${drawer.mode}:${drawer.entryId ?? 'new'}:${drawer.vorlageId ?? ''}`}
           mode={drawer.mode}
           entryId={drawer.entryId}
+          {...(drawer.vorlageId !== undefined ? { initialVorlageId: drawer.vorlageId } : {})}
+          {...(drawer.date !== undefined ? { initialDate: drawer.date } : {})}
           canPost={canPost}
           onClose={closeDrawer}
           onWritten={(entryId) => {

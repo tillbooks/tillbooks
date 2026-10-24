@@ -135,7 +135,7 @@ export function SearchPalette() {
   const workspaceId = useWorkspaceId();
   const navigate = useNavigate();
   const location = useLocation();
-  const { paletteOpen, paletteSeed, closePalette, requestAgentDock } = useKeyboard();
+  const { paletteOpen, paletteSeed, closePalette } = useKeyboard();
   const { whoami, can } = useCapabilities();
   /**
    * G17: the concept the palette handed off to. The palette overlay closes when a Begriff row is
@@ -259,7 +259,9 @@ export function SearchPalette() {
 
   const denialOf = useCallback(
     (cmd: VerbCommand): string | undefined => {
-      if (whoami === null || cmd.gateDynamic) return undefined; // fail-open / engine-gated
+      if (whoami === null) return undefined; // fail-open until the seat is known
+      // An input-keyed (`gateDynamic`) verb carries only its declared MINIMUM (D176): it is disabled when that
+      // is missing, and stays fail-open (engine-gated) when the minimum is empty, as every such verb was.
       return cmd.capabilities.find((c) => !can(c));
     },
     [whoami, can],
@@ -347,7 +349,8 @@ export function SearchPalette() {
   /**
    * C1's ask lane. One input, two lanes: a command row navigates or runs, this row hands the free
    * text to `agent_ask` (whose executed verb is always a READ, so no write is reachable from prose)
-   * and, on success, asks the dock to open onto the answer. A failure stays in the palette so the
+   * and, on success, opens the answer's session on `/agent` (D167: there is no dock any more; the
+   * session page is where a live conversation is read). A failure stays in the palette so the
    * operator sees why. `agent_ask` is idempotent per question (`askKey`), the shell-wide law.
    */
   const ask = useCallback(() => {
@@ -363,10 +366,11 @@ export function SearchPalette() {
         setAskError(code === 'needs_local_runtime' ? t('palette.askNoRuntime') : t('palette.askFailed'));
         return;
       }
-      requestAgentDock();
+      const sessionId = (response.body as { sessionId?: unknown }).sessionId;
       close();
+      navigate(typeof sessionId === 'string' && sessionId.length > 0 ? `/agent?session=${encodeURIComponent(sessionId)}` : '/agent');
     })();
-  }, [workspaceId, query, running, client, askKey, requestAgentDock, close, t]);
+  }, [workspaceId, query, running, client, askKey, navigate, close, t]);
 
   const sections = useMemo<Section[]>(
     () =>

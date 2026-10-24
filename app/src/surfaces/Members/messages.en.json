@@ -109,6 +109,19 @@
       "actor_already_bound": "This session already belongs to somebody else. Accept the invite from the session it was meant for.",
       "actor_already_member": "This session already has access here. Change its role in the list instead of inviting it.",
       "member_kind_mismatch": "TILL already knows this address as something else (a person or an agent). The kind belongs to the identity and cannot be changed by an invitation."
+    },
+    "device": {
+      "title": "Browsers on this computer",
+      "body": "Every browser you have opened TILL in stays signed in, even after a restart. Signing out sets a new key: every other browser and every copy of the old key loses access.",
+      "signOutAll": "Sign out on all devices",
+      "confirm": {
+        "title": "Sign out on all devices?",
+        "body": "TILL replaces the key to your books. This tab stays signed in. Every other browser and window needs the new key; on this computer TILL reopens by itself to hand it over, in the TILL app or in your default browser.",
+        "confirm": "Sign out",
+        "cancel": "Cancel"
+      },
+      "done": "New key set. Every other browser is signed out.",
+      "failed": "That did not work. The current key still applies."
     }
   },
   "capability": {
@@ -236,7 +249,7 @@
   "help": {
     "Members": {
       "title": "Access",
-      "body": "Who may open these books and what each role allows. The members tab lists everyone with access and their role; here you invite people, change roles and revoke access. The roles tab describes which rights sit behind a role. While nobody has been invited, the workspace is open; with the first invite the inviting person takes the owner role.",
+      "body": "Who may open these books and what each role allows. The members tab lists everyone with access and their role; here you invite people, change roles and revoke access. The roles tab describes which rights sit behind a role. While nobody has been invited, the workspace is open; with the first invite the inviting person takes the owner role. Under \"Browsers on this computer\" you sign out every other browser, in case a key ended up in the wrong hands.",
       "concepts": [],
       "docsPath": "introduction"
     }

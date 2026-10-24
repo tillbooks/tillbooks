@@ -53,6 +53,13 @@
  * `statement_amended`.
  *
  * Bank rules and the per-account reconciliation switch are parked (spec §10): no table here.
+ *
+ * D167 (spec §13.1): `bank_standard` is the one narrow form of D-A39.5 that was un-parked. A standard
+ * says "this counterparty, in this direction, books to this account and MWST code"; it PREFILLS a line
+ * (the ladder's rung (c2)) and never posts. Append-only like a decision: no DELETE, an UPDATE may only
+ * stamp `superseded_at`/`superseded_by` once, and a partial unique index keeps at most ONE live standard
+ * per (workspace, counterparty key, direction). `superseded_by` is the actor, as on a decision, so the
+ * table holds no self-reference a G04 restore would have to order.
  */
 
 export const BANK_INBOX_SCHEMA_SQL = `
@@ -75,7 +82,13 @@ CREATE TABLE IF NOT EXISTS bank_line_decision (
   created_at           TEXT NOT NULL,
   superseded_at        TEXT,
   superseded_by        TEXT,
-  supersede_reason     TEXT
+  supersede_reason     TEXT,
+  -- D175 (critic D175-C5, generation 15): the Buchungsregel a \`rule\` target booked the line by, NULL for
+  -- every other decision. Listed in ADDITIVE_COLUMNS (store/schema.ts) for a book written before it.
+  rule_id              TEXT REFERENCES bank_standard(id),
+  -- D178 E3 (A39 §17.7): the contact a \`contact\` target booked the line to, NULL for every other decision.
+  -- Listed in ADDITIVE_COLUMNS (store/schema.ts) for a book written before it.
+  contact_id           TEXT REFERENCES contact(id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS bank_line_decision_one_active
@@ -141,6 +154,59 @@ BEGIN
   SELECT RAISE(ABORT, 'bank_line_decision: only the supersession stamp may be written, and only once');
 END;
 
+-- D175: the rule a decision was booked by is as immutable as the rest of the row. A second trigger, so the
+-- A39 trigger in every existing book stays as it is (the \`bank_standard_recipe_frozen\` precedent); SQLite
+-- resolves the column when the trigger fires, after ADDITIVE_COLUMNS added it.
+CREATE TRIGGER IF NOT EXISTS bank_line_decision_rule_frozen
+BEFORE UPDATE ON bank_line_decision
+WHEN NEW.rule_id IS NOT OLD.rule_id
+BEGIN
+  SELECT RAISE(ABORT, 'bank_line_decision: only the supersession stamp may be written, and only once');
+END;
+
+-- D178 E3: the contact a decision booked the line to is as immutable as the rest of the row, by its own
+-- trigger for the same reason as the rule's (every existing book keeps its A39 trigger as it is).
+CREATE TRIGGER IF NOT EXISTS bank_line_decision_contact_frozen
+BEFORE UPDATE ON bank_line_decision
+WHEN NEW.contact_id IS NOT OLD.contact_id
+BEGIN
+  SELECT RAISE(ABORT, 'bank_line_decision: only the supersession stamp may be written, and only once');
+END;
+
+-- D178 E3 (owner, 21.10.2026): each clearing of a received Anzahlung's VAT when A14 applies the Guthaben
+-- to an invoice (anzahlungVat.ts). One row per clearing entry, append-only, so \`reopen_bank_line\` finds and
+-- reverses every clearing of a payment it undoes, and a replayed application clears nothing twice.
+CREATE TABLE IF NOT EXISTS bank_anzahlung_vat_clearing (
+  entry_id          TEXT PRIMARY KEY REFERENCES journal_entry(id),
+  workspace_id      TEXT NOT NULL REFERENCES workspace(id),
+  payment_id        TEXT NOT NULL REFERENCES payment(id),
+  receipt_entry_id  TEXT NOT NULL REFERENCES journal_entry(id),
+  gross_minor       INTEGER NOT NULL,
+  -- The Guthaben cash this clearing covers (an application's allocated cash, a refund's share), so the next
+  -- clearing takes its share on the cumulative figure and the last one clears exactly what is left.
+  applied_minor     INTEGER NOT NULL,
+  kind              TEXT NOT NULL CHECK (kind IN ('application', 'refund')),
+  -- A refund correction (Entgeltsminderung): the refund line's decision, whose reopen reverses it.
+  link_id           TEXT REFERENCES bank_txn_link(id),
+  created_by        TEXT,
+  created_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS bank_anzahlung_vat_clearing_payment
+  ON bank_anzahlung_vat_clearing (workspace_id, payment_id);
+
+CREATE TRIGGER IF NOT EXISTS bank_anzahlung_vat_clearing_no_update
+BEFORE UPDATE ON bank_anzahlung_vat_clearing
+BEGIN
+  SELECT RAISE(ABORT, 'bank_anzahlung_vat_clearing rows are immutable: a clearing is undone by its reversal');
+END;
+
+CREATE TRIGGER IF NOT EXISTS bank_anzahlung_vat_clearing_no_delete
+BEFORE DELETE ON bank_anzahlung_vat_clearing
+BEGIN
+  SELECT RAISE(ABORT, 'bank_anzahlung_vat_clearing rows are never deleted');
+END;
+
 CREATE TABLE IF NOT EXISTS bank_line_claim (
   link_id          TEXT NOT NULL REFERENCES bank_txn_link(id),
   workspace_id     TEXT NOT NULL REFERENCES workspace(id),
@@ -200,5 +266,94 @@ CREATE TABLE IF NOT EXISTS bank_txn_detail (
 
 CREATE INDEX IF NOT EXISTS bank_txn_detail_iban
   ON bank_txn_detail (workspace_id, counterparty_iban);
+
+CREATE TABLE IF NOT EXISTS bank_standard (
+  id                  TEXT PRIMARY KEY,
+  workspace_id        TEXT NOT NULL REFERENCES workspace(id),
+  counterparty_key    TEXT NOT NULL,
+  counterparty_label  TEXT NOT NULL,
+  direction           TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+  account_id          TEXT NOT NULL REFERENCES account(id),
+  tax_code            TEXT,
+  set_by              TEXT,
+  set_at              TEXT NOT NULL,
+  superseded_at       TEXT,
+  superseded_by       TEXT,
+  -- D175 (A39 §14.1, generation 15): the Buchungsregel. All four nullable: a row with legs_json NULL is a
+  -- D167 standard and reads as the one-leg recipe (account_id, tax_code, the rest). A book written before
+  -- generation 14 gains them through ADDITIVE_COLUMNS (store/schema.ts), where they are listed too.
+  label               TEXT,
+  match_text          TEXT,
+  legs_json           TEXT,
+  via_account_id      TEXT REFERENCES account(id),
+  -- D176 (A39 §15.1, generation 16): a Buchungsregel has a SCOPE (\`bank\`: proposed on a matching bank line;
+  -- \`manual\`: a Vorlage picked in the composer) and an OUTCOME (\`legs\`: book the recipe; \`ignore\`: propose
+  -- "Nicht buchen" with a reason and a note), and may name a follow-up Vorlage. A MANUAL row has no
+  -- counterparty: it is keyed \`vorlage:<the label's folded tokens>\` with direction 'out' and no match text, so
+  -- the one-live index above keeps one live Vorlage per folded label (a real key is always \`iban:\` or
+  -- \`name:\`, so the two can never meet). An IGNORE row has no legs; its NOT NULL \`account_id\` holds the
+  -- Bankkonto ledger account of the line it was saved from, which nothing books to (the API answers null).
+  -- A book written before generation 16 gains these through ADDITIVE_COLUMNS (store/schema.ts).
+  scope               TEXT NOT NULL DEFAULT 'bank' CHECK (scope IN ('bank', 'manual')),
+  outcome             TEXT NOT NULL DEFAULT 'legs' CHECK (outcome IN ('legs', 'ignore')),
+  ignore_reason       TEXT,
+  ignore_note         TEXT,
+  follow_up_standard_id TEXT REFERENCES bank_standard(id)
+);
+
+-- D175: the one-live index is \`bank_standard_one_live_rule\` over (workspace, key, direction,
+-- COALESCE(match_text, '')), created in ADDITIVE_INDEXES (store/schema.ts) because it names an additive
+-- column. The D167 index \`bank_standard_one_live\` is no longer created; generation 15 drops it.
+
+CREATE TRIGGER IF NOT EXISTS bank_standard_no_delete
+BEFORE DELETE ON bank_standard
+BEGIN
+  SELECT RAISE(ABORT, 'bank_standard rows are never deleted: supersede the standard instead');
+END;
+
+CREATE TRIGGER IF NOT EXISTS bank_standard_supersede_only
+BEFORE UPDATE ON bank_standard
+WHEN OLD.superseded_at IS NOT NULL
+  OR NEW.superseded_at IS NULL
+  OR NEW.id IS NOT OLD.id
+  OR NEW.workspace_id IS NOT OLD.workspace_id
+  OR NEW.counterparty_key IS NOT OLD.counterparty_key
+  OR NEW.counterparty_label IS NOT OLD.counterparty_label
+  OR NEW.direction IS NOT OLD.direction
+  OR NEW.account_id IS NOT OLD.account_id
+  OR NEW.tax_code IS NOT OLD.tax_code
+  OR NEW.set_by IS NOT OLD.set_by
+  OR NEW.set_at IS NOT OLD.set_at
+BEGIN
+  SELECT RAISE(ABORT, 'bank_standard: only the supersession stamp may be written, and only once');
+END;
+
+-- D175: the recipe columns are as immutable as the rest of the row (an edit supersedes). A SECOND trigger
+-- rather than a widened \`bank_standard_supersede_only\`, so the D167 trigger in every existing book stays
+-- exactly as it is and no generation step has to drop and re-create it. SQLite resolves NEW/OLD column
+-- names when the trigger fires, not when it is created, so on a pre-generation-15 book this CREATE runs
+-- before ADDITIVE_COLUMNS adds the columns, and nothing updates the table in between.
+CREATE TRIGGER IF NOT EXISTS bank_standard_recipe_frozen
+BEFORE UPDATE ON bank_standard
+WHEN NEW.label IS NOT OLD.label
+  OR NEW.match_text IS NOT OLD.match_text
+  OR NEW.legs_json IS NOT OLD.legs_json
+  OR NEW.via_account_id IS NOT OLD.via_account_id
+BEGIN
+  SELECT RAISE(ABORT, 'bank_standard: only the supersession stamp may be written, and only once');
+END;
+
+-- D176: the scope, the outcome and the follow-up are as immutable as the recipe (an edit supersedes). A
+-- THIRD trigger, for the reason the second one is separate: every existing trigger stays exactly as it is.
+CREATE TRIGGER IF NOT EXISTS bank_standard_outcome_frozen
+BEFORE UPDATE ON bank_standard
+WHEN NEW.scope IS NOT OLD.scope
+  OR NEW.outcome IS NOT OLD.outcome
+  OR NEW.ignore_reason IS NOT OLD.ignore_reason
+  OR NEW.ignore_note IS NOT OLD.ignore_note
+  OR NEW.follow_up_standard_id IS NOT OLD.follow_up_standard_id
+BEGIN
+  SELECT RAISE(ABORT, 'bank_standard: only the supersession stamp may be written, and only once');
+END;
 
 `;

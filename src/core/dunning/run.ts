@@ -44,10 +44,20 @@ import { buildVatLines } from '../vat/index.js';
 import type { VatJournalLine } from '../vat/index.js';
 import { baseCurrencyOf } from '../fx/rates.js';
 import { ROLE_ACCOUNT_NUMBER } from '../payments/accounts.js';
-import { dunningLevelsOf } from './config.js';
+import { dunningLevelsOf, dunningRefreezeOf, dunningLetterDateOf, validateRefreezeOverride } from './config.js';
+import type { DunningRefreezeMode, DunningLetterDate } from './config.js';
 import type { DunningLevelConfig } from './config.js';
 import { renderDunningPdf } from './pdf.js';
-import { readRun, runView, dunningRunChangesSinceIssue } from './reads.js';
+import {
+  readRun,
+  runView,
+  dunningRunChangesSinceIssue,
+  feePostingChain,
+  feeReversalOf,
+  REFREEZE_WITHOUT_FEE_ACTION,
+  REFREEZE_WITHOUT_FEE_REDATED_ACTION,
+} from './reads.js';
+import { reverseOwnedEntry, DUNNING_FEE_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
 import type { RunRow, ItemRow, DunningItemChange } from './reads.js';
 // G05: freeze the default template (id + snapshot) at issue, the same moment the figures freeze.
 import { freezeRenderedTemplate } from '../customization/documentTemplates.js';
@@ -203,7 +213,7 @@ function principalOf(item: OpenItem): number {
  * and mailing that assertion about a paid or cancelled invoice, under its own number and QRR
  * reference, is the worst sentence this product can produce. A residual fee balance is chased by no
  * letter: it stays visible on the OP-Liste as `dunningFeeMinor`, and its honest remedies are
- * `reverse_entry` on the fee entry (a mistaken or waived fee) or ordinary collection outside the
+ * `dunning_fee_reverse` on the run (a mistaken or waived fee, D169) or ordinary collection outside the
  * escalation machine. The spec §4 records this presentation decision.
  */
 function chaseableItems(items: readonly OpenItem[]): OpenItem[] {
@@ -384,7 +394,7 @@ export interface DiscardDunningRunInput {
  * nothing (that is the whole point of the split, US-A15.5), so discarding it removes the run and its
  * items, and the discard itself stays on the audit trail (`dunning_run` / `discard`). An issued or sent
  * run is refused `invalid_transition`: its letters and fee stand, and a wrong fee is corrected by
- * `reverse_entry` (§H-AUDIT).
+ * `dunning_fee_reverse` (D169, §H-AUDIT).
  *
  * §H-IDEMPOTENT: a replay under the same key answers the stored result; a second discard of the same
  * run under a new key reads the audit trail and answers `alreadyDiscarded` without writing. §H-TENANT:
@@ -995,6 +1005,252 @@ function recoverSkippedFee(
   }
 }
 
+// --- the fee's undo (D169: the owned A02 correction of a run's Mahngebühr) -------------------------
+
+export interface DunningFeeReverseInput {
+  runId?: string;
+  reason?: string;
+  /** D174: a per-call override of `dunning.refreeze` for this run only. Needs `overrideReason`. */
+  refreeze?: unknown;
+  /** D174: a per-call override of `dunning.letter_date` for this run only. Needs `overrideReason`. */
+  letterDate?: unknown;
+  /** D174: the required reason for an override, written into the mirror's text and an audit row. */
+  overrideReason?: unknown;
+  idempotencyKey?: string;
+}
+
+/** Thrown inside the fee reverse's transaction to roll it back and answer `result` instead. */
+class FeeReverseAbort {
+  constructor(public readonly result: Result) {}
+}
+
+/**
+ * Reverse an issued run's Mahngebühr: post the faithful A02 mirror of the run's ONE aggregate fee
+ * entry (D169, 14.10.2026, the D141.3 follow-up; owner decision: an undo verb for every row-backed
+ * source that lacked one).
+ *
+ * RUN-LEVEL, because the data model is: issue books ONE entry per run (`fee_entry_id`, lines grouped
+ * by account and VAT code across every debtor, D69), and A02 reverses whole entries. A per-debtor
+ * waiver would need a partial correcting posting, which no sibling does; it is deferred (D169).
+ *
+ * WHAT IT TOUCHES: the ledger only. The run stays `issued`/`sent` and every item, level and frozen
+ * demand stands (D73: the letters exist, so the escalation history they record is not rewritten).
+ * The reversal is derived from the ledger (`feeReversalOf`), never a stored flag, the schema's own
+ * rule that the fee's money effect lives in the ledger. Its consequences ride the readers that
+ * already exist: A16 drops the fee from the mirror's date (the live-fee predicate), so the next
+ * escalation letter no longer claims it, and an unsent letter that demanded it is RE-FROZEN without
+ * the fee in this same transaction (D174, amending D73 for unsent letters only), so send mails it. The reason rides the mirror's text; the act is on the audit trail.
+ *
+ * ACCEPTED: a run `issued` or `sent` with a fee entry that stands and that no live payment settled.
+ * REFUSALS, each a pre-check that writes nothing:
+ *  - `proposed` -> `invalid_transition` (nothing is booked yet: `discard_dunning_run`);
+ *  - no fee entry -> `no_fee_booked` (none configured, or deferred by a period lock: `feeSkippedReason`);
+ *  - an odd chain of posted mirrors -> `already_reversed` naming the mirror (idempotent on ROWS under
+ *    a new key, and the answer for a book whose raw Storno predates D169: there is no run state to
+ *    move, so the existing mirror IS the reversal and nothing is posted);
+ *  - any live payment allocation on one of the run's fee items -> `fee_settled` naming the payments:
+ *    the debtor paid (or it was written off), so reversing the booking alone would leave 1100 in
+ *    credit beside the payment. `reverse_payment` first, never silently;
+ *  - a blank reason -> `reason_required`; a locked period on the reversal date -> `period_locked`.
+ * THE DATE is today (OR 957a: correct in the open period, `reverse_entry`'s convention); the D69 VAT
+ * trace rides the mirror, so the Umsatzsteuer comes back on the Ziffer it was declared on, and a
+ * VAT-filed period is never touched. An EVEN, non-empty chain (a book whose raw Storno was itself
+ * reversed raw) means the fee stands again: A02 reverses an entry once, so the mirror is posted
+ * against the chain's last link (it carries the fee's direction; its owner walk ends at the run).
+ */
+export function reverseDunningFee(ctx: WorkspaceContext, input: DunningFeeReverseInput): Result {
+  const capable = ctx.capabilities.assert('dun');
+  if (!capable.ok) return capable;
+  const posting = ctx.capabilities.assert('post');
+  if (!posting.ok) return posting;
+  const guard = requireString(input.runId, 'runId') ?? requireString(input.idempotencyKey, 'idempotencyKey');
+  if (guard) return guard;
+  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) return err('reason_required', { field: 'reason' });
+  const reason = input.reason.trim();
+  const runId = input.runId as string;
+  // D174: the per-call override is validated before anything is read or written.
+  const overrideBad = validateRefreezeOverride(input);
+  if (overrideBad) return overrideBad;
+  const refreezeOverride = input.refreeze as DunningRefreezeMode | undefined;
+  const letterDateOverride = input.letterDate as DunningLetterDate | undefined;
+  const overridden = refreezeOverride !== undefined || letterDateOverride !== undefined;
+  const overrideReason = overridden ? (input.overrideReason as string).trim() : null;
+
+  const scopedKey = JSON.stringify(['dunning_fee_reverse', runId, input.idempotencyKey as string]);
+  const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'dunning_fee_reverse');
+  if (replayed !== undefined) return replayed;
+
+  const run = readRun(ctx, runId);
+  if (run === undefined) return err('not_found', { runId });
+  if (run.status === 'proposed') {
+    return err('invalid_transition', {
+      runId,
+      from: run.status,
+      hint: 'a proposed run booked nothing: discard it with discard_dunning_run',
+    });
+  }
+  if (run.fee_entry_id === null) {
+    return err('no_fee_booked', { runId, feeSkippedReason: run.fee_skipped_reason });
+  }
+  const feeEntryId = run.fee_entry_id;
+  const chain = feePostingChain(ctx, feeEntryId);
+  if (chain.links % 2 === 1) {
+    return err('already_reversed', { runId, feeEntryId, reversalEntryId: chain.last });
+  }
+  // §H-TENANT on both sides of the join. A reversed payment's allocation no longer settles anything.
+  const settledBy = ctx.store.db
+    .prepare(
+      `SELECT DISTINCT p.id AS id
+         FROM payment_allocation a
+         JOIN payment p ON p.id = a.payment_id AND p.workspace_id = a.workspace_id
+         JOIN dunning_item i ON i.id = a.target_id AND i.workspace_id = a.workspace_id
+        WHERE a.workspace_id = ? AND a.target_kind = 'dunning_fee' AND i.run_id = ?
+          AND p.reversal_entry_id IS NULL
+        ORDER BY p.id`,
+    )
+    .all(ctx.workspaceId, run.id) as { id: string }[];
+  if (settledBy.length > 0) {
+    return err('fee_settled', {
+      runId,
+      paymentIds: settledBy.map((p) => p.id),
+      hint: 'the fee was already paid or written off: reverse that payment first (reverse_payment), then reverse the fee',
+    });
+  }
+
+  const date = ctx.clock.now().slice(0, 10);
+  // §H-PERIOD: pre-checked BEFORE the tx, a structured refusal with the run untouched.
+  const periodOpen = ctx.periods.assertOpen(date);
+  if (!periodOpen.ok) return periodOpen;
+
+  const lettersSent = (ctx.store.db
+    .prepare('SELECT COUNT(DISTINCT debtor_id) AS n FROM dunning_item WHERE workspace_id = ? AND run_id = ? AND sent_at IS NOT NULL')
+    .get(ctx.workspaceId, run.id) as { n: number }).n;
+
+  try {
+    return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'dunning_fee_reverse', () => {
+      // D174: the settings are read INSIDE the transaction, after the replay (a replay answers the
+      // stored result whatever the setting says now); a per-call override wins for this run only.
+      const refreeze = refreezeOverride ?? dunningRefreezeOf(ctx);
+      const letterDate = letterDateOverride ?? dunningLetterDateOf(ctx);
+      const description =
+        overrideReason === null
+          ? `Storno Mahngebühren Mahnlauf ${run.run_date}: ${reason}`
+          : `Storno Mahngebühren Mahnlauf ${run.run_date}: ${reason} (abweichend: offene Briefe ${refreeze === 'hold' ? 'zurückgehalten' : 'ohne Gebühr neu ausgestellt'}, Briefdatum ${letterDate === 'today' ? 'Tag der Neuausstellung' : 'Datum des Mahnlaufs'}; Grund: ${overrideReason})`;
+      const reversed = reverseOwnedEntry(
+        ctx,
+        {
+          entryId: chain.last,
+          date,
+          description,
+          // One mirror per run and link, whatever key the caller used: the identity is the run's fee.
+          idempotencyKey: JSON.stringify(['dunning_fee_reversal', run.id, chain.last]),
+        },
+        DUNNING_FEE_REVERSAL_OWNER,
+      );
+      if (!reversed.ok) throw new FeeReverseAbort(reversed);
+      ctx.audit.record({ entityKind: 'dunning_run', entityId: run.id, action: 'fee_reverse', actor: ctx.actor, at: ctx.clock.now() });
+      // D174: in the SAME transaction, every letter not yet sent is re-frozen without the fee, so the
+      // reversal and the letters that no longer demand it land together or not at all.
+      // D174: the override is its own audit row (the reason stands in the mirror's description).
+      if (overridden) {
+        ctx.audit.record({ entityKind: 'dunning_run', entityId: run.id, action: 'refreeze_override', actor: ctx.actor, at: ctx.clock.now() });
+      }
+      const reissued = refreezeUnsentWithoutFee(ctx, run.id, { refreeze, letterDate });
+      return ok({
+        runId: run.id,
+        feeEntryId,
+        reversalEntryId: reversed.reversalId,
+        reason,
+        // The letters that already went out stand (they cannot be unsent); the count says so.
+        lettersSent,
+        // D174: the unsent letters' items re-issued without the fee (now sendable).
+        lettersReissuedItemIds: reissued,
+        // D174: the rules that applied to the unsent letters, and whether this call overrode them.
+        refreeze,
+        letterDate,
+        ...(overridden ? { overridden: true, overrideReason } : {}),
+        run: runView(ctx, readRun(ctx, run.id) as RunRow),
+      });
+    });
+  } catch (e) {
+    if (e instanceof FeeReverseAbort) return e.result;
+    throw e;
+  }
+}
+
+/**
+ * D174 (amends D73 for UNSENT letters only, owner decision Q1 15.10.2026): once a run's fee is
+ * reversed, every letter that has not left is RE-FROZEN without the fee, so it is honest to send.
+ *
+ * THE FREEZE IS A PURE ROW SNAPSHOT: the PDF, its figures and each invoice's QR amount are rendered
+ * on demand from `dunning_item` (`overdue_minor + demanded_fee_minor`; the QRR/SCOR reference comes
+ * from the invoice number and does not move). So the re-freeze is ONE column: `demanded_fee_minor`
+ * drops to 0. Every other frozen figure (principal, open amount, Verzugszins note, level, days,
+ * due date) stays exactly as issued: only the fee line leaves the letter, never a recomputation.
+ *
+ * WHICH LETTERS: a letter is one debtor's group of items. A group is re-frozen only when NOTHING of it
+ * has left: no item carries `sent_at`, and none is `dispatching` (a transport whose outcome is unknown
+ * counts as sent, the A11 m-1 discipline). A sent or possibly-sent letter stays byte-identical (D73).
+ *
+ * HISTORY, append-only and without a schema change: each re-frozen item writes one hash-chained audit
+ * row (`dunning_item` / `refreeze_without_fee`). The superseded demand stays reconstructible from the
+ * row itself: a letter demanded a fee only when it booked at issue, and then `demanded_fee_minor`
+ * equalled `fee_minor`, which nothing here touches. The audit row is also what the run view reads to
+ * say the letter was re-issued without the fee.
+ *
+ * IDEMPOTENT ON ROWS: the UPDATE matches only `demanded_fee_minor > 0`, so a second call finds nothing
+ * and writes nothing (no audit row either). §H-TENANT on every statement. Called inside
+ * `reverseDunningFee`'s transaction (atomic with the mirror) and, for a book whose fee was reversed by
+ * a raw Storno before D169, lazily by `sendDunningRun` before it decides what may leave.
+ */
+export function refreezeUnsentWithoutFee(
+  ctx: WorkspaceContext,
+  runId: string,
+  rules: { refreeze?: DunningRefreezeMode; letterDate?: DunningLetterDate } = {},
+): string[] {
+  // D174: `hold` (the setting or a per-call override) is D169's behaviour: nothing is re-frozen and
+  // send keeps holding the letter as `fee_reversed`.
+  const refreeze = rules.refreeze ?? dunningRefreezeOf(ctx);
+  if (refreeze === 'hold') return [];
+  // D174 Q9: the re-issue date is fixed HERE, by which audit action records the re-freeze.
+  const action =
+    (rules.letterDate ?? dunningLetterDateOf(ctx)) === 'today' ? REFREEZE_WITHOUT_FEE_REDATED_ACTION : REFREEZE_WITHOUT_FEE_ACTION;
+  const candidates = ctx.store.db
+    .prepare(
+      `SELECT i.id FROM dunning_item i
+        WHERE i.workspace_id = ? AND i.run_id = ? AND i.demanded_fee_minor > 0 AND i.sent_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM dunning_item g
+             WHERE g.workspace_id = i.workspace_id AND g.run_id = i.run_id AND g.debtor_id = i.debtor_id
+               AND (g.sent_at IS NOT NULL OR g.send_error = 'dispatching'))
+        ORDER BY i.debtor_id, i.id`,
+    )
+    .all(ctx.workspaceId, runId) as { id: string }[];
+  const update = ctx.store.db.prepare(
+    `UPDATE dunning_item SET demanded_fee_minor = 0
+      WHERE workspace_id = ? AND id = ? AND demanded_fee_minor > 0 AND sent_at IS NULL`,
+  );
+  const done: string[] = [];
+  for (const c of candidates) {
+    if (update.run(ctx.workspaceId, c.id).changes === 0) continue;
+    ctx.audit.record({ entityKind: 'dunning_item', entityId: c.id, action, actor: ctx.actor, at: ctx.clock.now() });
+    done.push(c.id);
+  }
+  return done;
+}
+
+/** D174: whether this run's fee was reversed by `dunning_fee_reverse` (not a legacy raw Storno). */
+// Its `workspace_id` predicate is defence in depth: run ids are unique across books, so it is unobservable.
+function reversedByVerb(ctx: WorkspaceContext, runId: string): boolean {
+  return (
+    ctx.store.db
+      .prepare(
+        "SELECT 1 FROM audit_log WHERE workspace_id = ? AND entity_kind = 'dunning_run' AND entity_id = ? AND action = 'fee_reverse' LIMIT 1",
+      )
+      .get(ctx.workspaceId, runId) !== undefined
+  );
+}
+
 export interface SendDunningRunInput {
   runId?: string;
   confirmed?: boolean;
@@ -1083,6 +1339,17 @@ export function sendDunningRun(ctx: WorkspaceContext, input: SendDunningRunInput
   // K-31/K-32: the ONE settlement re-validation, shared with the read model (the manual/download
   // path), broadened from "fully settled" to "changed since issue" and named by distinct cause. It
   // reads A16's own derivation. D73 is untouched: a changed letter loses its transport, not its row.
+  // D174: a fee reversed by a raw Storno before D169 never ran the in-transaction re-freeze, so its
+  // unsent letters are re-frozen here, before anything decides what may leave. Its own transaction,
+  // and not the send's act (no approval is marked by it); a no-op once done, and for every run whose
+  // fee stands.
+  // D174 critic r1: ONLY a legacy raw Storno. A reversal by `dunning_fee_reverse` (its `fee_reverse`
+  // audit row) already applied the run's re-freeze choice (the setting or a per-run override) in its
+  // own transaction; re-deciding here from the CURRENT setting would re-freeze and mail a letter the
+  // reversal chose to hold.
+  if (feeReversalOf(ctx, run) !== null && !reversedByVerb(ctx, run.id)) {
+    ctx.store.withoutCommitMark(() => ctx.store.tx(() => refreezeUnsentWithoutFee(ctx, run.id)));
+  }
   const changes = dunningRunChangesSinceIssue(ctx, run, ctx.clock.now().slice(0, 10));
 
   const items = ctx.store.db
@@ -1151,10 +1418,10 @@ export function sendDunningRun(ctx: WorkspaceContext, input: SendDunningRunInput
       .get(ctx.workspaceId, debtorId) as { email: string | null } | undefined;
     const email = contact?.email ?? null;
     if (email === null || email.length === 0) {
-      markGroup(ctx, run.id, debtorId, { error: 'no_email' });
       // G05 §10: the debtor whose letter could not leave is a degraded log row (one row per
-      // recipient, spec §10.2). The downloadable PDF stays the honest manual path, unchanged.
-      recordDispatch(ctx, {
+      // recipient, spec §10.2), in the same write as the outcome it logs. The downloadable PDF stays
+      // the honest manual path, unchanged.
+      markGroup(ctx, run.id, debtorId, { error: 'no_email' }, () => recordDispatch(ctx, {
         documentKind: 'dunning_run',
         dunningRunId: run.id,
         contactId: debtorId,
@@ -1165,14 +1432,13 @@ export function sendDunningRun(ctx: WorkspaceContext, input: SendDunningRunInput
         defaulted: true,
         outcome: 'degraded',
         degradeReason: 'no_email',
-      });
+      }));
       outcomes.push({ debtorId, outcome: 'no_email' });
       continue;
     }
     const pdf = renderDunningPdf(ctx, { runId: run.id, debtorId });
     if (!pdf.ok) {
-      markGroup(ctx, run.id, debtorId, { error: `render_failed:${String(pdf.error)}` });
-      recordDispatch(ctx, {
+      markGroup(ctx, run.id, debtorId, { error: `render_failed:${String(pdf.error)}` }, () => recordDispatch(ctx, {
         documentKind: 'dunning_run',
         dunningRunId: run.id,
         contactId: debtorId,
@@ -1184,24 +1450,46 @@ export function sendDunningRun(ctx: WorkspaceContext, input: SendDunningRunInput
         defaulted: true,
         outcome: 'failed',
         degradeReason: `render_failed:${String(pdf.error)}`,
-      });
+      }));
       outcomes.push({ debtorId, outcome: 'render_failed', detail: String(pdf.error) });
       continue;
     }
     const level = Math.max(...group.map((i) => i.level));
 
-    // The intent commits BEFORE the irreversible act (A11's m-1), in its own transaction.
-    markGroup(ctx, run.id, debtorId, { error: 'dispatching' });
-    const sent = relay.send({
-      to: email,
-      subject: dunningEmailSubject(level),
-      pdfBase64: (pdf.pdf as { base64: string }).base64,
-    });
+    // The intent commits BEFORE the irreversible act (A11's m-1), in its own transaction. Like every
+    // non-`sent` state, it is the send's own bookkeeping and marks no approval (see `markGroup`); a
+    // transport that THROWS leaves the outcome unknown, and that does mark (D165).
+    if (!markGroup(ctx, run.id, debtorId, { error: 'dispatching' })) {
+      // Another send claimed this debtor since the items were read (a second approval of the same
+      // run, D12): never a second transport call. Its letter is out, or on the wire.
+      const unsent = ctx.store.db
+        .prepare('SELECT COUNT(*) AS n FROM dunning_item WHERE workspace_id = ? AND run_id = ? AND debtor_id = ? AND sent_at IS NULL')
+        .get(ctx.workspaceId, run.id, debtorId) as { n: number };
+      outcomes.push({ debtorId, outcome: unsent.n === 0 ? 'already_sent' : 'send_outcome_unknown' });
+      continue;
+    }
+    let sent: ReturnType<typeof relay.send>;
+    try {
+      sent = relay.send({
+        to: email,
+        subject: dunningEmailSubject(level),
+        pdfBase64: (pdf.pdf as { base64: string }).base64,
+      });
+    } catch (e) {
+      try {
+        ctx.store.commitMarkNow();
+      } catch {
+        // The transport's error is the one the caller sees; a failed stamp must not replace it.
+      }
+      throw e;
+    }
     if (sent.ok) {
-      markGroup(ctx, run.id, debtorId, { sentAt: ctx.clock.now() });
       // G05 §10: one `sent` log row per debtor, recording exactly what left (the de-CH letter
-      // subject and the PDF; the letters are de-CH prose today, so the row says so honestly).
-      recordDispatch(ctx, {
+      // subject and the PDF; the letters are de-CH prose today, so the row says so honestly). It
+      // lands IN THE SAME WRITE as the debtor's `sent_at`, as A11's send records its row with its
+      // status (D165 round 2, critic finding 2): two transactions let a death between them leave the
+      // letter recorded as sent and its log row never written, since a retry answers `already_sent`.
+      markGroup(ctx, run.id, debtorId, { sentAt: ctx.clock.now() }, () => recordDispatch(ctx, {
         documentKind: 'dunning_run',
         dunningRunId: run.id,
         contactId: debtorId,
@@ -1212,14 +1500,13 @@ export function sendDunningRun(ctx: WorkspaceContext, input: SendDunningRunInput
         bodyResolved: '',
         defaulted: true,
         outcome: 'sent',
-      });
+      }));
       outcomes.push({ debtorId, outcome: 'sent' });
       transmitted += 1;
     } else {
       // The port contract: {ok:false} means nothing left the building, so the marker clears and a
-      // later retry may transmit once the fault does.
-      markGroup(ctx, run.id, debtorId, { error: `send_failed:${sent.reason}` });
-      recordDispatch(ctx, {
+      // later retry may transmit once the fault does. The `failed` log row rides the same write.
+      markGroup(ctx, run.id, debtorId, { error: `send_failed:${sent.reason}` }, () => recordDispatch(ctx, {
         documentKind: 'dunning_run',
         dunningRunId: run.id,
         contactId: debtorId,
@@ -1231,7 +1518,7 @@ export function sendDunningRun(ctx: WorkspaceContext, input: SendDunningRunInput
         defaulted: true,
         outcome: 'failed',
         degradeReason: sent.reason,
-      });
+      }));
       outcomes.push({ debtorId, outcome: 'send_failed', detail: sent.reason });
     }
   }
@@ -1254,14 +1541,49 @@ export function sendDunningRun(ctx: WorkspaceContext, input: SendDunningRunInput
   return result;
 }
 
-/** Commit one debtor group's outbound state in its own transaction (never inside another unit). */
+/**
+ * Commit one debtor group's outbound state in its own transaction (never inside another unit), with
+ * `log` (the G05 §10 dispatch row that records this outcome) inside the same transaction, so the
+ * outcome and its log row land together or not at all.
+ *
+ * D165 (follow-up critic, 14.10.2026): every state but `sentAt` (the `dispatching` intent, `no_email`,
+ * `render_failed`, `send_failed`) records a letter that did NOT leave, so it runs under
+ * `withoutCommitMark` and never marks an approval's act as having run: a run that sent nothing stays
+ * rejectable. A `sentAt` is the act, and marks.
+ */
 function markGroup(
   ctx: WorkspaceContext,
   runId: string,
   debtorId: string,
   state: { sentAt?: string; error?: string },
-): void {
-  ctx.store.tx(() => {
+  log?: () => void,
+): boolean {
+  if (state.sentAt === undefined) return ctx.store.withoutCommitMark(() => writeGroup(ctx, runId, debtorId, state, log));
+  return writeGroup(ctx, runId, debtorId, state, log);
+}
+
+function writeGroup(
+  ctx: WorkspaceContext,
+  runId: string,
+  debtorId: string,
+  state: { sentAt?: string; error?: string },
+  log?: () => void,
+): boolean {
+  return ctx.store.tx(() => {
+    if (state.error === 'dispatching') {
+      // THE CLAIM (D165 follow-up critic finding 6, probe DBL; the security review's fail-open state
+      // drift): the group is read again INSIDE this transaction, which holds the write lock, and claimed
+      // only when no letter of it has left and no other send is on the wire. Two processes approving
+      // one run read their items before the loop; without this the second sent a letter the first had
+      // already sent. A group taken meanwhile is not claimed (`false`), and nothing is written.
+      const taken = ctx.store.db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM dunning_item
+            WHERE workspace_id = ? AND run_id = ? AND debtor_id = ? AND (sent_at IS NOT NULL OR send_error = 'dispatching')`,
+        )
+        .get(ctx.workspaceId, runId, debtorId) as { n: number };
+      if (taken.n > 0) return false;
+    }
     if (state.sentAt !== undefined) {
       ctx.store.db
         .prepare(
@@ -1277,5 +1599,7 @@ function markGroup(
         )
         .run(state.error ?? null, ctx.workspaceId, runId, debtorId);
     }
+    log?.();
+    return true;
   });
 }

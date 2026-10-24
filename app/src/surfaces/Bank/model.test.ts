@@ -16,6 +16,7 @@ import {
   isSureAndUntouched,
   minorToField,
   parseMoneyInput,
+  prefillSource,
   rowCertainty,
   trustIdentityHolds,
   trustView,
@@ -44,6 +45,7 @@ function balance(over: Partial<BankAccountBalance> = {}): BankAccountBalance {
     openCount: 8,
     openSumMinor: -121_728,
     differenceMinor: 0,
+    start: null,
     ...over,
   };
 }
@@ -68,6 +70,10 @@ function line(over: Partial<BankInboxLine> = {}): BankInboxLine {
     proposal: null,
     attention: null,
     receiptCount: 0,
+    standardId: null,
+    ruleIds: [],
+    vorschlagActionId: null,
+    followUp: null,
     needsReceipt: false,
     ...over,
   };
@@ -341,6 +347,7 @@ describe("a row's draft", () => {
       vatCode: null,
     } as unknown as BankInboxLine['proposal'],
     amountMinor: 4_242,
+    attention: 'sure',
   });
 
   it('starts from the engine proposal, and "Alle sicheren buchen" takes only a sure, untouched one', () => {
@@ -351,6 +358,31 @@ describe("a row's draft", () => {
     const edited = { target: { kind: 'accounts' as const, legs: [{ accountId: 'acc_3200', amountMinor: 4_242, taxCode: '' }] }, source: 'edited' as const };
     expect(rowCertainty(sure, edited)).toBe('edited');
     expect(isSureAndUntouched(sure, edited)).toBe(false);
+  });
+
+  it('critic D167-7: a sure proposal the engine does not mark `sure` (an open Vorschlag) is never bulk-bookable', () => {
+    const named = { ...sure, attention: 'needs' } as BankInboxLine;
+    expect(isSureAndUntouched(named, draftFromProposal(named))).toBe(false);
+  });
+
+  it('D167: re-picking TILL\'s suggestion after × restores its source; another account is the person\'s own', () => {
+    const legs = [{ accountId: 'acc_6510', amountMinor: 8_990, taxCode: '' }];
+    const journal = line({ amountMinor: -8_990, proposal: { target: { kind: 'accounts', legs }, certainty: 'check', reasonCode: 'journal_history', reasonParams: { accountId: 'acc_6510', taxCode: null }, vatCode: null } } as Partial<BankInboxLine>);
+    expect(prefillSource(journal, draftFromProposal(journal))).toBe('history');
+    // × clears it: no target, no source.
+    expect(prefillSource(journal, { target: null, source: 'edited' })).toBeNull();
+    // Picked again from "Vorschläge" (source proposal) or as the same account from "Konten" (source edited).
+    expect(prefillSource(journal, { target: { kind: 'accounts', legs }, source: 'proposal' })).toBe('history');
+    expect(prefillSource(journal, { target: { kind: 'accounts', legs }, source: 'edited' })).toBe('history');
+    // A different account is the person's choice: no glyph.
+    expect(prefillSource(journal, { target: { kind: 'accounts', legs: [{ ...legs[0]!, accountId: 'acc_6500' }] }, source: 'edited' })).toBeNull();
+    // Polish 8: the glyph follows the ACCOUNT only; changing just the MWST keeps the source.
+    expect(prefillSource(journal, { target: { kind: 'accounts', legs: [{ ...legs[0]!, taxCode: 'VST-M' }] }, source: 'edited' })).toBe('history');
+    // The same for the agent's account: a MWST-only edit of the agent's booking keeps its ◇.
+    const agentLegs = [{ accountId: 'acc_6570', amountMinor: 8_990, taxCode: 'VST-I' }];
+    expect(prefillSource(journal, { target: { kind: 'accounts', legs: [{ ...agentLegs[0]!, taxCode: '' }] }, source: 'edited' }, { kind: 'accounts', legs: agentLegs })).toBe('agent');
+    const standard = { ...journal, proposal: { ...journal.proposal!, certainty: 'sure', reasonCode: 'standard' } } as BankInboxLine;
+    expect(prefillSource(standard, { target: { kind: 'accounts', legs }, source: 'edited' })).toBe('standard');
   });
 
   it("puts the agent's drafted booking on the row, marked as the agent's", () => {

@@ -231,6 +231,8 @@ describe('the A2 regrouping (D118): folding the taxonomy', () => {
     expect(settings?.items.map((n) => (n as NavItem).path)).toEqual([
       '/setup',
       '/operations',
+      // D178 point 7: Meine Einstellungen, the person's own preferences, after the workspace pair (K-16).
+      '/my-settings',
       '/members',
       '/customization',
       '/automations',

@@ -54,6 +54,12 @@ export type JournalEntry = {
   createdBy?: string | null;
   createdAt?: string | null;
   /**
+   * The Belegnummer (D178 point 2, A02 §4b) as the engine assigned and stored it (`118`, `2026-0007`,
+   * `B17`): `get_entry` and `list_journal` send it on every entry, null on a draft and on an entry posted
+   * while numbering was off. Never derived here. Optional on this TYPE only for a client-composed row.
+   */
+  number?: string | null;
+  /**
    * Entry total in minor units, the SUM of the debit legs (`reads.ts`, `total_minor`). It is the
    * TRANSACTION amount, so on a foreign-currency entry it is not Rappen. `currency` beside it is
    * what makes it a figure rather than a bare integer.

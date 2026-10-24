@@ -74,11 +74,47 @@
       "validFrom": null
     },
     {
+      "code": "VST-I26",
+      "kind": "input",
+      "rateBp": 260,
+      "formLine": "405",
+      "label": "Vorsteuer Investitionen und übriger Betriebsaufwand 2.6% (reduziert)",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "VST-I38",
+      "kind": "input",
+      "rateBp": 380,
+      "formLine": "405",
+      "label": "Vorsteuer Investitionen und übriger Betriebsaufwand 3.8% (Beherbergung)",
+      "active": true,
+      "validFrom": null
+    },
+    {
       "code": "VST-M",
       "kind": "input",
       "rateBp": 0,
       "formLine": "400",
       "label": "Vorsteuer Material, Waren, Dienstleistungen",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "VST-M26",
+      "kind": "input",
+      "rateBp": 260,
+      "formLine": "400",
+      "label": "Vorsteuer Material, Waren, Dienstleistungen 2.6% (reduziert)",
+      "active": true,
+      "validFrom": null
+    },
+    {
+      "code": "VST-M38",
+      "kind": "input",
+      "rateBp": 380,
+      "formLine": "400",
+      "label": "Vorsteuer Material, Waren, Dienstleistungen 3.8% (Beherbergung)",
       "active": true,
       "validFrom": null
     }

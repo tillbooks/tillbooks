@@ -7,8 +7,12 @@
  *
  *   1. CREATE a new ledger        -> A23 `create_workspace`
  *   2. RESTORE a backup           -> G04 `restore_backup` (pre-workspace, re-mints ids)
- *   3. ADOPT an existing database -> configuration (TILL_DB_PATH) + restart, NOT a verb: a path is
- *      deployment state, not tenant data, so adoption is config + restart and this door shows how.
+ *   3. ADOPT an existing database -> the host door `POST /studio/adopt-book` + a restart, NOT a verb: a
+ *      path is deployment state, not tenant data. D166 point 8 (owner, 14.10.2026): no terminal step.
+ *      Inside TILL.app the native open panel picks the file (`tillPick`); a browser names its path.
+ *      The host probes the file read-only, remembers it and restarts onto it; this surface then shows
+ *      one calm "opening" state. TILL.app reloads its own window; a browser tab waits for the new
+ *      process (`reloadAfterRestart`) and reloads, and its paired device signs it in again.
  *
  * Nothing is created silently: creation and restore are explicit button presses, and the process
  * stays up serving these same doors if the operator does nothing (US-M00.3 Empty). Refusals render
@@ -37,7 +41,7 @@
  * Einstellungen leaf (`nav.ts` OFF_RAIL), and on an empty ledger the Shell draws the rail as the inert
  * icon column, because every row of a full rail would lead into a workspace that does not exist yet.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
@@ -48,8 +52,42 @@ import { useT, formatDate } from '../../i18n';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { ErrorBanner, Skeleton, refusalText } from '../../components/states';
+import { adoptBook, forgetAdoptedBook, hasNativeBookPicker, pickBookNatively, reloadAfterRestart, restartBaseline } from '../../lib/studio-key';
 import { RuntimeLine } from './RuntimeLine';
 import './FirstRun.css';
+
+/** The adopt refusals that have their own sentence (`firstrun.adopt.error.<code>`); any other code
+ *  reads the calm fallback, never the raw code. */
+const ADOPT_ERRORS = new Set([
+  'book_path_pinned',
+  'book_path_not_absolute',
+  'book_not_found',
+  'book_unreadable',
+  'not_a_till_database',
+  'schema_newer_than_runtime',
+  'book_already_open',
+  'book_not_saved',
+  'book_not_forgotten',
+  'restart_unavailable',
+]);
+
+/** The adopted book `till up` could not open (`delivery_status.adoptedBookUnavailable`). */
+interface AdoptedBookUnavailable {
+  path: string;
+  reason: 'missing' | 'unopenable';
+}
+
+function asUnavailable(value: unknown): AdoptedBookUnavailable | null {
+  const v = value as { path?: unknown; reason?: unknown } | null | undefined;
+  if (v === null || v === undefined || typeof v.path !== 'string') return null;
+  return { path: v.path, reason: v.reason === 'missing' ? 'missing' : 'unopenable' };
+}
+
+/** The last segment of a path, for showing the picked file by its name. */
+function fileName(path: string): string {
+  const parts = path.split(/[\\/]/).filter((p) => p !== '');
+  return parts[parts.length - 1] ?? path;
+}
 
 /** One bundle the machine can see (the `list_restorable_backups` row), parsed off the open Result. */
 interface RestorableRow {
@@ -95,8 +133,26 @@ export function FirstRun() {
   /** What verify_backup found on the chosen source, named before the restore writes. */
   const [verified, setVerified] = useState<string | null>(null);
   const [otherPath, setOtherPath] = useState(false);
+  /** The book to adopt: the path typed in a browser, or the file TILL.app's open panel returned. */
   const [adoptPath, setAdoptPath] = useState('');
-  const [busy, setBusy] = useState<null | 'create' | 'restore' | 'demo'>(null);
+  /** D166 point 8: inside TILL.app the door offers the native open panel instead of a path field. */
+  const [nativePicker] = useState(() => hasNativeBookPicker());
+  /** Set once the host accepted the book (or forgot it) and restarts: the whole surface says so, calmly. */
+  const [opening, setOpening] = useState<null | 'adopt' | 'forget'>(null);
+  /** D166 point 8 (critic F1/F2): the adopted book this `till up` could not open, from delivery_status. */
+  const [unavailable, setUnavailable] = useState<AdoptedBookUnavailable | null>(null);
+  /** On the "not reachable" page: the person asked to choose another book (the adopt form shows). */
+  const [choosingOther, setChoosingOther] = useState(false);
+  /** On the "not reachable" page: "Vergessen und neu beginnen" waits for its confirmation. */
+  const [confirmForget, setConfirmForget] = useState(false);
+  /** Stops a browser tab's wait for the restarted host if this surface goes away first. */
+  const waitAbort = useRef(new AbortController());
+  useEffect(() => {
+    const controller = new AbortController();
+    waitAbort.current = controller;
+    return () => controller.abort();
+  }, []);
+  const [busy, setBusy] = useState<null | 'create' | 'restore' | 'demo' | 'pick' | 'adopt' | 'forget'>(null);
   const [error, setError] = useState<string | null>(null);
   const [portalNotice, setPortalNotice] = useState<string | null>(null);
   /** K-14: how many workspaces this device already carries. Zero until the list read lands; a
@@ -144,8 +200,9 @@ export function FirstRun() {
     let cancelled = false;
     void client.call('delivery_status', {}).then((resp) => {
       if (cancelled || isErr(resp.body)) return;
-      const { mode } = resp.body as unknown as { mode?: string };
+      const { mode, adoptedBookUnavailable } = resp.body as unknown as { mode?: string; adoptedBookUnavailable?: unknown };
       if (typeof mode === 'string') setRuntimeMode(mode);
+      setUnavailable(asUnavailable(adoptedBookUnavailable));
     });
     return () => {
       cancelled = true;
@@ -288,6 +345,156 @@ export function FirstRun() {
       setWorkspaceId(id);
       navigate(landing, { replace: true });
     }
+  }
+
+  /** TILL.app: the native open panel. A cancel keeps whatever was picked before. */
+  async function onPick(): Promise<void> {
+    if (busy !== null) return;
+    setBusy('pick');
+    setError(null);
+    const chosen = await pickBookNatively();
+    setBusy(null);
+    if (chosen !== null) setAdoptPath(chosen);
+  }
+
+  /**
+   * D166 point 8: hand the host a book (adopt) or tell it to forget the adopted one, then show the
+   * calm restart state. The host restarts onto the result; nothing else is called.
+   */
+  async function hostChoice(kind: 'adopt' | 'forget', path: string): Promise<void> {
+    if (busy !== null) return;
+    setBusy(kind);
+    setError(null);
+    // A browser tab must tell the restarted host from the old one: take the "before" proof first.
+    const before = nativePicker ? null : await restartBaseline();
+    const outcome = kind === 'adopt' ? await adoptBook(path) : await forgetAdoptedBook();
+    setBusy(null);
+    if (!outcome.ok) {
+      setError(refusalText(t, outcome.error, { own: 'firstrun.adopt.error', known: ADOPT_ERRORS, fallback: 'firstrun.adopt.error.fallback' }));
+      return;
+    }
+    setOpening(kind);
+    // TILL.app restarts the server and reloads this window itself; a browser tab waits and reloads.
+    if (before !== null) void reloadAfterRestart(window, { ...before, signal: waitAbort.current.signal });
+  }
+
+  function onAdopt(e: React.FormEvent): void {
+    e.preventDefault();
+    const path = adoptPath.trim();
+    if (path === '') return;
+    void hostChoice('adopt', path);
+  }
+
+  if (opening !== null) {
+    return (
+      <section className="firstrun firstrun-opening" aria-labelledby="firstrun-opening-title">
+        <h1 id="firstrun-opening-title" className="firstrun-opening-title">
+          {t(opening === 'adopt' ? 'firstrun.adopt.opening_title' : 'firstrun.unavailable.forgetting_title')}
+        </h1>
+        <p className="firstrun-lead">{t('firstrun.adopt.opening_body')}</p>
+        {opening === 'adopt' && <p className="firstrun-lead">{t('firstrun.adopt.opening_agents')}</p>}
+      </section>
+    );
+  }
+
+  /** The adopt form: TILL.app's native picker, or a path field in a browser, then one action. */
+  const adoptForm = (
+    <form className="firstrun-adopt-form" onSubmit={onAdopt}>
+      {nativePicker ? (
+        <div className="firstrun-field">
+          <button type="button" className="btn btn--secondary firstrun-adopt-pick" disabled={busy !== null} onClick={() => void onPick()}>
+            {t('firstrun.adopt.pick')}
+          </button>
+          <p className="firstrun-adopt-file" title={adoptPath === '' ? undefined : adoptPath} aria-live="polite">
+            {adoptPath === '' ? null : t('firstrun.adopt.picked', { name: fileName(adoptPath) })}
+          </p>
+        </div>
+      ) : (
+        <div className="firstrun-field">
+          <label className="firstrun-field">
+            <span>{t('firstrun.adopt.path_label')}</span>
+            <input
+              type="text"
+              className="field"
+              value={adoptPath}
+              onChange={(e) => setAdoptPath(e.target.value)}
+              placeholder={t('firstrun.adopt.path_placeholder')}
+              autoComplete="off"
+              spellCheck={false}
+              aria-describedby="firstrun-adopt-path-hint"
+            />
+          </label>
+          <p id="firstrun-adopt-path-hint" className="firstrun-door-hint firstrun-adopt-path-hint">
+            {t('firstrun.adopt.path_hint')}
+          </p>
+        </div>
+      )}
+      <button type="submit" className="btn btn--secondary" disabled={busy !== null || adoptPath.trim() === ''}>
+        {busy === 'adopt' ? t('firstrun.adopt.busy') : t('firstrun.adopt.action')}
+      </button>
+    </form>
+  );
+
+  // D166 point 8 (critic F1/F2): the adopted book is not reachable. TILL opened nothing in its place
+  // and writes nowhere; the person decides here, without a terminal.
+  if (unavailable !== null) {
+    return (
+      <section className="firstrun firstrun-unavailable" aria-labelledby="firstrun-unavailable-title">
+        <SurfaceHeader title={t('firstrun.unavailable.title')} titleId="firstrun-unavailable-title" help={<SurfaceHelp surface="FirstRun" />} />
+        <div className="firstrun-intro">
+          <p className="firstrun-lead">
+            {t(unavailable.reason === 'missing' ? 'firstrun.unavailable.missing' : 'firstrun.unavailable.unopenable', { path: unavailable.path })}
+          </p>
+          <p className="firstrun-lead">{t('firstrun.unavailable.nothing_written')}</p>
+        </div>
+        {error !== null && <ErrorBanner message={error} />}
+        <div className="firstrun-unavailable-actions">
+          <button type="button" className="btn btn--primary" disabled={busy !== null} onClick={() => void hostChoice('adopt', unavailable.path)}>
+            {busy === 'adopt' && !choosingOther ? t('firstrun.adopt.busy') : t('firstrun.unavailable.retry')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            aria-expanded={choosingOther}
+            disabled={busy !== null}
+            onClick={() => {
+              setChoosingOther((v) => !v);
+              setConfirmForget(false);
+            }}
+          >
+            {t('firstrun.unavailable.choose_other')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            aria-expanded={confirmForget}
+            disabled={busy !== null}
+            onClick={() => {
+              setConfirmForget((v) => !v);
+              setChoosingOther(false);
+            }}
+          >
+            {t('firstrun.unavailable.forget')}
+          </button>
+        </div>
+        {choosingOther && <div className="firstrun-door firstrun-unavailable-panel">{adoptForm}</div>}
+        {confirmForget && (
+          <div className="firstrun-door firstrun-unavailable-panel" role="group" aria-labelledby="firstrun-forget-confirm">
+            <p id="firstrun-forget-confirm" className="firstrun-door-hint">
+              {t('firstrun.unavailable.forget_confirm', { path: unavailable.path })}
+            </p>
+            <div className="firstrun-unavailable-actions">
+              <button type="button" className="btn btn--secondary" disabled={busy !== null} onClick={() => void hostChoice('forget', '')}>
+                {busy === 'forget' ? t('firstrun.adopt.busy') : t('firstrun.unavailable.forget_yes')}
+              </button>
+              <button type="button" className="btn btn--ghost" disabled={busy !== null} onClick={() => setConfirmForget(false)}>
+                {t('firstrun.unavailable.forget_no')}
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+    );
   }
 
   return (
@@ -454,27 +661,15 @@ export function FirstRun() {
           </form>
         </article>
 
-        {/* Door 3: adopt. Configuration, not a verb: show how, do not call anything. */}
+        {/* Door 3: adopt (D166 point 8). The host probes the file read-only, remembers it and restarts
+            onto it: no terminal, no command to copy. Inside TILL.app the native open panel picks the
+            file; a browser names its path. */}
         <article className="firstrun-door" aria-labelledby="door-adopt">
           <h2 id="door-adopt" className="firstrun-door-title">
             {t('firstrun.adopt.label')}
           </h2>
           <p className="firstrun-door-hint">{t('firstrun.adopt.hint')}</p>
-          <label className="firstrun-field">
-            <span>{t('firstrun.adopt.path_label')}</span>
-            <input
-              type="text"
-              className="field"
-              value={adoptPath}
-              onChange={(e) => setAdoptPath(e.target.value)}
-              placeholder={t('firstrun.adopt.path_placeholder')}
-              autoComplete="off"
-            />
-          </label>
-          <pre className="firstrun-adopt-cmd" aria-label={t('firstrun.adopt.cmd_label')}>
-            TILL_DB_PATH={adoptPath.trim() === '' ? '/path/to/till.db' : adoptPath.trim()} till up
-          </pre>
-          <p className="firstrun-door-hint firstrun-door-foot">{t('firstrun.adopt.verb')}</p>
+          {adoptForm}
         </article>
       </div>
 

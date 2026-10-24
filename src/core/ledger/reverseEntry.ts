@@ -93,10 +93,30 @@ interface OriginalRow {
  *     left the run `posted`, and the run's own reverse then refused `already_reversed` for good, so
  *     the asset kept a depreciation the journal no longer carried and the next valuation measured
  *     against a baseline that was gone.
- * The row-backed sources with NO undo verb (the asset register's acquisition, capitalisation and
- * disposal, expense claims, landed cost, the import-sourced openings and wage journal) are still
- * reversible raw and still strand their row: owning them would leave no way back at all, which is a
- * design call recorded in `docs/critique/governance-dial-and-owned-reversals.md`.
+ *   - `landed_cost` belongs to `landed_cost_reverse` when a voucher names the entry as
+ *     `journal_entry_id` (D141 follow-up 2: J04's undo verb existed all along).
+ *   - `expense_claim` belongs to `expense_claim_reverse` when a claim names the entry as its
+ *     `posted_entry_id` (D168, 14.10.2026, the D141.3 follow-up: E02 gained its undo verb). Measured
+ *     before: the raw Storno of an approved claim's posting returned ok, the claim still read
+ *     `approved`, and `expense_claim_reimburse` would then have paid a liability 2260 no longer carried.
+ *   - `dunning` belongs to `dunning_fee_reverse` when a dunning run names the entry as its
+ *     `fee_entry_id` (D169, 14.10.2026, the D141.3 follow-up: A15 gained its fee undo verb). Measured
+ *     before: the raw Storno of a run's fee returned ok and nothing knew; an unsent letter still
+ *     mailed the fee as demanded.
+ *   - `asset_acquisition` and `asset_disposal` belong to `asset_transaction_reverse` when an
+ *     acquisition, additional-capitalisation, opening or disposal `asset_transaction` row names the
+ *     entry (D170, 14.10.2026, the D141.3 follow-up: the asset register gained its undo verb). Measured
+ *     before: the raw Storno of an acquisition returned ok, the asset stayed `active` at full cost, the
+ *     OP11 reconciliation drifted by the cost, and depreciation kept charging an asset the GL no longer
+ *     carried.
+ *   - `import` belongs to `wage_journal_reverse` when a `wage_journal_posts` row names the entry as
+ *     its `posted_entry_id` (D171, 14.10.2026, the D141.3 follow-up: A34 gained its undo verb). The
+ *     source is shared with the import-sourced openings, which stay raw: ownership is by row only.
+ *     Measured before: the raw Storno of a wage journal returned ok and the hand-off history still
+ *     listed the posting as standing.
+ * The row-backed sources with NO undo verb (the import-sourced openings) are still reversible raw and
+ * still strand their row: owning them would leave no way back at all, which is a design call recorded
+ * in `docs/critique/governance-dial-and-owned-reversals.md` and D141.3.
  */
 export type OwnerResolver = (ctx: WorkspaceContext, entryId: string) => string | null;
 
@@ -131,6 +151,32 @@ export const DEPRECIATION_RUN_REVERSAL_OWNER = 'asset_depreciation_run_reverse';
 /** The owner token of a J06 inventory valuation run's journal (an opening run included). */
 export const INVENTORY_VALUATION_REVERSAL_OWNER = 'inventory_valuation_reverse';
 
+/** The owner token of a J04 landed-cost voucher's allocation journal (D141 follow-up 2). */
+export const LANDED_COST_REVERSAL_OWNER = 'landed_cost_reverse';
+
+/** The owner token of an E02 expense claim's approve posting (D168). */
+export const EXPENSE_CLAIM_REVERSAL_OWNER = 'expense_claim_reverse';
+
+/** The owner token of an A15 dunning run's fee entry (D169). */
+export const DUNNING_FEE_REVERSAL_OWNER = 'dunning_fee_reverse';
+
+/** The owner token of an H02/H06/H07 asset event's entry (acquisition, capitalisation, opening, disposal; D170). */
+export const ASSET_TRANSACTION_REVERSAL_OWNER = 'asset_transaction_reverse';
+
+/** D170: an asset event's entry belongs to the register's undo verb while an ORIGINAL event row names it
+ * (a compensating `*_reversal` row names a mirror, which is owned through the walk anyway). */
+function assetEventOwner(types: readonly string[]): OwnerResolver {
+  return (ctx, entryId) => {
+    const row = ctx.store.db
+      .prepare(`SELECT 1 AS p FROM asset_transaction WHERE workspace_id = ? AND journal_entry_id = ? AND type IN (${types.map(() => '?').join(', ')}) LIMIT 1`)
+      .get(ctx.workspaceId, entryId, ...types);
+    return row !== undefined ? ASSET_TRANSACTION_REVERSAL_OWNER : null;
+  };
+}
+
+/** The owner token of an A34 wage journal posting's entry (D171). */
+export const WAGE_JOURNAL_REVERSAL_OWNER = 'wage_journal_reverse';
+
 export const OWNED_REVERSAL_SOURCES: Readonly<Record<string, string | OwnerResolver>> = {
   [VAT_SETTLEMENT_SOURCE]: 'vat_settlement_reverse',
   [ACCRUAL_SOURCE]: 'accrual_reverse',
@@ -146,6 +192,17 @@ export const OWNED_REVERSAL_SOURCES: Readonly<Record<string, string | OwnerResol
       .prepare('SELECT 1 AS p FROM bank_line_decision WHERE workspace_id = ? AND entry_id = ? AND superseded_at IS NULL LIMIT 1')
       .get(ctx.workspaceId, entryId);
     if (live !== undefined) return 'reopen_bank_line';
+    // D178 E3 (critic E3-R2-1, D141.3): a VAT clearing of a received Anzahlung (applied to an invoice, or
+    // corrected for a refund) is owned by the bank line while the Guthaben's payment stands: reversed alone
+    // it would put the tax on 2200 twice. `reopen_bank_line` reverses it with the payment (the payment is
+    // reversed first, so this clause no longer holds when the reopen gets to the clearing).
+    const clearing = ctx.store.db
+      .prepare(
+        `SELECT 1 AS p FROM bank_anzahlung_vat_clearing c JOIN payment pay ON pay.workspace_id = c.workspace_id AND pay.id = c.payment_id
+          WHERE c.workspace_id = ? AND c.entry_id = ? AND pay.status = 'posted' LIMIT 1`,
+      )
+      .get(ctx.workspaceId, entryId);
+    if (clearing !== undefined) return 'reopen_bank_line';
     const reversed = ctx.store.db
       .prepare("SELECT 1 AS p FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ? AND status = 'posted' LIMIT 1")
       .get(ctx.workspaceId, entryId);
@@ -170,6 +227,46 @@ export const OWNED_REVERSAL_SOURCES: Readonly<Record<string, string | OwnerResol
       .prepare('SELECT 1 AS p FROM inventory_valuation_run WHERE workspace_id = ? AND journal_entry_id = ? LIMIT 1')
       .get(ctx.workspaceId, entryId);
     return run !== undefined ? INVENTORY_VALUATION_REVERSAL_OWNER : null;
+  },
+  // D141 follow-up 2: the row-backed source that had an undo verb all along. A raw Storno left the voucher
+  // `allocated` and its receipt layers carrying a capitalised cost the GL no longer did.
+  landed_cost: (ctx, entryId) => {
+    const voucher = ctx.store.db
+      .prepare('SELECT 1 AS p FROM landed_cost_voucher WHERE workspace_id = ? AND journal_entry_id = ? LIMIT 1')
+      .get(ctx.workspaceId, entryId);
+    return voucher !== undefined ? LANDED_COST_REVERSAL_OWNER : null;
+  },
+  // D168: by ROW. A claim names its approve posting as `posted_entry_id`; an `expense_claim` entry no
+  // claim names stays reversible raw (C16a's reasoning for `payment`).
+  expense_claim: (ctx, entryId) => {
+    const claim = ctx.store.db
+      .prepare('SELECT 1 AS p FROM expense_claim WHERE workspace_id = ? AND posted_entry_id = ? LIMIT 1')
+      .get(ctx.workspaceId, entryId);
+    return claim !== undefined ? EXPENSE_CLAIM_REVERSAL_OWNER : null;
+  },
+  // D169: by ROW. A run names its fee posting as `fee_entry_id`; a `dunning` entry no run names stays
+  // reversible raw (C16a's reasoning for `payment`). The key is A15's `DUNNING_SOURCE`, spelled out
+  // because importing it from the dunning module would close an import cycle through A02.
+  dunning: (ctx, entryId) => {
+    const run = ctx.store.db
+      .prepare('SELECT 1 AS p FROM dunning_run WHERE workspace_id = ? AND fee_entry_id = ? LIMIT 1')
+      .get(ctx.workspaceId, entryId);
+    return run !== undefined ? DUNNING_FEE_REVERSAL_OWNER : null;
+  },
+  // D170: by ROW. An `asset_acquisition` entry (acquisition, capitalisation or opening) or an
+  // `asset_disposal` entry no event row names stays reversible raw (C16a's reasoning for `payment`).
+  asset_acquisition: assetEventOwner(['acquisition', 'additional_capitalisation', 'opening']),
+  asset_disposal: assetEventOwner(['disposal']),
+  // D171: by ROW, never by source. `import` is shared: A04's opening balances and the migration openings
+  // post it too, and those stay reversible raw (their own undo is `migration_rollback_step`). Only an
+  // entry a `wage_journal_posts` row names belongs to `wage_journal_reverse`; the key is A34's
+  // `WAGE_JOURNAL_SOURCE`, spelled out because importing it from the payroll module would close an
+  // import cycle through A02.
+  import: (ctx, entryId) => {
+    const posting = ctx.store.db
+      .prepare('SELECT 1 AS p FROM wage_journal_posts WHERE workspace_id = ? AND posted_entry_id = ? LIMIT 1')
+      .get(ctx.workspaceId, entryId);
+    return posting !== undefined ? WAGE_JOURNAL_REVERSAL_OWNER : null;
   },
   payment: (ctx, entryId) => {
     const payment = ctx.store.db

@@ -131,7 +131,7 @@ test('qr_match: a short credit applies as a PARTIAL payment (never written off f
   assert.equal(item.reasonCode, 'amount_short');
   const apply = item.decisionOptions.find((o) => o.id === 'apply');
   assert.equal(apply.input.mode, 'partial');
-  assert.equal(apply.labelKey, 'qrmatch.applyPartial');
+  assert.equal(apply.labelKey, 'attention.act.assignPartial');
 });
 
 test('qr_match: an over-paying credit applies in FULL under "Übernehmen" (the surplus parks as Guthaben), and the posting settles the invoice once', () => {
@@ -140,7 +140,7 @@ test('qr_match: an over-paying credit applies in FULL under "Übernehmen" (the s
   const [item] = qrItems(t);
   assert.equal(item.reasonCode, 'amount_over');
   const apply = item.decisionOptions.find((o) => o.id === 'apply');
-  assert.equal(apply.labelKey, 'qrmatch.applyFull', 'the label says Übernehmen');
+  assert.equal(apply.labelKey, 'attention.act.assign', 'D178: the label says Zuordnen');
   assert.equal(apply.input.mode, 'full', 'and the call sends the mode the label names');
   assert.match(apply.input.idempotencyKey, /:full:/);
   const deps = { ...t.deps, actor: 'user_1' };

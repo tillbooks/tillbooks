@@ -193,9 +193,12 @@ test('the OWNED reversal of a settlement rides the same carve-out into the filed
   // integration, A22's `fx` on the critic's BLOCKING finding of 2026-09-10, and A39 L3's `camt` and
   // `payment` (resolved by row) with the lean bank inbox, and the three document sources `purchase`,
   // `invoice` and `credit_note`, plus the run sources `asset_depreciation` and `inventory_valuation`
-  // (all resolved by row), with the governance check of 28.09.2026.
+  // (all resolved by row), with the governance check of 28.09.2026, J04's `landed_cost` (by row,
+  // D141 follow-up 2), E02's `expense_claim` (by row, D168), A15's `dunning` (by row, the run
+  // naming its fee entry, D169), the asset register's `asset_acquisition` and `asset_disposal`
+  // (by row, D170) and A34's `import` (by row only, the wage journal posting naming its entry, D171).
   assert.equal(OWNED_REVERSAL_SOURCES.vat_settlement, 'vat_settlement_reverse');
-  assert.deepEqual(Object.keys(OWNED_REVERSAL_SOURCES).sort(), ['accrual', 'asset_depreciation', 'camt', 'credit_note', 'fx', 'inventory_valuation', 'invoice', 'payment', 'provision', 'purchase', 'vat_settlement']);
+  assert.deepEqual(Object.keys(OWNED_REVERSAL_SOURCES).sort(), ['accrual', 'asset_acquisition', 'asset_depreciation', 'asset_disposal', 'camt', 'credit_note', 'dunning', 'expense_claim', 'fx', 'import', 'inventory_valuation', 'invoice', 'landed_cost', 'payment', 'provision', 'purchase', 'vat_settlement']);
 
   const reversed = reverseOwnedEntry(ctx, { entryId: settled.entryId, date: '2026-06-30', idempotencyKey: key('rev') }, 'vat_settlement_reverse');
   assert.equal(reversed.ok, true, JSON.stringify(reversed));

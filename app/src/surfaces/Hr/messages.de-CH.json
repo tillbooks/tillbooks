@@ -66,7 +66,9 @@
       "receipt_required": "Für Positionen über CHF 50 ist ein Beleg erforderlich.",
       "empty_claim": "Vor dem Einreichen mindestens eine Position erfassen.",
       "needs_employee_contact": "Verknüpfe zuerst einen Kontakt (Lieferantenrolle) mit der Person.",
-      "reason_required": "Für eine Ablehnung ist ein Grund erforderlich."
+      "reason_required": "Für eine Ablehnung oder Stornierung ist ein Grund erforderlich.",
+      "claim_reimbursed": "Diese Abrechnung ist bereits ausbezahlt. Du musst zuerst die Auszahlung stornieren (unter Zahlungen), dann die Abrechnung.",
+      "already_reversed": "Diese Abrechnung ist bereits storniert."
     }
   },
   "spesen": {
@@ -76,12 +78,21 @@
       "approved": "Genehmigt",
       "reimbursed": "Erstattet",
       "rejected": "Abgelehnt",
-      "cancelled": "Storniert"
+      "cancelled": "Verworfen",
+      "reversed": "Storniert"
     },
     "action": {
       "approve": "Genehmigen & buchen",
       "reject": "Ablehnen",
-      "reimburse": "Rückerstattung vorbereiten"
+      "reimburse": "Rückerstattung vorbereiten",
+      "reverse": "Stornieren"
+    },
+    "reverseDialog": {
+      "title": "Spesenabrechnung «{title}» stornieren?",
+      "body": "TILL bucht eine Korrekturbuchung, die die Genehmigung aufhebt. Die ursprüngliche Buchung bleibt sichtbar, die Abrechnung wird als storniert abgeschlossen. Für eine korrigierte Abrechnung erfasst du eine neue.",
+      "reason": "Grund",
+      "cancel": "Abbrechen",
+      "confirm": "Abrechnung stornieren"
     },
     "reject": {
       "default": "Bitte den fehlenden Beleg nachreichen."
@@ -104,7 +115,11 @@
       "title": "Lohnbuchung",
       "date": "Buchungsdatum",
       "cta": "Lohndatei hochladen",
-      "post": "Buchen"
+      "post": "Buchen",
+      "supplementary": "Nachtragsbuchung (neben dem stehenden Lohnjournal des Monats)",
+      "supplementaryReason": "Grund der Nachtragsbuchung",
+      "warnStanding": "Für {month} steht bereits ein Lohnjournal. Prüfe, ob diese Buchung es ergänzt oder ersetzt; ein ersetztes stornierst du unten im Verlauf.",
+      "postedWithWarning": "Gebucht. Für {month} steht nun mehr als ein Lohnjournal."
     },
     "preview": {
       "account": "Konto",
@@ -121,12 +136,32 @@
       "kind": {
         "export": "Export",
         "posting": "Buchung"
+      },
+      "reversed": "Storniert",
+      "rowActions": "Aktionen für die Lohnbuchung vom {date}"
+    },
+    "reverse": {
+      "action": "Stornieren",
+      "title": "Lohnjournal vom {date} stornieren?",
+      "body": "TILL bucht eine Korrekturbuchung, die dieses Lohnjournal aufhebt. Die ursprüngliche Buchung bleibt sichtbar. Lohnzahlungen, Meldungen an AHV, BVG und Quellensteuer sowie Lohnausweise laufen ausserhalb von TILL und bleiben, wie sie sind: Korrigiere sie in deiner Lohnbuchhaltung und lade danach das korrigierte Lohnjournal hoch.",
+      "reason": "Grund",
+      "cancel": "Abbrechen",
+      "confirm": "Lohnjournal stornieren",
+      "done": "Das Lohnjournal ist storniert.",
+      "err": {
+        "already_reversed": "Dieses Lohnjournal ist bereits storniert.",
+        "owned_by": "Eine Bankzeile hält dieses Lohnjournal. Öffne zuerst die Bankzeile unter Bank wieder, dann stornierst du das Lohnjournal.",
+        "period_locked": "Die heutige Periode ist gesperrt, die Korrekturbuchung kann nicht gebucht werden.",
+        "reason_required": "Für eine Stornierung ist ein Grund erforderlich.",
+        "not_found": "Dieses Lohnjournal gibt es in diesem Mandanten nicht mehr.",
+        "permission_denied": "Das darfst du nicht."
       }
     },
     "requiresManage": "Erfordert Personalverwaltung.",
     "requiresPost": "Erfordert Buchhaltung.",
     "err": {
       "load": "Der Verlauf konnte nicht geladen werden.",
+      "month_already_posted": "Für diesen Monat ist bereits ein Lohnjournal gebucht. Storniere es zuerst unten im Verlauf und buche danach das korrigierte.",
       "no_employees": "Noch keine Mitarbeitenden.",
       "unbalanced": "Soll und Haben weichen voneinander ab.",
       "period_locked": "Die Periode ist gesperrt; die Lohnbuchung kann nicht gebucht werden.",
@@ -135,7 +170,17 @@
       "unsupported_currency": "Eine Lohnbuchung wird in CHF gebucht; entferne die Währungsspalte.",
       "invalid_amount": "Ein Betrag ist kein ganzzahliger Rappen-Wert.",
       "forbidden": "Das darfst du nicht.",
-      "permission_denied": "Das darfst du nicht."
+      "permission_denied": "Das darfst du nicht.",
+      "reason_required": "Für diese Buchung ist ein Grund erforderlich."
+    },
+    "runKind": {
+      "label": "Lohnlauf",
+      "regular": "Regulär",
+      "bonus": "Bonus",
+      "thirteenth": "13. Monatslohn",
+      "correction": "Korrektur",
+      "reason": "Grund für diesen Lohnlauf",
+      "reasonOptional": "Grund für diesen Lohnlauf (optional)"
     }
   },
   "help": {

@@ -13,6 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { getAction } from '../../dist/api/registry.js';
+import { handleRest } from '../../dist/api/rest.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
 import { makeContext } from '../../dist/core/context.js';
 import { ledgerPorts, postEntry, reverseEntry } from '../../dist/core/ledger/index.js';
@@ -107,16 +108,53 @@ test('K1 vendor_portal_grant: a customer portal_grant_create under `["vendor",K]
   const squat = w.call('portal_grant_create', { contactId: customer, scopes: [{ kind: 'all_invoices' }], expiresAt: '2027-01-31', idempotencyKey: JSON.stringify(['vendor', K]) });
   assert.equal(squat.ok, true, JSON.stringify(squat));
   const g = w.call('vendor_portal_grant', { contactId: vendor, expiresAt: '2027-01-31', idempotencyKey: K });
-  // develop (D157/D161) answers this squat with a refusal rather than a fresh grant: the vendor door's
-  // legacy replay finds the customer grant under the shared key and refuses to hand it out. The K1
-  // defect was ADOPTING the squatter's grant; either a fresh vendor grant or that refusal closes it.
-  if (g.ok !== true) {
-    assert.equal(g.error, 'idempotency_key_conflict', JSON.stringify(g));
-    return;
-  }
+  // The K1 defect was ADOPTING the squatter's grant. D157/D161 answered the squat with a refusal
+  // (idempotency_key_conflict), which let the free verb decide a governed one's outcome (critic A2-1);
+  // since D165 the legacy replay reads only what a pre-split build could have written there (a vendor
+  // grant), so the vendor door mints its own grant in its own scope.
+  assert.equal(g.ok, true, JSON.stringify(g));
   const grantId = g.grant?.id ?? g.grantId;
   const squatId = squat.grant?.id ?? squat.grantId;
   assert.notEqual(grantId, squatId, 'the vendor grant answered with the squatter\'s customer grant');
+  assert.equal(g.grant.kind, 'vendor');
+  assert.equal(g.grant.contactId, vendor);
+  const again = w.call('vendor_portal_grant', { contactId: vendor, expiresAt: '2027-01-31', idempotencyKey: K });
+  assert.equal(again.grant?.id ?? again.grantId, grantId, 'the retry replays the vendor door\'s own grant');
+});
+
+test('D165 A2-1: an agent that squats `["vendor",K]` through the free portal_grant_create cannot make the person\'s approval of vendor_portal_grant {K} refuse', () => {
+  const w = world();
+  const vendor = w.call('create_contact', { partyRole: 'vendor', name: 'Lieferant GmbH', idempotencyKey: 'v' }).contact.id;
+  const customer = w.call('create_contact', { partyRole: 'customer', name: 'Kunde AG', idempotencyKey: 'c' }).contact.id;
+  const K = 'grant-agent-2';
+  // Over the REST seam as the agent seat, where the dial drafts a governed write (A26).
+  const asAgent = (verb, input) => handleRest(verb, { workspaceId: w.ws, ...input }, { ...w.deps, actor: 'agent' }).body;
+  const drafted = asAgent('vendor_portal_grant', { contactId: vendor, expiresAt: '2027-01-31', idempotencyKey: K });
+  assert.equal(drafted.drafted, true, `vendor_portal_grant is governed (share): ${JSON.stringify(drafted)}`);
+  const squat = asAgent('portal_grant_create', { contactId: customer, scopes: [{ kind: 'all_invoices' }], expiresAt: '2027-01-31', idempotencyKey: JSON.stringify(['vendor', K]) });
+  assert.equal(squat.ok, true, JSON.stringify(squat));
+  assert.equal(squat.drafted, undefined, 'the customer mint is free, which is the premise');
+  const approved = getAction('approve_drafted_action').run({ ...w.deps, actor: 'studio' }, { workspaceId: w.ws, actionId: drafted.actionId });
+  assert.equal(approved.ok, true, JSON.stringify(approved));
+  assert.equal(approved.result.grant.kind, 'vendor');
+  assert.equal(approved.result.grant.contactId, vendor);
+  assert.notEqual(approved.result.grant.id, squat.grant.id);
+});
+
+test('D165 A2-1: a vendor grant stored under the shared scope before the D157 split is still replayed', () => {
+  const w = world();
+  const vendor = w.call('create_contact', { partyRole: 'vendor', name: 'Lieferant GmbH', idempotencyKey: 'v' }).contact.id;
+  const first = w.call('vendor_portal_grant', { contactId: vendor, expiresAt: '2027-01-31', idempotencyKey: 'legacy-1' });
+  assert.equal(first.ok, true, JSON.stringify(first));
+  // What a pre-split build left: the vendor door's record filed under the customer verb's scope.
+  const moved = w.db
+    .prepare("UPDATE idempotency SET verb = 'portal_grant_create' WHERE workspace_id = ? AND verb = 'vendor_portal_grant' AND key = ?")
+    .run(w.ws, JSON.stringify(['vendor', 'legacy-1']));
+  assert.equal(moved.changes, 1);
+  const replay = w.call('vendor_portal_grant', { contactId: vendor, expiresAt: '2027-01-31', idempotencyKey: 'legacy-1' });
+  assert.equal(replay.ok, true, JSON.stringify(replay));
+  assert.equal(replay.grant.id, first.grant.id, 'the legacy record is replayed, not minted again');
+  assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM portal_grant WHERE workspace_id = ? AND kind = 'vendor'").get(w.ws).n, 1);
 });
 
 test('K1 reverseEntryInternal (migration rollback): a public reverse_entry under the same key on the same entry is never adopted', () => {

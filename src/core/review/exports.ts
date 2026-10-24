@@ -20,7 +20,7 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { exportStatement, EXPORT_FORMATS } from '../reports/index.js';
-import { computeVatReturn } from '../vat/index.js';
+import { computeVatReturn, filingPeriodsOfYear, monthsOfVatPeriod, isMwstYear, MWST_FIRST_YEAR, stubsTouching } from '../vat/index.js';
 import type { VatReturnLine } from '../vat/index.js';
 import { parseReviewPeriod } from './shared.js';
 import type { ReviewPeriod } from './shared.js';
@@ -42,6 +42,36 @@ function periodOf(input: { period?: unknown }): ReviewPeriod | Result {
     return err('invalid_period', { period: input?.period, expected: 'YYYY-MM or YYYY' });
   }
   return period;
+}
+
+/**
+ * The period of a VAT export: everything `periodOf` takes, plus the labels A07 names its reporting
+ * periods with, `YYYY-Qn` (effektiv, quarterly) and `YYYY-Hn` (Saldo, half-yearly), MWSTG Art. 35
+ * Abs. 1. A label resolves through A07's own `monthsOfVatPeriod`, the function `vat_periods` and
+ * `vat_mark_filed` resolve it with, so a quarter is its three months and a half-year its six, first
+ * day to last, and the export of a label `vat_periods` listed covers exactly that period.
+ *
+ * Every form must lie in the MWST era (`MWST_FIRST_YEAR`, 1995): there is no MWST return for 1994, and
+ * a year below 1000 used to throw (critic L1). Any shape that does not resolve, whatever the reason, is
+ * `invalid_period`; nothing here is cast past a failed parse.
+ */
+function vatPeriodOf(input: { period?: unknown }): ReviewPeriod | Result {
+  const refuse = () =>
+    err('invalid_period', {
+      period: input?.period,
+      expected: 'YYYY-MM, YYYY-Qn, YYYY-Hn or YYYY',
+      earliestYear: MWST_FIRST_YEAR,
+    });
+  const raw = input?.period;
+  if (typeof raw !== 'string' || !isMwstYear(raw.slice(0, 4))) return refuse();
+  const plain = parseReviewPeriod(raw);
+  if (plain !== undefined) return plain;
+  const months = monthsOfVatPeriod(raw);
+  if (months === null) return refuse();
+  const first = parseReviewPeriod(months[0]);
+  const last = parseReviewPeriod(months[months.length - 1]);
+  if (first === undefined || last === undefined) return refuse();
+  return { period: raw, start: first.start, end: last.end };
 }
 
 function isErr(value: ReviewPeriod | Result): value is Result {
@@ -245,6 +275,7 @@ export function exportStatements(ctx: WorkspaceContext, input: ExportStatementsI
 // --- The MWST figures export ---------------------------------------------------------------------
 
 export interface ExportVatInput {
+  /** `YYYY-MM`, `YYYY-Qn`, `YYYY-Hn` or `YYYY` (see `vatPeriodOf`). */
   period: string;
   format?: string;
 }
@@ -256,10 +287,12 @@ const VAT_HEADER = ['record_type', 'form_line', 'label', 'kind', 'rate_bp', 'bas
  * `computeVatReturn` answered it (stored trace values, never recomputed), plus the payable/credit
  * totals as their own records. The ESTV upload artifact stays A07's `vat_export_ech0217`; this file
  * is what a Treuhänder hands to the annual accounts beside it. A07's rejections (for example
- * `needs_vat_config`) pass through unchanged.
+ * `needs_vat_config`) pass through unchanged. The period is a month, a calendar year, or a VAT
+ * period label (`2026-Q3`, `2026-H1`); a label names the file (`mwst-2026-Q3.csv`), the other two
+ * keep their dated name (`mwst-2026-03-01-bis-2026-03-31.csv`).
  */
 export function exportVat(ctx: WorkspaceContext, input: ExportVatInput): Result {
-  const period = periodOf(input);
+  const period = vatPeriodOf(input);
   if (isErr(period)) return period;
   const format = input.format ?? 'csv';
   if (format !== 'csv') return err('invalid_input', { field: 'format', supported: ['csv'] });
@@ -276,9 +309,39 @@ export function exportVat(ctx: WorkspaceContext, input: ExportVatInput): Result 
   ];
   const text = `${[csvLine(VAT_HEADER), ...lines, ...totals].join('\n')}\n`;
   const empty = model.empty === true;
+  const isLabel = monthsOfVatPeriod(period.period) !== null;
+  const filename = isLabel ? `mwst-${period.period}.csv` : `mwst-${period.start}-bis-${period.end}.csv`;
+
+  // A LABEL GETS A FILING-PERIOD VERDICT (critic L2). The export stays ok:true for any label, because a
+  // working paper over an effektiv filer's half-year is a legitimate aggregate, but a label that is not
+  // one of that year's filing periods (as vat_periods lists them, by the method of that year) says so,
+  // so a file named like a return is never mistaken for one. `vat_mark_filed` REFUSES such a label.
+  // The meaning of the period outranks its emptiness for the single `notice`; `empty` still says that.
+  // A month or a year is not a label and gets no verdict. `computeVatReturn` already refused a book
+  // with no VAT method, and a label spanning two method eras (period_straddles_method_change), so one
+  // method governs the label here: `filingMethod` is that method, the same as `artifact.method`
+  // (critic L-R2-3, R3-M1). In a MWSTV Art. 81 Abs. 2 switch year the calendar comes from the eras, and
+  // a label touching a stub the switch cut answers `switch_year_stub_not_modelled` (`vat_mark_filed`
+  // refuses to seal it the same way).
+  let verdict: Record<string, unknown> = {};
+  if (isLabel) {
+    const filing = filingPeriodsOfYear(ctx, period.period.slice(0, 4));
+    if (!('needsConfig' in filing)) {
+      const touching = stubsTouching(filing.stubs, period.period);
+      verdict = filing.labels.includes(period.period)
+        ? { filingPeriod: true }
+        : {
+            filingPeriod: false,
+            notice: touching.length > 0 ? 'switch_year_stub_not_modelled' : 'not_a_filing_period',
+            filingMethod: model.method,
+            filingPeriods: filing.labels,
+            ...(touching.length > 0 ? { stubs: touching } : {}),
+          };
+    }
+  }
 
   return ok({
-    artifact: csvArtifact('vat', `mwst-${period.start}-bis-${period.end}.csv`, text, {
+    artifact: csvArtifact('vat', filename, text, {
       method: model.method,
     }),
     period: period.period,
@@ -288,5 +351,6 @@ export function exportVat(ctx: WorkspaceContext, input: ExportVatInput): Result 
     creditMinor: model.creditMinor,
     empty,
     ...(empty ? { notice: 'empty_period' } : {}),
+    ...verdict,
   });
 }

@@ -20,16 +20,28 @@
  * A24 gate, and nothing else.
  */
 
-import type { VorschlagFigures } from '../agent/vorschlagPin.js';
 import type { WorkspaceContext } from '../context.js';
 import { listUnmatchedIncoming } from '../banking/index.js';
 import { listDunningRuns } from '../dunning/index.js';
-import { listDraftedActions, dialCapabilityForCall, CONSEQUENCE_FOR_ACTION } from '../agent/index.js';
+import { dialCapabilityForCall, CONSEQUENCE_FOR_ACTION } from '../agent/index.js';
 import { AGENT_ACTOR, SERVED_MEMBER_ACTOR_PREFIX } from '../access/actors.js';
 import { checklistItemsDueProvider } from '../checklists/attentionProvider.js';
 import { bankActivationProvider, bankKeysReviewProvider } from '../banking/ebics/attentionProvider.js';
 import { bankFetchFailedProvider, bankLinesWaitingProvider, bankStatementGapProvider } from '../banking/attentionProviders.js';
-import type { ActorKind, AttentionDecisionOption, AttentionItem, QueueProvider } from './types.js';
+import type { ActorKind, AttentionDecisionOption, AttentionItem, AttentionKind, QueueProvider } from './types.js';
+import { vorschlagProvider } from './vorschlaege.js';
+
+// D178: the Vorschläge queues, their filing and the batch reach live in `vorschlaege.ts`.
+export { BANK_VORSCHLAG_VERBS, BATCHABLE_VERBS, isBankVorschlag, isBankVorschlagVerb, isBatchable } from './vorschlaege.js';
+
+/**
+ * D178 point 11: a provider whose module the hub does not own takes its kind HERE, at its registration
+ * line, so the module's own file stays untouched (the EBICS providers belong to the bank nodes). A copy
+ * with the kind set; the provider's functions are its own (none of them reads `this`).
+ */
+export function withKind(provider: QueueProvider, kind: AttentionKind): QueueProvider {
+  return { ...provider, kind };
+}
 
 /**
  * The routed owning surfaces a provider's deep link may target. Hand-maintained here (the engine
@@ -51,7 +63,6 @@ export const ROUTED_SURFACES: ReadonlySet<string> = new Set(['/bank', '/dunning'
  */
 const QR_MATCH_ENTITY_KIND = 'reconciliation_match';
 const DUNNING_RUN_ENTITY_KIND = 'dunning_run';
-const AGENT_ACTION_ENTITY_KIND = 'agent_action';
 const REVIEW_FLAG_ENTITY_KIND = 'journal_entry';
 
 /** Read one Ok field defensively: a shape the provider cannot read is a failed provider (it throws). */
@@ -77,23 +88,6 @@ function consequenceOf(verb: string, payload: Readonly<Record<string, unknown>> 
   return {
     consequenceKey: capability === undefined ? null : `agent.consequence.${capability}`,
     consequence: sentence ?? null,
-  };
-}
-
-/**
- * The consequence of a DRAFTED Vorschlag, keyed on the tier the transport seam STORED when it drafted
- * (`agent_action.dial_capability`), never recomputed from the payload (non-author critic F1, D141.5
- * R4-1, 30.09.2026). "Genehmigen und künftig automatisch" grants exactly that stored tier
- * (`approveDraftedAction`), so the sentence beside it must name the same one. Recomputing from the input
- * was wrong for every tier the seam reads from the book (an automation rule's enable drafts at the tier
- * of the verb the stored rule fires, `post` for a `post_entry` rule, while the input alone says
- * `customize`): the hub told the approver "Anpassen" and the grant wrote `post=auto`. A row with no
- * stored tier carries no sentence key rather than an invented one.
- */
-function draftedConsequenceOf(verb: string, storedCapability: unknown): { consequenceKey: string | null; consequence: string | null } {
-  return {
-    consequenceKey: typeof storedCapability === 'string' && storedCapability.length > 0 ? `agent.consequence.${storedCapability}` : null,
-    consequence: CONSEQUENCE_FOR_ACTION[verb] ?? null,
   };
 }
 
@@ -147,6 +141,8 @@ const qrMatchProvider: QueueProvider = {
   queueId: 'qr_match',
   labelKey: 'attention.queue.qrMatch',
   area: 'bank',
+  // D178: a Hinweis. The money is already in the books; which invoice it settles is housekeeping.
+  kind: 'note',
   readCapability: 'read_sales',
   rank: 10,
   freshness: 'live',
@@ -196,7 +192,8 @@ const qrMatchProvider: QueueProvider = {
         options.push({
           id: 'apply',
           verb: 'apply_qr_match',
-          labelKey: reason === 'amount_short' ? 'qrmatch.applyPartial' : 'qrmatch.applyFull',
+          // D178 (the design judge): the job is to ASSIGN the payment; "Zuordnen", the shortfall said as a part.
+          labelKey: reason === 'amount_short' ? 'attention.act.assignPartial' : 'attention.act.assign',
           role: 'primary',
           input: {
             creditId,
@@ -265,6 +262,9 @@ const dunningRunProvider: QueueProvider = {
   queueId: 'dunning_run',
   labelKey: 'attention.queue.dunningRun',
   area: 'sales',
+  // D178 (the design judge, 21.10.2026): a proposed Mahnlauf waits for a person's Freigabe, so it is
+  // approved like a Vorschlag (Genehmigen), not merely noted. It is never batchable: its issue is its own act.
+  kind: 'approve',
   readCapability: 'read_sales',
   rank: 20,
   freshness: 'stored',
@@ -288,7 +288,8 @@ const dunningRunProvider: QueueProvider = {
         entityId: runId,
         titleKey: 'attention.item.dunningRun.title',
         titleParams: {},
-        subtitleKey: 'attention.item.dunningRun.subtitle',
+        // D178: "1 Rechnung", never "1 Rechnungen".
+        subtitleKey: r.itemCount === 1 ? 'attention.item.dunningRun.subtitleOne' : 'attention.item.dunningRun.subtitle',
         subtitleParams: {
           count: typeof r.itemCount === 'number' ? r.itemCount : 0,
           date: String(r.runDate ?? ''),
@@ -314,91 +315,6 @@ const dunningRunProvider: QueueProvider = {
   },
 };
 
-/**
- * A26/A35, the Vorschläge queue: every drafted agent action still `pending` (awaiting a human's
- * Genehmigen). Registrable since A35 landed the pieces the design's §5a exclusion named as missing:
- * the read face (`list_drafted_actions`), the enqueuing path (the dial at the transport seam) and
- * the routed surface (`/agent`). This IS the "A35 publishes the read model, G15 composes it"
- * contract: the pending count lives HERE and in the hub, and the `/agent` rail row deliberately
- * carries no second count (design §6b, `railAttention`).
- *
- * The exits are the Vorschlag card's own three (D103 §2): Genehmigen, Genehmigen und künftig
- * automatisch (the standing grant riding `allowFuture`, owner-gated), and Ablehnen with a reason
- * field. `approve_drafted_action` is idempotent on the draft's stored key and `reject_drafted_action`
- * on the action id, so neither option carries a key of its own. The consequence is the DRAFTED verb's,
- * which is what the approver is really deciding about.
- */
-const agentActionProvider: QueueProvider = {
-  queueId: 'agent_action',
-  labelKey: 'attention.queue.agentAction',
-  area: 'system',
-  readCapability: 'read_books',
-  rank: 5,
-  freshness: 'stored',
-  dismissal: 'module_dismiss',
-  deepLinkRoute: '/agent',
-  count(ctx: WorkspaceContext): number {
-    const row = ctx.store.db
-      .prepare(`SELECT COUNT(*) AS n FROM agent_action WHERE workspace_id = ? AND status = 'pending'`)
-      .get(ctx.workspaceId) as { n: number };
-    return row.n;
-  },
-  list(ctx: WorkspaceContext, opts: { limit: number }): AttentionItem[] {
-    const res = okOrThrow(listDraftedActions(ctx, { status: 'pending' }) as never, 'agent_action');
-    const actions = Array.isArray(res.actions) ? (res.actions as Record<string, unknown>[]) : [];
-    return actions.slice(0, opts.limit).map((a) => {
-      const actionId = String(a.actionId);
-      const tool = String(a.actionTool ?? '');
-      const deepLink = { route: '/agent', params: { actionId } };
-      const options: AttentionDecisionOption[] = [
-        {
-          id: 'approve',
-          verb: 'approve_drafted_action',
-          labelKey: 'agent.card.approve',
-          role: 'primary',
-          input: { actionId },
-          capability: 'manage_agent_dial',
-        },
-        {
-          id: 'approve_allow',
-          verb: 'approve_drafted_action',
-          labelKey: 'agent.card.approveAllow',
-          role: 'secondary',
-          input: { actionId, allowFuture: true },
-          capability: 'manage_agent_dial',
-          hintKey: 'agent.card.grantHint',
-        },
-        {
-          id: 'reject',
-          verb: 'reject_drafted_action',
-          labelKey: 'agent.card.reject',
-          role: 'danger',
-          input: { actionId },
-          capability: 'manage_agent_dial',
-          reasonField: true,
-        },
-      ];
-      return {
-        queueId: 'agent_action',
-        entityKind: AGENT_ACTION_ENTITY_KIND,
-        entityId: actionId,
-        titleKey: 'attention.item.agentAction.title',
-        titleParams: {},
-        subtitleKey: 'attention.item.agentAction.subtitle',
-        subtitleParams: { tool },
-        since: String(a.createdAt ?? ''),
-        urgency: 'open',
-        deepLink,
-        ...(typeof a.actor === 'string' ? { proposedBy: a.actor } : {}),
-        decisionOptions: options,
-        ...draftedConsequenceOf(tool, a.dialCapability),
-        // Critic N1: what is being approved, as the agent proposed it, and whether it changed since.
-        ...(a.figures !== undefined ? { figures: a.figures as VorschlagFigures | null } : {}),
-        ...(a.changedSinceProposal === true ? { changedSinceProposal: true } : {}),
-      } satisfies AttentionItem;
-    });
-  },
-};
 
 /**
  * A25, the Markierungen queue (F-07's hub part, J4.4): every posted entry whose LATEST review event
@@ -416,6 +332,8 @@ const reviewFlagProvider: QueueProvider = {
   queueId: 'review_flag',
   labelKey: 'attention.queue.reviewFlag',
   area: 'accounting',
+  // D178: a Hinweis. The posting stands; the flag asks for a second look.
+  kind: 'note',
   readCapability: 'read_books',
   rank: 15,
   freshness: 'stored',
@@ -505,21 +423,29 @@ const reviewFlagProvider: QueueProvider = {
   },
 };
 
+/** D178: the bank Vorschläge, under Bank; every other Vorschlag, under System (`vorschlaege.ts`). */
+const agentActionBankProvider: QueueProvider = vorschlagProvider('agent_action_bank', 'attention.queue.agentActionBank', 'bank', true);
+const agentActionProvider: QueueProvider = vorschlagProvider('agent_action', 'attention.queue.agentAction', 'system', false);
+
 /** The live registry, in rank order. Registration is guarded by `assertProvidersRegistrable`. */
 export const ATTENTION_PROVIDERS: readonly QueueProvider[] = [
+  // D178: the bank Vorschläge first, under Bank; every other Vorschlag under System.
+  agentActionBankProvider,
   agentActionProvider,
   qrMatchProvider,
   reviewFlagProvider,
   dunningRunProvider,
   // G22 (D127): open checklist items due within 14 days, overdue after their date. Defined beside the
-  // checklist engine (`src/core/checklists/attentionProvider.ts`) and spread in as one line.
-  checklistItemsDueProvider,
+  // checklist engine (`src/core/checklists/attentionProvider.ts`) and spread in as one line. D178: a step
+  // to carry out (the MWST return included), so `do`, declared here at its registration line.
+  withKind(checklistItemsDueProvider, 'do'),
   // D143: a bank that answered HPB while its activation is in progress: the human compares the keys.
-  // Defined beside the EBICS engine (`src/core/banking/ebics/attentionProvider.ts`), one line.
-  bankKeysReviewProvider,
+  // Defined beside the EBICS engine (`src/core/banking/ebics/attentionProvider.ts`), one line. D178: `do`.
+  withKind(bankKeysReviewProvider, 'do'),
   // The activation BEFORE the bank is ready (send INI/HIA, sign and post the INI letter, wait for the
-  // bank), mutually exclusive with the review above by construction. Same file, one line.
-  bankActivationProvider,
+  // bank), mutually exclusive with the review above by construction. Same file, one line. D178: `do`
+  // (signing and posting the letter is the person's act even while the bank is the one who waits).
+  withKind(bankActivationProvider, 'do'),
   // D150 (A36 §4.7): what the Übersicht missed on 01.10.2026. A failed automatic fetch that waits for a
   // person, every open statement gap, and the bank lines that need a person (minus those a pending
   // Vorschlag already names, which `agent_action` counts). Defined beside the banking engine

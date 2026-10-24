@@ -7,6 +7,78 @@ compatibility promise yet, so back up before every upgrade.
 
 ## [Unreleased]
 
+### Added
+
+- Settings: a new Settings section in the company profile lists the workspace's settings, each with
+  its default, and lets you change one with a short reason. Every change is kept with the old and the
+  new value, and a setting can go back to its default at any time. Agents can read the settings; a
+  change an agent proposes waits for your approval, and automations never change them. The first
+  setting is how many days ahead Pendenzen shows due checklist steps (14 by default). More settings
+  follow as TILL's built-in rules become yours to choose.
+  This update upgrades your book to format 13: backups taken before it restore only into the previous
+  version, so take a backup before updating and a fresh one right after, and update the Claude Desktop
+  extension and the command-line tool together.
+
+### Fixed
+
+- An approved expense claim can now be reversed from its row under HR. TILL books the correcting
+  entry and closes the claim as reversed. A claim that was already paid out asks you to reverse the
+  payment first, and the journal no longer lets a plain reversal leave the claim looking approved.
+- A dunning run's reminder fees can now be reversed from the run under Dunning. TILL books the
+  correcting entry; the reminder levels and any letter already sent stay as they are. A letter not
+  yet sent is re-issued without the fee and can then be sent; the run shows which letters were
+  re-issued. A fee the customer already paid asks you to reverse the
+  payment first, and the journal no longer reverses a run's fee on its own.
+  Under Setup, Einstellungen, you can choose to hold such letters instead, and whether a re-issued
+  letter keeps the date of the run (the default) or carries the day it was re-issued. A single run
+  can be handled differently from these settings, with a reason that is kept with the correcting entry.
+- A fixed asset's purchase, added cost, opening balance or disposal can now be reversed from the
+  asset's transactions in the asset register. TILL books the correcting entry and updates the register
+  in one step, so the register and the books keep matching. A reversed purchase closes the asset; a
+  reversed disposal puts it back in the register. Depreciation already booked on the asset asks you to
+  reverse that run first, and the journal no longer reverses these entries on its own.
+  This update upgrades your book to format 12 (format 11 brought the reduced-rate input tax codes):
+  backups taken before it restore only into the previous version, so take a backup before updating
+  and a fresh one right after, and update the Claude Desktop extension and the command-line tool
+  together.
+- A posted wage journal can now be reversed from its row on the Payroll tab under HR. TILL books the
+  correcting entry and the history marks the posting as reversed; you then upload the corrected
+  journal. Salary payments, social insurance declarations and wage statements are handled in your
+  payroll system and stay as they are. A wage journal a bank line booked asks you to reopen that line
+  first, and the journal no longer reverses a wage journal on its own.
+- A month can no longer be booked twice from the payroll. Uploading a second wage journal for a
+  month whose journal still stands is refused with the way out: reverse the posted one on the Payroll
+  tab first, then upload the corrected journal. A retry of the same upload still returns the original
+  booking. Under Setup, Einstellungen, you can change this to post with a warning or not to check at
+  all. A single extra posting for a month (a late bonus, say) can be booked as a Nachtragsbuchung with
+  a reason, which is kept with the booking.
+- Each wage journal now has a payroll run: Regular (the default), Bonus, 13th month salary or
+  Correction. Only regular runs count for the one-journal-per-month check, so a bonus or 13th salary
+  can be posted in a month whose regular journal already stands. Journals you posted earlier count as
+  regular. A correction run asks for a reason, which is kept with the booking; under Setup,
+  Einstellungen, you can ask for a reason on every bonus and 13th salary too, or on none. Every bonus,
+  13th salary and correction run is recorded in the audit trail.
+- **Upgrade note (database generation 14).** Opening your books with this version upgrades them
+  in one go, even from generation 10 (four steps, in order). Make a backup before you upgrade and
+  another one afterwards: a backup from before the upgrade restores only into the previous version, and
+  an older version refuses the upgraded books without changing them. Update the desktop extension
+  (.mcpb) and the command line tool together.
+- An approval whose action was interrupted half-way (TILL quit or crashed after the action committed,
+  before the approval was marked done) now settles as done when you approve again. It used to be
+  shown as "never executed" next to the booking it had already made.
+- Two approvals of the same dunning run at once no longer send a debtor two letters, and a rejection
+  that crosses an approval in another window no longer records "rejected" over an act that ran.
+- An approval whose action ran only in part (a dunning run cut off half-way, a bank fetch that
+  imported a statement and then lost the bank) can no longer be rejected as if nothing happened.
+- A send or a payment transmission whose outcome is unknown is never repeated. Approving it again
+  records the unknown outcome instead of trying a second time.
+- VAT periods follow the filing calendar. Only a real filing period (a quarter, or a half-year under
+  Saldosteuersätze) can be marked filed, and `export_vat` now takes the labels `2026-Q3` and `2026-H2`
+  and flags any range that is not one. A method or timing change takes effect on 01.01; the one
+  mid-year exception is the switch from Saldo to effektiv that MWSTV Art. 81 Abs. 2 allows. A
+  period cut by that switch is computed correctly, and TILL tells you to file it in the ESTV ePortal.
+  Labels before 1995, when MWST began, are refused.
+
 ## [1.0.0-beta.1] - 2026-10-14
 
 The first public beta, and the first release since 0.1.0 to reach npm. You can install it, open the

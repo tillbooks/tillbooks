@@ -64,8 +64,8 @@
  *    entry is itself reversed). A ROW WHOSE OPEN AMOUNT IS ONLY FEE IS NOT DUNNABLE (A15 critic
  *    C3/C4): A15's `chaseableItems` requires `openMinor - dunningFeeMinor > 0`, so a paid or
  *    cancelled invoice's residual fee is never chased by a letter under the invoice's name; it
- *    stays visible HERE as `dunningFeeMinor`, and its remedies are `reverse_entry` on the fee
- *    entry or ordinary collection. THE GAP RECORDED IN A15 §4 PER D59 IS CLOSED: `payment_allocation`
+ *    stays visible HERE as `dunningFeeMinor`, and its remedies are `dunning_fee_reverse` on the
+ *    run (D169) or ordinary collection. THE GAP RECORDED IN A15 §4 PER D59 IS CLOSED: `payment_allocation`
  *    now admits `target_kind = 'dunning_fee'`, naming the FEE (its own `dunning_item` row) rather
  *    than the invoice it rides, so a payment covering invoice + fee allocates BOTH in one call and
  *    the fee row genuinely CLOSES instead of parking as an unrelated Guthaben. `dunningFeeSettledAsOf`
@@ -774,7 +774,7 @@ function collectOpenItems(ctx: WorkspaceContext, asOf: string, boundaries: numbe
   // Booked fees whose DOCUMENT is no longer a receivable (a cancelled invoice whose reversal is
   // dated on or before asOf). The fee claim survives the invoice's reversal until the fee entry is
   // itself reversed, and 1100 still carries it, so it gets its own row rather than a silent hole
-  // in the reconciliation. The remedy the row points at is `reverse_entry` on the fee entry.
+  // in the reconciliation. The remedy the row points at is `dunning_fee_reverse` on the run (D169).
   for (const fee of feesByDoc.values()) {
     const daysOverdue = fee.due_date === null ? 0 : Math.max(0, daysBetween(fee.due_date, asOf));
     const party = resolve(fee.debtor_id);

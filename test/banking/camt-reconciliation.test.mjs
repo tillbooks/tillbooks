@@ -40,6 +40,7 @@ import { createVendorBill, postVendorBill } from '../../dist/core/purchase/index
 import { createContact } from '../../dist/core/sales/index.js';
 import { setup, issueInvoice, counts, accountBalance, GROSS_MINOR } from '../payments/support.mjs';
 import { secondWorkspace, seedOpeningBalanceAccount } from './support.mjs';
+import { answerDistinct } from './e2-adapt.mjs';
 
 const ok = (res, label = 'result') => {
   assert.equal(res.ok, true, `expected ${label} ok, got ${JSON.stringify(res)}`);
@@ -420,6 +421,9 @@ test('confirmCamtMatch links to an existing journal entry with NO second posting
   const imported2 = ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: xml2, idempotencyKey: 'link-import-2' }));
   const listed2 = ok(listReconciliation(t.ctx, { statementId: imported2.statementId }));
   const row2 = listed2.unmatched.find((r) => r.entryRef === 'LNK-2');
+  // D178 point 19 (re-cut): LINK-2 overlaps LINK-1's day with the same money, so the line waits for the
+  // person's answer; the person says "Kein Duplikat" (it is the fabricated second movement).
+  answerDistinct(t, row2.bankTxnId);
   const before = counts(t.store, t.workspaceId);
   // A39 (walk B9.3): the entry already backs the FIRST line (that line's booking created it), so a
   // second line may not claim it too; the refusal names the line that holds it. Before A39 this linked,

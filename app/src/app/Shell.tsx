@@ -33,13 +33,12 @@ import { useFeedback } from '../components/FeedbackProvider';
 import { CapabilitiesProvider } from '../lib/CapabilitiesProvider';
 import { DemoBanner } from '../surfaces/Onboarding';
 import { SearchPalette } from '../surfaces/Search';
-import { AgentDock } from '../surfaces/Agent';
 import { NavIcon } from './nav-icons';
-import { NavTree } from './NavTree';
+import { MenuCustomiseEntry, MenuSection } from './NavTree';
 import { FavouritesRail } from './FavouritesRail';
 import { IconRail } from './IconRail';
 import { RailResizer } from './RailResizer';
-import { RAIL_ICON_WIDTH, useRailPrefs } from './nav-prefs';
+import { RAIL_ICON_WIDTH, RailStateProvider, useRail, useRailPrefs } from './nav-prefs';
 import { KeyboardProvider, useFocusTrap, useKeyboard } from './keyboard';
 import { ShortcutSheet } from './ShortcutSheet';
 import { NotificationBell, SlotBoundary } from './chrome';
@@ -159,6 +158,65 @@ function HashAnchor() {
   return null;
 }
 
+/**
+ * The expanded rail's middle band (D178): the Favoriten section above the Menü section. The person's
+ * looks ride on it as data attributes, so the stylesheet sets every row from one place: the header
+ * style, the favourite style, and the "Menü anpassen" mode (which shows every drag grip).
+ */
+/** The row pitches the rail steps through to fit (owner, 21.10.2026: "shrink when needed depending on
+ *  screen size"): 30px is the D138 rhythm, 24px the floor (the WCAG 2.2 target spacing). */
+const RAIL_PITCHES = [30, 28, 26, 24] as const;
+
+/**
+ * Fit the rail to the screen: keep the 30px pitch while the nav band's rows fit its height, and step
+ * the pitch down (28, 26, 24) only as far as needed when they would overflow; at 24 it scrolls. The
+ * phone drawer keeps its 44px rows and is never stepped. Measured on the DOM (a data attribute, no
+ * React state, no preference), again whenever the band resizes or its rows change.
+ */
+function useRailFit(ref: { current: HTMLDivElement | null }, narrow: boolean): void {
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    const fit = (): void => {
+      for (const pitch of RAIL_PITCHES) {
+        if (pitch === 30 || narrow) el.removeAttribute('data-pitch');
+        else el.setAttribute('data-pitch', String(pitch));
+        if (narrow || el.scrollHeight <= el.clientHeight) return;
+      }
+    };
+    fit();
+    if (typeof ResizeObserver === 'undefined' || typeof MutationObserver === 'undefined') return;
+    const resize = new ResizeObserver(fit);
+    resize.observe(el);
+    const rows = new MutationObserver(fit);
+    rows.observe(el, { childList: true, subtree: true });
+    return () => {
+      resize.disconnect();
+      rows.disconnect();
+    };
+  }, [ref, narrow]);
+}
+
+function RailNavBody({ onNavigate }: { onNavigate: () => void }) {
+  const { look, customising } = useRail();
+  const ref = useRef<HTMLDivElement | null>(null);
+  useRailFit(ref, useIsNarrow());
+  return (
+    <div
+      ref={ref}
+      className="rail-nav"
+      data-header-style={look.groupHeaderStyle}
+      data-fav-style={look.favouriteStyle}
+      data-customising={customising ? '' : undefined}
+    >
+      {/* A3: the Favoriten section, ABOVE the menu. Renders nothing until the first pin. */}
+      <FavouritesRail onNavigate={onNavigate} />
+      {/* A1 + D178: the Menü section, the personal tree (or its editor) under a folding header. */}
+      <MenuSection onNavigate={onNavigate} />
+    </div>
+  );
+}
+
 function Frame() {
   const t = useT();
 
@@ -214,6 +272,7 @@ function Frame() {
     .join(' ');
 
   return (
+    <RailStateProvider>
     <div className={drawerOpen ? 'frame frame--drawer-open' : 'frame'}>
       {/* US-G16.10: reset a record-scoped route to its list root on a workspace switch. Renders nothing. */}
       <TenantRouteReset />
@@ -243,7 +302,8 @@ function Frame() {
         style={railStyle}
         aria-label={t('nav.label')}
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && drawerOpen) {
+          // The menu editor and the flyouts close themselves on Escape first (and say so).
+          if (event.key === 'Escape' && drawerOpen && !event.defaultPrevented) {
             event.preventDefault();
             closeDrawer();
           }
@@ -272,7 +332,7 @@ function Frame() {
             </div>
             <div className="rail-footer rail-footer--icon">
               {/* M01: the signed-in-identity chip, its own CapabilitiesProvider because it renders
-                  outside <main>'s provider (the AgentDock pattern). Icon-only here; silent in local mode. */}
+                  outside <main>'s provider. Icon-only here; silent in local mode. */}
               <SlotBoundary slot="identity">
                 <CapabilitiesProvider>
                   <IdentityChip iconOnly />
@@ -296,15 +356,8 @@ function Frame() {
               {/* G16: the palette trigger sits above the nav, the widest door into the product. */}
               <PaletteTrigger />
             </div>
-            {/* A3: the Favoriten lane, ABOVE the canonical tree. A per-user personal shortcut list that
-                renders nothing until the first pin, so the tree sits at the top on a fresh workspace. It
-                is additive: the canonical tree below is never reordered by it (one shared vocabulary). */}
-            {/* A1: the collapsible tree rail. A WAI-ARIA treeview owns its own keyboard model and its own
-                per-user expand state; choosing a destination dismisses the drawer on a narrow viewport. */}
-            <div className="rail-nav">
-              <FavouritesRail onNavigate={() => setDrawerOpen(false)} />
-              <NavTree onNavigate={() => setDrawerOpen(false)} />
-            </div>
+            {/* The Favoriten and Menü sections; choosing a destination dismisses the narrow drawer. */}
+            <RailNavBody onNavigate={() => setDrawerOpen(false)} />
             {/* K-01 (D137): the footer is ONE row. The environment is a single pill whose menu holds
                 what used to stand beside it (the environment switch, "Umgebungen verwalten", the
                 density switch and the collapse affordance, the A4 non-dragging alternative to the
@@ -317,8 +370,7 @@ function Frame() {
                 <RailStatusMenu onCollapse={isNarrow ? undefined : () => setCollapsed(true)} />
               </SlotBoundary>
               {/* M01: the signed-in-identity chip (spec §6, the G15 slot), icon-only in the one row. Its
-                  own CapabilitiesProvider, because it renders OUTSIDE <main>'s provider (the AgentDock
-                  pattern), and it reads the same `whoami` through the sanctioned single source. Silent
+                  own CapabilitiesProvider, because it renders OUTSIDE <main>'s provider, and it reads the same `whoami` through the sanctioned single source. Silent
                   in local mode: a laptop user has no login and must not be shown a fake one. */}
               <SlotBoundary slot="identity">
                 <CapabilitiesProvider>
@@ -341,6 +393,8 @@ function Frame() {
                   <FeedbackGlyph />
                 </button>
               )}
+              {/* "Menü anpassen" while the Menü has no header to carry it (no favourites yet). */}
+              <MenuCustomiseEntry />
               <ThemeToggle />
             </div>
           </>
@@ -385,21 +439,10 @@ function Frame() {
           <SearchPalette />
         </CapabilitiesProvider>
       </main>
-      {/*
-        A35: G16's dock slot (assistDock), filled. A flex SIBLING of <main>, so an open dock PUSHES
-        the content and never overlays it (D90 D-2; the D102 layout-law exception in brand/DESIGN.md
-        is its written licence). With zero agent sessions, no read right or no workspace it emits NO
-        DOM at all (guarantee 2), and it degrades inside its own slot boundary like every other slot.
-        Its own CapabilitiesProvider, because it renders beside <main>'s provider, not inside it.
-      */}
-      <SlotBoundary slot="agent-dock">
-        <CapabilitiesProvider>
-          <AgentDock />
-        </CapabilitiesProvider>
-      </SlotBoundary>
       {/* The shortcut sheet, opened on `?`. Read surface, Esc closes and returns focus to the trigger. */}
       <ShortcutSheet />
     </div>
+    </RailStateProvider>
   );
 }
 

@@ -2244,6 +2244,23 @@ export const SCENARIOS = {
     return { workspaceId: fx.workspaceId, runId: proposed.runId, confirmed: true, idempotencyKey: 'idr-1' };
   },
 
+  // D169: a fee-bearing run is issued, and the double call proves the reverse on ROWS: one mirror,
+  // the memo replayed, nothing written twice.
+  dunning_fee_reverse: (fx) => {
+    seedOverdueInvoice(fx, 'dfr');
+    fx.call('set_dunning_config', {
+      levels: [
+        { level: 1, daysOverdue: 10, feeMinor: 2000, bookFee: true, feeIncomeAccountId: fx.accId('3600') },
+        { level: 2, daysOverdue: 20, feeMinor: 0 },
+        { level: 3, daysOverdue: 30, feeMinor: 0 },
+      ],
+      idempotencyKey: 'dfr-cfg',
+    });
+    const proposed = fx.call('propose_dunning_run', { idempotencyKey: 'dfr-propose' });
+    fx.call('issue_dunning_run', { runId: proposed.runId, confirmed: true, idempotencyKey: 'dfr-issue' });
+    return { workspaceId: fx.workspaceId, runId: proposed.runId, reason: 'Gebühr erlassen', idempotencyKey: 'dfr-1' };
+  },
+
   send_dunning_run: (fx) => {
     seedOverdueInvoice(fx, 'sdr');
     const proposed = fx.call('propose_dunning_run', { idempotencyKey: 'sdr-propose' });
@@ -2394,6 +2411,43 @@ export const SCENARIOS = {
     };
   },
 
+  // D178 (A20 §11.4): the one statement door, driven on its CSV path with a mapping, so the double call
+  // proves the whole chain idempotent on rows: the statement, its two lines, their facts and the saved
+  // mapping are written once; the replay answers the memo and writes nothing (each line also carries its
+  // own content key, so a new call key would import nothing twice either).
+  import_bank_statement: (fx) => ({
+    workspaceId: fx.workspaceId,
+    bankAccountId: bankAccount(fx, 'ibs'),
+    content: 'Datum;Text;Betrag\n02.03.2026;Kaffeebar Lindenplatz;-4.50\n03.03.2026;Zinsgutschrift;0.35\n',
+    fileName: 'auszug.csv',
+    mapping: { columns: { bookingDate: 'Datum', text: 'Text', amount: 'Betrag' }, dateFormat: 'dd.mm.yyyy' },
+    idempotencyKey: 'ibs-1',
+  }),
+
+  // D178 point 19 (owner): a CSV line of the same day and amount as a camt line is imported FLAGGED; the
+  // person answers "Kein Duplikat". One decision row; the replay writes nothing new.
+  resolve_possible_duplicate: (fx) => {
+    const camtLine = importedPartyLine(fx, 'rpd', 4500, 'DBIT');
+    const day = fx.deps.store.db.prepare('SELECT booking_date AS d FROM bank_txn WHERE workspace_id = ? AND id = ?').get(fx.workspaceId, camtLine.bankTxnId).d;
+    const [y, m, dd] = day.split('-');
+    fx.call('import_bank_statement', {
+      bankAccountId: camtLine.bankAccountId,
+      content: `Datum;Text;Betrag\n${dd}.${m}.${y};Papeterie Lindenhof;-45.00\n`,
+      mapping: { columns: { bookingDate: 'Datum', text: 'Text', amount: 'Betrag' }, dateFormat: 'dd.mm.yyyy' },
+      idempotencyKey: 'rpd-csv',
+    });
+    const flagged = fx.deps.store.db.prepare('SELECT bank_txn_id AS id FROM bank_txn_possible_duplicate WHERE workspace_id = ?').get(fx.workspaceId).id;
+    return { workspaceId: fx.workspaceId, bankTxnId: flagged, decision: 'distinct', otherBankTxnId: camtLine.bankTxnId, idempotencyKey: 'rpd-1' };
+  },
+
+  // D178 (A20 §11.3): one mapping row per Bankkonto, upserted; the replay writes nothing new.
+  set_bank_csv_mapping: (fx) => ({
+    workspaceId: fx.workspaceId,
+    bankAccountId: bankAccount(fx, 'sbcm'),
+    mapping: { columns: { bookingDate: 'Buchungsdatum', debit: 'Belastung', credit: 'Gutschrift' }, dateFormat: 'dd.mm.yyyy' },
+    idempotencyKey: 'sbcm-1',
+  }),
+
   confirm_match: (fx) => {
     const vendorBillId = postedVendorBill(fx, 'cm');
     const bankAccountId = bankAccount(fx, 'cm');
@@ -2458,36 +2512,55 @@ export const SCENARIOS = {
 
   // --- A39, the bank inbox ------------------------------------------------------------------------
   // Every decision verb runs on a line a real camt import brought in. `book_bank_line` books a fee
-  // debit to TWO accounts, one leg carrying Vorsteuer through A06 exactly as a manual journal line,
-  // so its replay must post ZERO further entries or lines. `reopen_bank_line` reverses a real booking
-  // and its replay must reverse nothing twice. `ignore_bank_line` writes one link and its decision.
-  // None of them may move another tenant's rows.
+  // debit to TWO accounts BY A BUCHUNGSREGEL (D175): the rule's asked leg carries Vorsteuer through A06
+  // exactly as a manual journal line, its rest leg takes the other 10.00, and the whole entry runs through
+  // a Durchlaufkonto, so the rule target is expanded, validated and posted as ONE `accounts` entry. Its
+  // replay must post ZERO further entries or lines. `reopen_bank_line` reverses a real booking and its
+  // replay must reverse nothing twice. `ignore_bank_line` writes one link and its decision. None of them
+  // may move another tenant's rows.
   book_bank_line: (fx) => {
     fx.call('vat_seed_defaults', {});
     fx.call('set_vat_method', { vatMethod: 'effektiv', vatAccounting: 'soll' });
-    const line = importedLine(fx, 'bbl', 5000, 'DBIT');
+    const via = fx.call('create_account', { number: '1095', name: 'Durchlaufkonto Karten', type: 'asset', idempotencyKey: 'bbl-via' }).accountId;
+    const line = importedPartyLine(fx, 'bbl', 5000, 'DBIT');
+    // D177 (A39 §16.1): a third leg is COMPUTED from the line (1/10 of 50.00 = 5.00, no ask), so the
+    // double call also drives the factor expansion: 40.00 asked, 5.00 computed, 5.00 the rest.
+    const rule = fx.call('set_bank_standard', {
+      bankTxnId: line.bankTxnId,
+      label: 'Papeterie',
+      viaAccountId: via,
+      legs: [
+        { accountId: fx.accId('6500'), taxCode: 'VST-M', amount: { kind: 'ask', label: 'Material' } },
+        { accountId: fx.accId('6900'), taxCode: null, amount: { kind: 'factor', label: 'Gebühr', num: 1, den: 10, explain: { feeBp: 1000 } } },
+        { accountId: fx.accId('6800'), taxCode: null, amount: { kind: 'rest' } },
+      ],
+      idempotencyKey: 'bbl-rule',
+    }).standard;
     return {
       workspaceId: fx.workspaceId,
       bankTxnId: line.bankTxnId,
-      target: {
-        kind: 'accounts',
-        legs: [
-          { accountId: fx.accId('6500'), amountMinor: 4000, taxCode: 'VST-M' },
-          { accountId: fx.accId('6800'), amountMinor: 1000 },
-        ],
-      },
+      target: { kind: 'rule', standardId: rule.id, asks: { 0: 4000 } },
       text: 'Kartenzahlung Büromaterial',
       idempotencyKey: 'bbl-1',
     };
   },
 
+  // D176 (A39 §15.3): the line follows a "Nicht buchen" Buchungsregel, so the decision records the rule.
   ignore_bank_line: (fx) => {
-    const line = importedLine(fx, 'ibl', 7000, 'DBIT');
+    const line = importedPartyLine(fx, 'ibl', 7000, 'DBIT');
+    const rule = fx.call('set_bank_standard', {
+      bankTxnId: line.bankTxnId,
+      outcome: 'ignore',
+      ignoreReason: 'booked_elsewhere',
+      ignoreNote: 'über das Verrechnungskonto gebucht',
+      idempotencyKey: 'ibl-rule',
+    }).standard;
     return {
       workspaceId: fx.workspaceId,
       bankTxnId: line.bankTxnId,
       reason: 'booked_elsewhere',
       note: 'über das Verrechnungskonto gebucht',
+      standardId: rule.id,
       idempotencyKey: 'ibl-1',
     };
   },
@@ -2511,6 +2584,38 @@ export const SCENARIOS = {
     fx.call('runtime_select', { modelRef: 'stub-4b-q4', source: 'catalog', idempotencyKey: 'sbl-sel' });
     const line = importedLine(fx, 'sbl', 8450, 'DBIT');
     return { workspaceId: fx.workspaceId, bankTxnIds: [line.bankTxnId], idempotencyKey: 'sbl-1' };
+  },
+
+  // D167 (A39 §13.1): the standard per counterparty, over a REAL camt line that names its counterparty
+  // (an invented name and a published sample IBAN). `set_bank_standard` writes ONE row and its replay none;
+  // `clear_bank_standard` stamps that row's supersession once and its replay nothing. Neither posts.
+  // D175 (§14.1): the write is a Buchungsregel with a recipe (an asked leg with its code, the rest leg), a
+  // Durchlaufkonto, a match text and a name, so the recipe path is what the double call drives.
+  set_bank_standard: (fx) => {
+    fx.call('vat_seed_defaults', {});
+    fx.call('set_vat_method', { vatMethod: 'effektiv', vatAccounting: 'soll' });
+    const via = fx.call('create_account', { number: '1095', name: 'Durchlaufkonto Papeterie', type: 'asset', idempotencyKey: 'sbs-via' }).accountId;
+    const line = importedPartyLine(fx, 'sbs', 3240, 'DBIT');
+    return {
+      workspaceId: fx.workspaceId,
+      bankTxnId: line.bankTxnId,
+      label: 'Papeterie Lindenhof',
+      matchText: 'Rechnung',
+      viaAccountId: via,
+      legs: [
+        { accountId: fx.accId('6500'), taxCode: 'VST-M', amount: { kind: 'ask', label: 'Material' } },
+        // D177 (A39 §16.1): a computed leg, so the recipe's factor path is what the double call stores.
+        { accountId: fx.accId('6900'), taxCode: null, amount: { kind: 'factor', label: 'Gebühr', num: 3, den: 100 } },
+        { accountId: fx.accId('6800'), taxCode: null, amount: { kind: 'rest' }, description: 'Porto' },
+      ],
+      idempotencyKey: 'sbs-1',
+    };
+  },
+
+  clear_bank_standard: (fx) => {
+    const line = importedPartyLine(fx, 'cbs', 1880, 'DBIT');
+    const set = fx.call('set_bank_standard', { bankTxnId: line.bankTxnId, accountId: fx.accId('6500'), taxCode: null, idempotencyKey: 'cbs-set' });
+    return { workspaceId: fx.workspaceId, standardId: set.standard.id, idempotencyKey: 'cbs-1' };
   },
 
   set_bank_sync_schedule: (fx) => {
@@ -3211,6 +3316,22 @@ export const SCENARIOS = {
     idempotencyKey: 'wjp-conf-1',
   }),
 
+  // D171 (MONEY PATH: the owned A02 mirror): a synthetic wage journal is posted, and the double call
+  // proves the reverse on ROWS: one mirror, the memo replayed, nothing written twice.
+  wage_journal_reverse: (fx) => {
+    const posted = fx.call('wage_journal_post', {
+      lines: [
+        { accountNumber: '5000', debitMinor: 500000, description: 'Bruttolohn' },
+        { accountNumber: '5700', debitMinor: 50000, description: 'AG-Sozialbeitraege' },
+        { accountNumber: '2260', creditMinor: 550000, description: 'Nettolohn' },
+      ],
+      entryDate: '2026-07-05',
+      confirm: true,
+      idempotencyKey: 'wjr-post',
+    });
+    return { workspaceId: fx.workspaceId, wageJournalPostId: posted.wageJournalPostId, reason: 'Falsche Lohnperiode', idempotencyKey: 'wjr-1' };
+  },
+
   // --- A18, creditor payments (pain.001) ---------------------------------------------------------
   // A vendor's IBAN is written by its own verb (D65 leg f), a batch is drafted from one open A17
   // bill, generated, and paid; every double-call is a real money assertion on `mark_batch_paid`
@@ -3306,6 +3427,33 @@ export const SCENARIOS = {
     const { bankAccountId } = liquidityWorld(fx, 'lpd');
     const plan = fx.call('liquidity_plan_propose', { floorMinor: 1000000, idempotencyKey: 'lpd-plan' });
     return { workspaceId: fx.workspaceId, planId: plan.planId, bankAccountId, idempotencyKey: 'lpd-1' };
+  },
+
+  // --- G00, workspace settings (D172) -----------------------------------------------------------
+  // The registry's seed entry (the Pendenzen look-ahead for checklist steps, default 14 days). The set
+  // writes one override row, one history row and one audit row; the reset removes an override the
+  // setup really stored first, so its double-call proves a replay removes nothing twice.
+  settings_set: (fx) => {
+    fx.call('settings_set', { key: 'checklists.attention_window_days', value: 10, reason: 'erster Versuch', idempotencyKey: 'sset-seed' });
+    return { workspaceId: fx.workspaceId, key: 'checklists.attention_window_days', value: 21, reason: 'Monatsabschluss früher sehen', idempotencyKey: 'sset-1' };
+  },
+  settings_reset: (fx) => {
+    fx.call('settings_set', { key: 'checklists.attention_window_days', value: 30, reason: 'Vorbereitung', idempotencyKey: 'sres-seed' });
+    return { workspaceId: fx.workspaceId, key: 'checklists.attention_window_days', reason: 'zurück zum Standard', idempotencyKey: 'sres-1' };
+  },
+
+  // --- G00, per-person preferences (D178 point 7) ----------------------------------------------
+  // The appearance area, person scope, keyed by the calling seat. The set changes a value the setup
+  // really stored first, so its double call proves a second identical set writes nothing (both writes
+  // are key-exempt absolute setters); the reset clears a whole area holding a stored value, so its
+  // double call proves a replay removes nothing twice.
+  prefs_set: (fx) => {
+    fx.call('prefs_set', { key: 'appearance.theme', value: 'light' });
+    return { workspaceId: fx.workspaceId, key: 'appearance.theme', value: 'dark' };
+  },
+  prefs_reset: (fx) => {
+    fx.call('prefs_set', { key: 'appearance.density', value: 'kompakt' });
+    return { workspaceId: fx.workspaceId, area: 'appearance' };
   },
 
   // --- A33, EBICS bank channel -----------------------------------------------------------------
@@ -4295,6 +4443,12 @@ export const SCENARIOS = {
     fx.call('expense_claim_approve', { claimId, confirm: true, idempotencyKey: 'ecr-ap' });
     return { workspaceId: fx.workspaceId, claimId, bankAccountId: fx.accId('1020'), confirm: true, idempotencyKey: 'ecr-1' };
   },
+  // D168: the double call proves the reverse on ROWS: one mirror, one status move, the memo replayed.
+  expense_claim_reverse: (fx) => {
+    const { claimId } = seedSubmittedClaim(fx, 'ecv');
+    fx.call('expense_claim_approve', { claimId, confirm: true, idempotencyKey: 'ecv-ap' });
+    return { workspaceId: fx.workspaceId, claimId, reason: 'Doppelt erfasst', idempotencyKey: 'ecv-1' };
+  },
 
   // --- E04 local mail store ----------------------------------------------------------------------
   // Each scenario builds a REAL on-disk Thunderbird Maildir in a temp directory (the fixtures the
@@ -4704,6 +4858,23 @@ export const SCENARIOS = {
       reason: 'Verkauf an Dritte',
       idempotencyKey: 'disp-1',
     };
+  },
+
+  // --- D170, the register's undo verb (MONEY PATH: the owned A02 mirror + a compensating row) ------
+  // Dispose an active asset, then take the disposal back: the hardest of the four events (the asset
+  // returns from its terminal status). The double call proves the reverse on ROWS: one mirror, one
+  // compensating row, one status move, the memo replayed.
+  asset_transaction_reverse: (fx) => {
+    const assetId = depreciableAssetSeed(fx, 'atr');
+    const disposed = fx.call('asset_dispose', {
+      assetId,
+      disposalDate: '2026-07-15',
+      proceedsRappen: 1_000_000,
+      proceedsAccountId: fx.accId('1020'),
+      gainLossAccountId: fx.accId('6900'),
+      idempotencyKey: 'atr-disp',
+    });
+    return { workspaceId: fx.workspaceId, assetId, transactionId: disposed.transaction.id, reason: 'Verkauf geplatzt', idempotencyKey: 'atr-1' };
   },
 
   // --- H08, Simple Maintenance Log (NON-POSTING) ------------------------------------------------
@@ -5763,6 +5934,27 @@ function importedLine(fx, seed, amountMinor, creditDebit) {
   return { bankAccountId, bankTxnId, statementId: imported.statementId };
 }
 
+/**
+ * D167: like `importedLine`, but the camt entry names its counterparty (an INVENTED name and the
+ * invented IBAN with a correct check pair the A39 suite already uses), so a standard has a key.
+ */
+function importedPartyLine(fx, seed, amountMinor, creditDebit, onBankAccountId = undefined) {
+  // D177: a second line of one scenario reuses the scenario's Bankkonto (one IBAN registers once).
+  const bankAccountId = onBankAccountId ?? bankAccount(fx, seed);
+  const iban = fx.call('get_bank_account', { bankAccountId }).bankAccount.iban;
+  const party = creditDebit === 'CRDT' ? 'Dbtr' : 'Cdtr';
+  const rltd = `<NtryDtls><TxDtls><RltdPties><${party}><Pty><Nm>Papeterie Lindenhof AG</Nm></Pty></${party}><${party}Acct><Id><IBAN>CH5604835012345678009</IBAN></Id></${party}Acct></RltdPties></TxDtls></NtryDtls>`;
+  const xml = camtFixtureXml({ statementId: `${seed.toUpperCase()}-STMT`, iban, entryRef: `${seed.toUpperCase()}-NTRY`, amountMinor, creditDebit }).replace(
+    '</BkTxCd>\n</Ntry>',
+    `</BkTxCd>\n${rltd}</Ntry>`,
+  );
+  const imported = fx.call('import_camt', { bankAccountId, xml, idempotencyKey: `${seed}-import` });
+  const bankTxnId = fx.deps.store.db
+    .prepare('SELECT id FROM bank_txn WHERE workspace_id = ? AND statement_id = ?')
+    .get(fx.workspaceId, imported.statementId).id;
+  return { bankAccountId, bankTxnId, statementId: imported.statementId };
+}
+
 /** A vendor bill drafted AND posted (`vendorBillInput`'s gross 1'081.00), for A20's debit scenarios. */
 function postedVendorBill(fx, seed) {
   const created = fx.call('create_vendor_bill', vendorBillInput(fx, seed));
@@ -5978,7 +6170,53 @@ export const READ_SCENARIOS = {
       },
       { workspaceId: fx.workspaceId, mode: 'decompose', entryId: draft.entryId },
       { workspaceId: fx.workspaceId, mode: 'decompose', entryId: posted.entryId },
+      // D175 (A39 §14.2): the bank line preview of a Buchungsregel, expanded on a real camt line. It reads
+      // the rule and the line and must write nothing (the rule and the line are set up before the snapshot).
+      (() => {
+        const line = importedPartyLine(fx, 'cmp', 10770, 'DBIT');
+        const rule = fx.call('set_bank_standard', {
+          bankTxnId: line.bankTxnId,
+          legs: [
+            { accountId: fx.accId('6500'), taxCode: 'VST-M', amount: { kind: 'ask', label: 'Material' } },
+            { accountId: fx.accId('6800'), taxCode: null, amount: { kind: 'rest' } },
+          ],
+          idempotencyKey: 'cmp-rule',
+        }).standard;
+        return { workspaceId: fx.workspaceId, mode: 'expand', bankTxnId: line.bankTxnId, target: { kind: 'rule', standardId: rule.id, asks: { 0: 10000 } } };
+      })(),
+      // D177 (A39 §16.1): a rule whose only unknown is COMPUTED previews with no ask at all (the
+      // rule_computed proposal's own target): 1081/180 of 30.00 is 180.17 gross on the taxed leg.
+      (() => {
+        const existing = fx.deps.store.db.prepare('SELECT id FROM bank_account WHERE workspace_id = ? ORDER BY rowid LIMIT 1').get(fx.workspaceId).id;
+        const line = importedPartyLine(fx, 'cmf', 3000, 'CRDT', existing);
+        const rule = fx.call('set_bank_standard', {
+          bankTxnId: line.bankTxnId,
+          legs: [
+            { accountId: fx.accId('3200'), taxCode: 'UST81', amount: { kind: 'factor', label: 'Bruttoumsatz', num: 1081, den: 180, explain: { vatBp: 810, feeBp: 990 } } },
+            { accountId: fx.accId('6800'), taxCode: null, amount: { kind: 'rest' } },
+          ],
+          idempotencyKey: 'cmf-rule',
+        }).standard;
+        return { workspaceId: fx.workspaceId, mode: 'expand', bankTxnId: line.bankTxnId, target: { kind: 'rule', standardId: rule.id, asks: {} } };
+      })(),
     ];
+  },
+  // --- A02 §4b, journal_numbering_plan (D178 point 2): the Belegnummer run inspected on a book that holds
+  // numbered entries (a migrated one among them), an entry posted while numbering was OFF (so the catch-up
+  // marker is set and the plan's would-assign list is non-empty), and a draft. The plan runs the catch-up's
+  // planner; the snapshot proves it writes nothing (no number, no counter, no marker cleared).
+  journal_numbering_plan: (fx) => {
+    const lines = [
+      { account: fx.accId('6500'), debit: 2500 },
+      { account: fx.accId('1020'), credit: 2500 },
+    ];
+    fx.call('post_entry', { date: '2026-02-01', source: 'import', ref: '41', lines, idempotencyKey: 'jnp-migrated' });
+    fx.call('post_entry', { date: '2026-02-02', source: 'manual', lines, idempotencyKey: 'jnp-native' });
+    fx.call('settings_set', { key: 'ledger.belegnummer_mode', value: 'off', reason: 'Prüfung', idempotencyKey: 'jnp-off' });
+    fx.call('post_entry', { date: '2026-02-03', source: 'manual', lines, idempotencyKey: 'jnp-unnumbered' });
+    fx.call('settings_set', { key: 'ledger.belegnummer_mode', value: 'continue_migrated', reason: 'Prüfung', idempotencyKey: 'jnp-on' });
+    fx.call('save_draft', { date: '2026-02-04', lines, idempotencyKey: 'jnp-draft' });
+    return { workspaceId: fx.workspaceId };
   },
   // --- A40, payment timing: three pure reads over a really-proposed plan ------------------------
   // The forecast recomputes every flow on each call and stores nothing (P5); the plan reads are
@@ -5998,6 +6236,24 @@ export const READ_SCENARIOS = {
     fx.call('liquidity_plan_propose', { floorMinor: 1000000, idempotencyKey: 'lql-plan' });
     return { workspaceId: fx.workspaceId };
   },
+  // --- G00, workspace settings (D172): two pure reads over a really-overridden setting ------------
+  settings_list: (fx) => {
+    fx.call('settings_set', { key: 'checklists.attention_window_days', value: 7, reason: 'kurz halten', idempotencyKey: 'sls-seed' });
+    return { workspaceId: fx.workspaceId };
+  },
+  settings_get: (fx) => {
+    fx.call('settings_set', { key: 'checklists.attention_window_days', value: 7, reason: 'kurz halten', idempotencyKey: 'sgt-seed' });
+    return { workspaceId: fx.workspaceId, key: 'checklists.attention_window_days' };
+  },
+  // --- G00, per-person preferences (D178 point 7): two pure reads over a really-stored value ------
+  prefs_list: (fx) => {
+    fx.call('prefs_set', { key: 'appearance.density', value: 'kompakt' });
+    return { workspaceId: fx.workspaceId, area: 'appearance' };
+  },
+  prefs_get: (fx) => {
+    fx.call('prefs_set', { key: 'appearance.theme', value: 'dark' });
+    return { workspaceId: fx.workspaceId, key: 'appearance.theme' };
+  },
   // --- A20, camt reconciliation: the statement list is a pure read over bank_statement/bank_txn ----
   // One import first, so the read answers with a real statement and its open-line count rather than
   // the empty-workspace path; the snapshot proves the read itself writes nothing.
@@ -6008,6 +6264,31 @@ export const READ_SCENARIOS = {
       bankAccountId,
       xml: camtFixtureXml({ statementId: 'LBS-STMT', iban, entryRef: 'LBS-NTRY', amountMinor: 4000, creditDebit: 'DBIT' }),
       idempotencyKey: 'lbs-import',
+    });
+    return { workspaceId: fx.workspaceId, bankAccountId };
+  },
+  // --- D178 (A20 §11.3): the CSV preview and the saved mapping, pure reads ------------------------
+  // The preview over a file with a preamble and a total row, through a saved mapping, so it answers with
+  // a real layout, mapping source and sample (one row skipped); the snapshot proves it writes nothing.
+  bank_csv_preview: (fx) => {
+    const bankAccountId = bankAccount(fx, 'bcp');
+    fx.call('set_bank_csv_mapping', {
+      bankAccountId,
+      mapping: { columns: { bookingDate: 'Datum', text: 'Text', amount: 'Betrag' }, dateFormat: 'dd.mm.yyyy' },
+      idempotencyKey: 'bcp-map',
+    });
+    return {
+      workspaceId: fx.workspaceId,
+      bankAccountId,
+      content: 'Konto;Geschäftskonto\n\nDatum;Text;Betrag\n02.03.2026;Kaffeebar;-4.50\n;Total;-4.50\n',
+    };
+  },
+  get_bank_csv_mapping: (fx) => {
+    const bankAccountId = bankAccount(fx, 'gbcm');
+    fx.call('set_bank_csv_mapping', {
+      bankAccountId,
+      mapping: { columns: { bookingDate: 'Datum', amount: 'Betrag' }, dateFormat: 'yyyy-mm-dd' },
+      idempotencyKey: 'gbcm-map',
     });
     return { workspaceId: fx.workspaceId, bankAccountId };
   },
@@ -6662,6 +6943,33 @@ export const READ_SCENARIOS = {
     return { workspaceId: fx.workspaceId, tile: 'ar_aging', from: '2026-01-01', to: '2026-12-31' };
   },
 
+  // D178 point 13: the charts' series. A real Bankkonto on 1020 and two entries through it (a payment
+  // out to 6500, a receipt in from 3200), so both monthly sides and the top expense carry a figure.
+  dashboard_series: (fx) => {
+    bankAccount(fx, 'dse');
+    fx.call('post_entry', {
+      date: '2026-03-02',
+      description: 'Büromaterial per Bank',
+      source: 'manual',
+      idempotencyKey: 'dse-out',
+      lines: [
+        { account: fx.accId('6500'), debit: 12000 },
+        { account: fx.accId('1020'), credit: 12000 },
+      ],
+    });
+    fx.call('post_entry', {
+      date: '2026-04-10',
+      description: 'Barverkauf auf Bank',
+      source: 'manual',
+      idempotencyKey: 'dse-in',
+      lines: [
+        { account: fx.accId('1020'), debit: 30000 },
+        { account: fx.accId('3200'), credit: 30000 },
+      ],
+    });
+    return { workspaceId: fx.workspaceId, from: '2026-01-01', to: '2026-12-31' };
+  },
+
   // --- G11, the two check reads a Treuhänder relies on -------------------------------------------
   // `migration_get_check` is the record an approval was bound to, and `migration_export_check` is
   // the `export_journal` argument one family over: it PRODUCES the Prüfbericht file that leaves the
@@ -7216,8 +7524,14 @@ function seedForecastWorld(fx, prefix) {
  * D152's amendment makes it ONE HUNDRED AND TWENTY-FIVE (+1): `compose_entry`, both modes (`expand` of
  * an intent onto a draft, `decompose` of a draft and of a posted entry) in a book holding both, driven
  * between one snapshot and the next (critic R4-E3).
+ * D178 point 7 makes it ONE HUNDRED AND TWENTY-NINE (+2): `prefs_list` (one area) and `prefs_get`, each
+ * over a value the calling seat really stored; pure SELECTs, and the snapshot proves both inert.
+ * D178 (A20 §11.3) adds two more (+2, ONE HUNDRED AND THIRTY-TWO): `bank_csv_preview` over a file with a preamble and a total row through
+ * a saved mapping, and `get_bank_csv_mapping` over a saved one; both pure SELECTs, the snapshot proves
+ * them inert.
+ * D178 point 13 adds `dashboard_series` (+1, ONE HUNDRED AND THIRTY-THREE): a pure SELECT over the ledger and the Erfolgsrechnung, proven inert.
  */
-export const READ_SCENARIO_FLOOR = 125;
+export const READ_SCENARIO_FLOOR = 133;
 
 /**
  * THE ONE BLESSED READ-VERB WRITER (D96), and nothing else.
@@ -7279,6 +7593,10 @@ export const IDEMPOTENCY_KEY_EXEMPT = Object.freeze({
   set_fx_method:
     'Sets one Steuerperiode conversion basis to an absolute value, and re-asserting the same basis writes nothing at all (that no-op is what keeps a retry safe after the period has locked).',
   set_creditor_profile: 'Overwrites the one creditor row with the values given. No accumulation.',
+  prefs_set:
+    'Sets one of the calling seat\'s own preferences to an absolute value (D178 point 7, G00 spec §10.3). A replay re-asserts the same value and writes nothing, because a set to the value in force is a no-op; a per-workspace key memo would also let one actor replay another actor\'s key and read its answer.',
+  prefs_reset:
+    'Asserts the absolute state "this key (or area) holds no stored value of the calling seat" (D178 point 7). A replay finds nothing stored and removes nothing, so there is nothing a key could double.',
   set_ebill_config: 'Upserts the one eBill config row per workspace to an absolute biller_pid. A replay re-asserts the same value; nothing accumulates (A32 section 4).',
   update_company_profile: 'A patch of absolute field values onto the single profile row.',
   update_account: 'A patch of absolute field values onto one account. Replay is a no-op.',

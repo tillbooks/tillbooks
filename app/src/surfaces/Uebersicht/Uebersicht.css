@@ -25,9 +25,12 @@
   max-width: 12rem;
 }
 
-/* Ansicht speichern (a shared .btn--secondary) sits at the end of the row; push it to the right on a
-   wide home so it does not crowd the picker, and let it wrap under the controls on a narrow one. */
-.uebersicht-save {
+/* D180: Anpassen and Mehr, two icons at the end of the row; pushed right on a wide home, wrapping under
+   the controls on a narrow one. */
+.uebersicht-controls__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
   margin-left: auto;
 }
 
@@ -81,6 +84,87 @@
   gap: var(--t-space-2);
 }
 
+/* B5 (D178): every tile in a row takes the row's height, and on a wide home the column count is the
+   balanced one the surface computes (`balancedColumns`), so no figure sits alone on a last row. */
+:where(.uebersicht-grid) {
+  /* The surface sets the balanced count inline; four is the count before it does. */
+  --uebersicht-cols: 4;
+}
+
+.uebersicht-grid > li {
+  display: flex;
+}
+
+.uebersicht-grid > li > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* D180: the two stable wrappers every item carries (the group, then the face); they pass the cell's
+   height on to the tile or card. The group anchors the grip and the pill while editing. */
+.uebersicht-item__group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.uebersicht-item__face {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.uebersicht-item__face > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (min-width: 80rem) {
+  .uebersicht-grid {
+    grid-template-columns: repeat(var(--uebersicht-cols), minmax(0, 1fr));
+  }
+}
+
+/* The waiting work sits below the key figures (B5). */
+.uebersicht > .att-strip {
+  margin: var(--t-space-3) 0 0;
+}
+
+/* The period: four segments on a wide home, the shared Select at phone width (B5). Exactly one shows. */
+.uebersicht-controls .uebersicht-range-select {
+  display: none;
+}
+
+@media (max-width: 40rem) {
+  .uebersicht-controls .uebersicht-range {
+    display: none;
+  }
+
+  .uebersicht-controls .uebersicht-range-select {
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* Phone: the actions line up on the left edge with everything else instead of floating right. */
+  .uebersicht .surface-header-actions {
+    justify-content: flex-start;
+  }
+
+  /* Phone: Anpassen and Mehr stay on the period's row, at its right end (never a row of their own). */
+  .uebersicht-controls {
+    flex-wrap: nowrap;
+  }
+
+  .uebersicht-controls .saved-view-picker,
+  .uebersicht-controls .uebersicht-custom {
+    flex-wrap: wrap;
+  }
+}
+
 /* The skeleton stands in the same grid geometry as the tiles it waits for (K-34). */
 .uebersicht-grid-skeleton {
   margin: var(--t-space-2) 0 0;
@@ -94,6 +178,7 @@
    transparent, because it is the edge the focus cue turns brass (K-10). */
 .uebersicht-tile {
   width: 100%;
+  height: 100%;
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -153,4 +238,339 @@
   line-height: var(--t-lh-sm);
   color: var(--t-text-dim);
   font-variant-numeric: tabular-nums;
+}
+
+/* D178 point 13: the widgets under the key figures, two to a row on a wide home, one on a phone. */
+.uebersicht-widgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+  gap: var(--t-space-2);
+  margin-top: var(--t-space-3);
+}
+
+.uebersicht-widget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2) var(--t-space-3) var(--t-space-3);
+  min-width: 0;
+}
+
+.uebersicht-widget__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.uebersicht-widget__titlebar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.uebersicht-widget__title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+.uebersicht-widget__pending {
+  min-height: 160px;
+}
+
+.uebersicht-widget__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.uebersicht-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.uebersicht-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name amount'
+    'meta amount';
+  column-gap: var(--t-space-2);
+  padding: var(--t-space-1) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.uebersicht-list li:last-child {
+  border-bottom: none;
+}
+
+.uebersicht-list__name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--t-text);
+}
+
+.uebersicht-list__meta {
+  grid-area: meta;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.uebersicht-list__meta.is-overdue {
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+.uebersicht-list__amount {
+  grid-area: amount;
+  align-self: center;
+}
+
+/* The trend line sits under the figure on the cash tile ("Verlauf"). */
+.uebersicht-tile .chart-sparkline {
+  margin: var(--t-space-0-5) 0;
+}
+
+/* D180: a card that spans the whole row ("Grösse ändern" on a card). */
+.uebersicht-widget--full {
+  grid-column: 1 / -1;
+}
+
+.uebersicht-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.uebersicht-card > .uebersicht-item__group {
+  flex: 1 1 auto;
+}
+
+/* D180, the edit mode (round 4: the controls live ON the item). Nothing is added above or between
+   the items, so entering or leaving the mode moves nothing on the page. Each item shows a grip handle
+   inside its top-left corner and a small floating pill of icons on its top-right edge. */
+.uebersicht-item.is-editing {
+  cursor: grab;
+  /* A swipe over an item scrolls the page; a touch drags only after a long press (the list's touch
+     sensor), or at once from the grip, the one place that takes the touch for itself. */
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  user-select: none;
+  /* Each item is its own stacking context: its pill rises over the item, never over the sticky page
+     header when the page scrolls under it. */
+  isolation: isolate;
+}
+
+/* The grip: the visual cue that the whole item drags (the item carries the pointer listeners). It sits
+   inside the item's left padding at the head row's height, so it never covers a label. */
+.uebersicht-grip {
+  position: absolute;
+  top: var(--t-space-2);
+  left: 0;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 24px;
+  color: var(--t-text-dim);
+  touch-action: none;
+}
+
+/* The pill: on the item's top-right edge, half over it, so it never covers the item's label. */
+.uebersicht-tools {
+  position: absolute;
+  /* Half over the item's top edge; the rest stays inside the 16px gap above, clear of the row above. */
+  top: calc(-1 * var(--t-space-2) + 2px);
+  right: var(--t-space-1);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-elev);
+  box-shadow: var(--t-shadow-control);
+  cursor: default;
+}
+
+.uebersicht-tools .btn--icon,
+.uebersicht-tools .overflow-menu-trigger {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: var(--t-radius-full);
+}
+
+/* The bank item's size button opens a menu: a small chevron beside its glyph says so, and sets it apart
+   from a card's width toggle. */
+.uebersicht-bank-size .overflow-menu-trigger {
+  width: auto;
+  gap: 2px;
+  padding: 0 var(--t-space-0-5) 0 var(--t-space-0-5);
+}
+
+/* The chevron is the trigger's ::before, placed after the glyph (`order`); its ::after is the shared
+   44px target and stays untouched. */
+.uebersicht-bank-size .overflow-menu-trigger::before {
+  content: '';
+  order: 1;
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  margin: -3px 2px 0 1px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+/* A touch pointer gets 44px targets in the pill (D116). */
+@media (hover: none), (pointer: coarse) {
+  .uebersicht-tools .btn--icon,
+  .uebersicht-tools .overflow-menu-trigger {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .uebersicht-tools {
+    top: calc(-1 * var(--t-space-2));
+  }
+
+  /* The grip is a 44px touch target that drags at once, in the item's top-left corner. */
+  .uebersicht-grip {
+    top: 0;
+    width: 44px;
+    height: 44px;
+    justify-content: flex-start;
+    padding-left: 2px;
+  }
+}
+
+/* A hidden item while editing: a placeholder, framed by a dashed hairline (a placeholder, not a box
+   layer) on the sunken ground, its name and a quiet "Ausgeblendet". It keeps its natural height
+   instead of stretching to the row. */
+.uebersicht-item.is-ghost {
+  align-self: start;
+}
+
+.uebersicht-ghost {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-height: 4.5rem;
+  padding: var(--t-space-2) var(--t-space-2) var(--t-space-2) var(--t-space-3);
+  border: 1px dashed var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+}
+
+.uebersicht-ghost__name {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.uebersicht-ghost__state {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* The slot an item is dragged out of reads as the drop placeholder: the same dashed frame and sunken
+   ground, its contents hidden; the item itself follows the pointer as the overlay. */
+.uebersicht-item.is-dragging .uebersicht-item__group {
+  border: 1px dashed var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+}
+
+.uebersicht-item.is-dragging .uebersicht-item__group > * {
+  visibility: hidden;
+}
+
+/* The dragged item: a snapshot of its real face, lifted by the motion vocabulary's 2px, a 1.02 scale
+   and the lift shadow, above its neighbours. The overlay places it with a transform; the lift sits on
+   its child. */
+.uebersicht-overlay {
+  z-index: var(--t-z-menu);
+  cursor: grabbing;
+}
+
+.uebersicht-overlay-face {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transform: translateY(calc(-1 * var(--t-lift))) scale(1.02);
+  border-radius: var(--t-radius-md);
+  box-shadow: var(--t-shadow-lift);
+}
+
+.uebersicht-overlay-face > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Hidden tooltip bubbles on this surface take no room at all, so a closed bubble beside a pill icon at
+   the right edge never widens the page. An open bubble sits in the overlay layer, held in the viewport. */
+.uebersicht .tooltip:not(.is-open):not(.tooltip--portal) {
+  display: none;
+}
+
+/* The period caption and the quiet line a bulk act leaves share one row: nothing below moves. */
+.uebersicht-caption-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 var(--t-space-2);
+  min-height: 32px;
+}
+
+.uebersicht-caption-row .uebersicht-caption {
+  margin: 0;
+}
+
+.uebersicht .uebersicht-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.uebersicht .uebersicht-feedback .action-feedback__glyph {
+  margin: 0;
+}
+
+.uebersicht .uebersicht-feedback .action-feedback__body {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.uebersicht .uebersicht-feedback__undo {
+  height: 28px;
+  padding: 0 var(--t-space-1);
 }

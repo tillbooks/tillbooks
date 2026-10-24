@@ -2,7 +2,7 @@
   "name": "tillbooks",
   "version": "1.0.0-beta.1",
   "mcpName": "io.github.tillbooks/tillbooks",
-  "description": "Agent-first open-source ERP for Swiss SMEs: 800 MCP tools, one local file. Sales, purchasing, payments, stock, projects, books and MWST; your agent runs it, the Studio shows what it did. MIT licensed.",
+  "description": "Agent-first open-source ERP for Swiss SMEs: 822 MCP tools, one local file. Sales, purchasing, payments, stock, projects, books and MWST; your agent runs it, the Studio shows what it did. MIT licensed.",
   "type": "module",
   "license": "MIT",
   "author": "Nomadik GmbH",
@@ -71,8 +71,10 @@
     "seed:demo:reset": "npm run build && TILL_DB_PATH=$HOME/.till/till-demo.db node scripts/seed-demo-rich.mjs --reset",
     "seed:kaizen": "npm run build && TILL_DB_PATH=$HOME/.till/till-kaizen-golden.db TILL_SEED_TODAY=$(date +%F) node scripts/seed-demo-rich.mjs --reset",
     "seed:kaizen:restore": "sh -c 'rm -f \"$HOME/.till/till-kaizen.db\" \"$HOME/.till/till-kaizen.db-wal\" \"$HOME/.till/till-kaizen.db-shm\" && cp \"$HOME/.till/till-kaizen-golden.db\" \"$HOME/.till/till-kaizen.db\" && for s in -wal -shm; do if [ -f \"$HOME/.till/till-kaizen-golden.db$s\" ]; then cp \"$HOME/.till/till-kaizen-golden.db$s\" \"$HOME/.till/till-kaizen.db$s\"; fi; done'",
+    "shots:marketing": "node scripts/marketing-screenshots.mjs",
     "extract:btc": "node scripts/extract-btc.mjs",
-    "build:mcpb": "node scripts/build-mcpb.mjs"
+    "build:mcpb": "node scripts/build-mcpb.mjs",
+    "build:mac:release": "packaging/macos/build-release.sh"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",

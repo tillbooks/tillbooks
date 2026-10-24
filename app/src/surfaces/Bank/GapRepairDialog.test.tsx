@@ -78,7 +78,7 @@ describe('GapRepairDialog', () => {
     setup({ dashboard_tile: tileWith([GAP]) });
     expect(await screen.findByText('Geschäftskonto: Auszüge 183–186 fehlen (23.09.2026 bis 28.09.2026)')).toBeInTheDocument();
     expect(screen.getByText(/Der Saldo von Auszug 182 geht genau in Auszug 187 über: es fehlt kein Geld\./)).toBeInTheDocument();
-    expect(screen.getByText(/Lade in ZKB eBanking die camt\.053-Auszüge für 22\.09\.2026 bis 29\.09\.2026 herunter.*die Tage davor und danach schaden nicht/)).toBeInTheDocument();
+    expect(screen.getByText('Lade in ZKB eBanking die camt.053-Auszüge für 22.09.2026 bis 29.09.2026 herunter und lege sie hier ab. Doppelte Tage schaden nicht.')).toBeInTheDocument();
     const steps = screen.getAllByRole('listitem').map((li) => li.textContent ?? '');
     expect(steps).toEqual([
       'Öffne «Konto & Zahlungen» und dann «Datentransfer».',

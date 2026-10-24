@@ -15,8 +15,9 @@
  * edited or deleted: a hand-off history a workspace could rewrite could not prove what left the
  * device, which is the record's entire job. The BEFORE triggers make that impossible for any code
  * path, raw statement, or plugin, mirroring the `expense_claim` immutability triggers. A wrong wage
- * journal is corrected in the payroll system and re-imported, or reversed via A02's reversing entry,
- * never by touching these rows.
+ * journal is corrected in the payroll system and re-imported, or reversed by `wage_journal_reverse`
+ * (D171: the owned A02 mirror; whether a posting stands is derived from the ledger chain), never by
+ * touching these rows.
  */
 
 export const PAYROLL_HANDOFF_SCHEMA_SQL = `
@@ -47,7 +48,10 @@ CREATE TABLE IF NOT EXISTS wage_journal_posts (
   source_sha256    TEXT,
   line_count       INTEGER NOT NULL,
   actor            TEXT NOT NULL,
-  created_at       TEXT NOT NULL
+  created_at       TEXT NOT NULL,
+  -- D173 (owner Q12, generation 14): the kind of payroll run. The month guard counts only 'regular'.
+  -- Last, so a fresh book has the same column order as one the generation-14 ALTER lifted.
+  run_kind         TEXT NOT NULL DEFAULT 'regular' CHECK (run_kind IN ('regular','bonus','thirteenth','correction'))
 );
 CREATE INDEX IF NOT EXISTS wage_journal_posts_by_workspace
   ON wage_journal_posts (workspace_id, created_at DESC);

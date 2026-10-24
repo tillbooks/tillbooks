@@ -6,21 +6,36 @@ description: "Use TILL with zero installed infrastructure, and the three trade-o
 You do not need a machine of your own for TILL. If you already work in an agent runtime (Claude
 Desktop on your Mac, or a Claude Code / Cowork session in the cloud), TILL runs inside it. The
 public beta is on npm as `tillbooks@beta`, so the session needs Node.js 22 or newer and nothing
-else. Point `TILL_DB_PATH` at a `.db` file in the session folder, run the MCP server, and the full
-verb surface works: the engine has no idea it is sandboxed, and tenancy, the approval dial and the
-permission model hold exactly as they do anywhere else.
+else. Register the MCP server with `TILL_DB_PATH` pointing at a `.db` file in the session folder,
+and the full verb surface works: the engine has no idea it is sandboxed, and tenancy, the approval
+dial and the permission model hold exactly as they do anywhere else.
+
+Register the server, do not start it in the shell: a stdio server you start by hand talks to your
+terminal, not to the agent. The agent starts it when it needs it. In Claude Code, from the session
+folder (the shell fills in the folder once, so the stored path is absolute):
 
 ```bash
-# inside the session folder
-export TILL_DB_PATH="$PWD/till.db"
-npx -y tillbooks@beta mcp
+claude mcp add tillbooks -e TILL_DB_PATH="$PWD/till.db" -- npx -y tillbooks@beta mcp
 ```
 
-To tell TILL it is running this way, set one flag. TILL never guesses it:
+Any other client takes the same server with an `env` block, for example in a `.mcp.json` in the
+session folder. Put the absolute path of the session folder in `TILL_DB_PATH`:
 
-```bash
-export TILL_RUNTIME_MODE=agent_session
+```json
+{
+  "mcpServers": {
+    "tillbooks": {
+      "command": "npx",
+      "args": ["-y", "tillbooks@beta", "mcp"],
+      "env": { "TILL_DB_PATH": "/absolute/path/to/the/session/folder/till.db" }
+    }
+  }
+}
 ```
+
+To tell TILL it is running this way, set one more variable on the same registration. TILL never
+guesses it: add `-e TILL_RUNTIME_MODE=agent_session` to the `claude mcp add` line, or
+`"TILL_RUNTIME_MODE": "agent_session"` to the `env` block.
 
 With the flag set, `delivery_status` reports `mode: agent_session`, and the Studio shows the
 residency note below. This is the honest signal that the trade-offs on this page apply.

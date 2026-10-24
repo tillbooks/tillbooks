@@ -32,13 +32,14 @@ import { createLocalHttpRouter } from '../../dist/api/local-http.js';
 import { rejectNonLocal } from '../../dist/api/local-guard.js';
 import { resetDeliveryRuntime } from '../../dist/api/runtime-state.js';
 import { acquireLock, lockPath } from '../../dist/api/up-lock.js';
+import { studioKeyPath } from '../../dist/api/studio-key-store.js';
 import { spawn } from 'node:child_process';
 import * as session from '../../dist/api/session.js';
 import { createWorkspace } from '../../dist/core/setup/index.js';
 import { fixedClock } from '../../dist/core/clock.js';
 import { systemIdGen } from '../../dist/core/ids.js';
 import { SCENARIOS, fixture } from './conformance-contract.mjs';
-import { keyShapedRuns, listenStudioRouter, mintStudioKey, studioHeaders, studioKeyFromLink } from './studio-key-support.mjs';
+import { keyShapedRuns, listenStudioRouter, mintStudioKey, sessionFromLink, studioHeaders } from './studio-key-support.mjs';
 
 const KEY_HEADER = 'x-till-studio-key';
 /** A well-formed key that is not the host's: what a guesser or a stale tab presents. */
@@ -245,29 +246,42 @@ test('R3-B2 till up over the BUILT Studio (when built): no served file carries t
   }
 });
 
-test('R3-B2 till up hands the key out of band: it prints and returns the #k= link, and a second till up reopens it', async () => {
+test('R3-B2 + D166 till up hands the seat out of band: a one-time ticket in the link, the key owner-only beside the lock, never in it', async () => {
   const supportDir = mkdtempSync(join(tmpdir(), 'till-r3-link-'));
   const { handle, lines } = await startStudioUp({ supportDir });
   try {
-    assert.equal(handle.studioUrl, `${handle.url}/#k=${handle.studioKey}`);
-    assert.equal(studioKeyFromLink(handle.studioUrl), handle.studioKey);
-    assert.ok(lines.some((l) => l.includes(handle.studioUrl)), `the link is printed: ${JSON.stringify(lines)}`);
+    assert.match(handle.studioUrl, new RegExp(`^${handle.url}/#t=[A-Za-z0-9_-]{43}$`));
+    assert.ok(!handle.studioUrl.includes(handle.studioKey), 'D166: the key itself is never in a link');
+    // By default (a launcher, a log file) the banner names the URL and carries no credential at all.
+    assert.ok(lines.some((l) => l.includes(handle.url)), `the URL is printed: ${JSON.stringify(lines)}`);
+    assert.ok(!lines.join('\n').includes(handle.studioKey) && !lines.join('\n').includes('#t='), `no credential in the banner: ${JSON.stringify(lines)}`);
 
-    // Kept for a second `till up` beside the lock, owner-only, and NOT in the lock `till mcp` reads.
-    const linkFile = up.studioLinkPath(supportDir);
-    assert.equal(statSync(linkFile).mode & 0o777, 0o600);
-    const lock = readFileSync(lockPath(supportDir), 'utf8');
-    assert.ok(!lock.includes(handle.studioKey), 'the lock an agent reads carries no key');
+    // D166: the key is kept in the support directory, owner-only, and NOT in the lock `till mcp` reads.
+    const keyFile = studioKeyPath(supportDir);
+    assert.equal(statSync(keyFile).mode & 0o777, 0o600);
+    assert.equal(readFileSync(keyFile, 'utf8').trim(), handle.studioKey);
+    const lock = JSON.parse(readFileSync(lockPath(supportDir), 'utf8'));
+    assert.ok(!JSON.stringify(lock).includes(handle.studioKey), 'the lock an agent reads carries no key');
 
-    assert.equal(up.readStudioLink(supportDir, process.pid), handle.studioUrl, 'the file names this process and its link');
-    assert.equal(up.readStudioLink(supportDir, process.pid + 1), null, 'a link left by another pid is never handed out');
+    // The ticket is good ONCE.
+    const token = await sessionFromLink(handle.studioUrl);
+    assert.equal((await postJson(`${handle.url}/api/delivery_status`, {}, studioHeaders(token))).status, 200);
+    await assert.rejects(sessionFromLink(handle.studioUrl), /ticket_invalid/, 'a spent ticket (a history entry) is worthless');
+
+    // A second `till up` derives a ticket from the key file for exactly this process.
+    const derived = up.readStudioLink(supportDir, lock);
+    assert.ok(derived !== null && !derived.includes(handle.studioKey));
+    assert.ok(typeof (await sessionFromLink(derived)) === 'string');
+    await assert.rejects(sessionFromLink(derived), /ticket_invalid/, 'a derived ticket is single-use too');
+    const otherProcess = up.readStudioLink(supportDir, { ...lock, pid: lock.pid + 1 });
+    await assert.rejects(sessionFromLink(otherProcess), /ticket_invalid/, 'a ticket derived for another process is refused');
   } finally {
     await handle.close();
   }
-  assert.equal(existsSync(up.studioLinkPath(supportDir)), false, 'the link file goes with the process');
+  assert.equal(existsSync(studioKeyPath(supportDir)), true, 'D166: the key outlives the process, so the next start keeps it');
 });
 
-test('R3-B2 a second till up (the redirect) is handed the live instance\'s working link, not the bare URL', async () => {
+test('R3-B2 + D166 a second till up (the redirect) is handed a working link for the live instance, not the bare URL', async () => {
   // Two `till up` are two processes: seat a live child as the holder, as `up.test.mjs` does.
   const supportDir = mkdtempSync(join(tmpdir(), 'till-r3-redirect-'));
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
@@ -277,38 +291,34 @@ test('R3-B2 a second till up (the redirect) is handed the live instance\'s worki
     assert.equal(acquireLock(supportDir, { pid: child.pid, host: '127.0.0.1', port: 8799, url: bare, startedAt: '2026-10-12T00:00:00.000Z' }).acquired, true);
     const redirect = () => up.startUp({ dbPath: ':memory:', host: '127.0.0.1', port: 0, supportDir, studioDir: null, open: false, log: () => {} });
 
-    const withoutLink = await redirect();
-    assert.equal(withoutLink.started, false);
-    assert.equal(withoutLink.holder.url, bare, 'no link left: the bare URL, and the Studio shows its hint');
+    const withoutKey = await redirect();
+    assert.equal(withoutKey.started, false);
+    assert.equal(withoutKey.holder.url, bare, 'no key on disk: the bare URL, and the tab repairs itself');
 
-    const link = `${bare}/#k=${mintStudioKey()}`;
-    writeFileSync(up.studioLinkPath(supportDir), JSON.stringify({ pid: child.pid, link }), { mode: 0o600 });
-    const withLink = await redirect();
-    assert.equal(withLink.started, false);
-    assert.equal(withLink.holder.url, link, 'the redirect opens the working link');
-    assert.ok(!readFileSync(lockPath(supportDir), 'utf8').includes('#k='), 'the lock on disk keeps the bare URL');
+    const key = mintStudioKey();
+    writeFileSync(studioKeyPath(supportDir), `${key}\n`, { mode: 0o600 });
+    const withKey = await redirect();
+    assert.equal(withKey.started, false);
+    assert.match(withKey.holder.url, new RegExp(`^${bare}/#t=d\\.`), 'the redirect opens a derived one-time ticket');
+    assert.ok(!withKey.holder.url.includes(key), 'and never the key');
+    assert.ok(!readFileSync(lockPath(supportDir), 'utf8').includes('#t='), 'the lock on disk keeps the bare URL');
   } finally {
     child.kill('SIGKILL');
   }
 });
 
-test('R3-B2 a restart rotates the key: the old link\'s key is refused on both faces, the new link works', async () => {
+test('D166 a restart KEEPS the key (bookmarks and paired tabs keep working); only a rotation replaces it', async () => {
   const supportDir = mkdtempSync(join(tmpdir(), 'till-r3-restart-'));
   const first = await startStudioUp({ supportDir });
-  const oldKey = studioKeyFromLink(first.handle.studioUrl);
+  const firstKey = first.handle.studioKey;
   await first.handle.close();
   const second = await startStudioUp({ supportDir });
   try {
-    const newKey = studioKeyFromLink(second.handle.studioUrl);
-    assert.notEqual(newKey, oldKey);
-    const mcpOld = await postJson(`${second.handle.url}/mcp`, initialize('till-studio'), studioHeaders(oldKey));
-    assert.equal(mcpOld.status, 401);
-    assert.equal((await mcpOld.json()).error, 'studio_key_invalid');
-    const apiOld = await postJson(`${second.handle.url}/api/delivery_status`, {}, studioHeaders(oldKey));
-    assert.equal(apiOld.status, 401);
-    assert.equal((await apiOld.json()).error, 'studio_key_invalid');
-    const apiNew = await postJson(`${second.handle.url}/api/delivery_status`, {}, studioHeaders(newKey));
-    assert.equal(apiNew.status, 200);
+    assert.equal(second.handle.studioKey, firstKey, 'the same key after a restart');
+    const api = await postJson(`${second.handle.url}/api/delivery_status`, {}, studioHeaders(firstKey));
+    assert.equal(api.status, 200);
+    const mcp = await postJson(`${second.handle.url}/mcp`, initialize('till-studio'), studioHeaders(firstKey));
+    assert.equal(mcp.status, 200);
   } finally {
     await second.handle.close();
   }
@@ -341,7 +351,7 @@ test('P6 /mcp: till-studio WITHOUT the key is refused; any other keyless client 
 test('P6 /mcp: the Studio with the key from its link is the human seat, and its write executes', async () => {
   await withUp(async (handle) => {
     const { workspaceId, accId } = seed(handle.store, 'studio');
-    const studioKey = studioKeyFromLink(handle.studioUrl);
+    const studioKey = await sessionFromLink(handle.studioUrl);
     const studio = await connect(handle.url, 'till-studio', studioHeaders(studioKey));
     try {
       assert.equal((await callVerb(studio, 'whoami', { workspaceId })).actor, 'studio');
@@ -440,7 +450,7 @@ test('P6 till up /api: the REST twin needs the key from the link; without it or 
     assert.equal((await create({}, 'r1')).status, 401);
     assert.equal((await create(studioHeaders(WRONG_KEY), 'r2')).status, 401);
     assert.equal(workspaces(), before);
-    assert.equal((await create(studioHeaders(studioKeyFromLink(handle.studioUrl)), 'r3')).status, 200);
+    assert.equal((await create(studioHeaders(await sessionFromLink(handle.studioUrl)), 'r3')).status, 200);
     assert.equal(workspaces(), before + 1);
   });
 });

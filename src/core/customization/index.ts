@@ -48,6 +48,22 @@ export type { CreateSavedViewInput, SavedViewPatch, SavedViewView } from './view
 
 export { CUSTOMIZATION_SCHEMA_SQL } from './schema.js';
 
+// D178 point 7, the per-person preferences (spec §10): the def registry and the four verbs.
+export {
+  MAX_PREF_JSON_BYTES,
+  PREF_AREAS,
+  PREF_DEFS,
+  PREF_SCOPES,
+  assertPrefDefs,
+  prefDef,
+  prefDefault,
+  prefJsonProblem,
+  prefValueFits,
+} from './prefDefs/index.js';
+export type { PrefArea, PrefDef, PrefJsonSchema, PrefJsonValue, PrefSchema, PrefScope, PrefValue } from './prefDefs/index.js';
+export { prefRegistry, prefsGet, prefsList, prefsReset, prefsSet, suggestPrefKey } from './prefs.js';
+export type { PrefRegistry, PrefView, PrefsGetOk, PrefsListOk, PrefsResetInput, PrefsResetOk, PrefsSetInput, PrefsSetOk } from './prefs.js';
+
 // G05, document templates: the branding seam around the statutory artifacts.
 export {
   DOCUMENT_TEMPLATE_KINDS,

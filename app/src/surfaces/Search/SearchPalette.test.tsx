@@ -283,8 +283,9 @@ describe('the command palette', () => {
     const ask = log.find((l) => l.action === 'agent_ask');
     expect(ask?.input.text).toBe('Umsatz Q3');
     expect(typeof ask?.input.idempotencyKey).toBe('string');
-    // On success the palette closes (the answer opens in the dock, which lives outside this tree).
+    // On success the palette closes and the answer's session opens on /agent (D167: no dock).
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/agent?session=s1'));
   });
 
   it('C1: keeps the palette open and explains when no local runtime is configured', async () => {

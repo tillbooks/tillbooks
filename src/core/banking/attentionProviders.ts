@@ -20,7 +20,10 @@
 import type { WorkspaceContext } from '../context.js';
 import type { AttentionDecisionOption, AttentionItem, QueueProvider } from '../attention/types.js';
 import { CONSEQUENCE_FOR_ACTION, DIAL_CAPABILITY_FOR_ACTION } from '../agent/dialMap.js';
-import { bankInboxAttention } from './bankInbox.js';
+import { attentionOf, bankInboxAttention } from './bankInbox.js';
+import { readBankTxnDetail, type BankTxnRow } from './bankLines.js';
+import { proposalContext, proposeForLine } from './bankProposals.js';
+import { staleLineDrafts } from '../attention/vorschlaege.js';
 import type { BankInboxAttentionCounts } from './bankInbox.js';
 import { readStatementGaps } from './ebics/channel.js';
 import { AUTO_SYNC_MAX_ATTEMPTS, autoSyncConnections, latestAutoAttempt, zurichParts } from './ebics/autoSync.js';
@@ -103,6 +106,8 @@ export const bankStatementGapProvider: QueueProvider = {
   queueId: 'bank_statement_gap',
   labelKey: 'attention.queue.bankStatementGap',
   area: 'bank',
+  // D178: fetch or import the missing statements, a person's act.
+  kind: 'do',
   // The item's acts are the statement door (`import_camt_files`) and the confirmation, both `pay`.
   readCapability: 'pay',
   rank: 7,
@@ -150,9 +155,18 @@ export const bankStatementGapProvider: QueueProvider = {
               : gap.chains
                 ? 'attention.item.bankStatementGap.subtitleChained'
                 : 'attention.item.bankStatementGap.subtitleUnchained';
-        const options: AttentionDecisionOption[] = [
-          { id: 'open', verb: null, labelKey: 'attention.act.closeGap', role: 'link', input: {}, deepLink },
-        ];
+        // The action names what the click does (the fresh-eyes judge, N4 item 4): it opens the guided import
+        // of camt.053 statements for this gap (`GapRepairDialog`), so a missing statement is imported, a
+        // split one has its missing parts imported, and a duplicate with two balances is imported anew.
+        const actLabel =
+          titleKey === 'attention.item.bankStatementGap.titleConflicting'
+            ? 'attention.act.reimportStatement'
+            : titleKey === 'attention.item.bankStatementGap.titleIncomplete'
+              ? 'attention.act.importStatementParts'
+              : count === 'One'
+                ? 'attention.act.importStatement'
+                : 'attention.act.importStatements';
+        const options: AttentionDecisionOption[] = [{ id: 'open', verb: null, labelKey: actLabel, role: 'link', input: {}, deepLink }];
         if (gap.confirmable && gap.after.statementRowId !== null && gap.before.statementRowId !== null) {
           options.push({
             id: 'confirm_gap',
@@ -225,10 +239,47 @@ export function seesVorschlaege(ctx: WorkspaceContext): boolean {
   return ctx.capabilities.assert('read_books').ok;
 }
 
+const STALE_MEMO = new WeakMap<WorkspaceContext, { version: string; value: Map<string, number> }>();
+
+/**
+ * D178 (the design judge): a STALE Vorschlag on a line that is still open stays in Pendenzen
+ * (`attention/vorschlaege.ts`), counted there, so its line is not counted a second time among the waiting
+ * lines. Per Bankkonto: how many such lines the inbox counts as "needs a person" (a pending Vorschlag's line
+ * always does; a stale one's line is classed on its own proposal, exactly as `bankInboxAttention` classes
+ * it). Memoised per state of the book, like the inbox counts.
+ */
+export function staleNamedWaitingByAccount(ctx: WorkspaceContext): Map<string, number> {
+  return memoised(STALE_MEMO, ctx, () => {
+    const out = new Map<string, number>();
+    const drafts = staleLineDrafts(ctx);
+    if (drafts.length === 0) return out;
+    const pc = proposalContext(ctx);
+    const seen = new Set<string>();
+    for (const d of drafts) {
+      if (seen.has(d.bankTxnId)) continue;
+      seen.add(d.bankTxnId);
+      const row = ctx.store.db.prepare('SELECT * FROM bank_txn WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, d.bankTxnId) as BankTxnRow | undefined;
+      if (row === undefined) continue;
+      if (attentionOf(proposeForLine(ctx, pc, row, readBankTxnDetail(ctx, row.id)), Math.abs(row.amount_minor), false) !== 'needs') continue;
+      out.set(row.bank_account_id, (out.get(row.bank_account_id) ?? 0) + 1);
+    }
+    return out;
+  });
+}
+
+/** The waiting lines of one account in Pendenzen: `waitingOf`, minus the lines a listed stale Vorschlag stands for. */
+function hubWaitingOf(c: Pick<BankInboxAttentionCounts, 'needs' | 'vorschlag'>, sees: boolean, staleNamed: number): number {
+  return sees ? Math.max(0, waitingOf(c, sees) - staleNamed) : waitingOf(c, sees);
+}
+
 export const bankLinesWaitingProvider: QueueProvider = {
   queueId: 'bank_lines_waiting',
   labelKey: 'attention.queue.bankLinesWaiting',
   area: 'bank',
+  // D178 point 11: book the lines, a person's act; and Bank's own working queue, listed right after the
+  // Vorschläge inside Bank ("Bank transactions must be all the way on top").
+  kind: 'do',
+  lead: true,
   // The bank inbox's own read right: whoever may look at the lines is told they wait.
   readCapability: 'read_sales',
   rank: 12,
@@ -238,25 +289,33 @@ export const bankLinesWaitingProvider: QueueProvider = {
   count(ctx: WorkspaceContext): number {
     let n = 0;
     const sees = seesVorschlaege(ctx);
-    for (const c of inboxCounts(ctx).byAccount.values()) n += waitingOf(c, sees);
+    const stale = sees ? staleNamedWaitingByAccount(ctx) : new Map<string, number>();
+    for (const [id, c] of inboxCounts(ctx).byAccount.entries()) n += hubWaitingOf(c, sees, stale.get(id) ?? 0);
     return n;
   },
   list(ctx: WorkspaceContext, opts: { limit: number }): AttentionItem[] {
     const names = accountNames(ctx);
     const sees = seesVorschlaege(ctx);
+    const stale = sees ? staleNamedWaitingByAccount(ctx) : new Map<string, number>();
     return [...inboxCounts(ctx).byAccount.entries()]
-      .filter(([, c]) => waitingOf(c, sees) > 0)
+      .filter(([id, c]) => hubWaitingOf(c, sees, stale.get(id) ?? 0) > 0)
       .sort(([a], [b]) => (names.get(a) ?? a).localeCompare(names.get(b) ?? b))
       .slice(0, opts.limit)
       .map(([bankAccountId, c]) => {
-        const count = waitingOf(c, sees);
+        const count = hubWaitingOf(c, sees, stale.get(bankAccountId) ?? 0);
         const deepLink = { route: '/bank', params: { facet: 'needs', account: bankAccountId } };
         return {
           queueId: 'bank_lines_waiting',
           entityKind: BANK_ACCOUNT_ENTITY_KIND,
           entityId: bankAccountId,
-          titleKey: `attention.item.bankLinesWaiting.title.${count === 1 ? 'one' : 'other'}`,
+          // D178 point 11: ONE row per Bankkonto that stands for its N lines, and says so: the title is
+          // the number of lines ("5 Bankzeilen zu buchen"), the meta line the account, and `count` makes
+          // the row's units part of the page's arithmetic (the rows add up to the badge).
+          titleKey: `attention.item.bankLines.title.${count === 1 ? 'one' : 'other'}`,
           titleParams: { bank: names.get(bankAccountId) ?? '', count },
+          subtitleKey: 'attention.item.bankLines.subtitle',
+          subtitleParams: { bank: names.get(bankAccountId) ?? '' },
+          count,
           since: c.oldestWaiting ?? '',
           urgency: 'open',
           deepLink,
@@ -341,6 +400,8 @@ export const bankFetchFailedProvider: QueueProvider = {
   queueId: 'bank_fetch_failed',
   labelKey: 'attention.queue.bankFetchFailed',
   area: 'bank',
+  // D178: fetch by hand or repair the channel, a person's act.
+  kind: 'do',
   // The fix is a fetch by hand or the channel's own repair, both `pay` on /bank-accounts.
   readCapability: 'pay',
   rank: 6,

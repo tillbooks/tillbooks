@@ -3,7 +3,7 @@
 **Trusted Independent Ledger Library.** The agent-first ERP for Swiss SMEs.
 
 TILL is a free, open-source (MIT) ERP for Swiss small businesses: sales, purchasing, payments, stock,
-projects, books and MWST. Every function is exposed as an MCP tool, 800 of them, so your AI agent runs
+projects, books and MWST. Every function is exposed as an MCP tool, 822 of them, so your AI agent runs
 it and the Studio (the app you work in) shows you what it did. It works with Claude Desktop, Cursor
 and other MCP clients that can start a local stdio server. TILL runs on your own computer, or on a
 server you host yourself. Your books are a single SQLite file on that machine, and no server of ours
@@ -60,13 +60,10 @@ double-count. These are asserted in the test suite, not merely promised in a REA
 
 ## Install and run
 
-You need Node.js 22 or newer on macOS or Linux.
-
-<!-- TODO(publish): this block is true once tillbooks@1.0.0-beta.1, with the Studio vendored into
-     the package (launch plan P0.1), is on npm under the beta dist-tag (`npm publish --tag beta`;
-     `latest` stays 0.1.0, and `npm deprecate tillbooks@0.1.0` points bare installs at the beta).
-     The 0.1.0 on npm today ships no Studio, and its `till up` answers "The Studio is not built into
-     this install". -->
+You need Node.js 22 or newer on macOS or Linux. The quickest way in is to let your agent do it:
+[tillbooks.ch/en/start](https://tillbooks.ch/en/start/) has a setup prompt for Claude Code (terminal or
+desktop app), Cursor or Windsurf: it installs TILL, starts the Studio, asks you to open the demo
+company and connects itself. By hand, it is two commands:
 
 ```bash
 npm install -g tillbooks@beta
@@ -94,6 +91,12 @@ and no API key are needed:
     }
   }
 }
+```
+
+In Claude Code, the same server is one line:
+
+```bash
+claude mcp add tillbooks -- npx -y tillbooks@beta mcp
 ```
 
 The agent and the Studio work on the same file, so what the agent does shows up in the Studio.

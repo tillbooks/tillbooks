@@ -6,7 +6,7 @@
  * blocked the day: re-proposing returned the same run, and the only exit was to issue letters nobody
  * wanted. `discard_dunning_run` removes a PROPOSED run with its items (nothing was booked, rendered or
  * sent), records the discard in the audit trail, and frees the day's slot. An issued or sent run is
- * refused: its letters and fee stand, and a wrong fee is corrected by `reverse_entry`.
+ * refused: its letters and fee stand, and a wrong fee is reversed by `dunning_fee_reverse` (D169).
  *
  * Idempotent (a replay, or a second discard of the same run under a new key, settles to the same
  * answer and writes nothing) and §H-TENANT (another workspace's run is `not_found`, untouched).

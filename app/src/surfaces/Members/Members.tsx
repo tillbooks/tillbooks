@@ -66,6 +66,7 @@ import { Tabs, type TabItem } from '../../components/Tabs';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Status } from '../../components/Status';
 import { LockGlyph } from '../../components/states/glyphs';
+import { StudioKeySection } from './StudioKeySection';
 import './Members.css';
 
 /** Mint an idempotency key for one write attempt (§H-IDEMPOTENT): a retry with the same key never double-acts. */
@@ -258,6 +259,7 @@ export function Members() {
       <section className="members" aria-labelledby="members-title">
         <SurfaceHeader title={t('members.title')} titleId="members-title" help={<SurfaceHelp surface="Members" />} />
         <NoWorkspaceState body={t('members.noWorkspaceHint')} />
+        <StudioKeySection />
       </section>
     );
   }
@@ -440,6 +442,9 @@ export function Members() {
       {state.kind === 'ok' && (
         <Tabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as Tab)} label={t('members.title')} />
       )}
+
+      {/* D166: the browsers that hold the Studio key. Install-wide, so it is not inside a tab. */}
+      <StudioKeySection />
     </section>
   );
 }

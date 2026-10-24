@@ -31,7 +31,8 @@
     "idempotencyKey": "e1",
     "source": "manual",
     "createdBy": "user_1",
-    "createdAt": "2026-07-16T00:00:00.000Z"
+    "createdAt": "2026-07-16T00:00:00.000Z",
+    "number": "1"
   },
   "lines": [
     {

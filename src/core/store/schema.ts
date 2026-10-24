@@ -199,6 +199,14 @@ import { VAT_SETTLEMENT_SCHEMA_SQL } from '../accruals/vatSettlementSchema.js';
 // All §H-TENANT, none posts. payment_plan_line REFERENCES vendor_bill (A17), so it joins the union
 // after PURCHASE_SCHEMA_SQL; it is concatenated at the end beside the other late module fragments.
 import { LIQUIDITY_SCHEMA_SQL } from '../liquidity/schema.js';
+// D172 workspace settings: `workspace_setting` (one row per overridden setting) and the append-only
+// `workspace_setting_change` history. Both reference only `workspace`, so they go at the end of the union.
+import { SETTINGS_SCHEMA_SQL } from '../settings/schema.js';
+// A02 §4b, the Belegnummer (D178 point 2): `journal_entry_number` (append-only, one row per numbered
+// entry), `journal_numbering_pending` (the catch-up marker) and the guards that keep the `journal` rows of
+// `document_number_seq` moving forward only. They reference `workspace`, `journal_entry` and
+// `document_number_seq`, all in the core DDL above, so they go at the end of the union.
+import { ENTRY_NUMBER_SCHEMA_SQL, ENTRY_NUMBER_ADDITIVE_COLUMNS, ENTRY_NUMBER_ADDITIVE_DDL } from '../ledger/entryNumberSchema.js';
 
 /**
  * Additive column migrations (M-3). `CREATE TABLE IF NOT EXISTS` never widens an EXISTING table, so
@@ -301,6 +309,23 @@ export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: st
   // a file written before it widens on open with every earlier draft reading as "not pinned".
   { table: 'agent_action', column: 'pin_digest', ddl: 'pin_digest TEXT' },
   { table: 'agent_action', column: 'pin_json', ddl: 'pin_json TEXT' },
+  // A26 (D165, 13.10.2026): the commit mark of an approval's replay (`agent/draftedActions.ts`),
+  // stamped inside the act's own transaction. Nullable, so a file written before it widens on open
+  // with every earlier row reading as "no replay committed".
+  { table: 'agent_action', column: 'committed_at', ddl: 'committed_at TEXT' },
+  // A26 (D165 round 2): the pin digest the act's last committed transaction left, beside the mark.
+  { table: 'agent_action', column: 'committed_pin', ddl: 'committed_pin TEXT' },
+  // A39 (D177, the UX walk 16.10.2026): the bank-line decision (its `bank_txn_link` id) that closed a
+  // Vorschlag as "Zeile entschieden", so undoing THAT decision (`reopen_bank_line`) can give it back.
+  // Nullable, so a file written before it widens on open with every earlier row reading as "closed by
+  // nothing a reopen could undo".
+  { table: 'agent_action', column: 'closed_by_link_id', ddl: 'closed_by_link_id TEXT' },
+  // A39 (D177, critic R4): a SYSTEM closure's kind ('superseded', 'line_decided'; null for a person's
+  // rejection, which is what the trust read model counts) and the row's append-only history of closures and
+  // revives (`agent/draftHistory.ts`). Nullable, so an older file widens with every row reading as "closed
+  // by a person, no recorded history".
+  { table: 'agent_action', column: 'closure_kind', ddl: 'closure_kind TEXT' },
+  { table: 'agent_action', column: 'history_json', ddl: 'history_json TEXT' },
   // A15 (D73): the issue-time demand snapshot on `dunning_item`, added after the table first
   // shipped on the capability branch, so a database written by an earlier build of that branch
   // widens on open. Constant-defaulted, which is all ALTER ADD COLUMN supports, and THE TWO ZEROS
@@ -535,6 +560,35 @@ export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: st
   // 1 and opens nothing until it is sent; a book written before D157 widens on open with every existing
   // grant reading 0, live until its own expiry (owner decision 1). Shape only: SCHEMA_GENERATION stays.
   { table: 'portal_grant', column: 'minted_draft', ddl: 'minted_draft INTEGER NOT NULL DEFAULT 0' },
+  // D175 (A39 §14.1), generation 15: the Buchungsregel's recipe on `bank_standard`, all nullable, so a
+  // generation-14 book widens on open and every existing row reads as the D167 one-leg standard it was.
+  // The generation (not the shape) is what keeps an older build out: it would read a split rule's rest
+  // leg as the whole booking.
+  { table: 'bank_standard', column: 'label', ddl: 'label TEXT' },
+  { table: 'bank_standard', column: 'match_text', ddl: 'match_text TEXT' },
+  { table: 'bank_standard', column: 'legs_json', ddl: 'legs_json TEXT' },
+  { table: 'bank_standard', column: 'via_account_id', ddl: 'via_account_id TEXT REFERENCES account(id)' },
+  // D175 (critic D175-C5), the same generation 15: the Buchungsregel a line was booked by, on its decision.
+  { table: 'bank_line_decision', column: 'rule_id', ddl: 'rule_id TEXT REFERENCES bank_standard(id)' },
+  // D176 (A39 §15.1), generation 16: the scope (bank rule or manual Vorlage), the outcome (book the legs or
+  // propose "Nicht buchen"), the ignore reason and note, and the follow-up Vorlage. Every existing row reads
+  // as the bank rule with legs it was (the defaults), so no row is rewritten.
+  { table: 'bank_standard', column: 'scope', ddl: "scope TEXT NOT NULL DEFAULT 'bank' CHECK (scope IN ('bank', 'manual'))" },
+  { table: 'bank_standard', column: 'outcome', ddl: "outcome TEXT NOT NULL DEFAULT 'legs' CHECK (outcome IN ('legs', 'ignore'))" },
+  { table: 'bank_standard', column: 'ignore_reason', ddl: 'ignore_reason TEXT' },
+  { table: 'bank_standard', column: 'ignore_note', ddl: 'ignore_note TEXT' },
+  { table: 'bank_standard', column: 'follow_up_standard_id', ddl: 'follow_up_standard_id TEXT REFERENCES bank_standard(id)' },
+  // D178 point 19 (A20 §11.4), generation 18: how coverage classified a delivery at import ('extends' or
+  // 'checked'); NULL for a statement imported before, which no rule reads as either.
+  { table: 'bank_statement', column: 'coverage', ddl: 'coverage TEXT' },
+  // D178 E3 (A39 §17.7): the contact a `contact` target booked the line to (a Guthaben's counterparty is
+  // also on its payment; an Anzahlung's entry has no other place for it). Nullable and additive, so a book
+  // written before it widens on open with every existing decision reading NULL; no schema generation (the
+  // D177 `closed_by_link_id` precedent). Frozen by its own trigger in bankInboxSchema.ts.
+  { table: 'bank_line_decision', column: 'contact_id', ddl: 'contact_id TEXT REFERENCES contact(id)' },
+  // A02 §4b (D178 point 2, critic r2 L2-1): the Belegnummer's `voucher_ref`, for a number table a
+  // pre-release round-1 build created at generation 17 without it.
+  ...ENTRY_NUMBER_ADDITIVE_COLUMNS,
 ];
 
 /**
@@ -639,6 +693,19 @@ export const ADDITIVE_INDEXES: readonly { name: string; ddl: string }[] = [
     ddl: `CREATE INDEX IF NOT EXISTS stock_movement_by_ref_movement
           ON stock_movement (workspace_id, ref_movement_id) WHERE ref_movement_id IS NOT NULL`,
   },
+  // D175 (A39 §14.1): at most one LIVE Buchungsregel per (workspace, counterparty key, direction, match
+  // text), the text-less rule being the '' slot. It replaces D167's `bank_standard_one_live` (which
+  // generation 15 drops), so a counterparty may hold one text-less rule plus one rule per distinct text.
+  // No stored row can violate it: every pre-generation-15 row has a NULL match_text, so the new index is
+  // exactly the old one over those rows, and the old one held.
+  {
+    name: 'bank_standard_one_live_rule',
+    ddl: `CREATE UNIQUE INDEX IF NOT EXISTS bank_standard_one_live_rule
+          ON bank_standard (workspace_id, counterparty_key, direction, COALESCE(match_text, '')) WHERE superseded_at IS NULL`,
+  },
+  // A02 §4b (D178 point 2): the Belegnummer's probe indexes and its one-reader backstop trigger, which name
+  // `journal_entry_number.voucher_ref` and so run after the additive columns (critic r2 M2-2 and L2-1).
+  ...ENTRY_NUMBER_ADDITIVE_DDL,
 ];
 
 /**
@@ -728,7 +795,62 @@ export const ADDITIVE_INDEXES: readonly { name: string; ddl: string }[] = [
 // were given and 0 now means "due immediately" while NULL means "the workspace default applies". A
 // pre-generation-10 backup is refused by G04's `incompatible_schema_version`: its 0s would restore as
 // "due immediately". See `nullableContactPaymentTerms` in `./migrations.ts`.
-export const SCHEMA_GENERATION = 10;
+// Generation 11 (D167, the bank inbox reduced, 14.10.2026): no DDL (`bank_standard` rides the banking
+// DDL as a new table). Row-level only: every workspace that already holds tax codes receives the four
+// reduced-rate input codes VST-M26, VST-M38 (Ziffer 400), VST-I26 and VST-I38 (Ziffer 405) ONCE; a code
+// it already has by that name is untouched. A pre-generation-11 backup is refused by G04's
+// `incompatible_schema_version`. See `seedD167InputCodes` in `./migrations.ts`.
+// Generation 12 (D170, the asset register's undo verb, 14.10.2026): the partial unique index
+// `asset_transaction_one_disposal` is dropped and replaced by the trigger
+// `asset_transaction_one_live_disposal`, which counts only disposals no correcting row took back. An
+// older build must not open such a book: it would re-create the index (a raw UNIQUE crash on an asset
+// disposed again after a reversal, or else no build could re-dispose from then on) and it lacks the
+// D170 ownership of asset entries. A pre-generation-12 backup is refused by G04's
+// `incompatible_schema_version`. See `liveDisposalGuard` in `./migrations.ts`.
+// Generation 13 (D172, the workspace settings registry, 15.10.2026): the new tables `workspace_setting`
+// and `workspace_setting_change` ride SETTINGS_SCHEMA_SQL (IF NOT EXISTS, so every open creates them),
+// and the data migration creates them too. The generation exists so an OLDER build refuses the book:
+// a generation-12 build would open it, ignore every stored setting and run on the registry defaults
+// while the Studio of the newer build shows the overrides. A pre-generation-13 backup is refused by G04's
+// `incompatible_schema_version`. See `workspaceSettingsTables` in `./migrations.ts`.
+// Generation 14 (D173, owner Q12, 15.10.2026): `wage_journal_posts.run_kind` (regular, bonus,
+// thirteenth, correction; default regular, CHECKed). The month guard counts only regular runs, so an
+// older build must not open such a book: it would ignore the kind and refuse a bonus run as a second
+// journal of the month. A pre-generation-14 backup is refused by G04's `incompatible_schema_version`.
+// See `wageRunKind` in `./migrations.ts`.
+// Generation 15 (D175, Buchungsregeln, 15.10.2026): DDL only, no row is rewritten. `bank_standard` gains
+// four nullable recipe columns (ADDITIVE_COLUMNS) and the one-live index widens to include the match
+// text (ADDITIVE_INDEXES, `bank_standard_one_live_rule`); the step drops D167's narrower
+// `bank_standard_one_live`. An older build must not open such a book: it would re-create the narrow index
+// (a raw UNIQUE crash on a counterparty with a text rule and a text-less one) and read a split rule as a
+// one-leg standard booking the whole line to its rest account. A pre-generation-15 backup is refused by
+// G04's `incompatible_schema_version`. See `bankRuleRecipes` in `./migrations.ts`.
+// Generation 16 (D176, Vorlagen and "Nicht buchen", 15.10.2026): DDL only, no row is rewritten.
+// `bank_standard` gains `scope`, `outcome`, `ignore_reason`, `ignore_note` and `follow_up_standard_id`
+// (ADDITIVE_COLUMNS, defaults that read every existing row as the bank rule with legs it was) and the
+// trigger `bank_standard_outcome_frozen`. A manual Vorlage is keyed `vorlage:<folded label>` under the
+// generation-15 one-live index, so no index changes. An older build must not open such a book: it would
+// read a Vorlage as a bank rule (and an ignore rule as a one-leg booking to its stored ledger account).
+// A pre-generation-16 backup is refused by G04's `incompatible_schema_version`. See `bankVorlagen` in
+// `./migrations.ts`.
+// Generation 17 (D178 point 2, the Belegnummer, 21.10.2026): the tables `journal_entry_number` and
+// `journal_numbering_pending` ride ENTRY_NUMBER_SCHEMA_SQL (IF NOT EXISTS), with the append-only guards
+// and the forward-only guard on the `journal` counter rows. The data step numbers every posted entry of
+// every workspace that has no number yet, under the settings in force (A02 §4b.3: continue_migrated adopts
+// a migrated entry's plain-integer ref), and is a no-op on a second run. An older build must not open such
+// a book: it would post entries with no number and no catch-up marker, and "every posted entry has a
+// number" would silently stop being true. A pre-generation-17 backup is refused by G04's
+// `incompatible_schema_version`. See `belegnummerBackfill` in `./migrations.ts`.
+// Generation 18 (D178 point 19, the E2 re-cut, 21.10.2026; generation 17 is E1's): the possible-duplicate
+// tables (`bank_txn_possible_duplicate`, `bank_txn_duplicate_candidate`, `bank_txn_duplicate_decision`), the
+// append-only triggers on the answers, the CHOKEPOINT trigger on `bank_line_decision` (no decision but an
+// ignore while a line waits for its duplicate answer), the movement-key index on `bank_txn`, and
+// `bank_statement.coverage`. The step backfills every stored statement's period from its lines where the
+// file named none, so a re-import of history meets its own lines on covered days. An older build must not
+// open such a book: its bookings would hit the chokepoint trigger as raw constraint errors, and it would
+// import a second delivery of the same days as new lines. A pre-generation-18 backup is refused by G04's
+// `incompatible_schema_version`. See `possibleDuplicateCoverage` in `./migrations.ts`.
+export const SCHEMA_GENERATION = 18;
 
 const CORE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS workspace (
@@ -1502,4 +1624,4 @@ END;
  * and joins it here. That keeps the money-path DDL beside the code that writes it, and it keeps
  * concurrent capability branches from all editing one 300-line string.
  */
-export const SCHEMA_SQL = `${CORE_SCHEMA_SQL}\n${PAYMENT_SCHEMA_SQL}\n${DEBTORS_SCHEMA_SQL}\n${BANKING_SCHEMA_SQL}\n${ACCESS_SCHEMA_SQL}\n${CUSTOMIZATION_SCHEMA_SQL}\n${AUTOMATION_SCHEMA_SQL}\n${SALES_SCHEMA_SQL}\n${CONTACT_ACTIVITY_SCHEMA_SQL}\n${PURCHASE_SCHEMA_SQL}\n${CAPTURE_SCHEMA_SQL}\n${FILES_SCHEMA_SQL}\n${DUNNING_SCHEMA_SQL}\n${RECURRING_SCHEMA_SQL}\n${QR_MATCH_SCHEMA_SQL}\n${CAMT_SCHEMA_SQL}\n${PAIN001_SCHEMA_SQL}\n${REVIEW_SCHEMA_SQL}\n${AGENT_SCHEMA_SQL}\n${MIGRATION_SCHEMA_SQL}\n${ONBOARDING_SCHEMA_SQL}\n${MOVE_SCHEMA_SQL}\n${GL_ARCHIVE_SCHEMA_SQL}\n${EXTRACTION_MANIFEST_SCHEMA_SQL}\n${PROJECTS_SCHEMA_SQL}\n${TASKS_SCHEMA_SQL}\n${TIME_SCHEMA_SQL}\n${DEALS_SCHEMA_SQL}\n${STOCK_SCHEMA_SQL}\n${SALES_ORDER_SCHEMA_SQL}\n${PURCHASE_ORDER_SCHEMA_SQL}\n${HR_SCHEMA_SQL}\n${RETAINER_SCHEMA_SQL}\n${SIGN_SCHEMA_SQL}\n${PORTAL_SCHEMA_SQL}\n${REMITTANCE_SCHEMA_SQL}\n${REPORTBUILDER_SCHEMA_SQL}\n${MAIL_SCHEMA_SQL}\n${VOICE_SCHEMA_SQL}\n${DRAFTING_SCHEMA_SQL}\n${DATA_SCHEMA_SQL}\n${DOCUMENT_TEMPLATE_SCHEMA_SQL}\n${NOTIFICATIONS_SCHEMA_SQL}\n${PLUGINS_SCHEMA_SQL}\n${DISPATCH_SCHEMA_SQL}\n${PAYROLL_HANDOFF_SCHEMA_SQL}\n${EBILL_SCHEMA_SQL}\n${EBICS_SCHEMA_SQL}\n${MANAGED_SCHEMA_SQL}\n${ASSETS_SCHEMA_SQL}\n${ASSET_MASTER_SCHEMA_SQL}\n${PROCUREMENT_SCHEMA_SQL}\n${INVENTORY_SCHEMA_SQL}\n${DEPRECIATION_SCHEMA_SQL}\n${TRACKING_SCHEMA_SQL}\n${ASSET_TRANSACTION_SCHEMA_SQL}\n${PO_VERSION_SCHEMA_SQL}\n${ASSET_TRANSFER_SCHEMA_SQL}\n${MAINTENANCE_SCHEMA_SQL}\n${MOVEMENT_SCHEMA_SQL}\n${DEPRECIATION_RUN_SCHEMA_SQL}\n${RECEIPT_SCHEMA_SQL}\n${VALUATION_SCHEMA_SQL}\n${LANDED_COST_SCHEMA_SQL}\n${THREE_WAY_MATCH_SCHEMA_SQL}\n${RECONCILIATION_SCHEMA_SQL}\n${STOCKTAKE_SCHEMA_SQL}\n${ADJUST_SCHEMA_SQL}\n${SYNC_SCHEMA_SQL}\n${IMPLEMENTATION_PROJECT_SCHEMA_SQL}\n${ACCRUALS_SCHEMA_SQL}\n${VAT_SETTLEMENT_SCHEMA_SQL}\n${CHECKLISTS_SCHEMA_SQL}\n${FILE_UPLOAD_SCHEMA_SQL}\n${LIQUIDITY_SCHEMA_SQL}`;
+export const SCHEMA_SQL = `${CORE_SCHEMA_SQL}\n${PAYMENT_SCHEMA_SQL}\n${DEBTORS_SCHEMA_SQL}\n${BANKING_SCHEMA_SQL}\n${ACCESS_SCHEMA_SQL}\n${CUSTOMIZATION_SCHEMA_SQL}\n${AUTOMATION_SCHEMA_SQL}\n${SALES_SCHEMA_SQL}\n${CONTACT_ACTIVITY_SCHEMA_SQL}\n${PURCHASE_SCHEMA_SQL}\n${CAPTURE_SCHEMA_SQL}\n${FILES_SCHEMA_SQL}\n${DUNNING_SCHEMA_SQL}\n${RECURRING_SCHEMA_SQL}\n${QR_MATCH_SCHEMA_SQL}\n${CAMT_SCHEMA_SQL}\n${PAIN001_SCHEMA_SQL}\n${REVIEW_SCHEMA_SQL}\n${AGENT_SCHEMA_SQL}\n${MIGRATION_SCHEMA_SQL}\n${ONBOARDING_SCHEMA_SQL}\n${MOVE_SCHEMA_SQL}\n${GL_ARCHIVE_SCHEMA_SQL}\n${EXTRACTION_MANIFEST_SCHEMA_SQL}\n${PROJECTS_SCHEMA_SQL}\n${TASKS_SCHEMA_SQL}\n${TIME_SCHEMA_SQL}\n${DEALS_SCHEMA_SQL}\n${STOCK_SCHEMA_SQL}\n${SALES_ORDER_SCHEMA_SQL}\n${PURCHASE_ORDER_SCHEMA_SQL}\n${HR_SCHEMA_SQL}\n${RETAINER_SCHEMA_SQL}\n${SIGN_SCHEMA_SQL}\n${PORTAL_SCHEMA_SQL}\n${REMITTANCE_SCHEMA_SQL}\n${REPORTBUILDER_SCHEMA_SQL}\n${MAIL_SCHEMA_SQL}\n${VOICE_SCHEMA_SQL}\n${DRAFTING_SCHEMA_SQL}\n${DATA_SCHEMA_SQL}\n${DOCUMENT_TEMPLATE_SCHEMA_SQL}\n${NOTIFICATIONS_SCHEMA_SQL}\n${PLUGINS_SCHEMA_SQL}\n${DISPATCH_SCHEMA_SQL}\n${PAYROLL_HANDOFF_SCHEMA_SQL}\n${EBILL_SCHEMA_SQL}\n${EBICS_SCHEMA_SQL}\n${MANAGED_SCHEMA_SQL}\n${ASSETS_SCHEMA_SQL}\n${ASSET_MASTER_SCHEMA_SQL}\n${PROCUREMENT_SCHEMA_SQL}\n${INVENTORY_SCHEMA_SQL}\n${DEPRECIATION_SCHEMA_SQL}\n${TRACKING_SCHEMA_SQL}\n${ASSET_TRANSACTION_SCHEMA_SQL}\n${PO_VERSION_SCHEMA_SQL}\n${ASSET_TRANSFER_SCHEMA_SQL}\n${MAINTENANCE_SCHEMA_SQL}\n${MOVEMENT_SCHEMA_SQL}\n${DEPRECIATION_RUN_SCHEMA_SQL}\n${RECEIPT_SCHEMA_SQL}\n${VALUATION_SCHEMA_SQL}\n${LANDED_COST_SCHEMA_SQL}\n${THREE_WAY_MATCH_SCHEMA_SQL}\n${RECONCILIATION_SCHEMA_SQL}\n${STOCKTAKE_SCHEMA_SQL}\n${ADJUST_SCHEMA_SQL}\n${SYNC_SCHEMA_SQL}\n${IMPLEMENTATION_PROJECT_SCHEMA_SQL}\n${ACCRUALS_SCHEMA_SQL}\n${VAT_SETTLEMENT_SCHEMA_SQL}\n${CHECKLISTS_SCHEMA_SQL}\n${FILE_UPLOAD_SCHEMA_SQL}\n${LIQUIDITY_SCHEMA_SQL}\n${SETTINGS_SCHEMA_SQL}\n${ENTRY_NUMBER_SCHEMA_SQL}`;

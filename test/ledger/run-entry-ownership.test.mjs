@@ -73,3 +73,36 @@ test('an opening inventory valuation is a posted run too: its journal refuses th
   assert.equal(raw.verb, 'inventory_valuation_reverse');
   fx.deps.store.close();
 });
+
+// D141 follow-up 2 (the row-backed source that HAD an undo verb all along): J04's landed-cost voucher.
+// Measured before the fix: the raw Storno of an allocated voucher's journal returned ok, the voucher
+// still read `allocated` and its receipt layers kept the capitalised cost the GL no longer carried, and
+// `landed_cost_reverse` could then only post a second mirror of an entry already reversed.
+test('raw reverse_entry on an allocated landed-cost voucher journal refuses owned_by landed_cost_reverse; the owner still reverses it', () => {
+  const fx = fixture();
+  const ownerInput = SCENARIOS.landed_cost_reverse(fx);
+  const voucher = () =>
+    fx.deps.store.db
+      .prepare('SELECT status, journal_entry_id AS e FROM landed_cost_voucher WHERE workspace_id = ? AND id = ?')
+      .get(fx.workspaceId, ownerInput.voucherId);
+  assert.equal(voucher().status, 'allocated', 'premise: the seed allocated the voucher');
+  const entryId = voucher().e;
+  assert.equal(typeof entryId, 'string', 'premise: the voucher names its journal');
+
+  const raw = studio(fx, 'reverse_entry', { entryId, idempotencyKey: 'raw' });
+  assert.equal(raw.ok, false, `the raw Storno must not strand the voucher: ${JSON.stringify(raw)}`);
+  assert.equal(raw.error, 'owned_by');
+  assert.equal(raw.verb, 'landed_cost_reverse');
+  assert.equal(voucher().status, 'allocated');
+
+  const reversed = getAction('landed_cost_reverse').run(fx.deps, ownerInput);
+  assert.equal(reversed.ok, true, JSON.stringify(reversed));
+  assert.equal(voucher().status, 'reversed');
+
+  const mirror = fx.deps.store.db.prepare('SELECT id FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ?').get(fx.workspaceId, entryId);
+  assert.ok(mirror, 'the owner minted the mirror');
+  const rawMirror = studio(fx, 'reverse_entry', { entryId: mirror.id, idempotencyKey: 'raw-mirror' });
+  assert.equal(rawMirror.ok, false, JSON.stringify(rawMirror));
+  assert.equal(rawMirror.verb, 'landed_cost_reverse');
+  fx.deps.store.close();
+});

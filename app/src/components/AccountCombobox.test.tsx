@@ -11,7 +11,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 
-import { AccountCombobox, Combobox, rankOptions } from './AccountCombobox';
+import { AccountCombobox, Combobox, PickerButton, rankOptions } from './AccountCombobox';
 
 const CHART = [
   { id: 'acc_1020', number: '1020', name: 'Bank' },
@@ -136,5 +136,60 @@ describe('AccountCombobox', () => {
     await userEvent.type(screen.getByRole('combobox', { name: 'Kunde' }), 'Mara');
     expect(screen.getByRole('option', { name: '„Mara“ anlegen' })).toBeInTheDocument();
     expect(await axe(create.container)).toHaveNoViolations();
+  });
+
+  // D167: the opt-in clear control. Off by default (every existing consumer unchanged); on, it is a
+  // named icon button beside the trigger that clears the value WITHOUT opening the list.
+  describe('PickerButton clearable (D167)', () => {
+    const OPTIONS = CHART.map((a) => ({ id: a.id, code: a.number, label: a.name }));
+
+    it('renders no clear control unless the caller opts in', () => {
+      render(
+        <PickerButton label="Buchen auf" options={OPTIONS} value="acc_1020" onChange={() => undefined} searchLabel="Suchen">
+          1020 Bank
+        </PickerButton>,
+      );
+      expect(screen.queryByRole('button', { name: 'Konto entfernen' })).toBeNull();
+      expect(screen.getAllByRole('button')).toHaveLength(1);
+    });
+
+    it('clears without opening the list, and returns focus to the trigger', async () => {
+      const onClear = vi.fn();
+      const onChange = vi.fn();
+      render(
+        <PickerButton label="Buchen auf" options={OPTIONS} value="acc_1020" onChange={onChange} searchLabel="Suchen" clearable onClear={onClear} clearLabel="Konto entfernen">
+          1020 Bank
+        </PickerButton>,
+      );
+      const trigger = screen.getByRole('button', { name: 'Buchen auf' });
+      await userEvent.click(screen.getByRole('button', { name: 'Konto entfernen' }));
+      expect(onClear).toHaveBeenCalledTimes(1);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('listbox')).toBeNull();
+      expect(trigger).toHaveFocus();
+    });
+
+    it('shows no clear control without a value or while disabled, and has no axe violations', async () => {
+      const { rerender, container } = render(
+        <PickerButton label="Buchen auf" options={OPTIONS} value="" onChange={() => undefined} searchLabel="Suchen" clearable onClear={() => undefined} clearLabel="Konto entfernen">
+          Worauf buchen?
+        </PickerButton>,
+      );
+      expect(screen.queryByRole('button', { name: 'Konto entfernen' })).toBeNull();
+      rerender(
+        <PickerButton label="Buchen auf" options={OPTIONS} value="acc_1020" disabled onChange={() => undefined} searchLabel="Suchen" clearable onClear={() => undefined} clearLabel="Konto entfernen">
+          1020 Bank
+        </PickerButton>,
+      );
+      expect(screen.queryByRole('button', { name: 'Konto entfernen' })).toBeNull();
+      rerender(
+        <PickerButton label="Buchen auf" options={OPTIONS} value="acc_1020" onChange={() => undefined} searchLabel="Suchen" clearable onClear={() => undefined} clearLabel="Konto entfernen">
+          1020 Bank
+        </PickerButton>,
+      );
+      expect(screen.getByRole('button', { name: 'Konto entfernen' })).toBeInTheDocument();
+      expect(await axe(container)).toHaveNoViolations();
+    });
   });
 });

@@ -48,6 +48,27 @@
 
 import { BANK_INBOX_SCHEMA_SQL } from './bankInboxSchema.js';
 
+/**
+ * D178 point 19 (the round 3 re-cut, A20 §11.4, generation 18): THE ONE CHOKEPOINT of "not bookable until
+ * decided". Every booking, settlement and match of a bank line writes its active row into
+ * `bank_line_decision` (line state is derived from it), so this trigger refuses any active row other than
+ * an ignore while the line carries a possible-duplicate flag whose latest answer is not 'distinct'. The
+ * verbs refuse first, readably (`duplicate_decision_pending`, writeLineLink and performBooking); this is
+ * the second line, for a path that forgets. `resolve_possible_duplicate` (duplicate) writes its ignore first.
+ */
+export const DUPLICATE_CHOKEPOINT_SQL = `
+CREATE TRIGGER IF NOT EXISTS bank_line_decision_duplicate_pending
+BEFORE INSERT ON bank_line_decision
+WHEN NEW.state <> 'ignored' AND NEW.superseded_at IS NULL
+  AND EXISTS (SELECT 1 FROM bank_txn_possible_duplicate pd WHERE pd.workspace_id = NEW.workspace_id AND pd.bank_txn_id = NEW.bank_txn_id)
+  AND COALESCE((SELECT dd.decision FROM bank_txn_duplicate_decision dd
+                 WHERE dd.workspace_id = NEW.workspace_id AND dd.bank_txn_id = NEW.bank_txn_id
+                 ORDER BY dd.decided_at DESC, dd.rowid DESC LIMIT 1), '') <> 'distinct'
+BEGIN
+  SELECT RAISE(ABORT, 'duplicate_decision_pending: the line is flagged as a possible duplicate and not decided');
+END;
+`;
+
 export const CAMT_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS bank_statement (
   id                    TEXT PRIMARY KEY,
@@ -66,7 +87,12 @@ CREATE TABLE IF NOT EXISTS bank_statement (
   balance_currency      TEXT,
   txn_count             INTEGER NOT NULL DEFAULT 0,
   imported_by           TEXT,
-  imported_at           TEXT NOT NULL
+  imported_at           TEXT NOT NULL,
+  -- D178 point 19 (A20 §11.4, generation 18): how coverage classified the delivery at import, 'extends'
+  -- (it extended the balance chain: its lines were new) or 'checked' (its lines were matched against the
+  -- covered span); NULL for a statement imported before. Its later pages take the same classification.
+  -- Listed in ADDITIVE_COLUMNS (store/schema.ts) for a book written before it.
+  coverage              TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS bank_statement_dedupe
@@ -177,4 +203,129 @@ BEFORE DELETE ON bank_statement_gap_ack
 BEGIN
   SELECT RAISE(ABORT, 'bank_statement_gap_ack rows are never deleted');
 END;
-${BANK_INBOX_SCHEMA_SQL}`;
+
+-- D178 points 3 and 4 (spec A20 §11.1): what a statement says about a line beyond its booked fact, one
+-- row per line, written ONCE at import (statementFacts.ts) and never changed, like bank_txn itself. A NEW
+-- table rather than new bank_txn columns so neither the D81 identity key nor the statement content hash
+-- moves: a camt imported before it still re-imports as duplicate:true. A line imported before it has no
+-- row (the file is not stored, so its facts cannot be re-derived) and reads facts: null.
+-- The three bank texts are named so the landscape sanitiser's free-text rule covers them by name
+-- (remittance_text = RmtInf/Ustrd, description = AddtlTxInf, remark = AddtlNtryInf). Every money
+-- column is integer hundredths of the currency as written; a rate is the bank's decimal string.
+CREATE TABLE IF NOT EXISTS bank_txn_fact (
+  bank_txn_id             TEXT PRIMARY KEY REFERENCES bank_txn(id),
+  workspace_id            TEXT NOT NULL REFERENCES workspace(id),
+  source                  TEXT NOT NULL,
+  btc_domain              TEXT,
+  btc_family              TEXT,
+  btc_sub_family          TEXT,
+  btc_proprietary         TEXT,
+  btc_issuer              TEXT,
+  remittance_text         TEXT,
+  description             TEXT,
+  remark                  TEXT,
+  end_to_end_id           TEXT,
+  acct_svcr_ref           TEXT,
+  instruction_id          TEXT,
+  transaction_id          TEXT,
+  instructed_minor        INTEGER,
+  instructed_currency     TEXT,
+  tx_amount_minor         INTEGER,
+  tx_amount_currency      TEXT,
+  counter_value_minor     INTEGER,
+  counter_value_currency  TEXT,
+  fx_source_currency      TEXT,
+  fx_target_currency      TEXT,
+  fx_unit_currency        TEXT,
+  fx_rate                 TEXT,
+  fx_effective_rate       TEXT,
+  fx_origin               TEXT,
+  charges_total_minor     INTEGER,
+  charges_currency        TEXT,
+  charges_records         TEXT,
+  charges_origin          TEXT,
+  fee_minor               INTEGER,
+  fee_currency            TEXT,
+  fee_included            INTEGER,
+  fee_origin              TEXT,
+  created_at              TEXT NOT NULL
+);
+
+-- D178 point 4 (spec A20 §11.3): the CSV column mapping of one Bankkonto, saved once and reused. One live
+-- row per account (a later save replaces it, each change is in the audit log). The mapping names columns
+-- by their header TEXT, never by position, so a re-export with reordered columns still maps.
+CREATE TABLE IF NOT EXISTS bank_csv_mapping (
+  id               TEXT PRIMARY KEY,
+  workspace_id     TEXT NOT NULL REFERENCES workspace(id),
+  bank_account_id  TEXT NOT NULL REFERENCES bank_account(id),
+  mapping_json     TEXT NOT NULL,
+  updated_by       TEXT,
+  updated_at       TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS bank_csv_mapping_one_per_account
+  ON bank_csv_mapping (workspace_id, bank_account_id);
+
+-- D178 (spec A20 §11.4, "warn, don't block"): a new line that RESEMBLES a stored one without strong proof
+-- that it is the same movement is imported and named here, once, at import (statementDedupe.ts). The
+-- person decides on the bank inbox (ignore it as "Duplikat", or keep it); nothing is ever dropped on a
+-- guess. One row per flagged line; reason is POSSIBLE_DUPLICATE_REASONS.
+CREATE TABLE IF NOT EXISTS bank_txn_possible_duplicate (
+  bank_txn_id           TEXT PRIMARY KEY REFERENCES bank_txn(id),
+  workspace_id          TEXT NOT NULL REFERENCES workspace(id),
+  -- The first stored line the flag names; NULL for 'covered_period_new_line' with nothing to name.
+  existing_bank_txn_id  TEXT REFERENCES bank_txn(id),
+  reason                TEXT NOT NULL,
+  created_at            TEXT NOT NULL
+);
+
+-- D178 point 19 (owner): EVERY stored line a flagged line may be (the flag above is the nearest), the
+-- nearest first (rank 0). Naming never uses a stored line up: it may be a candidate of several lines.
+CREATE TABLE IF NOT EXISTS bank_txn_duplicate_candidate (
+  bank_txn_id           TEXT NOT NULL REFERENCES bank_txn(id),
+  workspace_id          TEXT NOT NULL REFERENCES workspace(id),
+  existing_bank_txn_id  TEXT NOT NULL REFERENCES bank_txn(id),
+  reason                TEXT NOT NULL,
+  rank                  INTEGER NOT NULL,
+  created_at            TEXT NOT NULL,
+  PRIMARY KEY (bank_txn_id, existing_bank_txn_id)
+);
+
+-- D178 point 19 (owner): the person's answer on a flagged line, append-only (the latest row is in force):
+-- 'duplicate' (the line was ignored with that reason; reopened, it needs a decision again) or 'distinct'
+-- (a normal line). Who and when, for the audit trail; a re-import never touches it.
+CREATE TABLE IF NOT EXISTS bank_txn_duplicate_decision (
+  id                 TEXT PRIMARY KEY,
+  workspace_id       TEXT NOT NULL REFERENCES workspace(id),
+  bank_txn_id        TEXT NOT NULL REFERENCES bank_txn(id),
+  decision           TEXT NOT NULL,
+  other_bank_txn_id  TEXT REFERENCES bank_txn(id),
+  note               TEXT,
+  decided_by         TEXT NOT NULL,
+  decided_at         TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS bank_txn_duplicate_decision_line ON bank_txn_duplicate_decision (workspace_id, bank_txn_id);
+
+-- D178 point 19 (critic R3-5, generation 18): a person's answer is append-only: a new answer is a new row.
+CREATE TRIGGER IF NOT EXISTS bank_txn_duplicate_decision_no_update
+BEFORE UPDATE ON bank_txn_duplicate_decision
+BEGIN
+  SELECT RAISE(ABORT, 'bank_txn_duplicate_decision is append-only: an answer is never rewritten, a new answer is a new row');
+END;
+
+CREATE TRIGGER IF NOT EXISTS bank_txn_duplicate_decision_no_delete
+BEFORE DELETE ON bank_txn_duplicate_decision
+BEGIN
+  SELECT RAISE(ABORT, 'bank_txn_duplicate_decision rows are never deleted');
+END;
+
+-- D178 point 19 (A20 §11.4, generation 18): a line's movement key (booking date, else value date; direction;
+-- amount; currency) is an expression over its own columns, so EVERY stored line has it, history included,
+-- and coverage's one-to-one match reads it through this index.
+CREATE INDEX IF NOT EXISTS bank_txn_movement
+  ON bank_txn (workspace_id, bank_account_id, COALESCE(booking_date, value_date), credit_debit, amount_minor, currency);
+
+CREATE INDEX IF NOT EXISTS bank_txn_account_booking ON bank_txn (workspace_id, bank_account_id, booking_date);
+${BANK_INBOX_SCHEMA_SQL}
+${DUPLICATE_CHOKEPOINT_SQL}`;

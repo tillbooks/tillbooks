@@ -15,6 +15,11 @@
  *
  * Built on the existing `Modal` and `FileDrop` (no new primitive). Opened from the attention item, the
  * Übersicht band and the channel panel, all through `/bank-accounts?repair=<account>&gap=<gap>`.
+ *
+ * ALL GAPS AT ONCE (owner, 18.10.2026: "if we want to close holes, one button must be sufficient"):
+ * `gap=all` opens the dialog for every gap of the account. The file drop already takes any number of
+ * statements in any order; the confirmation, offered only when every gap chains, confirms each gap with
+ * the one reason (`confirm_statement_gap` per gap, each still a person's act with its own rules).
  */
 import { useCallback, useEffect, useId, useState } from 'react';
 
@@ -63,13 +68,26 @@ function contextOf(body: unknown, bankAccountId: string, gapId: string): Context
   const channels = Array.isArray(tile.channels) ? (tile.channels as { bankName?: string | null; statementGaps?: unknown }[]) : [];
   const channel = channels.find((c) => parseStatementGaps(c.statementGaps).some((g) => g.bankAccountId === bankAccountId)) ?? null;
   return {
-    gap: gaps.find((g) => g.gapId === gapId) ?? null,
+    gap: gapId === ALL ? (gaps[0] ?? null) : (gaps.find((g) => g.gapId === gapId) ?? null),
     gaps,
     accountName: account?.name ?? '',
     currency: account?.currency ?? 'CHF',
     bankName: channel?.bankName ?? null,
     fed: channel !== null,
   };
+}
+
+/** The `gap` value that opens the dialog for every gap of the account. */
+export const ALL = 'all';
+
+/** One span from the first gap's earlier statement to the last gap's later one, for `gap=all`. */
+function spanOf(gaps: StatementGapDto[]): StatementGapDto | null {
+  if (gaps.length === 0) return null;
+  const pos = (e: { year: number; number: number }) => e.year * 1_000_000 + e.number;
+  const sorted = [...gaps].sort((a, b) => pos(a.after) - pos(b.after));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  return { ...first, before: last.before, missing: sorted.flatMap((g) => g.missing), missingDates: { from: first.missingDates.from, to: last.missingDates.to } };
 }
 
 /** The gaps still open inside the original one's span (a partial fill splits it). */
@@ -107,13 +125,14 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
       if (ctx === null) setLoad({ status: 'error' });
       else {
         setLoad({ status: 'ok', ctx });
-        if (ctx.gap !== null) setOriginal(ctx.gap);
+        const opened = gapId === ALL ? spanOf(ctx.gaps) : ctx.gap;
+        if (opened !== null) setOriginal(opened);
       }
     });
     return () => {
       live = false;
     };
-  }, [read]);
+  }, [read, gapId]);
 
   /** After a write: re-read, and close when nothing of the original gap is left. */
   const settle = async (doneKey: string) => {
@@ -122,7 +141,7 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
     if (ctx === null || original === null) return;
     const left = remainingWithin(original, ctx.gaps);
     if (left.length === 0) {
-      onResolved(t(doneKey, { range: gapRangeText(original) }));
+      onResolved(t(doneKey, { range: gapId === ALL ? gapRangeText(original) : gapRangeText(original) }));
       onClose();
       return;
     }
@@ -151,28 +170,39 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
   };
 
   const confirm = async () => {
-    const gap = load.status === 'ok' ? load.ctx.gap : null;
-    if (gap === null || busy || reason.trim() === '' || gap.after.statementRowId === null || gap.before.statementRowId === null) return;
+    const targets = load.status === 'ok' ? targetsOf(load.ctx) : [];
+    if (targets.length === 0 || busy || reason.trim() === '') return;
+    if (targets.some((g) => g.after.statementRowId === null || g.before.statementRowId === null)) return;
     setBusy(true);
     setError(null);
-    const res = await client.call('confirm_statement_gap', {
-      workspaceId,
-      bankAccountId,
-      afterStatementId: gap.after.statementRowId,
-      beforeStatementId: gap.before.statementRowId,
-      reason: reason.trim(),
-      confirmed: true,
-      idempotencyKey: newKey(),
-    });
-    setBusy(false);
-    if (isErr(res.body)) {
-      setError(res.body);
-      return;
+    for (const gap of targets) {
+      const res = await client.call('confirm_statement_gap', {
+        workspaceId,
+        bankAccountId,
+        afterStatementId: gap.after.statementRowId,
+        beforeStatementId: gap.before.statementRowId,
+        reason: reason.trim(),
+        confirmed: true,
+        idempotencyKey: newKey(),
+      });
+      if (isErr(res.body)) {
+        setBusy(false);
+        setError(res.body);
+        await settle('gapRepair.confirmed');
+        return;
+      }
     }
+    setBusy(false);
     await settle('gapRepair.confirmed');
   };
 
-  const title = t('gapRepair.title');
+  /** What this dialog repairs: the one gap, or with `gap=all` every gap still open in the original span. */
+  function targetsOf(ctx: Context): StatementGapDto[] {
+    if (gapId !== ALL) return ctx.gap !== null ? [ctx.gap] : [];
+    return original === null ? ctx.gaps : remainingWithin(original, ctx.gaps);
+  }
+
+  const title = t(gapId === ALL ? 'gapRepair.titleMany' : 'gapRepair.title');
   const close = t('gapRepair.close');
 
   if (load.status !== 'ok') {
@@ -196,7 +226,12 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
     );
   }
 
-  const dates = gapFetchDatesText(t, gap);
+  const targets = targetsOf(load.ctx);
+  const many = gapId === ALL && targets.length > 1;
+  const span = many ? spanOf(targets) : null;
+  const shown = span ?? gap;
+  const dates = gapFetchDatesText(t, shown);
+  const allConfirmable = targets.length > 0 && targets.every((g) => g.confirmable);
   const zkb = bankName === 'ZKB';
   const stepKeys = zkb ? ['zkb.1', 'zkb.2', 'zkb.3', 'zkb.4'] : ['other.1', 'other.2', 'other.3'];
   const params = { account: accountName, dates, bank: bankName ?? '' };
@@ -217,9 +252,9 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
     >
       <div className="gap-repair">
         <p className="gap-repair__what" id={descId}>
-          <strong>{`${accountName}: ${gapTitle(t, gap)}`}</strong>
+          <strong>{`${accountName}: ${many ? t('gapRepair.titleAll', { ranges: gapRangeText(shown) }) : gapTitle(t, gap)}`}</strong>
         </p>
-        <p className="gap-repair__why">{gapExplanation(t, gap)}</p>
+        <p className="gap-repair__why">{many && targets.every((g) => g.chains) ? t('gapRepair.whyAllChain') : gapExplanation(t, many ? (targets.find((g) => !g.chains) ?? gap) : gap)}</p>
         <p className="gap-repair__lead">{zkb ? t('gapRepair.leadZkb', params) : t('gapRepair.leadOther', params)}</p>
         <ol className="gap-repair__steps">
           {stepKeys.map((k) => (
@@ -263,9 +298,9 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
             {refusalText(t, error, { own: 'gapRepair.error', fallback: 'gapRepair.error.generic' })}
           </p>
         )}
-        {gap.confirmable && canPay && (
+        {allConfirmable && canPay && (
           <div className="gap-repair__confirm">
-            <p className="gap-repair__confirm-lead">{t('gapRepair.confirmLead', { range: gapRangeText(gap) })}</p>
+            <p className="gap-repair__confirm-lead">{t('gapRepair.confirmLead', { range: gapRangeText(shown) })}</p>
             <label className="bank-field" htmlFor={`${baseId}-reason`}>
               <span className="bank-field__label">{t('gapRepair.reason')}</span>
               <input

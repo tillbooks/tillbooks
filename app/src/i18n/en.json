@@ -143,17 +143,48 @@
       "label": "Favorites",
       "pin": "Add {name} to favorites",
       "unpin": "Remove {name} from favorites",
-      "moveUp": "Move {name} up",
-      "moveDown": "Move {name} down",
-      "rename": "Rename {name}",
-      "renameField": "New name for {name}"
+      "renameField": "New name for {name}",
+      "saveFailed": "Your favourites could not be saved. They apply until you reload.",
+      "more": "{name}: move, rename or remove",
+      "renameItem": "Rename",
+      "removeItem": "Remove"
     },
     "resize": {
       "label": "Adjust navigation width"
     },
     "collapse": "Collapse navigation",
     "expand": "Expand navigation",
-    "agent": "Agent"
+    "agent": "Agent",
+    "sections": {
+      "menu": "Menu"
+    },
+    "customise": {
+      "open": "Customise the menu",
+      "title": "Customise the menu",
+      "done": "Done",
+      "reset": "Reset",
+      "hint": "Drag, or move with ⋯. A page without a tick is hidden; the search still finds it.",
+      "top": "No group",
+      "show": "Show {name} in the menu",
+      "more": "Move {name}",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "moveTo": "Move to …",
+      "moveToLabel": "Move {name} to",
+      "moveToPlaceholder": "Choose a place",
+      "cancelMove": "Cancel",
+      "empty": "Empty",
+      "saveFailed": "Could not be saved. The change applies until you reload.",
+      "announce": {
+        "moved": "{name} moved",
+        "movedUp": "{name} moved up",
+        "movedDown": "{name} moved down",
+        "movedTo": "{name} moved to {target}",
+        "hidden": "{name} hidden",
+        "shown": "{name} shown",
+        "reset": "Menu reset to the default"
+      }
+    }
   },
   "theme": {
     "toggle": "Switch colour scheme"
@@ -325,7 +356,7 @@
       "toOverview": "Go to the overview"
     },
     "nav": {
-      "more": "Menu",
+      "more": "Navigation",
       "close": "Close menu"
     },
     "agent": {
@@ -515,6 +546,7 @@
       "send_invoice": "Send invoice",
       "propose_dunning_run": "Propose reminder run",
       "issue_dunning_run": "Issue reminder run",
+      "dunning_fee_reverse": "Reverse reminder fees",
       "send_dunning_run": "Send reminder run",
       "record_payment": "Record payment",
       "allocate_payment": "Allocate payment",
@@ -531,6 +563,7 @@
       "expense_claim_reimburse": "Reimburse expense claim",
       "create_entry_for_txn": "Book bank transaction",
       "wage_journal_post": "Post wage journal",
+      "wage_journal_reverse": "Reverse wage journal",
       "post_vendor_bill": "Post vendor bill",
       "post_fx_revaluation": "Revalue foreign currencies",
       "fx_revaluation_reverse": "Reverse the FX revaluation",
@@ -546,11 +579,13 @@
       "provision_reverse": "Reverse provision",
       "provision_release_reverse": "Reverse provision release",
       "expense_claim_approve": "Approve expense claim",
+      "expense_claim_reverse": "Reverse expense claim",
       "asset_acquire": "Capitalise asset",
       "asset_add_capitalisation": "Capitalise additional cost",
       "asset_depreciation_run_post": "Post depreciation run",
       "asset_depreciation_run_reverse": "Reverse depreciation run",
       "asset_dispose": "Book asset disposal",
+      "asset_transaction_reverse": "Reverse asset booking",
       "inventory_valuation_post": "Post inventory valuation",
       "inventory_valuation_reverse": "Reverse inventory valuation",
       "landed_cost_allocate_confirm": "Allocate and post landed costs",
@@ -564,6 +599,8 @@
       "import_open_items": "Import open items",
       "book_bank_line": "Book a bank line",
       "ignore_bank_line": "Ignore a bank line",
+      "set_bank_standard": "Set a bank standard",
+      "clear_bank_standard": "Remove a bank standard",
       "reopen_bank_line": "Reverse and reopen a bank line"
     }
   },
@@ -585,8 +622,9 @@
   },
   "taxCode": {
     "none": "Without VAT",
-    "noneMeta": "not taxable, exempt or without a receipt",
+    "noneMeta": "not taxable, for example wages, a fee or a transfer",
     "search": "Code, rate or name, for example 8.1 or reverse",
+    "searchShort": "Rate or name",
     "noMatch": "No VAT code fits.",
     "group": {
       "current": "Current",
@@ -603,7 +641,17 @@
       "zero": "Zero-rated",
       "exempt": "Exempt",
       "none": "Without VAT"
-    }
+    },
+    "rated": "{kind} {rate}%",
+    "hint": {
+      "material": "Material, goods, services",
+      "operating": "Operating costs, investments",
+      "normal": "Standard rate",
+      "reduced": "reduced",
+      "accommodation": "Accommodation",
+      "operatingShort": "operating"
+    },
+    "ratedFamily": "{name} ({family})"
   },
   "picker": {
     "hint": "Arrows choose · Enter takes · Esc closes"

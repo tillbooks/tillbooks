@@ -504,6 +504,18 @@ export interface RecordDispatchInput {
  * never double-logs.
  */
 export function recordDispatch(ctx: WorkspaceContext, input: RecordDispatchInput): void {
+  // D165 (follow-up critic, 14.10.2026): a `degraded` or `failed` row records a send that did NOT
+  // happen, a refusal's own bookkeeping, so it never marks an approval's act as having run
+  // (`withoutCommitMark`); the person can still reject a Vorschlag that wrote only this. A `sent` row
+  // marks as every write does, and always rides the write that records the send itself.
+  if (input.outcome === 'degraded' || input.outcome === 'failed') {
+    ctx.store.withoutCommitMark(() => insertDispatch(ctx, input));
+    return;
+  }
+  insertDispatch(ctx, input);
+}
+
+function insertDispatch(ctx: WorkspaceContext, input: RecordDispatchInput): void {
   ctx.store.db
     .prepare(
       `INSERT INTO dispatches

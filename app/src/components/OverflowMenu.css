@@ -74,3 +74,17 @@
   margin: var(--t-space-0-5) var(--t-space-1);
   background: var(--t-border);
 }
+
+/* D177: a list rendered in the overlay layer (a portal), fixed to its trigger by the component. It is as
+   wide as its longest item, so a reason is never cut. */
+.overflow-menu-list--portal {
+  /* Above a drawer too: a portalled list may open from inside one. */
+  z-index: var(--t-z-listbox);
+  width: max-content;
+  max-width: min(360px, calc(100vw - 16px));
+}
+
+.overflow-menu-list--portal .btn--menu {
+  justify-content: flex-start;
+  white-space: nowrap;
+}

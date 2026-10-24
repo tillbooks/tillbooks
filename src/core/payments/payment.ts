@@ -84,6 +84,9 @@ import { readLiveDunningFeeItem, dunningFeeLabel } from '../dunning/reads.js';
 // through the barrel; the leaf file imports nothing from payments, so the direct edge is one-way. The
 // dunning import two lines up follows the identical rule for the identical reason.
 import { revertReimbursedClaimsForPayment } from '../hr/reimbursementReversal.js';
+// D178 E3: the VAT clearing of a received Anzahlung applied to an invoice. A LEAF module (it imports neither
+// the payments nor the banking barrel), the same discipline as the two leaf edges above.
+import { clearAnzahlungVatOnAllocation } from '../banking/anzahlungVat.js';
 
 // --- Fixed §H-ENUM value lists this spec owns ---------------------------------------------------
 
@@ -758,7 +761,55 @@ function onAccountMinorOf(ctx: WorkspaceContext, payment: PaymentRow): number {
       'SELECT COALESCE(SUM(payment_amount_minor), 0) AS total FROM payment_allocation WHERE workspace_id = ? AND payment_id = ?',
     )
     .get(ctx.workspaceId, payment.id) as { total: number };
-  return payment.amount_minor - row.total;
+  return payment.amount_minor - row.total - refundNettedMinorOf(ctx, payment.id);
+}
+
+/**
+ * D178 E3: the cash a payment has netted in refunds (as the Guthaben handed back, or as the refund that
+ * handed it back), counted only while the OTHER payment of the pair is still posted. Derived, never stored.
+ */
+export function refundNettedMinorOf(ctx: WorkspaceContext, paymentId: string): number {
+  const row = ctx.store.db
+    .prepare(
+      `SELECT COALESCE(SUM(n.amount_minor), 0) AS total
+         FROM payment_refund_netting n
+         JOIN payment o ON o.workspace_id = n.workspace_id
+                       AND o.id = CASE WHEN n.guthaben_payment_id = ? THEN n.refund_payment_id ELSE n.guthaben_payment_id END
+        WHERE n.workspace_id = ? AND (n.guthaben_payment_id = ? OR n.refund_payment_id = ?) AND o.status = 'posted'`,
+    )
+    .get(paymentId, ctx.workspaceId, paymentId, paymentId) as { total: number };
+  return row.total;
+}
+
+/**
+ * D178 E3: a contact's open Guthaben in one direction (incoming for a customer, outgoing for a supplier),
+ * oldest first, each with the cash it still holds. Base currency only: a foreign Guthaben is not netted.
+ */
+export function openGuthabenOf(
+  ctx: WorkspaceContext,
+  contactId: string,
+  direction: PaymentDirection,
+): { paymentId: string; amountMinor: number; openMinor: number }[] {
+  const rows = ctx.store.db
+    .prepare(
+      `SELECT * FROM payment WHERE workspace_id = ? AND counterparty_id = ? AND direction = ? AND status = 'posted'
+         AND currency = ? ORDER BY date, rowid`,
+    )
+    .all(ctx.workspaceId, contactId, direction, baseCurrencyOf(ctx)) as PaymentRow[];
+  return rows
+    .map((p) => ({ paymentId: p.id, amountMinor: p.amount_minor, openMinor: onAccountMinorOf(ctx, p) }))
+    .filter((g) => g.openMinor > 0);
+}
+
+/** D178 E3: record a refund payment netting against Guthaben payments. Append-only rows, one per pair. */
+export function recordRefundNetting(ctx: WorkspaceContext, refundPaymentId: string, nettings: readonly { paymentId: string; cashMinor: number }[]): void {
+  const insert = ctx.store.db.prepare(
+    `INSERT INTO payment_refund_netting (refund_payment_id, guthaben_payment_id, workspace_id, amount_minor, created_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  for (const n of nettings) {
+    if (n.cashMinor > 0) insert.run(refundPaymentId, n.paymentId, ctx.workspaceId, n.cashMinor, ctx.actor, ctx.clock.now());
+  }
 }
 
 /**
@@ -2400,6 +2451,17 @@ export function allocatePayment(ctx: WorkspaceContext, input: AllocatePaymentInp
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'allocate_payment', () => {
       for (const row of plan.rows) writeAllocationRow(ctx, payment.id, row, payment.journal_entry_id);
       applyDocumentStatuses(ctx, plan.rows);
+      // D178 E3 (owner, 21.10.2026): a Guthaben from a bank line whose receipt VAT was booked (setting
+      // `bank.anzahlung_vat`) clears the share of that VAT the applied cash carries, because the invoice
+      // books its own. The ONE exception to "this verb posts nothing", and only for such a Guthaben; a
+      // refusal aborts the whole application (nothing of it commits). Every other payment is untouched.
+      const appliedAfter = payment.amount_minor - onAccountMinorOf(
+        ctx,
+        ctx.store.db.prepare('SELECT * FROM payment WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, payment.id) as PaymentRow,
+      );
+      // The cash this application applies; the clearing takes its share on the cumulative figure it records.
+      const cleared = clearAnzahlungVatOnAllocation(ctx, { id: payment.id, amountMinor: payment.amount_minor }, appliedAfter - (payment.amount_minor - available));
+      if (cleared !== null) throw new PaymentAbort(cleared);
       ctx.audit.record({
         entityKind: 'payment',
         entityId: payment.id,

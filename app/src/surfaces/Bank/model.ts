@@ -49,7 +49,17 @@ export const BANK_PROPOSAL_REASONS = [
   'vendor_bill_amount',
   'own_account_transfer',
   'own_account_transfer_booked',
+  // D167: the counterparty's standard (certainty sure, the bulk button books it) and the journal rung.
+  'standard',
+  // D175: a Buchungsregel that asks for an amount (never bookable as it stands, never bulk) and the chooser.
+  'rule_needs_amount',
+  'several_rules',
+  // D176: a "Nicht buchen" rule proposes ignoring the line with its reason and note.
+  'rule_ignore',
+  // D177 (A39 §16.1): a rule whose only unknowns are computed (`factor`) legs: prefilled, one click, `check`.
+  'rule_computed',
   'history',
+  'journal_history',
   'model_suggested',
   'no_proposal',
 ] as const;
@@ -129,11 +139,15 @@ export interface TaxCode {
   kind: string;
   rateBp: number;
   label: string;
+  /** The ESTV Ziffer (400, 405, 303 ...): the MWST picker tells the Vorsteuer families apart by it. */
+  formLine?: string;
 }
 
 export interface InvoiceOption {
   documentId: string;
   number: string | null;
+  /** D178 N3: the customer, so a several-invoice settlement offers one contact's invoices together. */
+  contactId?: string | null;
   contactName: string | null;
   openMinor: number;
   currency: string;
@@ -142,6 +156,8 @@ export interface InvoiceOption {
 export interface BillOption {
   vendorBillId: string;
   reference: string | null;
+  /** D178 N3: the vendor, so a several-bill settlement offers one contact's bills together. */
+  vendorId?: string | null;
   vendorName: string | null;
   openMinor: number;
   currency: string;
@@ -195,6 +211,13 @@ export function parseInbox(body: unknown): ListBankInboxOk | null {
     nextCursor: str(r.nextCursor),
     total: num(r.total) ?? (r.lines as unknown[]).length,
     summary: r.summary as BankAccountBalance[],
+    // D178 E3 (A39 §17.6): the per-direction counts, when the engine answered them.
+    ...((): { directionCounts?: { in: number; out: number } } => {
+      const dc = rec(r.directionCounts);
+      const inN = num(dc?.in);
+      const outN = num(dc?.out);
+      return inN === null || outN === null ? {} : { directionCounts: { in: inN, out: outN } };
+    })(),
   };
 }
 
@@ -243,7 +266,8 @@ export function parseTaxCodes(body: unknown): TaxCode[] {
     if (c === null || c.active === false) continue;
     const code = str(c.code);
     if (code === null) continue;
-    out.push({ code, kind: str(c.kind) ?? 'none', rateBp: num(c.rateBp) ?? 0, label: str(c.label) ?? code });
+    const formLine = str(c.formLine);
+    out.push({ code, kind: str(c.kind) ?? 'none', rateBp: num(c.rateBp) ?? 0, label: str(c.label) ?? code, ...(formLine !== null ? { formLine } : {}) });
   }
   return out;
 }
@@ -259,7 +283,7 @@ export function parseInvoices(body: unknown): InvoiceOption[] {
     const openMinor = num(i.openMinor);
     const currency = str(i.currency);
     if (documentId === null || openMinor === null || openMinor <= 0 || currency === null) continue;
-    out.push({ documentId, number: str(i.number), contactName: str(i.customerName), openMinor, currency });
+    out.push({ documentId, number: str(i.number), contactId: str(i.customerId), contactName: str(i.customerName), openMinor, currency });
   }
   return out;
 }
@@ -275,7 +299,35 @@ export function parseBills(body: unknown): BillOption[] {
     const openMinor = num(b.openMinor);
     const currency = str(b.currency);
     if (vendorBillId === null || openMinor === null || openMinor <= 0 || currency === null) continue;
-    out.push({ vendorBillId, reference: str(b.vendorReference), vendorName: str(b.vendorName), openMinor, currency });
+    out.push({ vendorBillId, reference: str(b.vendorReference), vendorId: str(b.vendorId), vendorName: str(b.vendorName), openMinor, currency });
+  }
+  return out;
+}
+
+/** D177: a generated payment run a money-out line can settle (`list_payment_batches`, status generated). */
+export interface BatchOption {
+  batchId: string;
+  bankAccountId: string;
+  executionDate: string | null;
+  totalMinor: number | null;
+  itemCount: number;
+}
+
+export function parseBatches(body: unknown): BatchOption[] {
+  const r = rec(body);
+  if (r === null || !Array.isArray(r.batches)) return [];
+  const out: BatchOption[] = [];
+  for (const raw of r.batches as unknown[]) {
+    const b = rec(raw);
+    const batchId = str(b?.id);
+    if (b === null || batchId === null || b.status !== 'generated') continue;
+    out.push({
+      batchId,
+      bankAccountId: str(b.bankAccountId) ?? '',
+      executionDate: str(b.executionDate),
+      totalMinor: num(b.ctrlSumMinor),
+      itemCount: Array.isArray(b.items) ? (b.items as unknown[]).length : (num(b.nbOfTxs) ?? 0),
+    });
   }
   return out;
 }
@@ -319,11 +371,109 @@ export interface DraftLeg {
   amountMinor: number;
   /** '' books the leg without VAT. */
   taxCode: string;
+  /**
+   * D178 E3 (A39 §17.4): the leg's amount in the card transaction's currency, a counter-leg booked at the
+   * effective rate behind the `fx_counter_leg` consequence. `amountMinor` stays the CHF the bank booked.
+   */
+  fx?: { currency: string; amountMinor: number };
+}
+
+/**
+ * D175: one amount a Buchungsregel asks for at booking time, as the person typed it. `legIndex` is the
+ * recipe leg's index (the key of the engine's `asks` record), `label` the rule's word for it
+ * ("Bruttoumsatz"), `value` the field's raw text: kept verbatim, so a refusal or a zero rest never eats it.
+ */
+export interface RuleAsk {
+  legIndex: number;
+  label: string;
+  value: string;
+  /**
+   * D177 (A39 §16.1): a COMPUTED leg (`factor`). `minor` is the engine's figure in Rappen
+   * (`reasonParams.computed`), or null for a rule picked by hand (the engine figures it at compose and at
+   * booking; the Studio computes nothing, D152). While `value` is '' the leg books the computed figure and
+   * nothing is sent for it; a typed `value` is the person's override, sent as `asks[legIndex]`.
+   */
+  computed?: ComputedLeg;
+  /**
+   * D177: the person took over a computed leg ("von dir"): `value` is theirs, even while empty (an empty
+   * override is a missing amount, never the engine's figure). "berechnen" clears it.
+   */
+  override?: boolean;
+}
+
+/** D177: what a `factor` leg is made of, in words only (`explain`), never used for a figure. */
+export interface FactorExplain {
+  vatBp?: number;
+  feeBp?: number;
+}
+
+/** D177: what the Studio knows of a computed leg: the engine's figure (when it said one) and its formula. */
+export interface ComputedLeg {
+  minor: number | null;
+  /** The rule's factor, for the formula in the tooltip ("× 1081 / 180"); absent when the rule is unread. */
+  num?: number;
+  den?: number;
+  explain?: FactorExplain;
+}
+
+/** D177: a computed amount the engine proposes for a rule's factor leg (`reasonParams.computed`). */
+export interface ComputedAmount {
+  legIndex: number;
+  label: string;
+  amountMinor: number;
+  explain: FactorExplain | null;
+}
+
+/** True when a rule's ask is a computed leg the person has not overridden. */
+export function isComputedAsIs(ask: RuleAsk): boolean {
+  return ask.computed !== undefined && ask.override !== true;
+}
+
+/** D178 E3 (A39 §17.1): how a contact booking parks the money (`bank.contact_booking_mode`). */
+export const CONTACT_BOOKING_MODES = ['guthaben', 'anzahlung'] as const;
+export type ContactBookingMode = (typeof CONTACT_BOOKING_MODES)[number];
+
+/** D178 E3 (A39 §17.2): one document of a several-document settlement and the cash applied to it. */
+export interface DraftAllocation {
+  documentId: string;
+  amountMinor: number;
 }
 
 export type DraftTarget =
-  | { kind: 'accounts'; legs: DraftLeg[] }
+  /**
+   * `viaAccountId` (D175): the whole entry routes through this Durchlaufkonto, which nets to zero.
+   * `acknowledgeFx` (D178 E3, A39 §17.4): the person read the `fx_counter_leg` consequence of an FX leg.
+   */
+  | { kind: 'accounts'; legs: DraftLeg[]; viaAccountId?: string; acknowledgeFx?: boolean }
+  /**
+   * D175: book by a Buchungsregel. The ENGINE expands it (`expandRule`): each asked leg takes the typed
+   * amount, the rest leg the line minus the others. The Studio checks only "is every ask a positive
+   * number" (D152); every other figure comes from `compose_entry` and `book_bank_line`.
+   */
+  | { kind: 'rule'; standardId: string; asks: RuleAsk[] }
+  /**
+   * D176: a "Nicht buchen" rule's proposal. Never a `book_bank_line` target: the row decides it with
+   * `ignore_bank_line` and the rule's reason, note and id (`ignoreInputOf`), so its next step is kept.
+   */
+  | { kind: 'ignore'; reason: IgnoreReason; note: string; standardId: string }
   | { kind: 'open_item'; documentId: string; remainder: RemainderMode | null }
+  /**
+   * D178 E3 (A39 §17.2): several invoices (money in) or bills (money out) of ONE contact in one payment, sent
+   * as `open_item { allocations, remainder }`. The deviation and what may remain are the engine's preview.
+   */
+  | { kind: 'allocations'; allocations: DraftAllocation[]; remainder: RemainderMode | null }
+  /**
+   * D178 E3 (A39 §17.1): bexio's Kundenbuchung, a line booked to a contact with no document. `mode` null
+   * books in the workspace setting's mode; a differing mode needs `overrideReason` (D172).
+   */
+  | { kind: 'contact'; contactId: string; contactName?: string; mode: ContactBookingMode | null; overrideReason: string }
+  /** D178 E3 (A39 §17.3): approved Spesen paid from a debit line through E02's reimbursement. */
+  | {
+      kind: 'expense_claims';
+      claimIds: string[];
+      /** Display only (never sent): the chosen claims' total, so the footer's figures show before the preview. */
+      totalMinor?: number;
+    }
   | { kind: 'payment_batch'; batchId: string }
   /** `differenceReason` is required with `acceptDifference` (critic A39-12): the books keep why. */
   | {
@@ -342,6 +492,11 @@ export type DraftSource = 'proposal' | 'edited' | 'agent';
 export interface RowDraft {
   target: DraftTarget | null;
   source: DraftSource;
+  /**
+   * D175: on a `several_rules` line the person chose "Anders buchen": the row shows the whole "Worauf
+   * buchen?" list instead of the rule chooser.
+   */
+  other?: boolean;
 }
 
 /** The line's absolute amount in Rappen (the engine's `amount_minor`). */
@@ -356,9 +511,7 @@ export function isCredit(line: Pick<BankInboxLine, 'amountMinor'>): boolean {
 
 /** The engine's proposal as a row draft. */
 export function draftFromProposal(line: BankInboxLine): RowDraft {
-  const p = line.proposal;
-  if (p === null || p.target === null) return { target: null, source: 'proposal' };
-  return { target: draftTargetOf(p.target), source: 'proposal' };
+  return { target: proposalTarget(line), source: 'proposal' };
 }
 
 /**
@@ -374,7 +527,11 @@ export function draftFromVorschlag(v: LineVorschlag | undefined): RowDraft | nul
 }
 
 /** Any engine-shaped `target` (a proposal's, a Vorschlag's payload) as a draft target. */
-export function draftTargetOf(raw: unknown): DraftTarget | null {
+export function draftTargetOf(
+  raw: unknown,
+  askLabels: readonly { legIndex: number; label: string }[] = [],
+  computed: readonly ComputedAmount[] = [],
+): DraftTarget | null {
   const t = rec(raw);
   if (t === null) return null;
   switch (t.kind) {
@@ -386,15 +543,72 @@ export function draftTargetOf(raw: unknown): DraftTarget | null {
         const accountId = str(l?.accountId);
         const amountMinor = num(l?.amountMinor);
         if (l === null || accountId === null || amountMinor === null) return null;
-        legs.push({ accountId, amountMinor, taxCode: str(l.taxCode) ?? '' });
+        const fx = rec(l.fx);
+        const fxCurrency = str(fx?.currency);
+        const fxMinor = num(fx?.amountMinor);
+        legs.push({ accountId, amountMinor, taxCode: str(l.taxCode) ?? '', ...(fxCurrency !== null && fxMinor !== null ? { fx: { currency: fxCurrency, amountMinor: fxMinor } } : {}) });
       }
-      return legs.length === 0 ? null : { kind: 'accounts', legs };
+      if (legs.length === 0) return null;
+      const via = str(t.viaAccountId);
+      const ack = t.acknowledgeFx === true ? { acknowledgeFx: true } : {};
+      return via === null ? { kind: 'accounts', legs, ...ack } : { kind: 'accounts', legs, viaAccountId: via, ...ack };
+    }
+    case 'rule': {
+      // D175: `asks` is a record legIndex to Rappen on the wire (empty on a proposal, filled on an agent's
+      // Vorschlag); the labels come from the proposal's `reasonParams.asks`.
+      const standardId = str(t.standardId);
+      if (standardId === null) return null;
+      const filled = rec(t.asks) ?? {};
+      const indexes = new Set<number>([...askLabels.map((a) => a.legIndex), ...computed.map((c) => c.legIndex)]);
+      for (const k of Object.keys(filled)) if (/^\d+$/.test(k)) indexes.add(Number(k));
+      const asks = [...indexes]
+        .sort((a, b) => a - b)
+        .map((legIndex): RuleAsk => {
+          const v = num(filled[String(legIndex)]);
+          const c = computed.find((x) => x.legIndex === legIndex);
+          const label = askLabels.find((a) => a.legIndex === legIndex)?.label ?? c?.label ?? '';
+          // D177: a computed leg's override is the one figure sent; an override equal to the figure is none.
+          const value = v === null || (c !== undefined && v === c.amountMinor) ? '' : minorToField(v);
+          return c === undefined
+            ? { legIndex, label, value }
+            : { legIndex, label, value, computed: { minor: c.amountMinor, ...(c.explain !== null ? { explain: c.explain } : {}) }, ...(value !== '' ? { override: true } : {}) };
+        });
+      return { kind: 'rule', standardId, asks };
+    }
+    case 'ignore': {
+      // D176: the "Nicht buchen" rule's proposal: its reason, note and rule, decided by ignore_bank_line.
+      const standardId = str(t.standardId);
+      const reason = BANK_LINE_IGNORE_REASONS.find((r) => r === t.reason);
+      if (standardId === null || reason === undefined) return null;
+      return { kind: 'ignore', reason, note: str(t.note) ?? '', standardId };
     }
     case 'open_item': {
+      const remainder = BANK_LINE_REMAINDER_MODES.find((m) => m === t.remainder) ?? null;
+      if (Array.isArray(t.allocations)) {
+        const allocations: DraftAllocation[] = [];
+        for (const raw of t.allocations as unknown[]) {
+          const a = rec(raw);
+          const documentId = str(a?.documentId);
+          const amountMinor = num(a?.amountMinor);
+          if (documentId === null || amountMinor === null) return null;
+          allocations.push({ documentId, amountMinor });
+        }
+        return { kind: 'allocations', allocations, remainder };
+      }
       const documentId = str(t.documentId);
       if (documentId === null) return null;
-      const remainder = BANK_LINE_REMAINDER_MODES.find((m) => m === t.remainder) ?? null;
       return { kind: 'open_item', documentId, remainder };
+    }
+    case 'contact': {
+      const contactId = str(t.contactId);
+      if (contactId === null) return null;
+      const mode = CONTACT_BOOKING_MODES.find((m) => m === t.mode) ?? null;
+      return { kind: 'contact', contactId, mode, overrideReason: str(t.overrideReason) ?? '' };
+    }
+    case 'expense_claims': {
+      if (!Array.isArray(t.claimIds)) return null;
+      const claimIds = (t.claimIds as unknown[]).filter((c): c is string => typeof c === 'string' && c !== '');
+      return claimIds.length === 0 ? null : { kind: 'expense_claims', claimIds };
     }
     case 'payment_batch': {
       const batchId = str(t.batchId);
@@ -418,11 +632,27 @@ export function accountDraft(line: BankInboxLine, accountId: string, taxCode: st
   return { kind: 'accounts', legs: [{ accountId, amountMinor: absAmount(line), taxCode }] };
 }
 
+/** D175: an asked amount as the engine takes it: a positive number of Rappen, else null. */
+export function askMinor(ask: Pick<RuleAsk, 'value'>): number | null {
+  const v = parseMoneyInput(ask.value);
+  return v === null || v <= 0 ? null : v;
+}
+
 /** True when the draft can be sent as it stands (every leg has an account and the legs sum up). */
 export function isBookable(line: BankInboxLine, target: DraftTarget | null): boolean {
   if (target === null) return false;
+  // D175 (D152): the Studio checks only that every ask is a positive number; the rest is the engine's.
+  // D177: a computed leg left as the engine figured it needs nothing; an override must be positive too.
+  if (target.kind === 'rule') return target.asks.every((a) => isComputedAsIs(a) || askMinor(a) !== null);
+  // D176: an ignore is decided as it stands.
+  if (target.kind === 'ignore') return true;
   // An accepted difference states its reason, or the engine refuses it (critic A39-12).
   if (target.kind === 'existing_entry') return !target.acceptDifference || (target.differenceReason ?? '').trim() !== '';
+  // D178 E3: the engine's preview decides the deviation; the Studio checks only what is plainly missing.
+  if (target.kind === 'allocations') return target.allocations.length > 0 && target.allocations.every((a) => a.amountMinor > 0);
+  if (target.kind === 'expense_claims') return target.claimIds.length > 0;
+  // A mode other than the setting's carries its reason (the pane sends `mode` only when it differs).
+  if (target.kind === 'contact') return target.mode === null || target.overrideReason.trim() !== '';
   if (target.kind !== 'accounts') return true;
   if (target.legs.length === 0 || target.legs.some((l) => l.accountId === '' || l.amountMinor === 0)) return false;
   return target.legs.reduce((s, l) => s + l.amountMinor, 0) === absAmount(line);
@@ -434,8 +664,41 @@ export function bookTargetOf(target: DraftTarget): Record<string, unknown> {
     case 'accounts':
       return {
         kind: 'accounts',
-        legs: target.legs.map((l) => (l.taxCode === '' ? { accountId: l.accountId, amountMinor: l.amountMinor } : { accountId: l.accountId, amountMinor: l.amountMinor, taxCode: l.taxCode })),
+        legs: target.legs.map((l) => ({
+          accountId: l.accountId,
+          amountMinor: l.amountMinor,
+          ...(l.taxCode !== '' ? { taxCode: l.taxCode } : {}),
+          ...(l.fx !== undefined ? { fx: { currency: l.fx.currency, amountMinor: l.fx.amountMinor } } : {}),
+        })),
+        ...(target.viaAccountId !== undefined && target.viaAccountId !== '' ? { viaAccountId: target.viaAccountId } : {}),
+        ...(target.acknowledgeFx === true && target.legs.some((l) => l.fx !== undefined) ? { acknowledgeFx: true } : {}),
       };
+    case 'allocations':
+      return {
+        kind: 'open_item',
+        allocations: target.allocations.map((a) => ({ documentId: a.documentId, amountMinor: a.amountMinor })),
+        ...(target.remainder !== null ? { remainder: target.remainder } : {}),
+      };
+    case 'contact':
+      return {
+        kind: 'contact',
+        contactId: target.contactId,
+        ...(target.mode !== null ? { mode: target.mode } : {}),
+        ...(target.mode !== null && target.overrideReason.trim() !== '' ? { overrideReason: target.overrideReason.trim() } : {}),
+      };
+    case 'expense_claims':
+      return { kind: 'expense_claims', claimIds: [...target.claimIds] };
+    case 'rule':
+      // `Record<legIndex, amountMinor>` (A39 §14.2). Only a bookable draft is sent, so every ask is positive.
+      // D177: a computed leg the person left alone is not sent: the engine computes it again.
+      return {
+        kind: 'rule',
+        standardId: target.standardId,
+        asks: Object.fromEntries(target.asks.filter((a) => !isComputedAsIs(a)).map((a) => [String(a.legIndex), askMinor(a) ?? 0])),
+      };
+    case 'ignore':
+      // Never sent to book_bank_line (the engine refuses `wrong_outcome`); `ignoreInputOf` is the input.
+      return { kind: 'ignore', standardId: target.standardId };
     case 'open_item':
       return target.remainder === null ? { kind: 'open_item', documentId: target.documentId } : { kind: 'open_item', documentId: target.documentId, remainder: target.remainder };
     case 'payment_batch':
@@ -447,9 +710,40 @@ export function bookTargetOf(target: DraftTarget): Record<string, unknown> {
   }
 }
 
+/** D176: the `ignore_bank_line` input a "Nicht buchen" proposal is decided with (reason, note, the rule). */
+export function ignoreInputOf(target: Extract<DraftTarget, { kind: 'ignore' }>): Record<string, unknown> {
+  return { reason: target.reason, ...(target.note !== '' ? { note: target.note } : {}), standardId: target.standardId };
+}
+
+/**
+ * D176: what a row books a proposal as. A COMPLETE rule's proposal arrives as the `accounts` target it stands
+ * for; when that rule names a next step (a follow-up Vorlage) and the person changed nothing, it is booked as
+ * the `rule` target instead, so the decision records the rule and the line then offers the next step. The
+ * figures are the same: the engine expands the rule to exactly the proposal's target. A rule whose code was
+ * dropped on a foreign-currency line (`vatDropped`) stays the accounts target it was proposed as.
+ */
+export function bookingTargetFor(
+  line: BankInboxLine,
+  target: DraftTarget,
+  rule: Pick<BankStandard, 'id' | 'followUpStandardId'> | undefined,
+): DraftTarget {
+  const params = (line.proposal?.reasonParams ?? {}) as Record<string, unknown>;
+  if ((line.proposal?.reasonCode as string | undefined) !== 'standard' || params.vatDropped === true) return target;
+  if (rule === undefined || rule.followUpStandardId === null || params.standardId !== rule.id) return target;
+  if (target.kind !== 'accounts' || targetKey(target) !== targetKey(proposalTarget(line))) return target;
+  return { kind: 'rule', standardId: rule.id, asks: [] };
+}
+
+/** D176: the next step a decided line offers (`list_bank_inbox` `followUp`), read defensively. */
+export function lineFollowUp(line: BankInboxLine): { standardId: string; label: string } | null {
+  const raw = rec((line as BankInboxLine & { followUp?: unknown }).followUp);
+  const standardId = str(raw?.standardId);
+  return raw === null || standardId === null ? null : { standardId, label: str(raw.label) ?? '' };
+}
+
 /** The dial family a booking falls under (the engine's input-keyed rule): post, or pay for a settlement. */
 export function bookCapability(target: DraftTarget): 'post' | 'pay' {
-  return target.kind === 'open_item' || target.kind === 'payment_batch' ? 'pay' : 'post';
+  return target.kind === 'open_item' || target.kind === 'payment_batch' || target.kind === 'allocations' || target.kind === 'contact' || target.kind === 'expense_claims' ? 'pay' : 'post';
 }
 
 /** A stable key for "is this the proposal as the engine made it". */
@@ -457,7 +751,17 @@ export function targetKey(target: DraftTarget | null): string {
   if (target === null) return '';
   switch (target.kind) {
     case 'accounts':
-      return `accounts:${target.legs.map((l) => `${l.accountId}/${l.taxCode}/${l.amountMinor}`).join('|')}`;
+      return `accounts:${target.viaAccountId ?? ''}:${target.legs.map((l) => `${l.accountId}/${l.taxCode}/${l.amountMinor}${l.fx !== undefined ? `/${l.fx.currency}${l.fx.amountMinor}` : ''}`).join('|')}${target.acknowledgeFx === true ? ':fx' : ''}`;
+    case 'allocations':
+      return `allocations:${target.allocations.map((a) => `${a.documentId}/${a.amountMinor}`).join('|')}:${target.remainder ?? ''}`;
+    case 'contact':
+      return `contact:${target.contactId}:${target.mode ?? ''}`;
+    case 'expense_claims':
+      return `expense_claims:${target.claimIds.join('|')}`;
+    case 'rule':
+      return `rule:${target.standardId}:${target.asks.map((a) => `${a.legIndex}=${a.value}`).join('|')}`;
+    case 'ignore':
+      return `ignore:${target.standardId}:${target.reason}`;
     case 'open_item':
       return `open_item:${target.documentId}:${target.remainder ?? ''}`;
     case 'payment_batch':
@@ -467,12 +771,96 @@ export function targetKey(target: DraftTarget | null): string {
   }
 }
 
+/**
+ * D167 polish 8: a target's ACCOUNTS, without the MWST codes. The source glyph follows the account only: a
+ * person who changes just the MWST of TILL's (or the agent's) suggestion still books to the account that
+ * source named, so its glyph stays.
+ */
+export function accountsKey(target: DraftTarget | null): string {
+  if (target === null) return '';
+  // D175: the rule decides the source, not the amounts typed into it.
+  if (target.kind === 'rule') return `rule:${target.standardId}`;
+  return target.kind === 'accounts' ? `accounts:${target.viaAccountId ?? ''}:${target.legs.map((l) => `${l.accountId}/${l.amountMinor}`).join('|')}` : targetKey(target);
+}
+
 /** The certainty a row shows: the engine's, or "edited" once the person changed the proposal. */
 export type RowCertainty = Certainty | 'edited' | 'agent';
 
-/** The engine's proposal as a draft target, or null. */
+/** The engine's proposal as a draft target, or null. A rule target takes its ask labels off the reason. */
 export function proposalTarget(line: BankInboxLine): DraftTarget | null {
-  return line.proposal === null || line.proposal.target === null ? null : draftTargetOf(line.proposal.target);
+  return line.proposal === null || line.proposal.target === null ? null : draftTargetOf(line.proposal.target, ruleAsksOf(line), ruleComputedOf(line));
+}
+
+/** D177 (A39 §16.1): the computed amounts a `rule_computed` proposal carries (`reasonParams.computed`). */
+export function ruleComputedOf(line: BankInboxLine): ComputedAmount[] {
+  const raw = (line.proposal?.reasonParams as Record<string, unknown> | undefined)?.computed;
+  if (!Array.isArray(raw)) return [];
+  const out: ComputedAmount[] = [];
+  for (const item of raw as unknown[]) {
+    const c = rec(item);
+    const legIndex = num(c?.legIndex);
+    const amountMinor = num(c?.amountMinor);
+    if (c === null || legIndex === null || amountMinor === null) continue;
+    const e = rec(c.explain);
+    const vatBp = num(e?.vatBp);
+    const feeBp = num(e?.feeBp);
+    const explain = e === null ? null : { ...(vatBp !== null ? { vatBp } : {}), ...(feeBp !== null ? { feeBp } : {}) };
+    out.push({ legIndex, label: str(c.label) ?? '', amountMinor, explain });
+  }
+  return out;
+}
+
+/** D175: the amounts a `rule_needs_amount` proposal asks for (`reasonParams.asks`), read defensively. */
+export function ruleAsksOf(line: BankInboxLine): { legIndex: number; label: string }[] {
+  const raw = (line.proposal?.reasonParams as Record<string, unknown> | undefined)?.asks;
+  if (!Array.isArray(raw)) return [];
+  const out: { legIndex: number; label: string }[] = [];
+  for (const item of raw as unknown[]) {
+    const a = rec(item);
+    const legIndex = num(a?.legIndex);
+    if (a === null || legIndex === null) continue;
+    out.push({ legIndex, label: str(a.label) ?? '' });
+  }
+  return out;
+}
+
+/** D175: the rules a `several_rules` proposal names (`reasonParams.standardIds`), in the engine's order. */
+export function severalRuleIds(line: BankInboxLine): string[] {
+  const raw = (line.proposal?.reasonParams as Record<string, unknown> | undefined)?.standardIds;
+  return Array.isArray(raw) ? (raw as unknown[]).filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
+}
+
+/** D175: every live rule for the line's counterparty and direction (`list_bank_inbox` `ruleIds`). */
+export function lineRuleIds(line: BankInboxLine): string[] {
+  const raw = (line as BankInboxLine & { ruleIds?: unknown }).ruleIds;
+  return Array.isArray(raw) ? (raw as unknown[]).filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
+}
+
+/**
+ * D177 (A39 §16.1): the ONE agent Vorschlag a line shows. The engine names it (`vorschlagActionId`, the
+ * newest pending bank-line draft for the line); a book drafted before D177 may hold two, and the other is
+ * never shown as a second Vorschlag. Without the field (an older engine) the first the queue lists, as before.
+ */
+export function lineVorschlag(line: BankInboxLine, byLine: ReadonlyMap<string, readonly LineVorschlag[]>): LineVorschlag | undefined {
+  const pending = byLine.get(line.bankTxnId) ?? [];
+  if (pending.length === 0) return undefined;
+  const named = str((line as BankInboxLine & { vorschlagActionId?: unknown }).vorschlagActionId);
+  const hit = named === null ? undefined : pending.find((v) => v.actionId === named);
+  return hit ?? pending[0];
+}
+
+/** D175: the rule a proposal used (`reasonParams.standardId`), or null. */
+export function proposalRuleId(line: BankInboxLine): string | null {
+  return str((line.proposal?.reasonParams as Record<string, unknown> | undefined)?.standardId);
+}
+
+/**
+ * D175: the line waits on the person to pick one of several rules: a `several_rules` proposal, nothing
+ * chosen yet, and "Anders buchen" not taken.
+ */
+export function needsRuleChoice(line: BankInboxLine, draft: RowDraft | undefined): boolean {
+  const code: string = line.proposal?.reasonCode ?? '';
+  return code === 'several_rules' && line.state === 'open' && draft?.other !== true && (draft?.target ?? null) === null;
 }
 
 /** True when the row still shows the engine's proposal exactly (the person changed nothing). */
@@ -495,10 +883,237 @@ export function rowCertainty(line: BankInboxLine, draft: RowDraft | undefined): 
   return draft.source === 'agent' ? 'agent' : 'edited';
 }
 
-/** True for a proposal "Alle sicheren buchen" may send: reference-proven and untouched. */
+/**
+ * D167 (pick 2A): where a prefilled account came from, as ONE small glyph before it. `standard` is the
+ * person's own standard for the counterparty (★), `history` the bank's or the journal's past bookings
+ * (↻), `agent` an agent's pending Vorschlag (◇), `model` the local model's suggestion (the D144 "KI"
+ * case, unchanged). `null` when the person chose it themselves (no glyph means "you chose it"), when the
+ * line has no target, and for every other rung, whose certainty glyph says the rest.
+ */
+export type PrefillSource = 'standard' | 'history' | 'agent' | 'model';
+
+export function prefillSource(line: BankInboxLine, draft: RowDraft | undefined, agentTarget: DraftTarget | null = null): PrefillSource | null {
+  const target = draft === undefined ? proposalTarget(line) : draft.target;
+  if (target === null) return null;
+  if (draft?.source === 'agent') return 'agent';
+  // The ACCOUNT decides, not how it was picked nor its MWST (polish 8): re-picking TILL's suggestion after
+  // × (from "Vorschläge", or the same account from "Konten"), or changing only its MWST, keeps the line's
+  // own source and glyph. Any other account is the person's own choice.
+  if (agentTarget !== null && accountsKey(agentTarget) === accountsKey(target)) return 'agent';
+  // D175: a rule the person picked from the chooser is still the rule's booking: ★.
+  if (target.kind === 'rule' || target.kind === 'ignore') return 'standard';
+  if (accountsKey(target) !== accountsKey(proposalTarget(line))) return null;
+  // A string, not the engine's union: the D167 codes land with the engine's own branch.
+  const code: string = line.proposal?.reasonCode ?? '';
+  if (code === 'standard' || code === 'rule_needs_amount' || code === 'rule_ignore' || code === 'rule_computed') return 'standard';
+  if (code === 'history' || code === 'journal_history') return 'history';
+  if (code === 'model_suggested') return 'model';
+  return null;
+}
+
+/**
+ * D167: the live standard for the line's counterparty and direction (`list_bank_inbox` carries it as
+ * `standardId`), read defensively so a line from an engine without the field reads as "none".
+ */
+export function lineStandardId(line: BankInboxLine): string | null {
+  const raw = (line as BankInboxLine & { standardId?: unknown }).standardId;
+  return typeof raw === 'string' && raw.length > 0 ? raw : null;
+}
+
+/**
+ * D175 (A39 §14.1): how a recipe leg is amounted. Exactly one leg of a rule is the `rest` (the line minus
+ * the others, worked out by the engine); every other leg is `ask`ed at booking time under its label, or
+ * (D176) takes the SAME amount as another asked leg.
+ */
+export type RecipeAmount =
+  | { kind: 'rest' }
+  | { kind: 'ask'; label: string }
+  | { kind: 'same'; legIndex: number }
+  /**
+   * D177 (A39 §16.1): a COMPUTED amount: round-half-up(|line| x num / den) in Rappen, the person may
+   * override it at booking time. `explain` is words only (the MWST and fee rates in basis points).
+   */
+  | { kind: 'factor'; label: string; num: number; den: number; explain?: FactorExplain };
+
+/** D176: the side a Vorlage's leg books on (`RECIPE_SIDES`, bankStandards.ts). */
+export const RECIPE_SIDES = ['debit', 'credit'] as const;
+export type RecipeSide = (typeof RECIPE_SIDES)[number];
+
+/** D176: a rule speaks on a bank line (`bank`) or is a Vorlage in the composer (`manual`). */
+export const BANK_RULE_SCOPES = ['bank', 'manual'] as const;
+export type RuleScope = (typeof BANK_RULE_SCOPES)[number];
+
+/** D176: a bank rule books its legs, or proposes "Nicht buchen". */
+export const BANK_RULE_OUTCOMES = ['legs', 'ignore'] as const;
+export type RuleOutcome = (typeof BANK_RULE_OUTCOMES)[number];
+
+/** D175: one leg of a Buchungsregel, the engine's `RecipeLeg` (mirrored as a shape, never as figures). */
+export interface RecipeLeg {
+  accountId: string;
+  taxCode: string | null;
+  amount: RecipeAmount;
+  /** An asked leg that runs against the line's direction (a fee, a cost). */
+  against?: boolean;
+  /** D176: a Vorlage's leg states its side. */
+  side?: RecipeSide;
+  description?: string;
+}
+
+/** A recipe leg as `list_bank_standards` names it. */
+export interface StandardLeg extends RecipeLeg {
+  accountNumber: string;
+  accountName: string;
+}
+
+/** The longest ask label the engine takes (A39 §14.1). */
+export const ASK_LABEL_MAX = 40;
+
+/**
+ * A live Buchungsregel (`list_bank_standards`, D167 widened by D175 §14.1). A D167 row reads as a one-leg
+ * recipe whose leg is the rest, so every reader sees one shape. `invalidReason` is set when a leg's or the
+ * via account's account or code no longer holds: such a rule is silent on the rows and the sheet says why.
+ */
+export interface BankStandard {
+  id: string;
+  /** D176: `bank` or `manual` (a Vorlage). */
+  scope: RuleScope;
+  /** D176: `legs`, or `ignore` ("Nicht buchen", bank scope only). */
+  outcome: RuleOutcome;
+  /** '' for a Vorlage (it has no counterparty). */
+  counterpartyKey: string;
+  counterpartyLabel: string;
+  /** null for a Vorlage (it has no direction). */
+  direction: 'in' | 'out' | null;
+  label: string | null;
+  matchText: string | null;
+  viaAccountId: string | null;
+  viaAccountNumber: string | null;
+  viaAccountName: string | null;
+  legs: StandardLeg[];
+  invalidReason: string | null;
+  /** D176: an ignore rule's reason and note. */
+  ignoreReason: IgnoreReason | null;
+  ignoreNote: string | null;
+  /** D176: the Vorlage offered as the next step, while one is live. */
+  followUpStandardId: string | null;
+  followUpLabel: string | null;
+  /** The rest leg, kept for the D167 readers ('' for an ignore rule, which has no legs). */
+  accountId: string;
+  accountNumber: string;
+  accountName: string;
+  taxCode: string | null;
+}
+
+function parseRecipeAmount(raw: unknown): RecipeAmount | null {
+  const a = rec(raw);
+  if (a === null) return null;
+  if (a.kind === 'rest') return { kind: 'rest' };
+  if (a.kind === 'ask') return { kind: 'ask', label: str(a.label) ?? '' };
+  if (a.kind === 'same') {
+    const legIndex = num(a.legIndex);
+    return legIndex === null ? null : { kind: 'same', legIndex };
+  }
+  if (a.kind === 'factor') {
+    // D177: positive safe integers only (the engine's `shapeLegs` refuses anything else as `factor`).
+    const n = num(a.num);
+    const d = num(a.den);
+    if (n === null || d === null || !Number.isSafeInteger(n) || !Number.isSafeInteger(d) || n <= 0 || d <= 0) return null;
+    const e = rec(a.explain);
+    const vatBp = num(e?.vatBp);
+    const feeBp = num(e?.feeBp);
+    const explain = e === null ? undefined : { ...(vatBp !== null ? { vatBp } : {}), ...(feeBp !== null ? { feeBp } : {}) };
+    return { kind: 'factor', label: str(a.label) ?? '', num: n, den: d, ...(explain !== undefined ? { explain } : {}) };
+  }
+  return null;
+}
+
+/** `list_bank_standards` answers `{ standards: [...] }`; an unreadable or refused read is no standards. */
+export function parseStandards(body: unknown): BankStandard[] {
+  const r = rec(body);
+  if (r === null || !Array.isArray(r.standards)) return [];
+  const out: BankStandard[] = [];
+  for (const raw of r.standards as unknown[]) {
+    const s = rec(raw);
+    const id = str(s?.id);
+    const outcome: RuleOutcome = s?.outcome === 'ignore' ? 'ignore' : 'legs';
+    // D176: an ignore rule names no account (it has no legs).
+    const accountId = str(s?.accountId) ?? (outcome === 'ignore' ? '' : null);
+    if (s === null || id === null || accountId === null) continue;
+    const accountNumber = str(s.accountNumber) ?? '';
+    const accountName = str(s.accountName) ?? '';
+    const taxCode = str(s.taxCode);
+    const legs: StandardLeg[] = [];
+    if (Array.isArray(s.legs)) {
+      for (const rawLeg of s.legs as unknown[]) {
+        const l = rec(rawLeg);
+        const legAccount = str(l?.accountId);
+        const amount = parseRecipeAmount(l?.amount);
+        if (l === null || legAccount === null || amount === null) continue;
+        const description = str(l.description);
+        legs.push({
+          accountId: legAccount,
+          taxCode: str(l.taxCode),
+          amount,
+          ...(l.side === 'debit' || l.side === 'credit' ? { side: l.side } : {}),
+          ...(l.against === true ? { against: true } : {}),
+          ...(description !== null ? { description } : {}),
+          accountNumber: str(l.accountNumber) ?? '',
+          accountName: str(l.accountName) ?? '',
+        });
+      }
+    }
+    // A D167 engine (or a D167 row) names no legs: it is the one-leg recipe whose leg is the rest. An ignore
+    // rule has none, on purpose.
+    if (legs.length === 0 && outcome === 'legs') legs.push({ accountId, taxCode, amount: { kind: 'rest' }, accountNumber, accountName });
+    const scope: RuleScope = s.scope === 'manual' ? 'manual' : 'bank';
+    out.push({
+      id,
+      scope,
+      outcome,
+      counterpartyKey: str(s.counterpartyKey) ?? '',
+      counterpartyLabel: str(s.counterpartyLabel) ?? '',
+      direction: scope === 'manual' ? null : s.direction === 'in' ? 'in' : 'out',
+      label: str(s.label),
+      matchText: str(s.matchText),
+      viaAccountId: str(s.viaAccountId),
+      viaAccountNumber: str(s.viaAccountNumber),
+      viaAccountName: str(s.viaAccountName),
+      legs,
+      invalidReason: str(s.invalidReason),
+      ignoreReason: BANK_LINE_IGNORE_REASONS.find((r) => r === s.ignoreReason) ?? null,
+      ignoreNote: str(s.ignoreNote),
+      followUpStandardId: str(s.followUpStandardId),
+      followUpLabel: str(s.followUpLabel),
+      accountId,
+      accountNumber,
+      accountName,
+      taxCode,
+    });
+  }
+  return out;
+}
+
+/**
+ * D175: a bank-line `compose_entry` answers a refusal the booking would give (`rest_is_zero`,
+ * `ask_missing`, `rule_not_found`, ...) as its VERDICT, inside an ok answer with `composed: false`
+ * (`bankBooking.ts composeBankLine`), never as a failed read. The verdict's refusal, or null.
+ */
+export function composeVerdictError(answer: { verdict?: unknown } | null | undefined): { ok: false; error: string } | null {
+  const v = rec(answer?.verdict);
+  if (v === null || v.ok !== false || typeof v.error !== 'string') return null;
+  return v as { ok: false; error: string };
+}
+
+/**
+ * True for a proposal "Alle vorgeschlagenen buchen" and the pick bar may send: `sure` (a reference, or
+ * the person's standard) and untouched. The ENGINE's `attention` must say `sure` too (critic D167-7): it
+ * folds in a pending agent Vorschlag on the line, so a line an agent drafted is never bulk-booked even
+ * while the Studio's own Vorschläge read has not landed, or for a seat that may not make it.
+ */
 export function isSureAndUntouched(line: BankInboxLine, draft: RowDraft | undefined): boolean {
   return (
     line.state === 'open' &&
+    line.attention === 'sure' &&
     line.proposal?.certainty === 'sure' &&
     isUntouched(line, draft) &&
     isBookable(line, proposalTarget(line))

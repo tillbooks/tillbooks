@@ -1,5 +1,6 @@
 /**
- * G22's G15 provider, `checklist_items_due`: every open item of an open run due within 14 days, `due`
+ * G22's G15 provider, `checklist_items_due`: every open item of an open run due within the look-ahead
+ * window (14 days by default, the workspace setting `checklists.attention_window_days`, D172), `due`
  * until its date and `overdue` after it (spec §2 story 7). An abandoned run contributes nothing; a
  * done run has no open item to contribute.
  *
@@ -16,9 +17,16 @@ import type { WorkspaceContext } from '../context.js';
 import type { AttentionItem, QueueProvider } from '../attention/types.js';
 import { addDays } from './deadlines.js';
 import { deriveRun, openRunRows, type ChecklistItemView, type ChecklistRunView } from './runs.js';
+import { getSetting, settingDef } from '../settings/index.js';
 
-/** How far ahead the hub looks: an item due within this window is `due`. */
-export const CHECKLIST_DUE_WINDOW_DAYS = 14;
+/** The workspace setting that holds the look-ahead window (D172, the settings registry's seed entry). */
+export const CHECKLIST_DUE_WINDOW_SETTING = 'checklists.attention_window_days';
+
+/**
+ * How far ahead the hub looks by DEFAULT: an item due within this window is `due`. The registry entry
+ * is the source; this export stays for readers that want the default without a workspace.
+ */
+export const CHECKLIST_DUE_WINDOW_DAYS = settingDef(CHECKLIST_DUE_WINDOW_SETTING)?.default as number;
 
 /** Hoisted const, so the audit-vocabulary scraper does not read this provider as an audit emitter. */
 const CHECKLIST_ITEM_ENTITY_KIND = 'checklist_run_item';
@@ -44,7 +52,7 @@ interface DueItem {
 
 function dueItems(ctx: WorkspaceContext): DueItem[] {
   const today = ctx.clock.now().slice(0, 10);
-  const horizon = addDays(today, CHECKLIST_DUE_WINDOW_DAYS);
+  const horizon = addDays(today, getSetting<number>(ctx, CHECKLIST_DUE_WINDOW_SETTING));
   const out: DueItem[] = [];
   for (const row of openRunRows(ctx)) {
     const run = deriveRun(ctx, row);

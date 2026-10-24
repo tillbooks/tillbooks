@@ -2,7 +2,7 @@
   "help": {
     "Agent": {
       "title": "Agent",
-      "body": "Here you keep watch over the agent. Read the conversation to see what it did and why, then work through the proposals.\n\nThe agent records each write as a proposal instead of posting it; you approve or reject every one. Under Trust you set how far each kind of action is trusted, from always ask to run automatically.\n\nThat grant is yours alone to give: no agent can raise its own trust.",
+      "body": "Here you read what the agent did: every conversation with every step, in words.\n\nThe agent records each write as a proposal instead of posting it. You decide it in Attention, one line per proposal; the full list is also here under Proposals. Under Permissions you set how far each kind of action is trusted, from always ask to run automatically.\n\nThat grant is yours alone to give: no agent can raise its own trust.",
       "concepts": [],
       "docsPath": "introduction"
     }
@@ -82,7 +82,9 @@
         "verweigert": "refused",
         "fehlgeschlagen": "failed"
       },
-      "stale": "Void: changed after the proposal"
+      "stale": "Void: changed after the proposal",
+      "refusal": "Refused",
+      "args": "Arguments"
     },
     "card": {
       "title": "Proposal",
@@ -117,9 +119,60 @@
         "gross": "Total"
       }
     },
+    "line": {
+      "more": "More for: {title}",
+      "details": "Details",
+      "hideDetails": "Hide details",
+      "detailsOf": "Details: {title}",
+      "consequence": "What this does",
+      "origin": "Agent proposal",
+      "proposed": "Proposed",
+      "proposedValue": "on {date} by {actor}",
+      "agentActor": "Agent",
+      "level": "Approval",
+      "levelAsk": "Asks first",
+      "levelAskAlways": "Always asks",
+      "levelAuto": "Automatic from now on",
+      "levelLink": "adjustable",
+      "toBankLine": "Open bank line",
+      "period": "{period} ({from} to {to})",
+      "moreRows": "{n} more",
+      "grantConfirm": "Let the agent do {capability} without asking from now on? The grant covers every proposal of this kind, is attributed to you and can be revoked at any time.",
+      "grantYes": "Approve and allow",
+      "grantNo": "Cancel",
+      "yes": "Yes",
+      "no": "No",
+      "targetKind": {
+        "accounts": "Book to accounts",
+        "open_item": "Settle an open item",
+        "payment_batch": "Match a payment run",
+        "existing_entry": "Match an existing entry"
+      },
+      "argsEmpty": "No further details.",
+      "month": {
+        "1": "Jan",
+        "2": "Feb",
+        "3": "Mar",
+        "4": "Apr",
+        "5": "May",
+        "6": "Jun",
+        "7": "Jul",
+        "8": "Aug",
+        "9": "Sep",
+        "10": "Oct",
+        "11": "Nov",
+        "12": "Dec"
+      },
+      "essentials": {
+        "pair": "{debit} to {credit}",
+        "onto": "to {account}",
+        "many": "{count} accounts",
+        "recipient": "to {recipient}"
+      }
+    },
     "queue": {
       "empty": "Nothing to approve.",
-      "emptyHint": "The agent records proposals instead of posting directly. You control what it may do under Trust.",
+      "emptyHint": "The agent records proposals instead of posting directly. You control what it may do under Permissions.",
       "group": {
         "geld": "Money",
         "system": "System"
@@ -169,26 +222,13 @@
         "hint": "Copy this block into your client's MCP settings. It starts TILL locally through npx, in the same version as this Studio.",
         "samePath": "It opens the same ledger as this Studio:",
         "memory": "This Studio runs on a ledger held in memory, which no second process can open. Connect your client to the address above instead.",
-        "approve": "What your agent proposes, you approve here under Agent > Proposals, or in Attention.",
+        "approve": "You decide what your agent proposes in Attention. The full list is under Agent > Proposals.",
         "copy": "Copy configuration"
       },
       "clients": {
         "heading": "Recently connected",
         "empty": "No client connected yet. As soon as one calls TILL, it appears here."
       }
-    },
-    "dock": {
-      "toggle": "Agent",
-      "close": "Collapse",
-      "session": "Session",
-      "since": "since {time}",
-      "running": "running",
-      "empty": "The session is running. No steps yet.",
-      "openArchive": "Open in history",
-      "narrowHint": "Not enough room for the table and the agent side by side. The history has its own page.",
-      "composerPlaceholder": "Ask your books …",
-      "composerSend": "Ask",
-      "noRuntime": "Conversations happen in your MCP client today. Set up a local model under Writing style."
     },
     "capability": {
       "post": "Post",
@@ -214,6 +254,7 @@
       "propose_dunning_run": "Propose reminder run",
       "discard_dunning_run": "Discard reminder run",
       "issue_dunning_run": "Issue reminder run",
+      "dunning_fee_reverse": "Reverse reminder fees",
       "send_dunning_run": "Send reminder run",
       "record_payment": "Record payment",
       "allocate_payment": "Allocate payment",
@@ -316,6 +357,9 @@
       "set_qr_auto_apply": "Switch automatic settling",
       "import_camt": "Import bank statement",
       "import_camt_files": "Import bank statements",
+      "import_bank_statement": "Import bank statement file",
+      "set_bank_csv_mapping": "Save CSV column mapping",
+      "resolve_possible_duplicate": "Decide a possible duplicate",
       "create_payment_batch": "Draft payment run",
       "generate_pain001": "Create payment file",
       "discard_payment_batch": "Discard payment run",
@@ -396,7 +440,23 @@
       "vendorId": "Vendor",
       "iban": "IBAN",
       "qrIban": "QR-IBAN",
-      "creditorName": "Payee name"
+      "creditorName": "Payee name",
+      "accountId": "Account",
+      "taxCode": "VAT code",
+      "bankTxnId": "Bank line",
+      "kind": "Kind",
+      "note": "Note",
+      "reason": "Reason",
+      "text": "Text",
+      "documentId": "Document",
+      "remainder": "Remainder",
+      "writeOffAccountId": "Write-off account",
+      "batchId": "Payment run",
+      "acceptDifference": "Accept difference",
+      "differenceReason": "Reason for the difference",
+      "question": "Question",
+      "year": "Year",
+      "method": "Method"
     }
   }
 }

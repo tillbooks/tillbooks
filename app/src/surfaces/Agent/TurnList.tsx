@@ -1,5 +1,5 @@
 /**
- * The turn and its call trace (design §3b/§3c), shared by the dock and the Gespräche archive.
+ * The turn and its call trace (design §3b/§3c), rendered in the Gespräche archive.
  *
  * A turn leads with WHAT HAPPENED (a derived outcome line, visibly a summary and never in quotation
  * marks) and keeps the trace collapsed above `TRACE_COLLAPSE_THRESHOLD` calls. A partially failed
@@ -8,13 +8,17 @@
  * surface could lie about the ledger, so the wording is fixed here and asserted in the tests.
  *
  * A trace row is glyph PLUS word (gelesen / ausgeführt / Entwurf / verweigert / fehlgeschlagen),
- * never colour alone; the raw verb name and arguments live behind a per-row Details disclosure and
- * the raw key survives as the row's title.
+ * never colour alone. A row's Details disclosure reads the call's arguments as label and value pairs
+ * (D167: the same read-back the Vorschlag line shows, never `JSON.stringify`, never the verb in code)
+ * and names a refusal in words; the raw verb key survives only as the row's `data-verb`.
  */
 import { useState } from 'react';
 
-import { useT } from '../../i18n';
+import { useI18n, useT } from '../../i18n';
 import { Status, type StatusKind } from '../../components/Status';
+import { refusalText } from '../../components/states';
+import { argumentRows } from './vorschlagDetails';
+import './VorschlagLine.css';
 import { LABELLED_VERBS, TRACE_COLLAPSE_THRESHOLD, type AgentCall, type AgentTurn } from './model';
 
 function verbLabel(t: (key: string) => string, verb: string): string {
@@ -78,9 +82,14 @@ function outcomeLine(t: (key: string, params?: Record<string, string | number>) 
 }
 
 function TraceRow({ call }: { call: AgentCall }) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
   const status = statusOf(call);
+  const rows = open ? argumentRows(t, locale, call.args) : [];
+  const refusal =
+    open && call.errorCode !== null
+      ? refusalText(t, call.errorCode, { fallbackText: call.errorCode.replace(/_/g, ' ') })
+      : null;
   return (
     <li className="trace-row" data-verb={call.verb}>
       <div className="trace-row-line">
@@ -124,11 +133,28 @@ function TraceRow({ call }: { call: AgentCall }) {
         </button>
       </div>
       {open && (
-        <div className="trace-details">
-          <code>{call.verb}</code>
-          {call.errorCode !== null && <code className="trace-error">{call.errorCode}</code>}
-          <pre>{JSON.stringify(call.args, null, 2)}</pre>
-        </div>
+        <dl className="trace-details vorschlag-readback">
+          {refusal !== null && (
+            <div className="vorschlag-readback-row" data-row="refusal">
+              <dt>{t('agent.trace.refusal')}</dt>
+              <dd>{refusal}</dd>
+            </div>
+          )}
+          {rows.map((row) => (
+            <div className="vorschlag-readback-row" key={row.key}>
+              <dt>{row.label}</dt>
+              <dd className={row.money ? 't-money' : undefined} title={row.title}>
+                {row.value}
+              </dd>
+            </div>
+          ))}
+          {refusal === null && rows.length === 0 && (
+            <div className="vorschlag-readback-row">
+              <dt>{t('agent.trace.args')}</dt>
+              <dd>{t('agent.line.argsEmpty')}</dd>
+            </div>
+          )}
+        </dl>
       )}
     </li>
   );

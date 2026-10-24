@@ -77,7 +77,7 @@ export const PROVEN_POSTING_VERBS = [
     why: 'books one outgoing payment per item through A14 recordPayment',
     hops: [
       { at: 'src/core/banking/pain001.ts:1160', fn: 'markBatchPaid', calls: 'recordPayment' },
-      { at: 'src/core/payments/payment.ts:2004', fn: 'recordPayment', calls: 'postEntry' },
+      { at: 'src/core/payments/payment.ts:2055', fn: 'recordPayment', calls: 'postEntry' },
     ],
   },
   {
@@ -87,20 +87,48 @@ export const PROVEN_POSTING_VERBS = [
     verb: 'book_bank_line',
     why: 'books a bank line to accounts: performBooking routes an accounts target to bookToAccounts, which posts the entry',
     hops: [
-      { at: 'src/core/banking/bankBooking.ts:277', fn: 'bookBankLine', calls: 'performBooking' },
-      { at: 'src/core/banking/bankBooking.ts:313', fn: 'performBooking', calls: 'bookToAccounts' },
-      { at: 'src/core/banking/bankBooking.ts:975', fn: 'bookToAccounts', calls: 'postEntry' },
+      { at: 'src/core/banking/bankBooking.ts:932', fn: 'bookBankLine', calls: 'performBooking' },
+      { at: 'src/core/banking/bankBooking.ts:1058', fn: 'performBooking', calls: 'bookToAccounts' },
+      { at: 'src/core/banking/bankBooking.ts:2401', fn: 'bookToAccounts', calls: 'postEntry' },
     ],
   },
   {
     verb: 'issue_dunning_run',
     why: 'books the Mahngebühr of each fee-bearing item at issue (and on the C8 recovery)',
-    hops: [{ at: 'src/core/dunning/run.ts:831', fn: 'issueUnit', calls: 'postEntryInternalChecked' }],
+    hops: [{ at: 'src/core/dunning/run.ts:841', fn: 'issueUnit', calls: 'postEntryInternalChecked' }],
   },
 ];
 
 /** Verbs the C2 money critic measured as booking nothing. Pinned so none of them creeps back in. */
 const KNOWN_NON_POSTING = ['create_credit_note', 'stock_run_valuation', 'stock_stocktake_commit', 'inventory_stocktake_commit', 'transition_document', 'convert_document'];
+
+/**
+ * THE APPROVAL COMMIT (D178 point 5; the orchestrator's N4 ruling: on Pendenzen the one primary, so the one
+ * accent, is the batch commit "Ausgewählte genehmigen"). Approving a Vorschlag is `approve_drafted_action`,
+ * which replays the drafted verb AS THE APPROVER through the shared dispatch. A replay is no posting verb
+ * of its own (it is not in the dial map at all: it is human-only), so it is admitted on these terms only,
+ * each held to the engine and not to prose:
+ *
+ *  - the replay is cited like a proof hop: the line in `approveOnce` that calls `invoke(`;
+ *  - the claim names the approval AND at least one posting verb it replays, and every replayed verb it
+ *    names is a posting verb (the dial `post` set or a proven one) that the ENGINE lets the batch reach
+ *    (`BATCHABLE_VERBS` in `src/core/attention/vorschlaege.ts`, read with the parser, critic N4 M1);
+ *  - the surface itself calls the approval by name;
+ *  - and it is ONE file, Pendenzen's batch (`Batch.tsx`), whose commit wears the tint only while a ticked
+ *    row posts (the engine's per-row `posts`, critic N4 R2-M2). Any other surface that approves (the
+ *    single Genehmigen on /agent approves any Vorschlag, an IBAN redirect included) is refused.
+ *
+ * So `data-money-commit="approve_drafted_action book_bank_line"` holds; the approval alone, the approval with
+ * a verb the batch cannot reach, a non-posting verb in the reach, or a replayed verb without the approval
+ * do not.
+ */
+export const APPROVAL_COMMIT = {
+  verb: 'approve_drafted_action',
+  why: 'replays the drafted verb as the approver through the shared dispatch; the batch reaches only the bank-line decisions',
+  replay: { at: 'src/core/agent/draftedActions.ts:606', fn: 'approveOnce', calls: 'invoke' },
+  reach: { file: 'src/core/attention/vorschlaege.ts', name: 'BATCHABLE_VERBS' },
+  surface: 'app/src/surfaces/Attention/Batch.tsx',
+};
 
 /**
  * The one posting path: every journal entry the engine mints goes through one of these. The internal
@@ -147,6 +175,30 @@ function engineDeclaredPostingVerbs() {
   return verbs;
 }
 
+/**
+ * The verbs the engine lets Pendenzen's batch reach: the string array `BATCHABLE_VERBS`, read from source.
+ * @returns {Set<string>}
+ */
+function approvalReach() {
+  const sf = parse(APPROVAL_COMMIT.reach.file);
+  /** @type {Set<string> | null} */
+  let verbs = null;
+  /** @param {ts.Node} node */
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === APPROVAL_COMMIT.reach.name && node.initializer !== undefined) {
+      const init = ts.isAsExpression(node.initializer) ? node.initializer.expression : node.initializer;
+      if (!ts.isArrayLiteralExpression(init) || !init.elements.every((e) => ts.isStringLiteral(e))) {
+        throw new Error(`${APPROVAL_COMMIT.reach.file}: ${APPROVAL_COMMIT.reach.name} is no longer an array of string literals; teach this guard to read it`);
+      }
+      verbs = new Set(init.elements.map((e) => /** @type {ts.StringLiteral} */ (e).text));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  if (verbs === null) throw new Error(`${APPROVAL_COMMIT.reach.file} no longer declares ${APPROVAL_COMMIT.reach.name}`);
+  return verbs;
+}
+
 /** @returns {Set<string>} every posting verb: the engine's own `post` set plus the proven ones */
 function postingVerbs() {
   const verbs = engineDeclaredPostingVerbs();
@@ -172,10 +224,12 @@ function enclosingFunctionName(sf, pos) {
 }
 
 /**
- * Check one proven verb against the engine source. Returns the list of what does not hold.
- * @param {ProvenPostingVerb} proof @param {(rel: string) => string} read @returns {string[]}
+ * Check one proven verb against the engine source. Returns the list of what does not hold. `terminal` is
+ * what the last hop must call: the posting path, or (for the approval commit's replay) the dispatch.
+ * @param {ProvenPostingVerb} proof @param {(rel: string) => string} read @param {ReadonlySet<string>} [terminal]
+ * @returns {string[]}
  */
-function checkProof(proof, read) {
+function checkProof(proof, read, terminal = POSTING_PATH) {
   const misses = [];
   if (proof.hops.length === 0) misses.push(`${proof.verb}: no hop cited`);
   proof.hops.forEach((hop, i) => {
@@ -202,7 +256,9 @@ function checkProof(proof, read) {
     if (fn !== hop.fn) misses.push(`${proof.verb}: ${hop.at} sits in ${fn ?? 'no named function'}, not ${hop.fn}`);
     const next = proof.hops[i + 1];
     if (next !== undefined && next.fn !== hop.calls) misses.push(`${proof.verb}: hop ${i + 1} calls ${hop.calls}, but hop ${i + 2} is in ${next.fn}`);
-    if (next === undefined && !POSTING_PATH.has(hop.calls)) misses.push(`${proof.verb}: the last hop calls ${hop.calls}, not postEntry or reverseEntry`);
+    if (next === undefined && !terminal.has(hop.calls)) {
+      misses.push(`${proof.verb}: the last hop calls ${hop.calls}, not ${terminal === POSTING_PATH ? 'postEntry or reverseEntry' : [...terminal].join(' or ')}`);
+    }
   });
   return misses;
 }
@@ -267,9 +323,10 @@ function calledVerbsByDir(parsed) {
  * @typedef {{ file: string, line: number, verbs: string[] }} Site
  * @param {Array<{ file: string, source: string }>} files
  * @param {Set<string>} posting
+ * @param {Set<string>} [reach] the verbs the approval commit may replay (the engine's batch reach)
  * @returns {{ misses: string[], sites: Site[] }}
  */
-function verdict(files, posting) {
+function verdict(files, posting, reach = approvalReach()) {
   const parsed = files.map(({ file, source }) => ({ file, sf: parse(file, source) }));
   const called = calledVerbsByDir(parsed);
   /** @type {string[]} */
@@ -287,9 +344,24 @@ function verdict(files, posting) {
     const checkVerbs = (lit, at) => {
       const verbs = lit.text.trim().split(/\s+/).filter(Boolean);
       if (verbs.length === 0) misses.push(`${where(at)}: ${ATTR} names no verb`);
+      // The approval commit: the approval is called by the surface, and what it replays is held to the reach.
+      const approval = verbs.includes(APPROVAL_COMMIT.verb);
+      if (approval && file !== APPROVAL_COMMIT.surface) {
+        misses.push(`${where(at)}: ${ATTR} names ${APPROVAL_COMMIT.verb}, which only ${APPROVAL_COMMIT.surface} may claim (critic N4 R2-M2)`);
+      }
       for (const v of verbs) {
-        if (!posting.has(v)) misses.push(`${where(at)}: ${ATTR} names '${v}', which is not a posting verb (the engine's dial 'post' set or a proven one)`);
-        else if (!surfaceCalls.has(v)) misses.push(`${where(at)}: ${ATTR} names '${v}', which no source in ${dirname(file)} calls`);
+        if (v === APPROVAL_COMMIT.verb) {
+          if (!surfaceCalls.has(v)) misses.push(`${where(at)}: ${ATTR} names '${v}', which no source in ${dirname(file)} calls`);
+        } else if (!posting.has(v)) {
+          misses.push(`${where(at)}: ${ATTR} names '${v}', which is not a posting verb (the engine's dial 'post' set or a proven one)`);
+        } else if (approval) {
+          if (!reach.has(v)) misses.push(`${where(at)}: ${ATTR} names '${v}' as replayed by ${APPROVAL_COMMIT.verb}, but the engine's batch reach (${APPROVAL_COMMIT.reach.name}) holds no such verb`);
+        } else if (!surfaceCalls.has(v)) {
+          misses.push(`${where(at)}: ${ATTR} names '${v}', which no source in ${dirname(file)} calls`);
+        }
+      }
+      if (approval && !verbs.some((v) => v !== APPROVAL_COMMIT.verb && posting.has(v) && reach.has(v))) {
+        misses.push(`${where(at)}: ${ATTR} names ${APPROVAL_COMMIT.verb} but no posting verb it replays; an approval alone commits nothing this guard can hold`);
       }
       return verbs;
     };
@@ -411,6 +483,42 @@ test('the proof check bites: a moved line, a wrong function and a non-posting la
   assert.match(wrongFn.join('\n'), /sits in buildInvoicePosting, not issueInvoice/);
   const notPosting = checkProof({ verb: 'x', why: '', hops: [{ at: 'src/core/banking/pain001.ts:1160', fn: 'markBatchPaid', calls: 'recordPayment' }] }, read);
   assert.match(notPosting.join('\n'), /the last hop calls recordPayment, not postEntry or reverseEntry/);
+});
+
+test('the approval commit replays at the cited line, its reach is the engine\'s, and it is no posting verb itself', () => {
+  const read = (/** @type {string} */ rel) => readFileSync(join(ROOT, rel), 'utf8');
+  const replay = checkProof({ verb: APPROVAL_COMMIT.verb, why: APPROVAL_COMMIT.why, hops: [APPROVAL_COMMIT.replay] }, read, new Set([APPROVAL_COMMIT.replay.calls]));
+  assert.deepEqual(replay, []);
+  const reach = approvalReach();
+  assert.ok(reach.has('book_bank_line'), `${APPROVAL_COMMIT.reach.name} no longer reaches book_bank_line`);
+  assert.ok([...reach].some((v) => postingVerbs().has(v)), 'the batch reach holds no posting verb, so no approval commit can carry the accent');
+  assert.ok(!postingVerbs().has(APPROVAL_COMMIT.verb), 'the approval itself must never count as a posting verb');
+  // The real Pendenzen commit is attributed to the approval and the posting verb it replays.
+  const { sites } = verdict(studioSources(), postingVerbs());
+  const batch = sites.filter((s) => s.file === 'app/src/surfaces/Attention/Batch.tsx');
+  assert.equal(batch.length, 2, `the batch commit and the confirm's commit, found ${batch.length}`);
+  for (const s of batch) assert.deepEqual(s.verbs, ['approve_drafted_action', 'book_bank_line']);
+});
+
+test('the approval commit bites: alone, out of reach, not posting, not called, or replayed without it', () => {
+  const approves = "client.call('approve_drafted_action', {});";
+  /** @param {string} jsx @param {string} [calls] */
+  const of = (jsx, calls = approves, file = APPROVAL_COMMIT.surface) => verdict([{ file, source: `${calls}\nconst v = <div>${jsx}</div>;` }], postingVerbs()).misses;
+  assert.deepEqual(of('<button className="btn btn--accent" data-money-commit="approve_drafted_action book_bank_line" />'), []);
+  // R2-M2: the claim belongs to Pendenzen's batch alone; the same shape on any other surface is refused.
+  assert.match(of('<button className="btn btn--accent" data-money-commit="approve_drafted_action book_bank_line" />', approves, 'app/src/surfaces/Agent/Agent.tsx').join('\n'), /which only app\/src\/surfaces\/Attention\/Batch\.tsx may claim/);
+  const cases = /** @type {Array<[string, string, RegExp]>} */ ([
+    ['<button className="btn btn--accent" data-money-commit="approve_drafted_action" />', approves, /no posting verb it replays/],
+    ['<button className="btn btn--accent" data-money-commit="approve_drafted_action issue_invoice" />', approves, /'issue_invoice' as replayed by approve_drafted_action, but the engine's batch reach/],
+    ['<button className="btn btn--accent" data-money-commit="approve_drafted_action confirm_match" />', approves, /'confirm_match', which is not a posting verb/],
+    ['<button className="btn btn--accent" data-money-commit="approve_drafted_action book_bank_line" />', "client.call('post_entry', {});", /'approve_drafted_action', which no source in app\/src\/surfaces\/Attention calls/],
+    ['<button className="btn btn--accent" data-money-commit="book_bank_line" />', approves, /'book_bank_line', which no source in app\/src\/surfaces\/Attention calls/],
+  ]);
+  for (const [jsx, calls, why] of cases) {
+    const misses = of(jsx, calls);
+    assert.ok(misses.length > 0, `passed but must fail: ${jsx}`);
+    assert.match(misses.join('\n'), why, jsx);
+  }
 });
 
 test('the verbs the C2 critic measured as booking nothing are not posting verbs', () => {

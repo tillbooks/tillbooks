@@ -10,50 +10,27 @@
  * with a single Tab stop (roving tabindex) over the whole tree.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
-import { I18nProvider } from '../i18n';
-import { TillClientProvider } from '../lib/client-context';
-import { TillClient, type Transport } from '../lib/client';
-import { WorkspaceProvider } from './workspace';
+import { resetPrefsModuleForTests } from '../lib/prefs';
 import { NavTree } from './NavTree';
+import { resetNavPrefsForTests } from './nav-prefs';
+import { fakePrefsEngine, renderWithRail, type FakePrefsEngine } from './rail-test-kit';
 
-const idle: Transport = async () => ({ status: 200, body: { ok: true, total: 0 } });
-
-/** Echoes the current path so a navigation from the tree is observable. */
-function LocationProbe() {
-  const location = useLocation();
-  return <div data-testid="loc">{location.pathname}</div>;
+// A null workspace keeps the async AttentionBadge path dormant (it renders sync with no client call)
+// and the preference store detached (one shared value per key, never an engine call), which is all
+// these tests need except the persistence ones, which pass a real workspace and a fake engine.
+function renderTree(initialPath = '/overview', workspaceId: string | null = null, engine?: FakePrefsEngine) {
+  return renderWithRail(<NavTree />, { path: initialPath, workspaceId, engine });
 }
 
-// A null workspace keeps the async AttentionBadge path dormant (it renders sync with no client call),
-// and nav-prefs then keys its overrides under the shared "global" scope, which is all these tests
-// need except the cross-workspace leak test, which passes real ids and flushes the badge's fetch.
-function renderTree(initialPath = '/overview', workspaceId: string | null = null) {
-  return render(
-    <I18nProvider>
-      <TillClientProvider client={new TillClient(idle)}>
-        <WorkspaceProvider initialId={workspaceId}>
-          <MemoryRouter initialEntries={[initialPath]}>
-            <Routes>
-              <Route
-                path="*"
-                element={
-                  <>
-                    <NavTree />
-                    <LocationProbe />
-                  </>
-                }
-              />
-            </Routes>
-          </MemoryRouter>
-        </WorkspaceProvider>
-      </TillClientProvider>
-    </I18nProvider>,
-  );
-}
+/** Let the preference store's read (and a write in flight) land inside act. */
+const settle = async (): Promise<void> => {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+};
 
 const treeitems = () => screen.getAllByRole('treeitem');
 
@@ -76,6 +53,8 @@ const header = (name: string): HTMLElement => {
 
 beforeEach(() => {
   window.localStorage.clear();
+  resetPrefsModuleForTests();
+  resetNavPrefsForTests();
 });
 
 describe('the default-collapsed shape (the rail never scrolls)', () => {
@@ -169,27 +148,44 @@ describe('deep-link auto-expand', () => {
   });
 });
 
-describe('per-user persistence', () => {
+describe('per-user persistence (the nav.expanded preference, per person per workspace)', () => {
   it('remembers an expanded group across a reload', async () => {
-    const { unmount } = renderTree('/overview');
+    const engine = fakePrefsEngine();
+    const { unmount } = renderTree('/overview', 'ws_a', engine);
+    await settle();
     await userEvent.click(screen.getByRole('treeitem', { name: 'Stammdaten' }));
     expect(screen.getByRole('treeitem', { name: 'Stammdaten' })).toHaveAttribute('aria-expanded', 'true');
+    await settle();
+    expect(engine.get('ws_a', 'nav.expanded')).toEqual({ 'master-data': true });
     unmount();
 
-    // A fresh mount reads the stored override: still open.
-    renderTree('/overview');
-    expect(screen.getByRole('treeitem', { name: 'Stammdaten' })).toHaveAttribute('aria-expanded', 'true');
+    // A fresh mount reads the stored override from the engine: still open.
+    renderTree('/overview', 'ws_a', engine);
+    await waitFor(() => expect(screen.getByRole('treeitem', { name: 'Stammdaten' })).toHaveAttribute('aria-expanded', 'true'));
   });
 
   it('does not leak one workspace expansion into another (keyed per workspace)', async () => {
-    const { unmount } = renderTree('/overview', 'ws_a');
+    const engine = fakePrefsEngine();
+    const { unmount } = renderTree('/overview', 'ws_a', engine);
+    await settle();
     await userEvent.click(screen.getByRole('treeitem', { name: 'Stammdaten' }));
+    await settle();
     unmount();
 
-    renderTree('/overview', 'ws_b');
-    // A real workspace fires the attention count; let it settle so its setState stays inside act.
-    await act(async () => {});
+    renderTree('/overview', 'ws_b', engine);
+    await settle();
     expect(screen.getByRole('treeitem', { name: 'Stammdaten' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('keeps a toggle the engine refused for the session, so the rail still works', async () => {
+    const engine = fakePrefsEngine();
+    engine.refuseAll('invalid_pref_value');
+    renderTree('/overview', 'ws_a', engine);
+    await settle();
+    await userEvent.click(screen.getByRole('treeitem', { name: 'Stammdaten' }));
+    await settle();
+    expect(engine.get('ws_a', 'nav.expanded')).toBeUndefined();
+    expect(screen.getByRole('treeitem', { name: 'Stammdaten' })).toHaveAttribute('aria-expanded', 'true');
   });
 });
 
@@ -240,7 +236,7 @@ describe('F-05: leaves are real links, headers are sentence case, the badge is a
 
   it('renders NO badge on the Pendenzen leaf when the queue is empty (a count or nothing, never a dash)', async () => {
     renderTree('/overview', 'ws_1');
-    await act(async () => {});
+    await settle();
     const leaf = screen.getByRole('treeitem', { name: 'Pendenzen' });
     expect(within(leaf).queryByRole('img')).toBeNull();
     expect(leaf.textContent).not.toContain('-');
@@ -296,6 +292,21 @@ describe('D135: a parent navigates to its first child, the chevron only toggles'
     await userEvent.keyboard(' ');
     expect(header('Berichte')).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByTestId('loc')).toHaveTextContent('/overview');
+  });
+});
+
+describe('a group and the page that shares its navId (Projekte, Einkauf, Berichte) keep apart', () => {
+  it('keeps ONE tab stop and steps from the Projekte header down to the Projekte page', async () => {
+    renderTree('/time');
+    const group = header('Projekte');
+    expect(group).toHaveAttribute('aria-expanded', 'true');
+    // The open page (Zeiterfassung) holds the tab stop; the group and its same-id page do not both.
+    expect(treeitems().filter((el) => el.getAttribute('tabindex') === '0')).toHaveLength(1);
+    focusItem(group);
+    fireEvent.keyDown(group, { key: 'ArrowDown' });
+    const page = screen.getAllByRole('treeitem', { name: 'Projekte' }).find((el) => !el.hasAttribute('aria-expanded'))!;
+    expect(page).toHaveFocus();
+    expect(page).toHaveAttribute('aria-level', '2');
   });
 });
 

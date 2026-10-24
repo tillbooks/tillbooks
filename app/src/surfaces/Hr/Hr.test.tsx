@@ -100,4 +100,77 @@ describe('Personal surface', () => {
       expect(typeof call?.input.idempotencyKey).toBe('string');
     });
   });
+
+  // D168: the approved claim's undo. It sits in the row overflow, marked destructive, and runs only
+  // after an explicit confirm with a reason; nothing is sent before.
+  const APPROVED = { ...CLAIM, status: 'approved' };
+
+  it('offers Stornieren on an approved claim and calls expense_claim_reverse only after the confirm with a reason', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    render(tree(base(['hr.read', 'spesen.approve', 'post'], {
+      expense_claim_list: ok({ claims: [APPROVED], selfScoped: false }),
+      expense_claim_reverse: ok({ claimId: 'clm_1', reversalEntryId: 'je_2' }),
+    }), asked));
+    await userEvent.click(await screen.findByRole('tab', { name: 'Spesen' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Aktionen für Spesen/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Stornieren' }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Korrekturbuchung');
+    expect(asked.some((a) => a.action === 'expense_claim_reverse')).toBe(false);
+    const confirm = screen.getByRole('button', { name: 'Abrechnung stornieren' });
+    expect(confirm).toBeDisabled();
+    expect(confirm.className).toContain('btn--danger');
+    expect(confirm).not.toHaveAttribute('data-money-commit');
+
+    await userEvent.type(screen.getByLabelText('Grund'), 'Doppelt erfasst');
+    expect(confirm).toBeEnabled();
+    await userEvent.click(confirm);
+    await waitFor(() => {
+      const call = asked.find((a) => a.action === 'expense_claim_reverse');
+      expect(call).toBeDefined();
+      expect(call?.input.claimId).toBe('clm_1');
+      expect(call?.input.reason).toBe('Doppelt erfasst');
+      expect(typeof call?.input.idempotencyKey).toBe('string');
+    });
+  });
+
+  it('cancelling the confirm sends nothing', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    render(tree(base(['hr.read', 'spesen.approve', 'post'], { expense_claim_list: ok({ claims: [APPROVED], selfScoped: false }) }), asked));
+    await userEvent.click(await screen.findByRole('tab', { name: 'Spesen' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Aktionen für Spesen/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Stornieren' }));
+    await screen.findByRole('alertdialog');
+    const footerCancel = screen.getAllByRole('button', { name: 'Abbrechen' }).find((b) => b.className.includes('btn--secondary'));
+    expect(footerCancel).toBeDefined();
+    await userEvent.click(footerCancel as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(asked.some((a) => a.action === 'expense_claim_reverse')).toBe(false);
+  });
+
+  it('offers no Stornieren on a reimbursed or reversed claim, and names the reimbursed refusal in words', async () => {
+    const { unmount } = render(tree(base(['hr.read', 'spesen.approve', 'post'], {
+      expense_claim_list: ok({ claims: [{ ...CLAIM, status: 'reimbursed' }, { ...CLAIM, id: 'clm_2', title: 'Alt', status: 'reversed' }], selfScoped: false }),
+    })));
+    await userEvent.click(await screen.findByRole('tab', { name: 'Spesen' }));
+    expect(await screen.findByText('Storniert')).toBeInTheDocument();
+    for (const button of screen.queryAllByRole('button', { name: /^Aktionen für Spesen/ })) {
+      await userEvent.click(button);
+      expect(screen.queryByRole('menuitem', { name: 'Stornieren' })).not.toBeInTheDocument();
+      await userEvent.keyboard('{Escape}');
+    }
+    unmount();
+
+    render(tree(base(['hr.read', 'spesen.approve', 'post'], {
+      expense_claim_list: ok({ claims: [APPROVED], selfScoped: false }),
+      expense_claim_reverse: { status: 422, body: { ok: false, error: 'claim_reimbursed', claimId: 'clm_1', paymentId: 'pay_1' } },
+    })));
+    await userEvent.click(await screen.findByRole('tab', { name: 'Spesen' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Aktionen für Spesen/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Stornieren' }));
+    await userEvent.type(await screen.findByLabelText('Grund'), 'Falsch');
+    await userEvent.click(screen.getByRole('button', { name: 'Abrechnung stornieren' }));
+    expect(await screen.findByText(/zuerst die Auszahlung stornieren/)).toBeInTheDocument();
+  });
 });

@@ -20,7 +20,8 @@
  *
  * THE MENU, top to bottom: "Umgebungen verwalten" first (DESIGN.md, Navigation), the environments
  * as radio items when there is more than one, then the view items that used to be footer buttons:
- * the density switch (a checkbox item, checked in Kompakt) and "Navigation einklappen". It is the
+ * the density switch (a checkbox item, checked in Kompakt), "Menü anpassen" (D178 point 6, the menu
+ * editor; the Menü header carries the same door) and "Navigation einklappen". It is the
  * rail's shared menu button (`useMenuButton`), opening upward from the footer.
  */
 import { useId, useState } from 'react';
@@ -39,6 +40,7 @@ import {
   type EnvironmentFace,
 } from '../surfaces/Environments/EnvironmentIndicator';
 import { useDensity } from './density';
+import { useRailOptional } from './nav-prefs';
 import { useMenuButton } from './useMenuButton';
 import { useWorkspaceId } from './workspace';
 
@@ -67,6 +69,8 @@ export function RailStatusMenu({ onCollapse, egress = 'local' }: RailStatusMenuP
   const workspaceId = useWorkspaceId();
   const landscape = useLandscape();
   const { density, toggle: toggleDensity } = useDensity();
+  // D178 point 6: "Menü anpassen" opens the menu editor; absent outside the rail's model (its tests).
+  const rail = useRailOptional();
   const [busy, setBusy] = useState(false);
   const menuId = useId();
   const triggerId = useId();
@@ -104,6 +108,9 @@ export function RailStatusMenu({ onCollapse, egress = 'local' }: RailStatusMenuP
     onSelect: toggleDensity,
     separated: true,
   });
+  if (rail !== null && !rail.customising) {
+    entries.push({ key: 'customise', label: t('nav.customise.open'), role: 'menuitem', onSelect: () => rail.setCustomising(true) });
+  }
   if (onCollapse !== undefined) {
     entries.push({ key: 'collapse', label: t('nav.collapse'), role: 'menuitem', onSelect: onCollapse });
   }

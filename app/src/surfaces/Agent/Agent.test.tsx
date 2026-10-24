@@ -3,8 +3,9 @@
  * every assertion is about what the surface shows.
  *
  *  - Gespräche: dash-versus-zero per the §3e rule; a running session is glyph plus TEXT.
- *  - Vorschläge: the empty state shares the list's predicate; the card is the ONE component and the
- *    accent sits on exactly one Genehmigen however many cards are stacked.
+ *  - Vorschläge: the empty state shares the list's predicate; the Vorschlag line is the ONE component,
+ *    a list spends no accent (every Genehmigen is a secondary), Details are label and value pairs and
+ *    never JSON, the Freigabe level is READ from the dial, a bank-line Vorschlag links to its line.
  *  - Berechtigungen: one row per governed capability; zero history is a sentence, never zeroes; the strong-default pair
  *    renders "fragt immer" with the reason; stored-vs-effective render BOTH when they disagree; the
  *    grant is a ceremony (confirm in place); without manage_agent_dial the control column is absent.
@@ -22,6 +23,7 @@ import { I18nProvider } from '../../i18n';
 import { WorkspaceProvider, useWorkspace } from '../../app/workspace';
 import { CapabilitiesContext, ALLOW_ALL, type Capabilities } from '../../lib/capabilities';
 import { Agent } from './index';
+import listAccountsFixture from '../Accounts/list-accounts.fixture.json';
 import { Turn } from './TurnList';
 import type { AgentTurn } from './model';
 
@@ -137,7 +139,7 @@ describe('Gespräche', () => {
   });
 });
 
-describe('Vorschläge (the one card)', () => {
+describe('Vorschläge (the one line, D167)', () => {
   const twoPending = ok({
     actions: [
       { actionId: 'a1', actor: 'agent', dialCapability: 'post', actionTool: 'post_entry', payload: { date: '2026-06-12' }, status: 'pending', createdAt: '2026-06-10T10:00:00.000Z' },
@@ -145,15 +147,144 @@ describe('Vorschläge (the one card)', () => {
     ],
   });
 
-  it('the accent sits on exactly ONE Genehmigen however many cards are stacked', async () => {
-    renderAgent({ list_agent_sessions: SESSIONS, list_drafted_actions: twoPending });
+  it('a list spends no accent: one line per proposal, every Genehmigen a secondary, the verb in words', async () => {
+    const { container } = renderAgent({ list_agent_sessions: SESSIONS, list_drafted_actions: twoPending });
     fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
-    const cards = await screen.findAllByRole('article');
-    expect(cards).toHaveLength(2);
-    expect(cards.filter((c) => c.dataset.accent === 'true')).toHaveLength(1);
-    // Approving from the queue calls the same verb the dock calls: same component, same handler.
+    const lines = await screen.findAllByRole('article');
+    expect(lines).toHaveLength(2);
     const approve = screen.getAllByRole('button', { name: 'Genehmigen' });
     expect(approve).toHaveLength(2);
+    for (const button of approve) {
+      expect(button.className).toContain('btn--secondary');
+      expect(button.className).not.toMatch(/btn--(primary|accent)/);
+    }
+    expect(container.querySelector('.vorschlag-line .btn--primary, .vorschlag-line .btn--accent')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Buchung erfassen' })).toHaveLength(2);
+    expect(screen.queryByText('post_entry')).toBeNull();
+  });
+
+  it('Details are label and value pairs, never JSON and never a raw payload key', async () => {
+    const { container } = renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: ok({
+        actions: [
+          {
+            actionId: 'a7',
+            actor: 'agent',
+            dialCapability: 'vat-file',
+            actionTool: 'vat_mark_filed',
+            payload: { workspaceId: 'ws_test', period: '2026-Q1', idempotencyKey: 'k7', confirmed: true },
+            status: 'pending',
+            createdAt: '2026-10-13T08:00:00.000Z',
+          },
+        ],
+      }),
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    // The face: the verb in words and the period as its one key figure.
+    expect(screen.getByRole('button', { name: 'MWST-Abrechnung als eingereicht markieren' })).toBeInTheDocument();
+    expect(container.querySelector('[data-figure="key"]')?.textContent).toBe('2026-Q1 (Jan. bis März)');
+    fireEvent.click(screen.getByRole('button', { name: /^Mehr zu:/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Details' }));
+    const details = container.querySelector('.vorschlag-readback') as HTMLElement;
+    const text = details.textContent ?? '';
+    expect(text).toContain('Periode');
+    expect(text).toContain('2026-Q1 (Jan. bis März)');
+    expect(text).toContain('am 13.10.2026 von Agent');
+    for (const raw of ['{', '"', 'workspaceId', 'idempotencyKey', 'confirmed', 'vat_mark_filed', 'ws_test', 'k7']) {
+      expect(text).not.toContain(raw);
+    }
+    expect(container.querySelector('.vorschlag-line pre, .vorschlag-line code')).toBeNull();
+  });
+
+  it('the Freigabe level is read from the dial, never hard-coded', async () => {
+    const pending = ok({
+      actions: [
+        { actionId: 'a1', actor: 'agent', dialCapability: 'post', actionTool: 'post_entry', payload: { date: '2026-06-12' }, status: 'pending', createdAt: '2026-06-10T10:00:00.000Z' },
+        { actionId: 'a2', actor: 'agent', dialCapability: 'vat-file', actionTool: 'vat_mark_filed', payload: { period: '2026-Q2' }, status: 'pending', createdAt: '2026-06-11T10:00:00.000Z' },
+      ],
+    });
+    const dialCalls: Record<string, unknown>[] = [];
+    renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: pending,
+      get_agent_dial: (input) => {
+        dialCalls.push(input);
+        return ok({
+          levels: { post: 'auto', 'vat-file': 'ask' },
+          rows: [
+            { capability: 'post', stored: 'auto', effective: 'auto', strongDefault: false },
+            { capability: 'vat-file', stored: 'ask', effective: 'ask', strongDefault: true },
+          ],
+        });
+      },
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    await waitFor(() => expect(dialCalls.length).toBeGreaterThan(0));
+    for (const title of screen.getAllByRole('button', { name: /^(Buchung erfassen|MWST-Abrechnung als eingereicht markieren)$/ })) {
+      fireEvent.click(title);
+    }
+    const levelOf = (actionId: string) => {
+      const line = document.querySelector(`[data-action-id="${actionId}"]`) as HTMLElement;
+      const row = [...line.querySelectorAll('.vorschlag-readback-row')].find((r) => r.querySelector('dt')?.textContent === 'Freigabe');
+      return row?.querySelector('dd')?.textContent ?? null;
+    };
+    // D167 polish 11: the level in words, then "einstellbar" as a link to the agent's Berechtigungen.
+    await waitFor(() => expect(levelOf('a1')).toBe('Künftig automatisch\u00a0·\u00a0einstellbar'));
+    expect(levelOf('a2')).toBe('Fragt immer\u00a0·\u00a0einstellbar');
+    const link = within(document.querySelector('[data-action-id="a1"]') as HTMLElement).getByRole('link', { name: 'einstellbar' });
+    expect(link).toHaveAttribute('href', '/agent?tab=berechtigungen');
+  });
+
+  it('an unreadable dial leaves the Freigabe row out rather than guessing a level', async () => {
+    renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: twoPending,
+      get_agent_dial: { status: 500, body: { ok: false, error: 'internal' } },
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Buchung erfassen' })[0]);
+    expect(await screen.findByText('Vorgeschlagen')).toBeInTheDocument();
+    expect(screen.queryByText('Freigabe')).toBeNull();
+    expect(screen.queryByText(/Stufe/)).toBeNull();
+  });
+
+  it('a bank-line Vorschlag links to its line on /bank', async () => {
+    renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: ok({
+        actions: [
+          {
+            actionId: 'a5',
+            actor: 'agent',
+            dialCapability: 'pay',
+            actionTool: 'book_bank_line',
+            payload: { bankTxnId: 'btx_42', target: { kind: 'accounts', legs: [{ accountId: 'acc_51', amountMinor: -1654, taxCode: 'VST-81' }] }, idempotencyKey: 'k5' },
+            status: 'pending',
+            createdAt: '2026-10-13T08:00:00.000Z',
+          },
+        ],
+      }),
+      // D167: the chart names the leg's account; Details never print its id. The PINNED recording
+      // (`list-accounts.fixture.json`, acc_51 is 6570), never hand-typed accounts.
+      list_accounts: ok({ accounts: listAccountsFixture.accounts }),
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    const link = screen.getByRole('link', { name: 'Zur Bankzeile' });
+    expect(link.getAttribute('href')).toBe('/bank?line=btx_42');
+    expect(document.querySelector('[data-figure="key"]')?.textContent).toContain('16.54');
+    fireEvent.click(screen.getByRole('button', { name: 'Bankzeile buchen' }));
+    const text = document.querySelector('.vorschlag-readback')?.textContent ?? '';
+    expect(text).toContain('Auf Konten buchen');
+    await waitFor(() => expect(document.querySelector('.vorschlag-readback')?.textContent ?? '').toContain('6570 Informatik, Software und Lizenzen'));
+    expect(document.querySelector('.vorschlag-readback')?.textContent ?? '').not.toContain('acc_51');
+    expect(text).toContain('VST-81');
+    expect(text).not.toContain('btx_42');
+    expect(text).not.toContain('legs');
   });
 
   it('no single control on the card face rejects: Ablehnen lives in the overflow and confirms in place', async () => {
@@ -163,7 +294,7 @@ describe('Vorschläge (the one card)', () => {
     // Nothing on the face rejects.
     expect(screen.queryByRole('button', { name: 'Ablehnen' })).not.toBeInTheDocument();
     // Open the first card's overflow, choose Ablehnen: a confirm appears IN PLACE, naming finality.
-    fireEvent.click(screen.getAllByRole('button', { name: 'Details' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Mehr zu:/ })[0]);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Ablehnen' }));
     expect(await screen.findByText(/Der Vorschlag ist danach erledigt/)).toBeInTheDocument();
   });
@@ -174,12 +305,37 @@ describe('Vorschläge (the one card)', () => {
     expect(await screen.findByText('Nichts zu genehmigen.')).toBeInTheDocument();
   });
 
-  it('without manage_agent_dial the card renders disabled-with-reason, shown and never rejecting', async () => {
+  it('without manage_agent_dial the line names the missing right in place of Genehmigen, and offers no reject', async () => {
     renderAgent({ list_agent_sessions: SESSIONS, list_drafted_actions: twoPending }, NO_DIAL_RIGHT);
     fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
     await screen.findAllByRole('article');
     expect(screen.queryByRole('button', { name: 'Genehmigen' })).not.toBeInTheDocument();
     expect(screen.getAllByText(/Benötigt: Agent-Freigabe/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Mehr zu:/ })[0]);
+    expect(await screen.findByRole('menuitem', { name: 'Details' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Ablehnen' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Genehmigen und künftig automatisch' })).toBeNull();
+  });
+
+  it('"Genehmigen und künftig automatisch" confirms in place with the grant sentence, then sends allowFuture once', async () => {
+    const sent: Record<string, unknown>[] = [];
+    renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: twoPending,
+      approve_drafted_action: (input) => {
+        sent.push(input);
+        return ok({ actionId: 'a1', status: 'executed' });
+      },
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    fireEvent.click(screen.getAllByRole('button', { name: /^Mehr zu:/ })[0]);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Genehmigen und künftig automatisch' }));
+    expect(await screen.findByText(/bleibt jederzeit widerrufbar/)).toBeInTheDocument();
+    expect(sent).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Genehmigen und erlauben' }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toEqual({ workspaceId: 'ws_test', actionId: 'a1', allowFuture: true });
   });
 });
 
@@ -323,7 +479,7 @@ describe('"No, and tell it why" (F-08, J5.6): the reject reason', () => {
     });
     fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
     await screen.findAllByRole('article');
-    fireEvent.click(screen.getAllByRole('button', { name: 'Details' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Mehr zu:/ })[0]);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Ablehnen' }));
     // The field is optional and labelled; the placeholder says where the sentence goes.
     const field = await screen.findByLabelText('Begründung (optional)');
@@ -345,7 +501,7 @@ describe('"No, and tell it why" (F-08, J5.6): the reject reason', () => {
     });
     fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
     await screen.findAllByRole('article');
-    fireEvent.click(screen.getAllByRole('button', { name: 'Details' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Mehr zu:/ })[0]);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Ablehnen' }));
     await screen.findByLabelText('Begründung (optional)');
     fireEvent.click(screen.getByRole('button', { name: 'Ja, ablehnen' }));
@@ -408,7 +564,7 @@ describe('Verbindung (the MCP-first onboarding)', () => {
     expect(config.mcpServers.tillbooks.env).toEqual({ TILL_DB_PATH: '/Users/beispiel/Buchhaltung/beispiel.db' });
     // The path is also said in words, and so is where a human approves what the agent drafts.
     expect(screen.getByText(/dasselbe Hauptbuch wie dieses Studio/)).toBeInTheDocument();
-    expect(screen.getByText(/Agent > Vorschläge frei/)).toBeInTheDocument();
+    expect(screen.getByText(/entscheidest du in den Pendenzen/)).toBeInTheDocument();
     // The recent client labels come from list_agent_sessions, the read the Gespräche tab uses.
     await waitFor(() =>
       expect(container.querySelector('.agent-connect-clients')?.textContent ?? '').toContain('Claude Desktop'),
@@ -544,7 +700,7 @@ describe('the Commit moment on a decision (D122 D-I)', () => {
     });
     fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
     await screen.findAllByRole('article');
-    fireEvent.click(screen.getAllByRole('button', { name: 'Details' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Mehr zu:/ })[0]);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Ablehnen' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Ja, ablehnen' }));
     expect(await screen.findByText('Abgelehnt')).toBeInTheDocument();

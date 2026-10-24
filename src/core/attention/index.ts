@@ -10,13 +10,33 @@
 import { assertProvidersRegistrable } from './compose.js';
 import { ATTENTION_PROVIDERS } from './providers.js';
 
-export { attentionSummary, attentionList, assertProvidersRegistrable } from './compose.js';
+export {
+  attentionSummary,
+  attentionList,
+  assertProvidersRegistrable,
+  unitsOf,
+  SECTION_PAGE_SIZE,
+  APPROVAL_BATCH_MODE_SETTING,
+  REMAINDER_ENTITY_KIND,
+} from './compose.js';
 export type { AttentionSummaryInput, AttentionListInput } from './compose.js';
-export { ATTENTION_PROVIDERS, ROUTED_SURFACES } from './providers.js';
+export {
+  ATTENTION_PROVIDERS,
+  ROUTED_SURFACES,
+  BANK_VORSCHLAG_VERBS,
+  BATCHABLE_VERBS,
+  isBankVorschlag,
+  isBankVorschlagVerb,
+  isBatchable,
+  withKind,
+} from './providers.js';
 export {
   ATTENTION_URGENCY,
   ATTENTION_LIST_CAP,
   URGENCY_RANK,
+  ATTENTION_KINDS,
+  ATTENTION_AREA_ORDER,
+  ATTENTION_GROUPINGS,
 } from './types.js';
 export type {
   AttentionItem,
@@ -24,6 +44,9 @@ export type {
   DecisionRole,
   AttentionUrgency,
   AttentionQueueSummary,
+  AttentionKind,
+  AttentionGrouping,
+  AttentionSection,
   QueueProvider,
   DeepLink,
   Freshness,

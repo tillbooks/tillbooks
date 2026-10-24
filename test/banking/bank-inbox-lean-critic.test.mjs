@@ -29,6 +29,7 @@ import { SqliteStore } from '../../dist/core/store/sqlite-store.js';
 import { assertClaimInvariantHolds, world, importLines, postedBill, rowCounts, must, refused, issueInvoice, secondWorkspace, SAVINGS_IBAN, MAIN_IBAN } from './bank-inbox-support.mjs';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
 import { retireSeededChecklistRules, runRows } from '../automation/support.mjs';
+import { chainedOpening } from './e2-adapt.mjs';
 
 afterEach(assertClaimInvariantHolds);
 
@@ -182,7 +183,8 @@ test('M1: confirm_match allocations refuse already_batched for a bill in a live 
   assert.equal(byTarget.batchId, r.batchId);
   assert.deepEqual(rowCounts(t.store, t.workspaceId), before, 'the refused split by targetId moved the database');
   // The run can still be booked from its own debit afterwards.
-  const { lines: runLine } = importLines(t, { statementId: 'M1R', seqNb: '2', entries: [{ ref: 'RUN', amountMinor: 100000, cd: 'DBIT', pmtInfId: frozenPmtInfId(t, r.batchId) }] });
+  // D178 point 19 (re-cut): the next statement opens where the last one closed, as a bank's do.
+  const { lines: runLine } = importLines(t, { statementId: 'M1R', seqNb: '2', openingMinor: chainedOpening(t), entries: [{ ref: 'RUN', amountMinor: 100000, cd: 'DBIT', pmtInfId: frozenPmtInfId(t, r.batchId) }] });
   assert.equal(must(bookBankLine(t.ctx, { bankTxnId: runLine.RUN, target: { kind: 'payment_batch', batchId: r.batchId }, idempotencyKey: 'm1-run' })).state, 'booked');
 });
 

@@ -13,6 +13,10 @@
  * actor (`visibleQueues == 0`, `total: null`) renders nothing here (the padlock lives on the hub), a
  * failed read is a muted line with a retry, an all-clear (`total: 0`) is a quiet line.
  *
+ * ONE LINE PER ITEM (B5 judge, D178): the row is the item's title; the engine's explanatory subtitle sits
+ * behind the (i) beside it, so the block reads as a list and not as paragraphs. The Übersicht places
+ * the block BELOW its title and key figures.
+ *
  * ZERO ACCENT: the count is ink, the urgency is the shared Status glyph (its shape carries it, never
  * colour alone), and the only accent the block ever shows is the focus ring.
  */
@@ -20,6 +24,7 @@ import { Link } from 'react-router-dom';
 
 import { useT } from '../../i18n';
 import { ChevronRightGlyph } from '../../components/icons';
+import { HelpHint } from '../../components/HelpHint';
 import { Status, type StatusKind } from '../../components/Status';
 import { announceAttentionChanged, useAttentionSummary, type AttentionTopItem, type AttentionUrgency } from '../Attention/attentionSummary';
 import { itemSubtitle, itemTitle } from '../Attention/itemText';
@@ -81,15 +86,16 @@ export function AttentionStrip() {
         <ul className="att-strip-items">
           {top.map((item) => {
             const subtitle = itemSubtitle(t, item);
+            const title = itemTitle(t, item);
             return (
-              <li key={`${item.queueId}:${item.entityId}`}>
+              <li key={`${item.queueId}:${item.entityId}`} className="att-strip-row">
                 <Link to={hrefOf(item)} className="att-strip-item">
                   <Status kind={URGENCY_KIND[item.urgency]} label={t(`attention.urgency.${item.urgency}`)} className="att-strip-urgency" />
-                  <span className="att-strip-text">
-                    <span className="att-strip-title">{itemTitle(t, item)}</span>
-                    {subtitle !== null && subtitle !== '' && <span className="att-strip-sub">{subtitle}</span>}
-                  </span>
+                  <span className="att-strip-title">{title}</span>
                 </Link>
+                {subtitle !== null && subtitle !== '' ? (
+                  <HelpHint label={t('dashboard.attentionStrip.more', { title })} title={title} body={subtitle} />
+                ) : null}
               </li>
             );
           })}

@@ -143,7 +143,9 @@ test('A07 fixtures: no payload carries a currency, which is why the surface read
 test('A07 fixtures: a period carries `filed` and no status word (design finding F13)', () => {
   assert.ok(PERIODS.periods.length > 0);
   for (const period of PERIODS.periods) {
-    assert.deepEqual(Object.keys(period).sort(), ['filed', 'label', 'months', 'periodEnd', 'periodStart']);
+    // `method` (critic R3-M1, 14.10.2026): in a MWSTV Art. 81 Abs. 2 switch year each period names the
+    // method it is filed under. It is a fact of the calendar, not a status word.
+    assert.deepEqual(Object.keys(period).sort(), ['filed', 'label', 'method', 'months', 'periodEnd', 'periodStart']);
     assert.equal('status' in period, false, 'the engine now sends a status word: move the derivation out of the Studio');
   }
 });

@@ -55,6 +55,7 @@ import {
   assetOpeningBalance,
   assetReconciliationReport,
   assetReconciliationCheck,
+  assetTransactionReverse,
 } from '../core/assets/index.js';
 import type { ActionKind } from './actionKind.js';
 
@@ -603,6 +604,15 @@ export function assetActions(h: AssetActionHelpers): readonly ActionDef[] {
         ['assetId', 'date', 'costRappen', 'idempotencyKey'],
       ),
       (ctx, input) => assetOpeningBalance(ctx, as(input)),
+    ),
+
+    // --- D170, the register's undo verb (MONEY PATH: posts the owned A02 mirror) -------------------
+    ctxAction(
+      'asset_transaction_reverse',
+      'write:correctable:books',
+      'Storniere one financial event on a fixed asset (D170): an acquisition, an additional capitalisation, an opening balance or a disposal, named by assetId and transactionId (from asset_ledger_get). In ONE transaction it posts the faithful A02 reversing entry of the event (OR 957a, dated today) and appends a compensating asset_transaction (type <event>_reversal, the negated deltas) naming that mirror, so the register and the GL stay reconciled; nothing is edited or deleted. A reversed acquisition or opening closes the asset (archived, book value 0): the corrected purchase is a fresh asset. A reversed capitalisation lowers cost and book value. A reversed disposal returns the asset to active (or fully_depreciated at its residual) and clears the disposal date and proceeds. Refused, writing nothing: asset_disposed (reverse the disposal first), capitalisation_stands (reverse the capitalisations before the baseline), depreciation_posted naming the runs (asset_depreciation_run_reverse first, newest first; for a capitalisation only runs of its period or later count), not_reversible (a depreciation row goes with its run; a correcting row is not reversed), already_reversed naming the compensating row, invalid_transition, reason_required, period_locked when today is sealed, not_found (foreign or mismatched ids, §H-TENANT). An event whose entry a raw reverse_entry already took out (a book from before this verb) adopts that reversal and posts nothing (adopted:true). The raw reverse_entry refuses these entries (owned_by asset_transaction_reverse). Idempotent on idempotencyKey; one mirror per event whatever the key.',
+      ctxSchema({ assetId: STR, transactionId: STR, reason: STR, idempotencyKey: STR }, ['assetId', 'transactionId', 'reason', 'idempotencyKey']),
+      (ctx, input) => assetTransactionReverse(ctx, as(input)),
     ),
   ];
 }

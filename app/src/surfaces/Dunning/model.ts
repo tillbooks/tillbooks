@@ -11,8 +11,9 @@
 export const DUNNING_RUN_STATUSES = ['proposed', 'issued', 'sent'] as const;
 export type DunningRunStatus = (typeof DUNNING_RUN_STATUSES)[number];
 
-/** K-31 f2: the distinct cause a named invoice changed since the run was issued. */
-export const DUNNING_ITEM_CHANGES = ['paid', 'partially_paid', 'cancelled', 'credited'] as const;
+/** K-31 f2: the distinct cause a named invoice changed since the run was issued; D169 adds the
+ *  run's fee reversed while the frozen letter still demands it. */
+export const DUNNING_ITEM_CHANGES = ['paid', 'partially_paid', 'cancelled', 'credited', 'fee_reversed'] as const;
 export type DunningItemChange = (typeof DUNNING_ITEM_CHANGES)[number];
 
 function parseChange(value: unknown): DunningItemChange | null {
@@ -38,10 +39,23 @@ export interface DunningLevelConfig {
   templateKey: string;
 }
 
+export type DunningRefreezeMode = 're-issue' | 'hold';
+export type DunningLetterDate = 'run_date' | 'today';
+
 export interface DunningConfigView {
   levels: DunningLevelConfig[];
   configured: boolean;
   interestFloorBp: number;
+  /** D174: the registry settings in force (`dunning.refreeze`, `dunning.letter_date`). */
+  refreeze: DunningRefreezeMode;
+  letterDate: DunningLetterDate;
+}
+
+/** D174: a per-run override of the re-freeze settings, with its required reason. */
+export interface DunningRefreezeOverride {
+  refreeze: DunningRefreezeMode;
+  letterDate: DunningLetterDate;
+  overrideReason: string;
 }
 
 export interface DunningItemView {
@@ -93,6 +107,10 @@ export interface DunningDebtorGroup {
   changeReason: DunningItemChange | null;
   /** Every invoice on this letter that changed since issue. */
   changedDocumentIds: string[];
+  /** D174: the unsent letter was re-issued without the run's reversed fee (now sendable). */
+  reissuedWithoutFee: boolean;
+  /** D174 (Q9): the date this letter carries; differs from the run date only when re-issued under `today`. */
+  letterDate: string | null;
 }
 
 export interface DunningRunView {
@@ -101,6 +119,8 @@ export interface DunningRunView {
   status: DunningRunStatus;
   feeEntryId: string | null;
   feeSkippedReason: string | null;
+  /** D169: the mirror that reversed the run's fee (derived by the engine from the ledger), or null. */
+  feeReversalEntryId: string | null;
   /** C3: the member seat that proposed the run, from `dunning_run.created_by`. Null when unnamed. */
   createdBy: string | null;
   /** C3: when the run was proposed, from `dunning_run.created_at`. Null on a legacy row. */
@@ -169,7 +189,11 @@ export function parseConfig(body: Record<string, unknown>): DunningConfigView | 
   }
   const interestFloorBp = num(body.interestFloorBp);
   if (levels.length !== 3 || interestFloorBp === null) return null;
-  return { levels, configured: body.configured === true, interestFloorBp };
+  // D174: the settings ride the config read; an absent or unknown value reads as the registry default.
+  const settings = typeof body.settings === 'object' && body.settings !== null ? (body.settings as Record<string, unknown>) : {};
+  const refreeze: DunningRefreezeMode = settings.refreeze === 'hold' ? 'hold' : 're-issue';
+  const letterDate: DunningLetterDate = settings.letterDate === 'today' ? 'today' : 'run_date';
+  return { levels, configured: body.configured === true, interestFloorBp, refreeze, letterDate };
 }
 
 function parseItem(value: unknown): DunningItemView | null {
@@ -244,6 +268,8 @@ function parseGroup(value: unknown): DunningDebtorGroup | null {
     changedSinceIssue: raw.changedSinceIssue === true,
     changeReason: parseChange(raw.changeReason),
     changedDocumentIds,
+    reissuedWithoutFee: raw.reissuedWithoutFee === true,
+    letterDate: str(raw.letterDate),
   };
 }
 
@@ -270,6 +296,7 @@ export function parseRun(body: Record<string, unknown>): DunningRunView | null {
     status: body.status,
     feeEntryId: str(body.feeEntryId),
     feeSkippedReason: str(body.feeSkippedReason),
+    feeReversalEntryId: str(body.feeReversalEntryId),
     createdBy: str(body.createdBy),
     createdAt: str(body.createdAt),
     issuedAt: str(body.issuedAt),

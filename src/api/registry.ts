@@ -15,6 +15,7 @@
 import type { OkFields, Result } from '../core/result.js';
 import { ok, err } from '../core/result.js';
 import type { SqliteStore } from '../core/store/sqlite-store.js';
+import type { AdoptedBookUnavailable } from './db-path.js';
 import { isBusyError } from '../core/store/sqlite-store.js';
 import { SchemaNewerThanRuntimeError, SCHEMA_NEWER_THAN_RUNTIME, refusalFields } from '../core/store/generation.js';
 import type { Clock } from '../core/clock.js';
@@ -30,6 +31,7 @@ import type {
 } from '../core/context.js';
 import type { DiagnosticsPort } from '../core/ports.js';
 import { makeContext } from '../core/context.js';
+import { postEntryFromTemplate } from '../core/banking/bankTemplates.js';
 import { closeYearGuarded } from '../core/checklists/index.js';
 
 import {
@@ -178,6 +180,7 @@ import { mailActions } from './mail-actions.js';
 import { voiceActions } from './voice-actions.js';
 import { draftActions } from './draft-actions.js';
 import { composeActions } from './compose-actions.js';
+import { journalNumberingActions } from './journal-numbering-actions.js';
 import { egressActions } from './egress-actions.js';
 import { dunningActions } from './dunning-actions.js';
 import { recurringActions } from './recurring-actions.js';
@@ -187,6 +190,8 @@ import { bankInboxActions } from './bank-inbox-actions.js';
 import { pain001Actions } from './pain001-actions.js';
 import { getPaymentBatch } from '../core/banking/pain001.js';
 import { liquidityActions } from './liquidity-actions.js';
+import { settingsActions } from './settings-actions.js';
+import { prefsActions } from './prefs-actions.js';
 import { workspaceActions } from './workspace-actions.js';
 import { reviewActions } from './review-actions.js';
 import { agentActions } from './agent-actions.js';
@@ -242,6 +247,14 @@ export interface ApiDeps {
   clock: Clock;
   ids: IdGen;
   actor: string;
+  /**
+   * D166 point 8 (critic N1): set by `till up` while the ADOPTED book could not be opened and the
+   * process runs on an in-memory stand-in. The transport dispatch (`runGoverned`, `agent-gate.ts`, the
+   * one door both faces call) then refuses every verb but `delivery_status` with
+   * `adopted_book_unavailable`, so nothing, an agent included, writes into a book that is not the
+   * person's. Absent everywhere else.
+   */
+  adoptedBookUnavailable?: AdoptedBookUnavailable | undefined;
   /**
    * M01: the proxy-attested subject in served mode, absent locally. Set per request by the transport
    * (see `served-mode.ts`), threaded onto `WorkspaceContext` so `whoami` can name it. Never consulted
@@ -1156,10 +1169,11 @@ const a14PaymentActions = paymentActions({ ctxAction, ctxSchema, STR, INT });
 const postEntryAction = ctxAction(
   'post_entry',
   'write:correctable:books',
-  'Post a balanced double-entry journal entry (business sources only; reversal/close are separate tools).',
+  'Post a balanced double-entry journal entry (business sources only; reversal/close are separate tools). Instead of lines, template { standardId, asks } books a Vorlage (a Buchungsregel of scope manual, list_bank_standards): asks { legIndex: amountMinor } fills its asked legs (gross on a taxed leg), a same leg copies the asked leg it names, the rest leg balances the entry on its own side, and the lines are composed and judged exactly as compose_entry with that template answers them (the entry text defaults to the Vorlage name). Template refusals: rule_not_found, rule_invalid (an account or code the Vorlage names is no longer valid: archived, now a Bankkonto ledger, a code gone; invalidReason says which), wrong_scope (a bank rule), ask_missing, rest_is_zero, rest_changes_side; lines and template together are invalid_input.',
   ctxSchema(
-    { entryId: STR, date: STR, ref: STR, description: STR, lines: LINES, source: STR, idempotencyKey: STR },
-    ['date', 'lines', 'source', 'idempotencyKey'],
+    // D176 (A39 §15.2): `lines` OR `template`; the engine refuses a call with neither (or both).
+    { entryId: STR, date: STR, ref: STR, description: STR, lines: LINES, template: { type: 'object' }, source: STR, idempotencyKey: STR },
+    ['date', 'source', 'idempotencyKey'],
   ),
   // Money-path guardrail: the agent post boundary carries only the business sources, and never a
   // reversal slot. `source='reversal'`/`'close'` and any `reversesEntryId` are rejected HERE, before
@@ -1175,6 +1189,8 @@ const postEntryAction = ctxAction(
     if (typeof source !== 'string' || !POST_ENTRY_SOURCE_SET.has(source)) {
       return err('invalid_source', { source, allowed: [...POST_ENTRY_SOURCES] });
     }
+    // Critic D176-R2-2: a null template is absent, as the engine reads a null `lines`.
+    if (input.template !== undefined && input.template !== null) return postEntryFromTemplate(ctx, as(input));
     return postEntry(ctx, as(input));
   },
 );
@@ -1213,7 +1229,7 @@ const getEntryAction = ctxAction(
   'read',
   // Both money pairs are named, because both are sent. A caller handed `baseDebit` as a bare
   // integer has to guess its unit, and guessing is how a EUR-base entry got read as francs.
-  'Read a journal entry and its lines. Each line reports the transaction amounts (debit, credit) under its currency, and the amounts the books hold (baseDebit, baseCredit) under baseCurrency, which is the workspace base currency.',
+  'Read a journal entry and its lines. The entry reports its Belegnummer (number, null on a draft). Each line reports the transaction amounts (debit, credit) under its currency, and the amounts the books hold (baseDebit, baseCredit) under baseCurrency, which is the workspace base currency.',
   ctxSchema({ entryId: STR }, ['entryId']),
   (ctx, input) => getEntry(ctx, as(input)),
 );
@@ -1224,8 +1240,8 @@ const listJournalAction = ctxAction(
   // The currency is named because `total` is the TRANSACTION amount: a caller handed a bare
   // integer for a EUR entry has no way to know it is not Rappen, and guessing is how money gets
   // reported wrong. `baseTotal` is stated as derived so no caller tries to recompute it.
-  'List journal entries, filtered by date range, account, source, or status. Each entry reports the currency its total is in (null when the entry has no lines), plus the base-currency total, rate and base currency for a foreign-currency entry, all derived from its posted rows. savedViewId applies a saved view (G00): its stored filters are merged underneath any filter named explicitly here.',
-  ctxSchema({ from: STR, to: STR, account: STR, source: STR, status: STR, savedViewId: STR }),
+  'List journal entries, filtered by date range, account, source, status, or Belegnummer (number: an exact match on the number as shown, or for a plain integer every series\' entry with that number). Each entry reports its Belegnummer (number, null on a draft), the currency its total is in (null when the entry has no lines), plus the base-currency total, rate and base currency for a foreign-currency entry, all derived from its posted rows. savedViewId applies a saved view (G00): its stored filters are merged underneath any filter named explicitly here.',
+  ctxSchema({ from: STR, to: STR, account: STR, source: STR, status: STR, number: STR, savedViewId: STR }),
   (ctx, input) => listJournal(ctx, as(input)),
 );
 
@@ -1473,6 +1489,9 @@ export const ACTIONS: readonly ActionDef[] = [
   // lines through the same pre-write steps postEntry runs, and decomposes stored lines back into intent,
   // so no surface does VAT math of its own. Defined in `./compose-actions.ts`, spread in as one line.
   ...composeActions({ ctxAction, ctxSchema, STR, INT, BOOL, LINES }),
+  // D178 point 2: `journal_numbering_plan`, the Belegnummer inspection read (A02 §4b.6). It writes nothing;
+  // a number is assigned only inside postEntry's own transaction. Defined in `./journal-numbering-actions.ts`.
+  ...journalNumberingActions({ ctxAction, ctxSchema }),
 
   // A03, period locks, close, and the audit trail.
   ctxAction(
@@ -1531,7 +1550,7 @@ export const ACTIONS: readonly ActionDef[] = [
   ctxAction(
     'vat_configure',
     'write:correctable:statutory',
-    'Configure VAT: method, timing, registration, VAT number, and the ESTV Bewilligung (asOf picks the statutory rate era). A filer holding several Saldosteuersätze maps each Tätigkeit to its Ertragskonten with saldoActivities, which is how MWSTV Art. 84 Abs. 3 books the Erträge separately per rate. Changing an approval that already governs posted turnover must say which it is: saldoGrant for a new ESTV Bewilligung from a given day, saldoCorrection to rewrite the open one.',
+    'Configure VAT: method, timing, registration, VAT number, and the ESTV Bewilligung (asOf picks the statutory rate era). A filer holding several Saldosteuersätze maps each Tätigkeit to its Ertragskonten with saldoActivities, which is how MWSTV Art. 84 Abs. 3 books the Erträge separately per rate. Changing an approval that already governs posted turnover must say which it is: saldoGrant for a new ESTV Bewilligung from a given day, saldoCorrection to rewrite the open one. A change of method or timing is dated with methodChange: { validFrom }, a 01.01, the start of a Steuerperiode (MWSTG Art. 37 Abs. 4, Art. 39 Abs. 3). The one mid-year exception is MWSTV Art. 81 Abs. 2: Saldo to effektiv (timing may change too, Abs. 5) on the day the ESTV adjusted a Saldosteuersatz of this book, stated with basis: mwstv_81_2 on a day a saldoGrant took effect. Any other mid-year day refuses vat_method_change_not_period_start, naming what is unmet.',
     ctxSchema(
       {
         method: STR,
@@ -1558,7 +1577,7 @@ export const ACTIONS: readonly ActionDef[] = [
         },
         saldoGrant: { type: 'object', properties: { validFrom: STR }, required: ['validFrom'] },
         saldoCorrection: BOOL,
-        methodChange: { type: 'object', properties: { validFrom: STR }, required: ['validFrom'] },
+        methodChange: { type: 'object', properties: { validFrom: STR, basis: STR }, required: ['validFrom'] },
         asOf: STR,
         idempotencyKey: STR,
       },
@@ -1727,20 +1746,20 @@ export const ACTIONS: readonly ActionDef[] = [
   ctxAction(
     'vat_periods',
     'read',
-    'List the statutory reporting periods of a year (quarterly under effektiv, semi-annual under Saldo) and whether each is filed.',
-    ctxSchema({ year: { type: 'string', pattern: '^\\d{4}$', description: 'Calendar year, YYYY.' } }),
+    'List the statutory reporting periods of a year (quarterly under effektiv, semi-annual under Saldo) and whether each is filed. In a year the method switched under MWSTV Art. 81 Abs. 2 each method lists its periods inside its own era, and the part of a period the switch cut is listed under stubs (computed by dates, not sealed).',
+    ctxSchema({ year: { type: 'string', pattern: '^\\d{4}$', description: 'Calendar year, YYYY, from 1995 (the MWST era).' } }),
     (ctx, input) => listVatPeriods(ctx, as(input)),
   ),
   ctxAction(
     'vat_mark_filed',
     'write:final:statutory',
-    'Record that a VAT period was filed with the ESTV, applying the A03 hard lock (reason vat_filed) to its months in one transaction: a month under a soft or an ordinary hard lock is upgraded to the seal, every month is read back, and the filing refuses filing_seal_not_held (and rolls back) unless each month holds the seal. Transmits nothing.',
+    'Record that a VAT period was filed with the ESTV, applying the A03 hard lock (reason vat_filed) to its months in one transaction: a month under a soft or an ordinary hard lock is upgraded to the seal, every month is read back, and the filing refuses filing_seal_not_held (and rolls back) unless each month holds the seal. Only a filing period as vat_periods lists it for that year can be marked: any other label refuses not_a_filing_period, and a label touching a switch-year stub refuses switch_year_stub_not_modelled, sealing nothing. Transmits nothing.',
     ctxSchema(
       {
         period: {
           type: 'string',
           pattern: '^\\d{4}-(Q[1-4]|H[12])$',
-          description: 'Period label: YYYY-Qn (effektiv) or YYYY-Hn (Saldo).',
+          description: 'Period label as vat_periods lists it, from 1995: YYYY-Qn (effektiv) or YYYY-Hn (Saldo).',
         },
         idempotencyKey: STR,
       },
@@ -2068,7 +2087,7 @@ export const ACTIONS: readonly ActionDef[] = [
   // A34 payroll hand-off: the employee-master export (local artifact, OP4) and the ONE wage-journal
   // posting through A02 (P8 preview-then-confirm), spread in as one line. `wage_journal_post` is the
   // only path a wage journal reaches the ledger (P3); the migration harness routes `payroll` here.
-  ...payrollActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  ...payrollActions({ ctxAction, ctxSchema, STR, INT, BOOL, withPrevalidate }),
 
   // E00, file management: the filing tree, the content-addressed store, the version chain, the OP3
   // entity link and the OR 958f retention lock. The prefix is `files_` and not `documents_` because
@@ -2099,7 +2118,7 @@ export const ACTIONS: readonly ActionDef[] = [
   // A15, Mahnwesen: the escalating reminder loop over A16's open items. Four writes and four reads,
   // spread in as one line. `dunning` as a journal source is deliberately NOT in POST_ENTRY_SOURCES:
   // only issue_dunning_run may book a Mahngebühr, so a caller cannot forge one (the A17 precedent).
-  ...dunningActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  ...dunningActions({ ctxAction, ctxSchema, STR, INT, BOOL, withPrevalidate }),
   // A12, recurring invoices (Serienrechnungen): schedules whose tick INVOKES create_document /
   // issue_invoice through this same dispatch as the schedule's author, which is why `invokerFor`
   // rides along exactly as it does for G01. Spread in as one line, the same shape every sibling uses.
@@ -2114,11 +2133,11 @@ export const ACTIONS: readonly ActionDef[] = [
   // link a manual entry, and the reconciled-to-balance read. Three writes and two reads, spread in
   // as one line. A CREDIT never settles here (`confirm_match` refuses `use_qr_queue`): it is decided
   // in A21's own queue, which `import_camt` routes it into.
-  ...camtActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  ...camtActions({ ctxAction, ctxSchema, STR, INT, BOOL, withPrevalidate }),
 
   // A39, the bank inbox: one line, one proposal, confirm, undo by reversal. Three writes and one read,
   // spread in as one line; the A20 verbs above stay as wrappers over the same core.
-  ...bankInboxActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  ...bankInboxActions({ ctxAction, ctxSchema, STR, INT, BOOL, withPrevalidate }),
 
   // A18, creditor payments: select A17's open items, generate a pain.001.001.09 credit-transfer
   // initiation, mark paid through A14's recordPayment. Eight verbs (five writes, three reads), spread
@@ -2131,6 +2150,14 @@ export const ACTIONS: readonly ActionDef[] = [
   // pay-date proposal. Nine verbs (four writes, five reads), spread in as one line. Nothing posts or
   // pays; the draft step reaches A18's createPaymentBatch and nothing else.
   ...liquidityActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // G00, workspace settings (D172). The generic registry of user settings: every behaviour choice is a
+  // setting with a sensible default. Four verbs (two reads, two writes), spread in as one line.
+  ...settingsActions({ ctxAction, ctxSchema, STR }),
+
+  // G00, per-person preferences (D178 point 7). The person's own looks and arrangements, keyed by the
+  // calling seat: four verbs (two reads, two writes), spread in as one line.
+  ...prefsActions({ ctxAction, ctxSchema, STR }),
 
   // A23, multi-client workspaces (Treuhänder onboarding and archive). `list_workspaces` (D12) moved
   // here from its inline registration; `depsAction`/`depsSchema` ride along because listing and
@@ -2276,13 +2303,14 @@ export const ACTIONS: readonly ActionDef[] = [
   // until their project references land. Defined in `./costing-actions.ts`, spread in as one line.
   ...costingActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
 
-  // F00, dashboards & KPIs: the pure P5 tile wall over the read models above. Two reads and not
-  // one write (the B03 shape): the overview and the single tile, each composing
+  // F00, dashboards & KPIs: the pure P5 tile wall over the read models above. Three reads and not
+  // one write (the B03 shape; D178 point 13 added `dashboard_series`, the charts' monthly money in
+  // and out and top expenses, gated `read_books`): the overview and the single tile, each composing
   // A08/A16/A17/A07/B01/B03/D01 (+ A19's account list and G00's saved views) in-process, RBAC
   // asserted PER TILE inside the engine (the boundary is ungated 'asserted_in_engine'). F00 owns
   // no table, posts nothing and emits no events. Defined in `./dashboard-actions.ts`, spread in
   // as one line.
-  ...dashboardActions({ ctxAction, ctxSchema, STR }),
+  ...dashboardActions({ ctxAction, ctxSchema, STR, INT }),
 
   // G15, the attention hub: two READS that compose the module work queues into one answer. Owns no
   // table, posts nothing and emits no events (pure P5, the F00 posture). RBAC is the union of the

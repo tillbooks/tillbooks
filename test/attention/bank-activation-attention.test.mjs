@@ -107,7 +107,10 @@ test('the step per lifecycle state: every pre-active state maps to exactly one s
 
 test('the provider is registered, reads under pay, and links to a routed surface', () => {
   const registered = ATTENTION_PROVIDERS.find((p) => p.queueId === 'bank_activation');
-  assert.equal(registered, bankActivationProvider);
+  // D178: registered through `withKind`, a copy carrying the kind, with the provider's own functions.
+  assert.equal(registered.count, bankActivationProvider.count);
+  assert.equal(registered.list, bankActivationProvider.list);
+  assert.equal(registered.kind, 'do');
   assert.equal(registered.readCapability, 'pay');
   assert.equal(registered.deepLinkRoute, '/bank-accounts');
   assert.equal(registered.area, 'bank');

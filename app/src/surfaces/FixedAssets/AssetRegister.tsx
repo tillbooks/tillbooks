@@ -103,7 +103,13 @@ export interface LedgerEvent {
   costAfterRappen: number;
   accumulatedDeprAfterRappen: number;
   netBookValueAfterRappen: number;
+  /** D170: the compensating row that took this event back, or null while it stands. */
+  reversedByTransactionId: string | null;
 }
+
+/** D170: the four events `asset_transaction_reverse` takes back (depreciation goes with its run). */
+const REVERSIBLE_TYPES = new Set(['acquisition', 'additional_capitalisation', 'opening', 'disposal']);
+const REVERSE_VERB = 'asset_transaction_reverse';
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
@@ -142,6 +148,7 @@ function parseLedger(body: unknown): LedgerEvent[] {
       costAfterRappen: num(r.costAfterRappen),
       accumulatedDeprAfterRappen: num(r.accumulatedDeprAfterRappen),
       netBookValueAfterRappen: num(r.netBookValueAfterRappen),
+      reversedByTransactionId: str(r.reversedByTransactionId),
     }))
     .filter((tr) => tr.id !== '');
 }
@@ -432,6 +439,10 @@ export function AssetRegister() {
   const [disposing, setDisposing] = useState<Asset | null>(null);
   const [dispDraft, setDispDraft] = useState<DisposeDraft>(EMPTY_DISPOSE);
   const [dispPreview, setDispPreview] = useState<DisposalPreview | null>(null);
+  // D170: the ledger event a person is about to take back, and the reason they give. The reverse runs
+  // only from the confirm dialog, never straight from the row's menu.
+  const [reversingTxn, setReversingTxn] = useState<LedgerEvent | null>(null);
+  const [reverseReason, setReverseReason] = useState('');
 
   const canWrite = can(CAP.manageMasterData);
   // A capitalisation posts a journal, so the honest gate is the posting capability; the register CRUD
@@ -654,6 +665,39 @@ export function AssetRegister() {
     },
     [client, workspaceId],
   );
+
+  // D170: take one event back. On success the ledger is re-read so the new correcting row and the
+  // moved status show at once (write() already reloads the register list).
+  const confirmReverse = useCallback(async () => {
+    if (viewing === null || reversingTxn === null || reverseReason.trim() === '') return;
+    const ok = await write(REVERSE_VERB, {
+      assetId: viewing.id,
+      transactionId: reversingTxn.id,
+      reason: reverseReason.trim(),
+      idempotencyKey: newKey(),
+    });
+    if (!ok) return;
+    setReversingTxn(null);
+    setReverseReason('');
+    await openTxns(viewing);
+  }, [write, viewing, reversingTxn, reverseReason, openTxns]);
+
+  // D170: an event that still stands offers Stornieren, destructive, behind its confirm dialog.
+  // TODO(Ruhig 3, E-step): migrate this action to the icon vocabulary once IconButton lands.
+  const ledgerActions = (tr: LedgerEvent): OverflowMenuItem[] =>
+    REVERSIBLE_TYPES.has(tr.type) && tr.reversedByTransactionId === null
+      ? [{
+          key: 'reverse',
+          label: t('assets.ledger.reverse'),
+          danger: true,
+          disabled: !canPost,
+          onSelect: () => {
+            setWriteError(null);
+            setReverseReason('');
+            setReversingTxn(tr);
+          },
+        }]
+      : [];
 
   // H07, opening balance: seed a DRAFT asset's historical cost + accumulated depreciation. The offset
   // picker offers equity accounts (the net book value is carried against the opening/equity account).
@@ -908,7 +952,16 @@ export function AssetRegister() {
   const ledgerColumns: DataTableColumn<LedgerEvent>[] = [
     { key: 'date', header: t('assets.ledger.col.date'), render: (tr) => cal.date(tr.date) },
     // The event TYPE is a word, not a status: plain text, no badge (K-22 keeps Status for states).
-    { key: 'type', header: t('assets.ledger.col.type'), render: (tr) => t(`assets.acquisition.txnType.${tr.type}`) },
+    {
+      key: 'type',
+      header: t('assets.ledger.col.type'),
+      render: (tr) => (
+        <>
+          {t(`assets.acquisition.txnType.${tr.type}`)}
+          {tr.reversedByTransactionId !== null && <> <Status kind="inactive" label={t('assets.ledger.reversed')} /></>}
+        </>
+      ),
+    },
     { key: 'deltaCost', header: t('assets.ledger.col.deltaCost'), numeric: true, render: (tr) => (tr.deltaCostRappen === 0 ? '-' : money(tr.deltaCostRappen)) },
     { key: 'deltaAccum', header: t('assets.ledger.col.deltaAccum'), numeric: true, render: (tr) => (tr.deltaAccumDeprRappen === 0 ? '-' : money(tr.deltaAccumDeprRappen)) },
     { key: 'nbv', header: t('assets.ledger.col.nbv'), numeric: true, render: (tr) => money(tr.netBookValueAfterRappen) },
@@ -1250,11 +1303,54 @@ export function AssetRegister() {
               columns={ledgerColumns}
               rows={txns}
               rowKey={(tr) => tr.id}
+              rowActions={ledgerActions}
+              rowActionsLabel={(tr) => t('assets.ledger.reverseActionsLabel', { date: cal.date(tr.date) })}
               emptyState={<EmptyState title={t('assets.ledger.empty.title')} hint={t('assets.ledger.empty.hint')} />}
             />
           )}
         </DetailDrawer>
       )}
+
+      {/* D170: taking an event back is a money-path correction, so it asks WHY first, in an alertdialog. */}
+      <Modal
+        open={reversingTxn !== null}
+        role={ALERT_DIALOG}
+        onClose={() => setReversingTxn(null)}
+        title={reversingTxn === null ? '' : t('assets.ledger.reverseTitle', { type: t(`assets.acquisition.txnType.${reversingTxn.type}`), date: cal.date(reversingTxn.date) })}
+        closeLabel={t('assets.common.close')}
+        describedById="fa-reverse-body"
+        footer={
+          <>
+            <button type="button" className="btn btn--ghost" onClick={() => setReversingTxn(null)}>
+              {t('assets.ledger.reverseCancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--danger"
+              disabled={!canPost || reverseReason.trim() === ''}
+              onClick={() => void confirmReverse()}
+            >
+              {t('assets.ledger.reverseConfirm')}
+            </button>
+          </>
+        }
+      >
+        <div id="fa-reverse-body">
+          <p>{t('assets.ledger.reverseBody')}</p>
+          <ConsequenceLine verb={REVERSE_VERB} />
+          {writeError && <ErrorBanner error={writeError} />}
+          <div className="fa-field">
+            <label htmlFor="fa-reverse-reason">{t('assets.ledger.reverseReason')}</label>
+            <input className="field"
+              id="fa-reverse-reason"
+              type="text"
+              value={reverseReason}
+              maxLength={200}
+              onChange={(e) => setReverseReason(e.target.value)}
+            />
+          </div>
+        </div>
+      </Modal>
 
       {transferring !== null && (
         <DetailDrawer

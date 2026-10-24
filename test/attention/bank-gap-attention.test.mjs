@@ -109,7 +109,9 @@ test('bank lines waiting: one item per account, the true count, minus the lines 
   assert.ok(needs >= 2, `the fixture lines need a person (${needs})`);
   assert.equal(bankLinesWaitingProvider.count(w.ctx), needs);
   const [item] = bankLinesWaitingProvider.list(w.ctx, { limit: 5 });
-  assert.deepEqual([item.titleKey, item.titleParams], ['attention.item.bankLinesWaiting.title.other', { bank: 'ZKB Geschäftskonto', count: needs }]);
+  // D178 point 11: the row says the number of lines and stands for them (`count`), the account is the meta.
+  assert.deepEqual([item.titleKey, item.titleParams], ['attention.item.bankLines.title.other', { bank: 'ZKB Geschäftskonto', count: needs }]);
+  assert.deepEqual([item.subtitleKey, item.subtitleParams, item.count], ['attention.item.bankLines.subtitle', { bank: 'ZKB Geschäftskonto' }, needs]);
   assert.deepEqual(item.deepLink, { route: '/bank', params: { facet: 'needs', account: w.accountId } });
   assert.equal(item.since, '2026-09-30');
 
@@ -123,7 +125,9 @@ test('bank lines waiting: one item per account, the true count, minus the lines 
     .run('aa_syn_1', w.workspaceId, JSON.stringify({ bankTxnId: line }), w.clock.now());
   const summary = must(attentionSummary(w.ctx, { topLimit: 10 }), 'summary');
   assert.equal(queue(summary, 'bank_lines_waiting').count, needs - 1, 'the named line is not counted here');
-  assert.equal(queue(summary, 'agent_action').count, 1, 'it is counted there');
+  // D178: a bank Vorschlag is counted by the bank Vorschläge queue, under Bank.
+  assert.equal(queue(summary, 'agent_action_bank').count, 1, 'it is counted there');
+  assert.equal(queue(summary, 'agent_action'), undefined, 'and not as a System Vorschlag');
   assert.equal(summary.total, summary.queues.reduce((s, q) => s + q.count, 0));
 
   // read_sales gates the queue; pay gates the other two.
@@ -230,6 +234,7 @@ test('critic LOW 5: the band and the hub say one number; without read_books the 
   assert.equal(bankLinesWaitingProvider.count(salesOnly), needs);
   const summary = must(attentionSummary(salesOnly, {}), 'summary');
   assert.equal(queue(summary, 'agent_action'), undefined);
+  assert.equal(queue(summary, 'agent_action_bank'), undefined, 'D178: the bank Vorschläge share the read_books gate');
   assert.equal(queue(summary, 'bank_lines_waiting').count, needs);
   // The band's tile itself needs read_books, so such an actor sees no band: the hub is the one number.
   assert.equal(dashboardTile(salesOnly, { tile: 'bank_inbox', from: '2026-09-30', to: '2026-09-30' }).error, 'permission_denied');

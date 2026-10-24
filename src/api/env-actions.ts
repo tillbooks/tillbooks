@@ -105,6 +105,10 @@ function stagedWrite(ctx: WorkspaceContext, input: ActionInput, verb: string, ru
 
   const result = run();
   if (result.ok) {
+    // D165: this memo deliberately does NOT run under `withoutCommitMark`, unlike the store's
+    // `rememberIdempotent` memo. The env act happens on disk, not in this database, so this row is the
+    // only database trace that it ran: under an approval it is what marks the act, so a reject after it
+    // is refused. It is written only on `ok`, never for a refusal. Do not scope it in a sweep.
     ctx.store.tx(() => {
       ctx.store.db
         .prepare('INSERT INTO idempotency (workspace_id, key, verb, result_json, created_at) VALUES (?, ?, ?, ?, ?)')

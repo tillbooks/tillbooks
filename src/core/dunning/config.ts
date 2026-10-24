@@ -29,6 +29,7 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { requireString } from '../ledger/inputGuards.js';
+import { getSetting } from '../settings/settings.js';
 
 /** Art. 104 Abs. 1 OR: the default interest floor, in basis points. */
 export const INTEREST_FLOOR_BP = 500;
@@ -40,6 +41,64 @@ export const INTEREST_FLOOR_BP = 500;
  * every level a workspace never explicitly configured, is spaced by 10 days rather than 0.
  */
 export const DEFAULT_MIN_INTERVAL_DAYS = 10;
+
+/**
+ * D174 (owner Q1): what a fee reversal does to the run's UNSENT letters, the registry setting
+ * `dunning.refreeze` (D172, no table of its own). `re-issue` (the default, the critic-passed behaviour):
+ * re-frozen without the fee and sendable. `hold`: D169's behaviour, the frozen demand stands and send
+ * holds the letter as `fee_reversed`.
+ */
+export const DUNNING_REFREEZE_MODES = ['re-issue', 'hold'] as const;
+export type DunningRefreezeMode = (typeof DUNNING_REFREEZE_MODES)[number];
+
+/**
+ * D174 (owner Q9): the date a RE-ISSUED letter carries, the registry setting `dunning.letter_date`.
+ * `run_date` (the default): the run's date (OR 102: a Mahnung takes effect on receipt, and this letter
+ * was never received). `today`: the day of the re-issue, fixed at the re-freeze by its audit action, so
+ * a later change of the setting never re-dates a letter already re-issued.
+ */
+export const DUNNING_LETTER_DATES = ['run_date', 'today'] as const;
+export type DunningLetterDate = (typeof DUNNING_LETTER_DATES)[number];
+
+/** The workspace's `dunning.refreeze` in force (the registry reads a misfit stored value as the default). */
+export function dunningRefreezeOf(ctx: WorkspaceContext): DunningRefreezeMode {
+  return getSetting<DunningRefreezeMode>(ctx, 'dunning.refreeze');
+}
+
+/** The workspace's `dunning.letter_date` in force. */
+export function dunningLetterDateOf(ctx: WorkspaceContext): DunningLetterDate {
+  return getSetting<DunningLetterDate>(ctx, 'dunning.letter_date');
+}
+
+/**
+ * D174: the per-call override of `dunning_fee_reverse` (D172: a single case overrides a setting with a
+ * required, audited reason). Pure, shared by the engine and the API's pre-draft validation
+ * (`withPrevalidate`), so a reasonless override is refused `reason_required` on every face and is never
+ * queued as a Vorschlag that could only fail at approval.
+ */
+export function validateRefreezeOverride(input: { refreeze?: unknown; letterDate?: unknown; overrideReason?: unknown }): Result | undefined {
+  if (input.refreeze !== undefined && !(DUNNING_REFREEZE_MODES as readonly unknown[]).includes(input.refreeze)) {
+    return err('invalid_input', { field: 'refreeze', allowed: [...DUNNING_REFREEZE_MODES] });
+  }
+  if (input.letterDate !== undefined && !(DUNNING_LETTER_DATES as readonly unknown[]).includes(input.letterDate)) {
+    return err('invalid_input', { field: 'letterDate', allowed: [...DUNNING_LETTER_DATES] });
+  }
+  if (input.overrideReason !== undefined && typeof input.overrideReason !== 'string') {
+    return err('invalid_input', { field: 'overrideReason' });
+  }
+  const overriding = input.refreeze !== undefined || input.letterDate !== undefined;
+  const reason = typeof input.overrideReason === 'string' ? input.overrideReason.trim() : '';
+  if (overriding && reason === '') {
+    return err('reason_required', {
+      field: 'overrideReason',
+      reason: 'a per-call override of dunning.refreeze or dunning.letter_date names why this run differs from the workspace setting',
+    });
+  }
+  if (!overriding && input.overrideReason !== undefined) {
+    return err('invalid_input', { field: 'overrideReason', reason: 'a reason is given only with refreeze or letterDate' });
+  }
+  return undefined;
+}
 
 /** The dunning levels (§H-ENUM). Level 3 is terminal: after it comes Betreibung, out of scope. */
 export const DUNNING_LEVELS = [1, 2, 3] as const;
@@ -150,6 +209,9 @@ export function getDunningConfig(ctx: WorkspaceContext): Result {
     levels: dunningLevelsOf(ctx),
     configured,
     interestFloorBp: INTEREST_FLOOR_BP,
+    // D174: the registry settings in force, so the Studio's fee-reverse dialog says what happens to an
+    // unsent letter. Read-only here: they change through settings_set (D172), never set_dunning_config.
+    settings: { refreeze: dunningRefreezeOf(ctx), letterDate: dunningLetterDateOf(ctx) },
   });
 }
 

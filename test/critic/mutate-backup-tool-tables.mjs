@@ -15,12 +15,12 @@ const orig = { [SS]: readFileSync(SS, 'utf8'), [PO]: readFileSync(PO, 'utf8') };
 const M = [
   ['M1 predicate: isTillTable drops only sqlite_', SS, "return !/^sqlite_/i.test(name) && !name.startsWith('_');", 'return !/^sqlite_/i.test(name);'],
   ['M2 portability allTables back to raw sqlite_master', PO, 'return tillTables(db);', `return db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);`],
-  ['M3 fingerprintMatches strict (TILL shape only)', SS, 'return recorded === schemaFingerprint(schemaShapeOf(snap, { includeForeignTables: true }));', 'return false;'],
+  ['M3 fingerprintMatches strict (TILL shape only)', SS, 'return recorded === schemaFingerprint(shapeOfTables(snap, fileTables(snap)));', 'return false;'],
   ['M4 fingerprintMatches accepts anything', SS, 'if (recorded === schemaFingerprint(schemaShapeOf(snap)))', 'if (true)'],
   ['M5 copySchemaDdl skip removed', SS, 'if (!isTillTable(o.name) || !isTillTable(o.tbl_name))', 'if (/^sqlite_/i.test(o.name))'],
   ['M6 copySchemaDdl skips by name only (not tbl_name)', SS, 'if (!isTillTable(o.name) || !isTillTable(o.tbl_name))', 'if (!isTillTable(o.name))'],
   ['M7 shapeGap filter removed', SS, 'Object.keys(need).filter(isTillTable).sort()', 'Object.keys(need).sort()'],
-  ['M8 schemaShapeOf default = whole file', SS, 'opts.includeForeignTables === true ? fileTables(db) : tillTables(db)', 'fileTables(db)'],
+  ['M8 schemaShapeOf default = whole file', SS, 'return shapeOfTables(db, tillTables(db));', 'return shapeOfTables(db, fileTables(db));'],
   ['M9 verify fingerprint check removed', PO, '!fingerprintMatches(manifest.schemaFingerprint, snap)', 'false'],
 ];
 const only = process.env.ONLY ? process.env.ONLY.split(',') : null;

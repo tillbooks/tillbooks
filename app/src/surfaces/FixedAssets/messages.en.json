@@ -244,7 +244,12 @@
         "depreciation": "Depreciation",
         "disposal": "Disposal",
         "revaluation": "Revaluation",
-        "adjustment": "Adjustment"
+        "adjustment": "Adjustment",
+        "depreciation_reversal": "Depreciation reversed",
+        "acquisition_reversal": "Acquisition reversed",
+        "additional_capitalisation_reversal": "Capitalisation reversed",
+        "opening_reversal": "Opening balance reversed",
+        "disposal_reversal": "Disposal reversed"
       }
     },
     "ledger": {
@@ -260,6 +265,14 @@
       "date": "Opening date",
       "description": "Description",
       "post": "Post opening balance",
+      "reverse": "Reverse",
+      "reversed": "Reversed",
+      "reverseTitle": "Reverse {type} of {date}",
+      "reverseBody": "This posts a correcting entry dated today and updates the register; the original entry stays visible. A reversed acquisition or opening balance closes the asset.",
+      "reverseReason": "Reason",
+      "reverseConfirm": "Reverse",
+      "reverseCancel": "Cancel",
+      "reverseActionsLabel": "Actions for the entry of {date}",
       "nbv": "Net book value",
       "col": {
         "date": "Date",
@@ -696,6 +709,13 @@
     "asset_not_acquirable": "A disposed or archived asset cannot be capitalised.",
     "source_document_not_found": "The linked source document could not be found in this workspace.",
     "period_locked": "The chosen date falls in a locked period. Reopen the period or pick another date.",
+    "depreciation_posted": "A posted depreciation run still covers this asset. Reverse that run first (newest first), then this entry.",
+    "capitalisation_stands": "Additional cost capitalised on this asset still stands. Reverse those capitalisations first, then the acquisition.",
+    "asset_disposed": "This asset was disposed, which cleared this cost too. Reverse the disposal first.",
+    "asset_posting_reversed": "An entry of this asset was reversed in the journal while the register kept it. Reverse that entry from the asset's ledger first.",
+    "not_reversible": "This entry cannot be reversed here: depreciation goes back with its run, and a correction is booked again.",
+    "already_reversed": "This entry has already been reversed.",
+    "reason_required": "Give a reason for the reversal.",
     "duplicate_number": "An asset with this number already exists.",
     "invalid_account_type": "That account is the wrong type for this field.",
     "invalid_cost_center": "That cost centre does not exist in this workspace.",

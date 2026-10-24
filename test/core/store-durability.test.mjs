@@ -480,6 +480,9 @@ const DRIVER_MODULES = {
   'src/core/data/portability.ts': 'G04: read-only snapshot reads, plus the snapshot destination in LISTED_OPENS',
   'src/core/landscape/operations.ts': 'N00: a read-only gate over a freshly built environment',
   'src/core/landscape/copy.ts': 'N00: read-only probes and gates over environment files',
+  'src/api/book-adopt.ts': 'D166 point 8: a read-only probe of a book the person picks, before it is adopted; never a write',
+  'scripts/marketing-screenshots.mjs':
+    'website screenshots: one read-only query of the throwaway Seeblick demo book in its own temp dir, never a write',
   'ops/private-data-scan.mjs':
     'the private-data guard reads the owner\'s live ledger and TILL backups to fingerprint them: read-only opens only, never a write',
 };

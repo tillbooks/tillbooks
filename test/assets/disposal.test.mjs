@@ -429,20 +429,20 @@ test('validation and guard-rail rejections (§2, §6)', () => {
 // writer with asset_already_disposed before the index would even fire. A true two-process race is not
 // reproducible in synchronous better-sqlite3, so these assert the structural guarantees directly.
 
-test('the partial unique index exists and REJECTS a second disposal row for an already-disposed asset', () => {
+test('the one-disposal guard exists and REJECTS a second disposal row for an already-disposed asset', () => {
   const { ctx, store, workspaceId, acc, activeAsset } = setup();
   const id = activeAsset(1_200_000);
   const r = dispose(ctx, id, acc, { proceedsRappen: 900_000 });
   assert.equal(r.ok, true, JSON.stringify(r));
   assert.equal(disposalTxnCount(store, workspaceId), 1, 'the first disposal seated exactly one row');
 
-  // The guard is a real, PARTIAL unique index scoped to disposal rows (not the whole table).
-  const idx = store.db
-    .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'asset_transaction_one_disposal'")
+  // The guard is a DB trigger scoped to disposal rows that counts LIVE disposals only (D170 replaced the
+  // partial unique index, which could not see a disposal taken back by asset_transaction_reverse).
+  const trg = store.db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'asset_transaction_one_live_disposal'")
     .get();
-  assert.ok(idx, 'asset_transaction_one_disposal index is present');
-  assert.match(idx.sql, /UNIQUE/i, 'the one-disposal index is UNIQUE');
-  assert.match(idx.sql, /WHERE\s+type\s*=\s*'disposal'/i, 'it is a PARTIAL index over disposal rows only');
+  assert.ok(trg, 'asset_transaction_one_live_disposal trigger is present');
+  assert.match(trg.sql, /NEW\.type\s*=\s*'disposal'/i, 'it guards disposal rows only');
 
   // A second disposal row for the SAME (workspace, asset), inserted straight against the store (the
   // shape a racing second writer would attempt), is refused by the unique index. Reusing the first
@@ -459,7 +459,7 @@ test('the partial unique index exists and REJECTS a second disposal row for an a
         )
         .run('atxn_dup_disposal', workspaceId, id, '2026-07-15', -1_200_000, 0, 0, 0, r.transaction.journalEntryId, AT),
     /UNIQUE constraint failed|asset_transaction_one_disposal/i,
-    'a second disposal row for the same asset must be rejected by the unique index',
+    'a second disposal row for the same asset must be rejected by the one-disposal guard',
   );
   assert.equal(disposalTxnCount(store, workspaceId), 1, 'still exactly one disposal row after the rejected insert');
 });

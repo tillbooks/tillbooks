@@ -212,4 +212,32 @@ describe('OverflowMenu', () => {
     await userEvent.click(trigger);
     expect(screen.queryByRole('menu')).toBeNull();
   });
+
+  it('D180: a glyph sits beside the words, hidden from assistive tech; the label stays the name', async () => {
+    const trigger = renderMenu(items([{ glyph: <svg data-testid="probe-glyph" /> }]));
+    await userEvent.click(trigger);
+    const item = screen.getByRole('menuitem', { name: 'Archivieren' });
+    const glyph = screen.getByTestId('probe-glyph');
+    expect(item).toContainElement(glyph);
+    expect(glyph.parentElement).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('D180: a checked group is menuitemradio with aria-checked, and the chosen one also shows a check', async () => {
+    const pick = vi.fn();
+    renderMenu([
+      { key: 'tile', label: 'Kachel', checked: true, onSelect: pick },
+      { key: 'card', label: 'Karte oben', checked: false, onSelect: pick, danger: false },
+      { key: 'bar', label: 'Schmale Leiste', checked: false, onSelect: pick, danger: false },
+    ]);
+    await userEvent.click(screen.getByRole('button', { name: 'Aktionen für Konto 1020' }));
+    expect(screen.queryAllByRole('menuitem')).toHaveLength(0);
+    const chosen = screen.getByRole('menuitemradio', { name: 'Kachel' });
+    expect(chosen).toHaveAttribute('aria-checked', 'true');
+    expect(chosen.querySelector('.overflow-menu-check svg')).not.toBeNull();
+    const other = screen.getByRole('menuitemradio', { name: 'Schmale Leiste' });
+    expect(other).toHaveAttribute('aria-checked', 'false');
+    expect(other.querySelector('.overflow-menu-check svg')).toBeNull();
+    await userEvent.click(other);
+    expect(pick).toHaveBeenCalledTimes(1);
+  });
 });

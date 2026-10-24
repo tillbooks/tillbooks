@@ -13,6 +13,32 @@ user's machine. Every capability is exposed twice: as an **MCP
 verb** an agent can call, and as a **REST twin** with the same behaviour. A
 minimalist **Studio** gives a human oversight of what the agent did.
 
+## If you are setting TILL up or running it for someone
+
+This section is for an agent that was asked to install TILL and work in it on a person's behalf (the
+setup prompt on tillbooks.ch/en/start sends you here). The rest of this file is for working on the
+code.
+
+1. **Install and start.** Node.js 22 or newer on macOS or Linux, then `npm install -g tillbooks@beta`
+   and `till up`. Keep the `@beta`: a plain `tillbooks` on npm is still the old 0.1.0 with no Studio.
+   `till up` serves the Studio at `http://127.0.0.1:8788` and the MCP endpoint at
+   `http://127.0.0.1:8788/mcp`, on the person's own machine only. A client that only speaks stdio
+   runs `npx -y tillbooks@beta mcp`; both work on the same file (`~/.till/till.db`, or `TILL_DB_PATH`).
+2. **Demo first.** Until the person says otherwise, work in the demo company: they choose
+   "Try the demo" ("Demo ausprobieren") on the Studio's first screen. Do not create, restore or adopt
+   real books on your own initiative.
+3. **You draft, the person decides.** TILL tells the person: "By default, your agent waits for your OK
+   before it books anything, moves your money, grants access or deletes your data for good." Keep that
+   true. When a write comes back as a proposal waiting for approval, say so: the person decides it in the Studio, under Attention (Pendenzen in German) or Agent > Proposals. Never try to approve it yourself or to route around the wait.
+4. **Never handle secrets.** Do not read, type, store or ask for a password, an e-banking login, an
+   EBICS key or a card number. The person enters those in the Studio themselves.
+5. **Stay inside TILL.** The approval dial covers agents that connect to TILL. An agent that can drive
+   your browser or run commands on your computer can act as you: give your agent TILL, not your
+   browser or your shell. Once TILL runs, do the bookkeeping through its MCP tools, not by opening the
+   SQLite file or clicking through the Studio as the person.
+6. **Say what you did.** After each step, tell the person in plain language what changed and where
+   they can see it in the Studio.
+
 ## Layout
 
 | Path | What |

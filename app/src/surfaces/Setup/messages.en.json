@@ -144,5 +144,33 @@
       "concepts": [],
       "docsPath": "quickstart"
     }
+  },
+  "workspaceSettings": {
+    "title": "Settings",
+    "yes": "Yes",
+    "no": "No",
+    "unit": {
+      "days": "{n} days",
+      "items": "{n} items",
+      "percent": "{n} %"
+    },
+    "defaultIs": "Default: {value}",
+    "isDefault": "Default",
+    "editTitle": "Change: {setting}",
+    "cancel": "Cancel",
+    "reset": "Reset to default ({value})",
+    "save": "Save",
+    "consequence": "The change applies to everyone in this workspace from the next action on and is recorded with its reason in the setting's history.",
+    "value": "Value",
+    "bounds": "From {min} to {max}. Default: {value}.",
+    "reason": "Reason (required)",
+    "refusal": {
+      "unknown_setting": "This setting is not known to this version of TILL.",
+      "invalid_setting_value": "This value is outside what the setting allows.",
+      "reason_required": "Please give a reason for the change.",
+      "belegnummer_display_clash": "With this change a later voucher number could repeat {display}, which is already taken. Choose another prefix, start or numbering mode.",
+      "belegnummer_prefix_invalid": "A prefix is empty or up to 12 characters from {characters}, starts with a letter or digit and does not end in a digit."
+    },
+    "stale": "The stored value {stored} no longer fits this setting, so the default ({value}) applies. Change or reset it."
   }
 }

@@ -660,12 +660,14 @@ test('critic F2: a replay stored under the SHARED verb (before the split) is han
   assert.equal(count(), rows);
 
   // Reverse: a CUSTOMER result stored under the shared verb with a vendor-shaped key is never
-  // replayed by the vendor door.
+  // replayed by the vendor door. D165 (critic A2-1): nor does it make the vendor door refuse. Since
+  // D157 only the customer verb writes that scope, so a customer result there says nothing about the
+  // vendor door's key; the vendor door mints its own grant in its own scope.
   const cust = w.call('portal_grant_create', { contactId: w.contactId, scopes: [{ kind: 'all_invoices' }], expiresAt: '2026-09-30', idempotencyKey: '["vendor","K3"]' });
   assert.equal(cust.ok, true, JSON.stringify(cust));
   const asVendor = w.call('vendor_portal_grant', { contactId: w.contactId, expiresAt: '2026-09-30', idempotencyKey: 'K3' });
-  assert.equal(asVendor.ok, false, 'the vendor door replayed a customer grant');
-  assert.equal(asVendor.error, 'idempotency_key_conflict');
-  assert.equal(asVendor.tokenOnce, undefined);
+  assert.equal(asVendor.ok, true, JSON.stringify(asVendor));
+  assert.notEqual(asVendor.grantId, cust.grantId, 'the vendor door replayed a customer grant');
+  assert.equal(asVendor.grant.kind, 'vendor');
   w.deps.store.close();
 });

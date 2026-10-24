@@ -33,17 +33,42 @@
  * has no key says so instead of quietly working as the agent.
  *
  * THE STUDIO KEY, delivered OUT OF BAND (critic R3-B2, owner decision 2026-10-12, the Jupyter-token
- * pattern). A host that serves the Studio (`till up`, the Vite dev bridge) mints 32 random bytes at
- * start and hands them to the PERSON, never to the page: it prints and opens
- * `http://localhost:PORT/#k=<key>`. A URL fragment is never sent to a server, so the browser alone
- * learns the key; the Studio moves it into `sessionStorage` and strips the fragment. The served HTML
+ * pattern). A host that serves the Studio (`till up`, the Vite dev bridge) holds 32 random bytes
+ * (minted at start, or since D166 kept by `till up` between launches) and hands them to the PERSON,
+ * never to the page: it prints and opens `http://localhost:PORT/#k=<key>`. A URL fragment is never
+ * sent to a server, so the browser alone learns the key; the Studio moves it into storage and strips
+ * the fragment. The served HTML
  * carries no key in any mode, so a program that fetches `/` (a fetch tool, a scraper, curl) learns
  * nothing. The first version wrote the key into the page as a `<meta>` tag, and any local HTTP client
  * could read it there and issue an invoice with 0 Vorschläge (R3-B2). The Studio sends the key back
  * in a request HEADER on every engine call (`STUDIO_KEY_HEADER`); `up.ts` says why a header beat a
- * cookie. A restart mints a new key, and an open tab then shows how to get back in (re-open the link).
- * What the key does NOT stop is stated as plainly: a process that can read this user's files or
- * drive this user's own browser tab can find the key, which is the approval claim's scope sentence.
+ * cookie.
+ *
+ * KNOWN DEVICES, NO TERMINAL (D166, owner decision 14.10.2026). The key used to die with the process,
+ * so a bookmark, a new tab or a restart sent the person to a terminal for a new link. Now:
+ *
+ *   1. the key PERSISTS in `<support dir>/studio.key`, owner-only (0600), and is the same after a
+ *      restart (`studio-key-store.ts`); "Auf allen Geräten abmelden" rotates it;
+ *   2. the native `TILL.app` reads that file, proves the server holds the same key (`/studio/prove`),
+ *      and opens its own window at `/#t=<ticket>`, a one-time ticket DERIVED from the key for that one
+ *      process: the key itself never goes into a URL and never over HTTP;
+ *   3. a browser that once opened the link is PAIRED: it holds a non-extractable WebCrypto device key
+ *      (IndexedDB) whose public half this host keeps, and a new tab or a bookmark trades a signed
+ *      one-time challenge for a per-process session token (`studio-devices.ts`). No secret a page
+ *      could read is stored in the browser, so a program that squats the port while TILL is down
+ *      reads nothing worth having; bookmarks and new tabs still work after a restart;
+ *   4. a tab with no key asks the server to reopen the Studio THROUGH THE OPERATING SYSTEM
+ *      (`POST /studio/reopen`: `open` on macOS, `xdg-open` on Linux). The server opens the keyed link
+ *      in the person's default browser and answers the caller with NOTHING but whether it did. A
+ *      program that triggers it gets a TILL tab opened on the person's screen and learns no key; it is
+ *      rate-limited, needs a custom header (so another origin cannot fire it without a preflight that
+ *      nothing answers), and runs in local mode only.
+ *
+ * What the key does NOT stop is stated as plainly, and D166 does not change it in kind: a process
+ * that can read this user's files (it can read `studio.key`, and the SQLite book itself) or drive this
+ * user's browser (it can use any paired tab of it) can act as the person. That is the approval claim's scope sentence: an agent that can drive your browser or run
+ * commands on your computer can act as you. What D166 does lengthen is how long a stolen copy of the
+ * key stays good, from one launch to "until rotated", which is why rotation is one click.
  *
  * The rule used to take a HOST-SUPPLIED fallback: `till up` and the Vite dev bridge passed `studio`
  * (their REST face's actor) and the MCP face inherited it. `deps.actor` is not consulted by either
@@ -57,6 +82,26 @@ import type { SqliteStore } from '../core/store/sqlite-store.js';
 import type { IdentitySource } from './served-mode.js';
 
 /**
+ * A host's Studio key as the faces take it: a fixed string (a suite, the dev bridge), or a live
+ * source whose `current()` is read on EVERY request, so a rotation (D166) takes effect at once.
+ */
+export type HostStudioKey =
+  | string
+  | {
+      current(): string;
+      /**
+       * D166: does this host also accept `presented` as a SESSION TOKEN a paired browser unlocked with
+       * its device key (`studio-devices.ts`)? A token seats the person exactly like the key.
+       */
+      accepts?(presented: string): boolean;
+    };
+
+/** The key a host holds right now, or undefined for a host with none (`till serve`). */
+export function currentStudioKey(hostKey: HostStudioKey | undefined): string | undefined {
+  return hostKey === undefined || typeof hostKey === 'string' ? hostKey : hostKey.current();
+}
+
+/**
  * The client name the Studio declares at `initialize`. A LABEL, never a seat: declaring it buys a
  * client nothing (see the module note).
  */
@@ -65,7 +110,7 @@ export const STUDIO_CLIENT_NAME = 'till-studio';
 /** The client name `till mcp` declares over stdio. */
 export const AGENT_CLIENT_NAME = 'till-cli';
 
-/** The human seat. Held only with the per-launch Studio key, never by a name. */
+/** The human seat. Held only with the Studio key, never by a name. */
 export const STUDIO_ACTOR = 'studio';
 
 /**
@@ -84,6 +129,18 @@ export const STUDIO_KEY_FRAGMENT = 'k';
 /** The link a person opens the Studio through: the base URL plus the key in the fragment. */
 export function studioLink(baseUrl: string, studioKey: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/#${STUDIO_KEY_FRAGMENT}=${studioKey}`;
+}
+
+/**
+ * The URL-fragment parameter a ONE-TIME ticket travels in: `/#t=<ticket>` (D166). Since the key outlives
+ * the process, it no longer travels in links at all (a link lands in history and autocomplete); a
+ * ticket is spent on first use and names the process it is good for (`studio-devices.ts`).
+ */
+export const STUDIO_TICKET_FRAGMENT = 't';
+
+/** The link that opens the Studio with a one-time ticket. */
+export function studioTicketLink(baseUrl: string, ticket: string): string {
+  return `${baseUrl.replace(/\/+$/, '')}/#${STUDIO_TICKET_FRAGMENT}=${ticket}`;
 }
 
 /** The key's entropy in bytes: 256 bits. */
@@ -119,13 +176,17 @@ export interface StudioKeyHeaders {
  * with no key (`till serve`, which serves no Studio) treats ANY presented key as `invalid`: there is
  * no Studio on that host to be. A repeated header is `invalid`, never "the first one wins".
  */
-export function checkStudioKey(headers: StudioKeyHeaders, hostKey: string | undefined): StudioKeyCheck {
+export function checkStudioKey(headers: StudioKeyHeaders, host: HostStudioKey | undefined): StudioKeyCheck {
+  const hostKey = currentStudioKey(host);
   const raw = headers[STUDIO_KEY_HEADER];
   if (raw === undefined) return 'absent';
   if (Array.isArray(raw) || hostKey === undefined || hostKey === '') return 'invalid';
   const presented = createHash('sha256').update(raw, 'utf8').digest();
   const expected = createHash('sha256').update(hostKey, 'utf8').digest();
-  return timingSafeEqual(presented, expected) ? 'valid' : 'invalid';
+  if (timingSafeEqual(presented, expected)) return 'valid';
+  // D166: a paired browser's session token. Looked up by its SHA-256, so the lookup leaks nothing
+  // about a token's bytes either.
+  return typeof host === 'object' && host.accepts?.(raw) === true ? 'valid' : 'invalid';
 }
 
 /**

@@ -26,6 +26,8 @@ import type { Capability } from './capabilities.js';
 // nothing runs in the other direction.
 import { ENTITY_KINDS, editCapabilityForKind, entityKindDef } from '../customization/entities.js';
 import type { EntityKindDef } from '../customization/entities.js';
+// D172: the settings registry is a leaf (it imports only `capabilities.ts`), so this creates no cycle.
+import { owningCapabilityFor } from '../settings/registry.js';
 
 /**
  * The READ capability a G00 verb inherits for an entity kind: the read twin of `editCapabilityForKind`.
@@ -283,7 +285,7 @@ export type CapabilityRule =
   | Capability
   | readonly Capability[]
   | Ungated
-  | ((input: Record<string, unknown>) => Capability);
+  | ((input: Record<string, unknown>) => Capability | readonly Capability[]);
 
 /**
  * EVERY verb in `ACTIONS`, read and write, grouped by the capability module that owns it.
@@ -306,6 +308,15 @@ export type CapabilityRule =
  * `preview_feedback` and `prepare_feedback` keep their in-engine gate rather than gaining one here,
  * because theirs is conditional on the `includeDiagnostics` FLAG and not on the verb.
  */
+/**
+ * D176 (critic R2-2): whether a `compose_entry` / `post_entry` input carries a Vorlage. Null reads as absent,
+ * as the dispatch reads it and as the engine reads a null `lines`, so `{ lines, template: null }` is the
+ * typed form on `post` alone.
+ */
+function hasTemplate(input: Record<string, unknown>): boolean {
+  return input['template'] !== undefined && input['template'] !== null;
+}
+
 export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // --- A00, company & fiscal setup -------------------------------------------------------------
   create_workspace: ungated('pre_workspace', 'Pre-workspace: there is no tenant yet to resolve a capability against.'),
@@ -330,7 +341,11 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // These four are the only entries whose engine code ALSO asserts `post`. The boundary check and
   // the in-engine check are not redundant: A04's import and A19's opening balance reach `postEntry`
   // through their own verbs, so only the inner one sees that second call.
-  post_entry: 'post',
+  // D176 (critic observation, round 1): the TEMPLATE form reads a Vorlage's recipe, a row of the table
+  // `list_bank_standards` reads under `read_sales`, exactly as `compose_entry`'s template form does, so it
+  // asks that right too. `post` first: it is the right the operator reasons about for a posting.
+  // Critic D176-R2-2: a null template is absent, exactly as the dispatch reads it.
+  post_entry: (input) => (hasTemplate(input) ? ['post', 'read_sales'] : 'post'),
   reverse_entry: 'post',
   save_draft: 'post',
   delete_draft: 'post',
@@ -835,6 +850,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // The ALL-OF (`record_payment`'s shape): operating dunning AND putting a letter in front of a
   // customer. An agent holds `dun` and not `send`, exactly as it cannot `send_invoice`.
   send_dunning_run: ['dun', 'send'],
+  // D169: the fee's undo mirrors the fee posting through A02 (which asserts `post`) under the right
+  // that operates dunning, so it declares the ALL-OF pair; unlike issue, it ALWAYS posts.
+  dunning_fee_reverse: ['dun', 'post'],
 
   // --- A21, QR incoming matching ---------------------------------------------------------------
   // The queue row is settlement bookkeeping, not master data, so recording a credit sits on `pay`
@@ -859,6 +877,11 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // A36 §4.7 (D150): several statements through the same door, one `importCamt` per statement; the
   // same right, never a cheaper one.
   import_camt_files: 'pay',
+  // D178 (A20 §11.4): one statement door for camt, MT940 and CSV, the same right as `import_camt` (a camt
+  // goes through `importCamt` itself); saving a CSV mapping decides how the next statement is read, so
+  // it asks the same right, never a cheaper one.
+  import_bank_statement: 'pay',
+  set_bank_csv_mapping: 'pay',
   // `confirm_match` and `create_entry_for_txn` are `apply_qr_match`'s ALL-OF verbatim: the settlement
   // branch reaches `recordPayment`, which asserts `post` through `postEntry` on every path, and the
   // manual-entry branch asserts `post` directly (`postEntry`'s own gate). Declaring `pay` alone on
@@ -884,16 +907,28 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   book_bank_line: (input) => {
     const target = input.target;
     const kind = typeof target === 'object' && target !== null ? (target as { kind?: unknown }).kind : undefined;
-    return kind === 'open_item' || kind === 'payment_batch' ? 'pay' : 'post';
+    // D178 E3 (A39 §17.9): Spesen are paid through E02's reimbursement, so they need the rights
+    // `expense_claim_reimburse` declares; a contact booking is a settlement act like an open item.
+    if (kind === 'expense_claims') return ['spesen.approve', 'pay', 'post'];
+    // Security review (D178 E3): a contact booking that states how a refund treats the receipt VAT may
+    // depart from `bank.anzahlung_vat_refund`, a filed figure, so it also asks that setting's owner right.
+    if (kind === 'contact' && (target as { refundVat?: unknown }).refundVat !== undefined) return ['pay', 'manage_vat_config'];
+    return kind === 'open_item' || kind === 'payment_batch' || kind === 'contact' ? 'pay' : 'post';
   },
   // Deciding that a line counts elsewhere is bookkeeping on the line: `post`.
   ignore_bank_line: 'post',
+  // D178 point 19: a duplicate answer ignores the line (post), a distinct answer clears its flag (post).
+  resolve_possible_duplicate: 'post',
   // Undoing a decision mints a reversal (`post`); undoing a SETTLEMENT reverses a payment, which the
   // engine additionally asserts `pay` for, state-dependently (the input cannot say which it is).
   reopen_bank_line: 'post',
   // D144 (A39 §12): asking the local model for an account prepares a booking and records the answer;
   // it posts nothing, but it writes, so it rides the right a booking to accounts needs.
   suggest_bank_lines: 'post',
+  // D167 (A39 §13.1): a standard prefills lines the bulk button books, so it rides the right a booking
+  // to accounts needs; listing them is a read of the inbox.
+  set_bank_standard: 'post',
+  clear_bank_standard: 'post',
 
   // --- A19, bank accounts ----------------------------------------------------------------------
   create_bank_account: 'manage_master_data',
@@ -1614,6 +1649,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
     'asserted_in_engine',
     'Per-tile RBAC: the engine asserts the requested tile’s own source-verb gates and answers permission_denied outright when the caller lacks one.',
   ),
+  // D178 point 13: the charts' series is ONE domain, the ledger (the bank accounts' Kontoblatt movement
+  // and the Erfolgsrechnung's expense lines), so it takes `income_statement`'s own gate.
+  dashboard_series: 'read_books',
 
   // --- G15, the attention hub ------------------------------------------------------------------
   // Two reads, no writes (pure P5), and the gate is PER QUEUE, not per verb, exactly as F00's
@@ -1784,6 +1822,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   expense_claim_approve: ['spesen.approve', 'post'],
   expense_claim_reject: 'spesen.approve',
   expense_claim_reimburse: ['spesen.approve', 'pay', 'post'],
+  // D168: the reverse mirrors the approve posting through A02 (which asserts `post`) under the same
+  // review right that approved it, so it declares approve's own ALL-OF pair.
+  expense_claim_reverse: ['spesen.approve', 'post'],
   hr_employee_get: 'hr.read',
   hr_employee_list: 'hr.read',
   hr_absence_list: 'hr.read',
@@ -1799,6 +1840,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // `post`, so `post` is the boundary right too. `list_payroll_handoffs` is a personnel-data read.
   payroll_handoff_export: 'hr.manage',
   wage_journal_post: 'post',
+  // D171: the wage journal's undo mirrors the posting through A02 (which asserts `post` again), the
+  // same boundary right as the posting it takes back.
+  wage_journal_reverse: 'post',
   list_payroll_handoffs: 'hr.read',
 
   // --- E04 local mail store ---------------------------------------------------------------------
@@ -1883,11 +1927,31 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   list_cost_centers: 'read_books',
   get_entry: 'read_books',
   list_journal: 'read_books',
+  // D178 point 2 (A02 §4b.6): the Belegnummer run is a property of the journal itself, so its inspection
+  // reads under the journal's own read right. It writes nothing.
+  journal_numbering_plan: 'read_books',
   // D152 amendment: composing an entry reads the books (a stored entry to decompose, the chart, the period
   // locks) AND the VAT configuration (its captions name the rate, the deductibility the method decides and
   // the ESTV form line, which `vat_preview` gates on `read_vat`), and writes nothing. ALL OF both, so a
   // role holding the books but not the VAT cannot read the VAT through this door (critic R4 L1).
-  compose_entry: ['read_books', 'read_vat'],
+  // D175 (critic D175-C6): the BANK form (`bankTxnId`) previews a bank line's amount and the lines a
+  // Buchungsregel expands to, so it also asks the bank inbox's own read right (`list_bank_inbox`,
+  // `list_bank_standards`): a seat with the books but without the bank cannot read a line through it.
+  // D176: the TEMPLATE form reads a Vorlage's recipe, a row of the table `list_bank_standards` reads under
+  // the same right, so it asks that right too: the composer cannot become a side door to the rules.
+  // D178 E3 (A39 §17.5, security review of 1de8bcd23): a bank preview of a Spesen target answers the
+  // claims (employee, title, amounts), so it also asks `hr.read`, the right `expense_claim_get` and
+  // `expense_claim_list` declare; a preview of a contact target answers the contact's name and mode, so
+  // it also asks `read_master_data`, the right `get_contact` declares. The engine asserts the same
+  // (`composeBankLine`), so the composer is no side door to the personnel or the master data.
+  compose_entry: (input) => {
+    if (input['bankTxnId'] === undefined && !hasTemplate(input)) return ['read_books', 'read_vat'];
+    const target = input['target'];
+    const kind = typeof target === 'object' && target !== null ? (target as { kind?: unknown }).kind : undefined;
+    if (input['bankTxnId'] !== undefined && kind === 'expense_claims') return ['read_sales', 'read_books', 'read_vat', 'hr.read'];
+    if (input['bankTxnId'] !== undefined && kind === 'contact') return ['read_sales', 'read_books', 'read_vat', 'read_master_data'];
+    return ['read_sales', 'read_books', 'read_vat'];
+  },
   get_audit_log: 'read_books',
   list_period_locks: 'read_books',
   trial_balance: 'read_books',
@@ -2003,6 +2067,11 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   list_bank_statements: 'read_sales',
   // A39: the inbox reads what the A20 board reads.
   list_bank_inbox: 'read_sales',
+  // D178 (A20 §11.3): the CSV preview and the saved mapping read a statement file and a Bankkonto
+  // setting on the same surface as the inbox.
+  bank_csv_preview: 'read_sales',
+  get_bank_csv_mapping: 'read_sales',
+  list_bank_standards: 'read_sales',
 
   // --- read_master_data: the registers, and the workspace's own party record -------------------
   get_company_profile: 'read_master_data',
@@ -2283,6 +2352,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   asset_reconciliation_report: 'read_books',
   asset_reconciliation_check: 'read_books',
   asset_opening_balance: 'post',
+  // D170: the register's undo mirrors an acquisition, capitalisation, opening or disposal entry through
+  // A02 (which asserts `post` again), the H04 `asset_depreciation_run_reverse` gate one verb over.
+  asset_transaction_reverse: 'post',
   // --- H08, Simple Maintenance Log (NON-POSTING: an append-oriented per-asset service log) -------
   // The log posts NOTHING to the GL (the captured cost is descriptive TCO metadata), so it is
   // master-data-grade exactly like the H05 location/transfer verbs, not a `post` money-path verb. Its
@@ -2462,6 +2534,27 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // `env_create` above (`landscape.manage`); its own retain override is refused to non-owners by the
   // engine only, so create-with-retain is deliberately not offered over the wire (use copy after create).
   env_copy: (input) => (input.retainSecrets === true ? 'landscape.retain_secrets' : 'landscape.manage'),
+
+  // --- D172, the workspace settings registry --------------------------------------------------------
+  // Reading a setting is reading the workspace's configuration, the `get_company_profile` domain. A
+  // CHANGE needs the capability that owns the KEY (`owningCapability` in `core/settings/registry.ts`),
+  // read from the input, so a checklist preference is changed by whoever may manage checklists and a
+  // money setting by whoever holds its money right; an unknown key falls back to `manage_settings`
+  // (the verb then refuses it `unknown_setting`). The engine asserts the same capability itself.
+  settings_list: 'read_master_data',
+  settings_get: 'read_master_data',
+  settings_set: (input) => owningCapabilityFor(input.key),
+  settings_reset: (input) => owningCapabilityFor(input.key),
+
+  // --- D178 point 7, the per-person preferences -----------------------------------------------------
+  // A preference is the caller's OWN look or arrangement, so the only fact that matters is that the caller
+  // belongs to the workspace, and no capability expresses that: a custom role with an empty bundle must
+  // still pick its own theme. The engine asserts membership (the `notifications_set_preference` shape) and
+  // keys every row by the session actor, so no input can reach another person's preferences.
+  prefs_list: ungated('asserted_in_engine', 'Own preferences need only membership: asserted in core/customization/prefs.ts (notOwnSeat); every row is keyed by the session actor.'),
+  prefs_get: ungated('asserted_in_engine', 'Own preferences need only membership: asserted in core/customization/prefs.ts (notOwnSeat); every row is keyed by the session actor.'),
+  prefs_set: ungated('asserted_in_engine', 'Own preferences need only membership: asserted in core/customization/prefs.ts (notOwnSeat); a plugin call may not write them.'),
+  prefs_reset: ungated('asserted_in_engine', 'Own preferences need only membership: asserted in core/customization/prefs.ts (notOwnSeat); a plugin call may not write them.'),
 };
 
 /**
@@ -2482,7 +2575,51 @@ export function requiredCapabilitiesFor(
   }
   if (isUngated(rule)) return [];
   if (Array.isArray(rule)) return rule;
-  return [typeof rule === 'function' ? rule(input) : (rule as Capability)];
+  if (typeof rule === 'function') {
+    const decided = rule(input);
+    return Array.isArray(decided) ? decided : [decided as Capability];
+  }
+  return [rule as Capability];
+}
+
+/**
+ * The capabilities an INPUT-KEYED rule asks for every input, its declared MINIMUM. The Studio's command
+ * palette cannot evaluate a rule without the input, so for these verbs it disables on the minimum instead
+ * of failing open (the regression D175/D176 caused: `post_entry` and `compose_entry` became functions and the
+ * palette stopped greying "Buchung erfassen" for a seat without `post`). A dynamic verb not listed here keeps
+ * an empty minimum, and the palette stays fail-open for it exactly as before.
+ *
+ * Each minimum is checked at load against the rule's answer for the representative inputs below; a rule
+ * that stopped asking its minimum for one of them is a crash on import, not a quietly wrong palette.
+ */
+export const MINIMUM_CAPABILITIES_FOR_DYNAMIC: Readonly<Record<string, readonly Capability[]>> = {
+  post_entry: ['post'],
+  compose_entry: ['read_books', 'read_vat'],
+};
+
+/** The inputs each minimum is checked against: the plain form and every keyed form. */
+const DYNAMIC_MINIMUM_PROBES: Readonly<Record<string, readonly Record<string, unknown>[]>> = {
+  post_entry: [{}, { template: { standardId: 'probe', asks: {} } }, { template: null }],
+  compose_entry: [
+    {},
+    { bankTxnId: 'probe' },
+    { bankTxnId: 'probe', target: { kind: 'expense_claims' } },
+    { bankTxnId: 'probe', target: { kind: 'contact' } },
+    { template: { standardId: 'probe', asks: {} } },
+    { template: null },
+  ],
+};
+
+for (const [name, minimum] of Object.entries(MINIMUM_CAPABILITIES_FOR_DYNAMIC)) {
+  const rule = CAPABILITY_FOR_ACTION[name];
+  if (typeof rule !== 'function') throw new Error(`A24: MINIMUM_CAPABILITIES_FOR_DYNAMIC names "${name}", whose rule is not input-keyed.`);
+  for (const input of DYNAMIC_MINIMUM_PROBES[name] ?? [{}]) {
+    const asked = requiredCapabilitiesFor(name, input);
+    const missing = minimum.filter((c) => !asked.includes(c));
+    if (missing.length > 0) {
+      throw new Error(`A24: "${name}" with ${JSON.stringify(input)} asks ${asked.join(', ')}, not its declared minimum (${missing.join(', ')} missing).`);
+    }
+  }
 }
 
 /** What the load-time guard needs to know about one registered action. */

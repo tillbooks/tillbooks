@@ -1,50 +1,49 @@
 /**
- * The Favoriten lane: a per-user personal shortcut section pinned ABOVE the canonical tree (D118 A3).
+ * The Favoriten section: a per-person shortcut list pinned ABOVE the menu (D118 A3, rebuilt by D178).
  *
- * WHAT THIS IS. A short, ordered list of a user's pinned surfaces, rendered above the canonical rail
- * tree, appearing ONLY when non-empty. The canonical tree below is untouched (favourites are
- * additive, never a reorder of the shared taxonomy: one shared mental model for documentation,
- * support and the agent, one personal lane on top). A favourite is a pointer to a catalog surface by
- * `navId`, resolved through `surfaceByNavId`; a pin whose surface no longer exists is silently dropped
- * rather than shown broken.
+ * WHAT THIS IS. A short, ordered list of the person's pinned surfaces, rendered above the menu and only
+ * when non-empty, under its own folding "Favoriten" section header (a step quieter than a group header,
+ * so it never passes for one; it carries `aria-current="location"` while folded over the open page). A favourite is
+ * a pointer to a catalog surface by `navId`; a pin whose surface no longer exists is silently dropped
+ * rather than shown broken. The menu below is never reordered by it.
  *
- * THREE THINGS A USER CAN DO HERE, and the accessibility contract for each:
- *   - REORDER by pointer drag (dnd-kit) AND by keyboard move-up / move-down buttons. The buttons are
- *     MANDATORY, not a nicety: WCAG 2.5.7 (Dragging Movements, AA) requires a single-pointer,
- *     non-dragging alternative to every drag, and the buttons are also the keyboard path. The drag
- *     handle is a pointer-only grip (aria-hidden, out of the tab order) precisely so the buttons are
- *     the one true keyboard reorder and there is no confusing second keyboard grabber.
- *   - RENAME (alias), favourites-only. An inline text field replaces the label; Enter commits, Escape
- *     cancels, blur commits. The canonical name always survives as the row's `title` tooltip and stays
- *     the label the tree below shows. Aliasing is deliberately not offered anywhere else in the tree.
- *   - UNPIN, removing the surface from the lane (the tree row remains, of course).
+ * FLUSH WITH THE MENU (D178 point 15). A favourite row is a menu row: the same 28px band, 2px gap and
+ * inset, its title at the same x as a top-level leaf's. No column is reserved for the drag grip any
+ * more (the old invisible 20px grip pushed the icon to 54px, deeper than a nested child); the grip takes
+ * the icon's place on hover and keyboard focus, and is always shown while "Menü anpassen" is open. The
+ * look is the person's `nav.favourite_style`: the page's icon with a filled star at the right edge
+ * (default), a star in the icon's place, or the icon alone.
  *
- * MOTION. dnd-kit's own settle animation and the section reveal both honour `prefers-reduced-motion`:
- * the sortable transition is nulled under reduced motion, and the CSS reveal is switched off in
- * global.css. The pointer drag itself is not "motion" in the reduced-motion sense (it tracks the
- * finger), so it is never suppressed.
+ * ONE HIGHLIGHT. Whether this row carries `aria-current` is the rail's one decision (`useRail().active`,
+ * `nav.active_rule`), never a URL match of its own: before D178 the lane and the menu both lit.
+ *
+ * WHAT A PERSON CAN DO HERE, and the accessibility contract for each:
+ *   - REORDER by pointer drag (dnd-kit) AND by "Nach oben" / "Nach unten" in the row's Mehr menu. The
+ *     menu items are MANDATORY (WCAG 2.5.7: a single-pointer, non-dragging alternative) and are the
+ *     keyboard path, with Alt+ArrowUp/Down on the row as the shortcut; the grip is pointer-only and
+ *     hidden from assistive tech. They moved under Mehr in D178: four arrow and pencil glyphs on a
+ *     hovered row left its title three letters, and D154 admits an icon alone only from the closed
+ *     vocabulary, which has Mehr and no arrows.
+ *   - RENAME (alias), favourites-only, also under Mehr. The canonical name survives as the tooltip.
+ *   - UNPIN, the one glyph button: under `icon_star` it sits exactly where the resting star is; also
+ *     "Entfernen" under Mehr, which is the path while "Menü anpassen" is open (the star steps out there
+ *     and Mehr stays visible, so a touch screen never depends on the drag).
+ *
+ * MOTION. dnd-kit's settle animation honours reduced motion; the pointer drag itself tracks the finger
+ * and is never suppressed.
  */
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 import { useT } from '../i18n';
-import { surfaceByNavId, type NavItem } from './nav';
+import { OverflowMenu } from '../components/OverflowMenu';
 import { NavIcon } from './nav-icons';
-import { useNavFavourites, type NavFavourite } from './nav-prefs';
+import { RailSectionHeader } from './NavTree';
+import { useRail, type FavouriteStyle, type ResolvedFavourite } from './nav-prefs';
+import { AgentBadge, AttentionBadge, SlotBoundary } from './chrome';
 
 /** True when the OS asks to minimise motion. Guarded for environments without matchMedia (jsdom). */
 function prefersReducedMotion(): boolean {
@@ -52,71 +51,13 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-/** A small square glyph, stroked in currentColor, matching the rail's 16px chevron weight. */
-function Glyph({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <svg
-      className={className}
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {children}
-    </svg>
-  );
-}
-
-const StarIcon = () => (
-  <Glyph className="rail-fav-glyph">
-    <path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8-5.3-2.8-5.3 2.8 1-5.8L3.2 9.7l5.9-.9z" fill="currentColor" />
-  </Glyph>
-);
-const MoveUpIcon = () => (
-  <Glyph className="rail-fav-glyph">
-    <path d="M12 19V5M6 11l6-6 6 6" />
-  </Glyph>
-);
-const MoveDownIcon = () => (
-  <Glyph className="rail-fav-glyph">
-    <path d="M12 5v14M6 13l6 6 6-6" />
-  </Glyph>
-);
-const RenameIcon = () => (
-  <Glyph className="rail-fav-glyph">
-    <path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z" />
-    <path d="M13.5 7.5l3 3" />
-  </Glyph>
-);
-const GripIcon = () => (
-  <Glyph className="rail-fav-glyph">
-    <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
-  </Glyph>
-);
-
-/** One resolved favourite: its catalog surface joined to the user's alias (if any) and its index. */
-interface ResolvedFavourite {
-  navId: string;
-  surface: NavItem;
-  alias?: string;
-}
-
-/**
- * One favourite row: a sortable list item holding the navigation link and its personalization
- * controls (move up/down, rename, unpin). Kept as its own component because `useSortable` is a hook
- * and must be called per item.
- */
+/** One favourite row: the link, the grip over its icon slot, and the trailing controls. */
 function FavouriteRow({
   fav,
   index,
   count,
   active,
+  style,
   reducedMotion,
   onNavigate,
   onMove,
@@ -127,6 +68,7 @@ function FavouriteRow({
   index: number;
   count: number;
   active: boolean;
+  style: FavouriteStyle;
   reducedMotion: boolean;
   onNavigate: (path: string) => void;
   onMove: (navId: string, direction: 'up' | 'down') => void;
@@ -142,10 +84,10 @@ function FavouriteRow({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Only the pointer `listeners` are wired to the grip; dnd-kit's `attributes` (role="button",
-  // tabIndex 0, aria-*) are deliberately NOT spread, because the grip is a pointer-only, AT-hidden
-  // handle: the keyboard reorder path is the move buttons (WCAG 2.5.7), not this grip.
-  const { listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: fav.navId });
+  // tabIndex 0) are deliberately NOT spread: the keyboard reorder is the move buttons (WCAG 2.5.7).
+  const { listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: fav.navId,
+  });
 
   useEffect(() => {
     if (editing) {
@@ -182,34 +124,34 @@ function FavouriteRow({
     }
   };
 
-  const style = {
+  const dragStyle = {
     transform: CSS.Transform.toString(transform),
     transition: reducedMotion ? undefined : transition,
+  };
+  const slotIcon = style === 'star_only' ? 'starFilled' : fav.surface.icon;
+
+  // Alt+ArrowUp / Alt+ArrowDown on the focused row moves it, the shortcut beside the Mehr menu.
+  const onRowKeyDown = (event: KeyboardEvent<HTMLLIElement>): void => {
+    if (editing || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+    event.preventDefault();
+    onMove(fav.navId, event.key === 'ArrowUp' ? 'up' : 'down');
   };
 
   return (
     <li
       ref={setNodeRef}
-      style={style}
+      style={dragStyle}
       className={isDragging ? 'rail-fav-row rail-fav-row--dragging' : 'rail-fav-row'}
+      data-fav-navid={fav.navId}
+      aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+      onKeyDown={onRowKeyDown}
     >
-      {/* Pointer-only drag grip: out of the tab order and hidden from assistive tech, because the
-          keyboard reorder is the move buttons (WCAG 2.5.7), not a second keyboard grabber. */}
-      <span
-        ref={setActivatorNodeRef}
-        className="rail-fav-grip"
-        aria-hidden="true"
-        tabIndex={-1}
-        {...listeners}
-      >
-        <GripIcon />
-      </span>
-
       {editing ? (
         <input
           ref={inputRef}
           className="rail-fav-input"
           value={draft}
+          maxLength={60}
           aria-label={t('nav.favourites.renameField', { name: canonical })}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onInputKeyDown}
@@ -219,10 +161,8 @@ function FavouriteRow({
         <a
           href={fav.surface.path}
           className="rail-fav-link rail-link"
-          role="link"
           aria-current={active ? 'page' : undefined}
-          // The canonical name always survives as the tooltip, even when an alias is shown (design
-          // law: when a friendly label replaces a machine key, the raw key survives as the tooltip).
+          // The canonical name always survives as the tooltip, even when an alias is shown.
           title={fav.alias !== undefined ? canonical : undefined}
           onClick={(event) => {
             if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
@@ -230,46 +170,57 @@ function FavouriteRow({
             onNavigate(fav.surface.path);
           }}
         >
-          {fav.surface.icon !== undefined && <NavIcon name={fav.surface.icon} className="rail-icon" />}
+          {slotIcon !== undefined && (
+            <NavIcon name={slotIcon} className={style === 'star_only' ? 'rail-icon rail-fav-slot-star' : 'rail-icon'} />
+          )}
           <span className="rail-label">{shown}</span>
+          {fav.surface.path === '/agent' && (
+            <SlotBoundary slot="agent-badge">
+              <AgentBadge />
+            </SlotBoundary>
+          )}
+          {fav.surface.path === '/attention' && (
+            <SlotBoundary slot="attention-badge">
+              <AttentionBadge />
+            </SlotBoundary>
+          )}
+          {style === 'icon_star' && <NavIcon name="starFilled" size={16} className="rail-fav-star" />}
         </a>
+      )}
+
+      {/* The pointer-only drag grip over the icon slot: out of the tab order and hidden from assistive
+          tech, because the keyboard reorder is the move buttons (WCAG 2.5.7). */}
+      {!editing && (
+        <span ref={setActivatorNodeRef} className="rail-fav-grip" aria-hidden="true" {...listeners}>
+          <NavIcon name="grip" />
+        </span>
       )}
 
       {!editing && (
         <span className="rail-fav-controls">
-          <button
-            type="button"
-            className="rail-fav-btn"
-            disabled={index === 0}
-            aria-label={t('nav.favourites.moveUp', { name: shown })}
-            onClick={() => onMove(fav.navId, 'up')}
-          >
-            <MoveUpIcon />
-          </button>
-          <button
-            type="button"
-            className="rail-fav-btn"
-            disabled={index === count - 1}
-            aria-label={t('nav.favourites.moveDown', { name: shown })}
-            onClick={() => onMove(fav.navId, 'down')}
-          >
-            <MoveDownIcon />
-          </button>
-          <button
-            type="button"
-            className="rail-fav-btn"
-            aria-label={t('nav.favourites.rename', { name: canonical })}
-            onClick={startRename}
-          >
-            <RenameIcon />
-          </button>
+          {/* Move up, move down, rename and remove sit under Mehr (D154: an icon alone only from the
+              closed vocabulary): the menu items are the single-pointer, non-dragging reorder of WCAG
+              2.5.7 and the keyboard path, with Alt+ArrowUp/Down on the row as the shortcut. In "Menü
+              anpassen" Mehr is always shown (on touch it is the reorder) and the unpin star steps out. */}
+          <OverflowMenu
+            label={t('nav.favourites.more', { name: shown })}
+            quiet
+            portal
+            className="rail-fav-more"
+            items={[
+              { key: 'up', label: t('nav.customise.moveUp'), disabled: index === 0, onSelect: () => onMove(fav.navId, 'up') },
+              { key: 'down', label: t('nav.customise.moveDown'), disabled: index === count - 1, onSelect: () => onMove(fav.navId, 'down') },
+              { key: 'rename', label: t('nav.favourites.renameItem'), onSelect: startRename },
+              { key: 'remove', label: t('nav.favourites.removeItem'), onSelect: () => onUnpin(fav.navId) },
+            ]}
+          />
           <button
             type="button"
             className="rail-fav-btn rail-fav-btn--unpin"
             aria-label={t('nav.favourites.unpin', { name: canonical })}
             onClick={() => onUnpin(fav.navId)}
           >
-            <StarIcon />
+            <NavIcon name="starFilled" size={16} />
           </button>
         </span>
       )}
@@ -278,31 +229,18 @@ function FavouriteRow({
 }
 
 /**
- * The Favoriten lane. Renders nothing when the user has no (resolvable) favourites, so the canonical
- * tree sits at the very top of the rail until the first pin. `onNavigate` dismisses the mobile drawer,
- * matching `NavTree`.
+ * The Favoriten section. Renders nothing when the person has no (resolvable) favourites, so the menu
+ * sits at the top of the rail until the first pin. `onNavigate` dismisses the mobile drawer.
  */
 export function FavouritesRail({ onNavigate }: { onNavigate?: () => void }) {
   const t = useT();
-  const location = useLocation();
   const navigate = useNavigate();
-  const { favourites, move, unpin, reorder, setAlias } = useNavFavourites();
+  const { resolvedFavourites, favourites, sections, toggleSection, look, active, location } = useRail();
+  const { move, unpin, reorder, setAlias, error } = favourites;
   const reducedMotion = prefersReducedMotion();
+  const listId = useId();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-
-  // Resolve each pin to its catalog surface, dropping any that no longer resolves (a removed surface).
-  const resolved: ResolvedFavourite[] = favourites.flatMap((f: NavFavourite) => {
-    const surface = surfaceByNavId(f.navId);
-    if (surface === undefined) return [];
-    const item: NavItem = {
-      navId: surface.navId,
-      path: surface.path,
-      labelKey: surface.labelKey,
-      icon: surface.icon,
-    };
-    return [{ navId: f.navId, surface: item, alias: f.alias }];
-  });
 
   const go = useCallback(
     (path: string): void => {
@@ -314,46 +252,55 @@ export function FavouritesRail({ onNavigate }: { onNavigate?: () => void }) {
 
   const onDragEnd = useCallback(
     (event: DragEndEvent): void => {
-      const { active, over } = event;
-      if (over === null || active.id === over.id) return;
-      const from = resolved.findIndex((f) => f.navId === active.id);
-      const to = resolved.findIndex((f) => f.navId === over.id);
+      const { active: dragged, over } = event;
+      if (over === null || dragged.id === over.id) return;
+      const from = favourites.favourites.findIndex((f) => f.navId === dragged.id);
+      const to = favourites.favourites.findIndex((f) => f.navId === over.id);
       if (from === -1 || to === -1) return;
       reorder(from, to);
     },
-    [resolved, reorder],
+    [favourites.favourites, reorder],
   );
 
-  if (resolved.length === 0) return null;
-
-  const activePath = location.pathname;
-  const isActive = (path: string): boolean => activePath === path || activePath.startsWith(`${path}/`);
+  if (resolvedFavourites.length === 0) return null;
 
   return (
-    <section className="rail-favourites" aria-labelledby="rail-fav-label">
-      <p id="rail-fav-label" className="rail-group-label rail-fav-label">
-        {t('nav.favourites.label')}
-      </p>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={resolved.map((f) => f.navId)} strategy={verticalListSortingStrategy}>
-          <ul className="rail-fav-list">
-            {resolved.map((fav, index) => (
-              <FavouriteRow
-                key={fav.navId}
-                fav={fav}
-                index={index}
-                count={resolved.length}
-                active={isActive(fav.surface.path)}
-                reducedMotion={reducedMotion}
-                onNavigate={go}
-                onMove={move}
-                onUnpin={unpin}
-                onAlias={setAlias}
-              />
-            ))}
-          </ul>
-        </SortableContext>
-      </DndContext>
+    <section className="rail-section rail-favourites" aria-label={t('nav.favourites.label')}>
+      <RailSectionHeader
+        label={t('nav.favourites.label')}
+        folded={sections.favourites}
+        onToggle={() => toggleSection('favourites')}
+        controlsId={listId}
+        location={location === 'favourites'}
+      />
+      {!sections.favourites && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={resolvedFavourites.map((f) => f.navId)} strategy={verticalListSortingStrategy}>
+            <ul className="rail-fav-list" id={listId} data-fav-style={look.favouriteStyle}>
+              {resolvedFavourites.map((fav, index) => (
+                <FavouriteRow
+                  key={fav.navId}
+                  fav={fav}
+                  index={index}
+                  count={resolvedFavourites.length}
+                  active={fav.navId === active.favouriteNavId}
+                  style={look.favouriteStyle}
+                  reducedMotion={reducedMotion}
+                  onNavigate={go}
+                  onMove={move}
+                  onUnpin={unpin}
+                  onAlias={setAlias}
+                />
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
+      )}
+      {error !== null && (
+        <p className="rail-save-note" role="status">
+          {t('nav.favourites.saveFailed')}
+        </p>
+      )}
     </section>
   );
 }

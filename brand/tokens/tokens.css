@@ -92,6 +92,12 @@
      (`rgba(0, 0, 0, 0.4)` in four places, and one opaque palette ground). */
   --t-shadow-overlay: 0 6px 18px rgba(31, 27, 22, 0.14);
   --t-scrim: rgba(31, 27, 22, 0.4);
+
+  /* Chart series (D178 point 13): money in and money out, the one categorical pair the charts use.
+     Validated with the dataviz six checks on both surfaces (CVD dE 26.8 light, 23.5 dark; contrast
+     3:1 or more). Data ink only: a label beside a mark stays in the text tokens. */
+  --t-chart-in: #2a78d6;
+  --t-chart-out: #b07d1a;
 }
 
 [data-theme='dark'] {
@@ -132,6 +138,9 @@
      depth; the scrim darkens the walnut by half rather than veiling it. */
   --t-shadow-overlay: 0 8px 22px rgba(0, 0, 0, 0.5);
   --t-scrim: rgba(0, 0, 0, 0.5);
+
+  --t-chart-in: #4a86cc;
+  --t-chart-out: #b88a26;
 }
 
 :root {
@@ -205,7 +214,9 @@
        body  14/20  running interface text
        lg    16/24  section and dialog titles
        xl    20/28  surface titles
-       2xl   24/32  the one headline figure (the Übersicht total, a closing sum) */
+       2xl   24/32  the one headline figure (the Übersicht total, a closing sum)
+       3xl   28/34  a surface title at its largest (Ruhig 3, D154)
+       display 32/40  a surface's one key figure, weight 600 (Ruhig 3, D154) */
   --t-font-xs: 11px;
   --t-font-sm: 12px;
   --t-font-md: 13px;
@@ -213,6 +224,8 @@
   --t-font-lg: 16px;
   --t-font-xl: 20px;
   --t-font-2xl: 24px;
+  --t-font-3xl: 28px;
+  --t-font-display: 32px;
   --t-lh-xs: 16px;
   --t-lh-sm: 16px;
   --t-lh-md: 18px;
@@ -220,6 +233,8 @@
   --t-lh-lg: 24px;
   --t-lh-xl: 28px;
   --t-lh-2xl: 32px;
+  --t-lh-3xl: 34px;
+  --t-lh-display: 40px;
 
   /* Motion: the Responsive vocabulary (D122 D-I, 2026-09-05). Three moments, one ease pair, and
      everything else inherits. Motion is NOT themed: these live in the theme-independent root block,
@@ -258,10 +273,19 @@
   --t-motion-stagger: 30ms;
   --t-motion-hover: 120ms;
   --t-motion-loop: 1400ms;
+  /* Motion levels (D178 point 14): the entrance the levels above Calm add. Lively grows chart marks
+     and counts the Übersicht's headline figures up in `grow` with a `grow-stagger` per mark; Standard
+     grows marks in `grow-standard` with the vocabulary's own `stagger`. Calm and Off use none of them
+     (`app/src/styles/motion.css` maps the level to these), and the kill switch below zeroes them all. */
+  --t-motion-grow: 700ms;
+  --t-motion-grow-standard: 400ms;
+  --t-motion-grow-stagger: 60ms;
   --t-ease-out: cubic-bezier(0.2, 0, 0, 1);
   --t-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --t-travel: 8px;
   --t-press-scale: 0.98;
+  /* How far an interactive tile lifts on hover under Lively (D178 point 14). */
+  --t-lift: 2px;
 }
 
 /* Kompakt: one denser tier. Theme-independent, so it lives outside the light/dark blocks and keys

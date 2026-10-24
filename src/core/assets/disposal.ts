@@ -53,6 +53,7 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { postEntry } from '../ledger/postEntry.js';
 import { getEntry } from '../ledger/reads.js';
+import { rawReversedEvent, postingReversedRefusal } from './reversal.js';
 
 /** An ISO calendar date `YYYY-MM-DD`, the shape A02 dates already use. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -238,6 +239,10 @@ function planDisposal(ctx: WorkspaceContext, input: AssetDisposalInputBase): Res
     // draft (or any pre-acquisition state): there is no cost basis to clear yet.
     return err('asset_not_acquired', { assetId: asset.id, status: asset.status });
   }
+  // D170: a disposal clears the register's cost from the GL; if a raw Storno already took a cost event
+  // out of the GL (a book from before the undo verb), the disposal would clear cost that is not there.
+  const rawReversed = rawReversedEvent(ctx, asset.id, ['acquisition', 'opening', 'additional_capitalisation']);
+  if (rawReversed !== null) return postingReversedRefusal(asset.id, rawReversed);
 
   const proceeds = input.proceedsRappen;
   if (typeof proceeds !== 'number' || !Number.isInteger(proceeds) || proceeds < 0) {
@@ -471,7 +476,7 @@ export function assetDispose(ctx: WorkspaceContext, input: AssetDisposeInput): R
       // a second concurrent writer (D12: Studio + a `till mcp` subprocess on one SQLite file) that read
       // `active` OUT of transaction before the first writer committed now touches 0 rows and aborts
       // cleanly with asset_already_disposed. It runs BEFORE the disposal INSERT, so it fires first, even
-      // before the `asset_transaction_one_disposal` unique index would (the index is the ultimate DB
+      // before the one-live-disposal trigger would (the trigger, D170, is the ultimate DB
       // guarantee underneath). The early planDisposal status read stays as the friendly fast path; this
       // is the last line of defence, in-transaction and DB-enforced, not an out-of-tx read. NBV is
       // forced to 0 (the asset has left the books), while acquisition cost and accumulated depreciation
@@ -496,7 +501,7 @@ export function assetDispose(ctx: WorkspaceContext, input: AssetDisposeInput): R
       // negative of the full cost basis and `delta_accum_depr_rappen` the negative of the accumulated,
       // so summed over the asset's whole history both convenience totals return to zero (OP11). The
       // signed gain/loss and the proceeds ride the row so H07's reconciliation can read them. The
-      // `asset_transaction_one_disposal` partial unique index rejects a second disposal row structurally.
+      // `asset_transaction_one_live_disposal` trigger rejects a second live disposal row structurally (D170).
       ctx.store.db
         .prepare(
           `INSERT INTO asset_transaction (

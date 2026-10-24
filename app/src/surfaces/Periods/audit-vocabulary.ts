@@ -185,6 +185,7 @@ export const AUDIT_ENTITY_KINDS = [
   // rows are removed, so the `discard` row is the one trace that the proposal existed and who threw
   // it away.
   'dunning_run',
+  'dunning_item',
   // F01 report builder. A retained run is filed into E00 through `linkFile({ entityKind:
   // 'report_run', entityId })`, so the run is a linkable/attributable object the emission scan sees.
   // F01 itself posts nothing (P3): the consequential stamp on a filed run is `stored_file`'s, the
@@ -204,9 +205,17 @@ export const AUDIT_ENTITY_KINDS = [
   // the money-path stamp is A17's/E02's when the committed draft is later posted.
   'capture',
   // A34 payroll hand-off. The engine emits `entityKind:'payroll_handoff'` on `export` (the artifact
-  // was produced) and on `post` (a wage journal reached the ledger), so the kind is named here and in
+  // was produced), on `post` (a wage journal reached the ledger) and on `reverse` (D171: the wage
+  // journal's owned mirror was posted; `reverse` is already a word below), so the kind is named here and in
   // both locales, or the AuditPanel renders the raw key and `audit-vocabulary.test.ts` reddens.
   'payroll_handoff',
+  // D173 (owner Q8): a supplementary wage journal (posted next to the month's standing one, with a
+  // reason kept in the entry description) stamps its own `post` row under this kind.
+  'payroll_supplementary',
+  // D173 (owner Q14): every non-regular wage journal stamps a `post` row whose kind names the run.
+  'payroll_run_bonus',
+  'payroll_run_thirteenth',
+  'payroll_run_correction',
   // H02 asset acquisition. The sub-ledger transaction is the attributable object of a capitalisation:
   // the engine stamps `post` when an acquisition or additional-capitalisation writes its
   // asset_transaction row alongside the balanced A02 journal. The GL entry keeps its own `entry` row
@@ -263,6 +272,9 @@ export const AUDIT_ENTITY_KINDS = [
   // or Rückstellung a human described, not the individual journal entries it produced.
   'accrual',
   'provision',
+  // D172, the workspace settings registry: a change of one setting stamps `update` (set or reset; the
+  // setting's own history table holds which, the old and new value and the reason).
+  'workspace_setting',
 ] as const;
 
 /** Every action the audit log can name. */
@@ -335,6 +347,17 @@ export const AUDIT_ACTIONS = [
   //     provision stands with its balance restored; `reverse` mirrors the formation itself.
   'release_reverse',
   'discard',
+  //   - `fee_reverse` (D169) is not `reverse`: it mirrors a dunning run's Mahngebühr only; the run, its
+  //     levels and its letters stand, so "Mahnlauf storniert" would overstate it.
+  'fee_reverse',
+  //   - `refreeze_without_fee` (D174): an UNSENT letter's frozen demand drops the reversed fee; nothing else moves.
+  'refreeze_without_fee',
+  //   - `refreeze_without_fee_redated` (D174 Q9): the same re-freeze under `dunning.letter_date = today`;
+  //     the letter carries the re-issue day. Not a second act, the same one with its date fixed.
+  'refreeze_without_fee_redated',
+  //   - `refreeze_override` (D174): one run's fee reversal deviated from the dunning settings, with a
+  //     reason (it stands in the correcting entry's text). Not `override` of a lock or a rule.
+  'refreeze_override',
   // A25. Three words, each refused a near miss:
   //   - `comment` is not `record`: `record` mints a statutory input (a rate, a credit), while a
   //     comment only ever asks a question about a posting that already exists.

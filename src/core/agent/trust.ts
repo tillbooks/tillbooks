@@ -65,7 +65,7 @@ export function agentTrustSummary(ctx: WorkspaceContext, input: AgentTrustSummar
         `SELECT
            SUM(CASE WHEN created_at >= ? AND created_at <= ? THEN 1 ELSE 0 END) AS proposed,
            SUM(CASE WHEN status = 'executed' AND resolved_at >= ? AND resolved_at <= ? THEN 1 ELSE 0 END) AS approved,
-           SUM(CASE WHEN status = 'rejected' AND resolved_at >= ? AND resolved_at <= ? THEN 1 ELSE 0 END) AS rejected,
+           SUM(CASE WHEN status = 'rejected' AND closure_kind IS NULL AND resolved_at >= ? AND resolved_at <= ? THEN 1 ELSE 0 END) AS rejected,
            MAX(CASE WHEN created_at >= ? AND created_at <= ? THEN created_at END) AS last_proposed,
            MAX(CASE WHEN resolved_at >= ? AND resolved_at <= ? THEN resolved_at END) AS last_resolved
          FROM agent_action

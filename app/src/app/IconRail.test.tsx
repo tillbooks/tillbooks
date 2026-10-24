@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
 import { act } from 'react';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -10,6 +10,15 @@ import { TillClientProvider } from '../lib/client-context';
 import { TillClient, type Transport } from '../lib/client';
 import { WorkspaceProvider } from './workspace';
 import { IconRail } from './IconRail';
+import { RailStateProvider, resetNavPrefsForTests } from './nav-prefs';
+import { resetPrefsModuleForTests } from '../lib/prefs';
+import { fakePrefsEngine, renderWithRail } from './rail-test-kit';
+
+beforeEach(() => {
+  window.localStorage.clear();
+  resetPrefsModuleForTests();
+  resetNavPrefsForTests();
+});
 
 /** Focus a trigger the way a keyboard user would land on it. Wrapped in act, because focusing opens
  *  the flyout (a state update) and the strict console guard rejects an update that escapes act. */
@@ -37,7 +46,9 @@ function renderIconRail(initialPath = '/journal', { workspaceId = null, transpor
           <MemoryRouter initialEntries={[initialPath]}>
             {/* A landmark so an axe scan has the region it expects; the Shell supplies the real nav. */}
             <nav aria-label="Hauptnavigation">
-              <IconRail />
+              <RailStateProvider>
+                <IconRail />
+              </RailStateProvider>
             </nav>
             <LocationDisplay />
           </MemoryRouter>
@@ -141,5 +152,53 @@ describe('IconRail: the Pendenzen icon carries the live waiting-work count (coll
     renderIconRail('/journal', { workspaceId: 'ws_icon', transport: async () => ({ status: 422, body: { ok: false, error: 'boom' } }) });
     const icon = await screen.findByRole('button', { name: /Pendenzen, Die Anzahl Pendenzen konnte nicht geladen werden/ });
     expect(icon.querySelector('.rail-icon-count')).toHaveTextContent('!');
+  });
+});
+
+describe('IconRail: the favourites lead the strip, and one row is lit (D178, US-G16.15)', () => {
+  function seeded(favourites: { navId: string }[], extra: Record<string, unknown> = {}) {
+    const engine = fakePrefsEngine();
+    engine.put('ws_a', 'nav.favourites', favourites);
+    for (const [key, value] of Object.entries(extra)) engine.put('ws_a', key, value as never);
+    return engine;
+  }
+  const strip = (
+    <nav aria-label="Hauptnavigation">
+      <IconRail />
+    </nav>
+  );
+
+  it('puts the pinned pages first, in the person\'s order, as link icons in a named group', async () => {
+    renderWithRail(strip, { path: '/overview', engine: seeded([{ navId: 'journal' }, { navId: 'bank-inbox' }]) });
+    const pins = await screen.findByRole('group', { name: 'Favoriten' });
+    const names = within(pins).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+    expect(names).toEqual(['Journal', 'Bankzeilen']);
+    expect(within(pins).getByRole('button', { name: 'Journal' })).not.toHaveAttribute('aria-haspopup');
+  });
+
+  it('lights only the favourite for a pinned, open page under the default rule', async () => {
+    const { container } = renderWithRail(strip, { path: '/journal', engine: seeded([{ navId: 'journal' }]) });
+    const pins = await screen.findByRole('group', { name: 'Favoriten' });
+    expect(within(pins).getByRole('button', { name: 'Journal' })).toHaveAttribute('aria-current', 'page');
+    expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Buchhaltung' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('marks the group instead under the tree rule, and the favourite stays plain', async () => {
+    const { container } = renderWithRail(strip, {
+      path: '/journal',
+      engine: seeded([{ navId: 'journal' }], { 'nav.active_rule': 'tree' }),
+    });
+    const pins = await screen.findByRole('group', { name: 'Favoriten' });
+    expect(screen.getByRole('button', { name: 'Buchhaltung' })).toHaveAttribute('aria-current', 'true');
+    expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(0);
+    expect(within(pins).getByRole('button', { name: 'Journal' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('leaves a hidden group out of the strip', async () => {
+    renderWithRail(strip, { path: '/overview', engine: seeded([{ navId: 'journal' }], { 'nav.menu_layout': { hidden: ['group:sales'] } }) });
+    await screen.findByRole('group', { name: 'Favoriten' });
+    expect(screen.queryByRole('button', { name: 'Verkauf' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Stammdaten' })).toBeInTheDocument();
   });
 });

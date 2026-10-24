@@ -119,11 +119,22 @@ const CONVERTED = [
   { module: './dist/core/checklists/periods.js', verb: 'resolveChecklistPeriod', field: 'periodStart', absent: 'start' },
   { module: './dist/core/ledger/reads.js', verb: 'getEntry', field: 'entry', absent: 'journalEntry' },
   { module: './dist/core/ledger/reads.js', verb: 'listJournal', field: 'entries', absent: 'rows' },
+  // D178 point 2, `journal_numbering_plan`: the Belegnummer inspection. `wouldAssign` is what an owner reads
+  // before trusting an upgrade; `assignments` is the planner's internal name a consumer would reach for.
+  { module: './dist/core/ledger/entryNumberPlan.js', verb: 'journalNumberingPlan', field: 'wouldAssign', absent: 'assignments' },
   // D152 amendment, `compose_entry`: the composer posts `lines` verbatim and gates Buchen on `verdict`, and
   // reopens a draft by `roundTrips`; `result` and `roundTrip` are the near names a consumer would reach for.
   { module: './dist/core/ledger/compose.js', verb: 'composeEntry', field: 'mode', absent: 'kind' },
   { module: './dist/core/ledger/compose.js', verb: 'expandEntry', field: 'verdict', absent: 'result' },
   { module: './dist/core/ledger/compose.js', verb: 'decomposeEntry', field: 'roundTrips', absent: 'roundTrip' },
+  // D175 (A39 §14.2), `compose_entry`'s bank form: the Studio previews a Buchungsregel from `target` (the
+  // accounts target the rule expands to on the line); `expandedTarget` is the near name a consumer would try.
+  { module: './dist/core/banking/bankBooking.js', verb: 'composeBankLine', field: 'target', absent: 'expandedTarget' },
+  // D176 (A39 §15.2), `compose_entry`'s template form and `post_entry { template }`: the composer reads the
+  // Vorlage's amounts from `template` (`expanded` is the near name), and the post answers `entryId` like
+  // `postEntry` (`id` is the near name a consumer would reach for).
+  { module: './dist/core/banking/bankTemplates.js', verb: 'composeTemplate', field: 'template', absent: 'expanded' },
+  { module: './dist/core/banking/bankTemplates.js', verb: 'postEntryFromTemplate', field: 'entryId', absent: 'id' },
   // A38's MWST-Saldierung model (D129 leg 2): the ONE function the preview returns and the post writes,
   // so its shape is the contract between the two faces. `lines` is what the poster books; `entries` is
   // the read a caller writes when it mistakes the model for a journal listing.
@@ -216,6 +227,15 @@ const CONVERTED = [
   { module: './dist/core/banking/bankBooking.js', verb: 'performBooking', field: 'linkId', absent: 'id' },
   { module: './dist/core/banking/bankBooking.js', verb: 'ignoreBankLine', field: 'alreadyIgnored', absent: 'ignored' },
   { module: './dist/core/banking/bankBooking.js', verb: 'reopenBankLine', field: 'supersededLinkId', absent: 'linkId' },
+  // D178 (A20 §11): the statement door for every format and the CSV mapping verbs. `statements` (never
+  // `outcomes`, import_camt_files' Studio word), `headers` (never `columns`, which is the mapping's own
+  // key), and `mapping` (never `csvMapping`, the table's name).
+  { module: './dist/core/banking/statementImport.js', verb: 'importBankStatement', field: 'statements', absent: 'outcomes' },
+  { module: './dist/core/banking/statementImport.js', verb: 'bankCsvPreview', field: 'headers', absent: 'columns' },
+  { module: './dist/core/banking/csvMapping.js', verb: 'getBankCsvMapping', field: 'mapping', absent: 'csvMapping' },
+  { module: './dist/core/banking/csvMapping.js', verb: 'setBankCsvMapping', field: 'mapping', absent: 'csvMapping' },
+  // D178 point 19: the person's answer to a possible duplicate. `decision` (never `outcome`, the import's word).
+  { module: './dist/core/banking/duplicateDecision.js', verb: 'resolvePossibleDuplicate', field: 'decision', absent: 'outcome' },
   // G03. `workspaceKind` is what the shell demo banner keys on, and `kind` is exactly the read a
   // caller writes after seeing the workspace row's own column name: the open Result would have
   // handed that caller `undefined` and a banner that never renders.
@@ -319,6 +339,23 @@ const CONVERTED = [
   // the word a reader of "below the floor" reaches for.
   { module: './dist/core/voice/decide.js', verb: 'decide', field: 'modelSha256', absent: 'sha256' },
   { module: './dist/core/banking/bankModelSuggest.js', verb: 'suggestBankLines', field: 'belowFloor', absent: 'rejected' },
+  // D167 (A39 §13.1): the standard verbs. The Studio reads `standard` (not the row's own name) after a
+  // set, and `standardId` after a clear on both of its answers (`cleared` and `alreadyCleared`).
+  { module: './dist/core/banking/bankStandards.js', verb: 'setBankStandard', field: 'standard', absent: 'bankStandard' },
+  { module: './dist/core/banking/bankStandards.js', verb: 'clearBankStandard', field: 'standardId', absent: 'id' },
+  { module: './dist/core/banking/bankStandards.js', verb: 'listBankStandards', field: 'standards', absent: 'items' },
+  // D172 (the workspace settings registry): the Studio's Einstellungen section reads `settings` from the
+  // list, `setting` from a get, and `previousValue` / `changed` after a set or a reset.
+  { module: './dist/core/settings/settings.js', verb: 'settingsList', field: 'settings', absent: 'items' },
+  { module: './dist/core/settings/settings.js', verb: 'settingsGet', field: 'setting', absent: 'value' },
+  { module: './dist/core/settings/settings.js', verb: 'settingsSet', field: 'previousValue', absent: 'oldValue' },
+  { module: './dist/core/settings/settings.js', verb: 'settingsReset', field: 'changed', absent: 'reset' },
+  // D178 point 7 (the per-person preferences): the Studio's prefs store reads `prefs` from the list,
+  // `pref` from a get, `previousValue` after a set and `reset` (the keys it cleared) after a reset.
+  { module: './dist/core/customization/prefs.js', verb: 'prefsList', field: 'prefs', absent: 'items' },
+  { module: './dist/core/customization/prefs.js', verb: 'prefsGet', field: 'pref', absent: 'preference' },
+  { module: './dist/core/customization/prefs.js', verb: 'prefsSet', field: 'previousValue', absent: 'oldValue' },
+  { module: './dist/core/customization/prefs.js', verb: 'prefsReset', field: 'reset', absent: 'keys' },
 ];
 
 /**
@@ -338,7 +375,13 @@ const UNDECLARED = { module: './dist/core/ledger/draft.js', verb: 'deleteDraft' 
 // 44 since D144 (2026-09-30): `decide` and `suggestBankLines` declare their payloads.
 // 48 since D153 (cl-periods): the year close's internal door `postEntryInternal`.
 // 50 since K1 (2026-10-04): `postEntryInternalChecked` and `reverseEntryInternal` declare their payloads.
-const DECLARED_FLOOR = 50;
+// 53 since D167 (2026-10-14): `setBankStandard`, `clearBankStandard` and `listBankStandards`.
+// 57 since D172 (2026-10-15): the four workspace settings verbs.
+// 60 since D176 (2026-10-15): `composeTemplate` and `postEntryFromTemplate`.
+// 65 since D178 (2026-10-21): the four per-person preference verbs (point 7) and `journalNumberingPlan` (point 2).
+// 69 since D178 point 4 (2026-10-21): `importBankStatement`, `bankCsvPreview`, `getBankCsvMapping`, `setBankCsvMapping`.
+// 70 since D178 point 19 (2026-10-21): `resolvePossibleDuplicate`.
+const DECLARED_FLOOR = 70;
 
 /**
  * The resolved compiler options of `tsconfig.test.json`, read through TypeScript's own JSONC parser

@@ -1,5 +1,6 @@
 /**
- * G00's three tables (data model §DG), kept in G00's own module.
+ * G00's three tables (data model §DG), kept in G00's own module, plus the two per-person preference
+ * tables D178 point 7 added (spec §10, `./prefs.ts`).
  *
  * The pattern A14 established and A24 followed: the DDL a capability writes sits beside the code that
  * writes it, and concurrent capability branches do not all edit one long string in `store/schema.ts`.
@@ -86,4 +87,33 @@ CREATE TABLE IF NOT EXISTS saved_view (
 
 CREATE INDEX IF NOT EXISTS saved_view_by_kind
 ON saved_view (workspace_id, entity_kind);
+
+-- D178 point 7, the per-person preferences (G00 spec §10, ./prefs.ts). ONE ROW PER OVERRIDE: a
+-- preference with no row reads its registry default (./prefDefs/), so a later build's new default
+-- reaches every person who kept the default. Keyed by the session ACTOR, never by an input, the
+-- saved_view.owner_actor rule. Shape only: SCHEMA_GENERATION stays, because an older build that
+-- ignores these tables shows the defaults, which is harmless for a look or an arrangement.
+--
+-- person_pref: a 'person'-scope value, one per actor across every workspace of the book (a theme
+-- follows a Treuhänder across mandates). NO workspace_id, deliberately: the actor is the book-wide
+-- identity user.actor_id holds, and the registry admits only look-and-arrangement defs here.
+CREATE TABLE IF NOT EXISTS person_pref (
+  actor       TEXT NOT NULL,
+  key         TEXT NOT NULL,
+  -- JSON-encoded in every case, so a scalar and a structured value round-trip in one column.
+  value_json  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  PRIMARY KEY (actor, key)
+);
+
+-- person_workspace_pref: a 'workspace'-scope value, one per actor per workspace (the rail arrangement
+-- of one mandate, D178 point 6). §H-TENANT on every statement; travels with its workspace in a backup.
+CREATE TABLE IF NOT EXISTS person_workspace_pref (
+  workspace_id TEXT NOT NULL REFERENCES workspace(id),
+  actor        TEXT NOT NULL,
+  key          TEXT NOT NULL,
+  value_json   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  PRIMARY KEY (workspace_id, actor, key)
+);
 `;

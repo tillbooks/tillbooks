@@ -141,6 +141,24 @@ BEGIN
   SELECT RAISE(ABORT, 'expense_claim_terminal_is_one_way');
 END;
 
+-- D168: a REVERSED claim is terminal with no exception at all (the trigger above predates the state and
+-- is not rewritten, so a book opened before D168 gains the seal too), and the mirror it names is set
+-- once: a claim whose reversal_entry_id moved would point at an entry that is not its Storno.
+CREATE TRIGGER IF NOT EXISTS expense_claim_reversed_is_terminal
+BEFORE UPDATE OF status ON expense_claim
+WHEN OLD.status = 'reversed' AND NEW.status <> OLD.status
+BEGIN
+  SELECT RAISE(ABORT, 'expense_claim_reversed_is_terminal');
+END;
+
+CREATE TRIGGER IF NOT EXISTS expense_claim_reversal_entry_immutable
+BEFORE UPDATE ON expense_claim
+WHEN OLD.reversal_entry_id IS NOT NULL
+ AND IFNULL(OLD.reversal_entry_id, '') <> IFNULL(NEW.reversal_entry_id, '')
+BEGIN
+  SELECT RAISE(ABORT, 'expense_claim_reversal_entry_immutable');
+END;
+
 -- A line is never deleted and never edited once its claim has left draft: the figures a submitted or
 -- posted claim was built on are frozen. Draft edits go through the engine's own upsert.
 CREATE TRIGGER IF NOT EXISTS expense_line_frozen_after_draft

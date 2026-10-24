@@ -143,9 +143,15 @@ export function employeeEcho(row: EmployeeRow, revealAhv: boolean): Record<strin
 
 export function claimEcho(ctx: WorkspaceContext, row: ClaimRow): Record<string, unknown> {
   const lines = readLineRows(ctx, row.id);
+  // D178 E3 (A39 §17.3): the claimant's name, so the bank line's Spesen picker reads "Anna Muster:
+  // Zugreise Bern" from this one list. Additive; null when the employee row is gone from this workspace.
+  const employee = ctx.store.db
+    .prepare('SELECT first_name, last_name FROM employee WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, row.employee_id) as { first_name: string; last_name: string } | undefined;
   return {
     id: row.id,
     employeeId: row.employee_id,
+    employeeName: employee === undefined ? null : `${employee.first_name} ${employee.last_name}`.trim(),
     title: row.title,
     status: row.status,
     currency: row.currency,

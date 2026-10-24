@@ -1,0 +1,287 @@
+/* The chart primitive (D178): tokens only, recessive axes, thin marks. Text wears the text tokens; a
+   coloured mark beside it carries identity. The entrance classes (.chart-grow, .chart-draw) live in
+   styles/motion.css with the motion levels. */
+
+.chart {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  position: relative;
+  min-width: 0;
+}
+
+.chart-svg {
+  display: block;
+  overflow: visible;
+}
+
+.chart-grid {
+  stroke: var(--t-border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-grid--zero {
+  stroke: var(--t-border-strong);
+}
+
+.chart-mark--in {
+  fill: var(--t-chart-in);
+}
+
+.chart-mark--out {
+  fill: var(--t-chart-out);
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--t-text);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-dot {
+  fill: var(--t-text);
+  stroke: var(--t-bg-elev);
+  stroke-width: 2;
+}
+
+/* The ranked parts of one whole: one hue (money out) in four steps, the rest neutral, a surface gap. */
+.chart--donut .chart-mark,
+.chart-swatch {
+  stroke: var(--t-bg-elev);
+  stroke-width: 2;
+}
+
+.chart-step--0 {
+  fill: var(--t-chart-out);
+  background: var(--t-chart-out);
+}
+
+.chart-step--1 {
+  fill: var(--t-chart-out);
+  fill-opacity: 0.78;
+  background: color-mix(in srgb, var(--t-chart-out) 78%, var(--t-bg-elev));
+}
+
+.chart-step--2 {
+  fill: var(--t-chart-out);
+  fill-opacity: 0.58;
+  background: color-mix(in srgb, var(--t-chart-out) 58%, var(--t-bg-elev));
+}
+
+.chart-step--3 {
+  fill: var(--t-chart-out);
+  fill-opacity: 0.42;
+  background: color-mix(in srgb, var(--t-chart-out) 42%, var(--t-bg-elev));
+}
+
+.chart-step--4 {
+  fill: var(--t-chart-out);
+  fill-opacity: 0.3;
+  background: color-mix(in srgb, var(--t-chart-out) 30%, var(--t-bg-elev));
+}
+
+.chart-step--rest {
+  fill: var(--t-border-strong);
+  background: var(--t-border-strong);
+}
+
+.chart--donut {
+  display: grid;
+  grid-template-columns: minmax(0, 10rem) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--t-space-2) var(--t-space-3);
+}
+
+.chart--donut .chart-table {
+  grid-column: 1 / -1;
+}
+
+.chart-hole-label {
+  fill: var(--t-text-dim);
+  font-size: var(--t-font-xs);
+}
+
+.chart-hole-value {
+  fill: var(--t-text);
+  font-size: var(--t-font-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-parts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.chart-parts li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.chart-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--t-radius-sm);
+}
+
+.chart-parts__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-parts__share {
+  min-width: 4.5ch;
+  color: var(--t-text-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.chart-parts__value {
+  white-space: nowrap;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1) var(--t-space-3);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text);
+}
+
+.chart--donut .chart-legend {
+  display: block;
+}
+
+.chart-key::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  vertical-align: baseline;
+}
+
+.chart-key--in::before {
+  background: var(--t-chart-in);
+}
+
+.chart-key--out::before {
+  background: var(--t-chart-out);
+}
+
+.chart-axis-max {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: var(--t-font-xs);
+  line-height: var(--t-lh-xs);
+  color: var(--t-text-dim);
+  background: var(--t-bg-elev);
+  padding-right: var(--t-space-0-5);
+}
+
+.chart-axis-x {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  font-size: var(--t-font-xs);
+  line-height: var(--t-lh-xs);
+  color: var(--t-text-dim);
+  text-align: center;
+}
+
+.chart-axis-x li {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.chart-table summary {
+  cursor: pointer;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.chart-sparkline {
+  display: block;
+  width: 100%;
+  max-width: 8rem;
+  height: 28px;
+  overflow: visible;
+}
+
+.chart-rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.chart-rank__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--t-space-0-5) var(--t-space-2);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.chart-rank__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-rank__track {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+  overflow: hidden;
+}
+
+.chart-rank__bar {
+  display: block;
+  height: 100%;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-chart-out);
+}
+
+@media (max-width: 30rem) {
+  .chart--donut {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .chart--donut .chart-svg {
+    max-width: 10rem;
+  }
+
+  .chart--donut .chart-legend {
+    width: 100%;
+  }
+
+  /* Twelve month labels do not fit a phone: every other one carries the axis. */
+  .chart-axis-x li:nth-child(even) {
+    visibility: hidden;
+  }
+}

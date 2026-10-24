@@ -1,7 +1,7 @@
 {
   "generatedFrom": "src/api/registry.ts via scripts/generate-command-source.mjs",
   "note": "DO NOT EDIT BY HAND. Regenerate: npm run generate:commands. Guarded by command-source-drift.test.mjs.",
-  "verbCount": 800,
+  "verbCount": 822,
   "consequenceFamilies": {
     "close-period": {
       "en": "Closes the period to further bookings. A soft close or a plain hard lock can be lifted with the right; a filed MWST period or a closed year stays sealed.",
@@ -474,8 +474,8 @@
       "denylisted": false,
       "dialCapability": "post",
       "consequence": {
-        "en": "Books the asset's purchase and adds it to the register, which locks its cost figures. A correcting entry can reverse the booking, but the register keeps the purchase.",
-        "de-CH": "Bucht die Anschaffung der Anlage und nimmt sie ins Anlagenverzeichnis auf; ihre Kostenwerte sind danach gesperrt. Eine Korrekturbuchung kann die Buchung korrigieren, das Verzeichnis behält sie aber.",
+        "en": "Books the asset's purchase and adds it to the register, which locks its cost figures. If it is wrong, you reverse the purchase; the asset is closed and you record it anew.",
+        "de-CH": "Bucht die Anschaffung und nimmt die Anlage ins Verzeichnis auf; ihre Kostenwerte sind danach gesperrt. Ist das falsch, stornierst du die Anschaffung; die Anlage wird geschlossen und du erfasst sie neu.",
         "reversibility": "correctable"
       }
     },
@@ -504,8 +504,8 @@
       "denylisted": false,
       "dialCapability": "post",
       "consequence": {
-        "en": "Books additional cost onto the asset and raises its book value. A correcting entry can reverse the booking, but the register keeps the added cost.",
-        "de-CH": "Bucht zusätzliche Kosten auf die Anlage und erhöht ihren Buchwert. Eine Korrekturbuchung kann die Buchung korrigieren, das Anlagenverzeichnis behält die Kosten aber.",
+        "en": "Books additional cost onto the asset and raises its book value. If it is wrong, you reverse it with a correcting entry and the book value falls back.",
+        "de-CH": "Bucht zusätzliche Kosten auf die Anlage und erhöht ihren Buchwert. Ist das falsch, stornierst du sie mit einer Korrekturbuchung und der Buchwert sinkt wieder.",
         "reversibility": "correctable"
       }
     },
@@ -802,8 +802,8 @@
       "denylisted": false,
       "dialCapability": "post",
       "consequence": {
-        "en": "Books the asset's sale or write-off with its gain or loss and takes it out of the register. A correcting entry reverses the booking; to have the asset in the register again, you record it anew.",
-        "de-CH": "Bucht Verkauf oder Ausbuchung der Anlage mit Gewinn oder Verlust und nimmt sie aus dem Verzeichnis. Eine Korrekturbuchung korrigiert die Buchung; ins Verzeichnis kommt die Anlage nur neu erfasst zurück.",
+        "en": "Books the asset's sale or write-off with its gain or loss and takes it out of the register. If it is wrong, you reverse the disposal and the asset is back in the register.",
+        "de-CH": "Bucht Verkauf oder Ausbuchung der Anlage mit Gewinn oder Verlust und nimmt sie aus dem Verzeichnis. Ist das falsch, stornierst du den Abgang und die Anlage ist wieder im Verzeichnis.",
         "reversibility": "correctable"
       }
     },
@@ -1027,8 +1027,8 @@
       "denylisted": false,
       "dialCapability": "post",
       "consequence": {
-        "en": "Books the asset's carried-over cost and depreciation into the opening position and locks its cost figures. A correcting entry can reverse the booking, but the register keeps the figures.",
-        "de-CH": "Bucht die übernommenen Kosten und Abschreibungen der Anlage in die Eröffnungsbilanz und sperrt ihre Kostenwerte. Eine Korrekturbuchung kann die Buchung korrigieren, das Verzeichnis behält die Werte aber.",
+        "en": "Books the asset's carried-over cost and depreciation into the opening position and locks its cost figures. If it is wrong, you reverse it; the asset is closed and you record it anew.",
+        "de-CH": "Bucht die übernommenen Kosten und Abschreibungen der Anlage in die Eröffnungsbilanz und sperrt ihre Kostenwerte. Ist das falsch, stornierst du sie; die Anlage wird geschlossen und du erfasst sie neu.",
         "reversibility": "correctable"
       }
     },
@@ -1109,6 +1109,23 @@
       "denylisted": false,
       "dialCapability": null,
       "consequence": null
+    },
+    {
+      "name": "asset_transaction_reverse",
+      "kind": "write",
+      "reqCount": 3,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Reverses a purchase, added cost, opening or disposal of the asset with a correcting entry and updates the register; the original stays. A reversed purchase closes the asset; you record it anew.",
+        "de-CH": "Storniert Anschaffung, Zusatzaktivierung, Eröffnung oder Abgang der Anlage mit einer Korrekturbuchung und passt das Verzeichnis an; das Original bleibt. Eine stornierte Anschaffung schliesst die Anlage.",
+        "reversibility": "correctable"
+      }
     },
     {
       "name": "asset_transfer",
@@ -1255,6 +1272,19 @@
       "hasComplexInput": false,
       "capabilities": [
         "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "bank_csv_preview",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_sales"
       ],
       "gateDynamic": false,
       "denylisted": false,
@@ -1531,6 +1561,23 @@
       "consequence": null
     },
     {
+      "name": "clear_bank_standard",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Removes a standard: later bank lines of this counterparty are no longer prefilled by it. Nothing already booked changes; the standard stays on record and you can set it again.",
+        "de-CH": "Entfernt einen Standard: Spätere Bankzeilen dieser Gegenpartei werden nicht mehr damit vorbelegt. Bereits Gebuchtes bleibt, wie es ist; der Standard bleibt erhalten, und du kannst ihn wieder setzen.",
+        "reversibility": "reversible"
+      }
+    },
+    {
       "name": "clear_diagnostics",
       "kind": "write",
       "reqCount": 0,
@@ -1597,7 +1644,7 @@
         "read_books",
         "read_vat"
       ],
-      "gateDynamic": false,
+      "gateDynamic": true,
       "denylisted": false,
       "dialCapability": null,
       "consequence": null
@@ -2057,6 +2104,19 @@
       "reqCount": 2,
       "hasComplexInput": false,
       "capabilities": [],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "dashboard_series",
+      "kind": "read",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
       "gateDynamic": false,
       "denylisted": false,
       "dialCapability": null,
@@ -2566,6 +2626,24 @@
       "consequence": null
     },
     {
+      "name": "dunning_fee_reverse",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "dun",
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Reverses the run's reminder fees with a correcting entry; the original stays visible. Levels and sent letters stand; an unsent letter is re-issued without the fee, or held if your settings say so.",
+        "de-CH": "Storniert die Mahngebühren mit einer Korrekturbuchung; das Original bleibt sichtbar. Stufen und versandte Briefe bleiben; offene Briefe werden ohne Gebühr neu ausgestellt oder, je nach Einstellung, zurückgehalten.",
+        "reversibility": "correctable"
+      }
+    },
+    {
       "name": "ebill_delivery_status",
       "kind": "read",
       "reqCount": 0,
@@ -2812,8 +2890,8 @@
       "denylisted": false,
       "dialCapability": "post",
       "consequence": {
-        "en": "Approves the expense claim and books what you owe the employee. A correcting entry can reverse the booking, but the claim stays approved.",
-        "de-CH": "Genehmigt die Spesenabrechnung und bucht, was du der mitarbeitenden Person schuldest. Eine Korrekturbuchung kann die Buchung korrigieren, die Abrechnung bleibt aber genehmigt.",
+        "en": "Approves the expense claim and books what you owe the employee. If it is wrong, you reverse the claim with a correcting entry; the original stays visible.",
+        "de-CH": "Genehmigt die Spesenabrechnung und bucht, was du der mitarbeitenden Person schuldest. Ist das falsch, stornierst du die Abrechnung mit einer Korrekturbuchung; das Original bleibt sichtbar.",
         "reversibility": "correctable"
       }
     },
@@ -2887,6 +2965,24 @@
       "denylisted": false,
       "dialCapability": null,
       "consequence": null
+    },
+    {
+      "name": "expense_claim_reverse",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "spesen.approve",
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Reverses an approved expense claim with a correcting entry; nothing in the original is edited. The claim stays on record as reversed; to claim again, you start a new one.",
+        "de-CH": "Storniert eine genehmigte Spesenabrechnung mit einer Korrekturbuchung; am Original wird nichts geändert. Die Abrechnung bleibt als storniert erhalten; neu abrechnen kannst du mit einer neuen.",
+        "reversibility": "correctable"
+      }
     },
     {
       "name": "expense_claim_submit",
@@ -3411,6 +3507,19 @@
       "hasComplexInput": false,
       "capabilities": [
         "read_master_data"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "get_bank_csv_mapping",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_sales"
       ],
       "gateDynamic": false,
       "denylisted": false,
@@ -4279,6 +4388,23 @@
       "denylisted": false,
       "dialCapability": null,
       "consequence": null
+    },
+    {
+      "name": "import_bank_statement",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "pay"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "pay",
+      "consequence": {
+        "en": "Imports the statement file (camt, MT940 or CSV): new lines wait in the bank inbox, nothing is booked, lines already in the books are skipped and a CSV mapping is saved. Imported statements cannot be removed.",
+        "de-CH": "Importiert die Auszugsdatei (camt, MT940 oder CSV): neue Zeilen warten im Bankeingang, gebucht wird nichts, Zeilen schon im Buch werden übersprungen, eine CSV-Zuordnung wird gespeichert. Importierte Auszüge bleiben.",
+        "reversibility": "final"
+      }
     },
     {
       "name": "import_camt",
@@ -5217,8 +5343,8 @@
       "denylisted": false,
       "dialCapability": "dun",
       "consequence": {
-        "en": "Raises each invoice in the run one reminder level for good and books any reminder fee. The level is never lowered again; a wrong fee is corrected with a correcting entry.",
-        "de-CH": "Hebt jede Rechnung im Lauf endgültig um eine Mahnstufe an und bucht allfällige Mahngebühren. Die Stufe sinkt nie wieder; eine falsche Gebühr korrigierst du mit einer Korrekturbuchung.",
+        "en": "Raises each invoice in the run one reminder level for good and books any reminder fee. The level is never lowered again; a wrong fee is reversed from the run with a correcting entry.",
+        "de-CH": "Hebt jede Rechnung im Lauf endgültig um eine Mahnstufe an und bucht allfällige Mahngebühren. Die Stufe sinkt nie wieder; eine falsche Gebühr stornierst du im Lauf mit einer Korrekturbuchung.",
         "reversibility": "final"
       }
     },
@@ -5289,6 +5415,19 @@
       "hasComplexInput": false,
       "capabilities": [
         "manage_master_data"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "journal_numbering_plan",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
       ],
       "gateDynamic": false,
       "denylisted": false,
@@ -5595,6 +5734,19 @@
     },
     {
       "name": "list_bank_inbox",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_sales"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "list_bank_standards",
       "kind": "read",
       "reqCount": 0,
       "hasComplexInput": false,
@@ -7480,12 +7632,12 @@
     {
       "name": "post_entry",
       "kind": "write",
-      "reqCount": 3,
-      "hasComplexInput": true,
+      "reqCount": 2,
+      "hasComplexInput": false,
       "capabilities": [
         "post"
       ],
-      "gateDynamic": false,
+      "gateDynamic": true,
       "denylisted": false,
       "dialCapability": "post",
       "consequence": {
@@ -7527,6 +7679,50 @@
         "de-CH": "Bucht die Lieferantenrechnung in deine Buchhaltung. Ist sie falsch, stornierst du sie mit einer Korrekturbuchung; beides bleibt erhalten.",
         "reversibility": "correctable"
       }
+    },
+    {
+      "name": "prefs_get",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "prefs_list",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "prefs_reset",
+      "kind": "write",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "prefs_set",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
     },
     {
       "name": "prepare_feedback",
@@ -8756,6 +8952,23 @@
       "consequence": null
     },
     {
+      "name": "resolve_possible_duplicate",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Answers a possible duplicate: Duplikat ignores the line with that reason, Kein Duplikat keeps it as its own line. You can reopen an ignored line and decide again.",
+        "de-CH": "Entscheidet ein mögliches Duplikat: Duplikat ignoriert die Zeile mit diesem Grund, Kein Duplikat behält sie als eigene Zeile. Eine ignorierte Zeile öffnest du wieder und entscheidest neu.",
+        "reversibility": "reversible"
+      }
+    },
+    {
       "name": "restore_backup",
       "kind": "write",
       "reqCount": 2,
@@ -9366,6 +9579,23 @@
       "consequence": null
     },
     {
+      "name": "set_bank_csv_mapping",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": true,
+      "capabilities": [
+        "pay"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "pay",
+      "consequence": {
+        "en": "Saves how this bank account's CSV exports are read (date, amount, debit and credit columns): later CSV imports read amounts and signs this way. Saving another mapping replaces it.",
+        "de-CH": "Speichert, wie die CSV-Exporte dieses Bankkontos gelesen werden (Spalten für Datum, Betrag, Belastung, Gutschrift): spätere Importe lesen Beträge und Vorzeichen so. Eine neue Zuordnung ersetzt diese.",
+        "reversibility": "reversible"
+      }
+    },
+    {
       "name": "set_bank_opening_balance",
       "kind": "write",
       "reqCount": 3,
@@ -9380,6 +9610,23 @@
         "en": "Books the bank account's opening balance against 9100 Eröffnungsbilanz, once. A correction is a correcting entry, never a second opening; both stay visible.",
         "de-CH": "Bucht den Eröffnungssaldo des Bankkontos gegen 9100 Eröffnungsbilanz, einmal. Korrigiert wird mit einer Korrekturbuchung, nie mit einer zweiten Eröffnung; das Original bleibt sichtbar.",
         "reversibility": "correctable"
+      }
+    },
+    {
+      "name": "set_bank_standard",
+      "kind": "write",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Saves a standard: later bank lines of this counterparty in this direction are proposed to this account and MWST code, ready for the bulk button. Nothing is booked now; you can remove it any time.",
+        "de-CH": "Speichert einen Standard: Spätere Bankzeilen dieser Gegenpartei in diese Richtung werden auf dieses Konto und diesen MWST-Code vorgeschlagen. Gebucht wird jetzt nichts; du kannst ihn jederzeit entfernen.",
+        "reversibility": "reversible"
       }
     },
     {
@@ -9625,6 +9872,62 @@
       "consequence": {
         "en": "Sets the leftover amount below which the Studio offers a one-click write-off of an open item. Larger write-offs stay possible when stated deliberately; you can change the amount again.",
         "de-CH": "Legt den Restbetrag fest, unter dem das Studio eine Ausbuchung mit einem Klick anbietet. Grössere Ausbuchungen bleiben bewusst möglich; den Betrag kannst du wieder ändern.",
+        "reversibility": "reversible"
+      }
+    },
+    {
+      "name": "settings_get",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_master_data"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "settings_list",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_master_data"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "settings_reset",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [],
+      "gateDynamic": true,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": {
+        "en": "Returns a workspace setting to its default for everyone here from the next action on; nothing already booked or sent changes. The removed value stays in its history, so you can set it again.",
+        "de-CH": "Setzt eine Einstellung für alle hier ab der nächsten Aktion auf den Standard; Gebuchtes oder Versendetes bleibt. Der entfernte Wert bleibt im Verlauf, du kannst ihn wieder setzen.",
+        "reversibility": "reversible"
+      }
+    },
+    {
+      "name": "settings_set",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [],
+      "gateDynamic": true,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": {
+        "en": "Changes a workspace setting for everyone here from the next action on; nothing already booked or sent changes. The old value stays in its history, so you can set it back or reset it at any time.",
+        "de-CH": "Ändert eine Einstellung für alle hier ab der nächsten Aktion; Gebuchtes oder Versendetes bleibt. Der alte Wert bleibt im Verlauf, du kannst ihn jederzeit wieder setzen oder zurücksetzen.",
         "reversibility": "reversible"
       }
     },
@@ -11064,8 +11367,25 @@
       "denylisted": true,
       "dialCapability": "post",
       "consequence": {
-        "en": "Books the month's wage journal from your payroll as one entry. If it is wrong, you correct it with a correcting entry; both stay visible.",
-        "de-CH": "Bucht das Lohnjournal des Monats aus deiner Lohnbuchhaltung als eine Buchung. Ist es falsch, korrigierst du es mit einer Korrekturbuchung; das Original bleibt sichtbar.",
+        "en": "Books the month's wage journal from your payroll as one entry. One journal per month: if it is wrong, you reverse it under Payroll and then post the corrected one; both stay visible.",
+        "de-CH": "Bucht das Lohnjournal des Monats aus deiner Lohnbuchhaltung als eine Buchung. Pro Monat gilt ein Lohnjournal: Ist es falsch, stornierst du es unter Lohn und buchst danach das korrigierte; beides bleibt sichtbar.",
+        "reversibility": "correctable"
+      }
+    },
+    {
+      "name": "wage_journal_reverse",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Reverses the wage journal with a correcting entry; the original stays visible. Salary payments and social insurance declarations are not touched.",
+        "de-CH": "Storniert das Lohnjournal mit einer Korrekturbuchung; das Original bleibt sichtbar. Lohnzahlungen und Meldungen an die Sozialversicherungen bleiben unberührt.",
         "reversibility": "correctable"
       }
     },

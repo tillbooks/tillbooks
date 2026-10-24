@@ -27,11 +27,15 @@ import { applySavedView } from '../customization/views.js';
 import { baseCurrencyOf } from '../fx/rates.js';
 import { BANK_LINE_STATES, LINE_STATE_EXPR, LINE_STATE_JOINS, readActiveLink, signedAmountOf } from './bankLines.js';
 import type { BankLineState, BankTxnDetailRow, BankTxnRow } from './bankLines.js';
-import { proposalContext, proposeForLine } from './bankProposals.js';
-import type { BankLineProposal } from './bankProposals.js';
-import type { BookBankLineTarget } from './bankLines.js';
+import { proposalContext, proposeForLine, standardsOf } from './bankProposals.js';
+import { liveRulesIndex, readRuleRow, resolveFollowUp, standardKeyOfLine } from './bankStandards.js';
+import type { BankLineProposal, BankProposalReason, BankProposalTarget } from './bankProposals.js';
 import { IS_HEAD } from '../files/head.js';
 import { STATEMENT_IS_VOUCHER_SQL } from '../accounts/accounts.js';
+import { readLineFactsMap } from './statementFacts.js';
+import type { BankLineFacts } from './statementFacts.js';
+import { DUPLICATE_PENDING_SQL, readDuplicateCandidatesMap, readDuplicateDecisionMap, readPossibleDuplicateMap } from './statementDedupe.js';
+import type { DuplicateCandidateView, DuplicateDecisionView, DuplicateFlag } from './statementDedupe.js';
 
 // --- Views ---------------------------------------------------------------------------------------
 
@@ -47,6 +51,13 @@ export type BankInboxDecision = {
   differenceMinor: number | null;
   decidedBy: string | null;
   decidedAt: string;
+  /** D175/D176: the Buchungsregel the line was booked or ignored by, when the decision names one; else null. */
+  ruleId: string | null;
+  /**
+   * D178 E3 (A39 §17.6): the contact a `contact` target booked the line to, else null. Always present on
+   * the engine's answer; optional in the type only so a surface's own fixtures may leave it out.
+   */
+  contactId?: string | null;
 };
 
 export type BankInboxLine = {
@@ -78,6 +89,57 @@ export type BankInboxLine = {
   receiptCount: number;
   /** D142: booked to accounts (`targetKind: 'accounts'`) and no receipt anywhere: the "Ohne Beleg" facet. */
   needsReceipt: boolean;
+  /**
+   * D167 (A39 §13.1), D175 (§14.3): the Buchungsregel the line's proposal used, else the first (newest) live
+   * rule for the line's counterparty key and direction, whether or not the proposal used it (a stronger rung
+   * may have spoken, or the rule went stale), so the ★ shows filled. Null when the line has no counterparty
+   * or no rule is set.
+   */
+  standardId: string | null;
+  /** D175: every live rule for the line's counterparty key and direction, newest first (empty when none). */
+  ruleIds: string[];
+  /**
+   * D176 (A39 §15.3): the next step. Once the line is booked or ignored BY a Buchungsregel that names a
+   * follow-up Vorlage, that Vorlage (while one is live under its name); null otherwise, and always on an
+   * open line.
+   */
+  followUp: { standardId: string; label: string } | null;
+  /**
+   * D177 (A39 §16.1): the newest PENDING agent Vorschlag (`agent_action` id) of a bank-line verb naming this
+   * line, or null. One per line since D177 (a new draft supersedes the older); a book drafted earlier may
+   * hold two, and this is the one to show.
+   */
+  vorschlagActionId: string | null;
+  /**
+   * D178 (A39 §19, A20 §11.1): what the statement says about the movement beyond its booked fact: the bank
+   * code with its SIX label (en, de-CH), the bank texts as separate facts (`bankText`, `additionalInfo`,
+   * `entryInfo`), the references, the instructed amount, the exchange (the bank's rate and the effective
+   * rate), the charges and the derived fee. Null for a line imported before facts were recorded. The
+   * engine always sets it; optional in the type only so a Studio fixture written before it still holds.
+   */
+  facts?: BankLineFacts | null;
+  /**
+   * D178 point 19 (A20 §11.4, the E2 re-cut): why this line waits for the person's answer, and the stored
+   * line it most likely is: `shared_reference`, `same_movement` (matched one to one on a covered day),
+   * `same_date`, `near_date`, or `covered_period_new_line` (on a fully covered day and matching nothing, so
+   * `bankTxnId` is null). Null when nothing flags the line. The person decides: "Duplikat" or "Kein Duplikat".
+   * Optional in the type only so a Studio fixture written before it still holds.
+   */
+  possibleDuplicateOf?: DuplicateFlag | null;
+  /**
+   * D178 point 19 (owner, A20 §11.4): EVERY stored line of another format this line may be (the nearest
+   * first): its id, why it is named, its format (`camt`, `mt940`, `csv`), its date and its signed amount.
+   * Empty when nothing resembled the line. Optional in the type only for Studio fixtures written before it.
+   */
+  possibleDuplicates?: DuplicateCandidateView[];
+  /**
+   * D178 point 19: true while the line is open, flagged, and not decided "Kein Duplikat": the person
+   * decides with `resolve_possible_duplicate` (duplicate | distinct). Until then the line is never `sure`
+   * and `book_bank_line` refuses it (`duplicate_decision_pending`).
+   */
+  needsDuplicateDecision?: boolean;
+  /** D178 point 19: the person's latest answer on the flag (who, when), or null. */
+  duplicateDecision?: DuplicateDecisionView | null;
 };
 
 // --- D142: the attention facets and the receipts (A39 §11) --------------------------------------------
@@ -87,26 +149,36 @@ export const BANK_LINE_ATTENTIONS = ['needs', 'sure', 'learned'] as const;
 export type BankLineAttention = (typeof BANK_LINE_ATTENTIONS)[number];
 
 /** The bank-line verbs a pending agent Vorschlag can carry. */
-const LINE_VERBS = ['book_bank_line', 'ignore_bank_line', 'reopen_bank_line'] as const;
+const LINE_VERBS = ['book_bank_line', 'ignore_bank_line', 'reopen_bank_line', 'resolve_possible_duplicate'] as const;
 
 /** The lines a PENDING agent Vorschlag names (A35's queue): a person decides those, never the pick bar. */
 export function vorschlagLineIds(ctx: WorkspaceContext): Set<string> {
+  return new Set(newestVorschlagByLine(ctx).keys());
+}
+
+/**
+ * D177 (A39 §16.1): per line, the NEWEST pending bank-line Vorschlag naming it (its `agent_action` id). Since
+ * D177 a new draft supersedes the older ones of its line, so there is one; a book drafted before that build
+ * may still hold two, and this names the one a surface shows. Tenant-bound.
+ */
+export function newestVorschlagByLine(ctx: WorkspaceContext): Map<string, string> {
   const rows = ctx.store.db
     .prepare(
-      `SELECT payload_json FROM agent_action
-        WHERE workspace_id = ? AND status = 'pending' AND action_tool IN (${LINE_VERBS.map(() => '?').join(', ')})`,
+      `SELECT id, payload_json FROM agent_action
+        WHERE workspace_id = ? AND status = 'pending' AND action_tool IN (${LINE_VERBS.map(() => '?').join(', ')})
+        ORDER BY created_at, rowid`,
     )
-    .all(ctx.workspaceId, ...LINE_VERBS) as { payload_json: string }[];
-  const ids = new Set<string>();
+    .all(ctx.workspaceId, ...LINE_VERBS) as { id: string; payload_json: string }[];
+  const newest = new Map<string, string>();
   for (const r of rows) {
     try {
       const payload = JSON.parse(r.payload_json) as { bankTxnId?: unknown };
-      if (typeof payload.bankTxnId === 'string' && payload.bankTxnId.length > 0) ids.add(payload.bankTxnId);
+      if (typeof payload.bankTxnId === 'string' && payload.bankTxnId.length > 0) newest.set(payload.bankTxnId, r.id);
     } catch {
       // An unreadable payload names no line.
     }
   }
-  return ids;
+  return newest;
 }
 
 /**
@@ -114,8 +186,21 @@ export function vorschlagLineIds(ctx: WorkspaceContext): Set<string> {
  * an accounts booking needs at least one leg, an account and a non-zero amount on every leg, and legs
  * summing to the line; an accepted difference needs its reason (critic A39-12).
  */
-export function isProposalBookable(absAmountMinor: number, target: BookBankLineTarget | null): boolean {
+export function isProposalBookable(absAmountMinor: number, target: BankProposalTarget | null, reasonCode?: BankProposalReason): boolean {
   if (target === null) return false;
+  // D176: a "Nicht buchen" proposal is decided as it stands (`ignore_bank_line` with its reason and note).
+  if (target.kind === 'ignore') return true;
+  // D175: a Buchungsregel target waits for its asked amounts. The ladder proposes it with NO amount filled,
+  // so it is never bookable as proposed and the bulk button never books it; an ask that is not a positive
+  // amount is not filled either. (Whether EVERY ask is filled needs the rule: `book_bank_line` refuses
+  // `ask_missing` for the rest.) D177: the ONE exception is a `rule_computed` proposal, whose every unknown
+  // the engine computes from the line, so its `asks: {}` IS complete (the ladder makes such a proposal
+  // `check` whenever the booking would refuse it as it stands).
+  if (target.kind === 'rule') {
+    const asks = Object.values(target.asks);
+    if (asks.length === 0) return reasonCode === 'rule_computed';
+    return asks.every((v) => Number.isSafeInteger(v) && v > 0);
+  }
   if (target.kind === 'existing_entry') return target.acceptDifference !== true || (target.differenceReason ?? '').trim() !== '';
   if (target.kind !== 'accounts') return true;
   if (target.legs.length === 0 || target.legs.some((l) => l.accountId === '' || l.amountMinor === 0)) return false;
@@ -129,7 +214,7 @@ export function isProposalBookable(absAmountMinor: number, target: BookBankLineT
  */
 export function attentionOf(proposal: BankLineProposal | null, absAmountMinor: number, hasVorschlag: boolean): BankLineAttention {
   if (hasVorschlag || proposal === null) return 'needs';
-  if (proposal.certainty === 'sure') return isProposalBookable(absAmountMinor, proposal.target) ? 'sure' : 'needs';
+  if (proposal.certainty === 'sure') return isProposalBookable(absAmountMinor, proposal.target, proposal.reasonCode) ? 'sure' : 'needs';
   if (proposal.certainty === 'learned') return 'learned';
   return 'needs';
 }
@@ -268,6 +353,29 @@ export type BankAccountBalance = {
   openSumMinor: number;
   /** bank - ledger - open: zero when bank and books agree. */
   differenceMinor: number | null;
+  /**
+   * Where bank and books stood when the feed STARTS (the audit of 16.10.2026): the earliest dated
+   * statement's opening balance against the linked account's balance the day before it. A raw fact
+   * beside the identity, never a term of it; `gapMinor` = bank - ledger, the difference's own sign.
+   *
+   * A gap here is NOT by itself a fault (critic, same day): an opening entry dated on the first
+   * statement's day, or a payment the books date a day before the bank books it, reads as a gap and is
+   * cancelled out from the first statement on. With a continuous statement chain, differenceMinor =
+   * gapMinor + whatever arose after the start, so the WHOLE difference lies before the feed exactly when
+   * gapMinor equals differenceMinor: a book migrated with a history the feed never saw (the books end
+   * before the first imported statement, the movements between are in neither the books nor the bank
+   * list). Only that case is said to a person. Null when the account cannot be judged, or no dated
+   * statement up to the judged one carries an opening balance in the account's currency.
+   */
+  start: BankAccountStart | null;
+};
+
+export type BankAccountStart = {
+  /** The earliest statement's first day: the books are read up to the day before. */
+  date: string;
+  bankMinor: number;
+  ledgerMinor: number;
+  gapMinor: number;
 };
 
 interface AccountRow {
@@ -327,6 +435,7 @@ export function accountBalance(ctx: WorkspaceContext, account: AccountRow, asOf?
     openCount: 0,
     openSumMinor: 0,
     differenceMinor: null,
+    start: null,
   };
   const statements = ctx.store.db
     .prepare(
@@ -362,7 +471,39 @@ export function accountBalance(ctx: WorkspaceContext, account: AccountRow, asOf?
     openCount: open.n,
     openSumMinor: open.s,
     differenceMinor: bank - ledger - open.s,
+    start: feedStart(ctx, account, statementDate),
   };
+}
+
+/** The day before an ISO date (calendar arithmetic in UTC, so no time zone can shift it). */
+function dayBefore(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The feed's start for ONE account, judged up to `asOf` (the statement the balance line reads): the
+ * earliest statement with its own first day (FrToDt; an undated one would make "the day before" a
+ * guess) and an opening balance in the account's currency, its first page first. A split statement's
+ * opening balance is its first page's. Pure read, §H-TENANT.
+ */
+function feedStart(ctx: WorkspaceContext, account: AccountRow, asOf: string): BankAccountStart | null {
+  const first = ctx.store.db
+    .prepare(
+      `SELECT from_date AS d, opening_balance_minor AS ob
+         FROM bank_statement
+        WHERE workspace_id = ? AND bank_account_id = ? AND opening_balance_minor IS NOT NULL
+          AND from_date IS NOT NULL
+          AND (balance_currency IS NULL OR balance_currency = ?)
+          AND from_date <= ?
+        ORDER BY from_date ASC, COALESCE(page_number, 1) ASC, imported_at ASC, rowid ASC
+        LIMIT 1`,
+    )
+    .get(ctx.workspaceId, account.id, account.currency, asOf) as { d: string; ob: number } | undefined;
+  if (first === undefined) return null;
+  const ledger = ledgerBalanceInAccountCurrency(ctx, account, dayBefore(first.d));
+  return { date: first.d, bankMinor: first.ob, ledgerMinor: ledger, gapMinor: first.ob - ledger };
 }
 
 function readAccount(ctx: WorkspaceContext, bankAccountId: string): AccountRow | undefined {
@@ -377,6 +518,10 @@ export const BANK_INBOX_STATUS_FILTERS = [...BANK_LINE_STATES, 'all'] as const;
 export const BANK_INBOX_DEFAULT_LIMIT = 50;
 export const BANK_INBOX_MAX_LIMIT = 200;
 
+/** D178 E3 (A39 §17.6): the money's direction a page may be narrowed to (Gutschriften, Belastungen). */
+export const BANK_INBOX_DIRECTIONS = ['in', 'out'] as const;
+export type BankInboxDirection = (typeof BANK_INBOX_DIRECTIONS)[number];
+
 export interface ListBankInboxInput {
   bankAccountId?: string;
   /** ONE line by its id, in any state with `status: 'all'` (a deep link to a line beyond the first page). */
@@ -385,17 +530,35 @@ export interface ListBankInboxInput {
   query?: string;
   from?: string;
   to?: string;
+  /** D178 E3: `in` (money in, Gutschriften) or `out` (money out, Belastungen). */
+  direction?: string;
   limit?: number;
   cursor?: string;
+  /** D178 E3: skip this many lines of the filtered, ordered list (a numbered page); never with `cursor`. */
+  offset?: number;
   savedViewId?: string;
+  /**
+   * D178 point 19: `duplicates` lists only the open lines that wait for a duplicate decision; its `total` is
+   * the count the attention surfaces read (`list_bank_inbox { facet: 'duplicates' }`).
+   */
+  facet?: string;
 }
+
+/** D178 point 19: the facets `list_bank_inbox` narrows to (closed, §H-ENUM). */
+export const BANK_INBOX_FACETS = ['duplicates'] as const;
 
 export type ListBankInboxOk = {
   lines: BankInboxLine[];
   /** Pass back as `cursor` for the next page; null on the last page. */
   nextCursor: string | null;
-  /** Lines matching the filter across every page. */
+  /** Lines matching EVERY filter (the direction included) across every page. */
   total: number;
+  /**
+   * D178 E3 (A39 §17.6): the same filters WITHOUT the direction, counted per direction, so the two
+   * Gutschriften / Belastungen chips show honest counts whichever of them is active. Always present on
+   * the engine's answer; optional in the type only so a surface's own parsed copy may leave it out.
+   */
+  directionCounts?: { in: number; out: number };
   /** Per Bankkonto in scope: the balance line (spec L4). */
   summary: BankAccountBalance[];
 };
@@ -443,10 +606,24 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
     optionalDate(input.from, 'from') ??
     optionalDate(input.to, 'to') ??
     optionalId(input.cursor, 'cursor') ??
-    optionalId(input.savedViewId, 'savedViewId');
+    optionalText(input.direction, 'direction') ??
+    optionalId(input.savedViewId, 'savedViewId') ??
+    optionalText(input.facet, 'facet');
   if (guard) return guard;
+  if (input.facet !== undefined && !(BANK_INBOX_FACETS as readonly string[]).includes(input.facet)) {
+    return err('invalid_input', { field: 'facet', allowed: [...BANK_INBOX_FACETS] });
+  }
   if (input.limit !== undefined && (!Number.isSafeInteger(input.limit) || input.limit < 1)) {
     return err('invalid_input', { field: 'limit', reason: 'a positive integer' });
+  }
+  if (input.offset !== undefined && (!Number.isSafeInteger(input.offset) || input.offset < 0)) {
+    return err('invalid_input', { field: 'offset', reason: 'zero or a positive integer' });
+  }
+  if (input.offset !== undefined && input.cursor !== undefined) {
+    return err('invalid_input', { field: 'offset', reason: 'page by cursor or by offset, not both' });
+  }
+  if (input.direction !== undefined && !(BANK_INBOX_DIRECTIONS as readonly string[]).includes(input.direction)) {
+    return err('invalid_input', { field: 'direction', allowed: [...BANK_INBOX_DIRECTIONS] });
   }
   const viewed = applySavedView(ctx, 'bank_txn', input);
   if (!viewed.ok) return viewed;
@@ -488,6 +665,10 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
     clauses.push(`${LINE_STATE_EXPR('t')} = ?`);
     params.push(status);
   }
+  // D178 point 19: the lines waiting for the person's duplicate decision (open, flagged, not "Kein Duplikat").
+  if (input.facet === 'duplicates') {
+    clauses.push(`${LINE_STATE_EXPR('t')} = 'open' AND ${DUPLICATE_PENDING_SQL('t')}`);
+  }
   const q = typeof filter.query === 'string' ? filter.query.trim() : '';
   if (q.length > 0) {
     const like = `%${q.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -500,6 +681,23 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
   }
   const from = `FROM bank_txn t ${LINE_STATE_JOINS('t')}
       LEFT JOIN bank_txn_detail d2 ON d2.workspace_id = t.workspace_id AND d2.bank_txn_id = t.id`;
+  // D178 E3 (A39 §17.6): the two direction chips count every OTHER filter, so each shows what choosing
+  // it would list; the direction itself then narrows `total` and the page.
+  const byDirection = ctx.store.db
+    .prepare(
+      `SELECT COALESCE(SUM(CASE WHEN t.credit_debit = 'CRDT' THEN 1 ELSE 0 END), 0) AS i,
+              COALESCE(SUM(CASE WHEN t.credit_debit = 'DBIT' THEN 1 ELSE 0 END), 0) AS o
+         ${from} WHERE ${clauses.join(' AND ')}`,
+    )
+    .get(...params) as { i: number; o: number };
+  const direction = typeof filter.direction === 'string' ? filter.direction : undefined;
+  if (direction !== undefined) {
+    if (!(BANK_INBOX_DIRECTIONS as readonly string[]).includes(direction)) {
+      return err('invalid_input', { field: 'direction', allowed: [...BANK_INBOX_DIRECTIONS] });
+    }
+    clauses.push('t.credit_debit = ?');
+    params.push(direction === 'in' ? 'CRDT' : 'DBIT');
+  }
   const where = clauses.join(' AND ');
   const total = (ctx.store.db.prepare(`SELECT COUNT(*) AS n ${from} WHERE ${where}`).get(...params) as { n: number }).n;
   const pageClauses = [...clauses];
@@ -508,6 +706,8 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
     pageClauses.push(`(${LINE_DATE('t')} < ? OR (${LINE_DATE('t')} = ? AND t.rowid < ?))`);
     pageParams.push(cursor.date, cursor.date, cursor.rowid);
   }
+  // One stable order for both ways of paging: the booking date, newest first, then the insertion order.
+  const offset = typeof filter.offset === 'number' && filter.cursor === undefined ? filter.offset : 0;
   const rows = ctx.store.db
     .prepare(
       `SELECT t.*, ${LINE_STATE_EXPR('t')} AS line_state,
@@ -516,15 +716,16 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
          ${from}
         WHERE ${pageClauses.join(' AND ')}
         ORDER BY sort_date DESC, t.rowid DESC
-        LIMIT ?`,
+        LIMIT ? OFFSET ?`,
     )
-    .all(...pageParams, limit + 1) as InboxRow[];
+    .all(...pageParams, limit + 1, offset) as InboxRow[];
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
   const nextCursor = rows.length > limit && last !== undefined ? encodeCursor(last.sort_date, last.rid) : null;
 
   const pc = page.some((r) => r.line_state === 'open') ? proposalContext(ctx) : null;
-  const named = pc !== null ? vorschlagLineIds(ctx) : new Set<string>();
+  const named = newestVorschlagByLine(ctx);
+  const standards = pc !== null ? standardsOf(ctx, pc) : liveRulesIndex(ctx);
   const receiptsOf = ctx.store.db.prepare(RECEIPTS_SQL);
   const statementCovers = ctx.store.db.prepare(
     `SELECT ${STATEMENT_COVERS_SQL('@entry', '@bank', '@ws')} AS covered`,
@@ -546,9 +747,16 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
       differenceMinor: link.differenceMinor,
       decidedBy: link.createdBy,
       decidedAt: link.createdAt,
+      ruleId: link.ruleId,
+      contactId: link.contactId,
     });
   }
 
+  // D178 (A39 §19): the page's facts in one read.
+  const factsOf = readLineFactsMap(ctx, page.map((r) => r.id));
+  const duplicateOf = readPossibleDuplicateMap(ctx, page.map((r) => r.id));
+  const candidatesOf = readDuplicateCandidatesMap(ctx, page.map((r) => r.id));
+  const duplicateDecisionOf = readDuplicateDecisionMap(ctx, page.map((r) => r.id));
   const lines: BankInboxLine[] = page.map((r) => {
     const decision = decisions.get(r.id);
     const detail: BankTxnDetailRow = {
@@ -589,6 +797,25 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
         decision?.targetKind === 'accounts' &&
         receiptCount === 0 &&
         (statementCovers.get({ entry: entryId, bank: r.bank_account_id, ws: ctx.workspaceId }) as { covered: number }).covered !== 1,
+      ...(() => {
+        const key = standardKeyOfLine(r, detail);
+        const rules = key === null ? [] : (standards.get(key) ?? []);
+        const used = proposal !== null && (proposal.reasonCode === 'standard' || proposal.reasonCode === 'rule_needs_amount' || proposal.reasonCode === 'rule_computed' || proposal.reasonCode === 'rule_ignore') ? proposal.reasonParams['standardId'] : undefined;
+        return { standardId: typeof used === 'string' ? used : (rules[0]?.id ?? null), ruleIds: rules.map((rule) => rule.id) };
+      })(),
+      vorschlagActionId: named.get(r.id) ?? null,
+      followUp: (() => {
+        // D176: the rule that decided the line (live or since edited: the decision names the row it used).
+        const ruleId = decision?.ruleId ?? null;
+        if (ruleId === null) return null;
+        const rule = readRuleRow(ctx, ruleId);
+        return rule === undefined ? null : resolveFollowUp(ctx, rule.follow_up_standard_id);
+      })(),
+      facts: factsOf.get(r.id) ?? null,
+      possibleDuplicateOf: duplicateOf.get(r.id) ?? null,
+      possibleDuplicates: candidatesOf.get(r.id) ?? [],
+      needsDuplicateDecision: r.line_state === 'open' && duplicateOf.has(r.id) && duplicateDecisionOf.get(r.id)?.decision !== 'distinct',
+      duplicateDecision: duplicateDecisionOf.get(r.id) ?? null,
     };
   });
 
@@ -599,7 +826,7 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
           .prepare('SELECT id, name, iban, currency, ledger_account_id, opening_entry_id, archived FROM bank_account WHERE workspace_id = ? AND archived = 0 ORDER BY name, rowid')
           .all(ctx.workspaceId) as AccountRow[]);
   const summary = accounts.map((a) => accountBalance(ctx, a, filter.to));
-  return ok<ListBankInboxOk>({ lines, nextCursor, total, summary });
+  return ok<ListBankInboxOk>({ lines, nextCursor, total, directionCounts: { in: byDirection.i, out: byDirection.o }, summary });
 }
 
 // --- G22 `bank_reconciled` (spec §4.5, D139) ----------------------------------------------------------

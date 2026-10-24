@@ -18,6 +18,7 @@
  */
 
 import { TILL_PACKAGE_VERSION } from '../core/version.js';
+import type { AdoptedBookUnavailable } from './db-path.js';
 
 /** How this process was started. The §H-ENUM enum M00 owns, single-sourced here. */
 export type DeliveryMode = 'up' | 'mcp' | 'serve' | 'agent_session';
@@ -54,6 +55,12 @@ export interface DeliveryRuntime {
   /** Whether the built Studio is served from this process (`till up` only). */
   studioServed: boolean;
   scheduler: SchedulerStatus;
+  /**
+   * D166 point 8 (critic F1/F2): the adopted book this `till up` could not open, or null. While set,
+   * the process runs on an in-memory book that writes nowhere, runs no cadence, and the Studio shows
+   * its "not reachable" page instead of the doors.
+   */
+  adoptedBookUnavailable: AdoptedBookUnavailable | null;
 }
 
 /**
@@ -73,6 +80,7 @@ function initialState(): DeliveryRuntime {
     port: null,
     studioServed: false,
     scheduler: { enabled: false, lastTickAt: null, nextTickAt: null },
+    adoptedBookUnavailable: null,
   };
 }
 
@@ -99,9 +107,18 @@ export function setSchedulerStatus(scheduler: SchedulerStatus): void {
   state = { ...state, scheduler };
 }
 
+/** Record (or clear) the adopted book this process could not open (D166 point 8). */
+export function setAdoptedBookUnavailable(unavailable: AdoptedBookUnavailable | null): void {
+  state = { ...state, adoptedBookUnavailable: unavailable === null ? null : { ...unavailable } };
+}
+
 /** A read-only snapshot of the current process state. */
 export function getDeliveryRuntime(): DeliveryRuntime {
-  return { ...state, scheduler: { ...state.scheduler } };
+  return {
+    ...state,
+    scheduler: { ...state.scheduler },
+    adoptedBookUnavailable: state.adoptedBookUnavailable === null ? null : { ...state.adoptedBookUnavailable },
+  };
 }
 
 /** Reset to the boot default. For tests, so one suite's mode never leaks into the next. */

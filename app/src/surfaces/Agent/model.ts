@@ -1,6 +1,5 @@
 /**
- * A35's read-model helpers: parsers over the four agent reads, the Geld/System grouping, the
- * per-workspace dock memory, and the per-capability suggestion dismissal (D90 D-3). Parsing is
+ * A35's read-model helpers: parsers over the four agent reads, the Geld/System grouping, and the per-capability suggestion dismissal (D90 D-3). Parsing is
  * defensive: a shape the surface cannot read renders as absent, never as a crash or a guessed figure.
  */
 
@@ -152,7 +151,7 @@ export const GELD_CAPABILITIES = ['post', 'issue', 'send', 'dun', 'pay', 'vat-fi
 // leaves or what goes for good, which the Vertrauen table must show beside the other governing acts.
 export const SYSTEM_CAPABILITIES = ['customize', 'plugin-install', 'close-period', 'go-live', 'erase', 'share'] as const;
 
-/** The Studio's trace-collapse threshold: one number, used by the dock and the archive alike. */
+/** The Studio's trace-collapse threshold: one number for every rendered trace. */
 export const TRACE_COLLAPSE_THRESHOLD = 4;
 /** Above this many pending Vorschläge the queue groups Geld/System (design §3f). */
 export const QUEUE_GROUP_THRESHOLD = 20;
@@ -290,7 +289,7 @@ export function figuresLine(t: (key: string, params?: Record<string, string | nu
 /** The approval refusal for a Vorschlag whose record changed after the proposal (critic N1). */
 export const VORSCHLAG_STALE = 'vorschlag_stale';
 
-/** The acknowledgement a decision lands on, per outcome: one map, the dock and the queue alike. */
+/** The acknowledgement a decision lands on, per outcome: one map for every decision surface. */
 export const DECIDED_MESSAGE = {
   approved: 'agent.card.executed',
   rejected: 'agent.card.rejected',
@@ -334,24 +333,7 @@ export function countCell(count: number, attempted: boolean): string {
 
 /* ------------------------------------------------- per-workspace browser state (G16 precedent) */
 
-const dockKey = (workspaceId: string) => `till.agent.dock.${workspaceId}`;
 const dismissKey = (workspaceId: string, capability: string) => `till.agent.suggest.${workspaceId}.${capability}`;
-
-export function readDockOpen(workspaceId: string): boolean {
-  try {
-    return localStorage.getItem(dockKey(workspaceId)) === 'open';
-  } catch {
-    return false;
-  }
-}
-
-export function writeDockOpen(workspaceId: string, open: boolean): void {
-  try {
-    localStorage.setItem(dockKey(workspaceId), open ? 'open' : 'closed');
-  } catch {
-    // Private mode: the dock simply forgets, which is the collapsed default anyway.
-  }
-}
 
 /** D90 D-3: a declined suggestion never nags again, per capability, per workspace. */
 export function isSuggestionDismissed(workspaceId: string, capability: string): boolean {

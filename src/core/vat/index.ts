@@ -49,13 +49,18 @@ export {
   listVatPeriods,
   markVatPeriodFiled,
   monthsOfVatPeriod,
+  MWST_FIRST_YEAR,
+  isMwstYear,
+  filingPeriodsOfYear,
+  stubsTouching,
+  describeFilingPeriods,
   formLineLabel,
   ESTV_FORM_LINE_LABELS,
   ESTV_FORM_LINE_LABELS_SALDO,
   OUTPUT_VAT_ACCOUNT,
   INPUT_VAT_ACCOUNTS,
 } from './abrechnung.js';
-export type { ComputeVatReturnInput, MarkVatPeriodFiledInput, VatReturnLine, VatPeriod } from './abrechnung.js';
+export type { ComputeVatReturnInput, MarkVatPeriodFiledInput, VatReturnLine, VatPeriod, FilingPeriod, SwitchYearStub } from './abrechnung.js';
 export { vatBridgeOf } from './bridge.js';
 export type { VatBridge, VatBridgeKind, VatBridgeInput } from './bridge.js';
 export { exportVatReturnEch0217, mapReturnToEch0217, ESTV_EPORTAL_URL } from './ech0217.js';

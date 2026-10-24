@@ -1,14 +1,19 @@
 /**
- * The theme context: light or dark, resolved once and stamped on the document.
+ * The theme context: light or dark, resolved from the person's colour-scheme preference and stamped on
+ * the document.
  *
- * On mount the theme is read from localStorage('till-theme') if the operator has chosen one,
- * otherwise from the OS `prefers-color-scheme` (light is the ground default when neither is known).
- * The resolved theme is written to `data-theme` on the document element, which is where the token
- * stylesheet keys the palette. An explicit choice (setTheme/toggle) persists; a system-derived
- * default does NOT persist, so the app keeps following the OS until the operator picks a side.
+ * D178 point 7: the choice is the engine preference `appearance.theme` (`light | dark | system`, default
+ * `system`), read and written through `usePref`, so it follows the person to another browser and an agent
+ * can read it. `system` follows the OS `prefers-color-scheme` live (light when the OS says nothing). The
+ * resolved theme is written to `data-theme` on the document element, where the token stylesheet keys the
+ * palette.
  *
- * Every access to `window` is guarded: under SSR or jsdom (no matchMedia, no localStorage) the
- * provider resolves to light and never throws.
+ * The browser-only choice of earlier builds (`localStorage['till-theme']`) moves into the engine once,
+ * through `importLegacyPref`, and is then cleared. Outside a `PrefsProvider` (component tests) the
+ * provider keeps local state; `initialTheme` pins its start there.
+ *
+ * Every access to `window` is guarded: under SSR or jsdom (no matchMedia) the provider resolves `system`
+ * to light and never throws.
  */
 import {
   createContext,
@@ -20,46 +25,60 @@ import {
   type ReactNode,
 } from 'react';
 
+import { importLegacyPref, usePref } from '../lib/prefs';
+
 export type Theme = 'light' | 'dark';
 
-/** The localStorage key that holds an explicit operator choice. */
+/** The stored preference: an explicit side, or the operating system's. */
+export type ThemePreference = Theme | 'system';
+
+/** The engine preference key (G00 spec §10, `src/core/customization/prefDefs/appearance.ts`). */
+export const THEME_PREF = 'appearance.theme';
+
+/** The `localStorage` key earlier builds kept an explicit choice under. Read once, then cleared. */
 export const THEME_STORAGE_KEY = 'till-theme';
+
+/** The legacy value as a preference: only an explicit side was ever stored (no key meant "system"). */
+export function parseLegacyTheme(raw: string): ThemePreference | undefined {
+  return raw === 'light' || raw === 'dark' ? raw : undefined;
+}
+
+/** Move `till-theme` into the engine once (queued until the preference store has loaded). */
+export function importLegacyTheme() {
+  return importLegacyPref<ThemePreference>(THEME_PREF, THEME_STORAGE_KEY, parseLegacyTheme);
+}
+
+void importLegacyTheme();
+
+const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 /** True when the OS asks for a dark scheme. Guarded for environments without matchMedia. */
 function prefersDark(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return window.matchMedia(DARK_QUERY).matches;
 }
 
-/** The stored explicit choice, or null if none (or storage is unavailable). */
-function readStored(): Theme | null {
-  try {
-    const value = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return value === 'light' || value === 'dark' ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Best-effort persist. Storage can throw (private mode, disabled): a failure is not fatal. */
-function persist(theme: Theme): void {
-  try {
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  } catch {
-    /* storage unavailable: the choice lives only for this session */
-  }
-}
-
-/** Resolve the initial theme: an explicit choice wins, else the OS preference, else light. */
-export function resolveInitialTheme(): Theme {
-  return readStored() ?? (prefersDark() ? 'dark' : 'light');
+/** The OS scheme, kept live while the person follows the system. */
+function useSystemDark(): boolean {
+  const [dark, setDark] = useState(prefersDark);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia(DARK_QUERY);
+    const onChange = () => setDark(media.matches);
+    media.addEventListener?.('change', onChange);
+    return () => media.removeEventListener?.('change', onChange);
+  }, []);
+  return dark;
 }
 
 export interface ThemeContextValue {
+  /** The theme on screen: the preference, with `system` resolved against the OS. */
   theme: Theme;
-  /** Set the theme explicitly and persist the choice. */
-  setTheme: (theme: Theme) => void;
-  /** Flip between light and dark, persisting the result. */
+  /** The stored preference. */
+  preference: ThemePreference;
+  /** Set the preference (an explicit side, or `system`). */
+  setTheme: (theme: ThemePreference) => void;
+  /** Flip the theme on screen, storing the explicit side. */
   toggle: () => void;
 }
 
@@ -70,10 +89,15 @@ export function ThemeProvider({
   initialTheme,
 }: {
   children: ReactNode;
-  /** Override the resolved initial theme. Used by tests to pin a known start state. */
-  initialTheme?: Theme;
+  /** Pin the start outside a `PrefsProvider` (tests). Inside one, the engine's preference decides. */
+  initialTheme?: ThemePreference;
 }) {
-  const [theme, setThemeState] = useState<Theme>(() => initialTheme ?? resolveInitialTheme());
+  const [preference, setPreference] = usePref<ThemePreference>(
+    THEME_PREF,
+    initialTheme === undefined ? undefined : { initial: initialTheme },
+  );
+  const systemDark = useSystemDark();
+  const theme: Theme = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
 
   // Reflect the theme onto the document so the token stylesheet can pick up the palette. This runs
   // on mount and on every change, and is the single place that touches `data-theme`.
@@ -83,22 +107,12 @@ export function ThemeProvider({
     }
   }, [theme]);
 
-  const setTheme = useCallback((next: Theme) => {
-    persist(next);
-    setThemeState(next);
-  }, []);
-
-  const toggle = useCallback(() => {
-    setThemeState((prev) => {
-      const next: Theme = prev === 'dark' ? 'light' : 'dark';
-      persist(next);
-      return next;
-    });
-  }, []);
+  const setTheme = useCallback((next: ThemePreference) => void setPreference(next), [setPreference]);
+  const toggle = useCallback(() => void setPreference(theme === 'dark' ? 'light' : 'dark'), [theme, setPreference]);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ theme, setTheme, toggle }),
-    [theme, setTheme, toggle],
+    () => ({ theme, preference, setTheme, toggle }),
+    [theme, preference, setTheme, toggle],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

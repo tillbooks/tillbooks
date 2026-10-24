@@ -488,7 +488,7 @@ export function computeVatReturn(ctx: WorkspaceContext, input: ComputeVatReturnI
       })),
       reason:
         'The Abrechnungsmethode changed inside this period, and the two halves are computed under different tax regimes (MWSTG Art. 36/37).',
-      hint: `File the part up to ${eras[0]!.validTo ?? periodEnd} and the part from the day after as separate periods. A method change takes effect at the start of a Steuerperiode (MWSTG Art. 37 Abs. 4), so a statutory quarter or half-year never spans one.`,
+      hint: `File the part up to ${eras[0]!.validTo ?? periodEnd} and the part from the day after as separate periods. An ordinary method change takes effect at the start of a Steuerperiode (MWSTG Art. 37 Abs. 4); a switch from Saldo to effektiv on the day the ESTV adjusts a Saldosteuersatz (MWSTV Art. 81 Abs. 2) can fall inside a quarter or half-year, and vat_periods then lists that year's filing periods and stubs.`,
     });
   }
   const era = eras[0]!;
@@ -1278,11 +1278,31 @@ function endOfMonth(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
 }
 
-/** The months a period label spans, or null when the label is malformed. */
+/**
+ * The first calendar year a Swiss MWST return can cover. The Mehrwertsteuer replaced the
+ * Warenumsatzsteuer on 1 January 1995 (Verordnung über die Mehrwertsteuer of 22 June 1994, in force
+ * 1.1.1995; the MWSTG of 1999 and of 2009 followed it), so a VAT period, a VAT export or a filing
+ * seal for 1994 or earlier names a return that never existed. Every A07 label and every `export_vat`
+ * period is refused below this year (critic L1, 14.10.2026).
+ */
+export const MWST_FIRST_YEAR = 1995;
+
+/** True for a four-digit year inside the MWST era (`MWST_FIRST_YEAR` onwards). */
+export function isMwstYear(year: string): boolean {
+  return YEAR_RE.test(year) && Number(year) >= MWST_FIRST_YEAR;
+}
+
+/**
+ * The months a period label spans, or null when the label is malformed or lies before the MWST era.
+ * The months carry the year EXACTLY as the label wrote it: rebuilding it through `Number` dropped the
+ * zero padding (`0999-Q1` became `999-01`), which is how a garbled month reached `vat_mark_filed`'s
+ * answer and a TypeError reached `export_vat` (critic L1).
+ */
 export function monthsOfVatPeriod(label: string): string[] | null {
   const m = PERIOD_LABEL_RE.exec(label ?? '');
   if (m === null) return null;
-  const year = Number(m[1]);
+  const year = m[1] as string;
+  if (!isMwstYear(year)) return null;
   const tag = m[2] as string;
   const span = tag[0] === 'Q' ? 3 : 6;
   const first = (Number(tag.slice(1)) - 1) * span + 1;
@@ -1306,6 +1326,132 @@ function periodOf(label: string): VatPeriod | null {
     months,
     filed: false,
   };
+}
+
+/** A filing period of a year's calendar, with the method it is filed under. */
+export interface FilingPeriod {
+  label: string;
+  method: 'effektiv' | 'saldo';
+}
+
+/**
+ * The part of a statutory period that a mid-year method switch cut off (MWSTV Art. 81 Abs. 2): the
+ * label it belonged to, the method that governed it, and the days it covers. TILL computes it
+ * (`vat_return` by these dates; eCH-0217 with `periodDeviationApproved`) but does not seal it.
+ */
+export interface SwitchYearStub {
+  label: string;
+  method: 'effektiv' | 'saldo';
+  periodStart: string;
+  periodEnd: string;
+}
+
+/** A label's first and last day (`YYYY-Qn` / `YYYY-Hn`), from its months. */
+function labelSpan(label: string): { start: string; end: string } {
+  const p = periodOf(label) as VatPeriod;
+  return { start: p.periodStart, end: p.periodEnd };
+}
+
+/**
+ * The periods a book FILES in `year` (an MWST-era `YYYY`), derived from the METHOD ERAS that govern
+ * that year, not from today's method and not from the 01.01 method alone (critic R3-M1, 14.10.2026).
+ *
+ * MWSTG Art. 35 Abs. 1 ties the frequency to the method: quarterly, half-yearly under Saldo. Art. 37
+ * Abs. 4 puts an ordinary switch at the start of a Steuerperiode, so most years have one method and its
+ * four quarters or two half-years. MWSTV Art. 81 Abs. 2 (AS 2024 485, in force 1.1.2025) also lets a
+ * Saldo filer switch to the effektiv method on the day the ESTV adjusts a Saldosteuersatz, inside the
+ * year. Then each method files its own statutory periods that lie WHOLLY inside its era: a switch on
+ * 01.07 gives H1 (Saldo), Q3 and Q4 (effektiv). A statutory period the switch CUTS (01.10 under Saldo
+ * cuts H2 to July to September) is a `stub`: no label of either calendar covers exactly its days, so it
+ * is not a filing period here. TILL computes it by dates but does not seal it (A07 names the gap).
+ *
+ * `method` is the method of 01.01 (what a year-level reader shows). `needsConfig` (the stored method)
+ * when no era of the year has an effektiv or Saldo method to derive periods from.
+ *
+ * The ONE source for "is this label a filing period": `vat_periods` lists `periods`, `vat_mark_filed`
+ * refuses anything else (`switch_year_stub_not_modelled` for a label touching a stub,
+ * `not_a_filing_period` otherwise), and `export_vat` marks anything else the same way.
+ */
+export function filingPeriodsOfYear(
+  ctx: WorkspaceContext,
+  year: string,
+):
+  | {
+      method: 'effektiv' | 'saldo';
+      labels: string[];
+      periods: FilingPeriod[];
+      stubs: SwitchYearStub[];
+      switchYear: boolean;
+      boundaries: MethodBoundary[];
+    }
+  | { needsConfig: string } {
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+  // The eras clipped to the year, adjacent eras of one method merged (a timing change is not a
+  // calendar change).
+  const segments: { method: string; from: string; to: string }[] = [];
+  for (const e of methodsGoverning(ctx, yearStart, yearEnd)) {
+    const from = e.validFrom < yearStart ? yearStart : e.validFrom;
+    const to = e.validTo === null || e.validTo > yearEnd ? yearEnd : e.validTo;
+    const last = segments[segments.length - 1];
+    if (last !== undefined && last.method === e.method) last.to = to;
+    else segments.push({ method: e.method, from, to });
+  }
+  const filed = segments.filter((g) => g.method === 'effektiv' || g.method === 'saldo');
+  const first = segments[0];
+  if (filed.length === 0 || first === undefined) return { needsConfig: first?.method ?? 'none' };
+
+  const periods: FilingPeriod[] = [];
+  const stubs: SwitchYearStub[] = [];
+  for (const g of filed) {
+    const method = g.method as 'effektiv' | 'saldo';
+    const candidates = method === 'saldo' ? [`${year}-H1`, `${year}-H2`] : [1, 2, 3, 4].map((n) => `${year}-Q${n}`);
+    for (const label of candidates) {
+      const span = labelSpan(label);
+      if (span.end < g.from || span.start > g.to) continue; // outside this era
+      if (span.start >= g.from && span.end <= g.to) periods.push({ label, method });
+      else stubs.push({ label, method, periodStart: span.start > g.from ? span.start : g.from, periodEnd: span.end < g.to ? span.end : g.to });
+    }
+  }
+  const head = (first.method === 'effektiv' || first.method === 'saldo' ? first.method : filed[0]!.method) as 'effektiv' | 'saldo';
+  // Every day inside the year where the method changes (a timing-only boundary merged away above).
+  const boundaries: MethodBoundary[] = segments.slice(1).map((g, i) => ({ on: g.from, from: segments[i]!.method, to: g.method }));
+  return { method: head, labels: periods.map((p) => p.label), periods, stubs, switchYear: filed.length > 1, boundaries };
+}
+
+/** A day inside a year on which the method changes, and the two methods either side of it. */
+export interface MethodBoundary {
+  on: string;
+  from: string;
+  to: string;
+}
+
+/**
+ * The year's method boundaries in words, for a refusal reason (critic L-R4-1). Only a Saldo to effektiv
+ * switch names a legal basis, MWSTV Art. 81 Abs. 2, because it is the only mid-year switch the engine
+ * records today. A book written before the O1 fix can hold others (effektiv to Saldo inside a year, a
+ * tax liability recorded as an era from a mid-year day): those are described by their date and methods
+ * only, with no basis claimed.
+ */
+export function describeBoundaries(boundaries: readonly MethodBoundary[]): string {
+  return boundaries
+    .map((b) =>
+      b.from === 'saldo' && b.to === 'effektiv'
+        ? `the method switched from saldo to effektiv on ${b.on} (MWSTV Art. 81 Abs. 2)`
+        : `the method changed inside the year on ${b.on} (from ${b.from} to ${b.to})`,
+    )
+    .join('; ');
+}
+
+/** The stubs of `year` whose days overlap `label`'s (empty in a year without a mid-year switch). */
+export function stubsTouching(stubs: readonly SwitchYearStub[], label: string): SwitchYearStub[] {
+  const span = labelSpan(label);
+  return stubs.filter((st) => st.periodStart <= span.end && st.periodEnd >= span.start);
+}
+
+/** The year's filing periods as one readable phrase: `2026-H1 (saldo), 2026-Q3 (effektiv), ...`. */
+export function describeFilingPeriods(periods: readonly FilingPeriod[]): string {
+  return periods.map((p) => `${p.label} (${p.method})`).join(', ');
 }
 
 /**
@@ -1335,17 +1481,13 @@ function periodOf(label: string): VatPeriod | null {
 export function listVatPeriods(ctx: WorkspaceContext, input?: { year?: string }): Result {
   const year = input?.year ?? ctx.clock.now().slice(0, 4);
   if (!YEAR_RE.test(year)) return err('invalid_input', { field: 'year', expected: 'YYYY' });
+  if (!isMwstYear(year)) {
+    return err('invalid_input', { field: 'year', expected: `YYYY from ${MWST_FIRST_YEAR}`, earliestYear: MWST_FIRST_YEAR });
+  }
 
-  // The method that governed THAT YEAR, not today's. A workspace that left Saldo on 01.01.2027 filed
-  // 2026 in two half-years and 2027 in four quarters, and a period list that renders today's method
-  // over the whole history offers the wrong periods for every closed year, which is where a
-  // correction return is filed from. MWSTG Art. 35 Abs. 1 ties the frequency to the method, and
-  // Art. 37 Abs. 4 puts a change at the start of a Steuerperiode, so a calendar year never spans one.
-  const method = methodOn(ctx, `${year}-01-01`).method;
-  if (method !== 'effektiv' && method !== 'saldo') return err('needs_vat_config', { method });
-
-  const labels =
-    method === 'saldo' ? [`${year}-H1`, `${year}-H2`] : [1, 2, 3, 4].map((n) => `${year}-Q${n}`);
+  const filing = filingPeriodsOfYear(ctx, year);
+  if ('needsConfig' in filing) return err('needs_vat_config', { method: filing.needsConfig });
+  const { method, stubs } = filing;
 
   // "Filed" means every month of the period carries a hard lock applied by a filing (A03's
   // `vat_filed` reason). Reading the locks is what makes the flag true rather than claimed.
@@ -1357,12 +1499,14 @@ export function listVatPeriods(ctx: WorkspaceContext, input?: { year?: string })
     ).map((r) => r.period),
   );
 
-  const periods = labels.map((label) => {
+  const periods = filing.periods.map(({ label, method: periodMethod }) => {
     const p = periodOf(label) as VatPeriod;
-    return { ...p, filed: p.months.every((m) => locked.has(m)) };
+    return { ...p, method: periodMethod, filed: p.months.every((m) => locked.has(m)) };
   });
 
-  return ok({ method, year, periods });
+  // `stubs`: the parts of a MWSTV Art. 81 Abs. 2 switch year no filing period covers (see
+  // `filingPeriodsOfYear`); empty in every other year.
+  return ok({ method, year, periods, stubs });
 }
 
 // --- Filing --------------------------------------------------------------------------------------
@@ -1393,7 +1537,40 @@ export function markVatPeriodFiled(ctx: WorkspaceContext, input: MarkVatPeriodFi
   }
   const months = monthsOfVatPeriod(input?.period);
   if (months === null) {
-    return err('invalid_period', { period: input?.period, expected: 'YYYY-Qn or YYYY-Hn' });
+    return err('invalid_period', { period: input?.period, expected: 'YYYY-Qn or YYYY-Hn', earliestYear: MWST_FIRST_YEAR });
+  }
+
+  // ONLY A FILING PERIOD OF THAT YEAR'S METHOD CAN BE FILED (critic L2, 14.10.2026). A seal is a
+  // statement that a return for exactly this span went to the ESTV; MWSTG Art. 35 Abs. 1 files
+  // quarterly, and half-yearly under Saldosteuersätze, so a Saldo book's `Q3` or an effektiv book's
+  // `H2` names a return that cannot exist. A year with no effektiv/Saldo method gives no basis to judge
+  // and keeps the previous behaviour (the label's own months), as it did before.
+  const filing = filingPeriodsOfYear(ctx, input.period.slice(0, 4));
+  if (!('needsConfig' in filing) && !filing.labels.includes(input.period)) {
+    const year = input.period.slice(0, 4);
+    const touching = stubsTouching(filing.stubs, input.period);
+    if (touching.length > 0) {
+      // A method boundary inside the year cut a statutory period (today only a MWSTV Art. 81 Abs. 2
+      // switch is written; a pre-O1 book can hold others), and this label touches the cut part.
+      // TILL computes the stub correctly but has no label that covers exactly its days, so it seals
+      // nothing rather than a month of a period that is not filed whole (critic R3-M1).
+      const stub = touching[0]!;
+      return err('switch_year_stub_not_modelled', {
+        period: input.period,
+        stub,
+        stubs: touching,
+        filingPeriods: filing.labels,
+        reason: `In ${year} ${describeBoundaries(filing.boundaries)}, inside a statutory period, so ${stub.periodStart} to ${stub.periodEnd} is a ${stub.method} stub that no filing period covers. TILL computes it correctly (vat_return with periodStart ${stub.periodStart} and periodEnd ${stub.periodEnd}) but does not seal it: a seal claims a whole filed period, and no label names exactly these days. The filing periods of ${year} are ${describeFilingPeriods(filing.periods)}.`,
+        hint: `File the stub in the ESTV ePortal (export it with vat_export_ech0217 for ${stub.periodStart} to ${stub.periodEnd} and periodDeviationApproved: true, the deviation such a stub needs), and mark the filing periods of ${year} here as they are filed.`,
+      });
+    }
+    return err('not_a_filing_period', {
+      period: input.period,
+      method: methodOn(ctx, labelSpan(input.period).start).method,
+      filingPeriods: filing.labels,
+      reason: `The ${year} returns of this book are ${describeFilingPeriods(filing.periods)} (MWSTG Art. 35 Abs. 1: quarterly, half-yearly under Saldosteuersätze${filing.boundaries.length > 0 ? `; ${describeBoundaries(filing.boundaries)}` : ''}), so ${input.period} is not one of them.`,
+      hint: 'Mark the filing period the return covered, as vat_periods lists it for that year.',
+    });
   }
 
   // ONE TRANSACTION FOR THE WHOLE FILING (critic R5-1 on cl-periods, D152, 04.10.2026). Every month is

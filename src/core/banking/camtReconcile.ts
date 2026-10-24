@@ -39,7 +39,24 @@ import { recordIncomingCredit, matchIncomingByQrr } from './qrMatch.js';
 import { parseCamt, hashCamtStatement } from './camt.js';
 import { decideSuccessor, isEbicsFedAccount, readFeedBook } from './ebics/feed.js';
 import type { FeedPosition, FeedSkippedRange, FeedStatementRef } from './ebics/feed.js';
-import type { CamtClassification, CamtCreditDebit, ParsedCamtStatement, CamtSkipReason } from './camt.js';
+import type { CamtClassification, CamtCreditDebit, ParsedBankStatement, ParsedCamtEntry, CamtSkipReason } from './camt.js';
+import { writeLineFacts } from './statementFacts.js';
+import {
+  MAX_CANDIDATES,
+  NEAR_DAYS,
+  REASON_RANK,
+  crossFormatModeOf,
+  decideLines,
+  duplicateDecisionPending,
+  formatFamilyOf,
+  incomingOf,
+  readStoredLines,
+  storedWindowOf,
+  writePossibleDuplicates,
+} from './statementDedupe.js';
+import { coverageOf, lineDayOf, movementKeyOf, periodOf, storedMovements } from './statementCoverage.js';
+import type { PossibleDuplicate } from './statementDedupe.js';
+import type { LineDecision, PossibleDuplicateReason } from './statementDedupe.js';
 import { readCamtMatchConfig, rankDebitCandidates, needsReviewFor, CONFIDENCE_RANK } from './debitRanking.js';
 import type { CamtMatchConfig, CamtMatchProposal } from './debitRanking.js';
 import {
@@ -181,13 +198,38 @@ export interface ImportCamtInput {
   bankAccountId?: string;
   xml?: string;
   idempotencyKey?: string;
-  /** D81's escape: admits a genuine same-day twin the entry-identity key would otherwise treat as a
-   *  re-delivery of an already-imported booking. Off by default, so the ambiguity is answered by a
-   *  human once, explicitly, rather than guessed on every import. */
+  /** D81's escape: admits a line whose BANK reference (camt AcctSvcrRef, MT940 `//`) is already on the
+   *  books, as a genuine second booking. Since the D178 point 19 re-cut only a bank reference drops a
+   *  line at all, and this escape never silences a coverage flag: an overlapping line is still imported
+   *  flagged and waits for the person's answer. Off by default. */
   allowDuplicateEntries?: boolean;
 }
 
-export type ImportSkippedEntry = { entryRef: string | null; reason: CamtSkipReason; status?: string | null };
+export type ImportSkippedEntry = {
+  entryRef: string | null;
+  reason: CamtSkipReason;
+  status?: string | null;
+  /** D178 (A20 §11.4): for `cross_format_duplicate`, the line already on the books this one IS. */
+  existingBankTxnId?: string;
+  /** D178: a CSV row's number in the file, for the row reasons. */
+  row?: number;
+};
+
+/**
+ * D178 point 19 (A20 §11.4): a NEW line that may be a stored line (`statementDedupe.ts`). It is imported,
+ * flagged on the line itself (`possibleDuplicates` and `needsDuplicateDecision` on `list_bank_inbox`) and
+ * named here, so the person decides: never a silent drop, never a silent double count. `existingBankTxnId`
+ * is the nearest candidate, `candidates` every one; `sameFormat` is true for a CSV line resembling a stored
+ * CSV line.
+ */
+export type NearCrossFormatDuplicate = {
+  bankTxnId: string;
+  /** The first line it names, or null for `covered_period_new_line` with nothing to name. */
+  existingBankTxnId: string | null;
+  reason: PossibleDuplicateReason;
+  sameFormat: boolean;
+  candidates: string[];
+};
 
 export type ImportCamtOk = {
   statementId: string;
@@ -217,6 +259,9 @@ export type ImportCamtOk = {
     position: FeedPosition;
     jump?: { after: FeedStatementRef; skipped: FeedSkippedRange[] };
   };
+  /** D178 (A20 §11.4): present only when a new line resembles another format's line (with the warning
+   *  `possible_cross_format_duplicate`). */
+  nearDuplicates?: NearCrossFormatDuplicate[];
 }
 
 /**
@@ -238,7 +283,7 @@ class FeedAnswer extends Error {
 function diffAmendedStatement(
   ctx: WorkspaceContext,
   existing: BankStatementRow,
-  fresh: ParsedCamtStatement,
+  fresh: ParsedBankStatement,
 ): string[] {
   const changes: string[] = [];
   if (existing.opening_balance_minor !== fresh.openingBalanceMinor) {
@@ -393,10 +438,10 @@ export function importCamt(ctx: WorkspaceContext, input: ImportCamtInput): Resul
  * A20's statement-level dedupe: the same identity key with the same content is `duplicate: true`
  * (writes nothing), with other content `statement_amended` (A20-C2). Null when the identity is new.
  */
-function existingStatementAnswer(
+export function existingStatementAnswer(
   ctx: WorkspaceContext,
   bankAccountId: string,
-  stmt: ParsedCamtStatement,
+  stmt: ParsedBankStatement,
   contentHash: string,
 ): Result<ImportCamtOk> | null {
   // D81/A20-C9: pagination is part of the statement's identity. Two pages of ONE multi-page statement
@@ -424,15 +469,42 @@ function existingStatementAnswer(
   return null;
 }
 
-/** Write one statement and its lines (the body `importCamt` memoises under its key). */
-function insertStatement(
+// --- D178 (A20 §11.4): the same bank movement only once, across formats (statementDedupe.ts) ---------
+
+export { formatFamilyOf };
+
+/** The window a resemblance is named in (kept under its first name; `statementDedupe.NEAR_DAYS`). */
+export const CROSS_FORMAT_NEAR_DAYS = NEAR_DAYS;
+
+/**
+ * Write one statement and its lines (the body `importCamt` memoises under its key; D178: the same body
+ * for MT940 and CSV, `statementImport.ts`). D178 point 19, re-cut (A20 §11.4):
+ *  1. A line whose BANK reference key (camt AcctSvcrRef `asr:`, MT940 `//` `m9:`) is already in the books
+ *     is dropped `duplicate_entry`. No other key drops a line: a `nr:`, `ck:`, `m9c:` or `csv:` key is a
+ *     storage label, suffixed when taken.
+ *  2. Coverage decides (statementCoverage.ts): an EXTENDING delivery's lines are new; an overlapping one's
+ *     lines on a covered day are matched one to one on their movement and flagged (`same_movement`, or
+ *     `covered_period_new_line` when nothing matches on a fully covered day).
+ *  3. Point 19's cross-format candidates flag any line on top (`statementDedupe.ts`); under
+ *     `bank.cross_format_duplicates` = `auto_strong` a shared bank reference on the same booking date drops it.
+ * A flagged line waits for the person: never sure, and no decision but an ignore can be written for it
+ * (the chokepoint in writeLineLink and the trigger on `bank_line_decision`).
+ */
+export function insertStatement(
   ctx: WorkspaceContext,
   account: { id: string },
-  stmt: ParsedCamtStatement,
+  stmt: ParsedBankStatement,
   contentHash: string,
   allowDuplicateEntries: boolean,
   warnings: string[],
-): { statementId: string; txnCount: number; duplicate: false; skipped: ImportSkippedEntry[]; warnings: string[] } {
+): {
+  statementId: string;
+  txnCount: number;
+  duplicate: false;
+  skipped: ImportSkippedEntry[];
+  warnings: string[];
+  nearDuplicates?: NearCrossFormatDuplicate[];
+} {
   const now = ctx.clock.now();
   const statementRowId = ctx.ids.next('bstmt');
 
@@ -467,39 +539,129 @@ function insertStatement(
       now,
     );
 
-  // D81/A20-C1: every entry's identity is unique per (workspace, bank account). Preload the keys
-  // already on the books for this account so an overlapping statement, a re-cut period, or the
-  // camt.054-then-camt.053 pair is caught here rather than by the UNIQUE index throwing mid-insert.
-  const existingKeys = new Set(
+  // Every stored key of the account, with its line: a BANK reference key already there drops the line
+  // (A20 §11.4); any other key is only a storage label and is suffixed when taken.
+  const existingKeys = new Map<string, string>(
     (
       ctx.store.db
-        .prepare('SELECT entry_key FROM bank_txn WHERE workspace_id = ? AND bank_account_id = ?')
-        .all(ctx.workspaceId, account.id) as { entry_key: string }[]
-    ).map((r) => r.entry_key),
+        .prepare('SELECT entry_key, id FROM bank_txn WHERE workspace_id = ? AND bank_account_id = ?')
+        .all(ctx.workspaceId, account.id) as { entry_key: string; id: string }[]
+    ).map((r) => [r.entry_key, r.id]),
   );
+  const isBankRefKey = (k: string): boolean => k.startsWith('asr:') || k.startsWith('m9:');
 
   const skipped: ImportSkippedEntry[] = stmt.skipped.map((s) => ({
     entryRef: s.entryRef,
     reason: s.reason,
     ...(s.status !== undefined ? { status: s.status } : {}),
+    ...(s.row !== undefined ? { row: s.row } : {}),
   }));
   let insertedCount = 0;
 
-  for (const entry of stmt.entries) {
-    let storageKey = entry.entryKey;
-    if (existingKeys.has(storageKey)) {
-      if (!allowDuplicateEntries) {
-        skipped.push({ entryRef: entry.entryRef, reason: 'duplicate_entry' });
-        continue;
+  // Pass 0: the lines a bank reference key already holds (in the books, or earlier in this file).
+  const exactRepeat = new Set<number>();
+  const exactClaimed = new Set<string>();
+  {
+    const seen = new Set<string>();
+    stmt.entries.forEach((e, i) => {
+      if (!isBankRefKey(e.entryKey)) return;
+      const storedId = existingKeys.get(e.entryKey);
+      if (storedId !== undefined) exactClaimed.add(storedId);
+      if (storedId !== undefined || seen.has(e.entryKey)) exactRepeat.add(i);
+      seen.add(e.entryKey);
+    });
+  }
+  const family = formatFamilyOf(stmt.messageType);
+  const kept = (index: number): boolean => !exactRepeat.has(index) || allowDuplicateEntries;
+
+  // Coverage first (statementCoverage.ts): does this delivery extend the chain, or which of its lines
+  // fall on days the books already hold a statement for?
+  const period = periodOf(stmt);
+  const lineDays = stmt.entries.map((e) => lineDayOf(e, period));
+  const covDays = lineDays.filter((d, i): d is string => d !== null && kept(i)).sort();
+  const coverage = coverageOf(
+    ctx,
+    account.id,
+    stmt,
+    statementRowId,
+    covDays.length === 0 ? null : { from: covDays[0] as string, to: covDays[covDays.length - 1] as string },
+  );
+  ctx.store.db.prepare('UPDATE bank_statement SET coverage = ? WHERE workspace_id = ? AND id = ?').run(coverage.coverage, ctx.workspaceId, statementRowId);
+
+  // Point 19 across formats (statementDedupe.ts), for every line.
+  const window = storedWindowOf(stmt.entries);
+  const stored = window === null ? [] : readStoredLines(ctx, account.id, family, window.from, window.to);
+  const incoming = stmt.entries.flatMap((e, index) => (kept(index) ? [incomingOf(e, index, family)] : []));
+  const decisions: Map<number, LineDecision> =
+    stored.length === 0 ? new Map() : decideLines({ family, mode: crossFormatModeOf(ctx), stored, incoming, exactClaimed });
+  const familyOfStored = new Map(stored.map((r) => [r.id, r.family]));
+
+  // Coverage's one-to-one match on the movement key, for the lines on covered days: every covered day of a
+  // delivery that does not extend the chain, and the days a delivery without a balance chain (a CSV) covers
+  // for one that does (critic R4-1).
+  const coverageFlag = new Map<number, PossibleDuplicate | { bankTxnId: null; reason: 'covered_period_new_line' }>();
+  if (coverage.span.full.size > 0 || coverage.span.edge.size > 0) {
+    const overlap = incoming.filter((l) => {
+      const d = lineDays[l.index] ?? null;
+      return d !== null && (coverage.span.full.has(d) || coverage.span.edge.has(d)) && decisions.get(l.index)?.kind !== 'absorb';
+    });
+    const keyOf = (index: number): string => movementKeyOf(stmt.entries[index] as ParsedCamtEntry);
+    const keys = [...new Set(overlap.map((l) => keyOf(l.index)))];
+    const keyDates = keys.map((k) => k.slice(0, k.indexOf('|'))).filter((d) => d !== '').sort();
+    const byKey =
+      keyDates.length === 0 ? new Map<string, string[]>() : storedMovements(ctx, account.id, keys, { from: keyDates[0] as string, to: keyDates[keyDates.length - 1] as string });
+    const used = new Map<string, number>();
+    for (const l of overlap) {
+      const k = keyOf(l.index);
+      const list = byKey.get(k) ?? [];
+      const i = used.get(k) ?? 0;
+      if (i < list.length) {
+        used.set(k, i + 1);
+        coverageFlag.set(l.index, { bankTxnId: list[i] as string, reason: 'same_movement' });
+      } else if (coverage.span.full.has(lineDays[l.index] as string)) {
+        coverageFlag.set(l.index, { bankTxnId: null, reason: 'covered_period_new_line' });
       }
-      // The caller has explicitly told us this really is a second, genuine booking (D81): mint a
-      // distinct storage key rather than relaxing the index, so the identity ladder stays exact for
-      // every future import.
+    }
+  }
+  const nearDuplicates: NearCrossFormatDuplicate[] = [];
+
+  // D178 (critic M5): the two inserts every line makes are compiled once per statement, not per line.
+  const insertTxn = ctx.store.db.prepare(
+    `INSERT INTO bank_txn
+       (id, workspace_id, bank_account_id, statement_id, entry_key, entry_ref, amount_minor,
+        currency, credit_debit, booking_date, value_date, reference_kind, reference_value,
+        payer_name, reversal_ind, btc_domain, btc_family, btc_sub_family, batch_pmt_inf_id,
+        classification, credit_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const insertDetail = ctx.store.db.prepare(
+    `INSERT INTO bank_txn_detail (bank_txn_id, workspace_id, counterparty_name, counterparty_iban, remittance_text, end_to_end_id)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+
+  for (let index = 0; index < stmt.entries.length; index += 1) {
+    const entry = stmt.entries[index] as (typeof stmt.entries)[number];
+    let storageKey = entry.entryKey;
+    if (exactRepeat.has(index) && !allowDuplicateEntries) {
+      skipped.push({ entryRef: entry.entryRef, reason: 'duplicate_entry' });
+      continue;
+    }
+    if (existingKeys.has(storageKey)) {
+      // A bank reference the caller admits as a genuine second booking (D81's escape), or a storage label
+      // already taken: a distinct storage key, never a relaxed index.
       let n = 1;
       while (existingKeys.has(`${entry.entryKey}~dup${n}`)) n += 1;
       storageKey = `${entry.entryKey}~dup${n}`;
     }
-    existingKeys.add(storageKey);
+    // D178 point 19 (A20 §11.4), `auto_strong` only: the same movement another format already brought in,
+    // PROVED by the bank's own reference on the same booking date. Skipped and named, unless the caller
+    // admits it as a genuine second movement (the D81 escape, exactly as for an exact repeat).
+    const decision = decisions.get(index);
+    if (decision?.kind === 'absorb' && !allowDuplicateEntries) {
+      skipped.push({ entryRef: entry.entryRef, reason: 'cross_format_duplicate', existingBankTxnId: decision.existingBankTxnId });
+      continue;
+    }
+    existingKeys.set(storageKey, '');
 
     const txnId = ctx.ids.next('btxn');
     const reversal = entry.reversalInd;
@@ -527,16 +689,7 @@ function insertStatement(
       if (recorded.ok) creditId = (recorded['credit'] as { creditId: string }).creditId;
     }
 
-    ctx.store.db
-      .prepare(
-        `INSERT INTO bank_txn
-           (id, workspace_id, bank_account_id, statement_id, entry_key, entry_ref, amount_minor,
-            currency, credit_debit, booking_date, value_date, reference_kind, reference_value,
-            payer_name, reversal_ind, btc_domain, btc_family, btc_sub_family, batch_pmt_inf_id,
-            classification, credit_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+    insertTxn.run(
         txnId,
         ctx.workspaceId,
         account.id,
@@ -562,13 +715,39 @@ function insertStatement(
       );
     // A39: the counterparty facts the inbox and the proposals read, kept beside the line (never in its
     // identity key or the statement hash, so a pre-A39 file still re-imports as a duplicate).
-    ctx.store.db
-      .prepare(
-        `INSERT INTO bank_txn_detail (bank_txn_id, workspace_id, counterparty_name, counterparty_iban, remittance_text, end_to_end_id)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(txnId, ctx.workspaceId, entry.counterpartyName, entry.counterpartyIban, entry.remittanceText, entry.endToEndId);
+    insertDetail.run(txnId, ctx.workspaceId, entry.counterpartyName, entry.counterpartyIban, entry.remittanceText, entry.endToEndId);
+    // D178 (A20 §11.1): the facts beyond the booked amount, once, beside the line.
+    if (entry.facts !== undefined) writeLineFacts(ctx, txnId, entry.facts);
     insertedCount += 1;
+
+    // D178 point 19 (A20 §11.4): a new line that may be a stored line is imported AND flagged on the line
+    // itself with every candidate; it waits for the person's decision before it can be booked.
+    const covFlag = coverageFlag.get(index);
+    const named: PossibleDuplicate[] = [];
+    if (covFlag !== undefined && covFlag.bankTxnId !== null) named.push(covFlag as PossibleDuplicate);
+    if (decision?.kind === 'flag') {
+      for (const c of decision.candidates) {
+        const at = named.findIndex((n) => n.bankTxnId === c.bankTxnId);
+        if (at < 0) named.push(c);
+        else if (REASON_RANK[c.reason] < REASON_RANK[(named[at] as PossibleDuplicate).reason]) named[at] = c;
+      }
+    }
+    if (named.length > 0 || covFlag !== undefined) {
+      const candidates = named
+        .map((c, order) => ({ c, order }))
+        .sort((x, y) => REASON_RANK[x.c.reason] - REASON_RANK[y.c.reason] || x.order - y.order)
+        .map((x) => x.c)
+        .slice(0, MAX_CANDIDATES);
+      const reason: PossibleDuplicateReason = candidates[0]?.reason ?? 'covered_period_new_line';
+      writePossibleDuplicates(ctx, txnId, reason, candidates);
+      nearDuplicates.push({
+        bankTxnId: txnId,
+        existingBankTxnId: candidates[0]?.bankTxnId ?? null,
+        reason,
+        sameFormat: candidates.every((c) => (familyOfStored.get(c.bankTxnId) ?? family) === family),
+        candidates: candidates.map((c) => c.bankTxnId),
+      });
+    }
   }
 
   ctx.store.db
@@ -583,7 +762,20 @@ function insertStatement(
     at: now,
   });
 
-  return { statementId: statementRowId, txnCount: insertedCount, duplicate: false, skipped, warnings };
+  // The warning codes a surface words (A20 §11.4): a line named across formats, a line matched one to one
+  // on a covered day, a line on a covered day that matches nothing.
+  const allWarnings = [...warnings];
+  if (nearDuplicates.some((n) => !n.sameFormat)) allWarnings.push('possible_cross_format_duplicate');
+  if ([...coverageFlag.values()].some((f) => f.reason === 'same_movement')) allWarnings.push('overlap_same_movement');
+  if ([...coverageFlag.values()].some((f) => f.reason === 'covered_period_new_line')) allWarnings.push('covered_period_new_line');
+  return {
+    statementId: statementRowId,
+    txnCount: insertedCount,
+    duplicate: false,
+    skipped,
+    warnings: allWarnings,
+    ...(nearDuplicates.length > 0 ? { nearDuplicates } : {}),
+  };
 }
 
 // --- suggestCamtMatches (US-A20.2), read-only (Pattern P5) ------------------------------------------
@@ -687,18 +879,40 @@ const CERTAINTY_AS_CONFIDENCE: Record<BankProposalCertainty, 'high' | 'medium' |
  * D144 (critic C8): the ladder is read WITHOUT the model rung. A model's unchecked guess is the weakest
  * reason on the ladder; it must not switch off the signal that asks a person to look, so a line whose
  * only proposal is a model suggestion needs review exactly as it did before the model spoke.
+ *
+ * D167 (critic D167-1, A39 §13.2): the same for the journal rung (d2). A text match in an old entry is
+ * no better evidence than a model's guess, so it never switches the signal off: the default context
+ * skips the rung (and so never reads the journal), and a `journal_history` proposal from a context a
+ * caller hands in reads as needing review. A standard's `sure` (owner pick 1A) does switch it off.
  */
 export function lineNeedsReview(
   ctx: WorkspaceContext,
   row: BankTxnRow,
   config: CamtMatchConfig = readCamtMatchConfig(ctx),
-  pc: ProposalContext = proposalContext(ctx, { withModel: false }),
+  pc: ProposalContext = proposalContext(ctx, { withModel: false, withJournal: false }),
 ): boolean {
   if (lineStateOf(ctx, row).state !== 'open') return false;
   if (row.reversal_ind === 1) return true;
   const proposal = proposeForLine(ctx, pc, row, readBankTxnDetail(ctx, row.id));
-  // Belt to the braces above, for a caller that hands in a context built with the model rung.
-  if (proposal.reasonCode === 'model_suggested') return true;
+  // Belt to the braces above, for a caller that hands in a context built with the model or journal rung.
+  if (proposal.reasonCode === 'model_suggested' || proposal.reasonCode === 'journal_history') return true;
+  // D176 (A39 §15.3): a "Nicht buchen" rule NEVER switches the signal off, not even as `sure` under
+  // `bank.buchungsregel_ignore_mode` = `bulk`: an ignored line never reaches the ledger, so a person looks.
+  if (proposal.reasonCode === 'rule_ignore') return true;
+  // D175 (A39 §14.3): a Buchungsregel switches the signal off ONLY when its proposal is `sure` (a complete
+  // rule under `bank.buchungsregel_mode` = `bulk`). A rule that asks for an amount, the person's pick among
+  // several rules, a rule proposal turned `check` by the setting or a dropped code: a person still looks.
+  // D177: a computed-only rule (`rule_computed`) likewise: only its `sure` (setting
+  // `bank.buchungsregel_computed_mode` = `bulk`) switches the signal off; the default `check` keeps it on.
+  if (
+    (proposal.reasonCode === 'standard' ||
+      proposal.reasonCode === 'rule_needs_amount' ||
+      proposal.reasonCode === 'rule_computed' ||
+      proposal.reasonCode === 'several_rules') &&
+    proposal.certainty !== 'sure'
+  ) {
+    return true;
+  }
   const confidence = CERTAINTY_AS_CONFIDENCE[proposal.certainty];
   if (confidence === 'none') return true;
   const floor = config.reviewThreshold === 'high' ? 2 : 1;
@@ -877,6 +1091,10 @@ export function confirmCamtMatch(ctx: WorkspaceContext, input: ConfirmCamtMatchI
       reason: 'this line is already decided; reopen_bank_line undoes the decision first',
     });
   }
+  // D178 point 19 (critic R3-1): a line waiting for its duplicate answer is settled by no path, the
+  // multi-bill split included (its writeLineLink and the trigger refuse too; this says so before any payment).
+  const duplicatePending = duplicateDecisionPending(ctx, row.id);
+  if (duplicatePending !== null) return duplicatePending;
 
   return runBankGuarded(() =>
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'confirm_match', () => {

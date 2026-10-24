@@ -66,7 +66,9 @@
       "receipt_required": "A receipt is required for a line over CHF 50.",
       "empty_claim": "Add at least one line before submitting.",
       "needs_employee_contact": "Link a contact (vendor role) to the employee first.",
-      "reason_required": "A reason is required to reject a claim."
+      "reason_required": "A reason is required to reject or reverse a claim.",
+      "claim_reimbursed": "This claim has already been paid out. Reverse the payment first (under Payments), then the claim.",
+      "already_reversed": "This claim has already been reversed."
     }
   },
   "spesen": {
@@ -76,12 +78,21 @@
       "approved": "Approved",
       "reimbursed": "Reimbursed",
       "rejected": "Rejected",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "reversed": "Reversed"
     },
     "action": {
       "approve": "Approve & post",
       "reject": "Reject",
-      "reimburse": "Prepare reimbursement"
+      "reimburse": "Prepare reimbursement",
+      "reverse": "Reverse"
+    },
+    "reverseDialog": {
+      "title": "Reverse the expense claim \u201c{title}\u201d?",
+      "body": "TILL books a correcting entry that takes the approval back. The original booking stays visible, and the claim is closed as reversed. For a corrected claim, you start a new one.",
+      "reason": "Reason",
+      "cancel": "Cancel",
+      "confirm": "Reverse claim"
     },
     "reject": {
       "default": "Please attach the missing receipt."
@@ -104,7 +115,11 @@
       "title": "Wage entry",
       "date": "Entry date",
       "cta": "Upload wage file",
-      "post": "Post"
+      "post": "Post",
+      "supplementary": "Supplementary posting (next to the month's standing wage journal)",
+      "supplementaryReason": "Reason for the supplementary posting",
+      "warnStanding": "A wage journal for {month} already stands. Check whether this posting adds to it or replaces it; reverse a replaced one in the history below.",
+      "postedWithWarning": "Posted. More than one wage journal now stands for {month}."
     },
     "preview": {
       "account": "Account",
@@ -121,12 +136,32 @@
       "kind": {
         "export": "Export",
         "posting": "Posting"
+      },
+      "reversed": "Reversed",
+      "rowActions": "Actions for the wage entry of {date}"
+    },
+    "reverse": {
+      "action": "Reverse",
+      "title": "Reverse the wage journal of {date}?",
+      "body": "TILL books a correcting entry that takes this wage journal back. The original entry stays visible. Salary payments, AHV, BVG and withholding tax declarations and wage statements happen outside TILL and stay as they are: correct them in your payroll system, then upload the corrected wage journal.",
+      "reason": "Reason",
+      "cancel": "Cancel",
+      "confirm": "Reverse wage journal",
+      "done": "The wage journal is reversed.",
+      "err": {
+        "already_reversed": "This wage journal is already reversed.",
+        "owned_by": "A bank line holds this wage journal. Reopen the bank line under Bank first, then reverse the wage journal.",
+        "period_locked": "Today's period is locked, so the correcting entry cannot be booked.",
+        "reason_required": "A reason is required to reverse a wage journal.",
+        "not_found": "This wage journal no longer exists in this workspace.",
+        "permission_denied": "You are not allowed to do that."
       }
     },
     "requiresManage": "Requires HR management.",
     "requiresPost": "Requires bookkeeper.",
     "err": {
       "load": "The history could not be loaded.",
+      "month_already_posted": "A wage journal for this month is already booked. Reverse it in the history below first, then post the corrected one.",
       "no_employees": "No employees yet.",
       "unbalanced": "Debits and credits differ.",
       "period_locked": "The period is locked; the wage journal cannot post.",
@@ -135,7 +170,17 @@
       "unsupported_currency": "A wage journal posts in CHF; remove the currency column.",
       "invalid_amount": "An amount is not an integer Rappen value.",
       "forbidden": "You are not allowed to do that.",
-      "permission_denied": "You are not allowed to do that."
+      "permission_denied": "You are not allowed to do that.",
+      "reason_required": "This posting needs a reason."
+    },
+    "runKind": {
+      "label": "Payroll run",
+      "regular": "Regular",
+      "bonus": "Bonus",
+      "thirteenth": "13th month salary",
+      "correction": "Correction",
+      "reason": "Reason for this payroll run",
+      "reasonOptional": "Reason for this payroll run (optional)"
     }
   },
   "help": {

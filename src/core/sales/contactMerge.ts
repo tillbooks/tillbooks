@@ -89,6 +89,14 @@ const MERGE_REPOINT_FKS: readonly { table: string; column: string }[] = [
   // a later reindex re-derives the same answer because `resolveContact` skips tombstones.
   { table: 'mail_message', column: 'contact_id' },
   { table: 'mail_thread', column: 'contact_id' },
+  // A12 (D141 follow-up 4): a recurring schedule names the customer every tick bills. Left out, the
+  // schedule kept naming the tombstone and the next tick drafted an invoice to a contact
+  // `list_contacts` hides. A schedule is a template (master data), never an append-only financial
+  // fact, so the re-point is legal for the same reason B00's and C01's are. A merge that moves an
+  // AUTO-ISSUING schedule retargets who an unattended tick bills, which D141.2 governs under `issue`, so
+  // the dial drafts such a merge under `issue` as well as `erase` (the book-keyed `contacts_merge` rule
+  // in src/core/agent/dialMap.ts; critic F1).
+  { table: 'recurring_schedule', column: 'contact_id' },
 ];
 
 /**

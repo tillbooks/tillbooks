@@ -66,18 +66,36 @@ switch (command) {
     // Loaded lazily from the build output so `version`/`help` never pay for the server or its
     // native SQLite dependency. The stdio transport keeps the process alive once connected.
     const { startMcpServer } = await import(new URL('../dist/api/mcp.js', import.meta.url));
-    const { ensureDbPath } = await import(new URL('../dist/api/db-path.js', import.meta.url));
+    const { ensureDbChoice, adoptedUnavailableRefusal } = await import(new URL('../dist/api/db-path.js', import.meta.url));
     // Always a resolved path, never an implicit in-memory database: an agent that posts into a
     // ledger nobody else can see is worse than one that refuses to start.
     let store;
     let dbPath;
+    let choice;
     try {
-      dbPath = ensureDbPath();
+      choice = ensureDbChoice();
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
+    // D166 point 8 (critic F1, L-b): the person adopted a book that is not there, or that the read-only
+    // probe refuses now (a swapped foreign file, a lost or read-only permission). Never open another
+    // one in its place, and never open this one writable (not even a WAL header): one plain sentence,
+    // the same answer `till up` gives, and the Studio says what to do.
+    const { adoptedChoiceUnavailable } = await import(new URL('../dist/api/book-adopt.js', import.meta.url));
+    const unavailable = adoptedChoiceUnavailable(choice);
+    if (unavailable !== null) {
+      console.error(adoptedUnavailableRefusal('till mcp', unavailable));
+      process.exit(1);
+    }
+    try {
+      dbPath = choice.path;
       ({ store } = await startMcpServer({ dbPath }));
     } catch (e) {
       // A refused open (a book written by a newer TILL, `schema_newer_than_runtime`) is a sentence for
       // the human on stderr and a non-zero exit, the way `up` and `serve` fail below, never a stack
       // trace. stdout stays clean: it is the MCP channel.
+      if (choice.source === 'adopted') console.error(adoptedUnavailableRefusal('till mcp', { path: choice.path, reason: 'unopenable' }));
       console.error(e instanceof Error ? e.message : String(e));
       process.exit(1);
     }
@@ -111,31 +129,95 @@ switch (command) {
     // never pay for the server or its native SQLite dependency.
     const { startUp } = await import(new URL('../dist/api/up.js', import.meta.url));
     const { resolvePortEnv } = await import(new URL('../dist/api/serve.js', import.meta.url));
-    const { ensureDbPath } = await import(new URL('../dist/api/db-path.js', import.meta.url));
+    const { ensureDbChoice } = await import(new URL('../dist/api/db-path.js', import.meta.url));
     const host = process.env.TILL_HOST ?? '127.0.0.1';
     const noOpen = process.argv.includes('--no-open') || process.env.TILL_NO_OPEN === '1';
     let result;
+    let closingUp = false;
+    // A restart asked for before `startUp` has returned is queued and run as soon as it has (critic L3).
+    let restartQueued = false;
+    // D166 point 8: the Studio adopted an existing book (`POST /studio/adopt-book`, after the answer is
+    // out) and this process must come back on it, without a terminal. The book path is re-resolved on
+    // the next start (`resolveDbPath` reads the adopted book), so a restart is all it takes:
+    //   - under TILL.app (`TILL_SUPERVISED=app`, set by the app for its child), close and exit 75: the
+    //     app sees its server go and starts it again, then reloads its window signed in;
+    //   - otherwise (a terminal, a launcher), close (which frees the lock and the port), then start a
+    //     DETACHED successor with the same node, flags, arguments and environment plus TILL_NO_OPEN=1
+    //     (the tab that asked reloads itself), and exit 0. Being detached, the successor outlives the
+    //     terminal's job: stop it with the TILL icon's Quit or a plain kill, as any background server.
+    const restartUp = () => {
+      if (result === undefined) {
+        restartQueued = true;
+        return;
+      }
+      if (closingUp || !result.started) return;
+      closingUp = true;
+      const supervised = process.env.TILL_SUPERVISED === 'app';
+      result
+        .close()
+        .catch(() => {})
+        .then(async () => {
+          if (supervised) process.exit(75);
+          const { spawn } = await import('node:child_process');
+          try {
+            const child = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
+              detached: true,
+              stdio: 'inherit',
+              env: { ...process.env, TILL_NO_OPEN: '1' },
+            });
+            child.unref();
+          } catch (e) {
+            console.error(`till up: could not restart by itself (${e instanceof Error ? e.message : String(e)}). Start TILL again to open the adopted book.`);
+            process.exit(1);
+          }
+          console.error('till up: restarting to open the adopted book.');
+          process.exit(0);
+        });
+    };
     try {
       const port = resolvePortEnv(process.env.TILL_PORT);
-      result = await startUp({ dbPath: ensureDbPath(), port, host, open: !noOpen });
+      // D166: the Studio link (a one-time ticket) goes to a terminal only, never into a log file.
+      // D166 point 8 (critic F1/F2): an adopted book that is missing, or that fails to open, starts the
+      // Studio on its "not reachable" page (an in-memory book that writes nowhere), never on another book.
+      const choice = ensureDbChoice();
+      result = await startUp({
+        dbPath: choice.path,
+        port,
+        host,
+        open: !noOpen,
+        announceStudioLink: process.stderr.isTTY === true,
+        onRestartRequested: restartUp,
+        ...(choice.source === 'adopted'
+          ? {
+              adoptedBook:
+                choice.adoptedUnavailable !== undefined
+                  ? { path: choice.adoptedUnavailable.path, unavailable: 'missing' }
+                  : { path: choice.path },
+            }
+          : {}),
+      });
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
       process.exit(1);
     }
+    if (restartQueued) restartUp();
     if (!result.started) {
       // A live instance already owns the machine: point at it, open the browser there, and exit 0.
       // Starting a second scheduler on one database is the exact double-fire the lock prevents.
-      console.error(`till up: already running at ${result.holder.url} (pid ${result.holder.pid}). Opening it.`);
+      // The holder URL carries a one-time ticket derived from the key file (D166): print it to a
+      // terminal only, and open it through `openStudioLink`, which keeps it off the command line on macOS.
+      const { redactStudioLink } = await import(new URL('../dist/api/up.js', import.meta.url));
+      const shown = process.stderr.isTTY === true ? result.holder.url : redactStudioLink(result.holder.url);
+      console.error(`till up: already running at ${shown} (pid ${result.holder.pid}). Opening it.`);
       if (!noOpen) {
-        const { openBrowser } = await import(new URL('../dist/api/up.js', import.meta.url));
-        openBrowser(result.holder.url);
+        const { openStudioLink } = await import(new URL('../dist/api/up.js', import.meta.url));
+        openStudioLink(result.holder.url);
       }
       process.exit(0);
     }
-    // The Studio itself opens only through the #k= link `startUp` logged (D162); the bare URL is the engine.
+    // The Studio opens through the #k= link (D162), which TILL.app and a terminal banner hand over (D166).
     console.error(`till up: engine at ${result.url}${result.studioServed ? '' : ' (Studio not built)'}`);
     console.error(`till up: MCP over HTTP at ${result.url}/mcp, REST at ${result.url}/api`);
-    let closingUp = false;
     const shutdownUp = () => {
       if (closingUp) return;
       closingUp = true;
@@ -150,16 +232,21 @@ switch (command) {
     // The production /mcp StreamableHTTP host (D23): the same server the Studio speaks, so an A11
     // demo runs against a real ledger with no Vite in front. Loaded lazily from the build output.
     const { startHttpServer, resolvePortEnv } = await import(new URL('../dist/api/serve.js', import.meta.url));
-    const { ensureDbPath } = await import(new URL('../dist/api/db-path.js', import.meta.url));
+    const { ensureDbChoice, adoptedUnavailableRefusal } = await import(new URL('../dist/api/db-path.js', import.meta.url));
     const host = process.env.TILL_HOST ?? '127.0.0.1';
     // Both bind policies live in serve.js so an embedder gets them too, and both refuse before the
-    // store is opened: `ensureDbPath` runs inside the try, AFTER the port is parsed, so a refused
+    // store is opened: `ensureDbChoice` runs inside the try, AFTER the port is parsed, so a refused
     // run does not even create ~/.till. Here the CLI only has to fail like a CLI: the message, no
-    // stack trace, a non-zero exit, and nothing served.
+    // stack trace, a non-zero exit, and nothing served. An adopted book that is not there is refused
+    // the way `till mcp` refuses it (D166 point 8): never another book in its place.
     let handle;
     try {
       const port = resolvePortEnv(process.env.TILL_PORT);
-      handle = await startHttpServer({ dbPath: ensureDbPath(), port, host });
+      const choice = ensureDbChoice();
+      const { adoptedChoiceUnavailable } = await import(new URL('../dist/api/book-adopt.js', import.meta.url));
+      const unavailable = adoptedChoiceUnavailable(choice);
+      if (unavailable !== null) throw new Error(adoptedUnavailableRefusal('till serve', unavailable));
+      handle = await startHttpServer({ dbPath: choice.path, port, host });
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
       process.exit(1);

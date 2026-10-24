@@ -34,6 +34,7 @@ import { createVendorBill, postVendorBill } from '../../dist/core/purchase/index
 import { createContact } from '../../dist/core/sales/index.js';
 import { setup, issueInvoice, GROSS_MINOR } from '../payments/support.mjs';
 import { secondWorkspace } from './support.mjs';
+import { resolvePossibleDuplicate } from '../../dist/core/banking/duplicateDecision.js';
 
 const IBAN = 'CH9300762011623852957';
 
@@ -180,7 +181,7 @@ test('baseline: the exact same file re-imported under a different key writes not
   assert.deepEqual(moneyCounts(t), before, 're-import must write nothing');
 });
 
-test('[FIXED A20-C1] an OVERLAPPING statement does NOT re-import the same bank entry (D81 entry identity)', () => {
+test('[FIXED A20-C1, D178 re-cut] an OVERLAPPING statement imports the same bank entry only FLAGGED, never bookable twice', () => {
   const t = world();
   const contact = ok(createContact(t.ctx, { partyRole: 'customer', name: 'Zahler AG', idempotencyKey: 'zc' }));
   const invoice = issueInvoice(t.ctx, { contactId: contact.contact.id, key: 'ov' });
@@ -195,37 +196,53 @@ test('[FIXED A20-C1] an OVERLAPPING statement does NOT re-import the same bank e
     payerName: 'Zahler AG',
   };
   // Week 1 statement, then the bank's week 1+2 statement (a real and common shape: a corrected or
-  // re-cut period). Same NtryRef, same amount, same value date. Different Stmt/Id.
+  // re-cut period). Same NtryRef, same amount, same value date. Different Stmt/Id. Both open at the
+  // same balance, as a re-cut period does, so the second does not extend the chain.
   const first = ok(
-    importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: camt({ statementId: 'W1', entries: [entry] }), idempotencyKey: 'a' }),
+    importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: camt({ statementId: 'W1', clbd: 100000 + GROSS_MINOR, entries: [entry] }), idempotencyKey: 'a' }),
   );
   assert.equal(first.txnCount, 1);
   const second = ok(
     importCamt(t.ctx, {
       bankAccountId: t.bankAccountId,
-      xml: camt({ statementId: 'W1-W2', seqNb: '2', entries: [entry] }),
+      xml: camt({ statementId: 'W1-W2', seqNb: '2', clbd: 100000 + GROSS_MINOR, entries: [entry] }),
       idempotencyKey: 'b',
     }),
   );
 
-  // FIXED (D81): the second statement is a genuinely NEW `bank_statement` row (different Stmt/Id, so
-  // no message-level dedupe applies), but its one entry shares the SAME identity (`NtryRef
-  // BANKREF-42`) as the first import's, so the entry-level dedupe (A20-C1's remedy) skips it: no
-  // second `bank_txn`, no second A21 queue row, and the skip is named, not silent.
+  // D178 point 19 (the E2 re-cut, A20 §11.4): the second statement is a genuinely NEW `bank_statement`
+  // row (different Stmt/Id), and it does not extend the balance chain (it opens at the same balance
+  // over the same day), so it is an OVERLAP. A NtryRef is the account owner's reference, not the
+  // bank's, so it drops nothing on its own: the line is imported FLAGGED, matched one to one on the
+  // movement key to the stored line, and it waits for the person's answer. Never silent, never
+  // bookable before the answer.
   assert.equal(second.duplicate, false, 'the STATEMENT itself is not a duplicate: different Stmt/Id');
-  assert.equal(second.txnCount, 0, 'the one entry it carries was already on the books');
-  assert.deepEqual(second.skipped, [{ entryRef: 'BANKREF-42', reason: 'duplicate_entry' }]);
+  assert.equal(second.txnCount, 1, 'the line is imported, flagged');
+  assert.deepEqual(second.skipped, []);
+  const [firstLine, secondLine] = rows(t, 'SELECT id FROM bank_txn WHERE workspace_id = ? ORDER BY rowid').map((r) => r.id);
+  assert.equal(second.nearDuplicates.length, 1);
+  assert.equal(second.nearDuplicates[0].bankTxnId, secondLine);
+  assert.equal(second.nearDuplicates[0].existingBankTxnId, firstLine, 'the flag names the stored line it matched');
+  assert.equal(second.nearDuplicates[0].reason, 'same_movement');
+  assert.ok(second.warnings.includes('overlap_same_movement'));
+  fails(
+    bookBankLine(t.ctx, { bankTxnId: secondLine, target: { kind: 'open_item', documentId: invoice.id }, idempotencyKey: 'bk2' }),
+    'duplicate_decision_pending',
+  );
 
-  const c = moneyCounts(t);
-  assert.equal(c.txns, 1, 'FIXED: one real bank movement stays one bank_txn row');
-  assert.equal(c.credits, 1, 'FIXED: the credit is queued in A21 exactly once');
-
-  const queued = rows(t, 'SELECT invoice_id, amount_minor, confidence FROM reconciliation_match WHERE workspace_id = ?');
-  assert.equal(queued.length, 1);
-  assert.equal(queued[0].amount_minor, GROSS_MINOR);
+  // The person answers "Duplikat": the flagged line is ignored, and the money stays one movement.
+  ok(resolvePossibleDuplicate(t.ctx, { bankTxnId: secondLine, decision: 'duplicate', idempotencyKey: 'rd' }));
+  const netBefore = bankNet(t);
+  ok(bookBankLine(t.ctx, { bankTxnId: firstLine, target: { kind: 'open_item', documentId: invoice.id }, idempotencyKey: 'bk1' }));
+  assert.equal(bankNet(t) - netBefore, GROSS_MINOR, 'one real credit moves the bank account exactly once');
+  assert.equal(
+    bookBankLine(t.ctx, { bankTxnId: secondLine, target: { kind: 'open_item', documentId: invoice.id }, idempotencyKey: 'bk3' }).ok,
+    false,
+    'the line answered as a duplicate is ignored and never books',
+  );
 });
 
-test('[FIXED A20-C1] the overlap never mints a second queue row, so it cannot be double-applied', () => {
+test('[FIXED A20-C1, D178 re-cut] the overlap\'s queue row only follows its flagged line, so it cannot be double-applied', () => {
   const t = world();
   const contact = ok(createContact(t.ctx, { partyRole: 'customer', name: 'Zahler AG', idempotencyKey: 'zc' }));
   const invoice = issueInvoice(t.ctx, { contactId: contact.contact.id, key: 'ov2' });
@@ -237,23 +254,30 @@ test('[FIXED A20-C1] the overlap never mints a second queue row, so it cannot be
     reference: ref,
     referenceKind: 'qrr',
   };
-  ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: camt({ statementId: 'X1', entries: [entry] }), idempotencyKey: 'a' }));
+  ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: camt({ statementId: 'X1', clbd: 100000 + GROSS_MINOR, entries: [entry] }), idempotencyKey: 'a' }));
   ok(
     importCamt(t.ctx, {
       bankAccountId: t.bankAccountId,
-      xml: camt({ statementId: 'X2', seqNb: '2', entries: [entry] }),
+      xml: camt({ statementId: 'X2', seqNb: '2', clbd: 100000 + GROSS_MINOR, entries: [entry] }),
       idempotencyKey: 'b',
     }),
   );
-  // FIXED (D81): only ONE queue row exists at all now, so the old exploit (apply both) has no second
-  // row left to apply.
+  // D178 point 19 (the E2 re-cut): the overlapping line is imported FLAGGED, so it carries its own A21
+  // row; that row only FOLLOWS its line (A39 L2), so the old exploit (apply both rows) still has no way
+  // in: the A21 verbs refuse use_bank_inbox, and the inbox refuses the flagged line until it is answered.
   const queue = rows(t, 'SELECT id FROM reconciliation_match WHERE workspace_id = ? ORDER BY rowid');
-  assert.equal(queue.length, 1, 'FIXED: the overlapping statement minted no second A21 queue row');
+  assert.equal(queue.length, 2, 'the flagged line has its following A21 row');
+  for (const [i, q] of queue.entries()) {
+    fails(applyQrMatch(t.ctx, { creditId: q.id, invoiceId: invoice.id, idempotencyKey: `aq${i}` }), 'use_bank_inbox');
+  }
 
   const netBefore = bankNet(t);
-  // A39 L2: the one line is booked on the bank inbox (the A21 verbs refuse use_bank_inbox on it).
   const line = rows(t, 'SELECT id FROM bank_txn WHERE workspace_id = ? ORDER BY rowid');
-  assert.equal(line.length, 1, 'one line for the one booking');
+  assert.equal(line.length, 2, 'the real line and the flagged one');
+  fails(
+    bookBankLine(t.ctx, { bankTxnId: line[1].id, target: { kind: 'open_item', documentId: invoice.id }, idempotencyKey: 'ap2' }),
+    'duplicate_decision_pending',
+  );
   ok(bookBankLine(t.ctx, { bankTxnId: line[0].id, target: { kind: 'open_item', documentId: invoice.id }, idempotencyKey: 'ap1' }), 'book 1');
   const moved = bankNet(t) - netBefore;
   assert.equal(moved, GROSS_MINOR, 'the single real credit moves the bank account exactly once');
@@ -517,24 +541,34 @@ test('a debit confirmed twice under different keys links and pays exactly once',
   assert.deepEqual(moneyCounts(t), mid, 'a second confirm under a fresh key must write nothing');
 });
 
-test('[FIXED A20-C1] a duplicated DEBIT is booked into the ledger exactly ONCE, guarded by entry identity', () => {
+test('[FIXED A20-C1, D178 re-cut] a duplicated DEBIT is booked into the ledger exactly ONCE, guarded by the duplicate answer', () => {
   const t = world();
   const fee = { entryRef: 'FEE-1', amountMinor: 4000, creditDebit: 'DBIT' };
-  ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: camt({ statementId: 'F1', entries: [fee] }), idempotencyKey: 'f1' }));
+  ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: camt({ statementId: 'F1', clbd: 96000, entries: [fee] }), idempotencyKey: 'f1' }));
   const second = ok(
     importCamt(t.ctx, {
       bankAccountId: t.bankAccountId,
-      xml: camt({ statementId: 'F2', seqNb: '2', entries: [fee] }),
+      xml: camt({ statementId: 'F2', seqNb: '2', clbd: 96000, entries: [fee] }),
       idempotencyKey: 'f2',
     }),
   );
-  assert.equal(second.txnCount, 0, 'FIXED: the debit lane now has a backstop too, not just the credit lane');
-  const txns = rows(t, 'SELECT id FROM bank_txn WHERE workspace_id = ?');
-  assert.equal(txns.length, 1);
+  // D178 point 19 (the E2 re-cut): the debit lane has the same backstop as the credit lane. The
+  // overlapping fee is imported FLAGGED (same_movement) and no booking path takes it before the answer.
+  assert.equal(second.txnCount, 1, 'imported, flagged');
+  assert.equal(second.nearDuplicates[0].reason, 'same_movement');
+  const txns = rows(t, 'SELECT id FROM bank_txn WHERE workspace_id = ? ORDER BY rowid');
+  assert.equal(txns.length, 2);
+  fails(
+    createEntryForTxn(t.ctx, { bankTxnId: txns[1].id, contraAccountId: t.acc('6500'), idempotencyKey: 'ce-early' }),
+    'duplicate_decision_pending',
+  );
+  ok(resolvePossibleDuplicate(t.ctx, { bankTxnId: txns[1].id, decision: 'duplicate', idempotencyKey: 'rd' }));
 
   const before = bankNet(t);
   for (const [i, x] of txns.entries()) {
-    ok(createEntryForTxn(t.ctx, { bankTxnId: x.id, contraAccountId: t.acc('6500'), idempotencyKey: `ce${i}` }));
+    const res = createEntryForTxn(t.ctx, { bankTxnId: x.id, contraAccountId: t.acc('6500'), idempotencyKey: `ce${i}` });
+    if (i === 0) ok(res);
+    else assert.equal(res.ok, false, 'the line answered as a duplicate never books');
   }
   // FIXED: one real CHF 40.00 bank fee, exactly CHF 40.00 taken out of 1020. The entry-identity key
   // (D81) protects the DEBIT lane exactly as it protects the credit lane, instead of relying on A21's
@@ -1042,27 +1076,37 @@ test('[A39 L7 (b)] a batch whose TxDtls do NOT sum to the entry amount is ONE li
   assert.deepEqual(rows(t, 'SELECT amount_minor FROM bank_txn WHERE workspace_id = ?'), [{ amount_minor: 30000 }]);
 });
 
-test('[NEW] allowDuplicateEntries admits a genuine same-day twin the identity key would otherwise skip', () => {
+test('[D178 re-cut] a genuine same-day twin is imported flagged and the person, not the importer, admits it', () => {
   const t = world();
   // No AcctSvcrRef, no NtryRef, identical amount/date/currency/direction: two customers paying
   // CHF 100.00 with no reference on the same day are indistinguishable by content alone.
   const twin = { amountMinor: 10000, creditDebit: 'DBIT', date: '2026-07-01' };
-  const xml1 = camt({ statementId: 'TW-1', entries: [twin] });
-  const xml2 = camt({ statementId: 'TW-2', seqNb: '2', entries: [twin] });
+  const xml1 = camt({ statementId: 'TW-1', clbd: 90000, entries: [twin] });
+  const xml2 = camt({ statementId: 'TW-2', seqNb: '2', clbd: 90000, entries: [twin] });
 
   const first = ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: xml1, idempotencyKey: 't1' }));
   assert.equal(first.txnCount, 1);
 
-  // Without the escape, the second (content-identical) entry is skipped as a duplicate.
-  const declined = ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: xml2, idempotencyKey: 't2' }));
-  assert.equal(declined.txnCount, 0);
-  assert.equal(declined.skipped[0].reason, 'duplicate_entry');
+  // D178 point 19 (the E2 re-cut, A20 §11.4): a content key drops nothing. The second statement does
+  // not extend the chain, so it overlaps the covered day: the content-identical entry is imported
+  // FLAGGED (same_movement), and the person, not the importer, says whether it is a twin.
+  const flagged = ok(importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: xml2, idempotencyKey: 't2' }));
+  assert.equal(flagged.txnCount, 1);
+  assert.deepEqual(flagged.skipped, []);
+  assert.equal(flagged.nearDuplicates[0].reason, 'same_movement');
 
-  // With the escape, a DIFFERENT statement carrying the SAME content is admitted as a genuine twin.
-  const xml3 = camt({ statementId: 'TW-3', seqNb: '3', entries: [twin] });
+  // allowDuplicateEntries is the escape for a BANK reference key only; it never silences a coverage flag.
+  const xml3 = camt({ statementId: 'TW-3', seqNb: '3', clbd: 90000, entries: [twin] });
   const admitted = ok(
     importCamt(t.ctx, { bankAccountId: t.bankAccountId, xml: xml3, idempotencyKey: 't3', allowDuplicateEntries: true }),
   );
-  assert.equal(admitted.txnCount, 1, 'allowDuplicateEntries admits the genuine second booking');
-  assert.equal(n(t, 'bank_txn'), 2, 'exactly two real bookings are now on the books');
+  assert.equal(admitted.txnCount, 1);
+  assert.ok(admitted.nearDuplicates?.length === 1, 'the third copy is flagged too');
+
+  // The person answers "Kein Duplikat" for the genuine twin: it is bookable like any line.
+  ok(resolvePossibleDuplicate(t.ctx, { bankTxnId: flagged.nearDuplicates[0].bankTxnId, decision: 'distinct', idempotencyKey: 'tw-d' }));
+  ok(
+    createEntryForTxn(t.ctx, { bankTxnId: flagged.nearDuplicates[0].bankTxnId, contraAccountId: t.acc('6500'), idempotencyKey: 'tw-ce' }),
+  );
+  assert.equal(n(t, 'bank_txn'), 3, 'every delivered line is on the books; none vanished');
 });

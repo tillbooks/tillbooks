@@ -31,8 +31,12 @@ export type AbsenceStatus = (typeof ABSENCE_STATUSES)[number];
  * 2260 liability and walks the claim back `reimbursed -> approved` (the state that reopened liability
  * matches), the one exception the `expense_claim_terminal_is_one_way` trigger and D95 admit. No verb
  * leaves `reimbursed`; only the payment reversal does, so `CLAIM_TRANSITIONS` below stays clean.
+ *
+ * `reversed` (D168, 14.10.2026) is the state an APPROVED claim reaches through `expense_claim_reverse`:
+ * its posting is mirrored by an owned A02 reversing entry and the claim is closed for good. It is
+ * terminal and sealed by its own trigger; the correction of the business fact is a fresh claim.
  */
-export const CLAIM_STATUSES = ['draft', 'submitted', 'approved', 'reimbursed', 'rejected', 'cancelled'] as const;
+export const CLAIM_STATUSES = ['draft', 'submitted', 'approved', 'reimbursed', 'rejected', 'cancelled', 'reversed'] as const;
 export type ClaimStatus = (typeof CLAIM_STATUSES)[number];
 
 /** The terminal states no FORWARD verb can leave (mirrored by a DB trigger in `schema.ts`). The one
@@ -41,16 +45,18 @@ export const TERMINAL_CLAIM_STATUSES: ReadonlySet<ClaimStatus> = new Set<ClaimSt
   'reimbursed',
   'rejected',
   'cancelled',
+  'reversed',
 ]);
 
 /** The allowed transitions, single-sourced so a verb cannot invent one A10-style. */
 const CLAIM_TRANSITIONS: Readonly<Record<ClaimStatus, readonly ClaimStatus[]>> = {
   draft: ['submitted', 'cancelled'],
   submitted: ['approved', 'rejected'],
-  approved: ['reimbursed'],
+  approved: ['reimbursed', 'reversed'],
   reimbursed: [],
   rejected: [],
   cancelled: [],
+  reversed: [],
 };
 
 export function canTransition(from: ClaimStatus, to: ClaimStatus): boolean {

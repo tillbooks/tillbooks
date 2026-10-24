@@ -152,4 +152,4 @@ export {
   renderChecklistPrompt,
 } from './prompt.js';
 export type { PromptPeriod, RenderPromptInput } from './prompt.js';
-export { checklistItemsDueProvider, CHECKLIST_DUE_WINDOW_DAYS } from './attentionProvider.js';
+export { checklistItemsDueProvider, CHECKLIST_DUE_WINDOW_DAYS, CHECKLIST_DUE_WINDOW_SETTING } from './attentionProvider.js';

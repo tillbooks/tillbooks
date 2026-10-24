@@ -1,17 +1,19 @@
 /**
  * The agent speaks ON THE LINE, in words (the judge's outcome 8). A Vorschlag the agent drafted for
  * this bank line (`list_drafted_actions`, A35) shows in the line's context strip (B2), naming what it
- * would do in the inbox's own vocabulary (the target, the VAT code, the reason), with the SAME
- * consequence sentence the Vorschläge queue shows (C4, D156: the engine's one catalogue, one source,
- * every face), here as the tooltip of "Freigeben" (`aria-describedby`). "Freigeben" replays the drafted verb
- * as the approver (`approve_drafted_action`); "Ablehnen" takes an optional reason the agent's next
- * session reads. The drafting seat never sees its own approve control (the engine refuses it too,
- * `cannot_self_approve`).
+ * would do in the inbox's own vocabulary (the target, the VAT code, the reason) and when it was made.
+ *
+ * D167: on an OPEN line the strip carries no second Buchen. The row's own Buchen approves the pinned
+ * Vorschlag (D162), or, once the person changed the line, books their version first and then closes the
+ * Vorschlag; what stays here is the reason line and "Ablehnen", which takes an optional reason the
+ * agent's next session reads. On a DECIDED line (a drafted reopen) the row has no Buchen, so the host
+ * passes `onApprove` and "Freigeben" stays, with the engine's consequence sentence as its tooltip (C4,
+ * D156). The drafting seat never decides its own proposal (`cannot_self_approve`).
  *
  * WHAT YOU APPROVED IS WHAT RUNS (critic N1). When the engine says the record behind the Vorschlag
- * changed since the proposal (`changedSinceProposal`), "Freigeben" is withheld and the strip says why;
- * the approval would refuse `vorschlag_stale` and run nothing. Rejecting stays. Frozen figures, when the
- * drafted verb pins a record, ride on one quiet line under the sentence.
+ * changed since the proposal (`changedSinceProposal`), the strip says so: Buchen then books the line as
+ * it stands and closes the stale Vorschlag. Frozen figures, when the drafted verb pins a record, ride on
+ * one quiet line under the sentence.
  */
 import { useId, useState } from 'react';
 
@@ -34,7 +36,8 @@ export interface VorschlagOnLineProps {
   /** The drafting seat is the one looking: it may not approve its own proposal. */
   isOwn: boolean;
   busy: boolean;
-  onApprove: () => void;
+  /** "Freigeben", only where the row has no Buchen of its own (a decided line). */
+  onApprove?: () => void;
   onReject: (reason: string) => void;
 }
 
@@ -64,18 +67,17 @@ export function VorschlagOnLine({ line, vorschlag, lookups, canDecide, isOwn, bu
   const baseId = useId();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
-  const capability = vorschlag.dialCapability;
   // D156: the engine's one consequence for the drafted verb, the sentence the Vorschläge card shows.
-  const consequence = useConsequence(vorschlag.actionTool, capability);
+  const consequence = useConsequence(vorschlag.actionTool, vorschlag.dialCapability);
   const date = vorschlag.createdAt.length >= 10 ? formatDate(vorschlag.createdAt.slice(0, 10)) : '';
   const changed = vorschlag.changedSinceProposal === true;
   const figures = vorschlag.figures != null ? figuresLine(t, vorschlag.figures) : null;
-
-  const approve = (
-    <button type="button" className="btn btn--secondary btn--sm" disabled={busy} onClick={onApprove}>
-      {busy ? t('bankInbox.row.busy') : t('bankInbox.vorschlag.approve')}
-    </button>
-  );
+  const approve =
+    onApprove === undefined ? null : (
+      <button type="button" className="btn btn--secondary btn--sm" disabled={busy} onClick={onApprove}>
+        {busy ? t('bankInbox.row.busy') : t('bankInbox.vorschlag.approve')}
+      </button>
+    );
 
   return (
     <section className="bank-vorschlag" aria-labelledby={`${baseId}-title`}>
@@ -116,7 +118,7 @@ export function VorschlagOnLine({ line, vorschlag, lookups, canDecide, isOwn, bu
         </form>
       ) : (
         <span className="bank-vorschlag__actions">
-          {changed ? null : consequence !== null ? <Tooltip content={consequence}>{approve}</Tooltip> : approve}
+          {changed || approve === null ? null : consequence !== null ? <Tooltip content={consequence}>{approve}</Tooltip> : approve}
           <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setRejecting(true)}>
             {t('bankInbox.vorschlag.reject')}
           </button>

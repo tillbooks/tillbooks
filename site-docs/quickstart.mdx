@@ -8,10 +8,11 @@ description: "Install TILL from npm, open the Studio in your browser, and connec
   match, and read [what the beta does not do yet](/introduction#what-the-beta-does-not-do-yet).
 </Note>
 
-{/* TODO(publish): these steps are true once tillbooks@1.0.0-beta.1 is on npm with the Studio
-    vendored into the package (launch plan P0.1), published with `npm publish --tag beta` (latest
-    stays 0.1.0; deprecate 0.1.0 so a bare install points at the beta). The 0.1.0 on npm today has no Studio, and its
-    `till up` answers "The Studio is not built into this install". */}
+<Tip>
+  Rather let your agent do it? [tillbooks.ch/en/start](https://tillbooks.ch/en/start/) has a setup
+  prompt for Claude Code (terminal or desktop app), Cursor or Windsurf: it checks Node, installs TILL,
+  starts the Studio, asks you to open the demo company and connects itself. The steps below are the same, by hand.
+</Tip>
 
 ## What you need
 
@@ -34,8 +35,10 @@ till up
 ```
 
 `till up` starts the Studio at `http://127.0.0.1:8788` and opens it in your browser. It listens on
-your own machine only. Leave the terminal open while you work; `Ctrl+C` stops TILL. If you run
-`till up` a second time, it opens the browser at the one already running.
+your own machine only. Leave the terminal open while you work; `Ctrl+C` stops TILL. After you adopt
+an existing database in the Studio, TILL restarts in the background and `Ctrl+C` no longer reaches
+it: quit it from the TILL app, or end the process. If you run `till up` a second time, it opens the
+browser at the one already running.
 
 The first screen offers three ways to start:
 
@@ -43,8 +46,9 @@ The first screen offers three ways to start:
   KMU.
 - **Restore a backup** from a `.tillbackup` file. It goes into a new workspace, so nothing you have
   is overwritten.
-- **Adopt an existing database.** This imports nothing: it shows you how to restart TILL on an
-  existing TILL database file (`TILL_DB_PATH=<path> till up`).
+- **Adopt an existing database.** Pick a TILL database file you already have: with the file picker
+  in the TILL app, or by its path in a browser. TILL restarts briefly and opens it. The file stays
+  where it is; nothing is copied or moved.
 
 Beneath the three sits a quieter line: **Try the demo** sets up a demo workspace with sample
 postings, which you can delete later.
@@ -83,6 +87,14 @@ or let `npx` fetch the package for you. No account and no API key are needed:
   }
 }
 ```
+
+In Claude Code, register the same server with one line:
+
+```bash
+claude mcp add tillbooks -- npx -y tillbooks@beta mcp
+```
+
+`till up` also serves MCP over HTTP at `http://127.0.0.1:8788/mcp`, for a client that speaks it.
 
 The agent and the Studio work on the same file, so what the agent does shows up in the Studio. By
 default, the agent waits for your OK before it books anything, moves your money, grants access or

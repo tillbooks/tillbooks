@@ -393,11 +393,16 @@ export function commitStep(ctx: WorkspaceContext, input: { planId: unknown; step
   if (!['trial_loaded', 'checked'].includes(step.status)) return err('step_not_ready', { state: step.status, need: 'trial_loaded' });
 
   // The G11 check runs here (// INTEGRATION-SEAM(G11)), advancing trial_loaded -> checked and producing
-  // the checkHash the approval binds to.
-  const check = checkStep(ctx, { id: step.id, dataClass: step.data_class, counts: step.counts === null ? null : (JSON.parse(step.counts) as Record<string, unknown>) });
-  ctx.store.db
-    .prepare('UPDATE migration_step SET status = ?, last_check_id = ?, updated_at = ? WHERE id = ? AND workspace_id = ?')
-    .run('checked', check.checkHash, ctx.clock.now(), step.id, ctx.workspaceId);
+  // the checkHash the approval binds to. The check and its `checked` status are the gate's own record,
+  // not the commit: they never mark an approval's act as having run (D165, `withoutCommitMark`), so a
+  // commit the gate refuses below (`check_failed`, `needs_backup`, ...) stays rejectable.
+  const check = ctx.store.withoutCommitMark(() => {
+    const checked = checkStep(ctx, { id: step.id, dataClass: step.data_class, counts: step.counts === null ? null : (JSON.parse(step.counts) as Record<string, unknown>) });
+    ctx.store.db
+      .prepare('UPDATE migration_step SET status = ?, last_check_id = ?, updated_at = ? WHERE id = ? AND workspace_id = ?')
+      .run('checked', checked.checkHash, ctx.clock.now(), step.id, ctx.workspaceId);
+    return checked;
+  });
 
   // (2) G11 reports no `failed` and no `not_asserted` control.
   const bad = check.controls.find((c) => c.status === 'failed' || c.status === 'not_asserted');
@@ -548,7 +553,7 @@ function commitRoute(
     // retained Belege (OR 958f / G13 archive), linked at discovery; the sealing is the act here.
     const sealCtx: WorkspaceContext = { ...ctx, capabilities: allowAllCapabilities };
     const created: string[] = [];
-    const failed: Array<{ ref: string; reason: string }> = [];
+    const failed: Array<{ ref: string; reason: string; [detail: string]: unknown }> = [];
     rows.forEach((r, i) => {
       const period = String(r.period ?? r.Periode ?? '').trim();
       if (period === '') {
@@ -557,7 +562,20 @@ function commitRoute(
       }
       const res = markVatPeriodFiled(sealCtx, { period, idempotencyKey: `migstep:${step.id}:${idempotencyKey}:${period}` });
       if (res.ok) created.push(period);
-      else failed.push({ ref: rowRef(i), reason: (res as { error?: string }).error ?? 'filing_failed' });
+      else if (res.error === 'not_a_filing_period') {
+        // Critic L-R2-2: the old system filed this label under a method the book does not record for
+        // that year (typically a book configured with TODAY's method and no dated history). The seal is
+        // refused rightly, since that year would also compute under the wrong method; the row says how.
+        const r2 = res as unknown as { method?: string; filingPeriods?: string[] };
+        failed.push({
+          ref: rowRef(i),
+          reason: 'not_a_filing_period',
+          period,
+          method: r2.method,
+          filingPeriods: r2.filingPeriods,
+          hint: `The book records ${String(r2.method)} for ${period.slice(0, 4)}, which files ${(r2.filingPeriods ?? []).join(', ')}. If the old system filed ${period} under another method, record the method history first with vat_configure and a dated methodChange (from the 01.01 the current method started), then commit vat_history again.`,
+        });
+      } else failed.push({ ref: rowRef(i), reason: (res as { error?: string }).error ?? 'filing_failed' });
     });
     recordStepRows(ctx, step, created.map((_p, i) => rowRef(i)), 'created', 'vat_filing');
     if (created.length === 0 && failed.length > 0) {
@@ -715,7 +733,8 @@ export function recordApproval(
 /**
  * US-G09.6: reverse a committed step. Posts REVERSING entries via A02 `reverseEntry` for every money
  * effect (never a delete: posted entries are append-only, §H-AUDIT, and five SQLite triggers refuse a
- * delete regardless, D85 §1). The step returns to `mapped` and the approval is voided. After any
+ * delete regardless, D85 §1). The step returns to `mapped` and the approval is voided. When the opening
+ * reversal is refused (a locked period), the whole rollback refuses with that reason and nothing moves. After any
  * commit the verb requires `commit_migration` (enforced at the registry boundary); the confirm gate
  * is here.
  */
@@ -739,19 +758,71 @@ export function rollbackStep(
   if (input.confirmed !== true) return err('needs_confirmation', { stepId: step.id });
   if (!['committed', 'verified', 'diverged'].includes(step.status)) return err('step_not_committed', { state: step.status });
 
-  return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey as string, 'migration_rollback_step', () => {
-    const reversed: string[] = [];
-    const archived: string[] = [];
-    const couldNotUndo: string[] = [];
-    const counts = step.counts === null ? {} : (JSON.parse(step.counts) as Record<string, unknown>);
-    const openingEntryId = counts.openingEntryId as string | undefined;
-    if (openingEntryId !== undefined && openingEntryId !== null) {
-      const rev = reverseEntryInternal(ctx, { entryId: openingEntryId, idempotencyKey: `migrollback:${step.id}:${input.idempotencyKey}`, description: 'Datenübernahme rückgängig' }, 'migration_rollback_step_internal');
-      if (rev.ok) reversed.push((rev as { entryId?: string }).entryId ?? openingEntryId);
-      else couldNotUndo.push(openingEntryId);
-    }
-    // Consumed ids stay consumed and document numbers are not reused: the honest-limit column (spec §2).
-    returnToMapped(ctx, step);
-    return ok({ reversed, archived, couldNotUndo });
-  });
+  try {
+    return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey as string, 'migration_rollback_step', () => {
+      const reversed: string[] = [];
+      const archived: string[] = [];
+      // Always empty since the D141 follow-up: a reversal that cannot be posted refuses the whole
+      // rollback (below) instead of being listed here beside a step that already went back to `mapped`.
+      const couldNotUndo: string[] = [];
+      const counts = step.counts === null ? {} : (JSON.parse(step.counts) as Record<string, unknown>);
+      const openingEntryId = counts.openingEntryId as string | undefined;
+      if (openingEntryId !== undefined && openingEntryId !== null) {
+        const rev = reverseEntryInternal(ctx, { entryId: openingEntryId, idempotencyKey: `migrollback:${step.id}:${input.idempotencyKey}`, description: 'Datenübernahme rückgängig' }, 'migration_rollback_step_internal');
+        if (rev.ok) reversed.push(rev.reversalId);
+        else if (rev.error === 'already_reversed' && typeof (rev as { reversalId?: unknown }).reversalId === 'string') {
+          // Reversed before (by hand, under another key). That reversal may itself have been reversed,
+          // which puts the opening back: walk the chain, and only an odd number of standing mirrors means
+          // the opening no longer stands (critic F2). Nothing was posted here, so `reversed` stays empty.
+          const firstMirror = (rev as unknown as { reversalId: string }).reversalId;
+          if (openingStandsAfter(ctx, firstMirror)) {
+            throw new RollbackRefused(
+              err('opening_still_stands', {
+                stepId: step.id,
+                openingEntryId,
+                reversalId: firstMirror,
+                hint: 'The opening entry was reversed and that reversal reversed again, so the opening is in the books. Reverse the last entry of that chain by hand, then roll the step back.',
+              }),
+            );
+          }
+        } else {
+          // The opening entry still stands (a locked period, for example). Returning the step to `mapped`
+          // now would let the next approval and commit post a SECOND opening beside it, so nothing moves:
+          // the transaction is aborted, the step stays committed, its approval stands, and the refusal is
+          // not memoised, so the same key rolls back once the cause is gone.
+          throw new RollbackRefused({ ...rev, stepId: step.id, openingEntryId });
+        }
+      }
+      // Consumed ids stay consumed and document numbers are not reused: the honest-limit column (spec §2).
+      returnToMapped(ctx, step);
+      return ok({ reversed, archived, couldNotUndo });
+    });
+  } catch (e) {
+    if (e instanceof RollbackRefused) return e.refusal;
+    throw e;
+  }
+}
+
+/**
+ * Whether the opening stands again after the mirror `firstMirror` (a reversal of it): every further
+ * posted reversal in the chain flips it back, so it stands when the chain holds an even number of
+ * mirrors. Bounded: a chain is short by construction.
+ */
+function openingStandsAfter(ctx: WorkspaceContext, firstMirror: string): boolean {
+  let mirrors = 1;
+  let current = firstMirror;
+  for (let hops = 0; hops < 16; hops += 1) {
+    const next = ctx.store.db
+      .prepare("SELECT id FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ? AND status = 'posted' LIMIT 1")
+      .get(ctx.workspaceId, current) as { id: string } | undefined;
+    if (next === undefined) break;
+    mirrors += 1;
+    current = next.id;
+  }
+  return mirrors % 2 === 0;
+}
+
+/** Aborts a rollback's transaction when its opening reversal is refused, carrying the refusal out. */
+class RollbackRefused {
+  constructor(readonly refusal: Result) {}
 }

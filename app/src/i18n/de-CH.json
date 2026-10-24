@@ -143,17 +143,48 @@
       "label": "Favoriten",
       "pin": "{name} zu den Favoriten hinzufügen",
       "unpin": "{name} aus den Favoriten entfernen",
-      "moveUp": "{name} nach oben verschieben",
-      "moveDown": "{name} nach unten verschieben",
-      "rename": "{name} umbenennen",
-      "renameField": "Neuer Name für {name}"
+      "renameField": "Neuer Name für {name}",
+      "saveFailed": "Deine Favoriten konnten nicht gespeichert werden. Sie gelten bis zum Neuladen.",
+      "more": "{name}: verschieben, umbenennen oder entfernen",
+      "renameItem": "Umbenennen",
+      "removeItem": "Entfernen"
     },
     "resize": {
       "label": "Navigationsbreite anpassen"
     },
     "collapse": "Navigation einklappen",
     "expand": "Navigation ausklappen",
-    "agent": "Agent"
+    "agent": "Agent",
+    "sections": {
+      "menu": "Menü"
+    },
+    "customise": {
+      "open": "Menü anpassen",
+      "title": "Menü anpassen",
+      "done": "Fertig",
+      "reset": "Zurücksetzen",
+      "hint": "Ziehen oder mit ⋯ verschieben. Ohne Häkchen ist die Seite ausgeblendet, die Suche findet sie weiter.",
+      "top": "Ohne Gruppe",
+      "show": "{name} im Menü zeigen",
+      "more": "{name} verschieben",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "moveTo": "Verschieben nach …",
+      "moveToLabel": "{name} verschieben nach",
+      "moveToPlaceholder": "Ziel wählen",
+      "cancelMove": "Abbrechen",
+      "empty": "Leer",
+      "saveFailed": "Konnte nicht gespeichert werden. Die Änderung gilt bis zum Neuladen.",
+      "announce": {
+        "moved": "{name} verschoben",
+        "movedUp": "{name} nach oben verschoben",
+        "movedDown": "{name} nach unten verschoben",
+        "movedTo": "{name} nach {target} verschoben",
+        "hidden": "{name} ausgeblendet",
+        "shown": "{name} eingeblendet",
+        "reset": "Menü auf den Standard zurückgesetzt"
+      }
+    }
   },
   "theme": {
     "toggle": "Design wechseln"
@@ -325,7 +356,7 @@
       "toOverview": "Zur Übersicht"
     },
     "nav": {
-      "more": "Menü",
+      "more": "Navigation",
       "close": "Menü schliessen"
     },
     "agent": {
@@ -515,6 +546,7 @@
       "send_invoice": "Rechnung senden",
       "propose_dunning_run": "Mahnlauf vorschlagen",
       "issue_dunning_run": "Mahnlauf ausstellen",
+      "dunning_fee_reverse": "Mahngebühren stornieren",
       "send_dunning_run": "Mahnlauf senden",
       "record_payment": "Zahlung erfassen",
       "allocate_payment": "Zahlung zuordnen",
@@ -531,6 +563,7 @@
       "expense_claim_reimburse": "Spesen auszahlen",
       "create_entry_for_txn": "Banktransaktion buchen",
       "wage_journal_post": "Lohnjournal buchen",
+      "wage_journal_reverse": "Lohnjournal stornieren",
       "post_vendor_bill": "Lieferantenrechnung buchen",
       "post_fx_revaluation": "Fremdwährungen neu bewerten",
       "fx_revaluation_reverse": "Fremdwährungsbewertung stornieren",
@@ -546,11 +579,13 @@
       "provision_reverse": "Rückstellung stornieren",
       "provision_release_reverse": "Auflösung stornieren",
       "expense_claim_approve": "Spesen genehmigen",
+      "expense_claim_reverse": "Spesenabrechnung stornieren",
       "asset_acquire": "Anlage aktivieren",
       "asset_add_capitalisation": "Anschaffungskosten nachaktivieren",
       "asset_depreciation_run_post": "Abschreibungslauf buchen",
       "asset_depreciation_run_reverse": "Abschreibungslauf stornieren",
       "asset_dispose": "Anlagenabgang buchen",
+      "asset_transaction_reverse": "Anlagenbuchung stornieren",
       "inventory_valuation_post": "Lagerbewertung buchen",
       "inventory_valuation_reverse": "Lagerbewertung stornieren",
       "landed_cost_allocate_confirm": "Bezugskosten verteilen und buchen",
@@ -564,6 +599,8 @@
       "import_open_items": "Offene Posten übernehmen",
       "book_bank_line": "Bankzeile buchen",
       "ignore_bank_line": "Bankzeile ignorieren",
+      "set_bank_standard": "Bank-Standard setzen",
+      "clear_bank_standard": "Bank-Standard entfernen",
       "reopen_bank_line": "Bankzeile stornieren und wieder öffnen"
     }
   },
@@ -585,8 +622,9 @@
   },
   "taxCode": {
     "none": "Ohne MWST",
-    "noneMeta": "nicht steuerbar, ausgenommen oder ohne Beleg",
+    "noneMeta": "nicht steuerbar, zum Beispiel Lohn, Gebühr oder Übertrag",
     "search": "Code, Satz oder Name, zum Beispiel 8.1 oder Bezug",
+    "searchShort": "Satz oder Name",
     "noMatch": "Kein MWST-Code passt.",
     "group": {
       "current": "Aktuell",
@@ -603,7 +641,17 @@
       "zero": "Befreit",
       "exempt": "Ausgenommen",
       "none": "Ohne MWST"
-    }
+    },
+    "rated": "{kind} {rate} %",
+    "hint": {
+      "material": "Material, Waren, Dienstleistungen",
+      "operating": "Betriebsaufwand, Investitionen",
+      "normal": "Normalsatz",
+      "reduced": "reduziert",
+      "accommodation": "Beherbergung",
+      "operatingShort": "Betrieb"
+    },
+    "ratedFamily": "{name} ({family})"
   },
   "picker": {
     "hint": "Pfeiltasten wählen · Enter übernimmt · Esc schliesst"

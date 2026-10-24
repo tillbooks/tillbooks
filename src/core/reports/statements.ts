@@ -818,6 +818,8 @@ export interface GeneralLedgerInput {
 interface LedgerLineRow {
   entry_id: string;
   date: string;
+  /** The entry's Belegnummer display (A02 §4b, D178 point 2), or null when it has none. */
+  number: string | null;
   ref: string | null;
   description: string | null;
   source: string;
@@ -846,11 +848,12 @@ export function computeGeneralLedger(ctx: WorkspaceContext, input: GeneralLedger
 
   const rows = ctx.store.db
     .prepare(
-      `SELECT l.entry_id AS entry_id, e.date AS date, e.ref AS ref, e.description AS description,
+      `SELECT l.entry_id AS entry_id, e.date AS date, n.display AS number, e.ref AS ref, e.description AS description,
               e.source AS source, l.base_debit_minor AS debit, l.base_credit_minor AS credit
          FROM journal_line l
          JOIN journal_entry e ON e.id = l.entry_id
          JOIN account a ON a.id = l.account_id
+         LEFT JOIN journal_entry_number n ON n.entry_id = e.id AND n.workspace_id = e.workspace_id
         WHERE e.status = 'posted' AND e.workspace_id = ? AND a.workspace_id = ? AND l.account_id = ?
           AND e.date >= ? AND e.date <= ?
         ORDER BY e.date, e.created_at, e.id, l.rowid`,
@@ -863,6 +866,7 @@ export function computeGeneralLedger(ctx: WorkspaceContext, input: GeneralLedger
     return {
       date: row.date,
       entryId: row.entry_id,
+      number: row.number,
       ref: row.ref,
       description: row.description,
       source: row.source,

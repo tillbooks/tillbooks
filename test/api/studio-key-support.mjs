@@ -40,8 +40,8 @@ export async function postAsStudio(baseUrl, action, input, studioKey, extraHeade
 }
 
 /**
- * Read the key out of the Studio LINK a host prints (`till up`'s `studioUrl`), exactly as the browser
- * does: from the `#k=` fragment. The served page carries no key (critic R3-B2). Throws when the link
+ * Read the key out of a Studio LINK that carries one in its `#k=` fragment: the dev bridge's (since
+ * D166 `till up` puts a one-time ticket there instead, see `sessionFromLink`). The served page carries no key (critic R3-B2). Throws when the link
  * has none, so a host that stopped handing it out fails loudly.
  */
 export function studioKeyFromLink(link) {
@@ -49,6 +49,26 @@ export function studioKeyFromLink(link) {
   const key = new URLSearchParams(hash).get('k');
   if (key === null || key === '') throw new Error(`the Studio link ${String(link)} carries no Studio key`);
   return key;
+}
+
+/**
+ * Act as the Studio the way a browser does since D166: take the ONE-TIME ticket out of the link a host
+ * opens (`/#t=<ticket>`), redeem it at `/studio/redeem`, and use the session token it buys. Throws
+ * when the link has no ticket or the redemption is refused, so a host that stopped handing one out
+ * fails loudly. A ticket is spent by this: a second call with the same link is refused.
+ */
+export async function sessionFromLink(link, extra = {}) {
+  const url = new URL(link);
+  const ticket = new URLSearchParams(url.hash.replace(/^#/, '')).get('t');
+  if (ticket === null || ticket === '') throw new Error(`the Studio link ${String(link)} carries no ticket`);
+  const res = await fetch(`${url.origin}/studio/redeem`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ticket, ...extra }),
+  });
+  const body = await res.json();
+  if (body.ok !== true) throw new Error(`the ticket in ${String(link)} was refused: ${JSON.stringify(body)}`);
+  return extra.publicKey === undefined ? body.token : body;
 }
 
 /** Every 43-character base64url run in a text: what a scraper would try as a key. */

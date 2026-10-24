@@ -9,5 +9,7 @@
 
 export { dashboardOverview, dashboardTile } from './dashboards.js';
 export type { DashboardOverviewInput, DashboardTileInput } from './dashboards.js';
+export { dashboardSeries, LEDGER_OPENING_KEY_PREFIX, SERIES_MAX_MONTHS, SERIES_TOP_DEFAULT, SERIES_TOP_MAX } from './series.js';
+export type { DashboardSeriesInput, SeriesExpense, SeriesMonth } from './series.js';
 export { DASHBOARD_TILES, TILE_REGISTRY, isDashboardTile, tileDef } from './tiles.js';
 export type { DashboardTile, DashboardTileDef } from './tiles.js';

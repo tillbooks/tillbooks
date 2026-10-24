@@ -23,11 +23,15 @@ import { Tabs, type TabItem } from '../../components/Tabs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { Status, type StatusKind } from '../../components/Status';
+import { Modal } from '../../components/Modal';
+import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { PayrollHandoff } from './PayrollHandoff';
 import { LinkedFiles } from '../Files/LinkedFiles';
 import './Hr.css';
 
 const newKey = () => crypto.randomUUID();
+// The confirm's role, passed as a value the way LandedCosts does (the modal-role guard reads literals).
+const ALERT_DIALOG = 'alertdialog' as const;
 
 type Tab = 'employees' | 'absences' | 'claims' | 'lohn';
 const TABS: readonly Tab[] = ['employees', 'absences', 'claims', 'lohn'];
@@ -67,7 +71,7 @@ function arr(body: unknown, key: string): Record<string, unknown>[] | null {
 /**
  * A claim's state as the one `Status` word (K-22): an icon-set glyph beside the word, never a text
  * glyph. A draft has nothing to act on yet, a submitted claim waits, approved and reimbursed are done,
- * rejected is refused, cancelled is out of play.
+ * rejected is refused, cancelled is out of play, and reversed (D168) is a booking taken back.
  */
 const CLAIM_KIND: Record<string, StatusKind> = {
   draft: 'neutral',
@@ -76,6 +80,7 @@ const CLAIM_KIND: Record<string, StatusKind> = {
   reimbursed: 'success',
   rejected: 'danger',
   cancelled: 'inactive',
+  reversed: 'inactive',
 };
 
 export function Hr() {
@@ -85,6 +90,7 @@ export function Hr() {
   const canManage = useCan('hr.manage');
   const canSubmit = useCan('spesen.submit');
   const canApprove = useCan('spesen.approve');
+  const canPost = useCan('post');
 
   const [tab, setTab] = useState<Tab>('employees');
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -99,6 +105,10 @@ export function Hr() {
   // The claim whose Dateien panel is open. Clicking a claim's title toggles its E00 attachments
   // (the scanned receipt behind the reimbursement) open below the list; no per-claim drawer exists.
   const [openClaimId, setOpenClaimId] = useState<string | null>(null);
+  // D168: the approved claim a person is about to reverse, and the reason they give. The reverse runs
+  // only from the confirm dialog, never straight from the menu.
+  const [reversing, setReversing] = useState<Claim | null>(null);
+  const [reverseReason, setReverseReason] = useState('');
 
   const load = useCallback(async () => {
     if (workspaceId === null) {
@@ -208,7 +218,18 @@ export function Hr() {
     { key: 'total', header: t('hr.claim.total'), numeric: true, render: (c) => (c.totalBaseMinor === null ? '' : formatMoney(c.totalBaseMinor, c.currency)) },
   ];
 
+  const confirmReverse = useCallback(async () => {
+    if (reversing === null || reverseReason.trim() === '') return;
+    const claimId = reversing.id;
+    setReversing(null);
+    await write('expense_claim_reverse', { claimId, reason: reverseReason.trim(), idempotencyKey: newKey() });
+    setReverseReason('');
+  }, [reversing, reverseReason, write]);
+
   // K-21: a claim's decisions sit behind its row's one overflow, Ablehnen last and marked destructive.
+  // D168: an approved claim also offers Stornieren, destructive and behind its confirm dialog. The
+  // engine refuses a reimbursed claim (reverse the payment first), so the menu does not offer it there.
+  // TODO(Ruhig 3, E-step): migrate this action to the icon vocabulary once IconButton lands.
   const claimActions = (c: Claim) => [
     ...(c.status === 'submitted'
       ? [
@@ -217,7 +238,10 @@ export function Hr() {
         ]
       : []),
     ...(c.status === 'approved'
-      ? [{ key: 'reimburse', label: t('spesen.action.reimburse'), onSelect: () => void write('expense_claim_reimburse', { claimId: c.id, confirm: true, idempotencyKey: newKey() }) }]
+      ? [
+          { key: 'reimburse', label: t('spesen.action.reimburse'), onSelect: () => void write('expense_claim_reimburse', { claimId: c.id, confirm: true, idempotencyKey: newKey() }) },
+          ...(canPost ? [{ key: 'reverse', label: t('spesen.action.reverse'), danger: true, onSelect: () => { setReverseReason(''); setReversing(c); } }] : []),
+        ]
       : []),
   ];
 
@@ -324,6 +348,34 @@ export function Hr() {
       {writeError !== null && <ErrorBanner error={writeError} message={refusalText(t, writeError, { own: 'hr.error' })} />}
 
       <Tabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as Tab)} label={t('hr.route.title')} />
+
+      <Modal
+        open={reversing !== null}
+        onClose={() => setReversing(null)}
+        role={ALERT_DIALOG}
+        title={t('spesen.reverseDialog.title', { title: reversing?.title ?? '' })}
+        closeLabel={t('spesen.reverseDialog.cancel')}
+        describedById="hr-reverse-body"
+        footer={
+          <>
+            <button type="button" className="btn btn--secondary" onClick={() => setReversing(null)}>
+              {t('spesen.reverseDialog.cancel')}
+            </button>
+            <button type="button" className="btn btn--danger" disabled={reverseReason.trim() === ''} onClick={() => void confirmReverse()}>
+              {t('spesen.reverseDialog.confirm')}
+            </button>
+          </>
+        }
+      >
+        <div id="hr-reverse-body">
+          <p>{t('spesen.reverseDialog.body')}</p>
+          <ConsequenceLine verb="expense_claim_reverse" />
+          <label className="hr-reverse-reason">
+            <span>{t('spesen.reverseDialog.reason')}</span>
+            <input className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
+          </label>
+        </div>
+      </Modal>
     </section>
   );
 }

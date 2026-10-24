@@ -34,6 +34,7 @@ import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { postEntry } from '../ledger/postEntry.js';
 import { getEntry } from '../ledger/reads.js';
+import { rawReversedEvent, postingReversedRefusal } from './reversal.js';
 
 /** An ISO calendar date `YYYY-MM-DD`, the shape A02 dates already use. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -461,6 +462,10 @@ export function assetAddCapitalisation(ctx: WorkspaceContext, input: AssetAddCap
   if (!baselineExists(ctx, asset.id)) {
     return err('not_acquired', { assetId: input.assetId, reason: 'record the primary acquisition or opening balance first' });
   }
+  // D170: a baseline whose entry a raw Storno took out (a book from before the undo verb) carries no
+  // cost in the GL any more; capitalising onto it would build on a hole.
+  const rawReversed = rawReversedEvent(ctx, asset.id, ['acquisition', 'opening']);
+  if (rawReversed !== null) return postingReversedRefusal(asset.id, rawReversed);
 
   const source = typeof input.source === 'string' && input.source.length > 0 ? input.source : 'manual';
   if (!CAPITALISATION_SOURCES.has(source)) {

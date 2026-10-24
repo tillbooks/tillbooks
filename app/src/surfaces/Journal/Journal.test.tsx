@@ -592,6 +592,11 @@ describe('EntryDrawer, reverse and drafts', () => {
     ['provision_reverse', {}, 'This entry belongs to a provision: reverse the provision under Periods.', 'Go to periods', '/periods'],
     ['provision_release_reverse', {}, 'This entry releases a provision: take the release back under Periods.', 'Go to periods', '/periods'],
     ['fx_revaluation_reverse', {}, 'This entry belongs to a currency revaluation: reverse the revaluation under Foreign currency.', 'Go to foreign currency', '/fx'],
+    ['landed_cost_reverse', {}, 'This entry belongs to a landed-cost voucher: reverse the voucher under Landed costs.', 'Go to landed costs', '/landed-costs'],
+    ['expense_claim_reverse', {}, 'This entry belongs to an expense claim: reverse the claim under HR.', 'Go to HR', '/personal'],
+    ['dunning_fee_reverse', {}, 'This entry holds a reminder run\'s fees: reverse the fees on the run under Dunning.', 'Go to dunning', '/dunning'],
+    ['asset_transaction_reverse', {}, "This entry belongs to an asset in the register: reverse it from the asset's ledger in the Asset register.", 'Go to the asset register', '/assets'],
+    ['wage_journal_reverse', {}, 'This entry is a wage journal from your payroll: reverse it on the Payroll tab under HR.', 'Go to HR', '/personal'],
   ])('A39 lean critic L4: an entry %s owns is refused with that owner named and where to undo it', async (verb, facts, sentence, linkName, href) => {
     const handlers = reverseHandlers([]);
     handlers.reverse_entry = { status: 422, body: { ok: false, error: 'owned_by', verb, entryId: 'je_1', ...facts } };
@@ -1447,5 +1452,126 @@ describe('Journal, /journal?entry=<id> opens that entry (bank "Buchung öffnen",
     expect(within(dialog).queryByRole('button', { name: 'Reverse' })).toBeNull();
     expect(screen.queryByRole('dialog', { name: 'View entry' })).toBeNull();
     expect(screen.getByTestId('location-search')).toHaveTextContent('?entry=je_d');
+  });
+});
+
+describe('D176: `?vorlage=` opens the composer with that Vorlage', () => {
+  it('the bank row\'s next step lands here: the composer opens with the Vorlage and the date, and the params leave the address', async () => {
+    const vorlage = {
+      id: 'br_v',
+      scope: 'manual',
+      outcome: 'legs',
+      label: 'Quartalsabgrenzung',
+      legs: [
+        { accountId: BUERO, taxCode: null, side: 'debit', amount: { kind: 'ask', label: 'Betrag' }, accountNumber: '', accountName: '' },
+        { accountId: KASSE, taxCode: null, side: 'credit', amount: { kind: 'rest' }, accountNumber: '', accountName: '' },
+      ],
+      accountId: KASSE,
+    };
+    renderJournal(
+      {
+        list_journal: { status: 200, body: { ok: true, entries: [postedEntry()] } },
+        ...PICKERS,
+        list_bank_standards: { status: 200, body: { ok: true, standards: [vorlage] } },
+      },
+      { path: '/journal?vorlage=br_v&date=2026-10-14' },
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'New entry' });
+    expect(await within(dialog).findByRole('textbox', { name: 'Betrag' })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Date')).toHaveValue('2026-10-14');
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/));
+  });
+});
+
+/**
+ * D178 point 2 (A02 §4b): the Belegnummer the engine assigned at posting, on the list, in the filter and in
+ * the drawer title. The rows are the engine's own shape (`number` is a field of `list_journal` and
+ * `get_entry`), null on a draft; the surface renders it and never derives one.
+ */
+describe('Journal, the Belegnummer (D178 point 2)', () => {
+  it('shows the number in a tabular, no-wrap column; a draft cell is empty', async () => {
+    renderJournal({
+      list_journal: {
+        status: 200,
+        body: {
+          ok: true,
+          entries: [
+            postedEntry({ number: '2026-0118' }),
+            postedEntry({ id: 'je_2', ref: 'B-101', status: 'draft', number: null }),
+          ],
+        },
+      },
+    });
+    const table = await screen.findByRole('table');
+    expect(within(table).getByRole('columnheader', { name: 'Voucher no.' })).toBeInTheDocument();
+    const posted = within(table).getByRole('row', { name: /B-100/ });
+    const cell = within(posted).getByText('2026-0118');
+    // The shared numeric column: tabular figures, end-aligned, never wraps (K-18).
+    expect(cell.closest('td')).toHaveClass('t-num');
+    const draft = within(table).getByRole('row', { name: /B-101/ });
+    expect(within(draft).queryByText(/2026-/)).toBeNull();
+  });
+
+  it('filters by number: the typed value reaches list_journal as number, trimmed, and clears with the rest', async () => {
+    const { calls } = renderJournal({ list_journal: { status: 200, body: { ok: true, entries: [] } } });
+    await waitFor(() => expect(calls.filter((c) => c.action === 'list_journal').length).toBe(1));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Voucher no.' }), ' 118 ');
+    await waitFor(() => expect([...calls].reverse().find((c) => c.action === 'list_journal')?.input.number).toBe('118'));
+    // A filtered miss reads as "no match", with the way back.
+    expect(await screen.findByText('No entries match these filters.')).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole('button', { name: 'Clear filters' })[0]);
+    await waitFor(() => expect([...calls].reverse().find((c) => c.action === 'list_journal')?.input.number).toBeUndefined());
+  });
+
+  it('titles a posted entry drawer with its number, so the dialog is named by the record', async () => {
+    renderJournal({
+      list_journal: { status: 200, body: { ok: true, entries: [postedEntry({ number: '118' })] } },
+      ...PICKERS,
+      get_entry: {
+        status: 200,
+        body: {
+          ok: true,
+          entry: postedEntry({ number: '118' }),
+          lines: [
+            { id: 'l1', account: BUERO, debit: 5000, credit: null },
+            { id: 'l2', account: KASSE, debit: null, credit: 5000 },
+          ],
+        },
+      },
+    });
+    const table = await screen.findByRole('table');
+    await userEvent.click(within(table).getByRole('row', { name: /Open entry B-100/ }));
+    expect(await screen.findByRole('dialog', { name: 'Voucher no. 118' })).toBeInTheDocument();
+  });
+
+  it('keeps the plain title on a posted entry without a number (posted while numbering was off)', async () => {
+    renderJournal({
+      list_journal: { status: 200, body: { ok: true, entries: [postedEntry({ number: null })] } },
+      ...PICKERS,
+      get_entry: {
+        status: 200,
+        body: {
+          ok: true,
+          entry: postedEntry({ number: null }),
+          lines: [
+            { id: 'l1', account: BUERO, debit: 5000, credit: null },
+            { id: 'l2', account: KASSE, debit: null, credit: 5000 },
+          ],
+        },
+      },
+    });
+    const table = await screen.findByRole('table');
+    await userEvent.click(within(table).getByRole('row', { name: /Open entry B-100/ }));
+    expect(await screen.findByRole('dialog', { name: 'View entry' })).toBeInTheDocument();
+  });
+
+  it('de-CH: the column and the filter say Beleg-Nr.', async () => {
+    renderJournal(
+      { list_journal: { status: 200, body: { ok: true, entries: [postedEntry({ number: '7' })] } } },
+      { locale: 'de-CH' },
+    );
+    const table = await screen.findByRole('table');
+    expect(within(table).getByRole('columnheader', { name: 'Beleg-Nr.' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Beleg-Nr.' })).toBeInTheDocument();
   });
 });

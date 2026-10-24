@@ -31,6 +31,30 @@ export type AttentionUrgency = (typeof ATTENTION_URGENCY)[number];
 /** Higher number = more urgent, so a plain numeric compare ranks the list. */
 export const URGENCY_RANK: Readonly<Record<AttentionUrgency, number>> = { overdue: 3, due: 2, open: 1 };
 
+/**
+ * D178 point 11, THE KIND OF A QUEUE: what the person is asked to do with its items, the second way to cut
+ * Pendenzen (the first is the area). Declared by the queue, never derived from an item.
+ *
+ *  - `approve` (Genehmigen): a drafted agent act waits for a person's OK. Reserved for the Vorschläge,
+ *    the only rows whose question is "is the agent's proposal right?" and the only rows a batch may act on.
+ *  - `do` (Erledigen): work only a person can carry out (fetch, book, compare, sign, file).
+ *  - `note` (Hinweise): something to look at and settle when convenient; nothing is lost while it waits.
+ *
+ * English identifiers like every §H-ENUM; the de-CH labels render in the Studio.
+ */
+export const ATTENTION_KINDS = ['approve', 'do', 'note'] as const;
+export type AttentionKind = (typeof ATTENTION_KINDS)[number];
+
+/**
+ * The area order of the grouped list (D178 point 11, the owner's pick: Bank first). An area outside this
+ * list sorts after it, in the order its queues register.
+ */
+export const ATTENTION_AREA_ORDER: readonly string[] = ['bank', 'accounting', 'sales', 'system'];
+
+/** The two ways to cut Pendenzen into sections (the per-person `attention.grouping` preference). */
+export const ATTENTION_GROUPINGS = ['by_area', 'by_kind'] as const;
+export type AttentionGrouping = (typeof ATTENTION_GROUPINGS)[number];
+
 /** `live` re-derives on every read; `stored` is a persisted row. Declared, not guessed (design §5b). */
 export type Freshness = 'live' | 'stored';
 
@@ -153,6 +177,25 @@ export interface AttentionItem {
    */
   readonly figures?: VorschlagFigures | null;
   readonly changedSinceProposal?: boolean;
+  /**
+   * D178 point 11: how many counted units this row stands for. Absent means 1; an aggregate row (one
+   * Bankkonto's waiting lines) carries N, so the sum of the rows' counts IS the queue's true count and
+   * the arithmetic badge = sections = rows is visible on the page.
+   */
+  readonly count?: number;
+  /**
+   * D178, set by the grouped `attention_list`: the area and the kind of the row. The kind is the queue's,
+   * unless the item says otherwise (a Vorschlag that can no longer be approved waits for a person to act:
+   * `do`, never `approve`).
+   */
+  readonly area?: string;
+  readonly kind?: AttentionKind;
+  /** D178 point 5 (critic N4 M1): a Vorschlag the batch may approve: a decision on a bank line, unchanged. */
+  readonly batchable?: boolean;
+  /** Critic N4 R2-M2, on a batchable Vorschlag: approving it mints a journal entry (else it books nothing). */
+  readonly posts?: boolean;
+  /** D178: a Vorschlag the engine voided as stale, kept listed while the bank line it names is open. */
+  readonly stale?: boolean;
 }
 
 /** How an actor id is named on screen: the words for a seat, or a member's display name. */
@@ -168,6 +211,17 @@ export interface QueueProvider {
   readonly labelKey: string;
   /** A known area key (`bank`, `sales`, ...): one taxonomy for rail, palette and hub. */
   readonly area: string;
+  /**
+   * D178 point 11: the queue's kind. Optional on the TYPE only so a module the hub does not own can be
+   * registered with `withKind` at its registration line; the registration guard refuses a REGISTERED
+   * provider without one.
+   */
+  readonly kind?: AttentionKind;
+  /**
+   * D178 point 11: the area's own working queue, listed right after the Vorschläge inside its area (the
+   * bank lines inside Bank).
+   */
+  readonly lead?: boolean;
   /** A REGISTERED A24 capability. A provider whose capability does not resolve fails registration. */
   readonly readCapability: string;
   /** The cross-queue tie-break rank; LOWER wins the same-entity collapse. */
@@ -191,8 +245,24 @@ export interface AttentionQueueSummary {
    */
   readonly labelKey: string;
   readonly area: string;
+  /** D178: the queue's kind (additive; the summary's meaning is unchanged). */
+  readonly kind?: AttentionKind;
   readonly count: number;
   readonly topUrgency: AttentionUrgency;
+}
+
+/** D178 point 11: one section of the grouped `attention_list`. */
+export interface AttentionSection {
+  /** An area key (`bank`, ...) under `by_area`, a kind (`approve`, ...) under `by_kind`. */
+  readonly key: string;
+  /** The sum of the units of ALL this section's rows, over every page. */
+  readonly count: number;
+  /** The queues whose rows this section holds, in registry order. */
+  readonly queues: readonly string[];
+  /** One page of rows, in section order. */
+  readonly items: readonly AttentionItem[];
+  /** Present when more rows follow: pass it back with `section` to read the next page. */
+  readonly nextCursor?: string;
 }
 
 /** The default list cap: 5 rows in the urgency list, and the fixture size the registry guard exceeds. */

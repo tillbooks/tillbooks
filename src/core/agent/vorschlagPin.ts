@@ -50,9 +50,14 @@ interface ChildSpec {
 
 /**
  * Where a dependency's keys come from: a column of the record row, a column of one of its child
- * tables (every line), or, for a nested dependency, a column of the parent dependency's rows.
+ * tables (every line), or, for a nested dependency, a column of the parent dependency's rows. D175
+ * (critic D175-C2): or a field of every element of a JSON array stored in a column of the record row
+ * (a Buchungsregel's `legs_json[].taxCode`), so what a stored recipe names is pinned like a child line.
  */
-type KeySource = { readonly row: string } | { readonly child: string; readonly column: string };
+type KeySource =
+  | { readonly row: string }
+  | { readonly child: string; readonly column: string }
+  | { readonly json: string; readonly field: string };
 
 /**
  * A row set the act reads LIVE when it executes. `key` is the column of `table` the collected keys are
@@ -128,6 +133,8 @@ const contactVia = (from: KeySource): DepSpec => ({ table: 'contact', key: 'id',
 
 /** Every validity version of a tax code: kind, rate, method, form line, active flag, start date. */
 const TAX_CODE_COLUMNS = ['code', 'kind', 'rate_bp', 'method', 'esa_form_line', 'active', 'valid_from'] as const;
+/** D175: what a Buchungsregel booking reads of an account it moves (a leg's or the Durchlaufkonto). */
+const RULE_ACCOUNT_COLUMNS = ['id', 'number', 'type', 'archived'] as const;
 const taxCodeVia = (from: KeySource): DepSpec => ({ table: 'tax_code', key: 'code', from, columns: TAX_CODE_COLUMNS });
 
 /** An item as an act consumes it: revenue account, default code, cost, stock tracking. */
@@ -168,12 +175,13 @@ const WORKSPACE_TERMS: DepSpec = { table: 'workspace', key: 'id', from: { row: '
  * D163: an issue that finds no stored due date on an invoice WRITES the derived one in the same
  * statement as the number (`issueDueDate` in `core/sales/document.ts`), so the act changes a content
  * column the pin digests. Without this, approving `issue_invoice` turned a pending `send_invoice` on
- * the same invoice stale, and a crash between the issue and the status flip left a Vorschlag that
- * could never settle. The digest therefore reads the due date as the INTENT the draft carried: on an
+ * the same invoice stale. (It was also argued as crash safety for the issue's own Vorschlag; since D165
+ * that is the commit mark's job in `draftedActions.ts`, for every verb, and does not rest on this.)
+ * The digest therefore reads the due date as the INTENT the draft carried: on an
  * issued invoice whose stored due date is exactly what the one derivation gives for its issue date
  * (the terms behind it are pinned beside it), the date reads as unset, which is what the draft held.
  * A blank due date reads as unset too, since the issue path treats it so. An explicit due date that
- * happens to equal the derived one reads as unset after the issue: that can only turn a pending
+ * happens to equal the derived one reads as unset after the issue: that can only turn a pending OTHER
  * Vorschlag stale (the safe direction), never let a changed one through.
  */
 function documentDueDateAsIntent(ctx: WorkspaceContext, row: Row): Row {
@@ -347,7 +355,7 @@ export const PIN_RECORDS = {
   },
   accrual: {
     table: 'accrual',
-    columns: ['kind', 'period_end', 'reversal_date', 'amount_minor', 'balance_account_id', 'contra_account_id', 'cost_center_id', 'description'],
+    columns: ['kind', 'period_end', 'reversal_date', 'amount_minor', 'balance_account_id', 'contra_account_id', 'cost_center_id', 'description', 'source_ref'],
     figures: { amount: { column: 'amount_minor', from: 'row', basis: 'amount' }, currency: { fixed: 'CHF' } },
   },
   provision: {
@@ -533,8 +541,10 @@ export const PIN_RECORDS = {
   },
   asset: {
     table: 'asset',
-    // The master the posting reads its accounts from; the amounts are in the verb's own input.
-    columns: ['number', 'name', 'category_id', 'useful_life_months', 'depreciation_method', 'declining_rate_bp', 'gl_asset_account_id', 'gl_accum_depr_account_id', 'gl_depr_expense_account_id'],
+    // The master the posting reads its accounts from; the amounts are in the verb's own input. B-1
+    // (column census): an acquisition or opening balance seats the draft's residual value unless its
+    // input overrides it, and asset_update changes it freely while the asset is a draft.
+    columns: ['number', 'name', 'category_id', 'useful_life_months', 'depreciation_method', 'declining_rate_bp', 'gl_asset_account_id', 'gl_accum_depr_account_id', 'gl_depr_expense_account_id', 'residual_value_rappen'],
     figures: { number: 'number' },
   },
   /** N-d: a stock act that omits its unit cost reads the item's cost (and tracking) live. */
@@ -624,6 +634,54 @@ export const PIN_RECORDS = {
     ],
     figures: {},
   },
+  /**
+   * D172: one workspace setting as a change consumes it: the override row in force under the key (none
+   * while the default applies). A person who changes the setting after the agent proposed a change makes
+   * the approval refuse `vorschlag_stale`, so an approval never overwrites a value the person did not see.
+   */
+  /**
+   * D175: the Buchungsregel a `book_bank_line` rule target names: its recipe, text, Durchlaufkonto and
+   * supersession as they stood when the booking was proposed, with the rest leg's tax code. (The codes of
+   * the other legs live inside `legs_json`, which the digest covers by value.)
+   */
+  bank_standard: {
+    table: 'bank_standard',
+    // D176: the scope, the outcome (an ignore rule's reason and note) and the follow-up too: a Vorlage a
+    // `post_entry { template }` names is pinned exactly as a bank rule a `book_bank_line` names.
+    columns: [
+      'counterparty_key',
+      'direction',
+      'account_id',
+      'tax_code',
+      'label',
+      'match_text',
+      'legs_json',
+      'via_account_id',
+      'superseded_at',
+      'scope',
+      'outcome',
+      'ignore_reason',
+      'ignore_note',
+      'follow_up_standard_id',
+    ],
+    // Critic D175-C2 (D162): what the rule books with is read LIVE at approval, so it is pinned: every
+    // leg's MWST code (the rest leg's on the row, the asked legs' inside the recipe) and the accounts the
+    // entry moves (every leg's and the Durchlaufkonto).
+    deps: [
+      { table: 'tax_code', key: 'code', from: { row: 'tax_code' }, columns: TAX_CODE_COLUMNS },
+      { table: 'tax_code', key: 'code', from: { json: 'legs_json', field: 'taxCode' }, columns: TAX_CODE_COLUMNS },
+      { table: 'account', key: 'id', from: { json: 'legs_json', field: 'accountId' }, columns: RULE_ACCOUNT_COLUMNS },
+      { table: 'account', key: 'id', from: { row: 'via_account_id' }, columns: RULE_ACCOUNT_COLUMNS },
+    ],
+    figures: {},
+  },
+  workspace_setting: {
+    table: 'workspace_setting',
+    idColumn: 'key',
+    many: true,
+    columns: ['value_json'],
+    figures: {},
+  },
 } as const satisfies Record<string, RecordSpec>;
 
 export type PinRecordKind = keyof typeof PIN_RECORDS;
@@ -686,9 +744,15 @@ export const PIN_FOR_VERB: Readonly<Record<string, readonly PinField[]>> = {
   mark_batch_paid: [{ field: 'batchId', record: 'payment_batch' }],
   expense_claim_approve: [{ field: 'claimId', record: 'expense_claim' }],
   expense_claim_reimburse: [{ field: 'claimId', record: 'expense_claim' }],
+  // D168: the claim is pinned like approve's, so the card shows the figures the reverse mirrors and a
+  // claim moved under the Vorschlag (reimbursed, say) voids it; the D165 crash census covers it.
+  expense_claim_reverse: [{ field: 'claimId', record: 'expense_claim' }],
   // Dunning: the run, its items, the debtors and the dunning setup.
   issue_dunning_run: [{ field: 'runId', record: 'dunning_run' }],
   send_dunning_run: [{ field: 'runId', record: 'dunning_run' }],
+  // D169: the run is pinned like issue's, so the card shows the fee the reverse mirrors and a run
+  // moved under the Vorschlag (sent, say) voids it; the D165 crash census covers it.
+  dunning_fee_reverse: [{ field: 'runId', record: 'dunning_run' }],
   // The ledger drafts a capability posts from its own row.
   accrual_post: [{ field: 'accrualId', record: 'accrual' }],
   provision_post: [{ field: 'provisionId', record: 'provision' }],
@@ -697,6 +761,9 @@ export const PIN_FOR_VERB: Readonly<Record<string, readonly PinField[]>> = {
   asset_add_capitalisation: [{ field: 'assetId', record: 'asset' }],
   asset_dispose: [{ field: 'assetId', record: 'asset' }],
   asset_opening_balance: [{ field: 'assetId', record: 'asset' }],
+  // D170: the asset is pinned like its forward acts', so a master moved under the Vorschlag voids it;
+  // the D165 crash census covers it (asserted by name).
+  asset_transaction_reverse: [{ field: 'assetId', record: 'asset' }],
   // Stock: the counted lines are the content of a commit; a move without a cost reads the item's.
   stock_stocktake_commit: [{ field: 'sessionId', record: 'stocktake' }],
   inventory_stocktake_commit: [{ field: 'sessionId', record: 'cycle_count' }],
@@ -719,7 +786,26 @@ export const PIN_FOR_VERB: Readonly<Record<string, readonly PinField[]>> = {
     { field: 'taxCode', record: 'tax_code' },
   ],
   create_entry_for_txn: [{ field: 'taxCode', record: 'tax_code' }],
-  book_bank_line: [{ field: 'target.legs[].taxCode', record: 'tax_code' }],
+  book_bank_line: [
+    { field: 'target.legs[].taxCode', record: 'tax_code' },
+    // D175: a `rule` target books the Buchungsregel as it stands at approval; pin the rule row (an edit
+    // supersedes it, which changes `superseded_at`), so a person who edits the rule after the agent
+    // proposed the booking makes the approval refuse `vorschlag_stale`.
+    { field: 'target.standardId', record: 'bank_standard' },
+    // D178 E3 (A39 §17.9): a contact booking books to the contact as it stands at approval (archived or
+    // merged since refuses), and a Spesen booking pays the claims as they stand (a claim rejected,
+    // reversed or edited since makes the approval refuse `vorschlag_stale`).
+    { field: 'target.contactId', record: 'contact' },
+    { field: 'target.claimIds[]', record: 'expense_claim' },
+  ],
+  // D176 (A39 §15.2, D162): a post from a Vorlage books the recipe as it stands at approval, so the Vorlage
+  // is pinned like a bank rule target (every leg's code and account through the recipe deps): an edit or a
+  // code change after the agent proposed the post refuses `vorschlag_stale`. A post with typed lines names
+  // no record (the field is absent) and pins nothing, exactly as before.
+  post_entry: [{ field: 'template.standardId', record: 'bank_standard' }],
+  // D176: an ignore that follows a "Nicht buchen" rule names that rule (kept on the decision for its next
+  // step); pinned, so a rule edited after the proposal makes the approval refuse rather than record it.
+  ignore_bank_line: [{ field: 'standardId', record: 'bank_standard' }],
   vat_settlement_post: [{ workspace: true, record: 'tax_codes_all' }],
   vat_configure: [{ workspace: true, record: 'tax_codes_all' }],
   vendor_portal_remittance_create: [{ field: 'paymentId', record: 'payment' }],
@@ -737,6 +823,9 @@ export const PIN_FOR_VERB: Readonly<Record<string, readonly PinField[]>> = {
   // N-b: a commit (and the archive import) of a step, for every data class.
   migration_commit_step: [{ field: 'stepId', record: 'migration_step' }],
   gl_archive_import: [{ field: 'stepId', record: 'migration_step' }],
+  // D172: the setting's override row in force when the change was proposed.
+  settings_set: [{ field: 'key', record: 'workspace_setting' }],
+  settings_reset: [{ field: 'key', record: 'workspace_setting' }],
 };
 
 /** The closed set of reasons a governed verb with a record id needs no pin. */
@@ -814,6 +903,8 @@ export const NOT_PINNED: Readonly<Record<string, NotPinned>> = {
   inventory_valuation_reverse: imm('mirrors a posted valuation run'),
   inventory_adjust_reverse: imm('mirrors a posted adjustment; the reason code is read for the mirror\'s label only'),
   landed_cost_reverse: imm('mirrors an allocated landed-cost voucher'),
+  // D171: the row is append-only by DB trigger and its entry is posted, so no pin could ever go stale.
+  wage_journal_reverse: imm('mirrors a posted wage journal; the wage_journal_posts row is append-only by trigger'),
   goods_receipt_reverse: imm('reverses a posted, frozen goods receipt'),
   match_three_way_reverse: imm('reverses an immutable match header'),
   confirm_statement_gap: imm('the statements on both sides of the gap are imported bank facts'),
@@ -823,7 +914,6 @@ export const NOT_PINNED: Readonly<Record<string, NotPinned>> = {
   confirm_match: imm('matches an imported bank line to a posted bill or entry'),
   retry_automation_run: imm('re-sends the stored input of a stuck run, key included'),
   // payload: the payload is the effect.
-  post_entry: pay('the lines are required in the payload; entryId only names the draft they replace'),
   set_bank_sync_schedule: pay('mode and time are in the payload'),
   provision_release: pay('the released amount and target account are in the payload; the provision is posted'),
   record_payment: pay('amount, date, currency and allocations are in the payload; the counterparty is read for its name on the payment row'),
@@ -846,7 +936,13 @@ export const NOT_PINNED: Readonly<Record<string, NotPinned>> = {
   record_incoming_credit: pay('amount, value date and reference are in the payload'),
   import_camt: pay('the statement XML is in the payload'),
   import_camt_files: pay('the statement files are in the payload'),
+  // D178 (D162): the file is in the payload, and a governed seat's CSV import is refused at draft time
+  // unless its mapping is too (`prevalidateImportBankStatement`), so the saved mapping, which a person may
+  // change before approving, is never what an approved CSV import reads.
+  import_bank_statement: pay('the statement file is in the payload, and a drafted CSV import must carry its mapping there too (refused at draft time otherwise)'),
+  set_bank_csv_mapping: pay('the whole mapping is in the payload; the Bankkonto is only where it is saved'),
   set_creditor_bank_profile: pay('the new IBAN is in the payload'),
+  set_bank_standard: pay('the account and the MWST code are in the payload; the line is an imported bank fact, read only for its counterparty and direction'),
   migration_record_approval: pay('the approval binds the check hash in the payload'),
   migration_waive_control: pay('the waiver reason is in the payload'),
   import_open_items: pay('the open items are in the payload'),
@@ -859,8 +955,11 @@ export const NOT_PINNED: Readonly<Record<string, NotPinned>> = {
   archive_role: st('archives a role'),
   resume_recurring_schedule: st('resumes a paused schedule; what it issues later is governed under issue'),
   end_recurring_schedule: st('ends a schedule'),
-  ignore_bank_line: st('sets a bank line aside, with the reason in the payload'),
   reopen_bank_line: st('returns a bank line to the inbox by reversal'),
+  // D178 point 19: the answer is checked against the line's flag and state at approval (not flagged, not
+  // open, a candidate it is not named against all refuse), so a stale proposal refuses rather than records.
+  resolve_possible_duplicate: st('answers the flag on an imported bank line; the flag, the candidates and the line state are checked again at approval'),
+  clear_bank_standard: st('retires a standard; nothing booked changes'),
   migration_rollback_step: st('rolls a committed step back'),
   migration_close_plan: st('closes a finished plan; the steps it closes were committed through governed verbs'),
   implementation_project_close: st('closes an implementation project'),
@@ -988,6 +1087,190 @@ export const LIVE_READ_TABLES: Readonly<
   migration_extraction_manifest: { policy: 'gate-only', why: 'read by the extraction checks before a trial load, not by a commit' },
 };
 
+// --- the column census (B-1, independent critic 13.10.2026) -------------------------------------------
+
+/**
+ * Why a column an approved act reads of a table its pin covers is NOT digested. The table census holds
+ * which TABLES a pin covers; this holds the columns inside them, because a new column on an already
+ * pinned table (D164 `document.supply_date` meeting D162's pin) is exactly what a table-level check
+ * cannot see. The suite traces every pinned verb's approval and fails on any column it reads that is
+ * neither in the pin (`pinnedColumnsFor`) nor named here. `id` and `workspace_id` (row identity and the
+ * tenant) are exempt generically; everything else is named, so a column added later fails until
+ * someone decides whether it is content.
+ */
+const STAMP = 'a who or when stamp of the record\'s own lifecycle; no act books, prices, prints or sends from it';
+const ROW_KEY = 'an idempotency memo key, a token hash or a partner correlation id; it selects or deduplicates, it carries no content';
+const LIFECYCLE = 'lifecycle state (the status and the reason recorded with a transition): the act reads it to refuse outside the state it acts from, so a free change can only make it refuse';
+const RESULT = 'a result a governed act writes (its posting, movement, number, artefact or link): read to refuse a second run or to link the result, never as input to what the act books or sends';
+
+function because(why: string, ...columns: string[]): Record<string, string> {
+  return Object.fromEntries(columns.map((c) => [c, why]));
+}
+
+export const UNPINNED_COLUMNS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  accrual: {
+    ...because(STAMP, 'created_at', 'created_by', 'discarded_at', 'posted_at', 'posted_by', 'reversed_at', 'reversed_by', 'updated_at'),
+    ...because(ROW_KEY, 'idempotency_key', 'post_idempotency_key', 'reverse_idempotency_key'),
+    ...because(LIFECYCLE, 'discard_reason', 'reverse_reason', 'status'),
+    ...because(RESULT, 'entry_id', 'reversal_entry_id', 'storno_entry_id', 'storno_reversal_entry_id'),
+  },
+  asset: {
+    ...because(STAMP, 'created_at', 'created_by', 'disposed_at', 'updated_at'),
+    ...because(LIFECYCLE, 'status'),
+    ...because(
+      'the financial baseline and its convenience columns: an acquisition or opening balance seats cost and date from its own input, and once the asset leaves draft asset_update refuses them (financial_fields_locked); only governed acts (acquisition, capitalisation, depreciation, disposal) move them after that',
+      'acquisition_cost_rappen', 'acquisition_date', 'accumulated_depr_rappen', 'net_book_value_rappen', 'last_depreciation_period', 'disposal_proceeds_rappen',
+    ),
+    ...because(
+      'descriptive master data read with the row (SELECT *); no acquisition, capitalisation, disposal or opening posting reads it',
+      'barcode', 'description', 'location_id', 'manufacturer', 'model', 'notes', 'responsible_user_id', 'serial_number', 'total_estimated_units', 'warranty_until',
+    ),
+  },
+  contact: {
+    ...because(STAMP, 'created_at'),
+    ...because('CRM tags and the drafting-assistant grounding switch; no act prints, sends or books from them', 'roles', 'segments', 'ledger_grounding_enabled'),
+  },
+  cycle_count_line: {
+    ...because(STAMP, 'counted_at', 'counted_by'),
+    ...because(LIFECYCLE, 'status'),
+    ...because(RESULT, 'movement_id'),
+  },
+  cycle_count_session: {
+    ...because(STAMP, 'cancelled_at', 'committed_at', 'committed_by', 'created_at', 'created_by'),
+    ...because(LIFECYCLE, 'cancel_reason', 'status'),
+    ...because(RESULT, 'inventar_document_id'),
+    ...because('a free-text note and a line count of the pinned lines; the commit books from the lines', 'notes', 'total_lines'),
+  },
+  delivery_note: {
+    ...because(STAMP, 'actor', 'created_at', 'issued_at'),
+    ...because(LIFECYCLE, 'status'),
+    ...because(RESULT, 'artifact_document_id', 'number'),
+  },
+  document: {
+    ...because(STAMP, 'created_at'),
+    ...because(ROW_KEY, 'accept_token_hash'),
+    ...because(LIFECYCLE, 'decline_reason', 'status', 'accepted_by'),
+    ...because(RESULT, 'number', 'posted_entry_id', 'rendered_template_id', 'rendered_template_snapshot', 'sent_to_email', 'issue_date'),
+    ...because('recomputed by the issue from the pinned lines and their codes (A11 B-1); on an issued document frozen with it', 'tax_minor', 'total_minor'),
+    ...because('fixed when the document is created (native or migrated, G21); read only by the transition guard', 'origin'),
+    ...because('the quote revision chain (quotes_revise writes them on a NEW document); no issue, send or settlement reads them as content', 'supersedes_id', 'version'),
+    ...because('written only by the credit-note derivation (the one writer, A13); a dunning run reads it to net credited invoices, which settles issued documents whose figures are frozen', 'credited_document_id'),
+  },
+  dunning_config: { ...because(STAMP, 'updated_at') },
+  ebill_deliveries: {
+    ...because(STAMP, 'created_at', 'transmitted_at', 'updated_at'),
+    ...because(ROW_KEY, 'business_case_id', 'correlation_id', 'idempotency_key'),
+    ...because(LIFECYCLE, 'partner_reason', 'partner_status', 'status'),
+  },
+  employee: {
+    ...because(STAMP, 'created_at', 'created_by', 'updated_at'),
+    ...because(ROW_KEY, 'idempotency_key'),
+    ...because('HR master data read with the row; a reimbursement pays the employee\'s payee contact (pinned) and reads none of these', 'ahv_nr', 'employment_pct', 'ends_on', 'starts_on'),
+  },
+  expense_claim: {
+    ...because(STAMP, 'approved_at', 'created_at', 'created_by', 'reimbursed_at', 'submitted_at'),
+    ...because(ROW_KEY, 'idempotency_key'),
+    ...because(LIFECYCLE, 'reject_reason', 'status'),
+    ...because(RESULT, 'payment_id', 'posted_entry_id', 'reversal_entry_id'),
+    ...because('the snapshot of the pinned lines\' base amounts taken at submit (hr/schema.ts); a change of it needs a change of the lines, which the pin sees', 'total_base_minor'),
+  },
+  goods_receipt_doc: {
+    ...because(STAMP, 'cancelled_at', 'created_at', 'created_by', 'posted_at', 'posted_by', 'reversed_at', 'reversed_by', 'updated_at'),
+    ...because(ROW_KEY, 'idempotency_key'),
+    ...because(LIFECYCLE, 'cancel_reason', 'status'),
+    ...because(RESULT, 'number', 'has_over_receipt'),
+    ...because('the expected delivery date, read by the supplier-performance report only', 'expected_at'),
+  },
+  goods_receipt_doc_line: {
+    ...because(STAMP, 'recognised_at', 'rejected_at'),
+    ...because(LIFECYCLE, 'reject_reason'),
+    ...because(RESULT, 'movement_id', 'reversal_movement_id', 'reversal_trail_line_id', 'trail_line_id', 'over_receipt_qty', 'billed_qty'),
+    ...because('the order a line came from (its order line is pinned) and the display position', 'po_id', 'line_no'),
+  },
+  inventory_reason_code: {
+    ...because(STAMP, 'created_at', 'created_by', 'updated_at'),
+    ...because('the reason\'s label text for display; the movement books by the code', 'description'),
+  },
+  item: { ...because('the low-stock threshold an attention notice compares against after a move; nothing booked depends on it', 'reorder_point_qty') },
+  migration_map: { ...because('a provenance label of where a map came from (template or hand set); the commit applies the pinned entries', 'provenance') },
+  migration_plan: {
+    ...because(STAMP, 'closed_at', 'created_at', 'created_by'),
+    ...because(LIFECYCLE, 'status'),
+    ...because(RESULT, 'backup_ref'),
+    ...because('the plan\'s Testmandant, a sibling workspace a trial load writes into; a commit to this workspace does not read its rows', 'testmandant_workspace_id'),
+  },
+  migration_step: {
+    ...because(STAMP, 'committed_at', 'created_at', 'updated_at'),
+    ...because(LIFECYCLE, 'status'),
+    ...because(RESULT, 'last_check_id'),
+  },
+  po_amendment: {
+    ...because(STAMP, 'applied_at', 'applied_by', 'cancelled_at', 'cancelled_by', 'created_at', 'created_by', 'rejected_at', 'rejected_by', 'submitted_at', 'submitted_by'),
+    ...because(ROW_KEY, 'idempotency_key'),
+    ...because(LIFECYCLE, 'status'),
+    ...because(RESULT, 'to_version_id'),
+  },
+  po_amendment_line: {
+    ...because('the order line as it stood when the amendment was drafted, kept for the diff view; the apply writes the pinned after values onto the order line, which is pinned beside it', 'before_description', 'before_qty', 'before_unit_price_rappen'),
+  },
+  portal_grant: {
+    ...because(STAMP, 'created_at', 'created_by', 'last_resolved_at', 'revoked_at', 'sent_at', 'updated_at'),
+    ...because(ROW_KEY, 'minted_draft', 'token_hash'),
+    ...because(RESULT, 'local_artifact_json'),
+  },
+  provision: {
+    ...because(STAMP, 'created_at', 'created_by', 'discarded_at', 'posted_at', 'posted_by', 'reversed_at', 'reversed_by'),
+    ...because(ROW_KEY, 'idempotency_key', 'post_idempotency_key', 'reverse_idempotency_key'),
+    ...because(LIFECYCLE, 'discard_reason', 'reverse_reason', 'status'),
+    ...because(RESULT, 'entry_id', 'reversal_entry_id'),
+  },
+  purchase_order: {
+    ...because(STAMP, 'created_at', 'updated_at'),
+    ...because(LIFECYCLE, 'status'),
+    ...because(RESULT, 'number', 'sent_artifact_ref', 'revision'),
+    ...because('the CHF conversion of the pinned total at the pinned rate (H-FX), stored at creation', 'total_base_rappen'),
+    ...because('printed on the order itself (po_send pins them) and copied into its version snapshot; a receipt or a match books quantities and costs from the pinned lines', 'expected_on', 'note'),
+    ...because('the source a converted order came from (provenance link)', 'source_document_id', 'source_document_type'),
+  },
+  requisition: {
+    ...because(STAMP, 'approved_at', 'closed_at', 'created_at', 'created_by', 'submitted_at', 'updated_at'),
+    ...because(LIFECYCLE, 'status'),
+    ...because(RESULT, 'number'),
+  },
+  requisition_approval_task: { ...because(STAMP, 'created_at', 'decided_at') },
+  sales_order: {
+    ...because(STAMP, 'actor', 'created_at'),
+    ...because(RESULT, 'number'),
+    ...because(
+      'read with the order row (SELECT *); a delivery note carries the order\'s number and quantities, never a price, rate, date or note of the order',
+      'expected_on', 'fx_rate', 'notes', 'order_date', 'quote_id', 'supply_date',
+    ),
+  },
+  sign_request: {
+    ...because(STAMP, 'created_at', 'requested_by', 'sent_at', 'signed_at', 'updated_at', 'viewed_at'),
+    ...because(ROW_KEY, 'provider_ref'),
+    ...because(LIFECYCLE, 'declined_reason', 'expired_reason', 'status'),
+    ...because(RESULT, 'signed_file_id'),
+    ...because(
+      'the request envelope: the file hash, signer and message frozen from the pinned columns when the draft was created, plus an append-only event trail; the free event recorder only moves a request to a state in which send refuses (`document_sha256` is the file hash it froze, the file itself being pinned)',
+      'local_artifact_json', 'document_sha256',
+    ),
+  },
+  so_line: {
+    ...because(STAMP, 'created_at'),
+    ...because(
+      'read with the order lines (SELECT *); a delivery note books quantities by item, never a price, rate or date of the order line',
+      'backorder_qty', 'fx_rate', 'invoiced_qty', 'supply_date', 'unit_price_base_rappen',
+    ),
+  },
+  time_entry: {
+    ...because(STAMP, 'approved_at', 'approved_by', 'created_at', 'locked_at', 'submitted_at', 'updated_at'),
+    ...because(LIFECYCLE, 'status'),
+    ...because(RESULT, 'invoice_line_id'),
+    ...because('the rate the entry was priced at, read with the row; approve and lock flip the status and price nothing', 'cost_rate_minor', 'rate_card_id', 'rate_scope'),
+  },
+};
+
 /**
  * Per-verb reasons for a `pin` table an act reads live without pinning it: the read is not content
  * of the act (a name on a row, a status check that can only refuse).
@@ -1099,8 +1382,12 @@ export const LIVE_READ_WAIVERS: Readonly<Record<string, Readonly<Record<string, 
     tax_code: 'the items carry their resolved tax as stored values (P6); the code is read to check it exists',
     migration_plan: MIGRATION_STATE,
   },
-  env_copy: { portal_grant: ENV, workspace: ENV },
-  env_reset: { workspace: ENV },
+  // D167: the generation-11 data migration reads `tax_code` when the new data root's store opens.
+  env_copy: { portal_grant: ENV, workspace: ENV, tax_code: ENV },
+  env_reset: { workspace: ENV, tax_code: ENV },
+  // D167: a standard stores its MWST code by value and prices nothing; the code is read only to refuse
+  // one that does not exist or is archived, so a free change can only make the act refuse.
+  set_bank_standard: { tax_code: 'read only to check the code exists and is active; the standard stores the code by value and computes no tax' },
 };
 
 // --- the snapshot ----------------------------------------------------------------------------------
@@ -1153,8 +1440,24 @@ function canonical(value: unknown): string {
   return `{${entries.join(',')}}`;
 }
 
+/** Every `field` of the objects in a JSON array stored in `raw` (nothing when it is not one). */
+function jsonArrayField(raw: unknown, field: string): unknown[] {
+  if (typeof raw !== 'string') return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.map((e) => (e !== null && typeof e === 'object' ? (e as Row)[field] : undefined)) : [];
+  } catch {
+    return [];
+  }
+}
+
 function keysFrom(source: KeySource, rows: readonly Row[], children: Readonly<Record<string, readonly Row[]>>): string[] {
-  const values = 'row' in source ? rows.map((r) => r[source.row]) : (children[source.child] ?? []).map((r) => r[source.column]);
+  const values =
+    'row' in source
+      ? rows.map((r) => r[source.row])
+      : 'json' in source
+        ? rows.flatMap((r) => jsonArrayField(r[source.json], source.field))
+        : (children[source.child] ?? []).map((r) => r[source.column]);
   return [...new Set(values.filter((v): v is string => typeof v === 'string' && v.length > 0))].sort();
 }
 
@@ -1404,6 +1707,31 @@ export function pinnedTablesFor(verb: string): Set<string> {
     for (const d of spec.deps ?? []) addDep(d);
   }
   return tables;
+}
+
+/**
+ * The columns a verb's pin digests, per table (the record, its children and every dependency, with the
+ * key columns that select the rows). The column census in the suite holds every column an approved act
+ * reads of a pinned table to this set or to a named reason in `UNPINNED_COLUMNS`.
+ */
+export function pinnedColumnsFor(verb: string): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  const add = (table: string, columns: readonly string[]): void => {
+    const set = out.get(table) ?? new Set<string>();
+    for (const c of columns) set.add(c);
+    out.set(table, set);
+  };
+  const addDep = (dep: DepSpec): void => {
+    add(dep.table, [...dep.columns, dep.key]);
+    for (const d of dep.deps ?? []) addDep(d);
+  };
+  for (const { record } of PIN_FOR_VERB[verb] ?? []) {
+    const spec: RecordSpec = PIN_RECORDS[record];
+    add(spec.table, [...spec.columns, spec.idColumn ?? 'id']);
+    for (const c of spec.children ?? []) add(c.table, [...c.columns, c.fk, c.order]);
+    for (const d of spec.deps ?? []) addDep(d);
+  }
+  return out;
 }
 
 /** Every table any pin reads, with the columns, for the schema test. */

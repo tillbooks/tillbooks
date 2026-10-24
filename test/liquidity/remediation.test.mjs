@@ -1,5 +1,5 @@
 /**
- * A40 critic remediation (docs/critique/a40-payment-timing-critique.md on origin/critic/a40-payment-timing):
+ * A40 critic remediation (docs/critique/a40-payment-timing-critique.md):
  * the author's own proofs for the findings the critic's suite does not pin by itself. Each test names
  * the finding it proves. Synthetic books only.
  */

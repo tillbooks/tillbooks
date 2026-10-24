@@ -453,7 +453,8 @@
       "closeGap": "Close the gap",
       "confirmGap": "Nothing is missing, confirm",
       "confirmGapConfirm": "Yes, nothing is missing",
-      "confirmGapReason": "How do you know nothing is missing?"
+      "confirmGapReason": "How do you know nothing is missing?",
+      "closeGaps": "Close gaps"
     }
   }
 }

@@ -53,6 +53,7 @@ export type { MemberBinding } from './capability.js';
 
 export {
   CAPABILITY_FOR_ACTION,
+  MINIMUM_CAPABILITIES_FOR_DYNAMIC,
   assertActionInvokersAreGated,
   assertEveryActionIsGated,
   assertEveryEntityKindHasAReadDomain,

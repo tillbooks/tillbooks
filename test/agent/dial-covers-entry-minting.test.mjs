@@ -57,6 +57,11 @@ const NOT_GOVERNED = {
   // Reads. A read verb is never dial-governed; these two only reach a minting symbol on a branch a
   // read cannot take.
   preview_opening_import: 'read: importMigration with dryRun true returns before setOpeningBalances',
+  // D178 E3 (A39 §17.5): the bank preview of a settlement, contact or Spesen target runs the booking to
+  // read its verdict and lines, inside a transaction it always rolls back (`dryRunCapture` in
+  // bankBooking.ts, the D177-C1 dry run), so nothing it posts survives (test/banking/e3-preview.test.mjs
+  // asserts every row count, the memo and the audit chain unchanged).
+  compose_entry: 'read: composeBankLine runs a settlement booking inside a transaction it always rolls back (dryRunCapture)',
   // Pre-workspace: it mints the tenant it posts into, and that tenant is a demo that can never go
   // productive (G03). There is no dial to consult before the workspace exists.
   create_demo_workspace: 'depsAction: posts only into the demo tenant it mints, which can never go productive',
@@ -75,7 +80,7 @@ const NOT_GOVERNED = {
  */
 const INVOKER_VERBS = {
   approve_drafted_action: 'the human approval replay itself: it is what a Vorschlag waits for',
-  run_due_recurring: 'A12: replays schedules a human authored; each tick runs as the schedule author',
+  run_due_recurring: 'A12: replays schedules a human authored; each tick runs as the schedule author, and an agent seat\'s own call drafts under issue (D161)',
   deals_log_activity: 'C03: invokes the task/activity verbs only, none of which mints an entry',
   deals_to_quote: 'C03: invokes quotes_create only (src/core/deals/quoteSeam.ts), which mints nothing',
 };

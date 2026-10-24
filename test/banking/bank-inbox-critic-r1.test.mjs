@@ -32,6 +32,7 @@ import { postEntry } from '../../dist/core/ledger/index.js';
 import { frozenPmtInfId, frozenEndToEndId } from './frozen-refs-support.mjs';
 import { assertClaimInvariantHolds, trackClaimInvariant, world, camt, importLines, postedBill, issueInvoice, must, refused, balanceOf, rowCounts, MAIN_IBAN, SAVINGS_IBAN } from './bank-inbox-support.mjs';
 import { legClaimViolations } from './bank-inbox-invariants.mjs';
+import { chainedOpening, answerDistinct } from './e2-adapt.mjs';
 
 // Critic A39R2-4: the claim invariant is asserted after EVERY scenario of this suite.
 afterEach(assertClaimInvariantHolds);
@@ -80,7 +81,8 @@ test('A39-1 p1: each side claims ONLY its own leg; the other leg of the entry is
   assert.deepEqual(claims, [{ txn: out, account: '1020' }], 'the main line claims the 1020 leg only');
   must(bookBankLine(t.ctx, { bankTxnId: inn, target: { kind: 'existing_entry', entryId: booked.entryId }, idempotencyKey: 's' }));
   // A third line on the main account cannot take the 1020 leg the first one holds.
-  const { lines } = importLines(t, { statementId: 'MAIN-2', seqNb: '2', entries: [{ ref: 'DUP', amountMinor: 50000, cd: 'DBIT', date: '2026-07-25' }] });
+  // D178 point 19 (re-cut): the next statement opens where the last one closed, as a bank's do.
+  const { lines } = importLines(t, { statementId: 'MAIN-2', seqNb: '2', openingMinor: chainedOpening(t), entries: [{ ref: 'DUP', amountMinor: 50000, cd: 'DBIT', date: '2026-07-25' }] });
   refused(bookBankLine(t.ctx, { bankTxnId: lines.DUP, target: { kind: 'existing_entry', entryId: booked.entryId }, idempotencyKey: 'd' }), 'entry_already_linked');
 });
 
@@ -89,6 +91,9 @@ test('A39-1 rung (c): a transfer booked outside the rung-(a) window is proposed 
   // The main side left weeks earlier than the savings statement reports it arriving.
   const main = importLines(t, { statementId: 'MAIN-0', seqNb: '0', entries: [{ ref: 'EARLY', amountMinor: 50000, cd: 'DBIT', iban: SAVINGS_IBAN, date: '2026-07-05' }] });
   const early = importLines(t, { statementId: 'SAV-2', iban: SAVINGS_IBAN, seqNb: '2', entries: [{ ref: 'LATE', amountMinor: 50000, cd: 'CRDT', iban: MAIN_IBAN, date: '2026-07-30' }] }, { bankAccountId: lineOf(t, inn).bankAccountId, key: 'imp-late' });
+  // D178 point 19 (re-cut): MAIN-0 is an EARLIER statement over a month the books already cover, so its line
+  // waits for the person's answer; the person says "Kein Duplikat" before booking it.
+  answerDistinct(t, main.lines.EARLY);
   const booked = must(bookBankLine(t.ctx, { bankTxnId: main.lines.EARLY, target: { kind: 'accounts', legs: [{ accountId: t.acc('1000'), amountMinor: 50000 }] }, idempotencyKey: 'm' }));
   // Booking the savings side as a SECOND transfer is refused by the engine itself (critic A39R2-2).
   const again = refused(bookBankLine(t.ctx, { bankTxnId: inn, target: { kind: 'accounts', legs: [{ accountId: t.acc('1020'), amountMinor: 50000 }] }, idempotencyKey: 'other' }), 'transfer_already_booked');

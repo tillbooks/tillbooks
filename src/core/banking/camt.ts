@@ -56,8 +56,12 @@
 
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
+import { deriveFacts, emptyFacts } from './statementFacts.js';
+import type { BankCodeFact, ChargeRecordFact, ChargesFact, ExchangeFact, FactSource, LineFacts, MoneyFact } from './statementFacts.js';
 
 export type CamtMessageType = 'camt053' | 'camt054';
+/** D178 (A20 §11): every statement format the one insertion takes. */
+export type StatementMessageType = CamtMessageType | 'mt940' | 'csv';
 export type CamtCreditDebit = 'CRDT' | 'DBIT';
 export type CamtReferenceKind = 'qrr' | 'scor' | 'none';
 export type CamtClassification = 'incoming_credit' | 'outgoing_debit' | 'unclassified';
@@ -106,9 +110,30 @@ export interface ParsedCamtEntry {
   remittanceText: string | null;
   /** `TxDtls/Refs/EndToEndId`, the payer's own reference (SPS 2.3 p.76); `NOTPROVIDED` reads as null. */
   endToEndId: string | null;
+  /**
+   * D178 (A20 §11.1): what the statement says about the movement beyond its booked fact (the bank code,
+   * the separate texts, the references, the amount details, the exchange, the charges, the derived fee).
+   * Kept OUT of `entryKey` and `hashCamtStatement`, like the counterparty facts, so a statement imported
+   * before it still re-imports as `duplicate: true`. Optional only for a hand-built entry; every parser
+   * sets it.
+   */
+  facts?: LineFacts;
 }
 
-export type CamtSkipReason = 'pending' | 'unreadable_amount' | 'unsupported_status' | 'duplicate_entry';
+/**
+ * Why a parsed line was not imported. The first four are A20's; D178 (A20 §11) adds the cross-format
+ * rule's `cross_format_duplicate` and the CSV row reasons.
+ */
+export type CamtSkipReason =
+  | 'pending'
+  | 'unreadable_amount'
+  | 'unsupported_status'
+  | 'duplicate_entry'
+  | 'cross_format_duplicate'
+  | 'unreadable_date'
+  | 'zero_amount'
+  | 'currency_differs'
+  | 'not_a_movement';
 
 /** An `Ntry` the importer did NOT turn into a `bank_txn`, with an honest reason (A20-C6). */
 export interface SkippedCamtEntry {
@@ -116,6 +141,8 @@ export interface SkippedCamtEntry {
   reason: CamtSkipReason;
   /** Present only for `unsupported_status`: the `Ntry/Sts` code that was neither BOOK nor PDNG. */
   status?: string | null;
+  /** D178: a CSV row's number in the file (1-based, the header row counted), for the row reasons. */
+  row?: number;
 }
 
 export interface ParsedCamtStatement {
@@ -147,28 +174,56 @@ export interface ParsedCamtStatement {
   skipped: SkippedCamtEntry[];
 }
 
+/**
+ * D178 (A20 §11.4): a parsed statement of ANY format, the shape the one insertion takes. A camt statement
+ * is one; the MT940 and CSV parsers produce one with their own `messageType`.
+ */
+export interface ParsedBankStatement extends Omit<ParsedCamtStatement, 'messageType'> {
+  messageType: StatementMessageType;
+}
+
 // --- The extraction primitives -------------------------------------------------------------------
 
 /** Strip a namespace prefix from every tag (`<ns2:Stmt>` -> `<Stmt>`, `</ns2:Stmt>` -> `</Stmt>`). */
 function stripPrefixes(xml: string): string {
-  return xml.replace(/<(\/?)[A-Za-z][\w.-]*:/g, '<$1');
+  return xml.replace(/<(\/?)[A-Za-z][\w.-]{0,40}:/g, '<$1');
+}
+
+/**
+ * The opening tag (`<tag>` or `<tag attr="...">`), its attribute run bounded. D178 (bounded parsing): the
+ * body is found with `indexOf` of the closing tag, never with a lazy `[\s\S]*?` pattern, so a file full of
+ * opening tags that never close costs one scan instead of one scan per tag. The answer is the same: the
+ * first closing tag after the opening one, and when the first opening tag has no closing tag after it,
+ * no later one has either.
+ */
+function openTagRe(tag: string, flags: string): RegExp {
+  return new RegExp(`<${tag}(?:\\s[^>]{0,1000})?>`, flags);
 }
 
 /** The inner content of the FIRST `<tag ...>...</tag>` at this nesting level, or null if absent. */
 function firstTagBody(xml: string | null, tag: string): string | null {
   if (xml === null) return null;
-  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`);
-  const m = re.exec(xml);
-  return m === null ? null : (m[1] as string);
+  const m = openTagRe(tag, '').exec(xml);
+  if (m === null) return null;
+  const start = m.index + m[0].length;
+  const close = xml.indexOf(`</${tag}>`, start);
+  return close === -1 ? null : xml.slice(start, close);
 }
 
 /** Every `<tag ...>...</tag>` block's inner content at this nesting level, in document order. */
 function allTagBodies(xml: string | null, tag: string): string[] {
   if (xml === null) return [];
-  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'g');
+  const re = openTagRe(tag, 'g');
+  const closing = `</${tag}>`;
   const out: string[] = [];
   let m: RegExpExecArray | null;
-  while ((m = re.exec(xml)) !== null) out.push(m[1] as string);
+  while ((m = re.exec(xml)) !== null) {
+    const start = m.index + m[0].length;
+    const close = xml.indexOf(closing, start);
+    if (close === -1) break;
+    out.push(xml.slice(start, close));
+    re.lastIndex = close + closing.length;
+  }
   return out;
 }
 
@@ -203,7 +258,7 @@ function decimalToMinor(decimal: string): number | null {
 /** `<Tag Ccy="CHF">1234.55</Tag>` at THIS nesting level, or null when absent or malformed. */
 function extractAmount(xml: string | null, tag: string): { minor: number; currency: string } | null {
   if (xml === null) return null;
-  const re = new RegExp(`<${tag}\\s+Ccy="([A-Z]{3})"\\s*>\\s*([\\d.]+)\\s*<\\/${tag}>`);
+  const re = new RegExp(`<${tag}\\s{1,20}Ccy="([A-Z]{3})"\\s{0,20}>\\s{0,200}([\\d.]{1,40})\\s{0,200}<\\/${tag}>`);
   const m = re.exec(xml);
   if (m === null) return null;
   const minor = decimalToMinor(m[2] as string);
@@ -295,6 +350,138 @@ function txDtlsPmtInfId(txDtls: string | null): string | null {
   return tagText(firstTagBody(txDtls, 'Refs'), 'PmtInfId');
 }
 
+// --- D178 (A20 §11.1): the facts beyond the booked amount -------------------------------------------
+
+/** The entry WITHOUT its `NtryDtls` block: the C-level elements only (SPS 2.3 p.61-72). */
+function cLevelOf(ntry: string): string {
+  // String positions, never a `[\s\S]*` pattern: an entry without a closing tag costs one scan.
+  const open = ntry.search(/<NtryDtls[\s>]/);
+  if (open === -1) return ntry;
+  const close = ntry.lastIndexOf('</NtryDtls>');
+  if (close < open) return ntry.slice(0, open);
+  return ntry.slice(0, open) + ntry.slice(close + '</NtryDtls>'.length);
+}
+
+/** `BkTxCd` (SPS p.66 C-level, p.80 D-level): Domain/Family/Sub-Family and the proprietary code. */
+function readBankCode(scope: string | null): BankCodeFact | null {
+  const bk = firstTagBody(scope, 'BkTxCd');
+  if (bk === null) return null;
+  const domn = firstTagBody(bk, 'Domn');
+  const fmly = firstTagBody(domn, 'Fmly');
+  const prtry = firstTagBody(bk, 'Prtry');
+  const code: BankCodeFact = {
+    domain: tagText(domn, 'Cd'),
+    family: tagText(fmly, 'Cd'),
+    subFamily: tagText(fmly, 'SubFmlyCd'),
+    proprietary: tagText(prtry, 'Cd'),
+    issuer: tagText(prtry, 'Issr'),
+  };
+  return Object.values(code).every((v) => v === null) ? null : code;
+}
+
+/** `CcyXchg` (SPS p.68/78): the bank's rate VERBATIM, a decimal string, with its three currencies. */
+function readExchange(scope: string | null): ExchangeFact | null {
+  const x = firstTagBody(scope, 'CcyXchg');
+  if (x === null) return null;
+  const rate = tagText(x, 'XchgRate');
+  return {
+    sourceCurrency: tagText(x, 'SrcCcy'),
+    targetCurrency: tagText(x, 'TrgtCcy'),
+    unitCurrency: tagText(x, 'UnitCcy'),
+    rate: rate !== null && /^\d+(\.\d+)?$/.test(rate) ? rate : null,
+    effectiveRate: null,
+    origin: 'structured',
+  };
+}
+
+/** `AmtDtls` (SPS §3.3, p.18-19): the instructed amount, the transaction amount, the counter value. */
+function readAmountDetails(scope: string | null): {
+  instructed: MoneyFact | null;
+  transactionAmount: MoneyFact | null;
+  counterValue: MoneyFact | null;
+  exchange: ExchangeFact | null;
+} {
+  const ad = firstTagBody(scope, 'AmtDtls');
+  if (ad === null) return { instructed: null, transactionAmount: null, counterValue: null, exchange: null };
+  const instd = firstTagBody(ad, 'InstdAmt');
+  const tx = firstTagBody(ad, 'TxAmt');
+  const cv = firstTagBody(ad, 'CntrValAmt');
+  const money = (body: string | null): MoneyFact | null => {
+    const a = extractAmount(body, 'Amt');
+    return a === null ? null : { amountMinor: a.minor, currency: a.currency };
+  };
+  return {
+    instructed: money(instd),
+    transactionAmount: money(tx),
+    counterValue: money(cv),
+    exchange: readExchange(instd) ?? readExchange(tx) ?? readExchange(cv),
+  };
+}
+
+/** `Chrgs` (SPS p.69-71 C-level, p.80-81 D-level): the total and every record; an older shape with
+ *  the amount directly under `Chrgs` reads as one record. */
+function readCharges(scope: string | null): ChargesFact | null {
+  const ch = firstTagBody(scope, 'Chrgs');
+  if (ch === null) return null;
+  const total = extractAmount(ch, 'TtlChrgsAndTaxAmt');
+  const bodies = allTagBodies(ch, 'Rcrd');
+  const records: ChargeRecordFact[] = [];
+  for (const r of bodies.length > 0 ? bodies : [ch]) {
+    const amt = extractAmount(r, 'Amt');
+    if (amt === null) continue;
+    const cd = tagText(r, 'CdtDbtInd');
+    const incl = tagText(r, 'ChrgInclInd');
+    const tp = firstTagBody(r, 'Tp');
+    records.push({
+      amountMinor: amt.minor,
+      currency: amt.currency,
+      creditDebit: cd === 'CRDT' || cd === 'DBIT' ? cd : null,
+      included: incl === 'true' ? true : incl === 'false' ? false : null,
+      type: tagText(tp, 'Cd') ?? tagText(firstTagBody(tp, 'Prtry'), 'Id'),
+    });
+  }
+  if (total === null && records.length === 0) return null;
+  return { totalMinor: total?.minor ?? null, currency: total?.currency ?? records[0]?.currency ?? null, records, origin: 'structured' };
+}
+
+/**
+ * The facts of one parsed row (A20 §11.1). `txDtls` is the row's own detail (null for an entry without
+ * one, or a batch kept as one line); `cLevelToo` lets the C-level amount details, charges and
+ * `AcctSvcrRef` speak for the row, which is right only when the row IS the whole booking (an entry with
+ * at most one detail, or a batch kept as one line), never for one line of a fanned-out batch.
+ */
+function factsOfRow(
+  ntry: string,
+  txDtls: string | null,
+  cLevelToo: boolean,
+  source: FactSource,
+  line: { amountMinor: number; currency: string; creditDebit: CamtCreditDebit },
+): LineFacts {
+  const cLevel = cLevelOf(ntry);
+  const facts = emptyFacts(source);
+  facts.bankCode = readBankCode(txDtls) ?? readBankCode(cLevel);
+  const ustrd = txDtls === null ? [] : allTagBodies(firstTagBody(txDtls, 'RmtInf'), 'Ustrd').map((u) => u.trim()).filter((u) => u.length > 0);
+  facts.bankText = ustrd.length > 0 ? ustrd.join(' ') : null;
+  facts.additionalInfo = txDtls === null ? null : tagText(txDtls, 'AddtlTxInf');
+  facts.entryInfo = tagText(cLevel, 'AddtlNtryInf');
+  const refs = firstTagBody(txDtls, 'Refs');
+  facts.refs = {
+    endToEndId: parseEndToEndId(txDtls),
+    accountServicerRef: tagText(refs, 'AcctSvcrRef') ?? (cLevelToo ? entryLevelAcctSvcrRef(ntry) : null),
+    instructionId: tagText(refs, 'InstrId'),
+    transactionId: tagText(refs, 'TxId'),
+  };
+  const d = readAmountDetails(txDtls);
+  const hasD = d.instructed !== null || d.transactionAmount !== null || d.counterValue !== null || d.exchange !== null;
+  const amounts = hasD || !cLevelToo ? d : readAmountDetails(cLevel);
+  facts.instructed = amounts.instructed;
+  facts.transactionAmount = amounts.transactionAmount;
+  facts.counterValue = amounts.counterValue;
+  facts.exchange = amounts.exchange;
+  facts.charges = readCharges(txDtls) ?? (cLevelToo ? readCharges(cLevel) : null);
+  return deriveFacts(facts, line);
+}
+
 // --- D81's identity ladder --------------------------------------------------------------------------
 
 /** A stable, deterministic string over the identifying fields (D81's third rung): never a real hash
@@ -351,7 +538,7 @@ function entryStatusCode(ntry: string): string | null {
   return tagText(sts, 'Cd') ?? tagText(ntry, 'Sts');
 }
 
-function parseEntry(ntry: string): EntryParseResult {
+function parseEntry(ntry: string, source: FactSource): EntryParseResult {
   const entryRef = tagText(ntry, 'NtryRef');
   const status = entryStatusCode(ntry);
   // A camt.053 entry is BOOK-only by the SPS profile (p.61); camt.054 may carry PDNG, and a pending
@@ -439,6 +626,7 @@ function parseEntry(ntry: string): EntryParseResult {
           endToEndId: parseEndToEndId(txDtls),
           ...shared,
           txPmtInfId: txDtlsPmtInfId(txDtls),
+          facts: factsOfRow(ntry, txDtls, true, source, { amountMinor: amt.minor, currency: amt.currency, creditDebit: shared.creditDebit }),
         },
       ],
     };
@@ -509,6 +697,7 @@ function parseEntry(ntry: string): EntryParseResult {
       endToEndId: parseEndToEndId(txDtls),
       ...shared,
       txPmtInfId: txDtlsPmtInfId(txDtls),
+      facts: factsOfRow(ntry, txDtls, false, source, { amountMinor: txAmt.minor, currency: txAmt.currency, creditDebit: shared.creditDebit }),
     });
   }
   return { kind: 'ok', entries: lines };
@@ -654,7 +843,7 @@ export function parseCamt(xml: unknown): ParseCamtResult {
   const entries: ParsedCamtEntry[] = [];
   const skipped: SkippedCamtEntry[] = [];
   for (const ntry of allTagBodies(stmt, 'Ntry')) {
-    const parsed = parseEntry(ntry);
+    const parsed = parseEntry(ntry, messageType);
     if (parsed.kind === 'error') {
       return err('schema_invalid', { reason: parsed.reason });
     }
@@ -690,7 +879,7 @@ export function parseCamt(xml: unknown): ParseCamtResult {
  * (A20-C2: `statement_amended`, naming what changed). Not a cryptographic hash, a delimited join
  * over the identifying facts, in the same spirit as `entryIdentityKey` above.
  */
-export function hashCamtStatement(stmt: ParsedCamtStatement): string {
+export function hashCamtStatement(stmt: ParsedBankStatement): string {
   const parts = [
     stmt.messageType,
     stmt.fromDate,
@@ -739,10 +928,28 @@ export function splitCamt053(xml: unknown): Result<{ parts: string[]; split: boo
   }
   // A `Stmt` element with or without a namespace prefix; `StmtPgntn` and the like are not matched. A
   // `Stmt` never contains another `Stmt`, so the lazy match ends at its own close tag.
-  const re = /<((?:[A-Za-z_][\w.-]*:)?)Stmt(?=[\s>])[^>]*>[\s\S]*?<\/\1Stmt>/g;
+  // D178 (bounded parsing): the opening tag by a bounded pattern, its close by `indexOf`, never a lazy
+  // `[\s\S]*?` with a backreference (one scan per unclosed `<Stmt>` would make a crafted file quadratic).
+  const re = /<((?:[A-Za-z_][\w.-]{0,40}:)?)Stmt(?=[\s>])[^>]{0,1000}>/g;
   const blocks: { start: number; end: number; text: string }[] = [];
   let m: RegExpExecArray | null;
-  while ((m = re.exec(xml)) !== null) blocks.push({ start: m.index, end: m.index + m[0].length, text: m[0] });
+  // A prefix whose closing tag is absent from the rest of the file is never searched again; a file
+  // trying many such prefixes is not a camt this splitter reads further.
+  const unclosed = new Set<string>();
+  while ((m = re.exec(xml)) !== null) {
+    const prefix = m[1] ?? '';
+    if (unclosed.has(prefix)) continue;
+    const closing = `</${prefix}Stmt>`;
+    const close = xml.indexOf(closing, m.index + m[0].length);
+    if (close === -1) {
+      unclosed.add(prefix);
+      if (unclosed.size > 8) break;
+      continue;
+    }
+    const end = close + closing.length;
+    blocks.push({ start: m.index, end, text: xml.slice(m.index, end) });
+    re.lastIndex = end;
+  }
   const first = blocks[0];
   const last = blocks[blocks.length - 1];
   if (blocks.length <= 1 || first === undefined || last === undefined) return ok({ parts: [xml], split: false });

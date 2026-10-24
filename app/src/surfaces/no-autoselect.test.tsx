@@ -219,17 +219,26 @@ const CASES: Case[] = [
     route: '/attention',
     surface: () => <Attention />,
     canned: {
-      attention_summary: ok({
+      // D178: Pendenzen reads the whole list in sections (`attention_list { grouping }`).
+      attention_list: ok({
         computedAt: '2026-08-17T14:32:00.000Z',
+        grouping: 'by_area',
         visibleQueues: 1,
         total: 2,
         incomplete: false,
-        queues: [{ queueId: 'dunning_run', area: 'sales', count: 2, topUrgency: 'open' }],
-        top: [
-          PENDENZ('dunning_run', 'run_1', 'attention.item.dunningRun.title'),
-          { ...PENDENZ('dunning_run', 'run_2', 'attention.item.dunningRun.title'), urgency: 'due' },
-        ],
         failed: [],
+        approvalBatchMode: 'tick',
+        sections: [
+          {
+            key: 'sales',
+            count: 2,
+            queues: ['dunning_run'],
+            items: [
+              PENDENZ('dunning_run', 'run_1', 'attention.item.dunningRun.title'),
+              { ...PENDENZ('dunning_run', 'run_2', 'attention.item.dunningRun.title'), urgency: 'due' },
+            ],
+          },
+        ],
       }),
     },
     ready: 'fällig',
@@ -356,7 +365,8 @@ describe('§H-TENANT: nothing opened in one workspace survives a switch to the n
         await waitFor(() => expect(current()?.textContent ?? '').toContain(c.ready));
       } else {
         // The hub: the person focuses a row, which makes it current.
-        const rows = [...container.querySelectorAll<HTMLButtonElement>('.att-row-open')];
+        // D178, N4 M4: a row's one button is its way in (no title is a button).
+        const rows = [...container.querySelectorAll<HTMLButtonElement>('.att-row-action button')];
         act(() => rows[1].focus());
         await waitFor(() => expect(current()).not.toBeNull());
       }

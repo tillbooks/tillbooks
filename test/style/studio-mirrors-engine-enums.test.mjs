@@ -259,6 +259,21 @@ const MIRRORS = [
     studio: { file: 'app/src/surfaces/Bank/model.ts', symbol: 'BANK_LINE_REMAINDER_MODES' },
     note: 'A39 / A2. The settlement consequence offers leave_open and write_off for a short payment and names on_account for a surplus.',
   },
+  {
+    engine: { module: 'dist/core/banking/bankStandards.js', export: 'BANK_RULE_SCOPES' },
+    studio: { file: 'app/src/surfaces/Bank/model.ts', symbol: 'BANK_RULE_SCOPES' },
+    note: 'A39 §15 (D176). The rules sheet groups by scope ("Bankzeilen", "Vorlagen"); a scope the Studio lacks would be listed nowhere.',
+  },
+  {
+    engine: { module: 'dist/core/banking/bankStandards.js', export: 'BANK_RULE_OUTCOMES' },
+    studio: { file: 'app/src/surfaces/Bank/model.ts', symbol: 'BANK_RULE_OUTCOMES' },
+    note: 'A39 §15 (D176). The rule form\'s one segmented control offers exactly "Buchen" and "Nicht buchen".',
+  },
+  {
+    engine: { module: 'dist/core/banking/bankStandards.js', export: 'RECIPE_SIDES' },
+    studio: { file: 'app/src/surfaces/Bank/model.ts', symbol: 'RECIPE_SIDES' },
+    note: 'A39 §15 (D176). A Vorlage\'s leg offers Soll and Haben; the engine refuses any other side with invalid_recipe.',
+  },
 ];
 
 /**

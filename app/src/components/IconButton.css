@@ -1,0 +1,11 @@
+/* IconButton (Ruhig 3, D154). The control itself is `.btn.btn--ghost.btn--icon` from global.css, so
+   its target, focus ring and hover are the ones every icon button already has. This file only sets
+   the two lines of its tooltip: the vocabulary name, then what it applies to. */
+.tooltip-name {
+  display: block;
+  font-weight: 600;
+}
+
+.tooltip-context {
+  display: block;
+}

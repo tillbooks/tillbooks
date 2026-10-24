@@ -9,7 +9,9 @@
 import { formatDate, formatMoney } from '../../i18n';
 import type {
   BankAccountOption,
+  BatchOption,
   BankInboxLine,
+  BankStandard,
   BillOption,
   ChartAccount,
   DraftTarget,
@@ -17,7 +19,8 @@ import type {
   LineVorschlag,
   TaxCode,
 } from './model';
-import { formatIban, formatReference, isCredit, lineDate, taxCodeOnChoosing, vatCanApply, vatNeverApplies } from './model';
+import { formatIban, isCredit, lineDate, proposalRuleId, ruleAsksOf, ruleComputedOf, severalRuleIds, taxCodeOnChoosing, vatCanApply, vatNeverApplies } from './model';
+import { routeInWords, ruleName } from './rules';
 
 type T = (key: string, params?: Record<string, string | number>) => string;
 
@@ -37,6 +40,10 @@ export interface Lookups {
   vorschlaege: ReadonlyMap<string, LineVorschlag[]>;
   /** The stored dial level per capability, when the actor may read the dial. */
   dial: Readonly<Record<string, string>> | null;
+  /** D167: the live standards per counterparty and direction (`list_bank_standards`), by id. */
+  standardById: ReadonlyMap<string, BankStandard>;
+  /** D177: the generated payment runs a money-out line can settle (the picker's "Zahlungsläufe"). */
+  batches: BatchOption[];
 }
 
 export function buildLookups(input: {
@@ -47,11 +54,16 @@ export function buildLookups(input: {
   bankAccounts: BankAccountOption[];
   vorschlaege: LineVorschlag[];
   dial: Readonly<Record<string, string>> | null;
+  standards?: BankStandard[];
+  batches?: BatchOption[];
 }): Lookups {
   const byLine = new Map<string, LineVorschlag[]>();
   for (const v of input.vorschlaege) byLine.set(v.bankTxnId, [...(byLine.get(v.bankTxnId) ?? []), v]);
+  const { standards = [], batches = [], ...rest } = input;
   return {
-    ...input,
+    ...rest,
+    batches,
+    standardById: new Map(standards.map((x) => [x.id, x])),
     chartById: new Map(input.chart.map((a) => [a.id, a])),
     chartByNumber: new Map(input.chart.map((a) => [a.number, a])),
     taxByCode: new Map(input.taxCodes.map((c) => [c.code, c])),
@@ -98,7 +110,7 @@ export function taxCodeFor(l: Lookups, accountId: string, held: string): string 
   return taxCodeOnChoosing(l.chartById.get(accountId), held, bankLedgersOf(l));
 }
 
-/** A posted entry as the strip says it: one Buchungssatz, and the whole of it when the line is cut. */
+/** A posted entry as the Details panel says it: one Buchungssatz, and the whole of it when the line is cut. */
 export interface Satz {
   short: string;
   full: string;
@@ -116,13 +128,39 @@ export function satzOf(t: T, l: Lookups, lines: readonly { account: string; debi
   const debit = lines.filter((x) => x.debit > 0).map((x) => part(x, x.debit));
   const credit = lines.filter((x) => x.credit > 0).map((x) => part(x, x.credit));
   const side = (parts: string[]) =>
-    parts.length <= perSide ? parts.join(' · ') : `${parts.slice(0, perSide).join(' · ')} ${t('bankInbox.strip.satzMore', { count: parts.length - perSide })}`;
+    parts.length <= perSide ? parts.join(' · ') : `${parts.slice(0, perSide).join(' · ')} ${t('bankInbox.details.satzMore', { count: parts.length - perSide })}`;
   const truncated = debit.length > perSide || credit.length > perSide;
   return {
-    short: t('bankInbox.strip.satz', { debit: side(debit), credit: side(credit) }),
-    full: t('bankInbox.strip.satz', { debit: debit.join(' · '), credit: credit.join(' · ') }),
+    short: t('bankInbox.details.satz', { debit: side(debit), credit: side(credit) }),
+    full: t('bankInbox.details.satz', { debit: debit.join(' · '), credit: credit.join(' · ') }),
     truncated,
   };
+}
+
+/**
+ * D167 polish 10: what a booked line went to, in words for its one row: "auf 6570 Informatik, Software und
+ * Lizenzen · Vorsteuer 8.1 %" (the entry's main leg and its code), or "aufgeteilt auf 3 Konten". The main
+ * legs are the entry's lines off the Bankkonto ledgers and off the MWST accounts. Null when the entry has
+ * none (the row then keeps its kind in words).
+ */
+export function bookedToPhrase(
+  t: T,
+  l: Lookups,
+  lines: readonly { account: string; taxCode?: string | null }[],
+  vatName: (code: string) => string | null,
+): string | null {
+  const ledgers = bankLedgersOf(l);
+  const main = lines.filter((x) => {
+    const a = l.chartById.get(x.account);
+    return a === undefined ? !ledgers.has(x.account) : !vatNeverApplies(a, ledgers);
+  });
+  const accounts = [...new Set(main.map((x) => x.account))];
+  if (accounts.length === 0) return null;
+  if (accounts.length > 1) return plural(t, 'bankInbox.decided.bookedSplit', accounts.length);
+  const label = accountLabel(l, accounts[0] as string) || t('bankInbox.legs.unknownAccount');
+  const code = main.find((x) => typeof x.taxCode === 'string' && x.taxCode !== '')?.taxCode ?? '';
+  const vat = code === '' ? null : vatName(code);
+  return vat === null ? t('bankInbox.decided.bookedTo', { account: label }) : t('bankInbox.decided.bookedToVat', { account: label, vat });
 }
 
 /** "6510 Telefon und Internet", or '' for an account the chart does not hold. */
@@ -137,9 +175,14 @@ export function accountLabel(l: Lookups, accountId: string): string {
  * else the bank's entry reference.
  */
 export function partyOf(t: T, line: BankInboxLine): string {
-  if (line.counterparty.name !== null) return line.counterparty.name;
-  if (line.counterparty.iban !== null) return formatIban(line.counterparty.iban);
-  return line.remittance.text ?? line.entryRef ?? t('bankInbox.row.unnamed');
+  // B5 judge: a blank name or text is no name (rows read "H.." beside nothing); the bank's own description
+  // of the line (D178 facts) is the next best words before the entry reference.
+  const words = (v: string | null | undefined): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+  const name = words(line.counterparty.name);
+  if (name !== null) return name;
+  if (words(line.counterparty.iban) !== null) return formatIban(line.counterparty.iban as string);
+  const facts = (line as BankInboxLine & { facts?: { bankText?: string | null } | null }).facts;
+  return words(line.remittance.text) ?? words(facts?.bankText) ?? words(line.entryRef) ?? t('bankInbox.row.unnamed');
 }
 
 /**
@@ -150,26 +193,6 @@ export function partyOf(t: T, line: BankInboxLine): string {
 export function detailOf(line: BankInboxLine): string {
   if (line.counterparty.name === null && line.counterparty.iban === null) return '';
   return line.remittance.text ?? line.remittance.referenceValue ?? '';
-}
-
-/**
- * What identifies the line beyond its row, for the strip's dim tail: the payment reference and the
- * counterparty IBAN, formatted as printed, each only when the row does not already show it.
- */
-export function identityTail(t: T, line: BankInboxLine): { label: string; full: string }[] {
-  const shown = `${partyOf(t, line)} ${detailOf(line)}`.replace(/\s+/g, '').toUpperCase();
-  const out: { label: string; full: string }[] = [];
-  const ref = line.remittance.referenceValue;
-  if (ref !== null && !shown.includes(ref.replace(/\s+/g, '').toUpperCase())) {
-    const value = formatReference(line.remittance.referenceKind, ref);
-    out.push({ label: t('bankInbox.strip.reference', { value }), full: value });
-  }
-  const iban = line.counterparty.iban;
-  if (iban !== null && !shown.includes(iban.replace(/\s+/g, '').toUpperCase())) {
-    const value = formatIban(iban);
-    out.push({ label: t('bankInbox.strip.iban', { value }), full: value });
-  }
-  return out;
 }
 
 /** A count-dependent key: `<key>.one` for one, `<key>.other` for every other count. */
@@ -189,6 +212,12 @@ const sp = (v: unknown): string | null => (typeof v === 'string' && v.length > 0
 export function targetParts(t: T, l: Lookups, line: BankInboxLine, target: DraftTarget | null): TargetParts {
   if (target === null) return { code: '', name: '' };
   switch (target.kind) {
+    case 'rule':
+      // D175: a rule reads by its name; its legs are in the Details' preview.
+      return { code: '', name: ruleName(t, l.standardById.get(target.standardId)) };
+    case 'ignore':
+      // D176: "Nicht buchen: Anderswo gebucht".
+      return { code: '', name: t('bankInbox.target.ignore', { reason: t(`bankInbox.ignore.reason.${target.reason}.label`) }) };
     case 'accounts': {
       if (target.legs.length > 1) return { code: '', name: t('bankInbox.target.split', { count: target.legs.length }) };
       const a = l.chartById.get(target.legs[0]?.accountId ?? '');
@@ -207,6 +236,19 @@ export function targetParts(t: T, l: Lookups, line: BankInboxLine, target: Draft
     }
     case 'payment_batch':
       return { code: t('bankInbox.target.batchCode'), name: t('bankInbox.target.batch') };
+    case 'allocations': {
+      // D178 E3: "2 Rechnungen" and the contact they belong to.
+      const first = target.allocations[0]?.documentId ?? '';
+      const party = isCredit(line) ? l.invoiceById.get(first)?.contactName : l.billById.get(first)?.vendorName;
+      return {
+        code: plural(t, isCredit(line) ? 'bankInbox.target.invoices' : 'bankInbox.target.bills', target.allocations.length),
+        name: party ?? t(isCredit(line) ? 'bankInbox.target.invoiceName' : 'bankInbox.target.billName'),
+      };
+    }
+    case 'contact':
+      return { code: t('bankInbox.target.contactCode'), name: target.contactName ?? t('bankInbox.target.contact') };
+    case 'expense_claims':
+      return { code: t('bankInbox.target.claimsCode'), name: plural(t, 'bankInbox.target.claims', target.claimIds.length) };
     case 'existing_entry': {
       const params = p(line);
       const same = params.entryId === target.entryId;
@@ -253,7 +295,9 @@ export function reasonSentence(t: T, l: Lookups, line: BankInboxLine): string {
   const date = (v: unknown) => (typeof v === 'string' && v.length >= 10 ? formatDate(v) : '');
   const account = (v: unknown) => (typeof v === 'string' ? accountLabel(l, v) : '');
   const vat = (v: unknown) => (typeof v === 'string' && v.length > 0 ? t('bankInbox.reason.withVat', { vat: taxPhrase(t, l, v) }) : t('bankInbox.reason.withoutVat'));
-  switch (proposal.reasonCode) {
+  // A string, not the engine's union: the D167 codes (`standard`, `journal_history`) land with its branch.
+  const code: string = proposal.reasonCode;
+  switch (code) {
     case 'existing_entry_reference':
       return t('bankInbox.reason.existing_entry_reference', { date: date(params.entryDate), description: sp(params.description) ?? t('bankInbox.target.entry') });
     case 'existing_entry_amount_date': {
@@ -288,7 +332,7 @@ export function reasonSentence(t: T, l: Lookups, line: BankInboxLine): string {
     case 'vendor_bill_reference':
     case 'vendor_bill_amount': {
       const bill = l.billById.get(sp(params.documentId) ?? '');
-      return t(`bankInbox.reason.${proposal.reasonCode}`, { number: bill?.reference ?? t('bankInbox.target.bill'), vendor: bill?.vendorName ?? '' });
+      return t(`bankInbox.reason.${code}`, { number: bill?.reference ?? t('bankInbox.target.bill'), vendor: bill?.vendorName ?? '' });
     }
     case 'own_account_transfer': {
       const other = l.bankById.get(sp(params.otherBankAccountId) ?? '');
@@ -307,6 +351,47 @@ export function reasonSentence(t: T, l: Lookups, line: BankInboxLine): string {
     }
     case 'history':
       return t('bankInbox.reason.history', { date: date(params.lastDate), account: account(params.accountId), vat: vat(params.taxCode), count: Number(params.count ?? 1) });
+    case 'standard': {
+      // D167: the person's own standard. On a line outside the book's base currency the engine drops the
+      // standard's MWST code (`book_bank_line` refuses VAT there) and reads `check`, so the sentence says
+      // that and why (critic D167-8): no MWST can be booked on a line in a foreign currency.
+      if (params.vatDropped === true) {
+        return t('bankInbox.reason.standardVatDropped', { account: account(params.accountId), vat: taxPhrase(t, l, typeof params.taxCode === 'string' ? params.taxCode : ''), currency });
+      }
+      // D175: a rule that splits or routes says its name and its route, never one account it is not.
+      const rule = l.standardById.get(proposalRuleId(line) ?? '');
+      if (rule !== undefined && (rule.legs.length > 1 || rule.viaAccountId !== null)) {
+        return t('bankInbox.reason.rule', { name: ruleName(t, rule), route: routeInWords(t, l, rule) });
+      }
+      return t('bankInbox.reason.standard', { account: account(params.accountId), vat: vat(params.taxCode) });
+    }
+    case 'rule_needs_amount': {
+      // D175: one rule fits and asks for what the line cannot say ("Bruttoumsatz"); the rest is the engine's.
+      const rule = l.standardById.get(proposalRuleId(line) ?? '');
+      const asks = ruleAsksOf(line)
+        .map((a) => (a.label !== '' ? a.label : t('bankInbox.rules.askFallback')))
+        .join(', ');
+      return t('bankInbox.reason.rule_needs_amount', { name: ruleName(t, rule), asks });
+    }
+    case 'rule_computed': {
+      // D177: the rule's computed legs, by label and figure ("Bruttoumsatz 90.80").
+      const rule = l.standardById.get(proposalRuleId(line) ?? '');
+      const asks = ruleComputedOf(line)
+        .map((c) => `${c.label !== '' ? c.label : t('bankInbox.rules.askFallback')} ${formatMoney(c.amountMinor, currency)}`)
+        .join(', ');
+      return t('bankInbox.reason.rule_computed', { name: ruleName(t, rule), asks });
+    }
+    case 'several_rules':
+      // D175 point 4: two rules fit, or the counterparty has rules and no rule's text decides.
+      return t('bankInbox.reason.several_rules', { count: Math.max(severalRuleIds(line).length, 2) });
+    case 'rule_ignore': {
+      // D176: the person's "Nicht buchen" rule: its name and its reason; the line never reaches the ledger.
+      const rule = l.standardById.get(proposalRuleId(line) ?? '');
+      const reason = typeof params.reason === 'string' ? t(`bankInbox.ignore.reason.${params.reason}.label`) : '';
+      return t('bankInbox.reason.rule_ignore', { name: ruleName(t, rule), reason });
+    }
+    case 'journal_history':
+      return t('bankInbox.reason.journal_history', { date: date(params.date), account: account(params.accountId), vat: vat(params.taxCode) });
     case 'model_suggested':
       // D144: a model's choice among code-built candidates, recorded before it was shown; always `check`.
       return t('bankInbox.reason.model_suggested', {
@@ -322,32 +407,7 @@ export function reasonSentence(t: T, l: Lookups, line: BankInboxLine): string {
 }
 
 /**
- * The reason as the context strip says it (B2: "one line where it fits"). The row already shows the
- * account, the VAT code and the amount, so the common reasons say only what the row cannot: WHY. The
- * rare ones keep their full sentence, because their words are the way out (a run that differs, a
- * transfer booked in another month).
- */
-export function stripReasonSentence(t: T, l: Lookups, line: BankInboxLine): string {
-  const proposal = line.proposal;
-  if (proposal === null) return '';
-  const params = proposal.reasonParams as Record<string, unknown>;
-  const date = (v: unknown) => (typeof v === 'string' && v.length >= 10 ? formatDate(v) : '');
-  switch (proposal.reasonCode) {
-    case 'history':
-      return t('bankInbox.strip.reason.history', { date: date(params.lastDate), count: Number(params.count ?? 1) });
-    case 'qr_reference_exact':
-      return t('bankInbox.strip.reason.qr_reference_exact', { number: sp(params.documentNumber) ?? t('bankInbox.target.invoice') });
-    case 'existing_entry_reference':
-      return t('bankInbox.strip.reason.existing_entry_reference', { date: date(params.entryDate) });
-    case 'model_suggested':
-      return modelStripSentence(t, line);
-    default:
-      return reasonSentence(t, l, line);
-  }
-}
-
-/**
- * The model rung's reason in ONE sentence for the context strip (B2), carrying every word D144 asks for:
+ * The model rung's reason in ONE sentence (B2; since D177 the Woher line's tooltip), carrying every word D144 asks for:
  * a model, on this device, its probability, its MEASURED calibration error (ECE), and that nobody has
  * checked it. A decision recorded without a measured error says so rather than inventing one.
  */
@@ -356,8 +416,8 @@ export function modelStripSentence(t: T, line: BankInboxLine): string {
   const model = typeof params.modelRef === 'string' ? params.modelRef : '';
   const percent = modelPercent(params.probability);
   const ece = params.ece;
-  if (typeof ece !== 'number' || !Number.isFinite(ece)) return t('bankInbox.strip.modelNoEce', { model, percent });
-  return t('bankInbox.strip.model', { model, percent, ece: String(Math.round(ece * 1000) / 10) });
+  if (typeof ece !== 'number' || !Number.isFinite(ece)) return t('bankInbox.details.modelNoEce', { model, percent });
+  return t('bankInbox.details.model', { model, percent, ece: String(Math.round(ece * 1000) / 10) });
 }
 
 /** A model probability as a whole percent ("82"), never rounded up to a certainty it did not state. */

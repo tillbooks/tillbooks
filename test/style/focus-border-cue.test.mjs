@@ -58,6 +58,9 @@ const FOCUSABLE_CONTROLS = [
   'rail-env-pill',
   'rail-link',
   'rail-treeitem',
+  // D178 (N6): the Favoriten and Menü section headers, and the menu editor's group/parent disclosure.
+  'rail-section-toggle',
+  'rail-edit-expand',
   'rail-fav-btn',
   'rail-fav-input',
   'rail-pin',
@@ -83,8 +86,14 @@ const EXEMPT = {
     'the pointer-only drag grip, aria-hidden and out of the tab order; the keyboard reorder is the move buttons (WCAG 2.5.7)',
   'rail-resizer':
     'the 8px window splitter; a border would draw a brass box down the whole viewport, so its edge cue is the grip turning brass beside the halo',
+  'rail-edit-grip':
+    'the menu editor\'s pointer-only drag grip (D178), aria-hidden and out of the tab order; the keyboard path is the row\'s Mehr menu and Alt+Arrow (WCAG 2.5.7)',
+  'rail-edit-check':
+    'a native 16px visibility checkbox in the menu editor (D178); the platform control is the focus stop and draws its own ring, like the checkbox inside check-cell',
   'check-cell':
     'the label around a native checkbox (K-14); the checkbox inside is the focus stop and carries the ring',
+  'rail-edit-checkwrap':
+    'the label around the menu editor\'s visibility checkbox (N6 judge round 1, the 44px touch target); the checkbox inside is the focus stop and carries the ring, like check-cell',
 };
 
 /**

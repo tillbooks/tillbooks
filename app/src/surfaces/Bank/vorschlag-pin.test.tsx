@@ -1,8 +1,8 @@
 /**
  * WHAT YOU APPROVED IS WHAT RUNS (critic N1) on a bank line. The agent's Vorschlag on the line carries
- * the same three things the Vorschlag card does: the frozen figures when its verb pins a record, the
- * "Freigeben" withheld when the record changed since the proposal (the sentence says why, rejecting
- * stays), and a `vorschlag_stale` refusal explained in words, with a reload, instead of the fallback.
+ * the frozen figures when its verb pins a record, says when the record changed since the proposal, and a
+ * `vorschlag_stale` refusal is explained in words, with a reload, instead of the fallback. D167: the strip
+ * holds no second Buchen and no "Freigeben": the row's Buchen approves; "Ablehnen" stays here.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -30,15 +30,17 @@ const base: LineVorschlag = {
 function strip(vorschlag: LineVorschlag) {
   return render(
     <I18nProvider>
-      <VorschlagOnLine line={line} vorschlag={vorschlag} lookups={EMPTY_LOOKUPS} canDecide isOwn={false} busy={false} onApprove={() => undefined} onReject={() => undefined} />
+      <VorschlagOnLine line={line} vorschlag={vorschlag} lookups={EMPTY_LOOKUPS} canDecide isOwn={false} busy={false} onReject={() => undefined} />
     </I18nProvider>,
   );
 }
 
 describe('the Vorschlag on a bank line', () => {
-  it('unchanged: Freigeben is offered as before', () => {
+  it('unchanged: the sentence and Ablehnen, never a second Buchen or Freigeben (D167)', () => {
     strip(base);
-    expect(screen.getByRole('button', { name: 'Freigeben' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Freigeben' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Buchen' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeEnabled();
     expect(screen.queryByText(/Seit dem Vorschlag geändert/)).toBeNull();
   });
 

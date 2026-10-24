@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.tillbooks/tillbooks",
   "title": "TILL",
-  "description": "Agent-first open-source ERP for Swiss SMEs: 800 MCP tools, one local file.",
+  "description": "Agent-first open-source ERP for Swiss SMEs: 822 MCP tools, one local file.",
   "websiteUrl": "https://tillbooks.ch",
   "repository": {
     "url": "https://github.com/tillbooks/tillbooks",

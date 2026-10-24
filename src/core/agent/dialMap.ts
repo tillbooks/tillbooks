@@ -15,6 +15,7 @@
 
 import { CONSEQUENCE_FOR_VERB, consequenceFor, type Consequence } from './consequences.js';
 import type { WorkspaceContext } from '../context.js';
+import { SETTINGS, dialCapabilityForSetting } from '../settings/registry.js';
 
 export { CONSEQUENCE_FOR_FAMILY, CONSEQUENCE_FOR_VERB, consequenceFor } from './consequences.js';
 export type { Consequence, Reversibility } from './consequences.js';
@@ -68,6 +69,8 @@ export const DIAL_CAPABILITY_FOR_ACTION: Readonly<Record<string, string>> = {
   // or a reversing one). A reversal is a posting: it mints an entry and cannot itself be un-posted.
   create_entry_for_txn: 'post',
   wage_journal_post: 'post',
+  // D171: the wage journal's undo mints the mirror, a posting like every sibling reverse.
+  wage_journal_reverse: 'post',
   post_vendor_bill: 'post',
   post_fx_revaluation: 'post',
   // A38: the five entry-minting writes (an accrual posts a pair, a Storno posts the mirror pair, a
@@ -83,15 +86,21 @@ export const DIAL_CAPABILITY_FOR_ACTION: Readonly<Record<string, string>> = {
   vat_settlement_post: 'post',
   vat_settlement_reverse: 'post',
   expense_claim_approve: 'post',
+  // D168: the approve's undo mints the mirror, a posting like every sibling reverse above.
+  expense_claim_reverse: 'post',
   asset_acquire: 'post',
   asset_add_capitalisation: 'post',
   asset_depreciation_run_post: 'post',
   asset_depreciation_run_reverse: 'post',
   asset_dispose: 'post',
+  // D170: the register's undo mints the mirror, a posting like every sibling reverse above.
+  asset_transaction_reverse: 'post',
   inventory_valuation_post: 'post',
   inventory_valuation_reverse: 'post',
   landed_cost_allocate_confirm: 'post',
   landed_cost_reverse: 'post',
+  // D169: the dunning fee's undo mints the mirror, a posting like every sibling reverse above.
+  dunning_fee_reverse: 'post',
 
   // close-period: sealing an accounting period against further posting. A hard seal (close_year, and
   // a hard lock_period) cannot be reopened; a soft lock is reversible but still a governed write.
@@ -142,7 +151,13 @@ export const DIAL_CAPABILITY_FOR_ACTION: Readonly<Record<string, string>> = {
   // accounts and matches, pay for settlements). `reopen_bank_line` keeps the stricter `pay` (it can
   // reverse a settlement).
   ignore_bank_line: 'post',
+  // D178 point 19: an agent may PROPOSE a duplicate answer; a person with post approves it.
+  resolve_possible_duplicate: 'post',
   reopen_bank_line: 'pay',
+  // D167 (A39 §13.1): a standard steers the bulk button (its lines read `sure`), so a governed seat
+  // proposes it and a person approves, under `post` like a booking to accounts.
+  set_bank_standard: 'post',
+  clear_bank_standard: 'post',
 
   // The governance check of 28.09.2026 (one appended block). A static reference graph over `src/`
   // (`test/agent/dial-covers-entry-minting.test.mjs`) found these write verbs reaching `postEntry`
@@ -320,6 +335,12 @@ export const DIAL_CAPABILITY_FOR_ACTION: Readonly<Record<string, string>> = {
   set_qr_auto_apply: 'pay',
   import_camt: 'pay',
   import_camt_files: 'pay',
+  // D178 (A20 §11.4): the one statement door for every format, `import_camt`'s family.
+  import_bank_statement: 'pay',
+  // D178 (A20 §11.3, security review): a CSV mapping decides how every later import reads amounts and
+  // signs (a swapped debit and credit column is a wrong bank fact on every line), so an agent's change of
+  // it waits for a person with the pay right, exactly like the import it steers.
+  set_bank_csv_mapping: 'pay',
   create_payment_batch: 'pay',
   generate_pain001: 'pay',
   discard_payment_batch: 'pay',
@@ -419,6 +440,9 @@ export const NOT_DIAL_GOVERNED: Readonly<Record<string, string>> = {
     'deletes only an EMPTY folder (folder_not_empty otherwise, never a cascade), which folders_upsert recreates exactly',
   delete_saved_view:
     'a display preference: a view mints no state and holds no history',
+  // D178 point 7: the name says reset, the act is the caller's own look returning to its default.
+  prefs_reset:
+    'a per-person display preference (ui-state): it removes only the calling seat\'s own stored value, never another person\'s, and prefs_set puts it back',
   clear_diagnostics:
     'the local error journal kept for bug reports, not a business record; written reports are kept',
   capture_discard:
@@ -622,9 +646,10 @@ export const INPUT_KEYED_DIAL_RULES: ReadonlyArray<InputKeyedDialRule> = [
     when: (input) => {
       const t = input.target;
       const kind = typeof t === 'object' && t !== null ? (t as { kind?: unknown }).kind : undefined;
-      return typeof input.bankTxnId === 'string' && (kind === 'accounts' || kind === 'existing_entry');
+      // D175: a `rule` target is expanded into an `accounts` booking, so it rides the same tier.
+      return typeof input.bankTxnId === 'string' && (kind === 'accounts' || kind === 'existing_entry' || kind === 'rule');
     },
-    why: 'Booking a bank line to accounts or matching it to an existing entry puts a posting behind a bank fact; an agent drafts it at the post tier.',
+    why: 'Booking a bank line to accounts (directly or by a Buchungsregel) or matching it to an existing entry puts a posting behind a bank fact; an agent drafts it at the post tier.',
   },
   {
     action: 'book_bank_line',
@@ -632,9 +657,21 @@ export const INPUT_KEYED_DIAL_RULES: ReadonlyArray<InputKeyedDialRule> = [
     when: (input) => {
       const t = input.target;
       const kind = typeof t === 'object' && t !== null ? (t as { kind?: unknown }).kind : undefined;
-      return typeof input.bankTxnId === 'string' && (kind === 'open_item' || kind === 'payment_batch');
+      // D178 E3: a contact booking (a Guthaben or an Anzahlung) and a Spesen reimbursement settle with a party too.
+      return typeof input.bankTxnId === 'string' && (kind === 'open_item' || kind === 'payment_batch' || kind === 'contact' || kind === 'expense_claims');
     },
-    why: 'Settling an invoice, a vendor bill or a payment run from a bank line moves money between parties; an agent drafts it at the pay tier.',
+    why: 'Settling an invoice, a vendor bill, a payment run, a contact\'s Guthaben or Anzahlung, or expense claims from a bank line moves money between parties; an agent drafts it at the pay tier.',
+  },
+  // Security review (D178 E3): a contact booking that states how a refund treats the receipt VAT
+  // (`target.refundVat`) can change a filed figure, so an agent drafts it at the vat-file tier too.
+  {
+    action: 'book_bank_line',
+    capability: 'vat-file',
+    when: (input) => {
+      const t = input.target;
+      return typeof input.bankTxnId === 'string' && typeof t === 'object' && t !== null && (t as { kind?: unknown }).kind === 'contact' && (t as { refundVat?: unknown }).refundVat !== undefined;
+    },
+    why: 'Stating how a refund of a prepayment treats its declared VAT can change a filed MWST figure; an agent drafts it at the vat-file tier.',
   },
 
   // --- The governance check of 28.09.2026, one appended block --------------------------------------
@@ -694,6 +731,23 @@ export const INPUT_KEYED_DIAL_RULES: ReadonlyArray<InputKeyedDialRule> = [
       return p.autoIssue === true || RECURRING_GOVERNED_PATCH_KEYS.some((k) => k in p);
     },
     why: 'Turning auto-issue on, or changing what a schedule issues, to whom, or when, decides invoices the tick will issue unattended; an agent drafts it for the owner.',
+  },
+  // D141 follow-up 4 (critic F1): `contacts_merge` re-points the source's recurring schedules onto the
+  // target, which is the same retarget `update_recurring_schedule {contactId}` drafts under `issue`. The
+  // merge's own tier is `erase`, which the owner may set to `auto` on its own, so a merge that moves an
+  // auto-issuing schedule drafts under `issue` too. Read against the book: only the source's schedules
+  // can say whether the merge changes who an unattended tick bills. A paused schedule counts (resume is
+  // free, D66); an ended one never issues again; a draft-only schedule's tick makes review drafts only.
+  {
+    action: 'contacts_merge',
+    capability: 'issue',
+    when: () => false,
+    whenBook: (ctx, input) =>
+      typeof input.sourceId === 'string' &&
+      ctx.store.db
+        .prepare("SELECT 1 AS p FROM recurring_schedule WHERE workspace_id = ? AND contact_id = ? AND auto_issue = 1 AND status != 'ended' LIMIT 1")
+        .get(ctx.workspaceId, input.sourceId) !== undefined,
+    why: 'The merge moves an auto-issuing schedule onto the target contact, so the next tick issues invoices to a different party unattended; an agent drafts it for the owner, as it drafts a schedule contact change.',
   },
 ];
 
@@ -777,6 +831,29 @@ export const INPUT_KEYED_DIAL_RULES: ReadonlyArray<InputKeyedDialRule> = [
     why: "The automation tick fires every due rule in its author's name, unattended; an agent drafts the tick for the owner.",
   },
 );
+
+// --- D172, the workspace settings registry, generated: one rule per dial family in use per verb ------
+// A setting's change drafts under the dial family its registry row declares (`dialCapability`): a display
+// preference under `customize`, a setting that changes what money does under its money family, exactly as
+// the per-capability config verbs do (`set_qr_auto_apply` is `pay`, `set_fx_method` is `vat-file`). Keyed
+// on `key`; an unknown key resolves to `customize` and the verb then refuses it `unknown_setting`. Only the
+// families the registry actually uses (plus `customize`, the floor) get a rule, so no rule exists that can
+// never match.
+for (const action of ['settings_set', 'settings_reset']) {
+  const families = [...new Set<string>(['customize', ...SETTINGS.map((s) => s.dialCapability)])];
+  for (const capability of families) {
+    (INPUT_KEYED_DIAL_RULES as InputKeyedDialRule[]).push({
+      action,
+      capability,
+      // A call without a non-blank reason is not drafted: the verb refuses it reason_required and writes
+      // nothing, so a Vorschlag that could only fail at approval is never queued (critic D172 r1).
+      when: (input) =>
+        typeof input.key === 'string' && input.key.length > 0 && typeof input.reason === 'string' && input.reason.trim().length > 0 &&
+        dialCapabilityForSetting(input.key) === capability,
+      why: 'A workspace setting decides how TILL behaves for everyone from the next action on; an agent drafts a change for the owner at the tier of what the setting governs.',
+    });
+  }
+}
 
 /**
  * The INPUT-ONLY tier of an automation-rule write (non-author critic R3-2, owner decision 28.09.2026),

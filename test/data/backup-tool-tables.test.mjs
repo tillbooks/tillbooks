@@ -44,6 +44,16 @@ function replicateWithLitestream(db, seq = 7) {
   db.exec('INSERT INTO _litestream_lock (id) VALUES (1)');
 }
 
+/** The whole-FILE shape a pre-isTillTable backup fingerprinted (tool tables included), computed here:
+ *  the engine no longer exports a way to ask for it (critic L3, 14.10.2026). */
+function wholeFileShape(db) {
+  const shape = {};
+  for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all()) {
+    shape[name] = db.pragma(`table_info("${name}")`).map((c) => c.name).sort();
+  }
+  return shape;
+}
+
 const litestreamRows = (db) => ({
   seq: db.prepare('SELECT id, seq FROM _litestream_seq ORDER BY id').all(),
   lock: db.prepare('SELECT id FROM _litestream_lock ORDER BY rowid').all(),
@@ -96,7 +106,7 @@ function makeLegacyLitestreamBackup(artifactRef) {
   // The old copy took Litestream's DDL but none of its rows (the tables are not workspace-scoped).
   // Rows are put in here anyway, so the test also proves nothing ever reads them back out.
   replicateWithLitestream(snap, 99);
-  const rawShape = schemaShapeOf(snap, { includeForeignTables: true });
+  const rawShape = wholeFileShape(snap);
   snap.close();
   assert.ok('_litestream_seq' in rawShape && '_litestream_lock' in rawShape, 'the legacy file carries the Litestream tables');
   const manifestPath = join(artifactRef, 'manifest.json');

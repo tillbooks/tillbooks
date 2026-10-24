@@ -12,7 +12,9 @@
  * engine's own summary at the latest statement date, then the paragraph on what makes a difference (an
  * ignored line whose money is not on the books, an entry no line backs, a difference accepted at a match,
  * a line matched to an entry dated after the statement), the statement's date and the open lines as a
- * door into the list. Nothing is explained away and nothing is recounted here. An account that cannot be
+ * door into the list. When bank and books already differed where the feed starts (the engine's `start`,
+ * the audit of 16.10.2026: history the feed never saw) and that is the WHOLE difference, one sentence says
+ * so with both figures, ahead of the general paragraph. Nothing is explained away and nothing is recounted here. An account that cannot be
  * judged says so in words, and the identity is not drawn for it.
  *
  * SEVERAL ACCOUNTS IN VIEW (D152, owner, 02.10.2026): one line per account cost 25 words above the first
@@ -43,7 +45,7 @@ import { trustView, type TrustView } from './model';
 import { BalancedGlyph, CaretGlyph, UnknownGlyph, WarnGlyph } from './glyphs';
 import { plural } from './lookups';
 import { InfoCard } from './InfoCard';
-import { gapRepairHref, gapTitle, type StatementGapDto } from './statementGaps';
+import { gapRepairHref, gapsSummary, type StatementGapDto } from './statementGaps';
 import { statementKeyOf, useStatementGaps } from './useStatementGaps';
 
 type T = ReturnType<typeof useT>;
@@ -70,19 +72,26 @@ function ToneGlyph({ tone, gaps = [] }: { tone: TrustView['tone']; gaps?: readon
   return <UnknownGlyph className="bank-trust__glyph" size={16} />;
 }
 
-/** One gap in the card: A36's own title, and the door to its repair. */
-function GapLine({ gap }: { gap: StatementGapDto }) {
+/**
+ * The gaps in the card (owner, 18.10.2026: "one button must be sufficient"): ONE line naming every missing
+ * statement and ONE door. A single gap keeps its own repair link; two or more open the repair dialog for
+ * all of the account's gaps at once (`gap=all`).
+ */
+function GapsLine({ gaps }: { gaps: readonly StatementGapDto[] }) {
   const t = useT();
   const titleId = useId();
+  const sum = gapsSummary(t, gaps);
+  if (sum === null) return null;
   return (
-    <>
-      <p id={titleId} className="bank-trust__hint bank-trust__gap">
-        {gapTitle(t, gap)}
+    <div className="bank-trust__gaps">
+      <p id={titleId} className="bank-trust__hint">
+        {sum.title}
+        {sum.note !== null && ` ${sum.note}`}
       </p>
-      <Link to={gapRepairHref(gap)} className="btn btn--secondary btn--sm bank-trust__open" aria-describedby={titleId}>
-        {t('attention.act.closeGap')}
+      <Link to={gapRepairHref({ bankAccountId: gaps[0].bankAccountId, gapId: sum.gapId })} className="btn btn--secondary btn--sm" aria-describedby={titleId}>
+        {t(sum.many ? 'attention.act.closeGaps' : 'attention.act.closeGap')}
       </Link>
-    </>
+    </div>
   );
 }
 
@@ -92,64 +101,62 @@ function hasDetails(v: TrustView, gaps: readonly StatementGapDto[]): boolean {
   return figures || v.tone === 'unknown' || v.openCount > 0 || v.statementDate !== null || gaps.length > 0;
 }
 
-/** One account's card content: the sentence, the identity, the explanation, the date, the gaps, the open lines. */
+/**
+ * One account's card content, lean (owner, 18.10.2026: less text, clear visuals, at most one button): the
+ * engine's identity as a sum to read top to bottom, Buchhaltung + offene Zeilen + Differenz = Bank, each
+ * figure the engine's own; then at most ONE line on the cause, the gaps on one line with one door. The
+ * open lines are the sum's own row, a quiet link into the list, never a second button.
+ */
 function TrustDetails({ balance, gaps, onShowOpen }: { balance: BankAccountBalance; gaps: readonly StatementGapDto[]; onShowOpen: () => void }) {
   const t = useT();
   const v = trustView(balance);
   const c = balance.currency;
-  const m = (minor: number) => formatMoney(Math.abs(minor), c);
+  const signed = (minor: number) => (minor < 0 ? `\u2212${formatMoney(-minor, c)}` : formatMoney(minor, c));
   const figures = v.tone !== 'unknown' && v.bank !== null && v.books !== null && v.difference !== null;
+  const start = balance.start;
+  // Only when the WHOLE difference lies before the feed (critic: a gap alone fires on correct books).
+  const beforeFeed = v.tone === 'difference' && start !== null && start.gapMinor !== 0 && start.gapMinor === balance.differenceMinor;
   return (
     <>
-      <p className="bank-trust__card-title">{t(v.tone === 'difference' ? 'bankInbox.trust.difference' : v.tone === 'unknown' ? `bankInbox.trust.unknown.${balance.reason ?? 'inconsistent'}` : v.tone === 'ok' ? 'bankInbox.trust.ok' : 'bankInbox.trust.pending', { amount: m(v.difference ?? 0) })}</p>
+      {v.tone === 'unknown' && <p className="bank-trust__card-title">{t(`bankInbox.trust.unknown.${balance.reason ?? 'inconsistent'}`)}</p>}
       {figures && (
-        <p className="bank-trust__figures t-num">
-          <span className="bank-trust__term">{t('bankInbox.trust.bank')}</span>
-          <span className="bank-trust__amount">{formatMoney(v.bank as number, c)}</span>
-          <span className="bank-trust__op" aria-hidden="true">
-            =
-          </span>
-          <span className="bank-trust__term">{t('bankInbox.trust.books')}</span>
-          <span className="bank-trust__amount">{formatMoney(v.books as number, c)}</span>
-          {v.openSum !== 0 && (
-            <>
-              <span className="bank-trust__op" aria-hidden="true">
-                {v.openSum < 0 ? '−' : '+'}
-              </span>
-              <span className="bank-trust__term">{t('bankInbox.trust.openTerm')}</span>
-              <span className="bank-trust__amount">{m(v.openSum)}</span>
-            </>
-          )}
-          {v.difference !== 0 && (
-            <>
-              <span className="bank-trust__op bank-trust__op--warn" aria-hidden="true">
-                {(v.difference as number) < 0 ? '−' : '+'}
-              </span>
-              <span className="bank-trust__term bank-trust__term--warn">{t('bankInbox.trust.differenceTerm')}</span>
-              <span className="bank-trust__amount bank-trust__amount--warn">{m(v.difference as number)}</span>
-            </>
-          )}
-          {/* The sentence a screen reader hears: the operators are glyphs above. */}
-          <span className="visually-hidden">
-            {t(v.difference === 0 ? 'bankInbox.trust.sentence' : 'bankInbox.trust.sentenceDifference', {
-              bank: formatMoney(v.bank as number, c),
-              books: formatMoney(v.books as number, c),
-              open: formatMoney(v.openSum, c),
-              difference: formatMoney(v.difference as number, c),
-            })}
-          </span>
+        <table className="bank-trust__sum t-num">
+          <caption className="bank-trust__asof">{v.statementDate !== null ? t('bankInbox.trust.asOfShort', { date: formatDate(v.statementDate) }) : ''}</caption>
+          <tbody>
+            <tr>
+              <th scope="row">{t('bankInbox.trust.books')}</th>
+              <td>{formatMoney(v.books as number, c)}</td>
+            </tr>
+            {v.openSum !== 0 && (
+              <tr>
+                <th scope="row">
+                  <button type="button" className="bank-trust__link" onClick={onShowOpen}>
+                    {plural(t, 'bankInbox.trust.openRow', v.openCount)}
+                  </button>
+                </th>
+                <td>{signed(v.openSum)}</td>
+              </tr>
+            )}
+            {v.difference !== 0 && (
+              <tr className="bank-trust__row--warn">
+                <th scope="row">{t('bankInbox.trust.differenceTerm')}</th>
+                <td>{signed(v.difference as number)}</td>
+              </tr>
+            )}
+            <tr className="bank-trust__row--total">
+              <th scope="row">{t('bankInbox.trust.bank')}</th>
+              <td>{formatMoney(v.bank as number, c)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+      {beforeFeed && start !== null && (
+        <p className="bank-trust__hint">
+          {t('bankInbox.trust.startGap', { date: formatDate(start.date), bank: formatMoney(start.bankMinor, c), books: formatMoney(start.ledgerMinor, c) })}
         </p>
       )}
-      {v.tone === 'difference' && <p className="bank-trust__hint">{t('bankInbox.trust.differenceHint')}</p>}
-      {v.statementDate !== null && <p className="bank-trust__hint">{t('bankInbox.trust.asOf', { date: formatDate(v.statementDate) })}</p>}
-      {gaps.map((g) => (
-        <GapLine key={g.gapId} gap={g} />
-      ))}
-      {v.openCount > 0 && (
-        <button type="button" className="btn btn--secondary btn--sm bank-trust__open" onClick={onShowOpen}>
-          {plural(t, 'bankInbox.trust.openLines', v.openCount, { amount: formatMoney(v.openSum, c) })}
-        </button>
-      )}
+      {v.tone === 'difference' && !beforeFeed && <p className="bank-trust__hint">{t('bankInbox.trust.differenceHint')}</p>}
+      <GapsLine gaps={gaps} />
     </>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * E02's fourteen verbs (HR-lite: employees, absences, expense claims), defined here and spread into
+ * E02's fifteen verbs (HR-lite: employees, absences, expense claims), defined here and spread into
  * `ACTIONS` as ONE line (the `purchaseActions` / `salesOrderActions` precedent), so several agents
  * appending to the append-only registry at once collide over a line rather than a block.
  *
@@ -28,6 +28,7 @@ import {
   approveClaim,
   rejectClaim,
   reimburseClaim,
+  reverseClaim,
   listClaims,
   getClaim,
 } from '../core/hr/index.js';
@@ -143,9 +144,16 @@ export function hrActions(h: HrActionHelpers): readonly ActionDef[] {
     ctxAction(
       'expense_claim_reimburse',
       'write:correctable:books',
-      'Reimburse an approved claim: pays the employee via A14 recordPayment (outgoing supplier settlement clearing 2000 Kreditoren, Dr 2000 / Cr bank) and prepares the pain.001 as a LOCAL artifact. P8 draft-gated: WITHOUT confirm:true it returns the payment + artifact plan and pays NOTHING. Transmission of the pain.001 to a bank is cloud-tier: the result carries transmitted:false, reason:cloud_tier. Idempotent: a reimbursed claim is never paid twice. Requires spesen.approve AND pay AND post. bankAccountId names the paying Bankkonto.',
+      'Reimburse an approved claim: pays the employee via A14 recordPayment (outgoing supplier settlement clearing 2000 Kreditoren, Dr 2000 / Cr bank) and prepares the pain.001 as a LOCAL artifact. P8 draft-gated: WITHOUT confirm:true it returns the payment + artifact plan and pays NOTHING. Transmission of the pain.001 to a bank is cloud-tier: the result carries transmitted:false, reason:cloud_tier. Idempotent: a reimbursed claim is never paid twice. A claim whose posting was reversed in the journal refuses claim_posting_reversed (close it with expense_claim_reverse). Requires spesen.approve AND pay AND post. bankAccountId names the paying Bankkonto.',
       ctxSchema({ claimId: STR, bankAccountId: STR, confirm: BOOL, idempotencyKey: STR }, ['claimId', 'idempotencyKey']),
       (ctx, input) => reimburseClaim(ctx, as(input)),
+    ),
+    ctxAction(
+      'expense_claim_reverse',
+      'write:correctable:books',
+      'Storniere an APPROVED expense claim (D168), the ONE correction of a booked claim: posts the faithful A02 reversing entry of the approve posting (OR 957a, dated today, the VAT trace carried) and moves the claim approved -> reversed (terminal) in one transaction. Nothing is edited or deleted; the correction of the business fact is a fresh claim. A REIMBURSED claim is refused with claim_reimbursed: reverse the reimbursement payment first (reverse_payment walks the claim back to approved). A second reverse is already_reversed; any other state is invalid_transition; a blank reason is reason_required; period_locked when today is sealed. A claim whose posting a raw reversal already took out (a book from before this verb) adopts that reversal and posts nothing (adopted:true). The raw reverse_entry refuses this entry (owned_by expense_claim_reverse). Requires spesen.approve AND post.',
+      ctxSchema({ claimId: STR, reason: STR, idempotencyKey: STR }, ['claimId', 'reason', 'idempotencyKey']),
+      (ctx, input) => reverseClaim(ctx, as(input)),
     ),
     ctxAction(
       'expense_claim_list',

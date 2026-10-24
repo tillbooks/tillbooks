@@ -1,22 +1,28 @@
 /**
- * The rail as a real, keyboard-navigable TREE (D118, modernisation phase 1, A1).
+ * The rail's Menü section: its header and the tree under it (D118 A1, D178 points 6, 16 and 17).
  *
  * WHAT THIS REPLACES. The rail used to be a flat run of grouped `NavLink`s: 71 destinations, every
  * one always rendered, and the middle band scrolled heavily. That violated the DESIGN.md law that
  * the rail never scrolls. This turns the same model into a WAI-ARIA treeview: headed groups and
  * nested parents collapse, everything collapsible defaults to collapsed, and a fresh workspace shows
- * roughly fifteen rows that fit without a scrollbar. The taxonomy (which surface sits where) is
- * authored in `nav.ts`; this file only renders and drives it.
+ * roughly fifteen rows that fit without a scrollbar.
+ *
+ * WHAT IT RENDERS SINCE D178. The PERSONAL tree (`useRail().rail`): the canonical taxonomy of `nav.ts`
+ * in the person's own order, hidden rows left out. Which leaf lights is not decided here: the rail's one
+ * model (`resolveRailActive`) names the ONE element that carries `aria-current`, so a pinned page no
+ * longer lights its favourite AND its menu row. The headers follow `nav.group_header_style`: by default
+ * 14px/600 at the icon column with the group's rows flush below, or 14px/500 with a group icon and the
+ * rows nested at the text column, or the K-23 12px label.
  *
  * THE ACCESSIBILITY CONTRACT (the a11y-critical core; verified with jest-axe in both themes):
  *   - `role="tree"` on the container, one accessible name.
  *   - `role="treeitem"` on every node: group headers and parents (with `aria-expanded`), and leaves
- *     (with `aria-current="page"` and `aria-selected` on the active one).
+ *     (with `aria-current="page"` and `aria-selected` on the lit one).
  *   - `role="group"` on each expanded child list, linked to its owning treeitem via `aria-owns`, so
  *     the parent/child relationship survives even though the group is a DOM sibling of its header
  *     (a sibling, not a child, so a click on a child never bubbles into the header's toggle, and the
  *     header's accessible name never absorbs its descendants).
- *   - ROVING TABINDEX: exactly one treeitem is in the tab order (`tabindex=0`, the active leaf or the
+ *   - ROVING TABINDEX: exactly one treeitem is in the tab order (`tabindex=0`, the lit leaf or the
  *     first row); the rest are `tabindex=-1` and reached with the arrow keys. One Tab stop, per APG.
  *   - KEYBOARD: Up/Down move between visible rows; Right expands a collapsed node or steps into the
  *     first child; Left collapses an expanded node or steps out to the parent; Home/End jump to the
@@ -26,86 +32,36 @@
  *
  * A leaf is a REAL LINK (F-05, friction ledger Phase 2): an `<a href>` that carries the `treeitem`
  * role, the roving tabindex and `aria-current`, so middle-click, Cmd/Ctrl-click, "copy link" and
- * "open in new tab" all work the way a browser link does, with no `window.open` imitation. The A3 pin
- * star rides inside the anchor as an ARIA button on a span (a real button may neither be an anchor's
- * child nor a direct child of the tree), so the tree still owns only treeitems and groups. A plain
- * click routes in place; a modifier or middle click is left to the browser.
- * Routing is never read here: `resolveActiveNav` maps the URL to the owning leaf and its collapsible
- * ancestors, the whole coupling.
+ * "open in new tab" all work the way a browser link does. The A3 pin star rides inside the anchor as an
+ * ARIA button on a span (a real button may neither be an anchor's child nor a direct child of the tree).
  */
-import { Fragment, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Fragment, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { useT } from '../i18n';
+import { IconButton } from '../components/IconButton';
+import { TooltipPortalContext } from '../components/Tooltip';
 import {
   firstLeafPath,
+  GROUP_ICON,
+  groupKey,
   isNavParent,
-  NAV_RAIL,
-  resolveActiveNav,
   type NavGroup,
+  type NavIconName,
   type NavItem,
   type NavParent,
 } from './nav';
 import { NavIcon } from './nav-icons';
-import { useNavExpansion, useNavFavourites } from './nav-prefs';
+import { useRail, useRailOptional } from './nav-prefs';
 import { AgentBadge, AttentionBadge, SlotBoundary } from './chrome';
 import { useKeyboardOptional } from './keyboard';
+import { MenuCustomiser } from './MenuCustomiser';
 
-/** The disclosure chevron. Points right when collapsed, rotates to point down when expanded (the
- *  rotation is a CSS transition on the parent's `aria-expanded`, honouring reduced motion).
- *  It carries the pure expand/collapse toggle as a POINTER affordance (D135): the parent row itself
- *  now navigates to its first child on click, so the chevron is the way to open or close a group
- *  without leaving the current page. It stays `aria-hidden` because that toggle is already in the a11y
- *  tree via the treeitem's own `aria-expanded` and the Left/Right/Space keyboard model, so exposing a
- *  second control would only duplicate it. `onClick` stops propagation so the row's navigation never
- *  fires alongside the toggle. */
-function Chevron({ onClick }: { onClick?: (event: MouseEvent<SVGSVGElement>) => void }) {
-  return (
-    <svg
-      className="rail-chevron"
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-      onClick={onClick}
-    >
-      <path d="M9 6l6 6-6 6" />
-    </svg>
-  );
-}
-
-/** The favourite star: a filled star when pinned, an outline when not. Sits at a leaf's right edge as
- *  a pointer-and-keyboard affordance to pin/unpin the surface to the Favoriten lane above the tree. */
-function StarGlyph({ filled }: { filled: boolean }) {
-  return (
-    <svg
-      className="rail-pin-glyph"
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill={filled ? 'currentColor' : 'none'}
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8-5.3-2.8-5.3 2.8 1-5.8L3.2 9.7l5.9-.9z" />
-    </svg>
-  );
-}
-
-/** One row in the flattened list of VISIBLE nodes, the model the keyboard math walks. A row exists
- *  only if all its ancestors are expanded, so Up/Down and Home/End move exactly over what is on
- *  screen. `path` is present on leaves only; `expandable` marks a group or parent. */
+/** One row in the flattened list of VISIBLE nodes, the model the keyboard math walks. `key` is unique
+ *  (a headed group is `group:<navId>`, because three groups share their navId with a page inside them);
+ *  `navId` is what the expand state and the routes are keyed by. */
 interface VisibleRow {
+  key: string;
   navId: string;
   level: number;
   expandable: boolean;
@@ -113,44 +69,129 @@ interface VisibleRow {
   path: string | null;
 }
 
+/**
+ * A section header of the rail, "Favoriten" or "Menü" (D178): a disclosure button that folds the
+ * section. It reads one step quieter than a group header (judge round 1 M1, the owner's picker): the
+ * chevron in the icon column, the label at the text column in the 12px label type (dim under the 14px
+ * group styles, full ink under the 12px group label), so "Favoriten" and "Menü" never pass for groups.
+ * `location` marks the folded header that holds the open page (`aria-current="location"`, accent ink).
+ * `trailing` is an optional control beside it (the Menü's "Menü anpassen"); it is a sibling of the
+ * button, never inside it, so the header never nests one control in another.
+ */
+export function RailSectionHeader({
+  label,
+  folded,
+  onToggle,
+  controlsId,
+  location = false,
+  trailing,
+}: {
+  label: string;
+  folded: boolean;
+  onToggle: () => void;
+  controlsId: string;
+  location?: boolean;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className="rail-section-head" data-trailing={trailing === undefined ? undefined : ''}>
+      <button
+        type="button"
+        className="rail-section-toggle"
+        aria-expanded={!folded}
+        aria-controls={folded ? undefined : controlsId}
+        aria-current={location ? 'location' : undefined}
+        onClick={onToggle}
+      >
+        <span className="rail-section-chevron" aria-hidden="true">
+          <NavIcon name="chevron" size={16} className="rail-chevron" />
+        </span>
+        <span className="rail-section-label">{label}</span>
+      </button>
+      {trailing}
+    </div>
+  );
+}
+
+/** "Menü anpassen": the pencil that opens the editor. Shown always in the drawer and on touch, on
+ *  hover and keyboard focus at the desktop rail (judge round 1 M5). */
+function CustomiseButton({ className }: { className: string }) {
+  const t = useT();
+  const { setCustomising } = useRail();
+  return (
+    <TooltipPortalContext.Provider value={true}>
+      <IconButton icon="edit" context={t('nav.customise.open')} small className={className} onClick={() => setCustomising(true)} />
+    </TooltipPortalContext.Provider>
+  );
+}
+
+/**
+ * The way into "Menü anpassen" when the Menü has no header (no favourites yet, judge round 1 M3): the
+ * same pencil, in the rail's footer row, always visible. Renders nothing while the header carries it.
+ */
+export function MenuCustomiseEntry() {
+  const rail = useRailOptional();
+  if (rail === null || rail.menuHeader || rail.customising) return null;
+  return <CustomiseButton className="rail-icon-btn rail-customise-entry" />;
+}
+
+/**
+ * The Menü section: its header (with "Menü anpassen") while there are favourites above it, and, unless
+ * folded, the tree, or the editor while "Menü anpassen" is open. Without favourites the menu stands
+ * alone and needs no title: the header (and its row of height) is left out.
+ */
+export function MenuSection({ onNavigate }: { onNavigate?: () => void }) {
+  const t = useT();
+  const { sections, toggleSection, customising, menuHeader, location } = useRail();
+  const bodyId = useId();
+  const folded = sections.menu && !customising;
+  return (
+    <div className="rail-section rail-section--menu">
+      {menuHeader && (
+        <RailSectionHeader
+          label={t('nav.sections.menu')}
+          folded={folded}
+          onToggle={() => {
+            if (customising) return;
+            toggleSection('menu');
+          }}
+          controlsId={bodyId}
+          location={location === 'menu'}
+          trailing={customising ? undefined : <CustomiseButton className="rail-section-action" />}
+        />
+      )}
+      {!folded && (
+        <div id={bodyId}>{customising ? <MenuCustomiser /> : <NavTree onNavigate={onNavigate} />}</div>
+      )}
+    </div>
+  );
+}
+
 export function NavTree({ onNavigate }: { onNavigate?: () => void }) {
   const t = useT();
-  const location = useLocation();
   const navigate = useNavigate();
   const treeRef = useRef<HTMLDivElement | null>(null);
-
-  const { leafNavId: activeLeafId, ancestors } = useMemo(
-    () => resolveActiveNav(location.pathname),
-    [location.pathname],
-  );
-  const { isExpanded, toggle } = useNavExpansion(ancestors);
-  const { isFavourite, toggleFavourite } = useNavFavourites();
+  const { rail, active, expansion, favourites, look } = useRail();
+  const { isExpanded, toggle } = expansion;
+  const { isFavourite, toggleFavourite } = favourites;
   // "Suche" opens the command palette OVER the current surface instead of routing to the full-screen
-  // /search page (owner request): a plain click should preserve context, not replace the main view.
-  // Read optionally: the shell always provides the KeyboardProvider, but the treeview's own unit tests
-  // mount NavTree bare, and there the palette is simply unavailable and the leaf routes as before.
+  // /search page (owner request). Read optionally: the unit tests mount the tree without the shell.
   const keyboard = useKeyboardOptional();
+  const headerStyle = look.groupHeaderStyle;
 
-  // The accordion set (D135): the top-level headed groups. Opening one collapses the others, so at
-  // most one is open at a time. Nested parents are NOT in this set and keep their independent state.
-  const topLevelGroupIds = useMemo(
-    () => NAV_RAIL.filter((group) => group.labelKey !== null).map((group) => group.navId),
-    [],
-  );
-  // The accordion set to pass to `toggle` for a given node: the sibling groups when the node is a
-  // top-level group, nothing for a nested parent (which never participates in the accordion).
+  // The accordion set (D135): the top-level headed groups of the personal tree.
+  const topLevelGroupIds = useMemo(() => rail.filter((g) => g.labelKey !== null).map((g) => g.navId), [rail]);
   const accordionSetFor = (navId: string): readonly string[] | undefined =>
     topLevelGroupIds.includes(navId) ? topLevelGroupIds : undefined;
 
-  // Where a parent row navigates on click (D135): each group's and each nested parent's first child
-  // leaf, its natural landing. Built once from the static rail. A group with no leaf never occurs in
-  // the canonical tree, so a missing entry simply means "do not navigate" (the toggle still runs).
+  // Where a header row navigates on click (D135): its first VISIBLE leaf in the personal tree.
   const firstChildPaths = useMemo(() => {
     const map = new Map<string, string>();
-    for (const group of NAV_RAIL) {
-      if (group.labelKey === null) continue; // a headerless cluster has no expandable header
-      const groupPath = firstLeafPath(group);
-      if (groupPath !== null) map.set(group.navId, groupPath);
+    for (const group of rail) {
+      if (group.labelKey !== null) {
+        const groupPath = firstLeafPath(group);
+        if (groupPath !== null) map.set(group.navId, groupPath);
+      }
       for (const node of group.items) {
         if (isNavParent(node)) {
           const parentPath = firstLeafPath(node);
@@ -159,69 +200,76 @@ export function NavTree({ onNavigate }: { onNavigate?: () => void }) {
       }
     }
     return map;
-  }, []);
+  }, [rail]);
 
-  // The visible rows, top to bottom, respecting the current expand state. Rebuilt whenever expansion
-  // changes (isExpanded closes over the overrides and the active ancestors).
+  // The visible rows, top to bottom, respecting the current expand state.
   const visible = useMemo<VisibleRow[]>(() => {
     const rows: VisibleRow[] = [];
-    for (const group of NAV_RAIL) {
+    const pushParent = (node: NavParent, level: number): void => {
+      const open = isExpanded(node.navId);
+      rows.push({ key: node.navId, navId: node.navId, level, expandable: true, expanded: open, path: null });
+      if (!open) return;
+      for (const child of node.children) {
+        rows.push({ key: child.navId, navId: child.navId, level: level + 1, expandable: false, expanded: false, path: child.path });
+      }
+    };
+    for (const group of rail) {
       if (group.labelKey === null) {
-        // A headerless cluster: its leaves are always-visible level-1 rows, never collapsible.
         for (const node of group.items) {
-          rows.push({ navId: node.navId, level: 1, expandable: false, expanded: false, path: (node as NavItem).path });
+          if (isNavParent(node)) pushParent(node, 1);
+          else rows.push({ key: node.navId, navId: node.navId, level: 1, expandable: false, expanded: false, path: node.path });
         }
         continue;
       }
       const groupExpanded = isExpanded(group.navId);
-      rows.push({ navId: group.navId, level: 1, expandable: true, expanded: groupExpanded, path: null });
+      rows.push({ key: groupKey(group.navId), navId: group.navId, level: 1, expandable: true, expanded: groupExpanded, path: null });
       if (!groupExpanded) continue;
       for (const node of group.items) {
-        if (isNavParent(node)) {
-          const parentExpanded = isExpanded(node.navId);
-          rows.push({ navId: node.navId, level: 2, expandable: true, expanded: parentExpanded, path: null });
-          if (!parentExpanded) continue;
-          for (const child of node.children) {
-            rows.push({ navId: child.navId, level: 3, expandable: false, expanded: false, path: child.path });
-          }
-        } else {
-          rows.push({ navId: node.navId, level: 2, expandable: false, expanded: false, path: node.path });
-        }
+        if (isNavParent(node)) pushParent(node, 2);
+        else rows.push({ key: node.navId, navId: node.navId, level: 2, expandable: false, expanded: false, path: node.path });
       }
     }
     return rows;
-  }, [isExpanded]);
+  }, [rail, isExpanded]);
 
-  // The roving tab stop. The user's last focus wins; otherwise the active leaf, otherwise the first
-  // row. Always normalised to a row that is actually visible, so collapsing a subtree can never leave
-  // the single Tab stop pointing at a node that is no longer on screen.
+  // EXACTLY ONE aria-current (judge round 1 M4): when the lit leaf sits inside a group or parent the
+  // person closed, the collapsed row on screen that holds it carries aria-current="location" and the
+  // accent ink, so the open page always has one mark in the rail.
+  const locationKey = useMemo<string | null>(() => {
+    if (active.treeNavId === null || visible.some((r) => r.key === active.treeNavId)) return null;
+    return visible.find((r) => r.expandable && !r.expanded && active.expand.has(r.navId))?.key ?? null;
+  }, [active, visible]);
+
+  // The roving tab stop: the user's last focus, else the lit leaf (or the row standing in for it), else
+  // the first row; always a row on screen, so collapsing a subtree can never leave the single Tab stop
+  // pointing at a hidden node.
   const [focusedNavId, setFocusedNavId] = useState<string | null>(null);
   const effectiveFocus = useMemo<string | null>(() => {
-    const onScreen = (id: string | null): boolean => id !== null && visible.some((r) => r.navId === id);
+    const onScreen = (key: string | null): boolean => key !== null && visible.some((r) => r.key === key);
     if (onScreen(focusedNavId)) return focusedNavId;
-    if (onScreen(activeLeafId)) return activeLeafId;
-    return visible[0]?.navId ?? null;
-  }, [focusedNavId, activeLeafId, visible]);
+    if (onScreen(active.treeNavId)) return active.treeNavId;
+    if (onScreen(locationKey)) return locationKey;
+    return visible[0]?.key ?? null;
+  }, [focusedNavId, active.treeNavId, locationKey, visible]);
 
-  const tabIndexFor = (navId: string): 0 | -1 => (navId === effectiveFocus ? 0 : -1);
+  const tabIndexFor = (key: string): 0 | -1 => (key === effectiveFocus ? 0 : -1);
 
-  const focusRow = (navId: string): void => {
-    const el = treeRef.current?.querySelector<HTMLElement>(`[data-tree-navid="${navId}"]`);
+  const focusRow = (key: string): void => {
+    const el = treeRef.current?.querySelector<HTMLElement>(`[data-tree-key="${key}"]`);
     if (el !== null && el !== undefined) {
       el.focus();
-      setFocusedNavId(navId);
+      setFocusedNavId(key);
     }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-tree-navid]');
+    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-tree-key]');
     if (target === null) return;
-    // Only the treeitem row itself drives tree keys. A key pressed while a descendant control (the
-    // pin star) holds focus is that control's business, never a navigation or a toggle.
+    // Only the treeitem row itself drives tree keys: a key on the pin star is the star's business.
     if (event.target !== target) return;
-    const navId = target.dataset.treeNavid;
-    if (navId === undefined) return;
-    const index = visible.findIndex((r) => r.navId === navId);
+    const key = target.dataset.treeKey;
+    if (key === undefined) return;
+    const index = visible.findIndex((r) => r.key === key);
     if (index === -1) return;
     const row = visible[index];
 
@@ -229,44 +277,43 @@ export function NavTree({ onNavigate }: { onNavigate?: () => void }) {
       case 'ArrowDown': {
         event.preventDefault();
         const next = visible[index + 1];
-        if (next !== undefined) focusRow(next.navId);
+        if (next !== undefined) focusRow(next.key);
         break;
       }
       case 'ArrowUp': {
         event.preventDefault();
         const prev = visible[index - 1];
-        if (prev !== undefined) focusRow(prev.navId);
+        if (prev !== undefined) focusRow(prev.key);
         break;
       }
       case 'Home': {
         event.preventDefault();
-        if (visible[0] !== undefined) focusRow(visible[0].navId);
+        if (visible[0] !== undefined) focusRow(visible[0].key);
         break;
       }
       case 'End': {
         event.preventDefault();
-        if (visible.length > 0) focusRow(visible[visible.length - 1].navId);
+        if (visible.length > 0) focusRow(visible[visible.length - 1].key);
         break;
       }
       case 'ArrowRight': {
         event.preventDefault();
         if (row.expandable && !row.expanded) {
-          toggle(row.navId, accordionSetFor(row.navId)); // expand in place; focus stays on the node just opened
+          toggle(row.navId, accordionSetFor(row.navId));
         } else if (row.expandable && row.expanded) {
           const child = visible[index + 1];
-          if (child !== undefined && child.level > row.level) focusRow(child.navId);
+          if (child !== undefined && child.level > row.level) focusRow(child.key);
         }
         break;
       }
       case 'ArrowLeft': {
         event.preventDefault();
         if (row.expandable && row.expanded) {
-          toggle(row.navId); // collapse in place; focus stays on the node just closed
+          toggle(row.navId);
         } else {
-          // Step out to the nearest shallower row, which is this row's parent.
           for (let i = index - 1; i >= 0; i -= 1) {
             if (visible[i].level < row.level) {
-              focusRow(visible[i].navId);
+              focusRow(visible[i].key);
               break;
             }
           }
@@ -276,8 +323,7 @@ export function NavTree({ onNavigate }: { onNavigate?: () => void }) {
       case 'Enter': {
         event.preventDefault();
         if (row.expandable) {
-          // D135: Enter on a parent navigates to its first child (its natural landing) and expands,
-          // mirroring a pointer click on the row. Space stays the pure toggle below.
+          // D135: Enter on a parent navigates to its first child and expands, like a pointer click.
           const destination = firstChildPaths.get(row.navId);
           if (destination !== undefined) {
             navigate(destination);
@@ -294,7 +340,7 @@ export function NavTree({ onNavigate }: { onNavigate?: () => void }) {
       case 'Spacebar': {
         event.preventDefault();
         if (row.expandable) {
-          toggle(row.navId, accordionSetFor(row.navId)); // pure expand/collapse toggle, no navigation
+          toggle(row.navId, accordionSetFor(row.navId));
         } else if (row.path !== null) {
           navigate(row.path);
           onNavigate?.();
@@ -306,22 +352,14 @@ export function NavTree({ onNavigate }: { onNavigate?: () => void }) {
     }
   };
 
-  /** A destination row: the `treeitem` itself, which is a REAL `<a href>`
-   *  (F-05), holding the pin star as an ARIA button on a span. A real `<button>` may not sit inside
-   *  an anchor (invalid HTML), and a button beside the anchor is a tree child the treeview contract
-   *  forbids (axe: "children which are not allowed"), so the star is a focusable span with the button
-   *  role, exactly as reachable by Tab and Enter/Space as the button it replaces.
-   *  A plain click and the keyboard route in place through the router; a modifier-click
-   *  (Cmd/Ctrl/Shift/Alt) or a middle click is left to the browser, which opens the href in a new
-   *  tab, and "copy link" reads the href. The active leaf carries `aria-current="page"` and
-   *  `aria-selected`, never colour alone. Its accessible name comes from `aria-labelledby`, so the
-   *  badge and the pin button's own label never pollute it.
-   *
-   *  The pin star toggles the surface in the Favoriten lane. Its tab stop FOLLOWS the roving focus (it
-   *  is tabbable only while its own row is the focused treeitem), so a keyboard user arrows to a row
-   *  and Tabs to its star, without adding a second permanent tab stop to the widget. */
-  const renderLeaf = (item: NavItem, level: number): ReactNode => {
-    const active = item.navId === activeLeafId;
+  /** A destination row: the `treeitem` itself, a REAL `<a href>` (F-05), holding the pin star as an
+   *  ARIA button on a span. It carries `aria-current` only when the rail's one model names it; under
+   *  `both_soft` the menu copy of a pinned page is drawn in accent ink without the fill and without
+   *  `aria-current` (`data-soft-current`). The pin star shows on hover and focus only, filled when the
+   *  page is pinned, so a pinned page draws no second accent in the menu. */
+  const renderLeaf = (item: NavItem, level: number, nested: boolean): ReactNode => {
+    const lit = item.navId === active.treeNavId;
+    const soft = item.navId === active.treeSoftNavId;
     const pinned = isFavourite(item.navId);
     const label = t(item.labelKey);
     const labelId = `nav-leaf-${item.navId}`;
@@ -331,22 +369,17 @@ export function NavTree({ onNavigate }: { onNavigate?: () => void }) {
         role="treeitem"
         href={item.path}
         aria-level={level}
-        aria-current={active ? 'page' : undefined}
-        aria-selected={active}
+        aria-current={lit ? 'page' : undefined}
+        aria-selected={lit}
         aria-labelledby={labelId}
         tabIndex={tabIndexFor(item.navId)}
         data-tree-navid={item.navId}
-        className={level >= 3 ? 'rail-leaf rail-link rail-link--nested' : 'rail-leaf rail-link'}
+        data-tree-key={item.navId}
+        data-soft-current={soft ? '' : undefined}
+        className={nested ? 'rail-leaf rail-link rail-link--nested' : 'rail-leaf rail-link'}
         onClick={(event) => {
-          // A modifier or non-primary click is the browser's (new tab, new window); a plain click
-          // routes in place without the full page load a bare anchor would cause.
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
           event.preventDefault();
-          // "Suche": open the command palette OVER the current surface (owner request, D135-adjacent).
-          // The href stays `/search`, so a modifier/middle click still deep-links to the routed page;
-          // only the plain click is diverted, preserving the context the full-screen page would erase.
-          // Without the provider (isolation tests) the palette is unavailable and we fall through to
-          // the normal in-place route, so the leaf never becomes a dead click.
           if (item.path === '/search' && keyboard !== null) {
             keyboard.openPalette();
             onNavigate?.();
@@ -373,9 +406,6 @@ export function NavTree({ onNavigate }: { onNavigate?: () => void }) {
             <AttentionBadge />
           </SlotBoundary>
         )}
-        {/* The pin star: an ARIA button on a span (a real <button> may not sit inside an anchor). Its
-            click stops at the star (never the anchor's navigation), and Enter/Space toggle the pin
-            with the anchor's own activation suppressed. */}
         <span
           role="button"
           className={pinned ? 'rail-pin rail-pin--on' : 'rail-pin'}
@@ -395,76 +425,76 @@ export function NavTree({ onNavigate }: { onNavigate?: () => void }) {
             }
           }}
         >
-          <StarGlyph filled={pinned} />
+          <NavIcon name={pinned ? 'starFilled' : 'star'} size={16} className="rail-pin-glyph" />
         </span>
       </a>
     );
   };
 
-  /** An expandable node (a headed group or a nested parent). It carries no route of its own, so it is
-   *  still a `<div>` treeitem and not an `<a>`: the rail owns zero anchors that are not destinations.
-   *  What changed (D135, owner request): a click on the ROW navigates to the node's first child leaf
-   *  (its natural landing) AND expands the node, so the header is a shortcut to a real surface rather
-   *  than a dead label. The CHEVRON keeps the pure expand/collapse toggle (it stops propagation, so the
-   *  row's navigation never fires with it), which is what preserves "peek without leaving the page" for
-   *  the pointer, alongside the Left/Right/Space keyboard toggle. A top-level group also runs the
-   *  accordion (opening it collapses its sibling groups); a nested parent does not. Its child
-   *  `role="group"` is a DOM sibling linked back by `aria-owns`. `variant` only styles the label
-   *  (uppercase group header vs. body-weight parent); the ARIA is identical. */
+  /** An expandable node (a headed group or a nested parent). A click on the ROW navigates to its first
+   *  visible leaf AND expands it (D135); the chevron keeps the pure toggle. A group header is set in the
+   *  person's header style; a parent keeps the leaf's type, with its icon. */
   const renderExpandable = (
-    node: { navId: string; labelKey: string; icon?: NavItem['icon'] },
+    node: { navId: string; labelKey: string; icon?: NavIconName },
     level: number,
     variant: 'group' | 'parent',
     children: ReactNode,
   ): ReactNode => {
+    const rowKey = variant === 'group' ? groupKey(node.navId) : node.navId;
     const expanded = isExpanded(node.navId);
     const labelId = `nav-label-${node.navId}`;
     const groupId = `nav-group-${node.navId}`;
     const destination = firstChildPaths.get(node.navId) ?? null;
     const accordionSet = accordionSetFor(node.navId);
-    // The chevron's pure toggle: expand or collapse, run the accordion when this is a group, and never
-    // navigate. Shared by the pointer (the chevron onClick) and kept off the row's own click.
-    const toggleOnly = (): void => {
-      toggle(node.navId, accordionSet);
-      setFocusedNavId(node.navId);
-    };
+    const icon = variant === 'group' ? (headerStyle === 'icon_14' ? GROUP_ICON[node.navId] : undefined) : node.icon;
     return (
       <Fragment key={node.navId}>
         <div
           role="treeitem"
           aria-level={level}
           aria-expanded={expanded}
+          aria-current={rowKey === locationKey ? 'location' : undefined}
           aria-labelledby={labelId}
           aria-owns={expanded ? groupId : undefined}
-          tabIndex={tabIndexFor(node.navId)}
+          tabIndex={tabIndexFor(rowKey)}
           data-tree-navid={node.navId}
-          className={variant === 'group' ? 'rail-treeitem rail-group-row' : 'rail-treeitem rail-parent-row'}
+          data-tree-key={rowKey}
+          className={
+            variant === 'group' ? 'rail-treeitem rail-group-row rail-header-row' : 'rail-treeitem rail-parent-row'
+          }
           onClick={() => {
-            // D135: navigate to the first child (its natural landing) and ensure the node is open. The
-            // chevron below keeps the pure toggle, so this row-click never collapses an open node.
             if (destination !== null) {
               navigate(destination);
               onNavigate?.();
             }
             if (!expanded) toggle(node.navId, accordionSet);
-            setFocusedNavId(node.navId);
+            setFocusedNavId(rowKey);
           }}
-          onFocus={() => setFocusedNavId(node.navId)}
+          onFocus={() => setFocusedNavId(rowKey)}
         >
-          {node.icon !== undefined && <NavIcon name={node.icon} className="rail-icon" />}
-          <span id={labelId} className={variant === 'group' ? 'rail-group-label' : 'rail-label'}>
+          {icon !== undefined && <NavIcon name={icon} className="rail-icon" />}
+          <span id={labelId} className={variant === 'group' ? 'rail-header-label rail-group-label' : 'rail-label'}>
             {t(node.labelKey)}
           </span>
-          <Chevron
-            onClick={(event) => {
+          <NavIcon
+            name="chevron"
+            size={16}
+            className="rail-chevron"
+            onClick={(event: MouseEvent<SVGSVGElement>) => {
               event.stopPropagation();
               event.preventDefault();
-              toggleOnly();
+              toggle(node.navId, accordionSet);
+              setFocusedNavId(rowKey);
             }}
           />
         </div>
         {expanded && (
-          <div role="group" id={groupId} aria-labelledby={labelId} className="rail-tree-group">
+          <div
+            role="group"
+            id={groupId}
+            aria-labelledby={labelId}
+            className={variant === 'group' ? 'rail-tree-group rail-tree-group--group' : 'rail-tree-group rail-tree-group--parent'}
+          >
             {children}
           </div>
         )}
@@ -472,37 +502,29 @@ export function NavTree({ onNavigate }: { onNavigate?: () => void }) {
     );
   };
 
+  const renderParent = (node: NavParent, level: number): ReactNode =>
+    renderExpandable(
+      { navId: node.navId, labelKey: node.labelKey, icon: node.icon },
+      level,
+      'parent',
+      node.children.map((child) => renderLeaf(child, level + 1, true)),
+    );
+
   const renderGroup = (group: NavGroup): ReactNode => {
     if (group.labelKey === null) {
-      // A headerless cluster contributes its leaves straight into the tree at level 1.
-      return group.items.map((node) => renderLeaf(node as NavItem, 1));
+      return group.items.map((node) => (isNavParent(node) ? renderParent(node, 1) : renderLeaf(node, 1, false)));
     }
     return renderExpandable(
       { navId: group.navId, labelKey: group.labelKey },
       1,
       'group',
-      group.items.map((node) =>
-        isNavParent(node)
-          ? renderExpandable(
-              { navId: node.navId, labelKey: node.labelKey, icon: (node as NavParent).icon },
-              2,
-              'parent',
-              (node as NavParent).children.map((child) => renderLeaf(child, 3)),
-            )
-          : renderLeaf(node as NavItem, 2),
-      ),
+      group.items.map((node) => (isNavParent(node) ? renderParent(node, 2) : renderLeaf(node, 2, false))),
     );
   };
 
   return (
-    <div
-      ref={treeRef}
-      role="tree"
-      aria-label={t('nav.label')}
-      className="rail-tree"
-      onKeyDown={onKeyDown}
-    >
-      {NAV_RAIL.map((group) => (
+    <div ref={treeRef} role="tree" aria-label={t('nav.label')} className="rail-tree" onKeyDown={onKeyDown}>
+      {rail.map((group) => (
         <Fragment key={group.navId}>{renderGroup(group)}</Fragment>
       ))}
     </div>

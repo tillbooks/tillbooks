@@ -1,15 +1,17 @@
 /**
- * The density context: Komfortabel or Kompakt, resolved once and stamped on the document (D118 B3).
+ * The density context: Komfortabel or Kompakt, resolved from the person's preference and stamped on the
+ * document (D118 B3).
  *
- * This is the deliberate twin of `theme.tsx`. Density is one global control, not a per-table menu:
- * the resolved value is written to `data-density` on the document element, where the token stylesheet
- * keys the compact spacing/height/type values (see `[data-density='kompakt']` in
- * `brand/tokens/tokens.css`). On mount the density is read from localStorage('till-density') if the
- * operator has chosen one, otherwise it defaults to Komfortabel (unlike the theme, there is no OS
- * signal for density, so the ground is the only default). An explicit choice persists.
+ * The deliberate twin of `theme.tsx`. Density is one global control, not a per-table menu: the value is
+ * written to `data-density` on the document element, where the token stylesheet keys the compact
+ * spacing/height/type values (see `[data-density='kompakt']` in `brand/tokens/tokens.css`).
  *
- * Every access to `window` is guarded: under SSR or jsdom (no localStorage) the provider resolves to
- * Komfortabel and never throws, exactly as the theme provider resolves to light.
+ * D178 point 7: the choice is the engine preference `appearance.density` (`komfortabel | kompakt`,
+ * default `komfortabel`), read and written through `usePref`, so it follows the person to another
+ * browser and an agent can read it. The browser-only choice of earlier builds
+ * (`localStorage['till-density']`) moves into the engine once, through `importLegacyPref`, and is then
+ * cleared. Outside a `PrefsProvider` (component tests) the provider keeps local state; `initialDensity`
+ * pins its start there.
  */
 import {
   createContext,
@@ -17,47 +19,38 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from 'react';
 
+import { importLegacyPref, usePref } from '../lib/prefs';
+
 export type Density = 'komfortabel' | 'kompakt';
 
-/** The localStorage key that holds an explicit operator choice. Sibling of `till-theme`. */
+/** The engine preference key (G00 spec §10, `src/core/customization/prefDefs/appearance.ts`). */
+export const DENSITY_PREF = 'appearance.density';
+
+/** The `localStorage` key earlier builds kept an explicit choice under. Read once, then cleared. */
 export const DENSITY_STORAGE_KEY = 'till-density';
 
-/** The ground default when the operator has made no choice. */
+/** The ground default when the person has made no choice (the registry default, restated for callers). */
 export const DEFAULT_DENSITY: Density = 'komfortabel';
 
-/** The stored explicit choice, or null if none (or storage is unavailable). */
-function readStored(): Density | null {
-  try {
-    const value = window.localStorage.getItem(DENSITY_STORAGE_KEY);
-    return value === 'komfortabel' || value === 'kompakt' ? value : null;
-  } catch {
-    return null;
-  }
+export function parseLegacyDensity(raw: string): Density | undefined {
+  return raw === 'komfortabel' || raw === 'kompakt' ? raw : undefined;
 }
 
-/** Best-effort persist. Storage can throw (private mode, disabled): a failure is not fatal. */
-function persist(density: Density): void {
-  try {
-    window.localStorage.setItem(DENSITY_STORAGE_KEY, density);
-  } catch {
-    /* storage unavailable: the choice lives only for this session */
-  }
+/** Move `till-density` into the engine once (queued until the preference store has loaded). */
+export function importLegacyDensity() {
+  return importLegacyPref<Density>(DENSITY_PREF, DENSITY_STORAGE_KEY, parseLegacyDensity);
 }
 
-/** Resolve the initial density: an explicit choice wins, else the Komfortabel ground. */
-export function resolveInitialDensity(): Density {
-  return readStored() ?? DEFAULT_DENSITY;
-}
+void importLegacyDensity();
 
 export interface DensityContextValue {
   density: Density;
-  /** Set the density explicitly and persist the choice. */
+  /** Set the density preference. */
   setDensity: (density: Density) => void;
-  /** Flip between Komfortabel and Kompakt, persisting the result. */
+  /** Flip between Komfortabel and Kompakt, storing the result. */
   toggle: () => void;
 }
 
@@ -68,11 +61,12 @@ export function DensityProvider({
   initialDensity,
 }: {
   children: ReactNode;
-  /** Override the resolved initial density. Used by tests to pin a known start state. */
+  /** Pin the start outside a `PrefsProvider` (tests). Inside one, the engine's preference decides. */
   initialDensity?: Density;
 }) {
-  const [density, setDensityState] = useState<Density>(
-    () => initialDensity ?? resolveInitialDensity(),
+  const [density, setPreference] = usePref<Density>(
+    DENSITY_PREF,
+    initialDensity === undefined ? undefined : { initial: initialDensity },
   );
 
   // Reflect the density onto the document so the token stylesheet can pick up the compact values.
@@ -83,18 +77,11 @@ export function DensityProvider({
     }
   }, [density]);
 
-  const setDensity = useCallback((next: Density) => {
-    persist(next);
-    setDensityState(next);
-  }, []);
-
-  const toggle = useCallback(() => {
-    setDensityState((prev) => {
-      const next: Density = prev === 'kompakt' ? 'komfortabel' : 'kompakt';
-      persist(next);
-      return next;
-    });
-  }, []);
+  const setDensity = useCallback((next: Density) => void setPreference(next), [setPreference]);
+  const toggle = useCallback(
+    () => void setPreference(density === 'kompakt' ? 'komfortabel' : 'kompakt'),
+    [density, setPreference],
+  );
 
   const value = useMemo<DensityContextValue>(
     () => ({ density, setDensity, toggle }),

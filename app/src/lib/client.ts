@@ -35,6 +35,7 @@ import type { Err, Ok, OkFields, Result } from '../../../src/core/result';
 
 import { mcpTransport } from './mcp-transport';
 import { guardStudioKey, studioKeyHeaders } from './studio-key';
+import { noticeAdoptedBookRefusal } from './adopted-book';
 import type { ActionPayloads } from './payloads';
 
 export type { Err, Ok, OkFields, Result };
@@ -144,7 +145,12 @@ export class TillClient {
    */
   call(action: string, input?: Record<string, unknown>): Promise<RestResponse>;
   call(action: string, input: Record<string, unknown> = {}): Promise<RestResponse> {
-    return this.transport(action, input);
+    // D166 point 8 (critic N1): the one place every Studio call returns through. A refusal because the
+    // adopted book is not reachable is announced, and the shell routes to the page that says so.
+    return this.transport(action, input).then((response) => {
+      noticeAdoptedBookRefusal(response.body);
+      return response;
+    });
   }
 
   /**

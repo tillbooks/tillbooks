@@ -39,6 +39,42 @@ export function useEntry(workspaceId: string, entryId: string | null): { entry: 
   return state.id === entryId ? { entry: state.entry, loading: false, failed: state.failed } : { entry: null, loading: true, failed: false };
 }
 
+/**
+ * D167 polish 10: the entries the DECIDED rows in view were booked to, read once each (`get_entry`), so a
+ * Gebucht row can say on its one line what it booked: "Gebucht auf 6570 Informatik · Vorsteuer 8.1 %". A
+ * read that fails leaves that row with its kind in words, never an error on the row.
+ */
+export function useEntries(workspaceId: string, entryIds: readonly string[]): ReadonlyMap<string, EntryDetail> {
+  const client = useClient();
+  const [cache, setCache] = useState<ReadonlyMap<string, EntryDetail>>(new Map());
+  const key = [...new Set(entryIds)].sort().join(',');
+  useEffect(() => {
+    const wanted = key === '' ? [] : key.split(',');
+    const missing = wanted.filter((id) => !cache.has(id));
+    if (missing.length === 0) return undefined;
+    let live = true;
+    void Promise.all(
+      missing.map(async (entryId) => {
+        const response = await client.call('get_entry', { workspaceId, entryId });
+        return isErr(response.body) ? null : ([entryId, { entry: response.body.entry, lines: response.body.lines }] as const);
+      }),
+    ).then((got) => {
+      if (!live) return;
+      setCache((prev) => {
+        const next = new Map(prev);
+        for (const pair of got) if (pair !== null) next.set(pair[0], pair[1]);
+        return next;
+      });
+    });
+    return () => {
+      live = false;
+    };
+    // `cache` is read, not watched: a landed answer must not start the reads again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, workspaceId, key]);
+  return cache;
+}
+
 export interface BatchDetail {
   executionDate: string | null;
   status: string;

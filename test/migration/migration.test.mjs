@@ -138,6 +138,82 @@ test('G09: rollback posts a REVERSING entry (never a delete) and voids the appro
   assert.equal(step.status, 'mapped', 'a rolled-back step must return to mapped');
 });
 
+// --- A rollback whose reversal is refused changes nothing (D141 follow-up 5) ---------------------
+
+test('G09: a rollback whose opening reversal is refused leaves the step committed, so a recommit cannot post a second opening', () => {
+  const { deps, wid } = ws('rb-locked');
+  const { planId, stepId } = seedOpeningStep(deps, wid, 'rl');
+  const staged = call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: 'rl-commit' });
+  grantBackup(deps, planId);
+  must(call(deps, 'migration_record_approval', { workspaceId: wid, planId, stepId, checkHash: staged.checkHash, idempotencyKey: 'rl-appr' }), 'approval');
+  const committed = must(call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: 'rl-commit' }), 'commit');
+  const openingId = committed.openingEntryId;
+  // A reversal is dated today (OR 957a), so locking today's month is what makes it refuse.
+  const today = deps.clock.now().slice(0, 7);
+  must(call(deps, 'lock_period', { workspaceId: wid, period: today, kind: 'hard', idempotencyKey: 'rl-lock' }), 'lock');
+  const afterCommit = countEntries(deps, wid);
+
+  // Measured before the fix: ok with couldNotUndo [openingId], the step back at `mapped` and the approval
+  // voided while the opening entry still stood, so the step's status misstated the books. (A recommit is
+  // held today only by the import-conflict check, which sees the standing opening; the step must not
+  // rely on that.)
+  const rolled = call(deps, 'migration_rollback_step', { workspaceId: wid, planId, stepId, confirmed: true, idempotencyKey: 'rl-roll' });
+  assert.equal(rolled.ok, false, `a rollback that could not reverse the opening must refuse: ${JSON.stringify(rolled)}`);
+  assert.equal(rolled.openingEntryId, openingId, 'the refusal names the opening entry it could not reverse');
+  assert.equal(countEntries(deps, wid), afterCommit, 'a refused rollback posts nothing');
+  const step = deps.store.db.prepare('SELECT status FROM migration_step WHERE id = ?').get(stepId);
+  assert.equal(step.status, 'committed', 'the step stays committed while its opening entry stands');
+  assert.equal(countApprovals(deps, wid, stepId), 1, 'the approval stands with the commit it approved');
+
+  // The refusal is not memoised: once the period reopens, the SAME key rolls back for real.
+  must(call(deps, 'unlock_period', { workspaceId: wid, period: today, idempotencyKey: 'rl-unlock' }), 'unlock');
+  const retried = must(call(deps, 'migration_rollback_step', { workspaceId: wid, planId, stepId, confirmed: true, idempotencyKey: 'rl-roll' }), 'rollback after unlock');
+  assert.equal(retried.reversed.length, 1);
+  const mirror = deps.store.db.prepare('SELECT id FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ?').get(wid, openingId);
+  assert.ok(mirror, 'the retry posted the reversal');
+  assert.deepEqual(retried.reversed, [mirror.id], '`reversed` names the reversing entry, not the original');
+  assert.equal(deps.store.db.prepare('SELECT status FROM migration_step WHERE id = ?').get(stepId).status, 'mapped');
+});
+
+// --- An opening reversed by hand before the rollback (critic F2) --------------------------------
+
+function committedOpening(seed) {
+  const { deps, wid } = ws(seed);
+  const { planId, stepId } = seedOpeningStep(deps, wid, seed);
+  const staged = call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: `${seed}-commit` });
+  grantBackup(deps, planId);
+  must(call(deps, 'migration_record_approval', { workspaceId: wid, planId, stepId, checkHash: staged.checkHash, idempotencyKey: `${seed}-appr` }), 'approval');
+  const committed = must(call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: `${seed}-commit` }), 'commit');
+  const studio = (name, input) => getAction(name).run({ ...deps, actor: 'studio' }, { workspaceId: wid, ...input });
+  const stepStatus = () => deps.store.db.prepare('SELECT status FROM migration_step WHERE id = ?').get(stepId).status;
+  return { deps, wid, planId, stepId, openingId: committed.openingEntryId, studio, stepStatus };
+}
+
+test('G09: an opening already reversed by hand rolls back without a second reversal', () => {
+  const w = committedOpening('hand1');
+  const b = w.studio('reverse_entry', { entryId: w.openingId, idempotencyKey: 'hand1-b' });
+  assert.equal(b.ok, true, JSON.stringify(b));
+  const before = countEntries(w.deps, w.wid);
+  const rolled = must(call(w.deps, 'migration_rollback_step', { workspaceId: w.wid, planId: w.planId, stepId: w.stepId, confirmed: true, idempotencyKey: 'hand1-roll' }), 'rollback');
+  assert.deepEqual(rolled.reversed, [], 'the rollback posted nothing, so it names nothing it posted');
+  assert.equal(countEntries(w.deps, w.wid), before);
+  assert.equal(w.stepStatus(), 'mapped');
+});
+
+test('G09: an opening whose hand reversal was itself reversed stands again, so the rollback refuses', () => {
+  const w = committedOpening('hand2');
+  const b = w.studio('reverse_entry', { entryId: w.openingId, idempotencyKey: 'hand2-b' });
+  assert.equal(b.ok, true, JSON.stringify(b));
+  const c = w.studio('reverse_entry', { entryId: b.reversalId, idempotencyKey: 'hand2-c' });
+  assert.equal(c.ok, true, JSON.stringify(c));
+  const rolled = call(w.deps, 'migration_rollback_step', { workspaceId: w.wid, planId: w.planId, stepId: w.stepId, confirmed: true, idempotencyKey: 'hand2-roll' });
+  assert.equal(rolled.ok, false, JSON.stringify(rolled));
+  assert.equal(rolled.error, 'opening_still_stands');
+  assert.equal(rolled.openingEntryId, w.openingId);
+  assert.equal(w.stepStatus(), 'committed', 'the step stays committed while its opening stands');
+  assert.equal(countApprovals(w.deps, w.wid, w.stepId), 1);
+});
+
 // --- The gate is a conjunction ------------------------------------------------------------------
 
 test('G09: the commit gate refuses on each condition in isolation', () => {

@@ -453,7 +453,8 @@
       "closeGap": "Lücke schliessen",
       "confirmGap": "Nichts fehlt, bestätigen",
       "confirmGapConfirm": "Ja, nichts fehlt",
-      "confirmGapReason": "Woran siehst du, dass nichts fehlt?"
+      "confirmGapReason": "Woran siehst du, dass nichts fehlt?",
+      "closeGaps": "Lücken schliessen"
     }
   }
 }

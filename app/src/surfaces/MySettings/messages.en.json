@@ -1,0 +1,55 @@
+{
+  "nav": {
+    "mySettings": "My settings"
+  },
+  "mySettings": {
+    "title": "My settings",
+    "subtitle": "These apply to you alone and follow you into every browser. TILL stays as it is for everyone else.",
+    "loading": "Loading your settings…",
+    "search": {
+      "label": "Search settings",
+      "placeholder": "For example colour scheme"
+    },
+    "empty": {
+      "title": "No personal settings yet.",
+      "hint": "They appear here as soon as an area offers one.",
+      "action": "Open the workspace settings"
+    },
+    "filtered": {
+      "title": "No setting matches “{query}”.",
+      "hint": "Try another word or clear the filter."
+    },
+    "scope": {
+      "person": "Applies in every workspace.",
+      "workspace": "Applies in this workspace only."
+    },
+    "isDefault": "Default",
+    "defaultIs": "Default: {value}",
+    "stale": "The stored value no longer fits, so the default applies.",
+    "reset": "Reset",
+    "resetKey": "Reset {setting}",
+    "resetGroup": "Reset all",
+    "resetGroupContext": "{area}: reset all",
+    "yes": "Yes",
+    "no": "No",
+    "bounds": "From {min} to {max}",
+    "json": {
+      "default": "Default",
+      "custom": "Customised",
+      "hint": "You change it where it applies."
+    },
+    "refusal": {
+      "unknown_pref": "TILL no longer knows this setting. Reload the page. Nothing was changed.",
+      "invalid_pref_value": "This value does not fit this setting. Nothing was changed.",
+      "capability_forbidden": "Only you can change your own settings. Nothing was changed."
+    }
+  },
+  "help": {
+    "MySettings": {
+      "title": "My settings",
+      "body": "Here you choose how TILL looks to you: the colour scheme, the density, and whatever further areas offer later. Your choices apply to you alone and follow you into every browser, because TILL keeps them with your books rather than in the browser. A change applies at once. Reset returns one setting or a whole group to its default. How the workspace behaves for everyone is set in the settings under Setup.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

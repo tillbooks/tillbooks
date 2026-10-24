@@ -100,7 +100,7 @@ export function reviewActions(h: ReviewActionHelpers): ActionDef[] {
     ctxAction(
       'export_vat',
       'read',
-      "The MWST-Abrechnung figures of a period as a per-form-line CSV working paper: every Ziffer line exactly as vat_return computes it (stored trace values, never recomputed), plus the payable (Ziffer 500) and credit (Ziffer 510) totals. The file a Treuhänder lays beside the annual accounts; the ESTV ePortal upload artifact itself is vat_export_ech0217, not this.",
+      "The MWST-Abrechnung figures of a period as a per-form-line CSV working paper: every Ziffer line exactly as vat_return computes it (stored trace values, never recomputed), plus the payable (Ziffer 500) and credit (Ziffer 510) totals. period is YYYY-MM, YYYY, YYYY-Qn or YYYY-Hn, from 1995 (the MWST era). A label names the file (mwst-2026-Q3.csv); a label that is not a filing period of the book's method that year (vat_periods lists those: quarters under effektiv, half-years under Saldo) still exports, with notice not_a_filing_period, filingPeriods and filingMethod (the method governing the label, as artifact.method); a label touching a switch-year stub answers notice switch_year_stub_not_modelled. The file a Treuhänder lays beside the annual accounts; the ESTV ePortal upload artifact itself is vat_export_ech0217, not this.",
       ctxSchema({ period: STR, format: STR }, ['period']),
       (ctx, input) => exportVat(ctx, input as never),
     ),

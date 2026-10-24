@@ -279,4 +279,37 @@ describe('WorkspaceResolver (F-02: the morning starts on the books)', () => {
     await waitFor(() => expect(screen.getByTestId('current')).toHaveTextContent('ws_here'));
     expect(window.localStorage.getItem(WORKSPACE_STORAGE_KEY)).toBe('ws_here');
   });
+
+  /** D166 point 8 (critic N1): the adopted book is not reachable; the engine refuses all but delivery_status. */
+  function unavailableClient(flagInStatus: boolean): TillClient {
+    const refusal = { status: 422, body: { ok: false, error: 'adopted_book_unavailable', path: '/x/till.db', reason: 'missing' } };
+    const transport: Transport = async (action) => {
+      if (action === 'delivery_status') {
+        return {
+          status: 200,
+          body: { ok: true, mode: 'up', adoptedBookUnavailable: flagInStatus ? { path: '/x/till.db', reason: 'missing' } : null } as unknown as RestResponse['body'],
+        };
+      }
+      if (action === 'list_workspaces' && !flagInStatus) {
+        return { status: 200, body: { ok: true, workspaces: [{ workspaceId: 'ws_kept', archived: false }] } as unknown as RestResponse['body'] };
+      }
+      return refusal as RestResponse;
+    };
+    return new TillClient(transport);
+  }
+
+  it('D166.8: with a remembered workspace AND delivery_status flagging the adopted book, the shell routes to the door', async () => {
+    mount('/journal', unavailableClient(true), 'ws_kept');
+    expect(await screen.findByTestId('door')).toBeInTheDocument();
+  });
+
+  it('D166.8: any call refused with adopted_book_unavailable routes to the door, from whatever surface', async () => {
+    const c = unavailableClient(false);
+    mount('/journal', c, 'ws_kept');
+    expect(screen.getByTestId('current')).toHaveTextContent('ws_kept');
+    await act(async () => {
+      await c.call('list_journal', { workspaceId: 'ws_kept' });
+    });
+    expect(await screen.findByTestId('door')).toBeInTheDocument();
+  });
 });

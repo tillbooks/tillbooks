@@ -471,7 +471,7 @@ test('issue books the Mahngebühr once: balanced entry, 1100 debit, reconciled A
   assert.equal(view.items[0].interestMinor, interestNoteMinor(108100, 500, 45));
 });
 
-test('reversing the fee entry takes the fee back out of A16, still reconciled (H-AUDIT)', () => {
+test('reversing the fee takes it back out of A16, still reconciled (H-AUDIT; owned by dunning_fee_reverse since D169)', () => {
   const { deps, workspaceId, documentId } = world();
   bookedFeePolicy(deps, workspaceId, feeAccount(deps, workspaceId));
   const run = must(call(deps, 'propose_dunning_run', { workspaceId, idempotencyKey: 'r-p' }), 'propose');
@@ -479,7 +479,11 @@ test('reversing the fee entry takes the fee back out of A16, still reconciled (H
     call(deps, 'issue_dunning_run', { workspaceId, runId: run.runId, confirmed: true, idempotencyKey: 'r-i' }),
     'issue',
   );
-  must(call(deps, 'reverse_entry', { workspaceId, entryId: issued.feeEntryId, idempotencyKey: 'r-rev' }), 'reverse');
+  // D169: the raw Storno refuses the run's fee entry; the run's own verb reverses it.
+  const raw = call(deps, 'reverse_entry', { workspaceId, entryId: issued.feeEntryId, idempotencyKey: 'r-raw' });
+  assert.equal(raw.error, 'owned_by');
+  assert.equal(raw.verb, 'dunning_fee_reverse');
+  must(call(deps, 'dunning_fee_reverse', { workspaceId, runId: run.runId, reason: 'Gebühr erlassen', idempotencyKey: 'r-rev' }), 'reverse');
   const open = must(call(deps, 'list_open_items', { workspaceId }), 'list_open_items');
   const item = open.items.find((i) => i.documentId === documentId);
   assert.equal(item.dunningFeeMinor, 0);

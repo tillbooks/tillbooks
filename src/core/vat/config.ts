@@ -61,6 +61,7 @@ import {
   latestGenerationFrom,
   listDeclarationElections,
   listGenerations,
+  methodOn,
   openGeneration,
   previousDay,
   recordMethodChange,
@@ -107,8 +108,12 @@ export interface ConfigureVatInput {
   saldoGrant?: { validFrom: string };
   /** Rewrite the OPEN approval in place: what TILL recorded was wrong, not what the ESTV granted. */
   saldoCorrection?: boolean;
-  /** Record a dated method change (MWSTG Art. 37 Abs. 4), preserving the method that governed before. */
-  methodChange?: { validFrom: string };
+  /**
+   * Record a dated method change (MWSTG Art. 37 Abs. 4), preserving the method that governed before.
+   * `validFrom` is a 01.01, or, with `basis: 'mwstv_81_2'`, the day the ESTV adjusted a Saldosteuersatz
+   * of this book for a switch from Saldo to effektiv (MWSTV Art. 81 Abs. 2, see `refuseMidYearChange`).
+   */
+  methodChange?: { validFrom: string; basis?: string };
   /**
    * The date of the PERIOD the rates are being configured for (`YYYY-MM-DD`, or a full ISO
    * timestamp). Selects the statutory era the Saldosteuersatz ladder and the Normalsatz ceiling are
@@ -135,6 +140,11 @@ function validate(input: ConfigureVatInput): Result | null {
     if (value !== undefined && (!ISO_DAY_RE.test(value) || !isValidRateDate(value))) {
       return err('invalid_input', { field, value, expected: 'YYYY-MM-DD' });
     }
+  }
+  // The only basis a mid-year change can state (critic R2-M1); the date rule itself needs the book's
+  // history and runs in `configureVat` (`refuseMidYearChange`).
+  if (input.methodChange?.basis !== undefined && input.methodChange.basis !== MWSTV_81_2) {
+    return err('invalid_input', { field: 'methodChange.basis', value: input.methodChange.basis, expected: [MWSTV_81_2] });
   }
   if (input.saldoGrant !== undefined && input.saldoCorrection === true) {
     return err('invalid_input', {
@@ -317,6 +327,84 @@ function isFiledOnOrAfter(ctx: WorkspaceContext, from: string): boolean {
  * so the latest locked month is the end of the latest filed period. Exported for the eCH-0217
  * refusals (D160.5 critic F1), whose next step names this day once `set_vat_method` refuses.
  */
+/** The basis a Saldo to effektiv switch states when it lands inside a year (MWSTV Art. 81 Abs. 2). */
+export const MWSTV_81_2 = 'mwstv_81_2';
+
+/**
+ * WHEN A DATED CHANGE OF METHOD OR TIMING MAY TAKE EFFECT (critic O1, then R2-M1, 14.10.2026). Read on
+ * fedlex (MWSTG consolidation 1.1.2025; MWSTV in the version of AS 2024 485, in force 1.1.2025):
+ *  - MWSTG Art. 34 Abs. 2 "Als Steuerperiode gilt das Kalenderjahr" (Abs. 3, the Geschäftsjahr, is
+ *    "noch nicht in Kraft"); Art. 37 Abs. 4 "Wechsel sind jeweils auf Beginn einer Steuerperiode
+ *    möglich"; Art. 39 Abs. 3 keeps the Abrechnungsart "während mindestens einer Steuerperiode".
+ *  - MWSTV Art. 79 Abs. 1 (effektiv to Saldo) and Art. 81 Abs. 1 (Saldo to effektiv) are notified within
+ *    60 days of the start of the Steuerperiode the switch applies from; Art. 81 Abs. 3 forces the
+ *    switch "auf den Beginn der folgenden Steuerperiode".
+ *  - THE EXCEPTION, MWSTV Art. 81 Abs. 2: "Ein Wechsel ist vor Ablauf der ganzen Steuerperiode
+ *    zulässig", for a filer whose approved Saldosteuersatz the ESTV adjusted (not because of a change
+ *    of the statutory rates, MWSTG Art. 25 and 55); "Der Wechsel erfolgt auf den Zeitpunkt der Änderung
+ *    des Saldosteuersatzes." Abs. 5 lets the Abrechnungsart change with it.
+ *  - Not dated changes, so not here: Art. 80 (a Saldo approval withdrawn retroactively to its grant)
+ *    and Art. 83 (a takeover in the Meldeverfahren).
+ * So a non-01.01 `validFrom` is admitted in ONE shape: Saldo governing the day before, effektiv after,
+ * `basis: 'mwstv_81_2'` stated, and the day equal to the `valid_from` of a stored Saldo approval of this
+ * book whose rates differ from the approval before it (the adjustment the ESTV made, which the engine can see; that it was not a statutory rate change
+ * is the filer's statement, carried by the basis). Everything else is refused, naming what is unmet.
+ * The start of the tax liability, which can fall mid-year, is the FIRST method era and carries no
+ * `methodChange`, so it never reaches this.
+ */
+function refuseMidYearChange(ctx: WorkspaceContext, input: ConfigureVatInput): Result | null {
+  const change = input.methodChange;
+  if (change === undefined || change.validFrom.slice(5) === '01-01') return null;
+  const nextPeriodStart = nextSteuerperiodeStart(change.validFrom);
+  // An ADJUSTMENT is a stored approval whose rates differ from the approval before it (critic L-R3-1):
+  // Art. 81 Abs. 2 asks for a Saldosteuersatz "den die ESTV angepasst hat", and a "grant" restating the
+  // same rates adjusted nothing, whenever it was recorded.
+  const generations = listGenerations(ctx);
+  const rateKey = (g: (typeof generations)[number]) => g.rates.map((r) => r.rateBp).sort((a, b) => a - b).join(',');
+  const adjusted = (i: number) => i > 0 && rateKey(generations[i]!) !== rateKey(generations[i - 1]!);
+  const adjustmentDates = generations
+    .filter((g, i) => g.validFrom !== OPEN_FROM_THE_START && g.validFrom.slice(5) !== '01-01' && adjusted(i))
+    .map((g) => g.validFrom);
+  const onThatDay = generations.findIndex((g) => g.validFrom === change.validFrom);
+  const unmet: string[] = [];
+  if (change.basis !== MWSTV_81_2) unmet.push('basis');
+  if (methodOn(ctx, previousDay(change.validFrom)).method !== 'saldo' || input.method !== 'effektiv') {
+    unmet.push('from_saldo_to_effektiv');
+  }
+  if (onThatDay === -1) unmet.push('saldo_rate_adjusted_on_that_day');
+  else if (!adjusted(onThatDay)) unmet.push('saldo_rate_unchanged_on_that_day');
+  if (unmet.length === 0) return null;
+  return err('vat_method_change_not_period_start', {
+    validFrom: change.validFrom,
+    nextPeriodStart,
+    unmet,
+    saldoAdjustmentDates: adjustmentDates,
+    articles: ['MWSTG Art. 34 Abs. 2', 'MWSTG Art. 37 Abs. 4', 'MWSTG Art. 39 Abs. 3', 'MWSTV Art. 79', 'MWSTV Art. 81'],
+    reason:
+      'A change of the MWST method or of the Abrechnungsart takes effect at the start of a Steuerperiode, the calendar year (MWSTG Art. 37 Abs. 4, Art. 39 Abs. 3). The one exception is MWSTV Art. 81 Abs. 2: a switch from Saldo to effektiv on the day the ESTV adjusted one of your approved Saldosteuersätze (not because of a statutory rate change), with the Abrechnungsart allowed to change alongside (Abs. 5).',
+    hint:
+      adjustmentDates.length > 0
+        ? `Date the change from ${nextPeriodStart}, the start of the next Steuerperiode. If the ESTV adjusted your Saldosteuersatz on ${adjustmentDates.join(' or ')} and you switch from Saldo to effektiv on that day, pass methodChange: { validFrom: that day, basis: '${MWSTV_81_2}' }.`
+        : `Date the change from ${nextPeriodStart}, the start of the next Steuerperiode. A switch inside a year exists only from Saldo to effektiv on the day the ESTV adjusted a Saldosteuersatz (MWSTV Art. 81 Abs. 2): record that adjustment with saldoGrant first, then pass methodChange: { validFrom: that day, basis: '${MWSTV_81_2}' }.`,
+  });
+}
+
+/** The first day of the Steuerperiode starting on or after `day` (`YYYY-MM-DD`): `day` itself on a 01.01. */
+export function nextSteuerperiodeStart(day: string): string {
+  return day.slice(5) === '01-01' ? day : `${String(Number(day.slice(0, 4)) + 1).padStart(4, '0')}-01-01`;
+}
+
+/**
+ * The earliest day a dated method or timing change can take effect once a period is filed: the start
+ * of the first Steuerperiode on or after the first unfiled month (MWSTG Art. 37 Abs. 4, Art. 39 Abs. 3).
+ * Null when nothing is filed. Every refusal that names a change date hands over THIS day, never the
+ * first unfiled month, which falls inside a year whenever a quarter or a half-year was filed.
+ */
+export function earliestMethodChangeFrom(ctx: WorkspaceContext): string | null {
+  const firstUnfiled = nextUnfiledMonthStart(ctx);
+  return firstUnfiled === null ? null : nextSteuerperiodeStart(firstUnfiled);
+}
+
 export function nextUnfiledMonthStart(ctx: WorkspaceContext): string | null {
   const row = ctx.store.db
     .prepare(
@@ -514,13 +602,15 @@ function refuseWritesReachingFiledPeriods(ctx: WorkspaceContext, input: Configur
   }
 
   if (input.methodChange !== undefined && input.methodChange.validFrom <= filedThrough) {
+    const earliestChangeFrom = earliestMethodChangeFrom(ctx);
     return err('vat_method_change_filed', {
       validFrom: input.methodChange.validFrom,
       filedMonths: filedMonthsFrom(ctx, input.methodChange.validFrom),
       firstUnfiledFrom,
+      earliestChangeFrom,
       reason:
         'The method change would take effect from a day that a period already filed with the ESTV covers, so the filed period would either be recomputed under a method it was not filed under or straddle two method eras and stop computing at all.',
-      hint: `MWSTG Art. 37 Abs. 4 puts a method change at the start of a Steuerperiode. Date it from the first day NOT yet filed, which \`firstUnfiledFrom\` names (${String(firstUnfiledFrom)}).`,
+      hint: `MWSTG Art. 37 Abs. 4 puts a method change at the start of a Steuerperiode. Date it from ${String(earliestChangeFrom)}, the first start of a Steuerperiode not yet filed (\`earliestChangeFrom\`), or, for a switch from Saldo to effektiv under MWSTV Art. 81 Abs. 2, from an unfiled day the ESTV adjusted a Saldosteuersatz (basis 'mwstv_81_2').`,
     });
   }
 
@@ -551,6 +641,7 @@ export function refuseUndatedMethodChange(
   if (input.method !== current.method) moved.push('method');
   if (input.timing !== current.timing) moved.push('timing');
   if (moved.length === 0 || input.methodChange !== undefined) return null;
+  const earliestChangeFrom = earliestMethodChangeFrom(ctx);
   const how =
     verb === 'set_vat_method'
       ? 'Make the change through `vat_configure`, stating when it takes effect with `methodChange: { validFrom }`'
@@ -561,9 +652,10 @@ export function refuseUndatedMethodChange(
     to: { method: input.method, timing: input.timing },
     filedMonths: filedMonthsFrom(ctx, '0001-01-01'),
     firstUnfiledFrom,
+    earliestChangeFrom,
     reason:
       'Changing the method or the accounting timing without dating the change rewrites how every past period is computed, including periods already filed with the ESTV, because an undated change leaves no era boundary behind it.',
-    hint: `${how}, dated from the first day NOT yet filed, which \`firstUnfiledFrom\` names (${String(firstUnfiledFrom)}). MWSTG Art. 37 Abs. 4 allows the switch only at the start of a Steuerperiode.`,
+    hint: `${how}, dated from ${String(earliestChangeFrom)}, the first start of a Steuerperiode not yet filed (\`earliestChangeFrom\`). MWSTG Art. 37 Abs. 4 and Art. 39 Abs. 3 put a switch at the start of a Steuerperiode, the calendar year; the one exception (MWSTV Art. 81 Abs. 2, Saldo to effektiv on the day the ESTV adjusted a Saldosteuersatz, basis 'mwstv_81_2') can land later than this and never on a filed day.`,
   });
 }
 
@@ -575,6 +667,10 @@ export function configureVat(ctx: WorkspaceContext, input: ConfigureVatInput): R
     const rates = input.saldoRates ?? [];
     const stored = openGeneration(ctx);
     const leavingSaldo = input.method !== 'saldo';
+
+    // A dated change lands on a 01.01, or exactly on an MWSTV Art. 81 Abs. 2 adjustment day.
+    const midYear = refuseMidYearChange(ctx, input);
+    if (midYear !== null) return midYear;
 
     // The DATE guard comes first, because it is about the date alone and needs nothing resolved.
     // Approvals only ever move forward. Back-dating one would either overlap the approval it

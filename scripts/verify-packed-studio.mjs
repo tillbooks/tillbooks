@@ -22,7 +22,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { createServer, connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -135,7 +135,10 @@ async function main() {
 
   try {
     const deadline = Date.now() + 60_000;
-    while (!/Studio.* at http/.test(stderr)) {
+    // `till up` names the Studio's URL in its banner (P0.5c). Run with a pipe for stderr, as a launcher
+    // or a log file is, it must NOT print the keyed link (D166: the key is long-lived); the key is read
+    // from the owner-only file in the support dir instead, the way TILL.app reads it.
+    while (!/Studio[^\n]* (?:at|through) http/.test(stderr)) {
       if (child.exitCode !== null) fail(`till up exited ${child.exitCode}: ${stderr}`);
       if (Date.now() > deadline) fail(`till up did not report its URL within 60 s: ${stderr}`);
       await new Promise((r) => setTimeout(r, 100));
@@ -160,7 +163,28 @@ async function main() {
     const asset = await fetch(`${base}/${script}`);
     summary.studio.asset = { path: script, status: asset.status, bytes: (await asset.arrayBuffer()).byteLength };
     if (asset.status !== 200) fail(`GET /${script} answered ${asset.status}`);
-    const status = await fetch(`${base}/api/delivery_status`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const keyless = await fetch(`${base}/api/delivery_status`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const refused = await keyless.json();
+    summary.studio.keylessRest = refused.error;
+    if (refused.error !== 'studio_key_required') fail(`the REST bridge answered a call without the Studio key: ${JSON.stringify(refused).slice(0, 200)}`);
+    if (/#[kt]=/.test(stderr)) fail(`till up printed a Studio credential into a non-terminal stderr: ${stderr}`);
+    const keyFile = join(supportDir, 'studio.key');
+    if (!existsSync(keyFile)) fail(`till up kept no Studio key in ${keyFile}`);
+    const keyMode = statSync(keyFile).mode & 0o777;
+    summary.studio.keyFileMode = keyMode.toString(8);
+    if (process.platform !== 'win32' && keyMode !== 0o600) fail(`the Studio key file is mode ${keyMode.toString(8)}, not 600`);
+    const studioKey = readFileSync(keyFile, 'utf8').trim();
+    if (!/^[A-Za-z0-9_-]{43,}$/.test(studioKey)) fail('the Studio key file holds no well-formed key');
+    if (html.includes(studioKey)) fail('the served shell carries the Studio key');
+    const reopenRes = await fetch(`${base}/studio/reopen`, { method: 'POST', headers: { 'x-till-reopen': '1', 'x-till-studio-key': studioKey } });
+    const reopenText = await reopenRes.text();
+    summary.studio.reopenWithKey = reopenText;
+    if (reopenText.includes(studioKey)) fail('the reopen door answered with the key');
+    const status = await fetch(`${base}/api/delivery_status`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-till-studio-key': studioKey },
+      body: '{}',
+    });
     const delivery = await status.json();
     summary.deliveryStatus = { mode: delivery.mode, studioServed: delivery.studioServed, dbPath: delivery.dbPath };
     if (delivery.studioServed !== true) fail('delivery_status reports studioServed false');

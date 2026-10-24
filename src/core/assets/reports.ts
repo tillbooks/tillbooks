@@ -90,6 +90,10 @@ const ASSET_SELECT = `
 
 const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
 
+/** D170: the event was not taken back by `asset_transaction_reverse` (no compensating row names it). */
+const NOT_REVERSED =
+  "NOT EXISTS (SELECT 1 FROM asset_transaction rv WHERE rv.workspace_id = t.workspace_id AND rv.source_document_type = 'asset_transaction' AND rv.source_document_id = t.id)";
+
 /** A workspace `YYYY-MM` from the injected clock (never the wall clock directly, §context). */
 function currentPeriod(ctx: WorkspaceContext): string {
   return ctx.clock.now().slice(0, 7);
@@ -573,7 +577,8 @@ export function assetDisposalSummary(ctx: WorkspaceContext, input: AssetDisposal
   const locationIds = optStringArray(filter.locationIds, 'filter.locationIds');
   if (locationIds !== null && 'ok' in (locationIds as object)) return locationIds as Result;
 
-  const clauses = ["t.workspace_id = ?", "t.type = 'disposal'", 't.date >= ?', 't.date <= ?'];
+  // D170: a disposal taken back by asset_transaction_reverse did not happen; it is not reported.
+  const clauses = ["t.workspace_id = ?", "t.type = 'disposal'", 't.date >= ?', 't.date <= ?', NOT_REVERSED];
   const params: unknown[] = [ctx.workspaceId, input.fromDate, input.toDate];
   if (Array.isArray(categoryIds) && categoryIds.length > 0) {
     clauses.push(`a.category_id IN (${categoryIds.map(() => '?').join(', ')})`);
@@ -687,6 +692,8 @@ export function assetAcquisitionSummary(ctx: WorkspaceContext, input: AssetAcqui
     "t.type IN ('acquisition', 'additional_capitalisation')",
     't.date >= ?',
     't.date <= ?',
+    // D170: an acquisition or capitalisation taken back by asset_transaction_reverse is not reported.
+    NOT_REVERSED,
   ];
   const params: unknown[] = [ctx.workspaceId, input.fromDate, input.toDate];
   if (Array.isArray(categoryIds) && categoryIds.length > 0) {

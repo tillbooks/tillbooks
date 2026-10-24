@@ -33,6 +33,7 @@ export type {
   EnqueueDraftedActionInput,
   ListDraftedActionsInput,
   ResolveDraftedActionInput,
+  ApprovedWithUnknownOutcome,
 } from './draftedActions.js';
 
 export {
@@ -43,6 +44,8 @@ export {
   LIVE_READ_WAIVERS,
   pinFor,
   pinnedTablesFor,
+  pinnedColumnsFor,
+  UNPINNED_COLUMNS,
   pinReadShapes,
   VORSCHLAG_STALE_MESSAGE,
 } from './vorschlagPin.js';

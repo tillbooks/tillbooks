@@ -6,8 +6,9 @@
  *    were made and none landed: the §3e dash-versus-zero rule, shared with Berechtigungen via ONE
  *    helper. Its empty state (no session ever) deep-links to Verbindung, since connecting a client is
  *    the real next step.
- *  - Vorschläge: every pending drafted action at full width, oldest first (the oldest is the one at
- *    risk of going stale), the SAME card component the dock renders, grouped Geld/System above 20.
+ *  - Vorschläge: every pending drafted action, oldest first (the oldest is the one at risk of going
+ *    stale), as the SAME one-line component Pendenzen renders (D167), grouped Geld/System above 20.
+ *    Pendenzen is where a Vorschlag is decided in the normal course; this tab is the full list.
  *  - Berechtigungen (was Vertrauen): the ten-row evidence, over a stated window, as the shared
  *    DataTable so the figure columns align cleanly, plus the D103 grant control (owner-gated, absent
  *    without `manage_agent_dial`, never disabled-and-scolding), the strong-default reason, the
@@ -38,7 +39,9 @@ import { ActionFeedback } from '../../components/ActionFeedback';
 import { MCP_ENDPOINT } from '../../lib/mcp-transport';
 import { connectSnippet, studioVersion } from './connectSnippet';
 import { TurnList } from './TurnList';
-import { VorschlagCard } from './VorschlagCard';
+import { VorschlagLine } from './VorschlagLine';
+import { useDialLevels } from './useDialLevels';
+import { useAccountNames } from './useAccountNames';
 import {
   GELD_CAPABILITIES,
   QUEUE_GROUP_THRESHOLD,
@@ -238,9 +241,13 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
   // the bank inbox does for the same two verbs. The `id` re-mounts it, so each approval lands again.
   const [decided, setDecided] = useState<{ id: number; kind: 'approved' | 'rejected' | 'stale' } | null>(null);
   const decidedSeq = useRef(0);
+  // D167: the Freigabe level each line names is READ from the dial, re-read after a decision (a
+  // "künftig automatisch" grant moves it).
+  const dial = useDialLevels(true, decided?.id ?? 0);
+  const accountNames = useAccountNames(actions.length > 0);
 
   // A decision belongs to the workspace it was made in: a switch drops its banner, and an answer that
-  // lands after the switch is discarded (§H-TENANT in the DOM, as the dock does). The ref is the
+  // lands after the switch is discarded (§H-TENANT in the DOM). The ref is the
   // workspace on screen NOW; the closure of an in-flight `decide` still holds the one it began under.
   const activeWs = useRef(workspaceId);
   activeWs.current = workspaceId;
@@ -296,7 +303,7 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
     [busy, client, load, workspaceId],
   );
 
-  if (state === 'loading') return <Skeleton rows={3} height={120} />;
+  if (state === 'loading') return <Skeleton rows={3} height={48} />;
   if (state === 'error') return <ErrorBanner error={error} context="read" onRetry={() => void load()} />;
   // The empty state is checked against the SAME list the success state renders (design §3f). K-33:
   // a proposal only ever comes from a connected agent, so the way forward is the connection.
@@ -324,12 +331,13 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
     );
   }
 
-  const focusedId = actions[0].actionId; // oldest first: the focused card is the one at risk of going stale.
+  // One line per proposal, every Genehmigen a secondary: a list spends no accent (D167).
   const card = (action: DraftedAction) => (
-    <VorschlagCard
+    <VorschlagLine
       key={action.actionId}
       action={action}
-      accent={action.actionId === focusedId}
+      dial={dial}
+      accountNames={accountNames}
       onApprove={(id, allow) => void decide('approve_drafted_action', id, allow)}
       onReject={(id, reason) => void decide('reject_drafted_action', id, false, reason)}
       busy={busy}
@@ -789,7 +797,14 @@ export function Agent() {
   const [params] = useSearchParams();
   const sessionParam = params.get('session');
   const initialSessionId = sessionParam !== null && sessionParam.length > 0 ? sessionParam : null;
-  const [tab, setTab] = useState<Tab>('gespraeche');
+  // D167 polish 11: `?tab=berechtigungen` (the Freigabe row's "einstellbar") opens that tab.
+  const tabParam = params.get('tab');
+  const [tab, setTab] = useState<Tab>(() => (tabParam === 'vorschlaege' || tabParam === 'berechtigungen' || tabParam === 'verbindung' ? tabParam : 'gespraeche'));
+  // D167: the palette's ask lane opens the answer at `/agent?session=<id>`. Arriving there (or a new
+  // id arriving while another tab is open) shows the conversation, never a tab that hides it.
+  useEffect(() => {
+    if (initialSessionId !== null) setTab('gespraeche');
+  }, [initialSessionId]);
 
   if (workspaceId === null) return <NoWorkspaceState />;
 

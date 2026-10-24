@@ -171,6 +171,13 @@ test('MCP and REST produce identical Results across a representative write flow'
   assert.equal(refused.ok, true);
   assert.equal(refused.verdict.error, 'unknown_tax_code');
 
+  // D178 point 2, the Belegnummer: every posting above is numbered at its flip, and both faces answer the
+  // same number on the entry and the same inspection of the run.
+  assert.equal(typeof step('get_entry', { workspaceId, entryId: composedPost.entryId }).entry.number, 'string');
+  const plan = step('journal_numbering_plan', { workspaceId });
+  assert.equal(plan.counts.unnumbered, 0);
+  assert.equal(plan.counts.numbered, plan.counts.posted);
+
   const con = step('create_contact', { workspaceId, partyRole: 'customer', name: 'Kunde AG', idempotencyKey: 'con-1' });
   step('archive_contact', { workspaceId, contactId: con.contact.id });
   step('unarchive_contact', { workspaceId, contactId: con.contact.id });

@@ -8,7 +8,7 @@
  *   1. it serves the BUILT Studio (static files) at `/`, so there is no Vite and no second terminal;
  *   2. it mounts the REST twins (`/api/:action`) beside `/mcp`, behind the SAME localhost guard
  *      (`createLocalHttpRouter({ rest: true })`), which is the shipped form of the dev bridge, and
- *      both faces hand the human seat only to the Studio it serves, through a per-launch key;
+ *      both faces hand the human seat only to the Studio it serves, through the Studio key;
  *   3. it runs the in-process scheduler tick (US-M00.4) so "recurring" does not mean "recurring
  *      whenever an agent happens to poke the tick".
  *
@@ -25,7 +25,7 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -38,7 +38,11 @@ import type { ApiDeps } from './registry.js';
 import { createLocalHttpRouter, pathnameOf } from './local-http.js';
 import { resolveServedMode, type ServedModeConfig } from './served-mode.js';
 import { rejectNonLocal } from './local-guard.js';
-import { mintStudioKey, studioLink } from './session.js';
+import { studioTicketLink } from './session.js';
+import { openStudioKeyStore, readStudioKeyFile, studioKeyPath, type StudioKeySource } from './studio-key-store.js';
+import { deriveTicket, instanceIdOf, openStudioDeviceRegistry, type StudioDeviceRegistry } from './studio-devices.js';
+import { doorHostKey } from './studio-door.js';
+import { adoptBook, forgetBook, probeBook } from './book-adopt.js';
 import {
   isBindablePort,
   invalidPortRefusal,
@@ -49,8 +53,8 @@ import {
   DEFAULT_PORT,
   EXPOSE_ENV,
 } from './serve.js';
-import { resolveSupportDir } from './db-path.js';
-import { setDeliveryRuntime, resetDeliveryRuntime } from './runtime-state.js';
+import { MEMORY_DB, resolveSupportDir, type AdoptedBookUnavailable } from './db-path.js';
+import { setAdoptedBookUnavailable, setDeliveryRuntime, resetDeliveryRuntime } from './runtime-state.js';
 import { createScheduler, resolveTickMs, type Scheduler } from './scheduler.js';
 import { acquireLock, releaseLock, type UpLock } from './up-lock.js';
 import type { SqliteStore } from '../core/store/sqlite-store.js';
@@ -158,22 +162,60 @@ export async function serveStudio(req: IncomingMessage, res: ServerResponse, stu
     return true;
   }
   const type = CONTENT_TYPES[extname(filePath)] ?? 'application/octet-stream';
-  res.writeHead(200, { 'content-type': type });
+  // The shell is never cached (critic H1/M1): every load of the Studio must come from the process on
+  // the port now, so a window always runs the code the live `till up` serves. Hashed assets may cache.
+  const isShell = filePath.endsWith('index.html');
+  res.writeHead(200, { 'content-type': type, ...(isShell ? { 'cache-control': 'no-store' } : {}) });
   res.end(req.method === 'HEAD' ? undefined : body);
   return true;
 }
 
-/** Open the default browser at `url`, best-effort. A launch failure is never fatal: the URL is printed. */
+/**
+ * The URL as it may be WRITTEN anywhere (a log line, a non-terminal banner): the fragment, which
+ * carries a one-time ticket (`/#t=`) or, from the dev bridge, a key (`/#k=`), is cut. A log file is
+ * not owner-only, and a ticket is a credential until it is spent.
+ */
+export function redactStudioLink(url: string): string {
+  const hash = url.indexOf('#');
+  return hash === -1 ? url : url.slice(0, hash);
+}
+
+/** Open the default browser at `url`, best-effort. A launch failure is never fatal: the URL is logged, minus any key. */
 export function openBrowser(url: string, log: (line: string) => void = () => {}): void {
   const platform = process.platform;
   const cmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open';
   const args = platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  const failed = () => log(`till up: could not open a browser automatically. TILL is at ${redactStudioLink(url)}.`);
   try {
     const child = spawn(cmd, args, { stdio: 'ignore', detached: true });
-    child.on('error', () => log(`till up: could not open a browser automatically. Open ${url} yourself.`));
+    child.on('error', failed);
     child.unref();
   } catch {
-    log(`till up: could not open a browser automatically. Open ${url} yourself.`);
+    failed();
+  }
+}
+
+/**
+ * Open a Studio link (it carries a one-time ticket, D166) through the operating system. On macOS the
+ * link goes to `osascript` on stdin (`open location`), not on a command line: an argument is visible to
+ * every account on the machine through `ps` while the process lives, and the reopen door can be fired
+ * by any local program. Elsewhere it falls back to `openBrowser` (`xdg-open` takes the URL as an
+ * argument; a ticket seen there is single-use and expires, DECISIONS D166). Best-effort, never fatal.
+ */
+export function openStudioLink(url: string, log: (line: string) => void = () => {}): void {
+  // The link is ours (`studioTicketLink`): http(s), a host, a port, `#t=` (or the dev bridge's `#k=`)
+  // and base64url. Anything else is not embedded in a script, whatever produced it.
+  if (process.platform !== 'darwin' || !/^https?:\/\/[A-Za-z0-9.:[\]-]+\/#[tk]=[A-Za-z0-9_.-]+$/.test(url)) {
+    openBrowser(url, log);
+    return;
+  }
+  try {
+    const child = spawn('/usr/bin/osascript', ['-'], { stdio: ['pipe', 'ignore', 'ignore'], detached: true });
+    child.on('error', () => openBrowser(url, log));
+    child.stdin?.end(`open location "${url}"\n`);
+    child.unref();
+  } catch {
+    openBrowser(url, log);
   }
 }
 
@@ -196,6 +238,31 @@ export interface UpOptions {
    * the suites (a slow synthetic bank behind the worker); production leaves it unset.
    */
   bankSyncPorts?: { portsModule: string; portsOptions?: unknown };
+  /**
+   * How a URL is opened through the operating system: the browser at start, and the D166 reopen.
+   * Defaults to `openBrowser`. Suites pass a recorder so no real browser opens.
+   */
+  openUrl?: (url: string) => void;
+  /**
+   * Print the Studio link (with its one-time ticket) in the start banner. Defaults to FALSE, the safe
+   * side; the CLI passes true only when stderr is a terminal (D166): a banner in a log file
+   * (`~/Library/Logs/TILL.log`, a launcher's log) would keep a live credential in a file that is not
+   * owner-only. Off, the banner names the bare URL.
+   */
+  announceStudioLink?: boolean;
+  /**
+   * D166 point 8: how this process restarts itself after the Studio adopted an existing book
+   * (`POST /studio/adopt-book`), so the next start opens it. Called once, after the answer is out.
+   * The CLI passes it (`bin/till.mjs`: exit 75 under TILL.app, else a detached successor); without
+   * it the door refuses an adopt with `restart_unavailable` and records nothing.
+   */
+  onRestartRequested?: () => void;
+  /**
+   * D166 point 8 (critic F1/F2): `dbPath` is the ADOPTED book (`resolveDbChoice` source `adopted`).
+   * Then a failed open does not stop `till up`: it starts on an in-memory book and reports the adopted
+   * book unavailable (`unopenable`). `unavailable: 'missing'` says the file is already known to be gone.
+   */
+  adoptedBook?: { path: string; unavailable?: 'missing' };
   log?: (line: string) => void;
 }
 
@@ -205,54 +272,35 @@ export interface UpHandle {
   scheduler: Scheduler;
   url: string;
   /**
-   * The link the person opens the Studio through: `url` plus `/#k=<key>`. The fragment never reaches
+   * The link the person opens the Studio through: `url` plus `/#t=<one-time ticket>` (D166; the key
+   * itself is never in a link). The fragment never reaches
    * a server, which is how the key reaches the browser and nothing else (critic R3-B2).
    */
   studioUrl: string;
   studioServed: boolean;
   /**
-   * This launch's Studio key. In process only: the caller that started `till up` already holds the
+   * The Studio key at start. In process only: the caller that started `till up` already holds the
    * store, so handing it the key grants nothing new. Tests use it to act as the Studio over HTTP.
+   * After a rotation (D166) the live key is `studioKeys.current()`.
    */
   studioKey: string;
+  /** The live key source the faces read on every request (D166). */
+  studioKeys: StudioKeySource;
+  /** The paired browsers (D166 layer 2). */
+  studioDevices: StudioDeviceRegistry;
   close(): Promise<void>;
 }
 
 /**
- * Where a running `till up` keeps its Studio link for a SECOND `till up` (the redirect) to reopen: in
- * the support directory beside the lock, readable by the owner only (0600). Not in the lock itself,
- * because `till mcp` reads the lock to point an AGENT at the Studio, and the key must never reach one.
+ * The Studio link a live `till up` can be reopened through, for a SECOND `till up` (the redirect): the
+ * holder's URL with a one-time ticket DERIVED from the owner-only key file for exactly that process
+ * (its pid and start time, from the lock). The key itself never goes into a link (D166), and the lock
+ * `till mcp` reads carries neither. Null when the support directory holds no trustworthy key: the
+ * redirect then opens the bare URL and the tab repairs itself.
  */
-export function studioLinkPath(supportDir: string): string {
-  return join(supportDir, 'till-up.studio-link');
-}
-
-function writeStudioLinkFile(supportDir: string, link: string): void {
-  try {
-    const file = studioLinkPath(supportDir);
-    writeFileSync(file, JSON.stringify({ pid: process.pid, link }), { mode: 0o600 });
-    chmodSync(file, 0o600); // an older file keeps its mode on rewrite: tighten it explicitly
-  } catch {
-    // Best-effort: without it a second `till up` opens the bare URL and the Studio shows the hint.
-  }
-}
-
-function removeStudioLinkFile(supportDir: string): void {
-  try {
-    rmSync(studioLinkPath(supportDir), { force: true });
-  } catch {
-    // Best-effort, like the lock release.
-  }
-}
-
-/** The Studio link a live `till up` (pid `pid`) left for a second one, or null. */
-export function readStudioLink(supportDir: string, pid: number): string | null {
-  try {
-    const parsed = JSON.parse(readFileSync(studioLinkPath(supportDir), 'utf8')) as { pid?: unknown; link?: unknown };
-    return parsed.pid === pid && typeof parsed.link === 'string' ? parsed.link : null;
-  } catch {
-    return null;
-  }
+export function readStudioLink(supportDir: string, holder: Pick<UpLock, 'url' | 'pid' | 'startedAt'>): string | null {
+  const key = readStudioKeyFile(supportDir);
+  return key === null ? null : studioTicketLink(holder.url, deriveTicket(key, instanceIdOf(holder.pid, holder.startedAt)));
 }
 
 /**
@@ -304,7 +352,7 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   // lock is written with the requested port and rewritten with the BOUND port once listening (they
   // differ only when the caller asked for an ephemeral port, which real fixed-port usage never does).
   // P0.5: the lock names the ledger too, so an agent's `till mcp` can tell whether this Studio has its book open.
-  const lockDbPath = opts.dbPath !== undefined ? { dbPath: opts.dbPath } : {};
+  let lockDbPath: { dbPath?: string } = opts.dbPath !== undefined ? { dbPath: opts.dbPath } : {};
   const acquired = acquireLock(supportDir, {
     pid: process.pid,
     host,
@@ -314,10 +362,10 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
     ...lockDbPath,
   });
   if (!acquired.acquired) {
-    // The redirect opens the live instance's Studio LINK when that instance left one (the key is in
-    // its fragment), so a second `till up` lands in a working Studio rather than in the no-key hint.
-    // Only the returned copy carries it: the lock on disk keeps the bare URL `till mcp` reads.
-    const link = readStudioLink(supportDir, acquired.holder.pid);
+    // The redirect opens the live instance's Studio LINK (its URL plus the persisted key, D166), so a
+    // second `till up` lands in a working Studio. Only the returned copy carries it: the lock on disk
+    // keeps the bare URL `till mcp` reads.
+    const link = readStudioLink(supportDir, acquired.holder);
     return { started: false, holder: link === null ? acquired.holder : { ...acquired.holder, url: link } };
   }
 
@@ -332,11 +380,37 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   let hostPorts: HostEbicsPorts;
   try {
     hostPorts = await resolveEbicsRuntime();
-    opened = makeApiDeps(opts.dbPath, hostPorts);
   } catch (e) {
     releaseLock(supportDir, process.pid);
     throw e;
   }
+  // D166 point 8 (critic F1/F2): an ADOPTED book that is missing, or whose open fails, never makes
+  // this process open another book and never stops it: it starts on an in-memory book that writes
+  // nowhere, runs no cadence, and tells the Studio, which offers "Erneut versuchen", "Anderes
+  // Hauptbuch wählen" and "Vergessen und neu beginnen". Any other refused open fails as before.
+  let unavailable: AdoptedBookUnavailable | null =
+    opts.adoptedBook?.unavailable === 'missing' ? { path: opts.adoptedBook.path, reason: 'missing' } : null;
+  // The adopted book is PROBED read-only before the writable open, exactly as the door probed it, so a
+  // file that is no longer a TILL book this runtime can open (a foreign SQLite, a newer generation, a
+  // lost permission) is never written to, not even a WAL header (critic F2).
+  if (unavailable === null && opts.adoptedBook !== undefined) {
+    const probe = probeBook(opts.adoptedBook.path);
+    if (!probe.ok) unavailable = { path: opts.adoptedBook.path, reason: probe.error === 'book_not_found' ? 'missing' : 'unopenable' };
+  }
+  let dbPath = unavailable === null ? opts.dbPath : MEMORY_DB;
+  try {
+    opened = makeApiDeps(dbPath, hostPorts);
+  } catch (e) {
+    if (opts.adoptedBook === undefined || unavailable !== null) {
+      releaseLock(supportDir, process.pid);
+      throw e;
+    }
+    unavailable = { path: opts.adoptedBook.path, reason: 'unopenable' };
+    dbPath = MEMORY_DB;
+    log(`till up: the adopted book could not be opened (${e instanceof Error ? e.message.split('\n')[0] : String(e)}); TILL shows what to do.`);
+    opened = makeApiDeps(dbPath, hostPorts);
+  }
+  if (unavailable !== null) log(`till up: the adopted book is not reachable (${unavailable.reason}): ${unavailable.path}. Nothing is written until it is chosen again or forgotten.`);
   const { store } = opened;
   // D142 critic F2: a process killed mid-sync left its lease; the single-instance lock above proves no
   // other till up runs, so a lease whose holder process is gone is taken over now, not in 15 minutes.
@@ -344,41 +418,47 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   // D142: `bank_sync` runs in a worker thread on its own connection to the same book, so the Studio
   // keeps answering while the bank wire waits. An in-memory book cannot be shared with a thread; there
   // the verb runs in process, exactly as before.
-  const deps: ApiDeps = isSharableDbPath(opts.dbPath)
+  const baseDeps: ApiDeps = isSharableDbPath(dbPath)
     ? {
         ...opened.deps,
         bankSyncRunner: createBankSyncOffload({
-          dbPath: opts.dbPath,
+          dbPath,
           ...(hostPorts.recipe !== undefined ? { recipe: hostPorts.recipe } : {}),
           ...(opts.bankSyncPorts !== undefined ? opts.bankSyncPorts : {}),
         }),
         // D143 critic F1: the daily activation check's HPB runs in the same kind of worker.
         bankActivationRunner: createBankActivationOffload({
-          dbPath: opts.dbPath,
+          dbPath,
           ...(hostPorts.recipe !== undefined ? { recipe: hostPorts.recipe } : {}),
           ...(opts.bankSyncPorts !== undefined ? opts.bankSyncPorts : {}),
         }),
       }
     : opened.deps;
+  // D166 point 8 (critic N1): while the adopted book is unavailable, the transport dispatch refuses every
+  // verb but delivery_status (agent-gate.ts), so nothing writes into the stand-in book.
+  const deps: ApiDeps = unavailable === null ? baseDeps : { ...baseDeps, adoptedBookUnavailable: unavailable };
+  // Critic L-a: the lock names the book this process actually OPENED (`:memory:` for the stand-in), so
+  // `till mcp` and a second `till up` read the truth, not the book that was asked for.
+  if (dbPath !== opts.dbPath && dbPath !== undefined) {
+    lockDbPath = { dbPath };
+    acquireLock(supportDir, { pid: process.pid, host, port, url: `http://${authority}:${port}`, startedAt, ...lockDbPath });
+  }
   // The REST twins are the Studio's own bridge (D25) and the Studio is the human; the MCP face seats
   // every session by the rule in `session.ts`. Until F-08 (2026-09-05) the REST actor was also the MCP
   // face's fallback, so Claude Desktop on `till up` was seated as the Studio and bypassed the A35 dial
   // and the trace. `till up` changes transport, not rights (A24 is untouched).
   // M01: in served mode BOTH faces require and resolve the proxy-attested subject.
   //
-  // THE STUDIO KEY (critic probe P6, 2026-10-12; delivery reworked for critic R3-B2). The human seat
-  // used to be granted to a NAME (an MCP client declaring `till-studio`) and, on the REST twins, to any
-  // caller at all. It is now granted only to a request carrying this launch's key: 32 bytes from the
-  // CSPRNG, minted here, held in this process's memory, and checked in constant time on both faces
-  // (`session.ts`). A restart mints a new key.
+  // THE STUDIO KEY (critic probe P6, 2026-10-12; delivery reworked for critic R3-B2 and D166). The
+  // human seat used to be granted to a NAME (an MCP client declaring `till-studio`) and, on the REST
+  // twins, to any caller at all. It is now granted only to a request carrying the Studio key, or a
+  // session token a ticket or a paired device unlocked, checked on both faces (`session.ts`).
   //
-  // HOW THE KEY REACHES THE BROWSER: OUT OF BAND, THROUGH THE LINK (the Jupyter-token pattern, owner
-  // decision 2026-10-12). `till up` prints and opens `http://HOST:PORT/#k=<key>`. Browsers never send a
-  // URL fragment to the server, so the key travels from this process to the person's browser and to
-  // nothing else; the Studio moves it into `sessionStorage` and strips the fragment. The served HTML
-  // carries NO key. The first version wrote it into the page as a `<meta>` tag, and any local HTTP
-  // client (a fetch tool, a browser-driving agent, curl) could GET `/`, read it and issue an invoice
-  // as the person with 0 Vorschläge (R3-B2).
+  // HOW THE SEAT REACHES THE BROWSER: OUT OF BAND, THROUGH A LINK, never through anything served.
+  // Browsers never send a URL fragment to the server, so `http://HOST:PORT/#t=<ticket>` reaches the
+  // person's browser and nothing else. The served HTML carries NO credential: the first version wrote
+  // the key into the page as a `<meta>` tag, and any local HTTP client (a fetch tool, a browser-driving
+  // agent, curl) could GET `/`, read it and issue an invoice as the person with 0 Vorschläge (R3-B2).
   //
   // WHY A REQUEST HEADER AND NOT A COOKIE. Cookies are not isolated by port, so a page on
   // `http://localhost:3000` (any other dev server, any local tool's UI) is SAME-SITE with this one:
@@ -387,8 +467,51 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   // could issue an invoice as the person. The cookie would also be sent to every other server on
   // localhost. A custom header has neither problem: another origin cannot attach one without a CORS
   // preflight, which no face here answers.
-  const studioKey = mintStudioKey();
-  const router = createLocalHttpRouter(deps, { rest: true, servedMode, studioKey });
+  //
+  // KEPT BETWEEN LAUNCHES, NEVER IN A LINK (D166, owner decision 14.10.2026). The key is read from (or,
+  // on the first start, written to) `<support dir>/studio.key`, owner-only, and links carry one-time
+  // tickets instead (`studio-devices.ts`): this host mints one for each link it opens, and TILL.app
+  // derives one from the key file for exactly this process. A browser that redeemed a ticket pairs a
+  // non-extractable device key, so bookmarks and new tabs unlock by themselves after a restart, and a
+  // tab with nothing left asks the door below to reopen the Studio through the operating system. No
+  // answer carries the key. Served mode keeps the key in memory: there the proxy-attested subject
+  // seats the person and the key seats nobody, so it has no business on disk, and no door is mounted.
+  const local = !servedMode.enabled;
+  const studioKeys = openStudioKeyStore(supportDir, { persist: local });
+  // D166 layer 2: the paired browsers, whose session tokens seat the person like the key does.
+  const studioDevices = openStudioDeviceRegistry(supportDir, {
+    persist: local,
+    key: () => studioKeys.current(),
+    instanceId: instanceIdOf(process.pid, startedAt),
+  });
+  const studioSeat = doorHostKey({ keys: studioKeys, devices: studioDevices });
+  const openUrl = opts.openUrl ?? ((target: string) => openStudioLink(target, log));
+  // The URL is known only once bound; the door reads it at call time.
+  let boundUrl: string | null = null;
+  const router = createLocalHttpRouter(deps, {
+    rest: true,
+    servedMode,
+    studioKey: studioSeat,
+    ...(local && studioDir !== null
+      ? {
+          studioDoor: {
+            keys: studioKeys,
+            devices: studioDevices,
+            openStudio: openUrl,
+            baseUrl: () => boundUrl,
+            // D166 point 8: adopt an existing book from the first-run door, then restart onto it.
+            // The open book is named so adopting it again is refused rather than restarting for nothing.
+            ...(opts.onRestartRequested !== undefined
+              ? {
+                  adoptBook: (path: unknown) => adoptBook(supportDir, path, { openPath: dbPath }),
+                  forgetBook: () => forgetBook(supportDir),
+                  restart: opts.onRestartRequested,
+                }
+              : {}),
+          },
+        }
+      : {}),
+  });
 
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     void router
@@ -440,20 +563,23 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   const address = server.address();
   const boundPort = typeof address === 'object' && address !== null ? address.port : port;
   const url = `http://${authority}:${boundPort}`;
+  boundUrl = url;
   // Finalise the lock with the real bound port, so a second `till up` redirects to a URL that dials.
   if (boundPort !== port) {
     acquireLock(supportDir, { pid: process.pid, host, port: boundPort, url, startedAt, ...lockDbPath });
   }
 
   setDeliveryRuntime({ mode: 'up', host, port: boundPort, studioServed });
+  setAdoptedBookUnavailable(unavailable);
 
+  // No cadence runs against the stand-in in-memory book of an unavailable adopted one (D166 point 8).
   const scheduler = createScheduler(deps, { intervalMs: opts.tickMs ?? resolveTickMs() });
-  scheduler.start();
+  if (unavailable === null) scheduler.start();
 
-  // The link the person opens the Studio through: the ONLY place the key leaves this process. It is
-  // printed and opened, and kept beside the lock (owner-only) for a second `till up` to reopen.
-  const studioUrl = studioLink(url, studioKey);
-  writeStudioLinkFile(supportDir, studioUrl);
+  // The link the person opens the Studio through: a ONE-TIME ticket, never the key (D166). The key
+  // itself stays in the owner-only file; no link, log line or HTTP response carries it.
+  const studioKey = studioKeys.current();
+  const studioUrl = local ? studioTicketLink(url, studioDevices.mintTicket()) : url;
 
   let closed = false;
   const handle: UpHandle = {
@@ -464,6 +590,8 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
     studioUrl,
     studioServed,
     studioKey,
+    studioKeys,
+    studioDevices,
     async close() {
       if (closed) return;
       closed = true;
@@ -471,14 +599,19 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
       await router.closeAll();
       await new Promise<void>((res, rej) => server.close((err) => (err ? rej(err) : res())));
       store.close();
-      removeStudioLinkFile(supportDir);
       releaseLock(supportDir, process.pid);
       resetDeliveryRuntime();
     },
   };
 
-  if (studioServed) log(`till up: open the Studio through ${studioUrl}`);
-  if (opts.open !== false) openBrowser(studioUrl, log);
+  if (studioServed) {
+    log(
+      opts.announceStudioLink !== true
+        ? `till up: the Studio is at ${url} (its key is kept owner-only in ${studioKeyPath(supportDir)})`
+        : `till up: open the Studio through ${studioUrl}`,
+    );
+  }
+  if (opts.open !== false) openUrl(studioUrl);
 
   return { started: true, ...handle };
 }

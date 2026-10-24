@@ -37,6 +37,7 @@ interface LiveDunningFeeItemRow {
   due_date: string | null;
   level: number;
   fee_minor: number;
+  fee_entry_id: string;
 }
 
 /**
@@ -58,18 +59,35 @@ interface LiveDunningFeeItemRow {
  * the reversal is itself dated, never retroactively.
  */
 const LIVE_DUNNING_FEE_ITEM_SELECT = `
-  SELECT i.id, i.document_id, i.debtor_id, i.number, i.due_date, i.level, i.fee_minor
+  SELECT i.id, i.document_id, i.debtor_id, i.number, i.due_date, i.level, i.fee_minor, r.fee_entry_id
     FROM dunning_item i
     JOIN dunning_run r ON r.id = i.run_id AND r.workspace_id = i.workspace_id
     JOIN journal_entry e ON e.id = r.fee_entry_id AND e.workspace_id = r.workspace_id
    WHERE i.workspace_id = ? AND i.fee_booked = 1
      AND r.status IN ('issued', 'sent')
      AND e.status = 'posted' AND e.date <= ?
-     AND NOT EXISTS (SELECT 1 FROM journal_entry x
-                      WHERE x.workspace_id = r.workspace_id
-                        AND x.reverses_entry_id = e.id
-                        AND x.status = 'posted' AND x.date <= ?)
 `;
+
+/**
+ * D169 critic L1: the reversal clause is the CHAIN, not one hop. A book written before D169 may hold
+ * the fee entry F raw-reversed (R1) and R1 raw-reversed (R2): the ledger carries the fee again, and the
+ * one-hop `NOT EXISTS` used to drop it from the Debitorenbuch anyway. The fee stands as of `asOf` iff
+ * the chain of posted reversals DATED ON OR BEFORE `asOf` is even, the same walk `feePostingChain`
+ * makes (§H-TENANT on every hop; the bound is a guard).
+ */
+function feeStandsAsOf(ctx: WorkspaceContext, feeEntryId: string, asOf: string): boolean {
+  let last = feeEntryId;
+  let links = 0;
+  for (let hops = 0; hops < 16; hops += 1) {
+    const next = ctx.store.db
+      .prepare("SELECT id FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ? AND status = 'posted' AND date <= ? ORDER BY rowid LIMIT 1")
+      .get(ctx.workspaceId, last, asOf) as { id: string } | undefined;
+    if (next === undefined) break;
+    last = next.id;
+    links += 1;
+  }
+  return links % 2 === 0;
+}
 
 function toLiveDunningFeeItem(row: LiveDunningFeeItemRow): LiveDunningFeeItem {
   return {
@@ -87,8 +105,8 @@ function toLiveDunningFeeItem(row: LiveDunningFeeItemRow): LiveDunningFeeItem {
 export function liveDunningFeeItemsAsOf(ctx: WorkspaceContext, asOf: string): LiveDunningFeeItem[] {
   const rows = ctx.store.db
     .prepare(LIVE_DUNNING_FEE_ITEM_SELECT)
-    .all(ctx.workspaceId, asOf, asOf) as LiveDunningFeeItemRow[];
-  return rows.map(toLiveDunningFeeItem);
+    .all(ctx.workspaceId, asOf) as LiveDunningFeeItemRow[];
+  return rows.filter((r) => feeStandsAsOf(ctx, r.fee_entry_id, asOf)).map(toLiveDunningFeeItem);
 }
 
 /** One fee by its `dunning_item` id, live as of `asOf`, or undefined (not found, or not live). */
@@ -99,8 +117,8 @@ export function readLiveDunningFeeItem(
 ): LiveDunningFeeItem | undefined {
   const row = ctx.store.db
     .prepare(`${LIVE_DUNNING_FEE_ITEM_SELECT} AND i.id = ?`)
-    .get(ctx.workspaceId, asOf, asOf, itemId) as LiveDunningFeeItemRow | undefined;
-  return row === undefined ? undefined : toLiveDunningFeeItem(row);
+    .get(ctx.workspaceId, asOf, itemId) as LiveDunningFeeItemRow | undefined;
+  return row === undefined || !feeStandsAsOf(ctx, row.fee_entry_id, asOf) ? undefined : toLiveDunningFeeItem(row);
 }
 
 /**
@@ -174,8 +192,68 @@ export function readRun(ctx: WorkspaceContext, runId: string): RunRow | undefine
 // untouched throughout: nothing here rewrites the frozen `dunning_item` rows or the letter; a changed
 // letter loses its TRANSPORT (or is marked for the operator's eyes), never its record.
 
-/** The distinct cause an issued letter's named invoice changed since issue (K-31 f2). */
-export type DunningItemChange = 'paid' | 'partially_paid' | 'cancelled' | 'credited';
+/**
+ * The distinct cause an issued letter's named invoice changed since issue (K-31 f2). `fee_reversed`
+ * (D169) is the one cause that is not the invoice's own: the run's Mahngebühr was reversed while the
+ * frozen letter still demands it, so mailing it would demand a fee the ledger no longer carries.
+ * Since D174 an unsent letter is re-frozen without the fee (by `dunning_fee_reverse`, or lazily by
+ * send for a pre-D169 raw Storno), so this cause remains only for a letter that cannot be re-frozen:
+ * one whose debtor group is `dispatching` (outcome unknown, so treated as sent and never rewritten).
+ */
+/** D174: the audit action that records one item's re-freeze without the reversed fee. */
+export const REFREEZE_WITHOUT_FEE_ACTION = 'refreeze_without_fee';
+/**
+ * D174 (owner Q9): the same re-freeze under `dunning.letter_date = today`. The letter is then dated the
+ * day of this audit row; the row fixes the choice, so changing the setting later re-dates nothing.
+ */
+export const REFREEZE_WITHOUT_FEE_REDATED_ACTION = 'refreeze_without_fee_redated';
+
+/**
+ * The date a debtor's letter in this run carries: the run date, or (D174 Q9) the day it was re-issued
+ * when that re-freeze was recorded under `dunning.letter_date = today`. §H-TENANT on both sides of the
+ * join. The date is the audit row's own (UTC) day, the same clock the reversal's date reads.
+ */
+export function letterDateOf(ctx: WorkspaceContext, run: Pick<RunRow, 'id' | 'run_date'>, debtorId: string): string {
+  const row = ctx.store.db
+    .prepare(
+      `SELECT MAX(a.at) AS at FROM audit_log a
+         JOIN dunning_item i ON i.id = a.entity_id AND i.workspace_id = a.workspace_id
+        WHERE a.workspace_id = ? AND a.entity_kind = 'dunning_item' AND a.action = ?
+          AND i.run_id = ? AND i.debtor_id = ?`,
+    )
+    .get(ctx.workspaceId, REFREEZE_WITHOUT_FEE_REDATED_ACTION, run.id, debtorId) as { at: string | null };
+  return row.at === null ? run.run_date : row.at.slice(0, 10);
+}
+
+export type DunningItemChange = 'paid' | 'partially_paid' | 'cancelled' | 'credited' | 'fee_reversed';
+
+/**
+ * D169: the chain of POSTED mirrors from a run's fee entry: F, its reversal R1, R1's reversal R2, and
+ * so on. Before D169 the raw `reverse_entry` could reverse F (and a later raw call its mirror). An ODD
+ * chain means the fee is gone and `last` is the mirror that took it out; an EVEN chain (0 included)
+ * means it stands, and `last` is the newest link standing in F's direction. §H-TENANT on every hop;
+ * the bound is a guard, the chain is short by construction (owned since D169, so it stops growing).
+ */
+export function feePostingChain(ctx: WorkspaceContext, feeEntryId: string): { links: number; last: string } {
+  let last = feeEntryId;
+  let links = 0;
+  for (let hops = 0; hops < 16; hops += 1) {
+    const next = ctx.store.db
+      .prepare("SELECT id FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ? AND status = 'posted' ORDER BY rowid LIMIT 1")
+      .get(ctx.workspaceId, last) as { id: string } | undefined;
+    if (next === undefined) break;
+    last = next.id;
+    links += 1;
+  }
+  return { links, last };
+}
+
+/** The mirror that took a run's fee out, or null while the fee stands (or none ever booked). D169. */
+export function feeReversalOf(ctx: WorkspaceContext, run: Pick<RunRow, 'fee_entry_id'>): string | null {
+  if (run.fee_entry_id === null) return null;
+  const chain = feePostingChain(ctx, run.fee_entry_id);
+  return chain.links % 2 === 1 ? chain.last : null;
+}
 
 /**
  * The invoice's OWN open amount on an A16 row: what the row carries minus the booked Mahngebühren
@@ -276,9 +354,13 @@ export function dunningRunChangesSinceIssue(
   if (run.status !== 'issued' && run.status !== 'sent') return changes;
 
   const items = ctx.store.db
-    .prepare('SELECT document_id, principal_minor, overdue_minor FROM dunning_item WHERE workspace_id = ? AND run_id = ?')
-    .all(ctx.workspaceId, run.id) as Pick<ItemRow, 'document_id' | 'principal_minor' | 'overdue_minor'>[];
+    .prepare('SELECT document_id, principal_minor, overdue_minor, demanded_fee_minor FROM dunning_item WHERE workspace_id = ? AND run_id = ?')
+    .all(ctx.workspaceId, run.id) as Pick<ItemRow, 'document_id' | 'principal_minor' | 'overdue_minor' | 'demanded_fee_minor'>[];
   if (items.length === 0) return changes;
+  // D169: the fee the frozen letters demand is gone (reversed by `dunning_fee_reverse`, or by a raw
+  // Storno in a book written before it). The invoice's own causes are named first; a letter whose
+  // invoice is unchanged but which demands the reversed fee is `fee_reversed`.
+  const feeReversed = feeReversalOf(ctx, run) !== null;
 
   const open = listOpenItems(ctx, { asOf });
   const openByDoc = new Map<string, OpenItem>();
@@ -291,7 +373,8 @@ export function dunningRunChangesSinceIssue(
   }
 
   for (const item of items) {
-    const change = classifyItemChange(ctx, item, openByDoc, asOf);
+    const change = classifyItemChange(ctx, item, openByDoc, asOf)
+      ?? (feeReversed && item.demanded_fee_minor > 0 ? 'fee_reversed' : null);
     if (change !== null) changes.set(item.document_id, change);
   }
   return changes;
@@ -326,6 +409,12 @@ interface ItemView {
    * paid, partially paid, cancelled or credited invoice. Never rewrites the frozen figures (D73).
    */
   changeSinceIssue: DunningItemChange | null;
+  /**
+   * D174: true when this unsent letter was re-issued without the run's reversed fee (its demand was
+   * re-frozen). Read from the append-only audit row, never a stored flag. The superseded demand is
+   * `feeMinor` (the fee this letter asked for before the re-freeze).
+   */
+  reissuedWithoutFee: boolean;
 }
 
 /** The full view of one run: its items, grouped per debtor the way the letters group. */
@@ -343,6 +432,15 @@ export function runView(ctx: WorkspaceContext, run: RunRow): Record<string, unkn
     )
     .all(ctx.workspaceId, run.id) as (ItemRow & { debtor_name: string | null })[];
 
+  const reissued = new Set(
+    (ctx.store.db
+      .prepare(
+        `SELECT a.entity_id AS id FROM audit_log a
+           JOIN dunning_item i ON i.id = a.entity_id AND i.workspace_id = a.workspace_id
+          WHERE a.workspace_id = ? AND a.entity_kind = 'dunning_item' AND a.action IN (?, ?) AND i.run_id = ?`,
+      )
+      .all(ctx.workspaceId, REFREEZE_WITHOUT_FEE_ACTION, REFREEZE_WITHOUT_FEE_REDATED_ACTION, run.id) as { id: string }[]).map((r) => r.id),
+  );
   const views: ItemView[] = items.map((i) => ({
     id: i.id,
     documentId: i.document_id,
@@ -362,6 +460,7 @@ export function runView(ctx: WorkspaceContext, run: RunRow): Record<string, unkn
     sentAt: i.sent_at,
     sendError: i.send_error,
     changeSinceIssue: changes.get(i.document_id) ?? null,
+    reissuedWithoutFee: reissued.has(i.id),
   }));
 
   const debtors = new Map<string, { debtorId: string; debtorName: string | null; items: ItemView[] }>();
@@ -377,6 +476,8 @@ export function runView(ctx: WorkspaceContext, run: RunRow): Record<string, unkn
     status: run.status,
     feeEntryId: run.fee_entry_id,
     feeSkippedReason: run.fee_skipped_reason,
+    // D169: the mirror that reversed the run's fee (derived from the ledger chain, never stored), or null.
+    feeReversalEntryId: feeReversalOf(ctx, run),
     createdBy: run.created_by,
     createdAt: run.created_at,
     issuedAt: run.issued_at,
@@ -404,6 +505,10 @@ export function runView(ctx: WorkspaceContext, run: RunRow): Record<string, unkn
       changedSinceIssue: g.items.some((i) => i.changeSinceIssue !== null),
       changeReason: g.items.find((i) => i.changeSinceIssue !== null)?.changeSinceIssue ?? null,
       changedDocumentIds: g.items.filter((i) => i.changeSinceIssue !== null).map((i) => i.documentId),
+      // D174: this debtor's unsent letter was re-issued without the reversed fee.
+      reissuedWithoutFee: g.items.some((i) => i.reissuedWithoutFee),
+      // D174 Q9: the date this debtor's letter carries (the run date unless re-issued under `today`).
+      letterDate: letterDateOf(ctx, run, g.debtorId),
     })),
   };
 }

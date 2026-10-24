@@ -175,8 +175,8 @@
       "fromTermsImmediate": "{name} pays immediately: left empty, the invoice is due on its issue date.",
       "fromDefault": "Left empty, TILL sets the due date at issue: {name} has no payment terms of their own, so the default of {days} days applies.",
       "fromNone": "Neither {name} nor the workspace has payment terms: left empty, the invoice is due on its issue date.",
-      "derivedDays": "Set at issue: {days} days from the invoice date.",
-      "derivedImmediate": "Set at issue: due on the invoice date.",
+      "derivedDays": "Set at issue: {days} days from the issue date.",
+      "derivedImmediate": "Set at issue: due on the issue date.",
       "reference": "Payment reference",
       "referencePending": "The payment reference is built from the invoice number when you issue."
     },

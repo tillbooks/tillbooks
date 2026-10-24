@@ -196,9 +196,10 @@ budget rather than a filled block.
 
 ### The scale (UI polish round 2, K-37, D137)
 
-Seven sizes, each with the one line height it travels with, as theme-independent tokens in
-`tokens.css` (like density). Before this the law named no size, so every surface chose one: 35
-values, 129 of them fractional pixels, and the most common size was not the body size.
+Nine sizes (seven from D137, two added by D154), each with the one line height it travels with, as
+theme-independent tokens in `tokens.css` (like density). Before this the law named no size, so
+every surface chose one: 35 values, 129 of them fractional pixels, and the most common size was not
+the body size.
 
 | Step | Size / line | Tokens | For |
 |---|---|---|---|
@@ -209,6 +210,8 @@ values, 129 of them fractional pixels, and the most common size was not the body
 | lg | 16 / 24 | `--t-font-lg`, `--t-lh-lg` | Section and dialog titles |
 | xl | 20 / 28 | `--t-font-xl`, `--t-lh-xl` | Surface titles |
 | 2xl | 24 / 32 | `--t-font-2xl`, `--t-lh-2xl` | The one headline figure (the Übersicht total, a closing sum) |
+| 3xl | 28 / 34 | `--t-font-3xl`, `--t-lh-3xl` | A surface title at its largest (Ruhig 3, D154) |
+| display | 32 / 40 | `--t-font-display`, `--t-lh-display` | A surface's one key figure, weight 600 (Ruhig 3, D154) |
 
 - **A surface reaches for a step; it never types a size.** The shared core (`tokens.css`,
   `global.css`, `motion.css`) carries no literal size and the rest of the Studio ratchets down:
@@ -227,7 +230,8 @@ values, 129 of them fractional pixels, and the most common size was not the body
   `text-transform: uppercase` over "Aktiven" is the all-caps German compound this section bans.
 - `--t-text-faint` is an edge tone (a placeholder, a disabled control, a decorative glyph), never
   text a person has to read.
-- Icons come in 16, 20 and 24px with one stroke width (1.75); 12 and 14 retire as surfaces migrate.
+- Icons come in 16, 20 and 24px with one stroke width (1.75), all from `app/src/components/icons`;
+  12 and 14 retire as surfaces migrate (see "Icon vocabulary").
 - Radii stay on the existing scale: `--t-radius-sm` 6, `--t-radius-md` 10, `--t-radius-lg` 14, and
   `--t-radius-full` for pills.
 
@@ -235,11 +239,18 @@ values, 129 of them fractional pixels, and the most common size was not the body
 
 - **8-pt grid.** Every gap, pad, and size is a multiple of 8 (4 is allowed for optical nudges
   only). The scale is `--t-space-1` through `--t-space-8` in `tokens.css`.
-- One fixed rail, one scrolling `<main>`, and at most one right dock, collapsed by default, which is
-  a viewport onto work in progress and never a place where work is done. A dock that acquires its
-  own tables, filters or settings has become a screen and belongs on a route. (The dock sentence is
-  the A35 exception, ratified verbatim by D102 on 17.08.2026; its own limit is what keeps it from
-  becoming a precedent for a fourth column.) The rail never scrolls.
+- One fixed rail and one scrolling `<main>`. No right dock: D167 (14.10.2026) retired the A35 agent
+  dock that D102 had allowed, because it hid the page on a laptop and doubled decisions the page
+  already showed. Agent Vorschläge are decided in Pendenzen, live sessions have their page under
+  Agent. A panel that wants a column of its own belongs on a route. The rail never scrolls.
+- **The /bank detail area docks right or bottom, inside its own route (D178).** Its position is a
+  per-person setting: automatic (the default: decided when the page opens, bottom at 8 or fewer open
+  lines, right above that, never re-decided while you work), right, or bottom. Drag the area by its
+  header to the other edge to dock it there, drag the divider to resize it; both are remembered per
+  person, and the dock buttons in its header plus arrow keys on the divider are the keyboard path.
+  X and Escape close it. On /bank the page itself never scrolls: the list and the detail area each own
+  their scroll, and the toolbar and the table head stay put. A split inside one route is not a dock
+  beside every page, so D167 holds.
 - Density is a feature. This is a data tool, not a landing page. Rows are compact and scannable.
 - **One global density toggle, Komfortabel or Kompakt** (D118 B3), never per-table density menus.
   It sits in the rail footer beside the theme toggle, persists per user, and works by stamping
@@ -293,7 +304,9 @@ values, 129 of them fractional pixels, and the most common size was not the body
   column the rows' pills span. The 28px band is the rail's stated exception to the D116 32px dense
   floor and to the 8-pt grid (see Tap targets); A4 first set it at 32px (a 34px pitch), and the owner
   found that too loose (D138, option B of the rail density picker). Hierarchy is carried by type
-  (leaf 14px, group label 12px/500 in `--t-text-dim` since K-23), never by a second row height. A
+  (leaf 14px; the group label is a per-person setting since D178, default 14px/600 in `--t-text`
+  starting at the icon column, alternatives 14px/500 with a group icon or the K-23 12px/500 label in
+  `--t-text-dim`), never by a second row height. A
   control inside a row (the 24px pin star, a count badge) never grows the row: the band is the row's
   natural height (a 20px line, 3px padding, a transparent 1px border) held by its `min-height`, and
   the star takes a negative block margin to stay out of the height calculation while keeping its
@@ -333,9 +346,18 @@ values, 129 of them fractional pixels, and the most common size was not the body
 - **The taxonomy is authored once, in one shared vocabulary** (D118 A2): Lager, Anlagen and
   Einstellungen are nested parents, Berichte is a group of report doors, and the daily queues
   (Übersicht, Aufgaben, Inbox, ...) stay top-level and always visible. Documentation, support and
-  the agent all speak this one taxonomy; no user can reorder it.
-- **The Favoriten lane sits ABOVE the canonical tree and is the only personal surface of the rail**
-  (D118 A3). It renders only when non-empty. Pins are per user per workspace; a pin is a pointer to
+  the agent all speak this one taxonomy. It is the default and the reset target: since D178 each
+  person may reorder groups and items, move items between groups and hide them in their own view
+  ("Menü anpassen", pointer drag AND keyboard move buttons), and "Zurücksetzen" restores it.
+  Documentation and the agent keep naming pages by the canonical path.
+- **The Favoriten lane sits ABOVE the canonical tree** (D118 A3; since D178 the personal menu order
+  is the rail's second personal surface). It renders only when non-empty, and it and the menu each
+  fold under their own header. A favourite row sits flush with the tree's leaves: no column is
+  reserved for the drag grip, which takes the icon's place on hover. By default (D178, each a
+  per-person setting) a favourite shows its page's icon and a filled star at its right edge, and when
+  a pinned page is open only the favourite row lights; the alternatives are a star in place of the
+  icon or the icon alone, and lighting the menu row only, or both with the menu row in accent ink and
+  no fill. Pins are per user per workspace; a pin is a pointer to
   a catalog surface, and the canonical tree below stays fixed. Reorder is pointer drag AND
   keyboard move-up/move-down buttons, and the buttons are MANDATORY (WCAG 2.5.7 requires a
   single-pointer, non-dragging alternative to every drag); the drag grip is pointer-only and hidden
@@ -363,7 +385,7 @@ rather than contradicting it (D118 C1-C4):
 
 - **One omnibox** (D118 C1). The Cmd/Ctrl+K palette is the single overlay for going somewhere,
   finding something and doing something, and it carries a "Frag den Agenten" tail row that routes
-  free text to `agent_ask` and opens the answer in the dock. The ask row appears only with a query,
+  free text to `agent_ask` and opens the answer on the Agent page (`/agent?session=`, D167). The ask row appears only with a query,
   is scored zero so it is never the auto-selected default over a real command, and a failed ask
   stays IN the palette so the operator sees why nothing happened. One input, two lanes; never a
   second agent input beside the palette.
@@ -417,7 +439,8 @@ rather than contradicting it (D118 C1-C4):
   the C4 confirmation; never a header action and never an export.
 - **"One of N" has three primitives, and only three** (K-11, D137). Sixteen class families with
   thirteen heights did the same job before this. `Tabs` switches the views of one record or one
-  surface (`role="tablist"`, the accent-soft pill with accent ink on the selected tab).
+  surface (`role="tablist"`, the accent-soft pill with accent ink on the selected tab; D154 makes the
+  selected tab the neutral raise, see "Surface hierarchy", and the surfaces take it in the E-step).
   `Segmented` switches between two to five sibling values (a period, month or year, list or
   board: `role="radiogroup"`, 32px, equal segments, arrow keys), and its selected segment is the
   neutral raise named under Accent discipline, never the accent; six options or more is a Select.
@@ -429,7 +452,9 @@ rather than contradicting it (D118 C1-C4):
   body scrolls, and the close X sits top right. Glyph-only save and cancel at the top right belong
   to inline editors that have no footer. (The law used to say glyph-only top right for every
   drawer; every drawer in the Studio already did the footer, and a Treuhänder reads "Speichern"
-  faster than a check mark.)
+  faster than a check mark.) **Amended by D154:** the labelled "Abbrechen" leaves the footer. The X
+  and Escape close the drawer, and the footer carries only the one primary action and its (i); see
+  "Surface hierarchy". Drawers take this as their cluster migrates in the E-step.
 - **Minimalism is the default.** Relabel, remove, merge, and reorder before adding anything. A new
   screen carries a high bar.
 - **Forgiveness.** Destructive actions take a deliberate act: a confirm or an undo. Delete sits
@@ -452,9 +477,13 @@ breaks one needs a reason a reviewer would accept, not a preference.
    12xx or 14xx to 17xx (Vorräte and Anlagevermögen), never a VAT or bank account), a filter only when
    it would change the list (a facet whose count is 0 or equals the total is hidden). Nothing hidden
    ever carries a value.
-3. **One action, one place.** No action appears twice on a surface. A button that cannot act yet is
-   absent rather than disabled when the control that unlocks it sits beside it ("Worauf buchen?"
-   is the next step on a bank line with no target, not a grey Buchen).
+3. **One action, one place.** No action appears twice on a surface (a bank line's Buchen steps out of
+   its row while the Details panel beside the table shows that line's Buchen). **Amended by D177:** a
+   commit that cannot act yet stays in its place, DISABLED and saying why: Buchen on every open bank
+   line, `aria-disabled` so it stays focusable, its reason in a few words on its tooltip ("Konto
+   wählen", "Rest wäre 0.00", "Konto fehlt"). A disabled Buchen reads plainly as not available: the
+   faint ink, no fill, a dashed hairline and the not-allowed cursor, never the look of an enabled
+   secondary. A row whose button comes and goes made the column jump and hid what was missing.
 4. **Words on demand.** Explanations, equations and "next step" sentences live behind an (i) as a
    hover and focus card. The working surface carries values and a one-line state. A derived figure
    is said in one line ("davon MWST 8.07 auf 1170 · netto 99.63"), not repeated as a table of what
@@ -495,6 +524,122 @@ are rules now, not review comments:
 | Bankzeilen, height of the selected line | 358px | 80px or less at rest |
 | Any surface, content visible above the sticky header | a 24px strip (64px on mobile) | none |
 
+## Ruhig 3 (D154, 07.10.2026)
+
+The owner asked for the whole Studio to be "minimalistic, Apple-style, intuitive and clear, with as
+little text as possible, icons with a hover label where necessary, low cognitive load". The Ruhig 3
+artifact tried three directions on Bank, Journal, Kreditoren and MWST, and the owner chose C (a
+closed icon vocabulary plus one surface layer) with an opaque header. On those four surfaces C cut
+the visible words from 435 to 181 and the boxed elements from 31 to 1. The three sections below are
+the law it sets. The system (`app/src/components/icons`, `IconButton`, the guard
+`test/style/icon-vocabulary-guard.test.mjs`) exists now; the surfaces adopt it cluster by cluster
+(the E-step), and the guard's baselines only go down.
+
+### Icon vocabulary
+
+Twenty-two glyphs may stand alone on a button, and no others: D154's twelve, the five D177 added for
+the bank line (16.10.2026) and the five D180 added for arranging the Übersicht in place (24.10.2026). Each means one thing everywhere, and its name is the button's accessible
+name and the first line of its tooltip.
+
+| Glyph | Name | Means | Where |
+|---|---|---|---|
+| pencil | Bearbeiten | Change this value or draft in place | Drafts and master records. Never a posted entry: its correction is Stornieren, under Mehr |
+| paperclip | Anhängen | Attach a Beleg (PDF, photo) | Once attached, the slot shows Öffnen |
+| speech bubble | Kommentieren | Add a note to the object | Detail headers; on dense rows it sits under Mehr |
+| flag | Markieren | Mark for follow-up or for the payment run | Rows. The marked state has its own accessible name ("markiert"), never colour alone |
+| two squares | Kopieren | Duplicate as a new draft | Always yields a draft, never a posted state |
+| arrow into tray | Herunterladen | Get a file: CSV, PDF, eCH-0217, a statement | Headers. The tooltip names the file |
+| arrow out of a box | Öffnen | Go to the linked object or an outside place | An outside place says so ("neues Fenster") |
+| magnifier | Suchen | Search within this surface | Headers. Cmd+K stays the global search |
+| three falling lines | Filter | Facets of this list | Headers. An active filter shows its count; "Filter zurücksetzen" stays a word |
+| three dots | Mehr | Rare actions and every destructive one | Always. Stornieren, Ignorieren and Löschen live only here |
+| cross | Schliessen | Close a drawer or dialog | Top right. Escape is its twin |
+| i in a circle | Info | Words on demand: an explanation, a consequence sentence | Beside a commit, the commit carries `aria-describedby` to it |
+| a line forking in two | Aufteilen | Split one amount over several accounts | Bank line details (D177) |
+| two chain links | Abgleichen | Tie a line to an entry already on the books | Bank line details (D177) |
+| outline star | Als Regel speichern | Save how this line books as a Buchungsregel | Bank line details (D177). It books nothing |
+| small cross | Ignorieren | Take a bank line out of the inbox without booking it | The bank row's right edge (D177 point 5): the one destructive glyph, because the status line undoes it in one click |
+| minus in a ring | Position entfernen | Take a position out of a draft (a split's position) | Draft rows (D177). Never a posted record: its correction is Stornieren. A minus, never a cross: on the bank line × means Ignorieren only (D177 final judge) |
+| two sliders | Anpassen | Open the arrangement of this surface for editing, in place | The surface header (D180). Pressed again, as Fertig, it closes the mode; Escape is its twin |
+| check | Fertig | Close an arrangement, or confirm a short name entry | Anpassen's pressed state, and the confirm of a one-field name entry such as naming a view (D180). Never a money commit or a posted record |
+| eye struck through | Ausblenden | Take an item off the page; it keeps its place | An item in edit mode (D180). The item stays in its slot as a faded ghost until Fertig |
+| open eye | Einblenden | Put a hidden item back where it was | A ghost in edit mode (D180) |
+| arrows between two edges | Grösse ändern | Make an item wider or narrower, or choose its size | An item in edit mode (D180): a card toggles half and full width; the bank item opens Kachel, Karte oben, Schmale Leiste |
+
+- **The one control is `IconButton`.** It takes a vocabulary key, a required `context` ("Beleg zu
+  dieser Buchung"), and nothing else that changes its meaning. The name is its `aria-label`; the
+  context is the tooltip's second line and its `aria-describedby`, so a screen reader hears "Anhängen,
+  Beleg zu dieser Buchung" and never the name twice. The tooltip opens on a mouse or pen hover (and
+  stays while the pointer moves onto it), on keyboard focus and on a 450ms long press on touch, and
+  Escape dismisses it wherever focus is. The tap that ends a long press does not act; a keyboard or
+  screen-reader click always does. A touch tap opens no bubble, and only a hover-opened bubble takes
+  the pointer, so a leftover bubble never catches the next tap.
+- **Everything else is an icon plus a word.** A glyph outside the twenty-two never stands alone; status
+  and disclosure glyphs sit beside words or inside a primitive that names itself.
+- **Money commits always keep their word:** Buchen, Ausstellen, Zahlung buchen, Periode sperren, and
+  the one main action of a surface (Neue Buchung, Rechnung erfassen). An irreversible act is never a
+  glyph alone, which is why the vocabulary has no "Neu" and no "Löschen". Its one check mark (D180) is
+  Fertig: it closes an arrangement whose every change already saved itself, or confirms a one-field
+  name entry (naming a view), and it never stands in for Buchen, Ausstellen or any posted record.
+- **Every glyph comes from `app/src/components/icons`:** one grid (24 viewBox, stroke 1.75, round caps,
+  `currentColor`), sizes 16, 20 and 24. `test/style/icon-vocabulary-guard.test.mjs` refuses, in the
+  JSX it parses (`.tsx` under `app/src`), a new `<svg>` elsewhere, a new `glyphs.tsx`, a new native
+  `<button>` whose only content is a glyph (an `<svg>`, a `*Glyph` or an `*Icon` component), and a
+  money commit (`data-money-commit`) without words. It does not see `createElement`, a glyph held in
+  a variable, an icon-only `role="button"` element or link: those stay review items until the E-step.
+
+### Text budget
+
+Busyness comes from text buttons, labels and boxed controls more than from prose, so those are what
+the budget counts: visible words, text buttons, icon buttons and boxes (three or more bordered sides,
+or a shadow), at rest and with the main object open, at 1280x800. The C counts are the budget for the
+four measured surfaces, and every other surface is held to "no more than today" until its cluster
+migrates:
+
+| Surface, at rest | Today: words / text btn / icon btn / boxes | Budget (C) |
+|---|---|---|
+| Bank | 96 / 20 / 20 / 19 | 61 / 11 / 5 / 0 |
+| Journal | 72 / 5 / 1 / 6 | 52 / 3 / 2 / 0 |
+| Kreditoren | 127 / 3 / 7 / 3 | 38 / 1 / 4 / 0 |
+| MWST | 140 / 3 / 6 / 3 | 30 / 10 / 6 / 1 |
+
+- **Words go to the Info glyph, not away.** A sentence that explains is an (i) card (D152 rule 4);
+  a word that names an act stays when the act moves money or is rare enough that nobody would learn
+  its glyph (tabs, segments, "Konto wählen").
+- **The budget is measured, not argued.** The rendered audit (`docs/planning/handoff-2026-10-07/
+  tools/audit2.cjs`) counts all 75 surfaces before and after each cluster; the F-step publishes the
+  numbers and turns them into a per-surface-type ratchet. Until then the icon guard is the automated
+  half.
+
+### Surface hierarchy
+
+- **One surface layer.** Group by whitespace and alignment, not by cards and borders. A border is
+  there for a role (a table's row rule, an input's edge, an overlay's boundary), never to make a box.
+- **An opaque sticky header** with the hairline that appears on scroll (D152 rule 6). No translucency
+  and no blur: glass stays on the forbidden list.
+- **One display step for the key figure.** The surface's one headline figure takes `--t-font-display`
+  (32/40, weight 600), and a surface title may go up to `--t-font-3xl` (28/34). Nothing else uses them.
+- **A selected tab is neutral:** the `--t-bg-soft` raise in ink, like a selected `Segmented`. Brass
+  marks only focus, the selected row and the money commit.
+- **Drawers close by X and Escape.** No labelled "Abbrechen"; the footer holds the one primary action
+  and its (i). Rare drawer actions (Als Entwurf sichern, Aufteilen, Referenz) move under Mehr.
+- **Row actions appear on hover or focus-within**, always on the selected row, and always on touch
+  (`@media (hover: none)`), so a touch user never meets a hidden control.
+
+**Grounding.** Apple's Human Interface Guidelines ask that each toolbar item's purpose be clear from a
+simple symbol, a short verb label or both, and show a brief help tag when the pointer rests on a
+button ([Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars),
+[Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons)). Material 3 sizes an
+icon button's target at 48dp and pairs it with a tooltip for accessibility
+([IconButton](https://developer.android.com/reference/kotlin/androidx/compose/material3/IconButton.composable)).
+GitHub's Primer makes the icon button's label both the tooltip and the accessible name, with a
+separate description for context, which is the `name` plus `context` split above
+([IconButton](https://primer.style/components/icon-button)). WCAG 2.2 SC 1.4.13 requires content shown
+on hover or focus to be dismissible, hoverable and persistent
+([Understanding 1.4.13](https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus)). And
+since few icons are universal, the vocabulary is closed and small, learnt through one meaning each,
+and every act that moves money or cannot be undone keeps its word.
+
 ## Motion
 
 Motion is a courtesy, not a personality (D118 D3):
@@ -510,6 +655,30 @@ Motion is a courtesy, not a personality (D118 D3):
   finger.
 - **A transition never fights the pointer.** The rail's width transition is suppressed during the
   splitter drag; any animated dimension a pointer drives directly does the same.
+
+### Motion levels (D178, 21.10.2026)
+
+Motion is a per-person setting with four levels, stamped on the root like density, and the OS
+"reduce motion" beats every one of them:
+
+| Level | What it adds |
+|---|---|
+| **Calm** | The vocabulary below and nothing else: 120-200 ms, three moments, the hover beat, the loop. |
+| **Standard** | One entrance per surface: chart marks grow in 400 ms with a 30 ms stagger. Figures are final from the first frame. |
+| **Lively** (the default, owner pick) | Chart marks grow in 700 ms with a 60 ms stagger, the Übersicht's headline figures count up over 700 ms, interactive tiles lift 2 px on hover. |
+| **Off** | No motion at all, the same as the OS setting. |
+
+Lively keeps two limits that no level lifts: a count-up runs only on the Übersicht's headline figures,
+never in a table, an input, a bank amount or anything you act on, and the layout holds still while
+anything moves (the space is reserved, only a fill, a mark or a figure changes). The budget sentence
+below governs Calm and every moment the levels do not name.
+
+The levels are tokens like the vocabulary: `--t-motion-grow` (700 ms, Lively's marks and count-up),
+`--t-motion-grow-standard` (400 ms), `--t-motion-grow-stagger` (60 ms, Lively's per-mark step;
+Standard uses `--t-motion-stagger`) and `--t-lift` (2 px). The person's level is the preference
+`appearance.motion`, stamped as `data-motion` on the root by `app/src/lib/motion.ts`;
+`app/src/styles/motion.css` maps it to what a chart and a tile read, and `off` repeats the kill
+switch. The chart palette is two tokens, `--t-chart-in` and `--t-chart-out`, one per theme.
 
 ### The vocabulary: three moments, one ease pair (D122 D-I, 05.09.2026)
 
@@ -557,12 +726,14 @@ dependency is adopted ON ITS TRIGGER, never in advance, and "we might need it" i
 | Dependency | Trigger |
 |---|---|
 | Base UI (per component) | Only when hand-rolling that one primitive would cost 500+ lines (an anchored combobox is the likely first case). Radix, Ark and Headless UI are off the table. |
-| dnd-kit | The Favoriten reorder, and ALWAYS paired with keyboard move buttons (WCAG 2.5.7). Drag without the buttons is a defect, not a phase one. |
+| dnd-kit | The Favoriten reorder, since D178 the personal menu order, and since D180 the Übersicht's key figures and cards, ALWAYS paired with a non-drag move (WCAG 2.5.7: Alt+Arrow on the focused item and the item's Mehr menu). Drag without that alternative is a defect, not a phase one. One wrapper, `app/src/components/SortableList.tsx`, serves all of them. |
 | TanStack Virtual | Only when a list measurably janks (~2'000 rendered rows). Measured, not feared. |
 | react-resizable-panels | The first genuine multi-panel surface, if one ever ships. Explicitly NOT the rail splitter, which stays hand-rolled. |
 | TanStack Table | Deferred. Revisit only if user-configurable columns/grouping become a product requirement. |
 
-The rail splitter stays hand-rolled: it shipped as ~160 lines against the WAI-ARIA window splitter
+Charts are hand-rolled SVG on one shared primitive (extracted from the creditor-payments liquidity
+chart, D178), never a chart library; the /bank detail area's dock drag and divider are hand-rolled
+like the rail splitter. The rail splitter stays hand-rolled: it shipped as ~160 lines against the WAI-ARIA window splitter
 pattern, which is the proof the zero-dep default holds for interactions of that size. No motion
 library (see Motion), no scrollbar library (see Layout), no command-palette library (the cmdk
 ranking IDEA is vendored as ~30 lines, the dependency is not).

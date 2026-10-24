@@ -1,6 +1,6 @@
 /**
- * A40 critic ROUND 2 remediation (docs/critique/a40-payment-timing-critique-r2.md on
- * origin/critic/a40-payment-timing-r2): the author's own adversarial proofs, one block per finding.
+ * A40 critic ROUND 2 remediation (docs/critique/a40-payment-timing-critique-r2.md): the author's
+ * own adversarial proofs, one block per finding.
  * Synthetic books only: invented names, the SIX sample IBANs, invented amounts and dates.
  */
 

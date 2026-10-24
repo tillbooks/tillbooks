@@ -1,17 +1,18 @@
 /**
- * G15 Pendenzen, the Studio hub: the states the design makes load-bearing, rendered from a canned
- * `attention_summary` so every assertion is about what the surface shows, not about the engine.
+ * G15 Pendenzen after D178, the page: rendered from a canned grouped `attention_list`, so every assertion
+ * is about what the surface shows and what it asks.
  *
- *  - the padlock (`visibleQueues == 0`) and the empty state ("Alles erledigt") are DIFFERENT facts
- *    and never render together (design story 1.5, 1.2);
- *  - a failed provider is named once and the empty state stays unreachable (story 1.3);
- *  - the row count does not grow with the backlog (story 1.4);
- *  - the per-workspace "neu" marker tags a row only when it is newer than the last visit (story 9.x);
- *  - there is NO hub-side hide/mute/snooze/clear (story 3.3), and the row overflow triages only;
- *  - the axe pass is clean.
+ *  - the padlock (`visibleQueues == 0`) and the empty state ("Nichts wartet auf dich.") are different
+ *    facts and never render together; a failed provider is named once and the empty state stays away;
+ *  - the sections render with their counts, every row with its own, the page adds up (D178 point 11);
+ *  - a section larger than its page reads the next page from the cursor, and the count stays the engine's;
+ *  - the grouping control writes the person's pref and the page re-reads by kind;
+ *  - "Stand" is Swiss time, in the refresh control's tooltip; no row is current on arrival; the "neu" marker;
+ *    no hub-side hide; an empty "Ereignisse" zone draws nothing;
+ *  - the five states (skeleton, empty, error with retry, success, a paging section) and axe.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -20,425 +21,344 @@ import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { I18nProvider } from '../../i18n';
 import { WorkspaceProvider } from '../../app/workspace';
+import { PrefsProvider, PrefsStore, resetPrefsModuleForTests } from '../../lib/prefs';
 import { Attention } from './index';
+import { standTime } from './model';
+import { bankVorschlag, groupedOf, linesRow } from './testing';
 
-type Handler = (input: Record<string, unknown>) => RestResponse;
+type Handler = (input: Record<string, unknown>) => RestResponse | Promise<RestResponse>;
 type Canned = Record<string, RestResponse | Handler>;
+type Call = { action: string; input: Record<string, unknown> };
 
 const ok = (data: Record<string, unknown> = {}): RestResponse => ({ status: 200, body: { ok: true, ...data } });
 
-function fakeTransport(canned: Canned): Transport {
+function fakeTransport(canned: Canned, calls: Call[]): Transport {
   return async (action, input) => {
+    calls.push({ action, input: (input ?? {}) as Record<string, unknown> });
     const entry = canned[action];
     if (entry === undefined) return { status: 200, body: { ok: true } };
-    return typeof entry === 'function' ? entry(input) : entry;
+    return typeof entry === 'function' ? await entry((input ?? {}) as Record<string, unknown>) : entry;
   };
 }
 
-function item(queueId: string, entityId: string, over: Record<string, unknown> = {}): Record<string, unknown> {
+function row(queueId: string, entityId: string, over: Record<string, unknown> = {}): Record<string, unknown> {
+  const dunning = queueId === 'dunning_run';
+  const link = { route: dunning ? '/dunning' : '/journal', params: { id: entityId } };
   return {
     queueId,
     entityKind: queueId,
     entityId,
-    titleKey: queueId === 'qr_match' ? 'attention.item.qrMatch.title' : 'attention.item.dunningRun.title',
+    titleKey: dunning ? 'attention.item.dunningRun.title' : 'attention.item.reviewFlag.title',
     titleParams: {},
-    subtitleKey: queueId === 'qr_match' ? 'attention.item.qrMatch.subtitle' : 'attention.item.dunningRun.subtitle',
-    subtitleParams: queueId === 'qr_match' ? { bank: 'PostFinance' } : { count: 3, date: '2026-08-01' },
+    subtitleKey: dunning ? 'attention.item.dunningRun.subtitle' : 'attention.item.reviewFlag.subtitle',
+    subtitleParams: dunning ? { count: 3, date: '2026-08-01' } : { date: '2026-07-03', description: 'Honorar Juli' },
     since: '2026-08-01',
     urgency: 'open',
-    deepLink: { route: queueId === 'qr_match' ? '/reconciliation' : '/dunning', params: { id: entityId } },
+    deepLink: link,
+    decisionOptions: [{ id: 'open', verb: null, labelKey: dunning ? 'attention.act.openDunning' : 'attention.act.openEntry', role: 'link', input: {}, deepLink: link }],
     ...over,
   };
 }
 
-function renderHub(canned: Canned) {
-  const client = new TillClient(fakeTransport(canned));
-  return render(
+function Where() {
+  const loc = useLocation();
+  return <div data-testid="where">{loc.pathname + loc.search}</div>;
+}
+
+function renderHub(canned: Canned, opts: { store?: PrefsStore } = {}) {
+  const calls: Call[] = [];
+  const client = new TillClient(fakeTransport(canned, calls));
+  const tree = (
+    <MemoryRouter initialEntries={['/attention']}>
+      <Routes>
+        <Route path="/attention" element={<Attention />} />
+        <Route path="*" element={<Where />} />
+      </Routes>
+    </MemoryRouter>
+  );
+  const view = render(
     <TillClientProvider client={client}>
       <I18nProvider>
-        <WorkspaceProvider initialId="ws_test">
-          <MemoryRouter initialEntries={['/attention']}>
-            <Attention />
-          </MemoryRouter>
-        </WorkspaceProvider>
+        <WorkspaceProvider initialId="ws_test">{opts.store !== undefined ? <PrefsProvider store={opts.store}>{tree}</PrefsProvider> : tree}</WorkspaceProvider>
       </I18nProvider>
     </TillClientProvider>,
   );
+  return { ...view, calls, client };
 }
+
+const sectionOf = (key: string) => document.querySelector(`[data-section="${key}"]`) as HTMLElement | null;
+
+/** Each row's way in for the roving focus: its one button (no title is a button, the fresh-eyes judge N4 M4). */
+const focusTargets = () =>
+  [...document.querySelectorAll<HTMLElement>('.att-row')].map((r) => r.querySelector('.att-row-action button') as HTMLButtonElement);
 
 beforeEach(() => {
   window.localStorage.clear();
+  resetPrefsModuleForTests();
 });
 
 describe('Pendenzen: padlock vs empty vs work waiting', () => {
-  it('padlock: visibleQueues 0 shows the padlock and NEVER "Alles erledigt", and total is not rendered as 0', async () => {
-    renderHub({
-      attention_summary: ok({ computedAt: '2026-08-17T14:32:00.000Z', visibleQueues: 0, total: null, incomplete: false, queues: [], top: [], failed: [] }),
-    });
-    expect(await screen.findByText(/Hier gibt es nichts zu zeigen/)).toBeInTheDocument();
-    expect(screen.queryByText('Alles erledigt.')).not.toBeInTheDocument();
-    expect(screen.queryByText('0')).not.toBeInTheDocument();
+  it('padlock: visibleQueues 0 shows the padlock and NEVER "Nichts wartet auf dich."', async () => {
+    renderHub({ attention_list: ok(groupedOf([], { visibleQueues: 0 })) });
+    expect(await screen.findByText('Hier gibt es nichts zu zeigen')).toBeInTheDocument();
+    expect(screen.queryByText('Nichts wartet auf dich.')).toBeNull();
   });
 
-  it('empty: everything readable and nothing waiting shows "Alles erledigt.", only when nothing failed', async () => {
-    renderHub({
-      attention_summary: ok({ computedAt: '2026-08-17T14:32:00.000Z', visibleQueues: 2, total: 0, incomplete: false, queues: [], top: [], failed: [] }),
-    });
-    expect(await screen.findByText('Alles erledigt.')).toBeInTheDocument();
-    // K-33: the empty state offers a way on, never a dead end.
-    expect(screen.getByRole('link', { name: 'Zur Übersicht' })).toHaveAttribute('href', '/overview');
+  it('empty: everything readable and nothing waiting says so in one line, only when nothing failed', async () => {
+    renderHub({ attention_list: ok(groupedOf([])) });
+    expect(await screen.findByText('Nichts wartet auf dich.')).toBeInTheDocument();
+    expect(screen.getByText('Was eine Entscheidung von dir braucht, erscheint hier.')).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-section]').length).toBe(0);
   });
 
-  it('K-40: the amount is Inter with tabular figures (.t-money), every figure intact, and no text-glyph refresh', async () => {
-    renderHub({
-      attention_summary: ok({
-        computedAt: '2026-08-17T14:32:00.000Z',
-        visibleQueues: 1,
-        total: 2,
-        incomplete: false,
-        queues: [{ queueId: 'qr_match', area: 'bank', count: 2, topUrgency: 'overdue' }],
-        top: [
-          item('qr_match', 'c1', { amountMinor: 9900, currency: 'CHF', urgency: 'overdue' }),
-          item('qr_match', 'c2', { amountMinor: 281060, currency: 'CHF' }),
-        ],
-        failed: [],
-      }),
+  it('a failed provider is named exactly once, carries no count, and the empty state stays away', async () => {
+    renderHub({ attention_list: ok(groupedOf([], { failed: ['dunning_run'] })) });
+    expect(await screen.findByText('Mahnwesen konnte nicht geladen werden.')).toBeInTheDocument();
+    expect(screen.getAllByText(/konnte nicht geladen werden/)).toHaveLength(1);
+    expect(screen.queryByText('Nichts wartet auf dich.')).toBeNull();
+    expect(screen.getByText('unvollständig', { exact: false })).toBeInTheDocument();
+  });
+
+  it('the whole read failing shows the error with a retry, and the retry reads again', async () => {
+    let reads = 0;
+    const { calls } = renderHub({
+      attention_list: () => {
+        reads += 1;
+        return reads === 1 ? { status: 500, body: { ok: false, error: 'store_busy' } } : ok(groupedOf([row('dunning_run', 'run_1')]));
+      },
     });
-    // The two figures render exactly as formatMoney writes them: the change is the face, not a digit.
-    const small = await screen.findByText('CHF 99.00');
-    const large = screen.getByText("CHF 2'810.60");
-    for (const amount of [small, large]) {
-      expect(amount).toHaveClass('att-amount');
-      expect(amount).toHaveClass('t-money');
+    expect(await screen.findByText('Die Pendenzen konnten nicht geladen werden.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /erneut versuchen/i }));
+    expect(await screen.findByText('Mahnlauf bereit zum Ausstellen')).toBeInTheDocument();
+    expect(calls.filter((c) => c.action === 'attention_list')).toHaveLength(2);
+  });
+});
+
+describe('Pendenzen: the sections add up (D178 point 11)', () => {
+  it('Bank first with its Vorschläge, then the lines; every section names its count and every row its own', async () => {
+    const rows = [
+      bankVorschlag('a1'),
+      bankVorschlag('a2'),
+      linesRow(5),
+      row('review_flag', 'e1'),
+      row('dunning_run', 'run_1'),
+    ];
+    const { calls } = renderHub({ attention_list: ok(groupedOf(rows)) });
+    await screen.findByText('5 Bankzeilen zu buchen');
+    expect(calls.find((c) => c.action === 'attention_list')?.input).toMatchObject({ workspaceId: 'ws_test', grouping: 'by_area' });
+    const sections = [...document.querySelectorAll('[data-section]')].map((s) => [s.getAttribute('data-section'), Number(s.getAttribute('data-count'))]);
+    expect(sections).toEqual([
+      ['bank', 7],
+      ['accounting', 1],
+      ['sales', 1],
+    ]);
+    // The arithmetic is on the page: the rows' own counts add up to each section's count.
+    for (const [key, count] of sections) {
+      const units = [...(sectionOf(String(key))?.querySelectorAll('[data-row-count]') ?? [])].reduce((n, r) => n + Number(r.getAttribute('data-row-count')), 0);
+      expect(units).toBe(count);
     }
-    // The urgency is the shared Status word (glyph plus word), never a text dingbat.
-    expect(screen.getByText('überfällig').closest('.status-word')).toHaveAttribute('data-kind', 'warn');
-    // The refresh control is a named icon button, not the "⟳" text glyph.
-    const refresh = screen.getByRole('button', { name: 'Aktualisieren' });
-    expect(refresh.textContent).toBe('');
-    expect(refresh.querySelector('svg')).not.toBeNull();
+    const bank = sectionOf('bank') as HTMLElement;
+    expect(within(bank).getByRole('heading', { level: 2 })).toHaveTextContent(/Bank\s*7/);
+    // No "Nach Bereich" index any more: the sections are the index.
+    expect(screen.queryByText('Alle Bereiche')).toBeNull();
   });
 
-  it('the urgency list renders the top rows, NO row is current on arrival (D152 rule 5), the amount is tabular', async () => {
-    renderHub({
-      attention_summary: ok({
-        computedAt: '2026-08-17T14:32:00.000Z',
-        visibleQueues: 2,
-        total: 5,
-        incomplete: false,
-        queues: [
-          { queueId: 'qr_match', area: 'bank', count: 2, topUrgency: 'open' },
-          { queueId: 'dunning_run', area: 'sales', count: 3, topUrgency: 'open' },
-        ],
-        top: [item('qr_match', 'c1', { amountMinor: 124000, currency: 'CHF' }), item('dunning_run', 'r1')],
-        failed: [],
-      }),
+  it('a section larger than its page offers the rest and reads it from the cursor; the count stays the engine\'s', async () => {
+    const first = groupedOf([row('dunning_run', 'run_1')], { more: { sales: { count: 2, nextCursor: '1' } } });
+    const page2 = groupedOf([row('dunning_run', 'run_2'), row('dunning_run', 'run_3')]);
+    const { calls } = renderHub({
+      attention_list: (input) => ok(input.cursor === '1' ? { ...page2, sections: [{ ...(page2.sections as Record<string, unknown>[])[0], count: 3 }] } : first),
     });
-    expect(await screen.findByText('Zahlung ohne Zuordnung')).toBeInTheDocument();
-    expect(screen.getByText('Mahnlauf wartet auf Freigabe')).toBeInTheDocument();
-    expect(screen.getByText("CHF 1'240.00")).toBeInTheDocument();
-    // D152 rule 5: no row is current on arrival. The roving tab stop still sits on the first row,
-    // so Tab lands in the list; focusing a row is the person's act and makes it current.
-    const rows = screen.getAllByRole('button').filter((b) => b.className.includes('att-row-open'));
-    for (const row of rows) expect(row).not.toHaveAttribute('aria-current');
-    expect(rows[0]).toHaveAttribute('tabindex', '0');
-    expect(rows[1]).toHaveAttribute('tabindex', '-1');
-    // The area index renders at two or more visible areas.
-    expect(screen.getByText('Nach Bereich')).toBeInTheDocument();
+    const more = await screen.findByRole('button', { name: 'Weitere 2 anzeigen' });
+    expect(sectionOf('sales')?.getAttribute('data-count')).toBe('3');
+    await userEvent.click(more);
+    await waitFor(() => expect(sectionOf('sales')?.querySelectorAll('[data-row-count]')).toHaveLength(3));
+    expect(calls.filter((c) => c.action === 'attention_list').at(-1)?.input).toMatchObject({ grouping: 'by_area', section: 'sales', cursor: '1' });
+    expect(screen.queryByRole('button', { name: /Weitere/ })).toBeNull();
+  });
+
+  it('the grouping control writes the person\'s pref and the page re-reads by kind', async () => {
+    const prefWrites: Call[] = [];
+    const prefsTransport: Transport = async (action, input) => {
+      if (action === 'prefs_list') return ok({ prefs: [], areas: [] });
+      if (action === 'prefs_set') {
+        prefWrites.push({ action, input: input as Record<string, unknown> });
+        return ok({ key: 'attention.grouping', value: (input as Record<string, unknown>).value, changed: true, isDefault: false });
+      }
+      return ok();
+    };
+    const store = new PrefsStore(new TillClient(prefsTransport), 'ws_test', { useCache: false });
+    const rows = [bankVorschlag('a1'), linesRow(2), row('dunning_run', 'run_1')];
+    const { calls } = renderHub(
+      { attention_list: (input) => ok(groupedOf(rows, { grouping: input.grouping === 'by_kind' ? 'by_kind' : 'by_area' })) },
+      { store },
+    );
+    await screen.findByText('2 Bankzeilen zu buchen');
+    expect(screen.getByRole('radio', { name: 'Nach Bereich' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(screen.getByRole('radio', { name: 'Nach Art' }));
+    await waitFor(() => expect(sectionOf('approve')).not.toBeNull());
+    expect(prefWrites[0]?.input).toMatchObject({ key: 'attention.grouping', value: 'by_kind' });
+    expect(calls.filter((c) => c.action === 'attention_list').at(-1)?.input).toMatchObject({ grouping: 'by_kind' });
+    // A Mahnlauf waiting for approval is a Vorschlag to approve (round 2): it counts under Genehmigen.
+    expect([...document.querySelectorAll('[data-section]')].map((s) => s.getAttribute('data-section'))).toEqual(['approve', 'do']);
+    expect(within(sectionOf('approve') as HTMLElement).getByRole('heading', { level: 2 })).toHaveTextContent(/Genehmigen\s*2/);
   });
 });
 
-describe('Pendenzen: honesty and scale', () => {
-  it('a failed provider is named exactly once and the empty state stays unreachable', async () => {
-    renderHub({
-      attention_summary: ok({
-        computedAt: '2026-08-17T14:32:00.000Z',
-        visibleQueues: 2,
-        total: 0,
-        incomplete: true,
-        queues: [],
-        top: [],
-        failed: ['dunning_run'],
-      }),
-    });
-    expect(await screen.findByText(/Mahnwesen konnte nicht geladen werden/)).toBeInTheDocument();
-    expect(screen.queryByText('Alles erledigt.')).not.toBeInTheDocument();
-    expect(screen.getByText(/unvollständig/)).toBeInTheDocument();
+describe('Pendenzen: one row pattern', () => {
+  it('a row is a title over one meta line, ONE real button, the reason behind the (i), the rest in the ⋯', async () => {
+    const flag = {
+      ...row('review_flag', 'e1'),
+      subtitleParams: { date: '2026-07-03', description: 'Honorar Juli', reviewer: 'Reto Muster', reason: 'Falsches Konto' },
+      proposedBy: 'member:user_3',
+      proposedByKind: 'member',
+      reasonKey: 'attention.item.reviewFlag.reason',
+      decisionOptions: [
+        { id: 'open', verb: null, labelKey: 'attention.act.openEntry', role: 'link', input: {}, deepLink: { route: '/journal', params: { entryId: 'e1' } } },
+        { id: 'resolve', verb: 'approve_entry', labelKey: 'attention.act.resolveFlag', role: 'secondary', input: { entryId: 'e1', idempotencyKey: 'k' }, capability: 'review' },
+      ],
+    };
+    renderHub({ attention_list: ok(groupedOf([flag])) });
+    const title = await screen.findByText('Buchung beanstandet');
+    // N4 M4: the title is words, never a button; the row's one button is the way in.
+    expect(title.tagName).not.toBe('BUTTON');
+    expect(screen.queryByRole('button', { name: 'Buchung beanstandet' })).toBeNull();
+    const line = title.closest('.att-row') as HTMLElement;
+    // N4 H1: no glyph in the lead column of a row that has no batch box.
+    expect(line.querySelector('.att-lead')?.childElementCount).toBe(0);
+    // The meta line: values only, the date in Swiss form and LAST (one order on every row).
+    expect(line.querySelector('.att-row-meta')).toHaveTextContent('Honorar Juli · 03.07.2026');
+    // Nothing explanatory at rest: the reason sentence is only in the (i)'s tooltip.
+    const info = within(line).getByRole('button', { name: 'Info' });
+    const tip = document.getElementById(info.getAttribute('aria-describedby') ?? '');
+    expect(tip).toHaveTextContent('Markiert von Reto Muster: Falsches Konto');
+    expect(line.querySelector('.att-row-meta')).not.toHaveTextContent('Falsches Konto');
+    // ONE real button (an edge, never ghost text): the link here; the resolve sits in the ⋯.
+    const action = within(line).getByRole('button', { name: 'Buchung öffnen' });
+    expect(action.className).toContain('btn--secondary');
+    expect(within(line).queryByRole('button', { name: 'Als geprüft freigeben' })).toBeNull();
+    await userEvent.click(within(line).getByRole('button', { name: /Aktionen für Buchung beanstandet/ }));
+    expect(screen.getByRole('menuitem', { name: 'Als geprüft freigeben' })).toBeInTheDocument();
+    // The aggregate count is the row's own.
+    expect(line.getAttribute('data-row-count')).toBe('1');
   });
 
-  it('at scale the row count does not grow with the backlog: 5 rows though the total is 300', async () => {
-    const top = Array.from({ length: 5 }, (_, i) => item('qr_match', `c${i}`));
+  it('due and overdue say so in words in the meta line, with the date; open says nothing', async () => {
     renderHub({
-      attention_summary: ok({
-        computedAt: '2026-08-17T14:32:00.000Z',
-        visibleQueues: 1,
-        total: 300,
-        incomplete: false,
-        queues: [{ queueId: 'qr_match', area: 'bank', count: 300, topUrgency: 'open' }],
-        top,
-        failed: [],
-      }),
+      attention_list: ok(
+        groupedOf([
+          { ...row('dunning_run', 'run_1'), urgency: 'overdue', dueAt: '2026-10-01' },
+          { ...row('dunning_run', 'run_2'), urgency: 'due', dueAt: '2026-10-30' },
+          row('dunning_run', 'run_3'),
+        ]),
+      ),
     });
-    await screen.findAllByText('Zahlung ohne Zuordnung');
-    const rows = screen.getAllByRole('button').filter((b) => b.className.includes('att-row-open'));
-    expect(rows).toHaveLength(5);
-    // The count carries the rest: 99+ in the total badge, not 300 rows.
-    expect(screen.getByText('99+')).toBeInTheDocument();
-  });
-
-  it('a single visible queue does NOT render the area index (a heading with nothing to index)', async () => {
-    renderHub({
-      attention_summary: ok({
-        computedAt: '2026-08-17T14:32:00.000Z',
-        visibleQueues: 1,
-        total: 1,
-        incomplete: false,
-        queues: [{ queueId: 'qr_match', area: 'bank', count: 1, topUrgency: 'open' }],
-        top: [item('qr_match', 'c1')],
-        failed: [],
-      }),
-    });
-    await screen.findByText('Zahlung ohne Zuordnung');
-    expect(screen.queryByText('Nach Bereich')).not.toBeInTheDocument();
+    await screen.findAllByText('Mahnlauf bereit zum Ausstellen');
+    const metas = [...document.querySelectorAll('.att-row-meta')].map((m) => m.textContent ?? '');
+    expect(metas[0]).toContain('überfällig seit 01.10.2026');
+    expect(metas[1]).toContain('fällig 30.10.2026');
+    expect(metas[2]).not.toMatch(/fällig|offen/);
   });
 });
 
-describe('Pendenzen: the "neu" marker and the absence of hub-side clearing', () => {
+describe('Pendenzen: time, focus, marker, triage', () => {
+  it('"Stand" is Swiss time, never UTC (D178 point 4), and lives in the refresh control\'s tooltip', async () => {
+    expect(standTime('2026-10-21T08:21:00.000Z')).toBe('10:21');
+    expect(standTime('2026-01-15T08:21:00.000Z')).toBe('09:21');
+    renderHub({ attention_list: ok(groupedOf([row('dunning_run', 'run_1')], { computedAt: '2026-10-21T08:21:00.000Z' })) });
+    const refresh = await screen.findByRole('button', { name: 'Aktualisieren' });
+    expect(refresh).toHaveAttribute('data-stand', 'Stand 10:21');
+    // The design judge: no line of its own at rest, the time is in the tooltip.
+    expect(screen.queryByText('Stand 10:21')).toBeNull();
+    await userEvent.hover(refresh);
+    expect(await screen.findByText('Aktualisieren · Stand 10:21')).toBeInTheDocument();
+  });
+
+  it('nothing is current on arrival; Tab lands on the first row, the arrows move across sections; Enter opens', async () => {
+    renderHub({ attention_list: ok(groupedOf([linesRow(2), row('review_flag', 'e1'), row('dunning_run', 'run_1')])) });
+    await screen.findByText('2 Bankzeilen zu buchen');
+    expect(document.querySelector('[aria-current="true"]')).toBeNull();
+    // The lines row's title and its one button open the same place, so its button is the way in.
+    const titles = focusTargets();
+    expect(titles.map((t) => t.tabIndex)).toEqual([0, -1, -1]);
+    act(() => titles[0]?.focus());
+    expect(titles[0]).toHaveAttribute('aria-current', 'true');
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    expect(document.activeElement).toBe(titles[2]);
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByTestId('where')).toHaveTextContent('/dunning?id=run_1');
+  });
+
   it('tags a row "neu" only when it is newer than the per-workspace last-seen marker', async () => {
-    window.localStorage.setItem('till.attention.lastSeen.ws_test', '2026-08-05T00:00:00.000Z');
-    renderHub({
-      attention_summary: ok({
-        computedAt: '2026-08-17T14:32:00.000Z',
-        visibleQueues: 1,
-        total: 2,
-        incomplete: false,
-        queues: [{ queueId: 'qr_match', area: 'bank', count: 2, topUrgency: 'open' }],
-        top: [
-          item('qr_match', 'new', { since: '2026-08-10', entityId: 'new' }),
-          item('qr_match', 'old', { since: '2026-08-01', entityId: 'old' }),
-        ],
-        failed: [],
-      }),
-    });
-    await screen.findAllByText('Zahlung ohne Zuordnung');
-    // Exactly one "neu" tag: the row whose `since` is newer than the marker.
+    window.localStorage.setItem('till.attention.lastSeen.ws_test', '2026-08-01T12:00:00.000Z');
+    renderHub({ attention_list: ok(groupedOf([{ ...row('dunning_run', 'run_1'), since: '2026-08-02' }, { ...row('dunning_run', 'run_2'), since: '2026-07-01' }])) });
+    await screen.findAllByText('Mahnlauf bereit zum Ausstellen');
     expect(screen.getAllByText('neu')).toHaveLength(1);
   });
 
+  // Ported from the pre-D178 suite (critic N4 L3): the behaviour is still live.
   it('a missing marker renders zero "neu" tags (never everything tagged new)', async () => {
-    renderHub({
-      attention_summary: ok({
-        computedAt: '2026-08-17T14:32:00.000Z',
-        visibleQueues: 1,
-        total: 1,
-        incomplete: false,
-        queues: [{ queueId: 'qr_match', area: 'bank', count: 1, topUrgency: 'open' }],
-        top: [item('qr_match', 'c1', { since: '2026-08-10' })],
-        failed: [],
-      }),
-    });
-    await screen.findByText('Zahlung ohne Zuordnung');
+    renderHub({ attention_list: ok(groupedOf([{ ...row('dunning_run', 'run_1'), since: '2026-08-10' }])) });
+    await screen.findByText('Mahnlauf bereit zum Ausstellen');
     expect(screen.queryByText('neu')).not.toBeInTheDocument();
   });
 
-  it('there is no hub-side hide, mute or snooze anywhere; the row overflow triages only', async () => {
-    renderHub({
-      attention_summary: ok({
-        computedAt: '2026-08-17T14:32:00.000Z',
-        visibleQueues: 1,
-        total: 1,
-        incomplete: false,
-        queues: [{ queueId: 'qr_match', area: 'bank', count: 1, topUrgency: 'open' }],
-        top: [item('qr_match', 'c1')],
-        failed: [],
-      }),
-    });
-    await screen.findByText('Zahlung ohne Zuordnung');
-    for (const banned of [/verbergen/i, /stummschalten/i, /erledigt für heute/i, /snooze/i, /ausblenden/i]) {
-      expect(screen.queryByText(banned)).not.toBeInTheDocument();
-    }
-    // The work list has no archive control (that belongs to the events zone).
-    expect(screen.queryByRole('button', { name: /Archivieren:/ })).not.toBeInTheDocument();
-  });
-});
-
-describe('Pendenzen: the defer (createTask) reports its outcome', () => {
-  const oneItem = (extra: Record<string, unknown> = {}): Canned => ({
-    attention_summary: ok({
-      computedAt: '2026-08-17T14:32:00.000Z',
-      visibleQueues: 1,
-      total: 1,
-      incomplete: false,
-      queues: [{ queueId: 'qr_match', area: 'bank', count: 1, topUrgency: 'open' }],
-      top: [item('qr_match', 'c1')],
-      failed: [],
-    }),
-    ...extra,
+  it('there is no hub-side hide, mute or snooze; the ⋯ triages only', async () => {
+    renderHub({ attention_list: ok(groupedOf([row('dunning_run', 'run_1')])) });
+    await screen.findByText('Mahnlauf bereit zum Ausstellen');
+    await userEvent.click(screen.getByRole('button', { name: /Aktionen für Mahnlauf/ }));
+    const items = screen.getAllByRole('menuitem').map((m) => m.textContent);
+    expect(items).toContain('Referenz kopieren');
+    expect(items.join(' ')).not.toMatch(/ausblenden|stumm|später/i);
   });
 
+  // Ported from the pre-D178 suite (critic N4 L3): the defer still sits in every row's ⋯.
   it('a successful defer confirms it (a defer changes no visible row, so it NEEDS the banner)', async () => {
-    const user = userEvent.setup();
-    renderHub(oneItem({ tasks_create: ok({ id: 'task_1' }) }));
-    await screen.findByText('Zahlung ohne Zuordnung');
-    await user.click(screen.getByRole('button', { name: /Aktionen für/ }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Aufgabe erstellen' }));
+    const { calls } = renderHub({ attention_list: ok(groupedOf([row('dunning_run', 'run_1')])), tasks_create: ok({ id: 'task_1' }) });
+    await screen.findByText('Mahnlauf bereit zum Ausstellen');
+    await userEvent.click(screen.getByRole('button', { name: /Aktionen für Mahnlauf/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Aufgabe erstellen' }));
     expect(await screen.findByText('Aufgabe erstellt.')).toBeInTheDocument();
+    expect(calls.find((c) => c.action === 'tasks_create')?.input).toMatchObject({ workspaceId: 'ws_test', title: 'Mahnlauf bereit zum Ausstellen', entityKind: 'dunning_run', entityId: 'run_1' });
   });
 
   it('a failed tasks_create shows the refusal, NOT a silent success', async () => {
-    const user = userEvent.setup();
-    renderHub(oneItem({ tasks_create: { status: 422, body: { ok: false, error: 'permission_denied' } } }));
-    await screen.findByText('Zahlung ohne Zuordnung');
-    await user.click(screen.getByRole('button', { name: /Aktionen für/ }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Aufgabe erstellen' }));
+    renderHub({
+      attention_list: ok(groupedOf([row('dunning_run', 'run_1')])),
+      tasks_create: { status: 422, body: { ok: false, error: 'permission_denied' } },
+    });
+    await screen.findByText('Mahnlauf bereit zum Ausstellen');
+    await userEvent.click(screen.getByRole('button', { name: /Aktionen für Mahnlauf/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Aufgabe erstellen' }));
     expect(await screen.findByText('Dafür fehlt dir die Berechtigung.')).toBeInTheDocument();
     expect(screen.queryByText('Aufgabe erstellt.')).not.toBeInTheDocument();
   });
-});
-
-describe('Pendenzen: accessibility', () => {
-  it('has no axe violations with work listed', async () => {
-    const { container } = renderHub({
-      attention_summary: ok({
-        computedAt: '2026-08-17T14:32:00.000Z',
-        visibleQueues: 2,
-        total: 5,
-        incomplete: false,
-        queues: [
-          { queueId: 'qr_match', area: 'bank', count: 2, topUrgency: 'open' },
-          { queueId: 'dunning_run', area: 'sales', count: 3, topUrgency: 'open' },
-        ],
-        top: [item('qr_match', 'c1', { amountMinor: 124000, currency: 'CHF' }), item('dunning_run', 'r1')],
-        failed: [],
-      }),
-      notifications_list: ok({ items: [], unreadCount: 0 }),
-    });
-    await screen.findByText('Zahlung ohne Zuordnung');
-    await waitFor(async () => {
-      expect(await axe(container)).toHaveNoViolations();
-    });
-  });
-});
-
-describe('Pendenzen: every queue is named in words, never as a raw key (the bank_keys_review defect)', () => {
-  const ebicsItem = (queueId: string): Record<string, unknown> => ({
-    queueId,
-    entityKind: 'ebics_connection',
-    entityId: 'ebconn_synth_9',
-    titleKey: 'attention.item.bankActivation.signLetter.title',
-    titleParams: { bank: 'Synthbank' },
-    subtitleKey: 'attention.item.bankActivation.signLetter.subtitle',
-    subtitleParams: { bank: 'Synthbank', lastCheckAt: '2026-10-02T05:02:00.000Z' },
-    since: '2026-09-28T08:00:00.000Z',
-    urgency: 'open',
-    deepLink: { route: '/bank-accounts', params: {} },
-    decisionOptions: [
-      { id: 'open', verb: null, labelKey: 'attention.act.openBankAccounts', role: 'link', input: {}, deepLink: { route: '/bank-accounts', params: {} } },
-    ],
-  });
-  const single = (queueId: string, labelKey?: string) =>
-    ok({
-      computedAt: '2026-10-02T06:00:00.000Z',
-      visibleQueues: 7,
-      total: 1,
-      incomplete: false,
-      queues: [{ queueId, ...(labelKey !== undefined ? { labelKey } : {}), area: 'bank', count: 1, topUrgency: 'open' }],
-      top: [ebicsItem(queueId)],
-      failed: [],
-    });
-
-  it('bank_keys_review and bank_activation have their own queue labels', async () => {
-    const { unmount } = renderHub({ attention_summary: single('bank_keys_review', 'attention.queue.bankKeysReview') });
-    expect(await screen.findByRole('heading', { name: 'Bankschlüssel' })).toBeInTheDocument();
-    unmount();
-    renderHub({ attention_summary: single('bank_activation', 'attention.queue.bankActivation') });
-    expect(await screen.findByRole('heading', { name: 'Bank-Freischaltung' })).toBeInTheDocument();
-  });
-
-  it("a queue with no queueLabel falls back to the provider's own labelKey, silently (no raw key, no console error)", async () => {
-    renderHub({ attention_summary: single('future_queue', 'attention.queue.bankActivation') });
-    expect(await screen.findByRole('heading', { name: 'Bank: Freischaltung' })).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain('attention.queueLabel');
-  });
 
   it('a failed queue with no label at all is named by its readable id, never the dot path', async () => {
-    renderHub({
-      attention_summary: ok({
-        computedAt: '2026-10-02T06:00:00.000Z',
-        visibleQueues: 2,
-        total: 0,
-        incomplete: true,
-        queues: [],
-        top: [],
-        failed: ['future_queue'],
-      }),
-    });
+    renderHub({ attention_list: ok(groupedOf([], { failed: ['future_queue'] })) });
     expect(await screen.findByText(/Future queue/)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain('attention.queueLabel');
   });
 
-  it('the EBICS letter row says the owner words and the last bank answer in Swiss time', async () => {
-    renderHub({ attention_summary: single('bank_activation', 'attention.queue.bankActivation') });
-    expect(await screen.findByText('Unterschreibe den INI-Brief für die Synthbank')).toBeInTheDocument();
-    expect(screen.getByText(/Zuletzt bei der Synthbank nachgefragt: 02\.10\.2026, 07:02\./)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bankkonten öffnen' })).toBeInTheDocument();
-  });
-});
-
-describe('Pendenzen: a list never opens itself (D152 rule 5)', () => {
-  const twoRows = () =>
-    ok({
-      computedAt: '2026-08-17T14:32:00.000Z',
-      visibleQueues: 2,
-      total: 2,
-      incomplete: false,
-      queues: [
-        { queueId: 'qr_match', area: 'bank', count: 1, topUrgency: 'open' },
-        { queueId: 'dunning_run', area: 'sales', count: 1, topUrgency: 'open' },
-      ],
-      top: [item('qr_match', 'c1'), item('dunning_run', 'run_7')],
-      failed: [],
+  it('an empty events zone draws nothing: no "Ereignisse" heading over an empty list', async () => {
+    renderHub({ attention_list: ok(groupedOf([row('dunning_run', 'run_1')])), notifications_list: ok({ items: [] }) });
+    await screen.findByText('Mahnlauf bereit zum Ausstellen');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
     });
-
-  it('nothing is current on arrival; Tab lands on the first row and makes it current, the arrows move it', async () => {
-    const user = userEvent.setup();
-    const { container } = renderHub({ attention_summary: twoRows() });
-    await screen.findByText('Mahnlauf wartet auf Freigabe');
-    expect(container.querySelector('[aria-current="true"]')).toBeNull();
-    const rows = screen.getAllByRole('button').filter((b) => b.className.includes('att-row-open'));
-    act(() => rows[0].focus());
-    await waitFor(() => expect(rows[0]).toHaveAttribute('aria-current', 'true'));
-    await user.keyboard('{ArrowDown}');
-    await waitFor(() => expect(rows[1]).toHaveAttribute('aria-current', 'true'));
-    expect(rows[1]).toHaveFocus();
-    expect(rows[0]).not.toHaveAttribute('aria-current');
+    expect(screen.queryByRole('heading', { name: 'Ereignisse' })).toBeNull();
   });
 
-  it('a click (or Enter) opens the row exactly where it did before: the item deep link', async () => {
-    const user = userEvent.setup();
-    render(
-      <TillClientProvider client={new TillClient(fakeTransport({ attention_summary: twoRows() }))}>
-        <I18nProvider>
-          <WorkspaceProvider initialId="ws_test">
-            <MemoryRouter initialEntries={['/attention']}>
-              <Routes>
-                <Route path="/attention" element={<Attention />} />
-                <Route path="/dunning" element={<LocationProbe />} />
-              </Routes>
-            </MemoryRouter>
-          </WorkspaceProvider>
-        </I18nProvider>
-      </TillClientProvider>,
-    );
-    await screen.findByText('Mahnlauf wartet auf Freigabe');
-    const rows = screen.getAllByRole('button').filter((b) => b.className.includes('att-row-open'));
-    act(() => rows[1].focus());
-    await user.keyboard('{Enter}');
-    expect(await screen.findByTestId('probe')).toHaveTextContent('/dunning?id=run_7');
+  it('has no axe violations with sections, the batch bar and rows rendered', async () => {
+    const { container } = renderHub({
+      attention_list: ok(groupedOf([bankVorschlag('a1'), bankVorschlag('a2'), linesRow(5), row('review_flag', 'e1'), row('dunning_run', 'run_1')])),
+      list_drafted_actions: ok({ actions: [] }),
+    });
+    await screen.findByText('5 Bankzeilen zu buchen');
+    // Let the side reads (events, drafted payloads, the dial, the chart) land before the audit.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(await axe(container)).toHaveNoViolations();
   });
 });
-
-function LocationProbe() {
-  const location = useLocation();
-  return <p data-testid="probe">{`${location.pathname}${location.search}`}</p>;
-}

@@ -34,7 +34,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ACTIONS, getAction } from '../../dist/api/registry.js';
-import { CAPABILITY_FOR_ACTION, isUngated } from '../../dist/core/access/index.js';
+import { handleRest } from '../../dist/api/rest.js';
+import { CAPABILITY_FOR_ACTION, MINIMUM_CAPABILITIES_FOR_DYNAMIC, isUngated, requiredCapabilitiesFor } from '../../dist/core/access/index.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
 
 /** The write verbs the boundary really gates: ctx verbs with a capability rather than an exemption. */
@@ -193,6 +194,88 @@ test('A24: the ALL-OF form really requires all of it, measured on each half of a
   // Declaration order decides which half is named, and `pay` is declared first because it is the
   // capability the operator was reasoning about when they opened the Roles tab.
   assert.equal(withoutPay.capability, 'pay');
+});
+
+test('A24, critic D175-C6: compose_entry in its bank form asks the bank inbox read right; the plain form does not', () => {
+  // Guards the input-keyed `compose_entry` rule in actionCapabilities.ts: without it a seat holding the
+  // books and the VAT but not the bank could preview any bank line's amount and a rule's expansion.
+  const bankInput = (workspaceId) => ({
+    workspaceId,
+    mode: 'expand',
+    bankTxnId: 'btx_unknown',
+    target: { kind: 'accounts', legs: [{ accountId: 'x', amountMinor: 100 }] },
+  });
+  const seat = agentHoldingExactly(['read_books', 'read_vat'], 'c6-books');
+  const bank = getAction('compose_entry').run(seat.deps, bankInput(seat.workspaceId));
+  assert.equal(bank.ok, false);
+  assert.equal(bank.error, 'permission_denied');
+  assert.equal(bank.capability, 'read_sales');
+  const plain = getAction('compose_entry').run(seat.deps, { workspaceId: seat.workspaceId, mode: 'expand', date: '2026-03-02', lines: [] });
+  assert.notEqual(plain.error, 'permission_denied', 'the journal composer stays on the books and the VAT');
+  const banked = agentHoldingExactly(['read_books', 'read_vat', 'read_sales'], 'c6-bank');
+  const allowed = getAction('compose_entry').run(banked.deps, bankInput(banked.workspaceId));
+  assert.equal(allowed.error, 'not_found', 'with the bank read right the read runs (and finds no such line)');
+});
+
+test('A24, D176: the TEMPLATE forms of compose_entry and post_entry both ask the bank inbox read right; their plain forms do not', () => {
+  // Guards the input-keyed `compose_entry` and `post_entry` rules in actionCapabilities.ts (and the
+  // engine's own assert in postEntryFromTemplate): both read a Vorlage, a rule row `list_bank_standards`
+  // reads under `read_sales`, so neither may be a side door to it.
+  const template = { standardId: 'bstd_unknown', asks: {} };
+  const seat = agentHoldingExactly(['post', 'read_books', 'read_vat'], 'd176-books');
+  const composed = getAction('compose_entry').run(seat.deps, { workspaceId: seat.workspaceId, mode: 'expand', date: '2026-03-02', template });
+  assert.deepEqual([composed.error, composed.capability], ['permission_denied', 'read_sales']);
+  const posted = getAction('post_entry').run(seat.deps, { workspaceId: seat.workspaceId, date: '2026-03-02', source: 'manual', template, idempotencyKey: 'd176-p1' });
+  assert.deepEqual([posted.error, posted.capability], ['permission_denied', 'read_sales']);
+  const plainPost = getAction('post_entry').run(seat.deps, { workspaceId: seat.workspaceId, date: '2026-03-02', source: 'manual', lines: [], idempotencyKey: 'd176-p2' });
+  assert.notEqual(plainPost.error, 'permission_denied', 'typed lines stay on post alone');
+  const banked = agentHoldingExactly(['post', 'read_books', 'read_vat', 'read_sales'], 'd176-bank');
+  const allowedCompose = getAction('compose_entry').run(banked.deps, { workspaceId: banked.workspaceId, mode: 'expand', date: '2026-03-02', template });
+  assert.equal(allowedCompose.verdict?.error, 'rule_not_found', 'with the right the read runs (and finds no such Vorlage)');
+  const allowedPost = getAction('post_entry').run(banked.deps, { workspaceId: banked.workspaceId, date: '2026-03-02', source: 'manual', template, idempotencyKey: 'd176-p3' });
+  assert.equal(allowedPost.error, 'rule_not_found');
+});
+
+test('A24, critic D176-R2-2: a NULL template is absent: typed lines with template: null post on post alone, through MCP and REST alike', () => {
+  // Guards `hasTemplate` (actionCapabilities.ts) and the null-aware dispatch of post_entry (registry.ts)
+  // and compose_entry (compose-actions.ts): a null template used to read as present and ask read_sales.
+  const seat = agentHoldingExactly(['post', 'read_books', 'read_vat'], 'r22-null');
+  const accounts = getAction('list_accounts').run({ ...seat.deps, actor: 'studio' }, { workspaceId: seat.workspaceId }).accounts;
+  const acc = (n) => accounts.find((a) => a.number === n).id;
+  const lines = [
+    { account: acc('6570'), debit: 1000 },
+    { account: acc('2800'), credit: 1000 },
+  ];
+  const base = { workspaceId: seat.workspaceId, date: '2026-03-02', source: 'manual', lines, template: null };
+  const viaMcp = getAction('post_entry').run(seat.deps, { ...base, idempotencyKey: 'r22-m' });
+  const viaRest = handleRest('post_entry', { ...base, idempotencyKey: 'r22-r' }, seat.deps).body;
+  for (const [face, answer] of [
+    ['MCP', viaMcp],
+    ['REST', viaRest],
+  ]) {
+    assert.equal(answer.ok, true, `${face}: ${JSON.stringify(answer).slice(0, 200)}`);
+    assert.notEqual(answer.error, 'permission_denied', face);
+  }
+  const composed = getAction('compose_entry').run(seat.deps, { workspaceId: seat.workspaceId, mode: 'expand', date: '2026-03-02', lines, template: null });
+  assert.equal(composed.ok, true, `compose_entry with template: null composes the typed lines: ${JSON.stringify(composed).slice(0, 200)}`);
+  assert.equal(composed.verdict.ok, true);
+});
+
+test('A24, D176: an input-keyed rule declares a MINIMUM the palette disables on, and every form of the verb asks it', () => {
+  // Guards MINIMUM_CAPABILITIES_FOR_DYNAMIC (actionCapabilities.ts), which the command source projects for
+  // the Studio palette: post_entry needs post and compose_entry the books and the VAT in every form.
+  assert.deepEqual({ ...MINIMUM_CAPABILITIES_FOR_DYNAMIC }, { post_entry: ['post'], compose_entry: ['read_books', 'read_vat'] });
+  const forms = {
+    post_entry: [{}, { lines: [] }, { template: { standardId: 'x', asks: {} } }, { template: null }],
+    compose_entry: [{ mode: 'expand' }, { bankTxnId: 'x' }, { template: { standardId: 'x', asks: {} } }, { template: null }],
+  };
+  for (const [name, minimum] of Object.entries(MINIMUM_CAPABILITIES_FOR_DYNAMIC)) {
+    assert.equal(typeof CAPABILITY_FOR_ACTION[name], 'function', `${name} is input-keyed`);
+    for (const input of forms[name]) {
+      const asked = requiredCapabilitiesFor(name, input);
+      for (const c of minimum) assert.ok(asked.includes(c), `${name} ${JSON.stringify(input)} asks ${asked.join(', ')}, not ${c}`);
+    }
+  }
 });
 
 test('A24: unlock_period still refuses a hard lock without the narrower capability', () => {

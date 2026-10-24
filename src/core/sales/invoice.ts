@@ -1290,6 +1290,67 @@ export function sendInvoice(
   const document = view.document as { type: string; status: string; contactId: string | null };
   if (document.type !== 'invoice') return err('not_an_invoice', { documentId: input.invoiceId, transmitted: false });
 
+  const invoiceNumber = readInvoiceNumber(ctx, input.invoiceId);
+  // G05 §10: the locale and subject the log row records, resolved once for every path below.
+  const sendLocale = sendLocaleOf(ctx, input.invoiceId, document.contactId);
+  const sentSubject = invoiceEmailSubject(invoiceNumber);
+
+  /**
+   * The post-transmission records, committed as one unit. Never reached without a real send.
+   * `recipient` is the address the mail actually LEFT for: on the reconcile of a prior transmitted
+   * attempt that is the attempt's own `to`, never the contact's email as it reads now (D165 round 2,
+   * independent critic finding 2: a rewrite between the send and the reconcile was recorded as the
+   * recipient of a mail it never received).
+   */
+  const recordSent = (recipient: string): Result => {
+    const run = (): Result => {
+      ctx.store.db
+        .prepare('UPDATE document SET sent_to_email = ? WHERE workspace_id = ? AND id = ?')
+        .run(recipient, ctx.workspaceId, input.invoiceId);
+      const transition = transitionDocument(ctx, { documentId: input.invoiceId, to: 'sent' });
+      if (!transition.ok) throw new SendAbort(transition);
+      // G05 §10: the log row lands IN THE SAME WRITE as the send's own status transition (spec
+      // §10.4), so a send that recorded its outcome also recorded its log row, or neither landed.
+      // The email that left carried `sentSubject` and the PDF, nothing else: the row records
+      // exactly that (`dispatch_text_defaulted:true`; saved texts do not drive sends this pass,
+      // spec §0 item 8a).
+      recordDispatch(ctx, {
+        documentKind: 'invoice',
+        documentId: input.invoiceId,
+        contactId: document.contactId,
+        recipientEmail: recipient,
+        channel: 'smtp',
+        locale: sendLocale,
+        subjectResolved: sentSubject,
+        bodyResolved: '',
+        defaulted: true,
+        outcome: 'sent',
+      });
+      return ok({ ...transition, sentToEmail: recipient, transmitted: true });
+    };
+    try {
+      if (scopedKey !== undefined) {
+        const result = ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'send_invoice', run);
+        // The completed result is now the durable record; the attempt row has served its purpose.
+        clearSendAttempt(ctx, scopedKey);
+        return result;
+      }
+      return ctx.store.tx(run);
+    } catch (e) {
+      if (e instanceof SendAbort) return { ...e.result, transmitted: true };
+      throw e;
+    }
+  };
+
+  // A prior attempt that definitively TRANSMITTED, whose records did not land: reconcile without
+  // touching the transport again. FIRST, before every guard below (D165 follow-up, the security
+  // review's fail-open state drift): the mail left, so a guard about sending (confirmation, the
+  // customer's email as it reads now, the PDF or QR part as they render now) must not answer
+  // `transmitted: false` and leave the invoice `issued`, as if nothing had gone out and a send under
+  // another key were still the first. The transition inside still refuses an invoice that cannot be
+  // `sent` (cancelled meanwhile), and then says `transmitted: true`.
+  if (priorAttempt?.phase === 'transmitted') return recordSent(priorAttempt.to);
+
   // Status legality BEFORE any side effect: a draft (or cancelled) invoice transmits ZERO emails.
   // This is the same guard the transition inside will re-check; running it first keeps the
   // `illegal_transition` from arriving only after the email left the building.
@@ -1355,56 +1416,7 @@ export function sendInvoice(
       detail: gap?.detail ?? 'unknown',
     });
   }
-  const invoiceNumber = readInvoiceNumber(ctx, input.invoiceId);
   const to = email;
-  // G05 §10: the locale and subject the log row records, resolved once for every path below.
-  const sendLocale = sendLocaleOf(ctx, input.invoiceId, document.contactId);
-  const sentSubject = invoiceEmailSubject(invoiceNumber);
-
-  /** The post-transmission records, committed as one unit. Never reached without a real send. */
-  const recordSent = (): Result => {
-    const run = (): Result => {
-      ctx.store.db
-        .prepare('UPDATE document SET sent_to_email = ? WHERE workspace_id = ? AND id = ?')
-        .run(to, ctx.workspaceId, input.invoiceId);
-      const transition = transitionDocument(ctx, { documentId: input.invoiceId, to: 'sent' });
-      if (!transition.ok) throw new SendAbort(transition);
-      // G05 §10: the log row lands IN THE SAME WRITE as the send's own status transition (spec
-      // §10.4), so a send that recorded its outcome also recorded its log row, or neither landed.
-      // The email that left carried `sentSubject` and the PDF, nothing else: the row records
-      // exactly that (`dispatch_text_defaulted:true`; saved texts do not drive sends this pass,
-      // spec §0 item 8a).
-      recordDispatch(ctx, {
-        documentKind: 'invoice',
-        documentId: input.invoiceId,
-        contactId: document.contactId,
-        recipientEmail: to,
-        channel: 'smtp',
-        locale: sendLocale,
-        subjectResolved: sentSubject,
-        bodyResolved: '',
-        defaulted: true,
-        outcome: 'sent',
-      });
-      return ok({ ...transition, sentToEmail: to, transmitted: true });
-    };
-    try {
-      if (scopedKey !== undefined) {
-        const result = ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'send_invoice', run);
-        // The completed result is now the durable record; the attempt row has served its purpose.
-        clearSendAttempt(ctx, scopedKey);
-        return result;
-      }
-      return ctx.store.tx(run);
-    } catch (e) {
-      if (e instanceof SendAbort) return { ...e.result, transmitted: true };
-      throw e;
-    }
-  };
-
-  // A prior attempt that definitively TRANSMITTED, whose records did not land: reconcile without
-  // touching the transport again.
-  if (priorAttempt?.phase === 'transmitted') return recordSent();
 
   // M18/OP4: the transport. A `workspace.email_relay` mode with nothing wired behind it is named
   // explicitly rather than stubbed, so a configured-but-inert relay can never look like a send.
@@ -1437,21 +1449,36 @@ export function sendInvoice(
         });
   }
 
-  // Commit the INTENT before the irreversible act, so a crash between the two is recoverable.
-  if (scopedKey !== undefined) writeSendAttempt(ctx, scopedKey, { phase: 'dispatching', to });
+  // Commit the INTENT before the irreversible act, so a crash between the two is recoverable. The
+  // intent and its retraction below are the send's own bookkeeping, not the send: they never mark an
+  // approval's act as having run (D165, `withoutCommitMark`), so an approval whose relay answered that
+  // nothing left stays rejectable. A transport that THROWS leaves the outcome unknown, and that marks.
+  if (scopedKey !== undefined) {
+    const key = scopedKey;
+    ctx.store.withoutCommitMark(() => writeSendAttempt(ctx, key, { phase: 'dispatching', to }));
+  }
 
   // The transport runs OUTSIDE any transaction: an outbound side effect cannot live inside something
   // that can roll back after it. A throw here leaves the attempt at `dispatching` (outcome unknown).
-  const sent = relay.send({
-    to,
-    subject: invoiceEmailSubject(invoiceNumber),
-    pdfBase64: (pdf.pdf as { base64: string }).base64,
-  });
+  let sent: ReturnType<typeof relay.send>;
+  try {
+    sent = relay.send({
+      to,
+      subject: invoiceEmailSubject(invoiceNumber),
+      pdfBase64: (pdf.pdf as { base64: string }).base64,
+    });
+  } catch (e) {
+    markUnknownOutcome(ctx);
+    throw e;
+  }
 
   if (!sent.ok) {
     // The port contract: `{ok:false}` means nothing left the building, so the intent is retractable
     // and a later retry with the same key may transmit once the fault clears.
-    if (scopedKey !== undefined) clearSendAttempt(ctx, scopedKey);
+    if (scopedKey !== undefined) {
+      const key = scopedKey;
+      ctx.store.withoutCommitMark(() => clearSendAttempt(ctx, key));
+    }
     // G05 §10: the failed attempt is a log row too, with the transport's own reason.
     recordDispatch(ctx, {
       documentKind: 'invoice',
@@ -1476,7 +1503,19 @@ export function sendInvoice(
   // It went out. Record that fact durably BEFORE attempting the bookkeeping, so a fault in the
   // bookkeeping can never be mistaken for "nothing was sent".
   if (scopedKey !== undefined) writeSendAttempt(ctx, scopedKey, { phase: 'transmitted', to });
-  return recordSent();
+  return recordSent(to);
+}
+
+/**
+ * D165: a transport that threw may or may not have sent, so an approval replaying this send must count
+ * as having run (`commitMarkNow`). Best effort: the transport's own error is the one the caller sees.
+ */
+function markUnknownOutcome(ctx: WorkspaceContext): void {
+  try {
+    ctx.store.commitMarkNow();
+  } catch {
+    // The transport's error is rethrown by the caller; a failed stamp must not replace it.
+  }
 }
 
 /** The configured relay MODE, which is a setting and never by itself a transport. */

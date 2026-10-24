@@ -36,6 +36,15 @@
  * nullable: a row drafted before the pin existed, or for a verb that needs none, carries NULL and
  * replays exactly as before.
  *
+ * `agent_action.committed_at` (D165, 13.10.2026) is the COMMIT MARK of an approval's replay: stamped
+ * inside the act's own transaction (`SqliteStore.withCommitMark`), so it is set exactly when the act
+ * committed something, whatever verb name or key the act files its idempotency record under. A
+ * re-approve after a process death between the act and the status flip reads it to settle the row
+ * instead of voiding a committed act as stale. `agent_action.committed_pin` (D165 round 2) is the pin
+ * digest as the act's last committed transaction left the records, so a re-approve forgives the act's
+ * own moves and nobody else's (a step-by-step act is marked after its first step). Both additive and
+ * nullable: a row from before them reads as "no replay committed".
+ *
  * `agent_action_by_key` (F-08 c, 2026-09-05) is the replay lookup: a governed write at `ask` that
  * arrives AGAIN with the same `idempotency_key` for the same `action_tool` answers with the row it
  * already minted instead of a second Vorschlag (measured in J3.10: two proposals for one booking, and
@@ -79,7 +88,12 @@ CREATE TABLE IF NOT EXISTS agent_action (
   resolved_by      TEXT,
   reject_reason    TEXT,
   pin_digest       TEXT,
-  pin_json         TEXT
+  pin_json         TEXT,
+  committed_at     TEXT,
+  committed_pin    TEXT,
+  closed_by_link_id TEXT,
+  closure_kind     TEXT,
+  history_json     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS agent_action_queue

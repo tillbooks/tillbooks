@@ -322,6 +322,101 @@ describe('AssetRegister, H02 acquisition', () => {
     expect(within(dialog).getByText('e1')).toBeInTheDocument();
   });
 
+  // D170: the register's undo. A standing event offers Stornieren behind its confirm; the reason is
+  // required, and the call names the asset and the event. A taken-back event and a depreciation row offer
+  // nothing (the run has its own reverse), and the taken-back one says so.
+  const EVENT = (over: Record<string, unknown> = {}) => ({
+    id: 't1',
+    type: 'acquisition',
+    date: '2026-03-15',
+    deltaCostRappen: 12500000,
+    deltaAccumDeprRappen: 0,
+    journalEntryId: 'e1',
+    description: null,
+    costAfterRappen: 12500000,
+    accumulatedDeprAfterRappen: 0,
+    netBookValueAfterRappen: 12500000,
+    reversedByTransactionId: null,
+    ...over,
+  });
+
+  it('D170: a standing event offers Stornieren; the confirm needs a reason and posts asset_transaction_reverse', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    let ledgerReads = 0;
+    const canned: Canned = {
+      ...baseCanned(),
+      asset_list: ok({ assets: [ASSET({ status: 'active' })], total: 1 }),
+      asset_ledger_get: () => {
+        ledgerReads += 1;
+        return ok({ asset: { id: 'as_1', status: 'active' }, events: [EVENT()], total: 1 });
+      },
+      asset_transaction_reverse: ok({ assetId: 'as_1', transactionId: 't1', reversalTransactionId: 't2', reversalEntryId: 'e2', adopted: false }),
+    };
+    renderSurface(canned, asked);
+    const user = userEvent.setup();
+    await rowVerb(user, de.assets.acquisition.transactions);
+    await user.click(await screen.findByRole('button', { name: /^Aktionen für die Buchung vom 15\.03\.2026/ }));
+    await user.click(screen.getByRole('menuitem', { name: de.assets.ledger.reverse }));
+    const confirm = await screen.findByRole('alertdialog');
+    const go = within(confirm).getByRole('button', { name: de.assets.ledger.reverseConfirm });
+    expect(go).toBeDisabled();
+    expect(asked.some((a) => a.action === 'asset_transaction_reverse')).toBe(false);
+    await user.type(within(confirm).getByLabelText(de.assets.ledger.reverseReason), 'Doppelt erfasst');
+    expect(go).toBeEnabled();
+    const readsBefore = ledgerReads;
+    await user.click(go);
+    await waitFor(() => expect(asked.some((a) => a.action === 'asset_transaction_reverse')).toBe(true));
+    const call = asked.find((a) => a.action === 'asset_transaction_reverse');
+    expect(call?.input.assetId).toBe('as_1');
+    expect(call?.input.transactionId).toBe('t1');
+    expect(call?.input.reason).toBe('Doppelt erfasst');
+    expect(typeof call?.input.idempotencyKey).toBe('string');
+    // The ledger is read again so the correcting row shows at once.
+    await waitFor(() => expect(ledgerReads).toBeGreaterThan(readsBefore));
+  });
+
+  it('D170: a refusal stays in the confirm with the engine reason, and nothing closes', async () => {
+    const canned: Canned = {
+      ...baseCanned(),
+      asset_list: ok({ assets: [ASSET({ status: 'active' })], total: 1 }),
+      asset_ledger_get: ok({ asset: { id: 'as_1', status: 'active' }, events: [EVENT()], total: 1 }),
+      asset_transaction_reverse: reject('depreciation_posted', { runIds: ['run_1'] }),
+    };
+    renderSurface(canned);
+    const user = userEvent.setup();
+    await rowVerb(user, de.assets.acquisition.transactions);
+    await user.click(await screen.findByRole('button', { name: /^Aktionen für die Buchung vom/ }));
+    await user.click(screen.getByRole('menuitem', { name: de.assets.ledger.reverse }));
+    const confirm = await screen.findByRole('alertdialog');
+    await user.type(within(confirm).getByLabelText(de.assets.ledger.reverseReason), 'Falsch');
+    await user.click(within(confirm).getByRole('button', { name: de.assets.ledger.reverseConfirm }));
+    expect(await within(confirm).findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  it('D170: a taken-back event reads Storniert and offers nothing; a depreciation row offers nothing', async () => {
+    const canned: Canned = {
+      ...baseCanned(),
+      asset_list: ok({ assets: [ASSET({ status: 'archived' })], total: 1 }),
+      asset_ledger_get: ok({
+        asset: { id: 'as_1', status: 'archived' },
+        events: [
+          EVENT({ reversedByTransactionId: 't3' }),
+          EVENT({ id: 't2', type: 'depreciation', date: '2026-03-31', deltaCostRappen: 0, deltaAccumDeprRappen: 100000 }),
+          EVENT({ id: 't3', type: 'acquisition_reversal', date: '2026-08-16', deltaCostRappen: -12500000 }),
+        ],
+        total: 3,
+      }),
+    };
+    renderSurface(canned);
+    const user = userEvent.setup();
+    await rowVerb(user, de.assets.acquisition.transactions);
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText(de.assets.ledger.reversed)).toBeInTheDocument();
+    expect(within(dialog).getByText(de.assets.acquisition.txnType.acquisition_reversal)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /^Aktionen für die Buchung vom/ })).toBeNull();
+  });
+
   it('the credit-account picker offers only asset/liability/equity accounts, never income', async () => {
     renderSurface(baseCanned());
     const user = userEvent.setup();

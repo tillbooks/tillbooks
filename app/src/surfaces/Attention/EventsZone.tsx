@@ -136,6 +136,10 @@ export function EventsZone() {
     );
   }
 
+  // D178 (the design judge): an empty zone is no section. While it loads or holds nothing it draws nothing
+  // (no heading over "keine Ereignisse"); a failed read still says so, with its own retry.
+  if (!failed && (loading || rows.length === 0)) return null;
+
   return (
     <section className="att-events" aria-labelledby="att-events-title">
       <div className="att-events-head">
@@ -148,19 +152,13 @@ export function EventsZone() {
           </button>
         )}
       </div>
-      {loading ? (
-        <p className="att-events-empty" role="status">
-          {t('attention.events.loading')}
-        </p>
-      ) : failed ? (
+      {failed ? (
         <p className="att-events-error" role="status">
           {t('attention.events.error')}{' '}
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => void load()}>
             {t('attention.retry')}
           </button>
         </p>
-      ) : rows.length === 0 ? (
-        <p className="att-events-empty">{t('attention.events.empty')}</p>
       ) : (
         <ul className="att-events-list">
           {rows.map((row) => (

@@ -41,6 +41,10 @@ import { NOT_AUTOMATABLE } from '../automation/denylist.js';
 import { appendAuditLog } from '../ledger/auditLog.js';
 import { topUpChartOfAccounts } from '../accounts/topUp.js';
 import { systemIdGen } from '../ids.js';
+import { DEFAULT_TAX_CODES } from '../vat/enums.js';
+import { SETTINGS_SCHEMA_SQL } from '../settings/schema.js';
+import { ENTRY_NUMBER_SCHEMA_SQL } from '../ledger/entryNumberSchema.js';
+import { numberUnnumberedEntries, numberingConfigOf } from '../ledger/entryNumber.js';
 import {
   batchHadFile,
   compactReference,
@@ -927,6 +931,17 @@ function freezePain001References(db: Database): void {
  * statements commit with the version bump in the store's one migration transaction, and the function
  * checks its own output before returning, so a throw leaves the old generation and the old column.
  */
+/**
+ * Generation 12 (D170): a disposal can be taken back by `asset_transaction_reverse`, and a partial unique
+ * index cannot see the correcting row, so `asset_transaction_one_disposal` would refuse every later, real
+ * disposal of that asset. Drop it here; the schema pass (`transactionSchema.ts`) drops it too on every
+ * open and creates `asset_transaction_one_live_disposal`, the trigger that counts live disposals only.
+ * Idempotent, and a no-op on a file without the table.
+ */
+function liveDisposalGuard(db: Database): void {
+  db.exec('DROP INDEX IF EXISTS asset_transaction_one_disposal');
+}
+
 function nullableContactPaymentTerms(db: Database): void {
   const column = (db.pragma('table_info(contact)') as { name: string; notnull: number }[]).find(
     (c) => c.name === 'payment_terms_days',
@@ -968,6 +983,171 @@ function nullableContactPaymentTerms(db: Database): void {
       );
     }
   }
+}
+
+/** The input codes D167 added to `DEFAULT_TAX_CODES` (A39 §13.3), the ones generation 11 tops up. */
+export const D167_INPUT_CODES: readonly string[] = ['VST-M26', 'VST-M38', 'VST-I26', 'VST-I38'];
+
+/**
+ * Generation 11 (D167, 14.10.2026, A39 §13.3): give every workspace that already holds tax codes the four
+ * reduced-rate input codes `VST-M26` and `VST-M38` (Ziffer 400) and `VST-I26` and `VST-I38` (Ziffer 405,
+ * D167-4), exactly as `seedTaxCodes` writes them from `DEFAULT_TAX_CODES`.
+ *
+ * A workspace with NO codes is left alone: it has not enabled MWST, and `configureVat` seeds the full
+ * default set (these two included) when it does. A workspace that already has a code of either name keeps
+ * its own row untouched (`INSERT OR IGNORE` on `UNIQUE (workspace_id, code)`), so a replay, or a book a
+ * person already gave the code, changes nothing. Row-level only, no DDL.
+ */
+function seedD167InputCodes(db: Database): void {
+  const codes = DEFAULT_TAX_CODES.filter((c) => D167_INPUT_CODES.includes(c.code));
+  if (codes.length !== D167_INPUT_CODES.length) throw new Error('generation 11: DEFAULT_TAX_CODES lacks a D167 input code');
+  const workspaces = db
+    .prepare('SELECT DISTINCT workspace_id AS id FROM tax_code ORDER BY workspace_id')
+    .all() as { id: string }[];
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO tax_code (id, workspace_id, code, kind, rate_bp, esa_form_line, label, active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+  );
+  for (const ws of workspaces) {
+    for (const c of codes) insert.run(systemIdGen.next('tax'), ws.id, c.code, c.kind, c.rateBp, c.formLine, c.label);
+  }
+}
+
+/**
+ * Generation 13 (D172, 15.10.2026): the workspace settings registry's two tables. The schema pass already
+ * creates them on every open (`SETTINGS_SCHEMA_SQL`, IF NOT EXISTS); this step runs the same DDL so the
+ * generation's own step is self-sufficient, and then checks its work: both tables present. No row is read or written: a book that never touched a
+ * setting holds nothing here, and every setting reads its registry default. Idempotent.
+ */
+function workspaceSettingsTables(db: Database): void {
+  db.exec(SETTINGS_SCHEMA_SQL);
+  // One-table probes (the table-enumeration chokepoint admits exactly this shape).
+  const probe = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?");
+  for (const needed of ['workspace_setting', 'workspace_setting_change']) {
+    if (probe.get(needed) === undefined) throw new Error(`generation 13: ${needed} is missing after the settings DDL`);
+  }
+}
+
+/** D173 (owner Q12): the column the generation-14 step adds, exported for the migration test set. */
+export const D173_RUN_KIND_DDL =
+  "ALTER TABLE wage_journal_posts ADD COLUMN run_kind TEXT NOT NULL DEFAULT 'regular' CHECK (run_kind IN ('regular','bonus','thirteenth','correction'))";
+
+/**
+ * Generation 14 (D173, owner Q12, 15.10.2026): `wage_journal_posts.run_kind`. Every existing posting
+ * reads 'regular' through the column default, which is exactly how the month guard counted it before.
+ * The schema pass ran first, but `CREATE TABLE IF NOT EXISTS` does not add a column to an existing
+ * table, so the ALTER is this step's job; a book that already has the column (born on this build) is
+ * left as it is.
+ */
+function wageRunKind(db: Database): void {
+  // One-table probe (the table-enumeration chokepoint admits exactly this shape).
+  const probe = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?");
+  if (probe.get('wage_journal_posts') === undefined) throw new Error('generation 14: wage_journal_posts is missing');
+  if (!hasColumn(db, 'wage_journal_posts', 'run_kind')) db.exec(D173_RUN_KIND_DDL);
+  if (!hasColumn(db, 'wage_journal_posts', 'run_kind')) throw new Error('generation 14: run_kind is missing after the ALTER');
+}
+
+/**
+ * Generation 15 (D175, 15.10.2026): Buchungsregeln. DDL only, no row is read or rewritten. The four recipe
+ * columns on `bank_standard` and the widened one-live index `bank_standard_one_live_rule` are created by the
+ * shape pass before any data step (ADDITIVE_COLUMNS, ADDITIVE_INDEXES); this step retires D167's narrower
+ * index, which would refuse a counterparty's second live rule (one with a match text beside the text-less
+ * one), and then checks its work: the four columns and the new index present, the old index gone.
+ * Idempotent.
+ */
+function bankRuleRecipes(db: Database): void {
+  db.exec('DROP INDEX IF EXISTS bank_standard_one_live');
+  const columns = new Set((db.pragma('table_info(bank_standard)') as { name: string }[]).map((c) => c.name));
+  for (const needed of ['label', 'match_text', 'legs_json', 'via_account_id']) {
+    if (!columns.has(needed)) throw new Error(`generation 15: bank_standard.${needed} is missing after the shape pass`);
+  }
+  // The table's own index list (a PRAGMA, not a catalogue enumeration: the table chokepoint's rule).
+  const indexes = new Set((db.pragma('index_list(bank_standard)') as { name: string }[]).map((i) => i.name));
+  if (!indexes.has('bank_standard_one_live_rule')) throw new Error('generation 15: the index bank_standard_one_live_rule is missing');
+  if (indexes.has('bank_standard_one_live')) throw new Error('generation 15: the D167 index bank_standard_one_live is still present');
+  // Critic D175-C5: the decision row names the rule a line was booked by.
+  const decision = new Set((db.pragma('table_info(bank_line_decision)') as { name: string }[]).map((c) => c.name));
+  if (!decision.has('rule_id')) throw new Error('generation 15: bank_line_decision.rule_id is missing after the shape pass');
+}
+
+/**
+ * Generation 16 (D176, 15.10.2026): manual Vorlagen, the "Nicht buchen" outcome and the follow-up. DDL only,
+ * no row is read or rewritten: the five columns on `bank_standard` arrive through the shape pass
+ * (ADDITIVE_COLUMNS) with defaults that read every existing row as the bank rule with legs it was, and the
+ * trigger `bank_standard_outcome_frozen` rides the banking DDL. A manual Vorlage is keyed
+ * `vorlage:<folded label>`, so "one live Vorlage per label" is the generation-15 one-live index; this step
+ * checks its work through the table's own pragmas (never a catalogue enumeration): the five columns
+ * present, and the one-live index present, because the Vorlage keying relies on it. Idempotent.
+ */
+function bankVorlagen(db: Database): void {
+  const columns = new Set((db.pragma('table_info(bank_standard)') as { name: string }[]).map((c) => c.name));
+  for (const needed of ['scope', 'outcome', 'ignore_reason', 'ignore_note', 'follow_up_standard_id']) {
+    if (!columns.has(needed)) throw new Error(`generation 16: bank_standard.${needed} is missing after the shape pass`);
+  }
+  const indexes = new Set((db.pragma('index_list(bank_standard)') as { name: string }[]).map((i) => i.name));
+  if (!indexes.has('bank_standard_one_live_rule')) throw new Error('generation 16: the index bank_standard_one_live_rule is missing');
+}
+
+/**
+ * Generation 17 (D178 point 2, the Belegnummer, A02 §4b.4): number every posted entry of every workspace
+ * that has no number yet, through the SAME catch-up the posting chokepoint runs
+ * (`numberUnnumberedEntries`, `core/ledger/entryNumber.ts`), under the settings in force in that workspace
+ * (an override row if one exists, else the registry default `continue_migrated`, which adopts a migrated
+ * entry's plain-integer ref and numbers every other entry after the highest, in (date, created_at, rowid)
+ * order).
+ *
+ * Why a generation and not a lazy start at the first post: the numbers are there the moment the upgraded
+ * book opens, and an older build is refused the book (it would post entries without a number and without
+ * the catch-up marker). Idempotent: an entry that has a number is never numbered again, so a second run, or
+ * a run after a crash (the whole step commits with the version bump), writes nothing. The tables ride the
+ * schema pass; the step re-creates them (IF NOT EXISTS) and checks they are there first.
+ */
+function belegnummerBackfill(db: Database): void {
+  db.exec(ENTRY_NUMBER_SCHEMA_SQL);
+  // One-table probes (the table-enumeration chokepoint admits exactly this shape).
+  const probe = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?");
+  for (const needed of ['journal_entry_number', 'journal_numbering_pending', 'journal_number_withheld']) {
+    if (probe.get(needed) === undefined) throw new Error(`generation 17: ${needed} is missing after the numbering DDL`);
+  }
+  const at = new Date().toISOString();
+  const workspaces = db.prepare('SELECT id FROM workspace ORDER BY id').all() as { id: string }[];
+  for (const ws of workspaces) {
+    const scope = { db, workspaceId: ws.id, at, ids: systemIdGen };
+    // Rule a (A02 §4b.3) holds inside the catch-up: a book holding only migration postings (imports and the
+    // reversals correcting them) keeps them waiting for its first native booking.
+    numberUnnumberedEntries(scope, numberingConfigOf(scope));
+  }
+}
+
+/**
+ * Generation 18 (D178 point 19, the E2 re-cut, A20 §11.4). The tables, the append-only and chokepoint
+ * triggers and the movement-key index arrive with the base schema (IF NOT EXISTS) and `coverage` with the
+ * shape pass; this step checks they did, and backfills the one stored fact coverage reads that history may
+ * lack: a statement's PERIOD. A camt without `FrToDt` stored no `from_date`/`to_date`; its period is its
+ * lines' first and last date (booking, else value). The movement key needs no backfill: it is an expression
+ * over each line's own columns (booking date, else value date; direction; amount; currency), indexed, so
+ * every stored line already has it. No line, answer or decision is rewritten.
+ */
+function possibleDuplicateCoverage(db: Database): void {
+  // One-table (one-trigger) probes: the table-enumeration chokepoint admits exactly this shape.
+  const probe = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?");
+  for (const needed of ['bank_txn_possible_duplicate', 'bank_txn_duplicate_candidate', 'bank_txn_duplicate_decision']) {
+    if (probe.get(needed) === undefined) throw new Error(`generation 18: the table ${needed} is missing after the base schema`);
+  }
+  const triggerProbe = db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = ?");
+  for (const needed of ['bank_line_decision_duplicate_pending', 'bank_txn_duplicate_decision_no_update', 'bank_txn_duplicate_decision_no_delete']) {
+    if (triggerProbe.get(needed) === undefined) throw new Error(`generation 18: the trigger ${needed} is missing after the base schema`);
+  }
+  const columns = new Set((db.pragma('table_info(bank_statement)') as { name: string }[]).map((c) => c.name));
+  if (!columns.has('coverage')) throw new Error('generation 18: bank_statement.coverage is missing after the shape pass');
+  db.exec(`
+    UPDATE bank_statement
+       SET from_date = (SELECT MIN(COALESCE(t.booking_date, t.value_date)) FROM bank_txn t WHERE t.workspace_id = bank_statement.workspace_id AND t.statement_id = bank_statement.id)
+     WHERE from_date IS NULL;
+    UPDATE bank_statement
+       SET to_date = (SELECT MAX(COALESCE(t.booking_date, t.value_date)) FROM bank_txn t WHERE t.workspace_id = bank_statement.workspace_id AND t.statement_id = bank_statement.id)
+     WHERE to_date IS NULL;
+  `);
 }
 
 export const DATA_MIGRATIONS: readonly DataMigration[] = [
@@ -1020,5 +1200,45 @@ export const DATA_MIGRATIONS: readonly DataMigration[] = [
     generation: 10,
     name: 'd163-contact-terms: make contact.payment_terms_days nullable and read every stored 0 as no terms of its own',
     apply: nullableContactPaymentTerms,
+  },
+  {
+    generation: 11,
+    name: 'd167-input-codes: give every workspace holding tax codes the reduced-rate input codes VST-M26, VST-M38, VST-I26 and VST-I38',
+    apply: seedD167InputCodes,
+  },
+  {
+    generation: 12,
+    name: 'd170-live-disposal: drop the one-disposal unique index; the live-disposal trigger in the schema replaces it',
+    apply: liveDisposalGuard,
+  },
+  {
+    generation: 13,
+    name: 'd172-workspace-settings: create workspace_setting and the append-only workspace_setting_change history',
+    apply: workspaceSettingsTables,
+  },
+  {
+    generation: 14,
+    name: 'd173-wage-run-kind: add wage_journal_posts.run_kind (regular, bonus, thirteenth, correction); every existing posting reads regular',
+    apply: wageRunKind,
+  },
+  {
+    generation: 15,
+    name: 'd175-bank-rules: retire the D167 one-live index on bank_standard; the recipe columns and the text-aware index ride the shape pass',
+    apply: bankRuleRecipes,
+  },
+  {
+    generation: 16,
+    name: 'd176-bank-vorlagen: bank_standard gains scope, outcome, the ignore reason and note and the follow-up Vorlage; every existing row reads as before',
+    apply: bankVorlagen,
+  },
+  {
+    generation: 17,
+    name: 'd178-belegnummer: number every posted entry that has none (continue_migrated adopts a migrated plain-integer ref); a second run writes nothing',
+    apply: belegnummerBackfill,
+  },
+  {
+    generation: 18,
+    name: 'd178-possible-duplicates: the duplicate tables, answers append-only, the chokepoint trigger on bank_line_decision, the movement-key index; every statement keeps a period',
+    apply: possibleDuplicateCoverage,
   },
 ];

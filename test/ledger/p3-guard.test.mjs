@@ -12,6 +12,9 @@ test('P3 guard: the ledger exposes exactly its intended verbs, no raw writer', (
     // A02, the single posting path and its reads.
     'deleteDraft',
     'getEntry',
+    // A02 §4b (D178 point 2): the Belegnummer inspection read. It writes nothing; numbers are assigned
+    // only inside postEntry's own transaction, so no numbering writer is public either.
+    'journalNumberingPlan',
     'listJournal',
     'postEntry',
     'reverseEntry',

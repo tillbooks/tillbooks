@@ -662,6 +662,13 @@ test('A24: a NON-MEMBER of a provisioned workspace reads nothing, which is the D
   //                     holding no read domain gets `{ visibleQueues: 0, total: null, queues: [],
   //                     top: [] }` from the summary and an empty page from the list, zero rows of
   //                     anyone's work.
+  //   prefs_list, prefs_get
+  //                     D178 point 7's per-person preferences: the caller's OWN look and arrangement,
+  //                     so the only fact that matters is membership, and no capability expresses it (a
+  //                     custom role with an empty bundle must still read its own theme). The engine
+  //                     asserts membership itself (`notOwnSeat` in `core/customization/prefs.ts`) and
+  //                     keys every row by the session actor: a stranger is refused `permission_denied`
+  //                     with role null, which the loop below holds, and never reads anyone's row.
   const exempt = reads
     .filter((a) => isUngated(CAPABILITY_FOR_ACTION[a.name]))
     .map((a) => a.name)
@@ -675,6 +682,8 @@ test('A24: a NON-MEMBER of a provisioned workspace reads nothing, which is the D
       'dashboard_tile',
       'notifications_list',
       'notifications_list_preferences',
+      'prefs_get',
+      'prefs_list',
       'preview_feedback',
       'reports_preview',
       'search_global',

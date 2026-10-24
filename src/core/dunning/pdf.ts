@@ -53,7 +53,7 @@ import {
   PT_PER_MM,
 } from '../sales/index.js';
 import type { BuildQrBillInput, QrReferenceType, QrStructuredAddress } from '../sales/index.js';
-import { readRun } from './reads.js';
+import { readRun, letterDateOf } from './reads.js';
 import type { ItemRow } from './reads.js';
 // G05: the template seam (layout-only footer lines on the letter page; see the A11 note).
 import { resolveRenderTemplate } from '../customization/documentTemplates.js';
@@ -326,7 +326,7 @@ export function renderDunningPdf(ctx: WorkspaceContext, input: RenderDunningPdfI
     { text: `${debtor.street ?? ''} ${debtor.buildingNo ?? ''}`.trim() },
     { text: `${debtor.postalCode} ${debtor.town}`.trim() },
     { text: '' },
-    { text: `${creditor.town}, ${letterDate(run.run_date)}` },
+    { text: `${creditor.town}, ${letterDate(letterDateOf(ctx, run, input.debtorId as string))}` },
     { text: '' },
     { text: letterTitle(level), size: 14 },
     { text: '' },

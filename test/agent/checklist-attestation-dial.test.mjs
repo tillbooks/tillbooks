@@ -170,7 +170,19 @@ test('the WHOLE input-keyed rule table is closed and sane: every rule names a re
     assert.ok(action !== undefined, `${rule.action}: the rule names a verb that exists`);
     assert.equal(action.kind, 'write', `${rule.action}: only writes are dial-governed`);
     assert.ok(DIAL_CAPABILITIES.includes(rule.capability), `${rule.action}: '${rule.capability}' is a real dial capability`);
-    assert.equal(DIAL_CAPABILITY_FOR_ACTION[rule.action], undefined, `${rule.action}: a verb governed by name makes its input rule dead`);
+    const byName = DIAL_CAPABILITY_FOR_ACTION[rule.action];
+    if (byName === undefined) {
+      // fine: the rule is the verb's governance
+    } else {
+      // A verb governed by name answers `dialCapabilitiesForCall` first, so an INPUT rule on it would be
+      // dead. A BOOK-keyed rule is not: the transport seam adds `stateKeyedDialCapabilities` to the
+      // name tier and drafts at the strictest (`governedDialCapability`), which is how a merge that moves
+      // an auto-issuing schedule drafts under `issue` beside `erase` (D141 follow-up 4). Such a rule must
+      // be book-only and add a tier the name does not already give.
+      assert.equal(typeof rule.whenBook, 'function', `${rule.action}: a verb governed by name makes an input-only rule dead`);
+      assert.equal(rule.when({ sourceId: 'x', targetId: 'y', id: 'z' }), false, `${rule.action}: on a name-governed verb the rule is book-only`);
+      assert.notEqual(rule.capability, byName, `${rule.action}: the book-keyed rule adds a tier the name does not give`);
+    }
     assert.equal(typeof rule.when, 'function', `${rule.action}: the predicate is a function`);
     if (EVERY_CALL_GOVERNED.includes(rule.action)) {
       // D161: the two scheduler ticks require nothing beyond the tenant, so the bare call IS the tick.

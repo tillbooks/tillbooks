@@ -178,3 +178,17 @@
   flex-direction: row;
   align-items: center;
 }
+
+/* D169: the reason field in the fee-reverse confirm, the Hr reverse-reason shape. */
+.dunning-reverse-reason {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin-top: var(--t-space-2);
+}
+
+.dunning-reverse-reason span {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}

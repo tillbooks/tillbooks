@@ -114,6 +114,11 @@ export { DEPRECIATION_RUN_SCHEMA_SQL } from './depreciationRunSchema.js';
 export { assetDispose, assetDisposalPreview, assetDisposalGet } from './disposal.js';
 export type { AssetDisposeInput, AssetDisposalPreviewInput, AssetDisposalInputBase } from './disposal.js';
 
+// D170, the register's undo verb: takes back an acquisition, capitalisation, opening or disposal as an
+// owned A02 mirror plus a compensating asset_transaction, in one transaction.
+export { assetTransactionReverse, REVERSIBLE_ASSET_TRANSACTION_TYPES } from './reversal.js';
+export type { AssetTransactionReverseInput } from './reversal.js';
+
 // H07, Asset Ledger & Reconciliation: the READ half (the per-asset ledger with running balances and the
 // cross-asset event list) + the OP11 reconciliation (sub-ledger vs GL control accounts, on demand and as
 // the hard period-close check) + the one opening-balance write. Derived from the append-only
