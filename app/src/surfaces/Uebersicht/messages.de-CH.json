@@ -104,6 +104,7 @@
       "saveView": "Als Ansicht speichern",
       "reset": "Standard wiederherstellen",
       "saveConfirm": "Ansicht speichern",
+      "saveConfirmContext": "Unter dem eingegebenen Namen",
       "saveCancel": "Ohne Speichern schliessen",
       "undo": "Rückgängig",
       "undone": "Rückgängig gemacht.",

@@ -580,7 +580,9 @@ name and the first line of its tooltip.
   the one main action of a surface (Neue Buchung, Rechnung erfassen). An irreversible act is never a
   glyph alone, which is why the vocabulary has no "Neu" and no "Löschen". Its one check mark (D180) is
   Fertig: it closes an arrangement whose every change already saved itself, or confirms a one-field
-  name entry (naming a view), and it never stands in for Buchen, Ausstellen or any posted record.
+  name entry (naming a view), and it never stands in for Buchen, Ausstellen or any posted record. Where
+  it confirms a name entry, `IconButton`'s `name` override says what it does ("Ansicht speichern"), so a
+  screen reader never hears a bare "Fertig" for a save; the glyph and its one meaning stay the vocabulary's.
 - **Every glyph comes from `app/src/components/icons`:** one grid (24 viewBox, stroke 1.75, round caps,
   `currentColor`), sizes 16, 20 and 24. `test/style/icon-vocabulary-guard.test.mjs` refuses, in the
   JSX it parses (`.tsx` under `app/src`), a new `<svg>` elsewhere, a new `glyphs.tsx`, a new native

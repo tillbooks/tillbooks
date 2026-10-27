@@ -1,6 +1,6 @@
 {
   "name": "tillbooks",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "mcpName": "io.github.tillbooks/tillbooks",
   "description": "Agent-first open-source ERP for Swiss SMEs: 822 MCP tools, one local file. Sales, purchasing, payments, stock, projects, books and MWST; your agent runs it, the Studio shows what it did. MIT licensed.",
   "type": "module",

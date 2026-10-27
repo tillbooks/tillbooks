@@ -104,6 +104,7 @@
       "saveView": "Save as a view",
       "reset": "Restore the standard",
       "saveConfirm": "Save the view",
+      "saveConfirmContext": "Under the name you typed",
       "saveCancel": "Close without saving",
       "undo": "Undo",
       "undone": "Undone.",

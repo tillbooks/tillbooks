@@ -800,7 +800,7 @@ export function Uebersicht() {
             <input type="checkbox" checked={saveShared} disabled={!canShare} onChange={(e) => setSaveShared(e.target.checked)} />
             {t('dashboard.view.shared')}
           </label>
-          <IconButton icon="done" type="submit" small context={t('dashboard.edit.saveConfirm')} disabled={saveName.trim() === ''} />
+          <IconButton icon="done" type="submit" small name={t('dashboard.edit.saveConfirm')} context={t('dashboard.edit.saveConfirmContext')} disabled={saveName.trim() === ''} />
           <IconButton icon="close" small context={t('dashboard.edit.saveCancel')} onClick={() => setSaving(false)} />
           {saveFailed !== null ? (
             <span role="alert" className="uebersicht-save-error">

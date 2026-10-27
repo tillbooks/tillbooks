@@ -8,13 +8,13 @@
     "url": "https://github.com/tillbooks/tillbooks",
     "source": "github"
   },
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "tillbooks",
-      "version": "1.0.0-beta.1",
+      "version": "1.0.0-beta.2",
       "transport": {
         "type": "stdio"
       },

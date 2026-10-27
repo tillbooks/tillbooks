@@ -26,6 +26,17 @@ describe('IconButton (Ruhig 3, D154)', () => {
     expect(button.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
   });
 
+  it('a name override replaces the vocabulary word as the name and the tooltip line, and keeps the glyph (D180)', () => {
+    render(<IconButton icon="done" name="Ansicht speichern" context="Unter dem eingegebenen Namen" onClick={() => {}} />);
+    const button = screen.getByRole('button', { name: 'Ansicht speichern' });
+    expect(button).toHaveAccessibleDescription('Unter dem eingegebenen Namen');
+    expect(button).toHaveAttribute('data-icon', 'done');
+    expect(screen.queryByRole('button', { name: 'Fertig' })).toBeNull();
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('Ansicht speichern');
+    expect(tip).not.toHaveTextContent('Fertig');
+  });
+
   it('shows its tooltip on hover and on keyboard focus, and Escape dismisses it', () => {
     render(<IconButton icon="close" context="Ohne Buchen" onClick={() => {}} />);
     const button = screen.getByRole('button', { name: 'Schliessen' });

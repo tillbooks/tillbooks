@@ -7,6 +7,18 @@ compatibility promise yet, so back up before every upgrade.
 
 ## [Unreleased]
 
+## [1.0.0-beta.2] - 2026-10-27
+
+The second beta. It makes the bank inbox and the Studio's daily screens easier to work in, turns
+more of TILL's built-in choices into settings, and gives the Mac a native TILL app. It is still a
+beta: back up before you update.
+
+**Upgrade note (database generation 18).** Opening your books with this version upgrades them
+in one go, even from generation 10 (every step in order). Make a backup before you upgrade and
+another one afterwards: a backup from before the upgrade restores only into the previous version, and
+an older version refuses the upgraded books without changing them. Update the desktop extension
+(.mcpb) and the command line tool together.
+
 ### Added
 
 - Settings: a new Settings section in the company profile lists the workspace's settings, each with
@@ -15,9 +27,79 @@ compatibility promise yet, so back up before every upgrade.
   change an agent proposes waits for your approval, and automations never change them. The first
   setting is how many days ahead Pendenzen shows due checklist steps (14 by default). More settings
   follow as TILL's built-in rules become yours to choose.
-  This update upgrades your book to format 13: backups taken before it restore only into the previous
-  version, so take a backup before updating and a fresh one right after, and update the Claude Desktop
-  extension and the command-line tool together.
+- A Belegnummer on every journal entry, gap-free and given when the entry is posted. Entries migrated
+  from bexio keep their bexio number and new entries continue after the highest one; a bexio voucher
+  that became several entries shares one number. The Journal gains a Beleg-Nr. column and filter. Under
+  Setup, Einstellungen, you can choose another start number, restart each fiscal year with a prefix,
+  or switch numbering off.
+- Bank statements can be imported as MT940 and as CSV, beside camt.053. TILL detects the format, shows
+  a preview, and for a CSV asks you to map the columns once; the mapping is saved per bank account.
+- A line that may already be in TILL from another statement format is flagged instead of dropped or
+  silently imported twice. The line names the entries it may duplicate, and you answer "Duplikat" or
+  "Kein Duplikat". A statement delivered again never adds a line silently.
+- Buchungsregeln. The ☆ on a bank line saves "this payer or payee books to this account and MWST
+  code", and later lines arrive prefilled; TILL also proposes from your past journal entries. A
+  rule can split an amount over several accounts, route it through a Durchlaufkonto, ask for an amount
+  the line cannot say, compute an amount as an exact fraction of the payout, and match on the line's
+  text. A rule only proposes: nothing books by itself.
+- "Nicht buchen" as a rule outcome, and Vorlagen for manual entries: a template in the journal composer
+  asks for its amounts and shows what it will post.
+- More ways to book a bank line: to a customer or a supplier as a Guthaben, to several invoices or
+  bills at once, to a Spesen claim, or as a foreign-currency Anzahlung fixed in CHF at the receipt
+  rate. VAT on a received Anzahlung is a setting and is off by default.
+- Card payments in a foreign currency show the amount, the rate and the fee the bank reported, and
+  TILL proposes splitting the fee onto Bankspesen. The setting `bank.fx_mode` lets you prefill the
+  split, show the facts only, or book the counter-leg in the transaction currency.
+- A bank pane you can arrange: the Details area docks at the bottom or the right, closes and resizes
+  by drag, and the table's columns resize. The list filters by Zeitraum and by Gutschriften or
+  Belastungen, counts honestly and pages past 200 lines.
+- Pendenzen in sections by area, bank Vorschläge first, one row pattern throughout. You tick the
+  bank decisions you agree with and approve them together (rows are never pre-ticked); each still runs
+  as its own approval. A setting switches to one by one, or to approve all behind a confirmation.
+- The Übersicht is arranged in place: one Anpassen icon turns the page into two zones, key figures
+  and cards, that you drag into order, hide and resize, and it saves as you go. Cards are a free
+  library (for example the expense ring and the monthly money in and out), the bank action can be a
+  tile, a card or a slim bar, and a saved view keeps the layout.
+- Meine Einstellungen, a page of personal settings for each person and workspace: bank layout, menu,
+  motion, Pendenzen grouping, Übersicht content. Agents can read and change them with `prefs_list`,
+  `prefs_get`, `prefs_set` and `prefs_reset`.
+- A menu you can rearrange: reorder groups and items, move an item to another group, hide one, reset
+  to the default. A favourite sits flush in the menu as the page's icon with a filled star, and moves
+  and renames from its Mehr menu.
+- The bank balance card reads as one sum (Buchhaltung, open lines, Differenz, Bank), says when bank
+  and books already differ before the first statement, and repairs all statement gaps of an account
+  from one dialog.
+- Reduced-rate input tax codes for operating costs and material: VST-M26 and VST-M38 on Ziffer 400,
+  VST-I26 and VST-I38 on Ziffer 405. Existing books receive them when they open.
+- A native TILL app for the Mac. It opens the Studio in its own window with no link and no terminal,
+  and "Bestehende Datenbank übernehmen" on the first run picks your book with a file dialog.
+- A signed and notarised TILL.app for Apple-silicon Macs, as a dmg with its own Node runtime and no
+  Intel code. Intel Macs use the npm install.
+- A browser you have opened TILL in stays signed in across new tabs, bookmarks and restarts, and
+  "Auf allen Geräten abmelden" under Zugriff signs every other browser out.
+- MCP tools: 822 now (800 in beta.1). New are the settings verbs `settings_list`, `settings_get`,
+  `settings_set` and `settings_reset`; the undo verbs `expense_claim_reverse`, `dunning_fee_reverse`,
+  `asset_transaction_reverse` and `wage_journal_reverse`; `import_bank_statement`, `bank_csv_preview`,
+  `get_bank_csv_mapping` and `set_bank_csv_mapping`; `resolve_possible_duplicate`; the bank standard
+  verbs such as `set_bank_standard` and `list_bank_standards`; `journal_numbering_plan`; and
+  `dashboard_series` for the Übersicht's monthly figures.
+
+### Changed
+
+- A bank line has one decision per row. "Prüfen" is gone: a line an agent drafted reads "Buchen" like
+  any other, and an edited line books your version first and then closes the agent's Vorschlag. The
+  account field can be cleared, MWST is always a field with "Ohne MWST" first, and the picker lists
+  the payer's Buchungsregeln first.
+- An agent's Vorschlag is one line in Pendenzen: title, the figures that matter, and Genehmigen, with
+  Details as label and value, never raw JSON. The floating Agent pill and its panel are gone; live
+  sessions stay under Agent.
+- One icon set and one icon button across the Studio: an icon-only button shows its name on hover and
+  focus, and a tap on a touch screen opens no bubble. Menu group names are 14 px semibold without an icon.
+- The Übersicht's expense ring counts expense accounts with a debit balance and names the credit-balance
+  accounts as reductions, so a stock change no longer empties it.
+- Issuing a Mahnlauf from a Pendenzen row asks you to confirm first, with the consequence in words.
+- Motion has four levels in Meine Einstellungen (Lively, Standard, Calm, Off). A count-up never runs
+  in a table, an input or a bank amount, and your system's reduced-motion setting wins.
 
 ### Fixed
 
@@ -37,10 +119,6 @@ compatibility promise yet, so back up before every upgrade.
   in one step, so the register and the books keep matching. A reversed purchase closes the asset; a
   reversed disposal puts it back in the register. Depreciation already booked on the asset asks you to
   reverse that run first, and the journal no longer reverses these entries on its own.
-  This update upgrades your book to format 12 (format 11 brought the reduced-rate input tax codes):
-  backups taken before it restore only into the previous version, so take a backup before updating
-  and a fresh one right after, and update the Claude Desktop extension and the command-line tool
-  together.
 - A posted wage journal can now be reversed from its row on the Payroll tab under HR. TILL books the
   correcting entry and the history marks the posting as reversed; you then upload the corrected
   journal. Salary payments, social insurance declarations and wage statements are handled in your
@@ -58,11 +136,6 @@ compatibility promise yet, so back up before every upgrade.
   regular. A correction run asks for a reason, which is kept with the booking; under Setup,
   Einstellungen, you can ask for a reason on every bonus and 13th salary too, or on none. Every bonus,
   13th salary and correction run is recorded in the audit trail.
-- **Upgrade note (database generation 14).** Opening your books with this version upgrades them
-  in one go, even from generation 10 (four steps, in order). Make a backup before you upgrade and
-  another one afterwards: a backup from before the upgrade restores only into the previous version, and
-  an older version refuses the upgraded books without changing them. Update the desktop extension
-  (.mcpb) and the command line tool together.
 - An approval whose action was interrupted half-way (TILL quit or crashed after the action committed,
   before the approval was marked done) now settles as done when you approve again. It used to be
   shown as "never executed" next to the booking it had already made.
@@ -78,6 +151,32 @@ compatibility promise yet, so back up before every upgrade.
   mid-year exception is the switch from Saldo to effektiv that MWSTV Art. 81 Abs. 2 allows. A
   period cut by that switch is computed correctly, and TILL tells you to file it in the ESTV ePortal.
   Labels before 1995, when MWST began, are refused.
+- Merging two contacts now moves their recurring schedules to the surviving contact, so no invoice is
+  drafted to a contact that no longer shows in the lists.
+- The raw reversal of a landed-cost voucher's entry is refused and points to the voucher's own undo, so
+  the voucher and its stock layers keep matching the books.
+- Rolling back a migration step whose opening entry cannot be reversed (a locked period, say) changes
+  nothing and says why, instead of letting the next approval post a second opening.
+- A refund through a contact first nets against that contact's open Guthaben, so a refunded payment can
+  no longer be applied to an invoice. A refund larger than the Guthaben is refused unless you allow it.
+- An Anzahlung clearing that was reversed no longer counts as cleared.
+- An adopted book that has gone missing or cannot be opened is reported on a calm page and never
+  replaced by an empty one.
+- A CSV whose first lines are a key and value preamble no longer takes that preamble for the header,
+  and an MT940 line key no longer depends on the order its pages arrive in.
+- The expense ring's legend keeps each share and amount on one line, and the menu rail fits the screen
+  height by stepping its row pitch down only as far as needed.
+
+### Security
+
+- The Studio key stays in an owner-only file between launches. Links carry one-time tickets and
+  never the key, a browser pairs with a device key that cannot be exported, and a failed rotation
+  changes nothing. TILL.app checks that the server on the port is the real one before it loads
+  anything.
+- Statement parsing is bounded against crafted files that stall the import.
+- Overriding the VAT refund on an Anzahlung needs the right to manage the VAT configuration and a
+  reason, and an agent's override waits for approval.
+- Dependency advisories in proxy-addr, fast-uri, ip-address, hono and qs are patched.
 
 ## [1.0.0-beta.1] - 2026-10-14
 

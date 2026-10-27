@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "tillbooks",
   "display_name": "TILL",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Agent-first open-source ERP for Swiss SMEs: 822 MCP tools, one local file.",
   "long_description": "TILL (Trusted Independent Ledger Library) is the agent-first ERP for Swiss SMEs: sales, purchasing, payments, stock, projects, books and MWST, with every function exposed as an MCP tool. Your agent posts entries, drafts invoices and prepares the MWST-Abrechnung; by default, it waits for your OK before it books anything, moves your money, grants access or deletes your data for good, and you approve its drafts in the Studio. This covers agents that connect to TILL. An agent that can drive your browser or run commands can act as you: give it TILL, not your browser or your shell. This extension runs `till mcp` as a local stdio server on your own machine. Your books stay on your disk; the extension opens no outbound socket. If no database exists yet, the first tool call that needs one guides you to create_workspace or restore_backup.",
   "author": {

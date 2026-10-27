@@ -27,6 +27,12 @@ export interface IconButtonProps extends NativeButton {
   icon: VocabularyIcon;
   /** What the act applies to, in a few words: the tooltip's second line and the description. */
   context: string;
+  /**
+   * The accessible name and the tooltip's first line, when the act is more specific than the
+   * vocabulary word: the check that saves a named view says "Ansicht speichern", not "Fertig" (D180).
+   * The glyph and its meaning stay the vocabulary's; omit it everywhere else.
+   */
+  name?: string;
   /** Glyph size; DESIGN.md allows 16, 20 and 24. */
   size?: IconSize;
   /** Where the tooltip sits. Defaults to above. */
@@ -45,10 +51,12 @@ export function IconButton({
   type = 'button',
   small = false,
   className,
+  name: nameOverride,
   ...rest
 }: IconButtonProps) {
   const descriptionId = useId();
-  const { name, glyph: Glyph } = VOCABULARY[icon];
+  const { name: vocabularyName, glyph: Glyph } = VOCABULARY[icon];
+  const name = nameOverride ?? vocabularyName;
   return (
     <Tooltip
       placement={placement}

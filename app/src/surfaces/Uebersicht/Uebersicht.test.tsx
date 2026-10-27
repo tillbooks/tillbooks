@@ -382,7 +382,7 @@ describe('Uebersicht: the tile wall states', () => {
     // The name field takes the focus; the check saves.
     expect(screen.getByLabelText('Name')).toHaveFocus();
     await userEvent.type(screen.getByLabelText('Name'), 'Meine Startseite');
-    await userEvent.click(screen.getByRole('button', { name: 'Fertig', description: 'Ansicht speichern' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ansicht speichern', description: 'Unter dem eingegebenen Namen' }));
     await waitFor(() => expect(saved).not.toBeNull());
     expect(saved).toMatchObject({
       entityKind: 'workspace',
