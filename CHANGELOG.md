@@ -7,7 +7,7 @@ compatibility promise yet, so back up before every upgrade.
 
 ## [Unreleased]
 
-## [1.0.0-beta.2] - 2026-10-27
+## [1.0.0-beta.2] - 2026-10-28
 
 The second beta. It makes the bank inbox and the Studio's daily screens easier to work in, turns
 more of TILL's built-in choices into settings, and gives the Mac a native TILL app. It is still a
@@ -103,6 +103,7 @@ an older version refuses the upgraded books without changing them. Update the de
 
 ### Fixed
 
+- The MCP server now reports its real version to the client (it said 0.0.0 before).
 - An approved expense claim can now be reversed from its row under HR. TILL books the correcting
   entry and closes the claim as reversed. A claim that was already paid out asks you to reverse the
   payment first, and the journal no longer lets a plain reversal leave the claim looking approved.

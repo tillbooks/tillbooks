@@ -50,6 +50,7 @@ import { resolveSessionActor, type ServedIdentity } from './session.js';
 import { makeDiagnosticsPort } from './support-actions.js';
 import { resolveEbicsRuntime, type HostEbicsPorts } from './host-runtime.js';
 import type { ApiDeps } from './registry.js';
+import { TILL_PACKAGE_VERSION } from '../core/version.js';
 
 /** The MCP `CallToolResult` shape this server emits: a single JSON text block. */
 export interface ToolCallResult {
@@ -242,7 +243,9 @@ export function buildMcpServer(
   opts: { pinnedActor?: string; servedIdentity?: ServedIdentity } = {},
 ): Server {
   const server = new Server(
-    { name: 'tillbooks', version: '0.0.0' },
+    // The running package's version, so a client (and every directory that scans the server) sees
+    // the release it talks to, not a placeholder.
+    { name: 'tillbooks', version: TILL_PACKAGE_VERSION },
     // G22 (D127): `prompts` beside `tools`. One prompt per checklist template, rendered from the
     // governed `checklist_get` under the session actor (see `renderPromptOverActions`).
     { capabilities: { tools: {}, prompts: {} }, instructions: MCP_SERVER_INSTRUCTIONS },
