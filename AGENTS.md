@@ -1,6 +1,6 @@
 # AGENTS.md
 
-TILL is the agent-first ERP for Swiss SMEs: an MCP server is a first-class
+TILL is an agent-first ERP for Swiss SMEs: an MCP server is a first-class
 interface, not a bolt-on. This file is the guide for an AI coding agent (or a
 contributor driving one) working in this repository. It is the public counterpart to the human-facing
 [CONTRIBUTING.md](CONTRIBUTING.md), and everything here also applies to a human.
@@ -75,7 +75,7 @@ maintainers run.
    must review the change.
 2. **Parity.** A write capability ships on BOTH faces: the MCP verb and its REST
    twin. The parity test enforces it. Do not add one without the other.
-3. **Clean-room.** TILL is built from public documentation. Never copy code, UI, or
+3. **Copy nothing.** TILL is built from public documentation. Never copy code, UI, or
    trade dress from any accounting vendor. Copied code cannot live in an MIT repo.
 4. **House style.** No em dashes anywhere: use a colon, a comma, or parentheses. En
    dashes are fine in real ranges. English and de-CH only, with real umlauts (never

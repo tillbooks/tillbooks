@@ -31,9 +31,9 @@ to move more decisions into the open. That evolution will be recorded here.
 
 - **The ledger contract.** Posted entries are append-only; corrections are
   reversing entries; posting is idempotent; every query is tenant-scoped.
-- **Clean-room and independent.** TILL is a clean-room implementation built from
-  public documentation. It does not copy code, UI, or trade dress from any
-  accounting vendor, and it is not affiliated with one.
+- **Independent.** TILL is built from public documentation. It does not copy
+  code, UI, or trade dress from any accounting vendor, and it is not affiliated
+  with one.
 - **Local-first and private.** The books live in a SQLite file on the user's own
   machine. TILL does not phone home and does not add telemetry.
 - **House style.** No em dashes. English and de-CH, with real umlauts.

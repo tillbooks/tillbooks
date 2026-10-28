@@ -47,7 +47,7 @@ is the thing this architecture exists to prevent.
 **TDD on the ledger core is mandatory.** Write the failing test first. This stays on even when we are
 moving fast: it is what makes autonomy safe rather than reckless.
 
-**Clean room.** Never copy code, UI assets, or trade dress from bexio, Gäld, or anyone else. Learn
+**Copy nothing.** Never copy code, UI assets, or trade dress from bexio, Gäld, or anyone else. Learn
 what to build from public API docs and from observing your own accounts. Copied code poisons an MIT
 repo, and we will not take the change.
 

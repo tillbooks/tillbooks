@@ -21,8 +21,8 @@ export const SURFACES = [
     id: 'overview',
     route: '/overview',
     alt: {
-      en: 'TILL Studio overview for the Seeblick demo company: revenue, cash, open receivables and payables, stock value, and what is waiting for a decision.',
-      'de-CH': 'TILL Studio, Übersicht der Demofirma Seeblick: Umsatz, flüssige Mittel, offene Debitoren und Kreditoren, Lagerwert und was auf einen Entscheid wartet.',
+      en: 'TILL Studio overview for a sample company: revenue, cash, open receivables and payables, stock value, and what is waiting for a decision.',
+      'de-CH': 'TILL Studio, Übersicht einer Beispielfirma: Umsatz, flüssige Mittel, offene Debitoren und Kreditoren, Lagerwert und was auf einen Entscheid wartet.',
     },
   },
   {
@@ -55,8 +55,8 @@ export const SURFACES = [
     // ledger (an issued invoice with a QR payment part). See `marketing-screenshots.mjs`.
     route: null,
     alt: {
-      en: 'An issued invoice in TILL with its Swiss QR-bill payment part: the scannable code, QR-IBAN, reference and amount.',
-      'de-CH': 'Eine ausgestellte Rechnung in TILL mit dem Zahlteil der Schweizer QR-Rechnung: scanbarer Code, QR-IBAN, Referenz und Betrag.',
+      en: 'The Swiss QR-bill payment part of an issued invoice in TILL: the scannable code, reference, amount and due date.',
+      'de-CH': 'Der Zahlteil der Schweizer QR-Rechnung zu einer ausgestellten Rechnung in TILL: scanbarer Code, Referenz, Betrag und Fälligkeit.',
     },
   },
   {
@@ -71,8 +71,8 @@ export const SURFACES = [
     id: 'reports',
     route: '/reports',
     alt: {
-      en: 'TILL financial reports: the trial balance of the Seeblick demo company, checked against the journal.',
-      'de-CH': 'Finanzberichte in TILL: die Saldenbilanz der Demofirma Seeblick, abgestimmt mit dem Journal.',
+      en: 'TILL financial reports: the trial balance of a sample company, checked against the journal.',
+      'de-CH': 'Finanzberichte in TILL: die Saldenbilanz einer Beispielfirma, abgestimmt mit dem Journal.',
     },
   },
   {
@@ -98,25 +98,47 @@ export const AGENT_DRAFTS = [
   { description: 'Betriebshaftpflicht Prämie 2027', debit: '6300', credit: '2000', amount: 124000 },
 ];
 
+/**
+ * What the demo migration plan scopes before the migration frame (scripts/marketing-screenshots.mjs):
+ * the classes a small company brings over from bexio. Every one is first-scope in
+ * src/core/migration/dataClasses.ts, so `migration_set_scope` lands a step for each.
+ */
+export const MIGRATION_SCOPE = ['chart_of_accounts', 'tax_codes', 'contacts', 'opening_balances', 'open_items_ar', 'open_items_ap'];
+
 export const LOCALES = ['en', 'de-CH'];
 export const THEMES = ['light', 'dark'];
 
-/** The capture geometry the website was designed around: a 1440x900 desktop at 2x. */
-export const VIEWPORT = { width: 1440, height: 900 };
+/**
+ * The capture geometry: a 1120x800 Studio at 2x. The website draws its crops at about the size they
+ * were taken (UX critic M3): at 1440 a table spreads over 1176px and a feature row's 736px column drew
+ * it at 0.54, with 6 to 7px text; at 1120 the same screen, every column included, fits about 840px.
+ */
+export const VIEWPORT = { width: 1120, height: 800 };
+/**
+ * The phone frame: the same screen in the Studio's own narrow layout (below 767px its rail becomes a
+ * drawer and the tables reflow), which is what a phone-width crop on the website is cut from. A crop
+ * of a desktop frame cannot keep a label and its amount together on a phone: the VAT return's
+ * "Amount payable" sits 800px left of its figure there (UX critic M3).
+ */
+export const PHONE_VIEWPORT = { width: 480, height: 900 };
 export const DEVICE_SCALE_FACTOR = 2;
+
+/** The two frames every surface is captured in. */
+export const FRAMES = ['desk', 'phone'];
 
 /** The locale token in a file name: the website's page locales are `en` and `de`. */
 export const FILE_LOCALE = { en: 'en', 'de-CH': 'de' };
 
 /**
- * `overview-de-dark.webp`: the one naming contract the website's pages import by (the ids and the
- * `de` token were fixed by the website's product-preview component).
+ * `overview-de-dark.webp`, `overview-de-dark-phone.webp`: the one naming contract the website's pages
+ * import by (the ids and the `de` token were fixed by the website's product-preview component).
  */
-export function shotFileName(surfaceId, locale, theme) {
+export function shotFileName(surfaceId, locale, theme, frame = 'desk') {
   if (!SURFACES.some((s) => s.id === surfaceId)) throw new Error(`unknown surface: ${surfaceId}`);
   if (!LOCALES.includes(locale)) throw new Error(`unknown locale: ${locale}`);
   if (!THEMES.includes(theme)) throw new Error(`unknown theme: ${theme}`);
-  return `${surfaceId}-${FILE_LOCALE[locale]}-${theme}.webp`;
+  if (!FRAMES.includes(frame)) throw new Error(`unknown frame: ${frame}`);
+  return `${surfaceId}-${FILE_LOCALE[locale]}-${theme}${frame === 'phone' ? '-phone' : ''}.webp`;
 }
 
 /** Resolve symlinks on the deepest part of `p` that exists, then re-append the rest. */
@@ -157,6 +179,7 @@ export function buildManifest(entries, meta) {
       surface: e.surface,
       locale: e.locale,
       theme: e.theme,
+      frame: e.frame ?? 'desk',
       width: e.width,
       height: e.height,
       alt: surface.alt[e.locale],
@@ -165,8 +188,12 @@ export function buildManifest(entries, meta) {
   return {
     about:
       'Product screenshots of the TILL Studio, generated by scripts/marketing-screenshots.mjs from the synthetic Seeblick demo ledger. Do not edit by hand: re-run npm run shots:marketing.',
+    // The workshop version the Studio was built at when captured (D181 critic r4): the home page's
+    // CAPTURED_WITH must equal it, so a recapture forces each shot's shownIn/checkedAgainst again.
+    capturedWith: meta.capturedWith,
     seedToday: meta.seedToday,
-    viewport: VIEWPORT,
+    viewport: meta.viewport ?? VIEWPORT,
+    phoneViewport: meta.phoneViewport ?? PHONE_VIEWPORT,
     deviceScaleFactor: DEVICE_SCALE_FACTOR,
     surfaces: SURFACES.map((s) => ({ id: s.id, alt: s.alt })),
     images,

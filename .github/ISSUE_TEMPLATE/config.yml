@@ -1,14 +1,14 @@
 blank_issues_enabled: false
 contact_links:
-  # TODO(owner): once private vulnerability reporting is switched on for tillbooks/tillbooks
-  # (Settings, Code security), point this back at
-  # https://github.com/tillbooks/tillbooks/security/advisories/new. It is off today, so that link
-  # would lead a reporter nowhere.
+  - name: Ask a question
+    url: https://github.com/tillbooks/tillbooks/discussions
+    about: Questions and ideas go to GitHub Discussions. Issues are for bugs.
   - name: Report a security vulnerability
-    url: https://github.com/tillbooks/tillbooks/blob/develop/SECURITY.md
-    about: Email security@tillbooks.ch. Never report a vulnerability in a public issue.
+    url: https://github.com/tillbooks/tillbooks/security/advisories/new
+    about: Report it privately through a GitHub security advisory, or email security@tillbooks.ch. Never report a vulnerability in a public issue.
   # TODO(docs): docs.tillbooks.ch does not resolve yet (launch plan P0.2: DNS and the Mintlify
-  # deploy). Keep the link; it starts working the day the docs site goes live.
+  # deploy). Until it does, the link points at the README; switch it to https://docs.tillbooks.ch
+  # the day the docs site goes live.
   - name: Read the documentation
-    url: https://docs.tillbooks.ch
-    about: The product guides and the capability reference may already answer it.
+    url: https://github.com/tillbooks/tillbooks#readme
+    about: The README and the product guides may already answer it.

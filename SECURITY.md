@@ -11,10 +11,10 @@ keep your previous system running until TILL's figures match it (see
 
 Report security issues privately. Do not open a public issue for a vulnerability.
 
-- Email **security@tillbooks.ch**.
-
-<!-- TODO(owner): private vulnerability reporting is switched off on tillbooks/tillbooks. Once it is
-     on, add: "or open a private security advisory on GitHub". -->
+- Preferred: open a private security advisory on GitHub at
+  [github.com/tillbooks/tillbooks/security/advisories/new](https://github.com/tillbooks/tillbooks/security/advisories/new).
+  Only you and the maintainers can see it.
+- Or email **security@tillbooks.ch**.
 
 Tell us what you found, how to reproduce it, and what an attacker gets out of it. A proof of concept
 helps. You will get an acknowledgement, and we will tell you honestly whether and when we can fix it.

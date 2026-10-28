@@ -175,9 +175,9 @@ each is false, so they get named rather than merely omitted.
 
 | Do not write | Why | Write instead |
 |---|---|---|
-| Any count of TILL's own verbs or tools | The number in the code and the design target are different things and only one is a fact | The composition argument, and QuickBooks' 144 as a fact about QuickBooks |
+| Any count of TILL's own verbs or tools | The number in the code and the design target are different things and only one is a fact | The composition argument, and QuickBooks' 145 as a fact about QuickBooks (their README, read 28.10.2026) |
 | "TILL opens no socket" | `till serve` binds one on localhost by design, for the Studio and the MCP face | "TILL makes no outbound connection" |
-| "No German-speaking vendor has shipped an official MCP server" | The vendors that have include SAP SE | "No Swiss or German-speaking SME accounting vendor has shipped an official MCP server", dated |
+| "No German-speaking vendor has shipped an official MCP server", and the narrower "No Swiss or German-speaking SME accounting vendor has shipped an official MCP server" | The vendors that have include SAP SE, and since D181 (28.10.2026) the Swiss Infinity advertises native MCP: both universal negatives are false | A dated fact about a named vendor, from its own publication, or the architecture argument with no market claim at all |
 | Any price for TILL | No paid tier exists | bexio's published prices as a dated fact about bexio, if a comparison is needed |
 | "Free forever" about any future tier | A lifetime pricing promise about a tier that does not exist | "The core is MIT and free" |
 | Append-only described as legally required | It is better practice and the basis for OR Art. 958 Abs. 1, not a statutory mandate | "Append-only, with corrections as reversing entries" |
@@ -186,7 +186,6 @@ each is false, so they get named rather than merely omitted.
 | "Waits for your OK before it touches your books", "changes who has access", "bevor er deine Buchhaltung anrührt", "Zugriffe ändert" | Drafts, chart-of-accounts and VAT-code edits touch the books and run free; revoking a portal link or disabling a plugin changes access and runs free | The claim above, which names acts: books anything, moves your money, grants access, deletes your data for good |
 | "Waits for your OK before it sends your data out", "bevor er deine Daten verschickt" | An agent may edit a contact's email without asking, and your own automatic sends then go to that address | The claim above, which names booking, moving money, granting access and deleting for good |
 | "Connects to your bank", "automatic bank sync", "open-source EBICS" | The module that connects the EBICS client to a bank is not published yet, so the public release cannot reach a bank | "The EBICS client is built and tested with ZKB's test platform" |
-| The repository URL in a profile field | Not false any more (the source is public since 09.09.2026), but `test/web/social-copy.test.mjs` still refuses it on the retired D9 premise | "The source is public on GitHub under MIT", until that test is updated |
 
 Also: no em dashes, sentence case only, and never `effortless`, `seamless`, `supercharge`, `unlock` or
 `revolutionize`. German uses `du`, real umlauts, and never `ß`.

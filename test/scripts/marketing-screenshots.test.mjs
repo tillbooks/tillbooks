@@ -59,6 +59,8 @@ test('a symlink inside the temp dir that points outside it is refused', () => {
 test('file names follow <surface>-<en|de>-<theme>.webp and reject unknown parts', () => {
   assert.equal(shotFileName('overview', 'de-CH', 'dark'), 'overview-de-dark.webp');
   assert.equal(shotFileName('qr-invoice', 'en', 'light'), 'qr-invoice-en-light.webp');
+  assert.equal(shotFileName('qr-invoice', 'en', 'light', 'phone'), 'qr-invoice-en-light-phone.webp');
+  assert.throws(() => shotFileName('overview', 'en', 'light', 'tablet'));
   assert.throws(() => shotFileName('nope', 'en', 'light'));
   assert.throws(() => shotFileName('overview', 'fr', 'light'));
   assert.throws(() => shotFileName('overview', 'en', 'sepia'));

@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use TILL, please cite it as below."
 title: TILL
-abstract: "TILL (Trusted Independent Ledger Library) is the agent-first, open-source ERP for Swiss SMEs: sales, purchasing, payments, stock, projects, books and MWST, every function exposed as an MCP tool, with a Studio that shows a person what the agent did. Local first, append-only ledger, QR-bill, ISO 20022."
+abstract: "TILL (Trusted Independent Ledger Library) is an agent-first, open-source ERP for Swiss SMEs: sales, purchasing, payments, stock, projects, books and MWST, every function exposed as an MCP tool, with a Studio that shows a person what the agent did. Local first, append-only ledger, QR-bill, ISO 20022."
 type: software
 authors:
   - name: "Nomadik GmbH"

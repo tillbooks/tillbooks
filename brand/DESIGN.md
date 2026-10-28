@@ -720,6 +720,46 @@ ratchets the raw duration literals left in the Studio down to zero.
   agent's group animations run regardless) and drops a click issued meanwhile. Re-measure before
   reaching for it again; do not re-add it on the strength of the documentation.
 
+## Website (D181)
+
+tillbooks.ch is the Studio's family, not a second brand (owner, 28.10.2026: visual direction A,
+"Brass, refined"). It uses the same Brass tokens, the same one typeface and the same accent budget,
+and it adds no colour. What it adds lives in `web/src/styles/site.css` as `--t-site-*` tokens, because
+a page read from a couch is not a ledger read at a desk:
+
+- **A bigger scale with a display step.** The home H1 is `--t-site-font-display`: 58px on desktop,
+  36px on a phone, weight 700, tracking -0.035em. An inner page's H1 is `--t-site-font-title` (48 to
+  32), a band title `--t-site-font-h2` (40 to 26), a lede 20 to 17, body 16 on a 1.6 line. 700 stays
+  the ceiling; sentence case everywhere; eyebrows and section labels are dim ink, never brass.
+- **One rhythm.** A band is 96px top and bottom on desktop and 64px at mobile width
+  (`--t-site-band-y`); two bands on the same ground share one gap instead of stacking two.
+- **Soft depth, one shadow.** An elevated panel or a product shot lifts by the background step plus
+  `--t-site-shadow-panel`, one soft shadow defined for both themes. This is the website's one
+  exception to "no shadow" on panels; it is still never a stack, never a glow, and never a border
+  around every card.
+- **Pill buttons.** Primary (brass, at most one per band), quiet (neutral with a control edge) and
+  link (ink with an arrow). 44px tall, 36px only in the desktop bar.
+- **The accent budget is the Studio's**: the single primary action, focus and the selected item.
+  "Get TILL" is one primary style on every page; on /start it carries `aria-current` and keeps its
+  style. The GitHub control is ink, never brass.
+- **Focus is a 2px brass outline** on the website, offset 2px. The Studio's "Sehr subtil" halo is
+  tuned for bordered controls in dense tables; on borderless marketing links it would vanish.
+- **Motion is transform only** (owner: "subtle movement only"). A Reveal nudges an element that
+  starts below the fold by `--t-travel` (8px) and settles it in `--t-motion-reveal`. Content is
+  never at `opacity: 0` waiting for an observer, the hero never moves, and reduced motion or a
+  missing script leaves the page exactly as authored. `test/web/site-foundation.test.mjs` holds it.
+- **The header** is wordmark, Product menu, Compare, Resources menu, GitHub, the language switch and
+  Get TILL: seven controls, at the S11 cap. The menus are disclosure buttons that also work on hover
+  and degrade without script. Below 900px the nav collapses into a full-sitemap panel over a scrim,
+  rows 44px, and the language switch and Get TILL stay in the bar.
+- **The footer** is five grouped columns (Product, Compare, Resources, Community, Company) from the
+  same map as the mobile menu (`web/src/data/sitemap.mjs`), links at least 32px tall (44px on a
+  phone). Community carries GitHub Discussions for questions, an issue for bugs and the mailto as
+  an equal path.
+- **Shared components** live in `web/src/components/ui/`: Section, PageHero, Button, CtaPair,
+  GitHubButton, Badge (icon plus text, never colour alone) and Reveal. A page reaches for them
+  rather than restyling a band, a hero or a button of its own.
+
 ## Dependencies
 
 The Studio is zero-UI-dependency by default, and every exception is named here (D118 D1/D2). A

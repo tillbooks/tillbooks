@@ -12,10 +12,11 @@
  *      at a FIXED `TILL_SEED_TODAY` (`--today=`, default below), so a re-run reproduces the same books;
  *   2. starts `till up --no-open` on a throwaway port, with `TILL_SUPPORT_DIR` in the temp dir, so the
  *      run's Studio key, lock and diagnostics never touch `~/.till`;
- *   3. drives Playwright (the copy `.claude/ui-tests` already installs) at 1440x900, deviceScaleFactor 2,
+ *   3. drives Playwright (the copy `.claude/ui-tests` already installs) at VIEWPORT (1120x800), deviceScaleFactor 2,
  *      in light and dark and in the Studio locales `en` and `de-CH`;
- *   4. writes `web/public/product/<surface>-<en|de>-<theme>.webp` plus `manifest.json` (pixel size and
- *      suggested alt text per locale). The WebP encode runs in the same Chromium, so no image library
+ *   4. writes `web/public/product/<surface>-<en|de>-<theme>.webp` (and `-phone.webp`, the same screen
+ *      at PHONE_VIEWPORT in the Studio's narrow layout) plus `manifest.json` (pixel size and suggested
+ *      alt text per locale). The WebP encode runs in the same Chromium, so no image library
  *      is added to the repo.
  *
  * PRIVATE DATA. The database path is checked against the temp dir before the seed runs, before the
@@ -45,8 +46,11 @@ import {
   LOCALES,
   THEMES,
   VIEWPORT,
+  PHONE_VIEWPORT,
+  FRAMES,
   DEVICE_SCALE_FACTOR,
   AGENT_DRAFTS,
+  MIGRATION_SCOPE,
   assertDbInsideTemp,
   shotFileName,
   buildManifest,
@@ -69,7 +73,18 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(seedToday)) throw new Error(`--today must be YYY
 const only = opt('only')?.split(',').filter(Boolean) ?? null;
 const onlyLocales = opt('locale')?.split(',').filter(Boolean) ?? LOCALES;
 const onlyThemes = opt('theme')?.split(',').filter(Boolean) ?? THEMES;
+const onlyFrames = opt('frame')?.split(',').filter(Boolean) ?? FRAMES;
+for (const f of onlyFrames) if (!FRAMES.includes(f)) throw new Error(`unknown frame in --frame: ${f}`);
 const port = Number(opt('port') ?? 8797);
+// `--viewport=1180x780`: the CSS size the frames are taken at. The default is the library's VIEWPORT; a
+// run at another size writes it into the manifest, so a partial run must use the size of the rest.
+const viewport = (() => {
+  const raw = opt('viewport');
+  if (!raw) return VIEWPORT;
+  const m = /^(\d{3,4})x(\d{3,4})$/.exec(raw);
+  if (!m) throw new Error(`--viewport must be WIDTHxHEIGHT, got ${raw}`);
+  return { width: Number(m[1]), height: Number(m[2]) };
+})();
 for (const id of only ?? []) if (!SURFACES.some((s) => s.id === id)) throw new Error(`unknown surface in --only: ${id}`);
 
 const log = (...m) => console.log('[shots]', ...m);
@@ -198,6 +213,13 @@ try {
   const { DatabaseSync } = await import('node:sqlite');
   const ro = new DatabaseSync(assertDbInsideTemp(tmp, dbPath), { readOnly: true });
   const seeblick = ro.prepare("SELECT id FROM workspace WHERE name LIKE 'Seeblick%' ORDER BY id LIMIT 1").get();
+  // The issued invoices, newest number first: the QR-bill frame tries these before walking the list.
+  const issuedInvoices = seeblick
+    ? ro
+        .prepare("SELECT id FROM document WHERE workspace_id = ? AND type = 'invoice' AND status = 'issued' ORDER BY number DESC LIMIT 10")
+        .all(seeblick.id)
+        .map((r) => `/documents/${r.id}`)
+    : [];
   ro.close();
   if (!seeblick) throw new Error('the seed produced no Seeblick workspace');
   const wsBase = `${lock.url}/w/${seeblick.id}`;
@@ -208,7 +230,10 @@ try {
   // 3. Capture
   // -------------------------------------------------------------------------------------------------
 
-  browser = await chromium.launch();
+  // The browser's own locale draws the date fields: with a Swiss locale they read dd.mm.yyyy, as a
+  // Swiss reader's do, on whatever box runs this script (`--lang` does not reach the headless shell;
+  // the environment does).
+  browser = await chromium.launch({ env: { ...process.env, LANG: 'de_CH.UTF-8', LANGUAGE: 'de_CH', LC_ALL: 'de_CH.UTF-8' } });
   const encoder = await browser.newPage();
   await encoder.setContent('<!doctype html><title>encoder</title>');
 
@@ -220,11 +245,16 @@ try {
   // context could not sign in. The theme preference defaults to `system`, so switching the emulated
   // colour scheme switches the Studio's theme live.
   const context = await browser.newContext({
-    viewport: VIEWPORT,
+    viewport,
     deviceScaleFactor: DEVICE_SCALE_FACTOR,
     reducedMotion: 'reduce',
     locale: 'de-CH',
     timezoneId: 'Europe/Zurich',
+  });
+  // The Studio shows the reader's own modifier in its search hint ("Cmd K" on a Mac, "Ctrl K"
+  // elsewhere). The frames show a Mac, like the first published set, whatever box runs this script.
+  await context.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'MacIntel' });
   });
   // Sign in: open a freshly derived one-time ticket link in a fresh tab. A ticket is single-use and
   // short-lived, and on a loaded box the first redeem can lose a race with the Studio's own repair
@@ -257,17 +287,25 @@ try {
     for (const locale of onlyLocales) {
       for (const surface of surfaces) {
         let route = surface.route;
-        if (surface.id === 'qr-invoice') route = invoiceRoute ??= await findQrInvoiceRoute(page, wsBase);
+        if (surface.id === 'qr-invoice') route = invoiceRoute ??= await findQrInvoiceRoute(page, wsBase, issuedInvoices);
+        if (surface.id === 'migration') await planDemoMigration(page, seeblick.id);
         await page.goto(`${wsBase}${route}`);
         await settle(page);
         if (locale !== 'de-CH') await setStudioLocale(page, locale);
-        await prepareFrame(page, surface.id);
-        const png = await page.screenshot({ type: 'png', animations: 'disabled', timeout: 180_000 });
-        const file = shotFileName(surface.id, locale, theme);
-        const { width, height, bytes } = await encodeWebp(encoder, png);
-        writeFileSync(join(OUT_DIR, file), bytes);
-        entries.push({ file, surface: surface.id, locale, theme, width, height });
-        log(`${file} ${width}x${height} ${(bytes.length / 1024).toFixed(0)} KB`);
+        // The desk frame, then the same screen at phone width (the Studio's own narrow layout): a
+        // resize keeps the page, so the locale and the data stay as they are.
+        for (const frame of onlyFrames) {
+          await page.setViewportSize(frame === 'phone' ? PHONE_VIEWPORT : viewport);
+          if (frame === 'phone') await page.waitForTimeout(400);
+          await prepareFrame(page, surface.id, frame === 'phone' ? PHONE_VIEWPORT : viewport);
+          const png = await page.screenshot({ type: 'png', animations: 'disabled', timeout: 180_000 });
+          const file = shotFileName(surface.id, locale, theme, frame);
+          const { width, height, bytes } = await encodeWebp(encoder, png);
+          writeFileSync(join(OUT_DIR, file), bytes);
+          entries.push({ file, surface: surface.id, locale, theme, frame, width, height });
+          log(`${file} ${width}x${height} ${(bytes.length / 1024).toFixed(0)} KB`);
+        }
+        await page.setViewportSize(viewport);
       }
     }
   }
@@ -285,7 +323,7 @@ try {
       .map(([file, e]) => [file, { file, ...e }]),
   );
   for (const e of entries) merged.set(e.file, e);
-  writeFileSync(manifestPath, JSON.stringify(buildManifest([...merged.values()], { seedToday }), null, 2) + '\n');
+  writeFileSync(manifestPath, JSON.stringify(buildManifest([...merged.values()], { seedToday, viewport, capturedWith: JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version }), null, 2) + '\n');
   log(`wrote ${entries.length} images and ${manifestPath}`);
 } catch (e) {
   failed = true;
@@ -356,10 +394,48 @@ async function draftAgentProposals(origin, workspaceId, today) {
   log(`the demo agent drafted ${AGENT_DRAFTS.length} proposals over MCP`);
 }
 
+/**
+ * The migration surface with a plan on it, not its empty state (UX critic M3): a bexio move planned
+ * for the next year with the first-scope classes a small company brings across. Called as the human
+ * seat, through the Studio's own REST bridge and the tab's session credential, exactly the two calls
+ * the surface's "Create plan" flow makes. Fixed idempotency keys make every later call a no-op, so
+ * the four frames show the same plan.
+ */
+async function planDemoMigration(page, workspaceId) {
+  const out = await page.evaluate(
+    async ({ workspaceId, classes }) => {
+      const key = sessionStorage.getItem('till-studio-key') ?? sessionStorage.getItem('till-studio-session');
+      const call = async (action, input) => {
+        const r = await fetch(`/api/${action}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...(key ? { 'x-till-studio-key': key } : {}) },
+          body: JSON.stringify(input),
+        });
+        return r.json();
+      };
+      const plan = await call('migration_create_plan', {
+        workspaceId,
+        sourceSystem: 'bexio',
+        cutoverDate: '2027-01-01',
+        idempotencyKey: 'shots:migration:plan',
+      });
+      if (plan.ok === false) return plan;
+      return call('migration_set_scope', {
+        workspaceId,
+        planId: plan.planId,
+        classes: classes.map((dataClass) => ({ dataClass, include: true })),
+        idempotencyKey: 'shots:migration:scope',
+      });
+    },
+    { workspaceId, classes: MIGRATION_SCOPE },
+  );
+  if (out?.ok === false) throw new Error(`could not plan the demo migration: ${JSON.stringify(out)}`);
+}
+
 /** A previous manifest entry still matches today's naming contract (a renamed surface drops out). */
 function isCurrentName(file, e) {
   try {
-    return shotFileName(e.surface, e.locale, e.theme) === file;
+    return shotFileName(e.surface, e.locale, e.theme, e.frame ?? 'desk') === file;
   } catch {
     return false;
   }
@@ -377,7 +453,10 @@ async function waitFor(fn, timeoutMs, what) {
 
 /** Wait until the surface has loaded: network quiet, no busy region, no skeleton, fonts ready. */
 async function settle(page) {
-  await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {});
+  // The Studio polls (attention, sync), so "network idle" may never come: wait a while for it, then go
+  // on to the checks below, which are what actually say the surface has loaded. At 60s the wait
+  // dominated a run (about five minutes a frame, two and a half hours for the set).
+  await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
   await page
     .waitForFunction(
       () =>
@@ -431,7 +510,7 @@ async function setStudioLocale(page, locale) {
 }
 
 /** Hide what is not product: focus rings from the last click, toasts, the caret, scrollbars. */
-async function prepareFrame(page, surfaceId) {
+async function prepareFrame(page, surfaceId, size = viewport) {
   await page.addStyleTag({
     content: `
       *, *::before, *::after { caret-color: transparent !important; transition: none !important; animation: none !important; }
@@ -443,7 +522,7 @@ async function prepareFrame(page, surfaceId) {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     window.scrollTo(0, 0);
   });
-  await page.mouse.move(0, VIEWPORT.height - 1);
+  await page.mouse.move(0, size.height - 1);
   if (surfaceId === 'qr-invoice') {
     // Bring the QR payment part into the frame, with the invoice header still above it if it fits.
     await page.evaluate(() => {
@@ -464,8 +543,16 @@ async function prepareFrame(page, surfaceId) {
   await page.waitForTimeout(150);
 }
 
-/** The route of an issued Seeblick invoice whose QR payment part renders. */
-async function findQrInvoiceRoute(page, base) {
+/**
+ * The route of an issued Seeblick invoice whose QR payment part renders. The issued invoices read
+ * from the seed go first (one or two loads); walking the documents list is the fallback.
+ */
+async function findQrInvoiceRoute(page, base, candidates = []) {
+  for (const href of candidates) {
+    await page.goto(`${base}${href}`);
+    await settle(page);
+    if (await page.$('.invoice-qr-panel .invoice-qr-svg svg')) return href;
+  }
   await page.goto(`${base}/documents`);
   await settle(page);
   const hrefs = await page.$$eval('a[href*="/documents/"]', (as) =>

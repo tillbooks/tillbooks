@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "TILL",
-  "description": "The agent-first ERP for Swiss SMEs. Open source, MIT, local-first.",
+  "description": "An agent-first ERP for Swiss SMEs. Open source, MIT, local-first.",
   "colors": {
     "primary": "#7a5a16",
     "light": "#e0b444",

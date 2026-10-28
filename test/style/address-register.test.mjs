@@ -157,3 +157,25 @@ test('the guard actually fires, on every shape of the polite address', () => {
     );
   }
 });
+
+test('the German side of every blog post addresses the reader as du (28.10.2026)', () => {
+  // The posts are typed `.ts` modules, not catalogues, so the test above never read them: a whole
+  // article could be written in the Sie register and stay green. This reads the `'de-CH': {` block of
+  // each post (it is written first, before `en: {`, which test/web/blog.test.mjs enforces) and judges
+  // every single-quoted string in it. Template literals are code samples and are skipped.
+  const posts = execFileSync('git', ['ls-files', 'web/src/data/blog/posts'], { env: cleanGitEnv(), cwd: ROOT, encoding: 'utf8' })
+    .split('\n')
+    .filter((p) => p.endsWith('.ts'));
+  assert.ok(posts.length > 0, 'found no blog posts at all, so this test proves nothing');
+
+  const found = [];
+  for (const file of posts) {
+    const src = readFileSync(join(ROOT, file), 'utf8');
+    const de = src.slice(src.indexOf("'de-CH': {"), src.indexOf('en: {'));
+    assert.ok(de.length > 0, `${file}: no German block found. Has the post shape changed?`);
+    for (const m of de.matchAll(/'((?:[^'\\\n]|\\.)*)'/g)) {
+      for (const o of offences(m[1])) found.push(`${file}\n    text: ${m[1]}\n    ${o.id}: ${o.fix}`);
+    }
+  }
+  assert.deepEqual(found, [], `blog posts must use the du register (D56). Offending strings:\n\n${found.join('\n\n')}\n`);
+});

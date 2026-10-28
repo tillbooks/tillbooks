@@ -1,6 +1,6 @@
 # TILL
 
-**Trusted Independent Ledger Library.** The agent-first ERP for Swiss SMEs.
+**Trusted Independent Ledger Library.** An agent-first ERP for Swiss SMEs.
 
 TILL is a free, open-source (MIT) ERP for Swiss small businesses: sales, purchasing, payments, stock,
 projects, books and MWST. Every function is exposed as an MCP tool, 822 of them, so your AI agent runs
@@ -173,4 +173,4 @@ available. [SUPPORT.md](SUPPORT.md) has the details.
 MIT, Copyright (c) 2026 Nomadik GmbH. See [LICENSE](LICENSE).
 
 TILL is an independent project. It is not affiliated with, endorsed by, or derived from bexio AG or
-any other accounting vendor. It is a clean-room implementation built from public documentation.
+any other accounting vendor, and it copies no code, UI or trade dress from any of them.

@@ -39,20 +39,25 @@ Agents can do all of this too, over MCP: `prepare_feedback` writes the report an
 mailto link. An agent can switch error recording on with `set_diagnostics`, and it should only do that
 when you ask it to. You see the setting in that panel and can turn it off there at any time.
 
-**In public**, open an issue at
-[github.com/tillbooks/tillbooks/issues](https://github.com/tillbooks/tillbooks/issues). Leave out
-anything from your books: amounts, names, IBANs and account numbers do not belong in a public issue.
+**In public**, questions and ideas go to
+[GitHub Discussions](https://github.com/tillbooks/tillbooks/discussions), bugs to
+[GitHub Issues](https://github.com/tillbooks/tillbooks/issues). Leave out anything from your books:
+amounts, names, IBANs and account numbers do not belong in a public post.
 
-- **Bug**: tell us what you did, what you expected, and what happened. Steps to reproduce are worth
-  more than a description of the symptom.
-- **Feature request**: tell us the problem, not the solution you have in mind. The problem survives
-  longer.
-- **Question**: ask. If the docs did not answer it, that is a documentation bug and we want to know.
+- **Question** (Discussions, Q&A): ask. If the docs did not answer it, that is a documentation bug
+  and we want to know.
+- **Idea or feature request** (Discussions, Ideas): tell us the problem, not the solution you have
+  in mind. The problem survives longer.
+- **Bug** (Issues): tell us what you did, what you expected, and what happened. Steps to reproduce
+  are worth more than a description of the symptom.
+
+No GitHub account? Mail **hello@tillbooks.ch**: it is an equal path, not a fallback.
 
 ## Security
 
-Do not open a public issue for a vulnerability. See [SECURITY.md](SECURITY.md), or mail
-**security@tillbooks.ch**.
+Do not open a public issue for a vulnerability. Open a
+[private security advisory](https://github.com/tillbooks/tillbooks/security/advisories/new) or mail
+**security@tillbooks.ch**. See [SECURITY.md](SECURITY.md).
 
 ## Anything else
 
