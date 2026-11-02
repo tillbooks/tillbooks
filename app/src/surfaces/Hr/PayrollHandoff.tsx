@@ -259,7 +259,7 @@ export function PayrollHandoff() {
 
   // K-21: a posting's one verb sits behind its row's overflow, destructive. Only a posting whose journal
   // stands, and only for someone who may post (the engine asserts `post`).
-  // TODO(Ruhig 3, E-step): migrate this action to the icon vocabulary once IconButton lands.
+  // Stornieren is destructive, so it stays under Mehr (brand/DESIGN.md, Icon vocabulary).
   const rowActions = (r: HandoffRow) =>
     r.type === 'posting' && (r.reversalEntryId ?? null) === null
       ? [{ key: 'reverse', label: t('payroll.reverse.action'), danger: true, onSelect: () => { setReverseReason(''); setReversing(r); } }]

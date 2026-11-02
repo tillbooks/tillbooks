@@ -78,9 +78,9 @@ maintainers run.
 3. **Copy nothing.** TILL is built from public documentation. Never copy code, UI, or
    trade dress from any accounting vendor. Copied code cannot live in an MIT repo.
 4. **House style.** No em dashes anywhere: use a colon, a comma, or parentheses. En
-   dashes are fine in real ranges. English and de-CH only, with real umlauts (never
-   `ae`/`oe`/`ue` as a substitute, and Swiss German has no `ss`-for-`ss` rule to
-   invent). Minimalist, one accent, one typeface: build to `brand/DESIGN.md`.
+   dashes are fine in real ranges. English and de-CH only. de-CH uses real umlauts
+   (never `ae`/`oe`/`ue`) and never `ß`: Swiss German writes `ss` (`Grösse`,
+   `schliessen`). Minimalist, one accent, one typeface: build to `brand/DESIGN.md`.
 5. **Local-first and private.** Do not add telemetry. Do not make TILL phone home.
    Never commit a secret, a key, or a `.env` file.
 

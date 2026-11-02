@@ -229,7 +229,7 @@ export function Hr() {
   // K-21: a claim's decisions sit behind its row's one overflow, Ablehnen last and marked destructive.
   // D168: an approved claim also offers Stornieren, destructive and behind its confirm dialog. The
   // engine refuses a reimbursed claim (reverse the payment first), so the menu does not offer it there.
-  // TODO(Ruhig 3, E-step): migrate this action to the icon vocabulary once IconButton lands.
+  // Stornieren is destructive, so it stays under Mehr (brand/DESIGN.md, Icon vocabulary).
   const claimActions = (c: Claim) => [
     ...(c.status === 'submitted'
       ? [

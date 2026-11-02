@@ -8,7 +8,8 @@ A short description of the change and why.
 - [ ] If I added or changed a write capability, it ships on BOTH faces (the MCP verb and its REST twin) and the parity test still passes.
 - [ ] The money path is intact: posted entries stay append-only, corrections are reversing entries (never destructive edits), and posting stays idempotent. If I touched it, the invariant tests still assert it.
 - [ ] Every query is tenant-scoped (section H-TENANT).
-- [ ] I followed the house style: no em dashes, English or de-CH only, real umlauts (never `ae`/`oe`/`ue`, never `ss` for a Swiss word).
+- [ ] I followed the house style: no em dashes, English or de-CH only, de-CH with real umlauts (never `ae`/`oe`/`ue`) and never `ß` (Swiss German writes `ss`: `Grösse`, `schliessen`).
+- [ ] Any behaviour I added or changed is a user setting with a sensible default (the workspace settings registry), not a hard-coded rule. A test-only or docs-only change says so here.
 - [ ] I did not commit any secrets, keys, or a `.env` file.
 - [ ] Docs updated if behaviour changed (README or `site-docs/`).
 

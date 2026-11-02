@@ -19,7 +19,8 @@
  * Studio UI copy, not a legal letter the user sends onward. Placeholders `{company}`, `{address}`
  * and `{source}` are filled by the caller from the A00 profile it already holds (spec §4).
  *
- * de-CH uses real umlauts (ä ö ü) and never `ss` for `ß`: Swiss German has no `ß` at all.
+ * de-CH uses real umlauts (never `ae`/`oe`/`ue`) and never `ß`: Swiss German writes `ss`
+ * (`Grösse`, `schliessen`).
  */
 
 import type { LetterTemplate } from './types.js';

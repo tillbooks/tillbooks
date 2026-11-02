@@ -884,7 +884,7 @@ function CurrentRun({
             />
           )}
           {/* D169: the fee's undo, destructive, under Mehr and behind its confirm (the discard shape).
-              TODO(Ruhig 3, E-step): migrate this action to the icon vocabulary once IconButton lands. */}
+              Stornieren is destructive, so it stays under Mehr (brand/DESIGN.md, Icon vocabulary). */}
           {mayReverseFee && (
             <OverflowMenu
               label={t('dunning.moreActions')}

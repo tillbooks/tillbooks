@@ -74,6 +74,15 @@ body:
       render: shell
     validations:
       required: false
+  - type: textarea
+    id: configurable
+    attributes:
+      label: Should this be configurable?
+      description: >-
+        TILL makes behaviour choices user settings with a sensible default. If
+        people would reasonably want this to work differently, say how.
+    validations:
+      required: false
   - type: checkboxes
     id: checks
     attributes:

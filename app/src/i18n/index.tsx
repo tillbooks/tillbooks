@@ -3,7 +3,8 @@
  *
  * Dot-path keys resolved against a locale JSON tree, with `{param}` interpolation. Every visible
  * string in a component comes from here: no hardcoded user-facing copy. de-CH is the default and
- * uses real umlauts (never `ss` for the German sharp s, which Swiss German does not have).
+ * uses real umlauts (never `ae`/`oe`/`ue`) and never `ß`: Swiss German writes `ss` (`Grösse`,
+ * `schliessen`).
  *
  * Money is always `CHF 1'234.55` (apostrophe thousands separator) regardless of locale, per house
  * style. Dates are `TT.MM.JJJJ` / `DD.MM.YYYY` (identical digits, both `31.12.2026`).

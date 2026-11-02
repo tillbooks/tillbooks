@@ -683,7 +683,7 @@ export function AssetRegister() {
   }, [write, viewing, reversingTxn, reverseReason, openTxns]);
 
   // D170: an event that still stands offers Stornieren, destructive, behind its confirm dialog.
-  // TODO(Ruhig 3, E-step): migrate this action to the icon vocabulary once IconButton lands.
+  // Stornieren is destructive, so it stays under Mehr (brand/DESIGN.md, Icon vocabulary).
   const ledgerActions = (tr: LedgerEvent): OverflowMenuItem[] =>
     REVERSIBLE_TYPES.has(tr.type) && tr.reversedByTransactionId === null
       ? [{

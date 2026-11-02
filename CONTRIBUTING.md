@@ -53,9 +53,11 @@ repo, and we will not take the change.
 
 ## House style
 
-- **No em dashes. Anywhere.** Use a colon, a comma, or parentheses. CI enforces this via
-  `npm run check:style`. En dashes are fine in real ranges (`B–F`, `8.1–3.8`).
-- de-CH uses real umlauts, and never `ss` for `ß`. Swiss German has no `ß`.
+- **No em dashes. Anywhere.** Use a colon, a comma, or parentheses. `npm run check:style`
+  enforces this, and it runs as part of `npm run check` and `npm run gate`. En dashes are fine in
+  real ranges (`B–F`, `8.1–3.8`).
+- de-CH uses real umlauts (never `ae`/`oe`/`ue`) and never `ß`: Swiss German writes `ss`
+  (`Grösse`, `schliessen`).
 - Comments say why, not what. If the code needs a comment to explain what it does, fix the code.
 - The design law is [brand/DESIGN.md](brand/DESIGN.md). One accent, one typeface, no decoration
   pretending to be signal.
