@@ -63,6 +63,7 @@ import { useCommitAck, useCommitAckState } from '../../lib/motion';
 import { FileDrop } from '../../components/FileDrop';
 import { useBankFetch } from './useBankFetch';
 import { useAttachReceipt } from './useAttachReceipt';
+import { useBookAgain } from '../../components/BookAgain';
 import type {
   BankAccountBalance,
   BankAccountOption,
@@ -118,12 +119,13 @@ import { controlAccountsIn } from './ControlAccountWarning';
 import type { RefusalAction } from './errors';
 import { FetchGlyph, FilterGlyph, SearchGlyph } from './glyphs';
 import type { RulePayload } from './RuleEditor';
-import { RulesSheet } from './RulesSheet';
+import { RulesSheet, type BookedLineRef } from './RulesSheet';
 import { ruleInputOf } from './rules';
 import { COMPACT_PARTY_WIDTH, DEFAULT_COLUMN_WIDTHS, PANEL_BESIDE_MIN_VIEWPORT, useColumnWidths, type ResizableColumn } from './columns';
 import { ColumnResizer } from './ColumnResizer';
 import { DetailArea, DetailDivider, DrawerArea, useDockDrag } from './DetailArea';
 import { FactsCard } from './FactsCard';
+import { HouseRuleLine } from './HouseRuleLine';
 import { DuplicateCheck } from './DuplicateCheck';
 import { DirectionFilter, ListCount, PeriodFilter, isoDateOrNull, periodInverted } from './ListControls';
 import { duplicateFlagOf } from './statementFacts';
@@ -356,6 +358,8 @@ export function Bank() {
   const [ignorePreset, setIgnorePreset] = useState<IgnoreReason | undefined>(undefined);
   // D177: the rules sheet opened on one rule (the Woher line's name).
   const [rulesFocus, setRulesFocus] = useState<string | null>(null);
+  /** N03: the booked line the rules sheet opens a new rule's form for ("Als Regel speichern", Pendenzen "Anpassen"). */
+  const [rulesFromBooked, setRulesFromBooked] = useState<BookedLineRef | null>(null);
   const wide = useWideLayout();
   // D178 N2 (A39 §18.3): ONE scroll owner per region. The page takes exactly the height <main> leaves and
   // never scrolls; the list and the detail area each own their scroll (the D177 panel measured the window
@@ -710,6 +714,18 @@ export function Bank() {
     if (pinned === null || tabOf(pinned.state) !== tab || loaded.some((l) => l.bankTxnId === pinned.bankTxnId)) return loaded;
     return [pinned, ...loaded];
   }, [inbox, pinned, tab]);
+
+  // N03: Pendenzen's "Anpassen" on a proposed rule links `?line=<id>&rule=save`: once the deep-linked line is in
+  // the list, the rules sheet opens a new rule prefilled from its booking, once.
+  const ruleFromLink = useRef<string | null>(params.get('rule') === 'save' ? params.get('line') : null);
+  useEffect(() => {
+    const wanted = ruleFromLink.current;
+    if (wanted === null) return;
+    const line = lines.find((l) => l.bankTxnId === wanted);
+    if (line === undefined) return;
+    ruleFromLink.current = null;
+    saveAsRule(line);
+  }, [lines]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resolve a deep link: on the loaded page, else read by its id (switching to the line's tab).
   useEffect(() => {
@@ -1297,6 +1313,8 @@ export function Bank() {
 
   // --- Belege (D142): dropped on a row, or picked from the Details or the paperclip --------------------
   const receipts = useAttachReceipt(workspaceId);
+  // N02 R1: a receipt already booked elsewhere is attached only with the person's reason.
+  const { ask: askBookAgain, dialog: bookAgainDialog } = useBookAgain();
   /**
    * Every file, one after the other, each its own upload and link; the person hears which did not land.
    * `banner` says a refusal in an ErrorBanner (the line has left the list, so no row can carry it).
@@ -1305,10 +1323,27 @@ export function Bank() {
     const attached: string[] = [];
     const failed: string[] = [];
     let lastRefusal: Err | null = null;
+    let asked = false;
     for (const file of files) {
       const refusal = await receipts.attach(target.bankTxnId, file);
       if (refusal === null) {
         attached.push(file.name);
+        continue;
+      }
+      // One question at a time: the first receipt already booked elsewhere asks for the reason, and
+      // that file is attached again with it; a further one is reported like any refusal.
+      if (
+        !asked &&
+        askBookAgain(refusal, async (confirmation) => {
+          const again = await receipts.attach(target.bankTxnId, file, confirmation);
+          if (again === null) {
+            ackLine(target.bankTxnId);
+            reload();
+          }
+          return again;
+        })
+      ) {
+        asked = true;
         continue;
       }
       lastRefusal = refusal;
@@ -1692,6 +1727,16 @@ export function Bank() {
     setRulesFocus(standardId);
     setRulesOpen(true);
   };
+  /** N03: "Als Regel speichern" on a booked line: the sheet opens a new rule prefilled with its booking. */
+  const saveAsRule = (line: BankInboxLine) => {
+    setRulesFromBooked({
+      bankTxnId: line.bankTxnId,
+      party: (line.counterparty.name ?? line.counterparty.iban ?? '').trim(),
+      direction: line.creditDebit === 'CRDT' ? 'in' : 'out',
+      amountMinor: line.amountMinor,
+    });
+    setRulesOpen(true);
+  };
 
   const panelFor = (line: BankInboxLine) => {
     const draft = effectiveDraft(line);
@@ -1740,6 +1785,7 @@ export function Bank() {
         onSetStandard={() => void setStandard(line)}
         onSaveRule={(payload) => saveRule(line, payload)}
         onOpenRule={openRule}
+        onSaveAsRule={() => saveAsRule(line)}
         onPickRule={(id) => pickRule(line, id)}
         onOther={() => bookOtherwise(line)}
         onRefusalAction={(action) => onRefusalAction(line, action)}
@@ -1801,6 +1847,8 @@ export function Bank() {
     return (
       <>
         <FactsCard line={line} lookups={lookups} titleId={factsTitleId} showAccount={accounts.length > 1} onReceipts={() => openReceipts(line)} />
+        {/* N00 (US-N00.4): the counterparty's house rule, under the facts. */}
+        {workspaceId !== null && <HouseRuleLine line={line} workspaceId={workspaceId} />}
         {duplicate !== null && (
           <DuplicateCheck
             line={line}
@@ -2169,6 +2217,7 @@ export function Bank() {
       {header}
       {fetchError !== null && <ErrorBanner error={fetchError} message={channelRefusal(t, fetchError)} />}
       {receiptError !== null && <ErrorBanner error={receiptError.error} message={receiptError.message} />}
+      {bookAgainDialog}
       {/* Two or more accounts in view: one summary line, every account in its card (D152, 02.10.2026). */}
       {trustBalances.length > 1 ? (
         <div className="bank-trusts">
@@ -2438,6 +2487,7 @@ export function Bank() {
       <RulesSheet
         open={rulesOpen}
         focusStandardId={rulesFocus}
+        fromBookedLine={rulesFromBooked}
         workspaceId={workspaceId}
         lookups={lookups}
         currency={accounts[0]?.currency ?? 'CHF'}
@@ -2445,6 +2495,7 @@ export function Bank() {
         onClose={() => {
           setRulesOpen(false);
           setRulesFocus(null);
+          setRulesFromBooked(null);
         }}
         onChanged={() => {
           reload();

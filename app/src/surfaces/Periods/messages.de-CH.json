@@ -230,7 +230,11 @@
       "sync": "Sync-Publishing",
       "accrual": "Abgrenzung",
       "provision": "Rückstellung",
-      "workspace_setting": "Einstellung"
+      "workspace_setting": "Einstellung",
+      "receipt_override": "Zweite Buchung eines Belegs",
+      "hausbuch_note": "Hausregel",
+      "rule_autobook_grant": "Automatik einer Buchungsregel",
+      "vorlage_schedule": "Dauerbuchung"
     },
     "emptyHint": "TILL schreibt hier jede Buchung, jede Sperre und jede Änderung an deinen Stammdaten mit. Du musst nichts davon selbst erfassen."
   },

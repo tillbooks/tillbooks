@@ -4,6 +4,7 @@
  */
 
 import { formatMoney } from '../../i18n';
+import { parseReceiptHolders, type ReceiptHolder } from '../../lib/receiptHolders';
 import en from './messages.en.json';
 import sharedEn from '../../i18n/en.json';
 
@@ -76,6 +77,8 @@ export interface DraftedAction {
   actor: string;
   dialCapability: string | null;
   actionTool: string;
+  /** N01 US-N01.8: the agent's own sentence on why it proposes this, shown quoted; null when it gave none. */
+  agentReason?: string | null;
   payload: Record<string, unknown>;
   /**
    * The engine's human names for contact ids in the payload (`vendorId` -> the vendor's name), keyed
@@ -90,6 +93,42 @@ export interface DraftedAction {
   figures?: VorschlagFigures | null;
   /** The pinned record changed after the proposal: approving would refuse `vorschlag_stale`. */
   changedSinceProposal?: boolean;
+  /** N02 (critic round 2): the Belege the approval will link (proposed, dropped, or named). */
+  belege?: VorschlagBeleg[];
+  /** N02 R1: the records that already hold this Vorschlag's receipt; the approval is judged against them. */
+  receiptHolders?: ReceiptHolder[];
+}
+
+/** Mirrors `VorschlagBeleg` in `src/core/files/belegeView.ts`. */
+export interface VorschlagBeleg {
+  fileId: string;
+  filename: string;
+  mime: string;
+  bytes: number;
+  sha256: string;
+  source: 'draft' | 'drop' | 'filed';
+  pending: boolean;
+}
+
+/** The Belege of a listed Vorschlag, defensively: a row the card cannot read is left out. */
+export function parseBelege(raw: unknown): VorschlagBeleg[] {
+  if (!Array.isArray(raw)) return [];
+  const out: VorschlagBeleg[] = [];
+  for (const entry of raw) {
+    const b = record(entry);
+    const source = b.source === 'draft' || b.source === 'drop' || b.source === 'filed' ? b.source : null;
+    if (typeof b.fileId !== 'string' || typeof b.filename !== 'string' || typeof b.mime !== 'string' || source === null) continue;
+    out.push({
+      fileId: b.fileId,
+      filename: b.filename,
+      mime: b.mime,
+      bytes: typeof b.bytes === 'number' ? b.bytes : 0,
+      sha256: typeof b.sha256 === 'string' ? b.sha256 : '',
+      source,
+      pending: b.pending === true,
+    });
+  }
+  return out;
 }
 
 export interface AgentCall {
@@ -234,6 +273,7 @@ export function parseDrafted(body: unknown): DraftedAction[] {
       actor: String(a.actor ?? ''),
       dialCapability: typeof a.dialCapability === 'string' ? a.dialCapability : null,
       actionTool: String(a.actionTool ?? ''),
+      agentReason: typeof a.agentReason === 'string' && a.agentReason.trim() !== '' ? a.agentReason : null,
       payload: record(a.payload),
       payloadLabels: Object.fromEntries(
         Object.entries(record(a.payloadLabels)).filter((pair): pair is [string, string] => typeof pair[1] === 'string'),
@@ -243,6 +283,8 @@ export function parseDrafted(body: unknown): DraftedAction[] {
       rejectReason: typeof a.rejectReason === 'string' ? a.rejectReason : null,
       figures: parseFigures(a.figures),
       changedSinceProposal: a.changedSinceProposal === true,
+      ...(Array.isArray(a.belege) && a.belege.length > 0 ? { belege: parseBelege(a.belege) } : {}),
+      ...(Array.isArray(a.receiptHolders) && a.receiptHolders.length > 0 ? { receiptHolders: parseReceiptHolders(a.receiptHolders) } : {}),
     };
   });
 }
@@ -294,6 +336,7 @@ export const DECIDED_MESSAGE = {
   approved: 'agent.card.executed',
   rejected: 'agent.card.rejected',
   stale: 'agent.card.stale',
+  holdersChanged: 'agent.card.holdersChanged',
 } as const;
 
 export function parseTrust(body: unknown): TrustSummary | null {

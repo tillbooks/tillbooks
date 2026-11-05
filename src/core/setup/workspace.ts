@@ -349,12 +349,10 @@ function setArchived(
     });
   };
   if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {
-    return ctx.store.rememberIdempotent(
-      ctx.workspaceId,
-      input.idempotencyKey,
-      archived ? 'archive_workspace' : 'unarchive_workspace',
-      run,
-    );
+    // N01 critic finding 5: ONE scope, the verb's own. Picking it from `archived` let the same key mean
+    // two acts (archive, then unarchive under the key that archived); the registry's argument record
+    // refuses that now, and the memo no longer offers a second namespace for it.
+    return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey, 'archive_workspace', run);
   }
   return run();
 }

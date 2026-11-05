@@ -131,6 +131,40 @@
         "download": "You can see the filing but you are not allowed to download its contents.",
         "link": "You are missing a right needed to attach files to this record."
       }
+    },
+    "bookAgain": {
+      "title": "Receipt already booked",
+      "lead": "This receipt is already booked on:",
+      "question": "Booking it a second time needs a reason. It is kept in the change log.",
+      "reasonLabel": "Reason",
+      "confirm": "Book anyway",
+      "working": "Booking …",
+      "cancel": "Cancel",
+      "close": "Close",
+      "notice": "This receipt is already booked ({list}).",
+      "kind": {
+        "journal_entry": "entry",
+        "vendor_bill": "vendor bill",
+        "expense_claim": "expense claim",
+        "bank_txn": "bank line",
+        "payment": "payment",
+        "document": "invoice",
+        "drafted_action": "another proposal, waiting",
+        "other": "another record"
+      },
+      "error": {
+        "reason_required": "Enter a reason.",
+        "receipt_already_booked": "A receipt may be booked only once here (Receipts setting).",
+        "holders_changed": "The receipt was booked elsewhere in the meantime. Check the proposal again.",
+        "human_only": "Only a person can confirm a second booking.",
+        "receipt_replace_needs_reason": "This file is the receipt of a booking: replacing it needs a reason."
+      },
+      "replace": {
+        "title": "Replace a booked receipt",
+        "lead": "This file already evidences:",
+        "question": "The new version becomes the receipt of this booking; the old one stays its evidence and cannot be booked elsewhere. Give the reason, it is kept in the change log.",
+        "confirm": "Replace anyway"
+      }
     }
   },
   "sign": {

@@ -155,6 +155,8 @@ export interface DetailsPanelProps {
   onSaveRule: (payload: RulePayload) => Promise<Err | null>;
   /** The rule's name: the rules sheet opens on that rule. */
   onOpenRule: (standardId: string) => void;
+  /** N03: "Als Regel speichern" on a line booked to accounts: the rules sheet opens a rule prefilled from it. */
+  onSaveAsRule?: () => void;
   /** Another rule of the payer, picked from the switcher. */
   onPickRule: (standardId: string) => void;
   /** "Anders buchen": the whole "Worauf buchen?" list. */
@@ -1054,6 +1056,28 @@ function DecidedPanel(props: DetailsPanelProps) {
   const entryId = decision?.entryId ?? null;
   const satz = entry !== null && entry.lines.length > 0 && line.state !== 'ignored' ? satzOf(t, lookups, entry.lines, line.currency) : null;
   const accountsBooking = decision?.targetKind !== 'existing_entry' && decision?.targetKind !== 'open_item' && decision?.targetKind !== 'payment_batch';
+  // N03 (D183): a line booked to accounts saves its booking as a rule ("Als Regel speichern"), unless a live
+  // rule already booked it: through its `rule` target, or as that rule proposed it, unchanged.
+  const byRuleId =
+    line.state !== 'booked' || decision === null || decision === undefined
+      ? null
+      : (decision.ruleId ?? (decision.ruleChanged === false ? (decision.proposedRuleId ?? null) : null));
+  const byRule = byRuleId === null ? undefined : lookups.standardById.get(byRuleId);
+  const canSaveRule = line.state === 'booked' && (decision?.targetKind === 'accounts' || decision?.targetKind === 'legacy') && caps.post && props.onSaveAsRule !== undefined;
+  const saveRule =
+    byRule !== undefined ? (
+      <p className="bank-panel__line bank-panel__by-rule">
+        <button type="button" className="link-inline" onClick={() => props.onOpenRule(byRule.id)}>
+          {t('bankInbox.rules.saveFromBooked.already', { name: ruleName(t, byRule) })}
+        </button>
+      </p>
+    ) : canSaveRule ? (
+      <p className="bank-panel__line">
+        <button type="button" className="btn btn--ghost btn--sm bank-panel__save-rule" disabled={busy} onClick={props.onSaveAsRule}>
+          {t('bankInbox.rules.saveFromBooked.action')}
+        </button>
+      </p>
+    ) : null;
 
   return (
     <DetailSlots
@@ -1082,6 +1106,7 @@ function DecidedPanel(props: DetailsPanelProps) {
             <span className="bank-panel__satz">{satz.short}</span>
           ))}
       </p>
+      {saveRule}
       {decision?.note !== null && decision?.note !== undefined && <p className="bank-panel__line">{t('bankInbox.decided.note', { note: decision.note })}</p>}
       {decision?.differenceMinor !== null && decision?.differenceMinor !== undefined && decision.differenceMinor !== 0 && (
         <p className="bank-panel__line bank-panel__warn">{t('bankInbox.decided.difference', { amount: formatMoney(Math.abs(decision.differenceMinor), line.currency) })}</p>

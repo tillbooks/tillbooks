@@ -20,6 +20,8 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Err, Result } from '../result.js';
 import { afterBelegnummerSettingChange, refuseBelegnummerSetting } from '../ledger/entryNumber.js';
+import { isGovernedSeat } from '../access/capability.js';
+import { briefSectionsProblem } from '../hausbuch/sections.js';
 import {
   SETTINGS,
   settingDef,
@@ -42,6 +44,8 @@ export type SettingView = {
   area: { id: string; label: LocalisedText };
   label: LocalisedText;
   description: LocalisedText;
+  /** N02/N04 (D183): only a person may change it; a governed seat is refused `human_only`. */
+  humanOnly: boolean;
   updatedAt: string | null;
   updatedBy: string | null;
   /**
@@ -114,6 +118,7 @@ function viewOf(ctx: WorkspaceContext, def: SettingDef): SettingView {
     area: def.area,
     label: def.label,
     description: def.description,
+    humanOnly: def.humanOnly === true,
     updatedAt: row?.updated_at ?? null,
     updatedBy: row?.updated_by ?? null,
     stale: row !== undefined && stored === undefined,
@@ -169,12 +174,42 @@ const BELEGNUMMER_RULE: SettingRule = {
   afterChange: (ctx) => afterBelegnummerSettingChange(ctx),
 };
 
+/**
+ * N00: the brief's sections are a comma-separated list of closed names (`core/hausbuch/sections.ts`); an
+ * empty list, an unknown name or a name given twice is refused like any value its schema does not fit.
+ */
+const BRIEF_SECTIONS_RULE: SettingRule = {
+  refuse: (_ctx, key, value) => {
+    const problem = briefSectionsProblem(value);
+    return problem === null ? null : err('invalid_setting_value', { key, value, ...problem });
+  },
+  afterChange: () => undefined,
+};
+
 const SETTING_RULES: Readonly<Record<string, SettingRule>> = {
   'ledger.belegnummer_mode': BELEGNUMMER_RULE,
   'ledger.belegnummer_start': BELEGNUMMER_RULE,
   'ledger.belegnummer_prefix': BELEGNUMMER_RULE,
   'ledger.belegnummer_split_voucher': BELEGNUMMER_RULE,
+  'hausbuch.brief_sections': BRIEF_SECTIONS_RULE,
 };
+
+/**
+ * N02/N04 (D183): a `humanOnly` setting refuses a governed seat (`isGovernedSeat`: the local agent, a
+ * served agent member, a plugin call) with `human_only`, whatever the dial says. The transport seam runs
+ * this through the verbs' `prevalidate` BEFORE it drafts, so the agent cannot even queue a proposal; the
+ * approval replay runs as the person, who passes. Null when the key is not human-only or the actor is a
+ * person.
+ */
+export function refuseHumanOnly(ctx: WorkspaceContext, key: unknown): Err | null {
+  const def = settingDef(key);
+  if (def === undefined || def.humanOnly !== true) return null;
+  if (!isGovernedSeat(ctx.store, ctx.actor)) return null;
+  return err('human_only', {
+    key: def.key,
+    reason: 'only a person may change this setting; an agent can neither change nor propose it',
+  }) as Err;
+}
 
 /** The shared validation of a change; answers the def and the trimmed reason, or the refusal. */
 function validateChange(
@@ -187,6 +222,8 @@ function validateChange(
   }
   const def = settingDef(input.key);
   if (def === undefined) return { refusal: err('unknown_setting', { key: input.key }) };
+  const humanOnly = refuseHumanOnly(ctx, def.key);
+  if (humanOnly !== null) return { refusal: humanOnly };
   // The registry's own gate, in the engine too: an embedder calling the verb directly (not through
   // the registry, whose A24 map asks the same capability) still needs the owning capability.
   const capable = ctx.capabilities.assert(def.owningCapability);

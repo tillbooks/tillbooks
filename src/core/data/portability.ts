@@ -114,6 +114,7 @@ const IDENTITY_TABLES: ReadonlySet<string> = new Set(['user', 'workspace_member'
  *
  *  - `idempotency` rows are keyed to the source workspace and replaying them in a restored workspace
  *    would return stale results carrying old ids. A restored workspace starts with a clean ledger.
+ *    `idempotency_args` (N01) is the same record's argument half and goes with it.
  *  - `backups` is the artifact REGISTRY, and every row's `storage_ref` is a machine-local directory
  *    path to the SOURCE workspace's artifacts. Copying those rows into a restored (or re-backed-up)
  *    workspace would make its history list ANOTHER workspace's files, and a later `deleteBackup` on
@@ -121,7 +122,7 @@ const IDENTITY_TABLES: ReadonlySet<string> = new Set(['user', 'workspace_member'
  *    backups is not ledger data; the honest state for a fresh workspace is an empty backup history, so
  *    the registry is excluded rather than carried across with dangling, dangerous references.
  */
-const OPERATIONAL_TABLES: ReadonlySet<string> = new Set(['idempotency', 'backups']);
+const OPERATIONAL_TABLES: ReadonlySet<string> = new Set(['idempotency', 'idempotency_args', 'backups']);
 
 /**
  * A35/D103 (critic F7, 18.08.2026): `agent_dial` is EXCLUDED FROM A RESTORE, fail-closed. A dial
@@ -1278,8 +1279,20 @@ function mintRestoredId(ids: IdGen, table: string, sourceId: string, srcWsId: st
   if (tokens.length > 1 && tokens.includes(srcWsId)) {
     return sourceId.replace(/[A-Za-z0-9_-]+/g, (t) => (t === srcWsId ? newWsId : t));
   }
-  return ids.next(table);
+  return ids.next(RESTORE_ID_PREFIX[table] ?? table);
 }
+
+/**
+ * The tables whose restored ids carry ANOTHER table's prefix, each with its reason. A restored id is
+ * otherwise minted under its own table's name.
+ *
+ * `stored_file_pending` (N02, critic round 2): a pending file's id BECOMES its `stored_file` id when its
+ * Vorschlag is approved (`releasePendingFile`), so it is minted as a stored-file id and reads as one for
+ * the life of the file.
+ */
+const RESTORE_ID_PREFIX: Readonly<Record<string, string>> = {
+  stored_file_pending: 'stored_file',
+};
 
 /**
  * Copy the snapshot's workspace fields onto the freshly-minted workspace row, keeping id + chosen name.
@@ -1383,6 +1396,12 @@ function loadTable(
  * lands revoked at the restore time, its hash replaced by a marker no token can hash to (a SHA-256 hex
  * digest never contains a colon); the original's link is untouched and the copy keeps the grant's
  * history (the revDSG access trail).
+ *
+ * `file_drop_link` (N02, critic F3): `token_hash` is GLOBAL unique too (the drop page resolves a link by
+ * the token alone). A drop link is a one-time invitation of a day or so, never worth carrying into
+ * another set of books, so EVERY restored link lands used at the restore time with its hash replaced by
+ * the same colon marker: beside the original the copy no longer collides, and in an empty book no old
+ * link opens the restored books. The receipt a used link brought stays where it was linked.
  */
 interface RestoreRowContext {
   /** The restore's own time (the clock of the restoring runtime). */
@@ -1407,6 +1426,13 @@ const RESTORE_ROW_TRANSFORMS: Readonly<Record<string, (db: Database.Database, ro
     if (taken === undefined) return row;
     return { ...row, token_hash: `restored-copy:${String(row['id'])}`, revoked_at: row['revoked_at'] ?? ctx.now, updated_at: ctx.now };
   },
+  file_drop_link: (_db, row, ctx) => ({
+    ...row,
+    token_hash: `restored-copy:${String(row['id'])}`,
+    used_at: row['used_at'] ?? ctx.now,
+    used_by: row['used_by'] ?? 'restore',
+    memo_scrubbed: 1,
+  }),
   ebics_connection: (db, input) => {
     // D142: a restored book never inherits the lease of a sync that was running when it was saved.
     const row: Row = 'sync_started_at' in input ? { ...input, sync_started_at: null, sync_lease_owner: null } : input;

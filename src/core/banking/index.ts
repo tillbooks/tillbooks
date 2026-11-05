@@ -188,6 +188,11 @@ export type {
   SetBankStandardInput,
   SetBankStandardOk,
 } from './bankStandards.js';
+// N03 (D183), Buchungsregeln that learn: the evidence (provenance, stats) and the backtest and miner.
+export { computeRuleProvenance, ruleStats } from './ruleStats.js';
+export type { BankRuleStats, BankRuleStatsOk } from './ruleStats.js';
+export { BACKTEST_LINES_MAX, MINED_RULE_KEY_PREFIX, MINER_ACTOR, backtestRule, isMinedRuleVorschlag, mineRules, minedProposalFacts } from './ruleMiner.js';
+export type { BacktestInput, BacktestLine, BacktestOk, MinedGroup, MinedProposalFacts, MineRulesOk } from './ruleMiner.js';
 export {
   BANK_INBOX_MODEL_CONSUMER,
   BANK_INBOX_MODEL_LANGUAGES,

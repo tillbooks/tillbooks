@@ -237,6 +237,34 @@ test('the accept token is single-use: reusing it after acceptance is refused', (
   assert.equal(acceptQuote(ctx, { token, idempotencyKey: 'a2' }).error, 'invalid_token');
 });
 
+test('a bogus token with a key someone spent gets the same refusal as without a key; the holder\'s retry replays', () => {
+  const { ctx, contactId } = setup();
+  const id = draft(ctx, contactId);
+  const sent = sendQuote(ctx, { quoteId: id, idempotencyKey: 's' });
+  const accepted = acceptQuote(ctx, { token: sent.acceptToken, idempotencyKey: 'tk-1' });
+  assert.equal(accepted.ok, true, JSON.stringify(accepted));
+  // The token check comes before any replay: the stored acceptance is never handed to a bogus token.
+  const withKey = acceptQuote(ctx, { token: 'kein-gueltiges-token', idempotencyKey: 'tk-1' });
+  const withoutKey = acceptQuote(ctx, { token: 'kein-gueltiges-token' });
+  assert.equal(withKey.ok, false, `a bogus token got the stored acceptance: ${JSON.stringify(withKey)}`);
+  assert.deepEqual(withKey, withoutKey);
+  assert.equal(withKey.error, 'invalid_token');
+  // The real holder's retry (the token is single-use and already spent) still replays its acceptance.
+  assert.deepEqual(acceptQuote(ctx, { token: sent.acceptToken, idempotencyKey: 'tk-1' }), accepted);
+});
+
+test('quotes_decline on the token path: a bogus token with a spent key gets the token refusal, never the replay', () => {
+  const { ctx, contactId } = setup();
+  const id = draft(ctx, contactId);
+  const sent = sendQuote(ctx, { quoteId: id, idempotencyKey: 's' });
+  const declined = declineQuote(ctx, { token: sent.acceptToken, declineReason: 'Zu teuer', idempotencyKey: 'td-1' });
+  assert.equal(declined.ok, true, JSON.stringify(declined));
+  const withKey = declineQuote(ctx, { token: 'kein-gueltiges-token', idempotencyKey: 'td-1' });
+  assert.deepEqual(withKey, declineQuote(ctx, { token: 'kein-gueltiges-token' }));
+  assert.equal(withKey.error, 'invalid_token');
+  assert.deepEqual(declineQuote(ctx, { token: sent.acceptToken, declineReason: 'Zu teuer', idempotencyKey: 'td-1' }), declined);
+});
+
 test('acceptance after valid_until is refused (OR Art. 3 binding window)', () => {
   const { store, deps, ctx, contactId } = setup();
   // A quote valid only through 2026-08-31, created and sent at the fixture clock (2026-07-16).

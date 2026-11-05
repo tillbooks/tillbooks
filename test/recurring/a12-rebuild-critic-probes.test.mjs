@@ -504,7 +504,9 @@ test('X9: the schedule idempotency key is enforced by the memo alone now, and it
     anchorDate: '2026-08-01',
     idempotencyKey: 'x9-same',
   });
-  const second = call(deps, 'create_recurring_schedule', {
+  // N01 US-N01.5: the same key with ANOTHER shape is refused (it used to replay the first schedule as
+  // its own answer); the identical call replays it.
+  const other = call(deps, 'create_recurring_schedule', {
     workspaceId,
     contactId,
     lines: [{ unitPriceMinor: 999999 }],
@@ -512,7 +514,16 @@ test('X9: the schedule idempotency key is enforced by the memo alone now, and it
     anchorDate: '2027-01-01',
     idempotencyKey: 'x9-same',
   });
+  const second = call(deps, 'create_recurring_schedule', {
+    workspaceId,
+    contactId,
+    lines: [{ unitPriceMinor: 100000 }],
+    interval: 'monthly',
+    anchorDate: '2026-08-01',
+    idempotencyKey: 'x9-same',
+  });
   assert.equal(first.ok, true);
+  assert.equal(other.error, 'idempotency_key_conflict', JSON.stringify(other));
   assert.equal(second.ok, true);
   assert.equal(second.schedule.id, first.schedule.id, 'a repeated key minted a second schedule');
   assert.equal(second.schedule.interval, 'monthly', 'the replay returned the SECOND call shape');

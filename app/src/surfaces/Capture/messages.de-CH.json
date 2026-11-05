@@ -95,7 +95,9 @@
       "no_matching_tax_code": "Kein konfigurierter MWST-Code entspricht diesem Satz.",
       "needs_open_claim": "Vor dem Übernehmen eine Spesenabrechnung wählen oder erstellen.",
       "currency_conflict": "Betrag und Währung dieses Belegs widersprechen sich. Korrigiere den Betrag oder die Währung, bevor du übernimmst.",
-      "qr_payload_invalid": "Dieser QR-Code hält die Regeln der QR-Rechnung nicht ein, darum wurde kein Feld ausgefüllt:"
+      "qr_payload_invalid": "Dieser QR-Code hält die Regeln der QR-Rechnung nicht ein, darum wurde kein Feld ausgefüllt:",
+      "receipt_already_booked": "Dieser Beleg ist schon gebucht. Ein zweites Übernehmen würde ihn doppelt buchen.",
+      "document_already_linked": "Dieser Beleg hängt schon an einem anderen Eintrag und wird dort nicht weggenommen."
     },
     "discarded": {
       "title": "Korrektur zur vorherigen Rechnung verworfen",
@@ -169,7 +171,8 @@
         "notification": "Die Rechnung ist eine Mitteilung: Der Betrag wird per Lastschrift oder eBill bezahlt. Gib ihn von Hand ein.",
         "country_user_assigned": "XK (Kosovo) ist kein Code nach ISO 3166-1, und SIX führt ihn nicht auf. Prüf die Adresse, bevor du übernimmst."
       }
-    }
+    },
+    "alreadyBooked": "Dieser Beleg ist schon gebucht. Er wurde nicht nochmals in die Liste aufgenommen."
   },
   "help": {
     "Capture": {
@@ -178,5 +181,20 @@
       "concepts": [],
       "docsPath": "swiss/qr-bill"
     }
+  },
+  "belegeingang": {
+    "folder": "Ordner Belegeingang: {folder}",
+    "lastScan": "zuletzt gelesen {at}",
+    "never": "noch nicht gelesen",
+    "change": "Ordner ändern",
+    "state": {
+      "off": "Beobachten ist ausgeschaltet.",
+      "folder_missing": "Ordner nicht gefunden.",
+      "folder_invalid": "Ordner ungültig.",
+      "folder_shared": "Ein anderes Mandat nutzt denselben Ordner. Er wird nicht gelesen.",
+      "no_actor": "Niemand mit dem Recht, Belege abzulegen, ist eingetragen.",
+      "not_local": "Wird nur gelesen, wenn TILL auf diesem Computer läuft."
+    },
+    "errors": "{count} Dateien konnten nicht gelesen werden: {files}"
   }
 }

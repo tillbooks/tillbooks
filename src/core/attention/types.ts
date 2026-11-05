@@ -196,6 +196,60 @@ export interface AttentionItem {
   readonly posts?: boolean;
   /** D178: a Vorschlag the engine voided as stale, kept listed while the bank line it names is open. */
   readonly stale?: boolean;
+  /**
+   * N03 (D183), a mined Buchungsregel's Vorschlag only: who it is for, how often it was booked so, its
+   * backtest, and the newest bookings it was found in. Computed when read (`minedProposalFacts`).
+   */
+  readonly ruleProposal?: AttentionRuleProposal;
+  /** N04 (D183): the offer "künftig automatisch" of a proven Buchungsregel (its Vorschlag row). */
+  readonly autobookOffer?: AttentionAutobookOffer;
+  /** N04 (critic F5): a Dauerbuchung's Vorschlag (drafted by `system`) names who set the schedule. */
+  readonly scheduledBy?: { readonly actor: string; readonly agent: boolean };
+  /** N04 (D183): one day's automatic bookings (the digest card, queue `autopilot`). */
+  readonly autobookDigest?: AttentionAutobookDigest;
+}
+
+/** N04: the words and figures of an autobook offer (N04 §2 US-N04.1). */
+export interface AttentionAutobookOffer {
+  readonly standardId: string;
+  readonly counterparty: string;
+  readonly label: string | null;
+  readonly cleanUses: number;
+  readonly ceilingMinor: number;
+  readonly currency: string;
+}
+
+/** N04: one digest day, every line booked automatically on it and every line the rule left to a person. */
+export interface AttentionAutobookDigest {
+  readonly day: string;
+  readonly lines: readonly {
+    readonly bankTxnId: string;
+    readonly standardId: string;
+    readonly counterparty: string;
+    readonly ruleLabel: string | null;
+    readonly amountMinor: number;
+    readonly currency: string;
+    readonly lineDate: string;
+    /** Booked lines: the entry and whether it still stands; not-booked lines: null and the reason. */
+    readonly entryId: string | null;
+    readonly stands: boolean;
+    readonly reason: string | null;
+    /** Whether the rule's grant is still live ("Automatik aus" applies). */
+    readonly grantLive: boolean;
+  }[];
+}
+
+/** N03: the words and figures of a mined rule's Vorschlag (N03 §6). */
+export interface AttentionRuleProposal {
+  readonly counterparty: string;
+  readonly repeats: number;
+  /** The backtest: since when (`YYYY-MM-DD`), booked hits, of them booked exactly so. */
+  readonly since: string;
+  readonly hits: number;
+  readonly identical: number;
+  /** The line the rule is saved from (the editor's "Anpassen" opens it). */
+  readonly bankTxnId: string;
+  readonly evidence: readonly { readonly bankTxnId: string; readonly date: string; readonly amountMinor: number; readonly currency: string }[];
 }
 
 /** How an actor id is named on screen: the words for a seat, or a member's display name. */

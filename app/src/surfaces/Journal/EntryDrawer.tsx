@@ -48,6 +48,7 @@ import { Tooltip } from '../../components/Tooltip';
 import { Provenance, type ProvenanceOrigin } from '../../components/Provenance';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { Modal } from '../../components/Modal';
+import { useBookAgain } from '../../components/BookAgain';
 import type { Account, CostCenter, DrawerMode, EntryLine, JournalEntry, TaxCode } from './types';
 import { newIdempotencyKey, fxDisclosureOf } from './money';
 import { LinkedFiles } from '../Files/LinkedFiles';
@@ -314,6 +315,8 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten, initia
   belegRef.current = beleg;
   const [belegErr, setBelegErr] = useState<Err | null>(null);
   const [linkFailure, setLinkFailure] = useState<LinkFailure | null>(null);
+  // N02 R1: a Beleg already booked elsewhere is linked only with the person's reason.
+  const { ask: askBookAgain, dialog: bookAgainDialog } = useBookAgain();
 
   const [writeErr, setWriteErr] = useState<Err | null>(null);
   const [denied, setDenied] = useState(false);
@@ -759,8 +762,11 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten, initia
     [upload],
   );
 
-  /** Link the filed Beleg to the entry the write just answered with. True when it stands linked. */
-  async function linkBeleg(target: string, fileId: string, linkKey: string): Promise<Err | null> {
+  /**
+   * Link the filed Beleg to the entry the write just answered with. Null when it stands linked. N02 R1:
+   * `confirmation` is the person's reason for booking a receipt that is already booked elsewhere.
+   */
+  async function linkBeleg(target: string, fileId: string, linkKey: string, confirmation: Record<string, unknown> = {}): Promise<Err | null> {
     if (workspaceId === null) return null;
     const { body } = await client.call('files_link', {
       workspaceId,
@@ -768,6 +774,7 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten, initia
       entityKind: 'journal_entry',
       entityId: target,
       idempotencyKey: linkKey,
+      ...confirmation,
     });
     return isErr(body) ? body : null;
   }
@@ -788,8 +795,10 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten, initia
       if (failed !== null) {
         // The write STANDS. The drawer stays open on the banner with a retry, and the list learns of the
         // entry now: nothing is lost and nothing is written twice.
-        setLinkFailure({ entryId: writtenId, fileId: current.fileId, linkKey: current.linkKey, error: failed, wrote });
+        const failure = { entryId: writtenId, fileId: current.fileId, linkKey: current.linkKey, error: failed, wrote };
+        setLinkFailure(failure);
         onWritten(writtenId);
+        askReason(failure);
         return;
       }
     }
@@ -799,6 +808,7 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten, initia
 
   async function retryLink() {
     if (linkFailure === null) return;
+    if (askReason(linkFailure)) return;
     setBusy(true);
     const failed = await linkBeleg(linkFailure.entryId, linkFailure.fileId, linkFailure.linkKey);
     setBusy(false);
@@ -807,6 +817,20 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten, initia
       return;
     }
     onClose();
+  }
+
+  /**
+   * N02 R1: the Beleg is already booked elsewhere. The entry stands; the person gives the reason and the
+   * same link is sent again with it. Cancelled, the banner keeps the retry. True when it asked.
+   */
+  function askReason(failure: LinkFailure): boolean {
+    return askBookAgain(failure.error, async (confirmation) => {
+      const again = await linkBeleg(failure.entryId, failure.fileId, failure.linkKey, { ...confirmation });
+      if (again !== null) return again;
+      setLinkFailure(null);
+      onClose();
+      return null;
+    });
   }
 
   /** The key for this exact content: the one already minted for it, or a fresh one (critic C7, K3). */
@@ -1557,6 +1581,7 @@ export function EntryDrawer({ mode, entryId, canPost, onClose, onWritten, initia
 
   const linkFailureBody = linkFailure !== null && (
     <div className="journal-drawer-body-spacing">
+      {bookAgainDialog}
       <ErrorBanner
         error={linkFailure.error}
         message={t(linkFailure.wrote === 'post' ? 'entry.beleg.linkFailedPosted' : 'entry.beleg.linkFailedDraft', {

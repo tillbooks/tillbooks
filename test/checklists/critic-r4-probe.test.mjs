@@ -135,7 +135,7 @@ test('R4-1: vat_mark_filed still writes the filing seal through its internal pat
   assert.equal(w.call('unlock_period', { period: '2026-02', idempotencyKey: key('u') }).error, 'hard_lock_sealed');
 });
 
-test('R4-2 (holds): a replayed seal key answers the same with and without runId', () => {
+test('R4-2 (holds): a replayed seal key answers the same; with another runId it refuses rather than answering differently', () => {
   const w = world();
   const k = key('seal');
   const first = w.call('close_year', { year: '2026', idempotencyKey: k });
@@ -145,7 +145,10 @@ test('R4-2 (holds): a replayed seal key answers the same with and without runId'
   // A sealed year starts no run.
   assert.equal(run.error, 'year_already_closed', JSON.stringify(run));
   assert.deepEqual(w.call('close_year', { year: '2026', idempotencyKey: k }), first);
-  assert.deepEqual(w.call('close_year', { year: '2026', runId: 'chkrun_whatever', idempotencyKey: k }), first);
+  // N01 US-N01.5: `runId` is an argument, so the seal key with a runId it was not spent with is another
+  // call under the same key and refuses `idempotency_key_conflict` (writing nothing), never a state
+  // guard's answer.
+  assert.equal(w.call('close_year', { year: '2026', runId: 'chkrun_whatever', idempotencyKey: k }).error, 'idempotency_key_conflict');
   assert.equal(w.call('close_year', { year: '2026', idempotencyKey: key('other') }).error, 'year_already_closed');
   assert.equal(closes(w), posted, 'a replay or a re-close posted again');
 });

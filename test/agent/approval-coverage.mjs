@@ -42,10 +42,20 @@ export const TAGGED = Object.freeze(
 /**
  * The only reasons a TAGGED write may stay off the dial, each a statement about the code. D161 records
  * both as human-only. (`portal_quote_accept`, once a third, is governed: the seam resolves its token.)
+ *
+ * N01 (D183) adds the batch approval (human-only, the same reason) and the DISPATCHERS: a batch or
+ * `call_tool` is never drafted as one act because every item it runs IS the single verb, dispatched
+ * through the transport seam under the caller's seat, where the dial governs it (under ask each item is
+ * its own Vorschlag). The claim stays true because the item is governed; that is measured on rows in
+ * `test/api/n01-agent-ergonomics.test.mjs`.
  */
 export const TAGGED_EXCLUSIONS = Object.freeze({
   approve_drafted_action: /^human-only: approveDraftedAction refuses every governed seat/,
   set_agent_dial: /^human-only: setAgentDial refuses every governed seat/,
+  approve_drafted_actions: /^human-only: approveDraftedActions refuses every governed seat/,
+  book_bank_lines: /^dispatch: every item is one book_bank_line run through the transport seam/,
+  post_entries: /^dispatch: every item is one post_entry run through the transport seam/,
+  call_tool: /^dispatch: the named verb runs through the transport seam/,
 });
 
 /**

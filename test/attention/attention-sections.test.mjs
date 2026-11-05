@@ -256,6 +256,7 @@ test('every registered queue declares a kind; the registration guard refuses one
     bank_fetch_failed: ['bank', 'do'],
     bank_statement_gap: ['bank', 'do'],
     bank_lines_waiting: ['bank', 'do'],
+    autopilot: ['bank', 'note'],
   });
   assert.deepEqual(ATTENTION_PROVIDERS.filter((p) => p.lead === true).map((p) => p.queueId), ['bank_lines_waiting']);
 });

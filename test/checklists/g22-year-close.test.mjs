@@ -369,9 +369,10 @@ test('the FY 2026 walk: every kind exercised through the real verbs, the seal he
   assert.ok(sealed.closingEntryId);
   assert.equal(typeof sealed.result, 'number');
   assert.equal(sealed.baseCurrency, 'CHF');
-  // A replay of the key returns the stored answer, run or no run, and moves nothing.
+  // A replay of the key returns the stored answer and moves nothing. N01 US-N01.5: the key was spent
+  // WITH the runId, so the same key without it is another call and refuses (nothing written).
   assert.deepEqual(w.call('close_year', { year: '2026', runId: run.runId, idempotencyKey: sealKey }), sealed);
-  assert.deepEqual(w.call('close_year', { year: '2026', idempotencyKey: sealKey }), sealed);
+  refuse(w.call('close_year', { year: '2026', idempotencyKey: sealKey }), 'idempotency_key_conflict', 'the seal key without its runId');
   refuse(w.call('close_year', { year: '2026', runId: run.runId, idempotencyKey: key('twice') }), 'year_already_closed', 'a second seal');
   v = get(w, run.runId);
   assert.equal(item(v, 'year_sealed').status, 'done');

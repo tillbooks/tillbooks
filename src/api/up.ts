@@ -23,6 +23,7 @@
  */
 
 import { createServer } from 'node:http';
+import { homedir } from 'node:os';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -35,6 +36,7 @@ import { resolveEbicsRuntime, type HostEbicsPorts } from './host-runtime.js';
 import { createBankActivationOffload, createBankSyncOffload, isSharableDbPath } from './bank-sync-offload.js';
 import { reclaimDeadSyncLeases } from '../core/banking/ebics/index.js';
 import type { ApiDeps } from './registry.js';
+import type { LocalFileGrant } from '../core/files/index.js';
 import { createLocalHttpRouter, pathnameOf } from './local-http.js';
 import { resolveServedMode, type ServedModeConfig } from './served-mode.js';
 import { rejectNonLocal } from './local-guard.js';
@@ -219,6 +221,16 @@ export function openStudioLink(url: string, log: (line: string) => void = () => 
   }
 }
 
+/**
+ * N02 (D183, critic F6): the local-file grant `till up` hands its faces and its scheduler, or none. Only a
+ * LOCAL instance (not served) bound to LOOPBACK reads receipts by path: a served caller sits across a
+ * proxy, and a LAN bind (opted into with TILL_EXPOSE_LEDGER_UNAUTHENTICATED) is reachable by any peer.
+ */
+export function localFileGrantFor(opts: { served: boolean; host: string; home: string }): LocalFileGrant | undefined {
+  if (opts.served || !isLoopbackBindHost(opts.host)) return undefined;
+  return { home: opts.home };
+}
+
 export interface UpOptions {
   dbPath?: string;
   host?: string;
@@ -233,6 +245,8 @@ export interface UpOptions {
   allowNonLoopback?: boolean;
   /** M01: served-mode config. Defaults to `resolveServedMode()` (env, throws on misconfiguration). */
   servedMode?: ServedModeConfig;
+  /** N02: the home folder `~/` expands to for `sourcePath` and the Belegeingang. Defaults to `os.homedir()`; suites inject one. */
+  homeDir?: string;
   /**
    * D142: the ports module the sync worker builds its wire from, instead of the live-wire recipe. For
    * the suites (a slow synthetic bank behind the worker); production leaves it unset.
@@ -477,6 +491,12 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   // answer carries the key. Served mode keeps the key in memory: there the proxy-attested subject
   // seats the person and the key seats nobody, so it has no business on disk, and no door is mounted.
   const local = !servedMode.enabled;
+  // N02 (D183): only a LOCAL `till up` may read a receipt by path and watch the Belegeingang folder: not
+  // served (a caller across a proxy), and bound to loopback only (critic F6: a LAN bind opted into with
+  // TILL_EXPOSE_LEDGER_UNAUTHENTICATED would let any peer read the roots). Otherwise the grant is absent
+  // and `sourcePath` refuses `source_path_local_only`.
+  const grant = localFileGrantFor({ served: !local, host, home: opts.homeDir ?? homedir() });
+  const fileDeps: ApiDeps = grant === undefined ? deps : { ...deps, localFiles: grant };
   const studioKeys = openStudioKeyStore(supportDir, { persist: local });
   // D166 layer 2: the paired browsers, whose session tokens seat the person like the key does.
   const studioDevices = openStudioDeviceRegistry(supportDir, {
@@ -488,7 +508,7 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   const openUrl = opts.openUrl ?? ((target: string) => openStudioLink(target, log));
   // The URL is known only once bound; the door reads it at call time.
   let boundUrl: string | null = null;
-  const router = createLocalHttpRouter(deps, {
+  const router = createLocalHttpRouter(fileDeps, {
     rest: true,
     servedMode,
     studioKey: studioSeat,
@@ -573,7 +593,7 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   setAdoptedBookUnavailable(unavailable);
 
   // No cadence runs against the stand-in in-memory book of an unavailable adopted one (D166 point 8).
-  const scheduler = createScheduler(deps, { intervalMs: opts.tickMs ?? resolveTickMs() });
+  const scheduler = createScheduler(fileDeps, { intervalMs: opts.tickMs ?? resolveTickMs() });
   if (unavailable === null) scheduler.start();
 
   // The link the person opens the Studio through: a ONE-TIME ticket, never the key (D166). The key

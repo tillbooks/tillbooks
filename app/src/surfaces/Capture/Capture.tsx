@@ -77,6 +77,7 @@ import { AccountCombobox, Combobox, type ComboboxOption } from '../../components
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { COMMIT_TARGET_CLASS, useCommitAck } from '../../lib/motion';
 import { detectSwissQrText } from './qrDetect';
+import { BelegeingangLine } from './BelegeingangLine';
 import './Capture.css';
 
 interface CaptureField {
@@ -500,7 +501,13 @@ export function Capture() {
           setNotice(refusalText(t, response.body, { own: 'capture.error' }));
           return;
         }
-        const body = response.body as unknown as { captureId: string; duplicate: boolean };
+        const body = response.body as unknown as { captureId: string | null; duplicate: boolean; booked?: boolean };
+        // N02 (critic round 2): a receipt a booking already holds is not queued again.
+        if (body.booked === true || body.captureId === null) {
+          setNotice(t('capture.alreadyBooked'));
+          await load();
+          return;
+        }
         if (body.duplicate) setNotice(t('capture.duplicate'));
         // A31 §0a item 12: an image whose QR code the browser can read pre-fills the paste field. A
         // pre-fill only: the person reads it in, so nothing machine-found is written unasked.
@@ -658,6 +665,9 @@ export function Capture() {
         help={<SurfaceHelp surface="Capture" />}
         actions={dropAction}
       />
+
+      {/* N02 (D183): where receipts saved into the watched folder come from, and what last happened. */}
+      {workspaceId !== null ? <BelegeingangLine workspaceId={workspaceId} /> : null}
 
       {notice !== null ? (
         <p className="capture__notice" role="status">

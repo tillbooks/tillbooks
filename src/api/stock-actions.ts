@@ -27,6 +27,7 @@ import {
   stocktakeCommit,
 } from '../core/stock/index.js';
 import type { ActionKind } from './actionKind.js';
+import { STOCK_REASONS } from '../core/stock/enums.js';
 
 export interface StockActionHelpers {
   ctxAction(
@@ -76,7 +77,8 @@ export function stockActions(h: StockActionHelpers): readonly ActionDef[] {
           locationId: STR,
           toLocationId: STR,
           qty: INT,
-          reason: STR,
+          // N01: a closed code, so never free text in the idempotency identity.
+          reason: { type: 'string', enum: [...STOCK_REASONS] },
           unitCostMinor: INT,
           movedAt: STR,
           refKind: STR,

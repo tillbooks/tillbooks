@@ -607,6 +607,9 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // bank facts (leg (c)); a stored rule never makes it.
   'set_bank_standard',
   'clear_bank_standard',
+  // N03 (critic, finding 5): the rule miner is the unattended subsystem's own job (the scheduler runs it once
+  // a Swiss day, leg (e)); a stored rule firing it would rescan the whole lookback at the rule's cadence.
+  'mine_rules',
   // (c)+(e) A39 critic round 1 (A39-3/A39-4), ONE rule for unattended money movement: a stored rule never
   // DECIDES A BANK FACT. `create_entry_for_txn` and `confirm_match` are, since A39, wrappers that decide a
   // bank line exactly as `book_bank_line` does (probe p7: a rule booked every imported line as revenue
@@ -658,6 +661,34 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // commit, so no stored rule can predate the denial and no data migration accompanies it.
   'prefs_set',
   'prefs_reset',
+  // (c) N02 (D183): a drop link is an invitation for a person to put a Beleg on a booking. A stored rule
+  // minting links unattended would hand out such invitations with nobody asking for one (spec §7).
+  'files_drop_link',
+  // (e) N00, the Hausbuch: the house notes are the rules agents run under, read first in every session's
+  // brief. A stored rule rewriting or archiving them administers the unattended subsystem itself, the
+  // D172 `settings_set` reasoning. Both directions are denied; the verbs land in this commit, so no stored
+  // rule can predate the denial and no data migration accompanies it.
+  'hausbuch_note_set',
+  'hausbuch_note_archive',
+  // (e) N01: the batch verbs and the dispatcher hold the governed dispatch (`governedRun`), the
+  // `run_due_automations` shape: a stored rule firing one would re-drive many acts, or any verb by name,
+  // from inside a firing. The batch approval is the oversight surface itself (`approve_drafted_action`).
+  // The verbs land in this commit, so no stored rule can predate the denial and no data migration
+  // accompanies it.
+  'book_bank_lines',
+  'post_entries',
+  'approve_drafted_actions',
+  'call_tool',
+  // (e) N04 (D183 §7): earned autonomy administers the unattended subsystem itself. A grant lets a rule book
+  // with no person looking, and a Dauerbuchung schedule books (or proposes) on its own; a stored rule
+  // granting, revoking or scheduling them would arm or disarm unattended booking with nobody deciding. The
+  // stop and "Gesehen" ride along: switching a person's autopilot off or closing their digest is theirs.
+  // The verbs land in this commit, so no stored rule can predate the denial.
+  'grant_rule_autobook',
+  'revoke_rule_autobook',
+  'set_vorlage_schedule',
+  'clear_vorlage_schedule',
+  'autopilot_mark_seen',
 ]);
 
 /**
@@ -772,6 +803,11 @@ export const NOT_AUTOMATABLE_LEGS: Readonly<Record<string, readonly DenylistLeg[
   // (e) A26/A35's own oversight surface; the prose delete also erases for good (a)
   set_agent_dial: ['e'],
   approve_drafted_action: ['e'],
+  // N01: the batches, the batch approval and the dispatcher re-drive governed acts (e).
+  approve_drafted_actions: ['e'],
+  book_bank_lines: ['e'],
+  post_entries: ['e'],
+  call_tool: ['e'],
   reject_drafted_action: ['e'],
   agent_ask: ['e'],
   agent_prose_delete: ['a', 'e'],
@@ -824,6 +860,7 @@ export const NOT_AUTOMATABLE_LEGS: Readonly<Record<string, readonly DenylistLeg[
   suggest_bank_lines: ['e'],
   set_bank_standard: ['c'],
   clear_bank_standard: ['c'],
+  mine_rules: ['e'],
   // (c)+(e) a stored rule never decides a bank fact or moves a bank ledger
   create_entry_for_txn: ['c', 'e'],
   confirm_match: ['c', 'e'],
@@ -844,6 +881,17 @@ export const NOT_AUTOMATABLE_LEGS: Readonly<Record<string, readonly DenylistLeg[
   // (d) D178 point 7: a person-scope preference reaches beyond the rule's tenant
   prefs_set: ['d'],
   prefs_reset: ['d'],
+  // (c) N02 (D183): a drop link invites a person to act on a booking; only a person or an agent asking now mints one
+  files_drop_link: ['c'],
+  // (e) N00: a rule never rewrites the house notes agents run under
+  hausbuch_note_set: ['e'],
+  hausbuch_note_archive: ['e'],
+  // (e) N04: the autopilot's grant, its stop, the Dauerbuchung schedules and the digest's "Gesehen"
+  grant_rule_autobook: ['e'],
+  revoke_rule_autobook: ['e'],
+  set_vorlage_schedule: ['e'],
+  clear_vorlage_schedule: ['e'],
+  autopilot_mark_seen: ['e'],
 };
 
 /** The denylisted verbs tagged with `leg`, in `NOT_AUTOMATABLE_LEGS` order. */

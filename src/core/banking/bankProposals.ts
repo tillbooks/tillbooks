@@ -46,7 +46,7 @@ import { matchIncomingByQrr } from './qrMatch.js';
 import { rankDebitCandidates, readCamtMatchConfig } from './debitRanking.js';
 import type { CamtMatchConfig } from './debitRanking.js';
 import { HAS_REVERSAL_SQL, bankLegsOf, claimedLegs, lineBookingDate, signedAmountOf } from './bankLines.js';
-import type { BankLineIgnoreReason, BankTxnDetailRow, BankTxnRow, BookBankLineTarget, ClaimedLegs } from './bankLines.js';
+import type { BankLineIgnoreReason, BankTxnDetailRow, BankTxnRow, BookBankLineTarget } from './bankLines.js';
 import { modelRungContext, modelRungProposal } from './bankModelRung.js';
 import type { ModelRungContext } from './bankModelRung.js';
 import { computedLegsOf, liveRulesIndex, restLegIndex, standardKeyOfLine, suggestionTargetUsable, VAT_ACCOUNT_NUMBERS } from './bankStandards.js';
@@ -195,9 +195,18 @@ interface HistoryHit {
   date: string;
 }
 
+/**
+ * N03: what the rungs ask of the claim set: whether ONE bank leg is held by a live decision. The inbox's
+ * context holds the whole set (`claimedLegs`, read once per page); the light rule-rung context looks each
+ * candidate leg up instead (`ruleRungContext`), so a booking never reads every claim of the book.
+ */
+export interface ClaimedLookup {
+  readonly lineIds: { has(lineId: string): boolean };
+}
+
 export interface ProposalContext {
   config: CamtMatchConfig;
-  claimed: ClaimedLegs;
+  claimed: ClaimedLookup;
   ownAccounts: OwnAccount[];
   history: Map<string, HistoryHit[]>;
   ledgerOf: Map<string, { ledgerAccountId: string; openingEntryId: string | null }>;
@@ -409,6 +418,99 @@ export function proposalContext(ctx: WorkspaceContext, opts: { withModel?: boole
     model: opts.withModel === false ? null : modelRungContext(ctx),
     lazy: { accounts, withJournal: opts.withJournal !== false },
   };
+}
+
+/**
+ * N03 (D183): the LIGHT context the booking's provenance reads (`ruleRungForLine`): the rungs a to c2 need
+ * the Bankkonten, the camt match config and the claim set, and nothing else. No history index (rung d), no
+ * model (d'), no journal (d2): the three whole-book reads a page of the inbox pays once and a booking must
+ * not pay every time. Claims are looked up per candidate leg through the partial unique index
+ * `bank_line_claim_one_active`, never read whole. NEVER hand it to `proposeForLine`: its empty history makes
+ * the lower rungs silent, which is right only for the question it answers (which rule, if any, proposes).
+ */
+export function ruleRungContext(ctx: WorkspaceContext): ProposalContext {
+  const accounts = ctx.store.db
+    .prepare('SELECT id, iban, ledger_account_id, opening_entry_id FROM bank_account WHERE workspace_id = ?')
+    .all(ctx.workspaceId) as { id: string; iban: string; ledger_account_id: string; opening_entry_id: string | null }[];
+  const ledgerOf = new Map<string, { ledgerAccountId: string; openingEntryId: string | null }>();
+  for (const a of accounts) ledgerOf.set(a.id, { ledgerAccountId: a.ledger_account_id, openingEntryId: a.opening_entry_id });
+  const held = ctx.store.db.prepare('SELECT 1 AS h FROM bank_line_claim WHERE workspace_id = ? AND journal_line_id = ? AND released_at IS NULL LIMIT 1');
+  return {
+    config: readCamtMatchConfig(ctx),
+    claimed: { lineIds: { has: (lineId: string) => held.get(ctx.workspaceId, lineId) !== undefined } },
+    ownAccounts: accounts.map((a) => ({ bankAccountId: a.id, ledgerAccountId: a.ledger_account_id, iban: normalizeIban(a.iban) })),
+    history: new Map(),
+    ledgerOf,
+    model: null,
+    lazy: { accounts, withJournal: false },
+  };
+}
+
+/** N03: what the rule rung says about a line, for the booking's provenance. */
+export interface RuleRungAnswer {
+  /** The proposal of rungs a to c2 (the first that spoke), or null when none did. */
+  proposal: BankLineProposal | null;
+  /** The ONE rule behind it (`reasonParams.standardId`), or null: an earlier rung, several rules, no rule. */
+  standardId: string | null;
+  /** The fee split `withFeeSplit` adds to that proposal under `bank.fx_mode` (its two legs), or null. */
+  feeSplitLegs: BankLineLeg[] | null;
+}
+
+/**
+ * N03 (D183): which Buchungsregel the line's proposal stands on, read through the ladder's OWN rungs a, b,
+ * c and c2 (`ruleLadder`, which `ladderForLine` runs first too, so the two can never disagree about which
+ * rung wins) over the light context. The lower rungs (history, journal, model) come after c2 and cannot
+ * change whether it speaks, so they are never run. One shortcut, which changes no answer: a line whose
+ * counterparty and direction hold no live bank rule cannot get a rule proposal, so nothing else is read.
+ * `pc` lets a caller that asks for many lines share one light context.
+ */
+export function ruleRungForLine(
+  ctx: WorkspaceContext,
+  row: BankTxnRow,
+  detail: BankTxnDetailRow | undefined,
+  pc?: ProposalContext,
+): RuleRungAnswer {
+  const silent: RuleRungAnswer = { proposal: null, standardId: null, feeSplitLegs: null };
+  const key = standardKeyOfLine(row, detail);
+  if (key === null) return silent;
+  const context = pc ?? ruleRungContext(ctx);
+  if ((standardsOf(ctx, context).get(key) ?? []).length === 0) return silent;
+  const proposal = ruleLadder(ctx, context, row, detail);
+  if (proposal === null) return silent;
+  const named = proposal.reasonParams['standardId'];
+  const standardId = typeof named === 'string' ? named : null;
+  const split = standardId === null ? undefined : withFeeSplit(ctx, context, row, proposal).feeSplit;
+  return { proposal, standardId, feeSplitLegs: split?.legs ?? null };
+}
+
+/**
+ * N03: does rung (c2) speak for this line at all (one rule, the several-rules picker, a "Nicht buchen" rule)?
+ * The miner's "no live rule matches them": a pattern a rule already covers is never offered again.
+ */
+export function ruleRungSpeaks(ctx: WorkspaceContext, pc: ProposalContext, row: BankTxnRow, detail: BankTxnDetailRow | undefined): boolean {
+  return standardProposal(ctx, pc, row, detail) !== null;
+}
+
+/**
+ * N04 (D183): rung (c2) ALONE for a line: which Buchungsregel would speak for it if no stronger rung did
+ * (one rule, the several-rules picker, a "Nicht buchen" rule), or null. The autobook step asks it first, so a
+ * line that is not the granted rule's at all is never recorded against it.
+ */
+export function ruleRungAlone(ctx: WorkspaceContext, pc: ProposalContext, row: BankTxnRow, detail: BankTxnDetailRow | undefined): BankLineProposal | null {
+  return standardProposal(ctx, pc, row, detail);
+}
+
+/**
+ * N04 (D183): the line's FULL-ladder proposal (every rung, the fee split, the duplicate cap) for a line
+ * rung (c2) speaks for. Over the LIGHT context (`ruleRungContext`: live per-leg claim lookups, so a line
+ * the same tick booked a moment ago is seen as claimed), which is exact here: when (c2) speaks the ladder
+ * ends at or above it, so the history, journal and model rungs that context leaves silent are never
+ * reached. Null when (c2) is silent for the line.
+ */
+export function fullLadderWhereRuleSpeaks(ctx: WorkspaceContext, row: BankTxnRow, detail: BankTxnDetailRow | undefined): BankLineProposal | null {
+  const pc = ruleRungContext(ctx);
+  if (standardProposal(ctx, pc, row, detail) === null) return null;
+  return proposeForLine(ctx, pc, row, detail);
 }
 
 /** The tokens a text is matched in: folded, split on everything that is not a letter or a digit. */
@@ -1136,12 +1238,12 @@ function duplicateCap(ctx: WorkspaceContext, pc: ProposalContext, row: BankTxnRo
   return p.certainty === 'sure' || p.certainty === 'learned' ? { ...p, certainty: 'check' } : p;
 }
 
-function ladderForLine(
-  ctx: WorkspaceContext,
-  pc: ProposalContext,
-  row: BankTxnRow,
-  detail: BankTxnDetailRow | undefined,
-): BankLineProposal {
+/**
+ * The UPPER ladder, rungs (a), (b), (c) and (c2), in order: the first that speaks. Every rung that can
+ * stand before a Buchungsregel, and the rule itself. `ladderForLine` runs it first; N03's provenance runs
+ * it alone (`ruleRungForLine`), so both read the one sequence.
+ */
+function ruleLadder(ctx: WorkspaceContext, pc: ProposalContext, row: BankTxnRow, detail: BankTxnDetailRow | undefined): BankLineProposal | null {
   const reversalCap = (p: BankLineProposal): BankLineProposal =>
     row.reversal_ind === 1 && p.certainty === 'sure' ? { ...p, certainty: 'check' } : p;
 
@@ -1154,6 +1256,17 @@ function ladderForLine(
   // (c2) D167/D175: the person's Buchungsregel, before any history.
   const c2 = standardProposal(ctx, pc, row, detail);
   if (c2 !== null) return reversalCap(c2);
+  return null;
+}
+
+function ladderForLine(
+  ctx: WorkspaceContext,
+  pc: ProposalContext,
+  row: BankTxnRow,
+  detail: BankTxnDetailRow | undefined,
+): BankLineProposal {
+  const upper = ruleLadder(ctx, pc, row, detail);
+  if (upper !== null) return upper;
 
   const key = counterpartyKeyOf(row, detail);
   const hits = key === null ? undefined : pc.history.get(key);

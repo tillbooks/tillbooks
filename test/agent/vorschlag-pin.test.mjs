@@ -76,7 +76,8 @@ function idFields(/** @type {any} */ action) {
 
 const GOVERNED_WITH_IDS = ACTIONS.filter((a) => a.kind === 'write' && dialCapabilitiesForVerb(a.name).length > 0 && idFields(a).length > 0);
 
-const TRACE_AND_QUEUE = new Set(['agent_session', 'agent_turn', 'agent_call', 'agent_action', 'idempotency']);
+// `idempotency_args` (N01) is the memo's argument half: bookkeeping exactly like `idempotency`.
+const TRACE_AND_QUEUE = new Set(['agent_session', 'agent_turn', 'agent_call', 'agent_action', 'idempotency', 'idempotency_args']);
 
 /** Every business table, row for row. */
 function businessDigest(/** @type {any} */ db) {

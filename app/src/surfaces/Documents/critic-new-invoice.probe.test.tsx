@@ -219,6 +219,28 @@ describe('PROBE 3 (F1): a type change between a lost create and its retry', () =
     await waitFor(() => expect(screen.getByLabelText('Typ')).toBeDisabled());
   });
 
+  it('N01 US-N01.5: the retry of a lost create repeats the FIRST arguments, and the edit made since reaches the draft as a patch', async () => {
+    // The engine refuses a spent key with other arguments, so the retry must not carry the edit.
+    const createSpy = engineCreate();
+    const updateSpy = vi.fn<CannedHandler>(() => ok({ document: { id: 'doc_1', status: 'draft' } }));
+    renderAt({ ...base(), create_document: createSpy, update_document: updateSpy }, '/documents/new');
+    await pickCustomer();
+    await userEvent.click(screen.getByLabelText('Einzelpreis 1'));
+    await userEvent.paste('150');
+    await userEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }));
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+
+    // The person edits the price while the first answer is lost, then saves again.
+    await userEvent.clear(screen.getByLabelText('Einzelpreis 1'));
+    await userEvent.paste('200');
+    await userEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }));
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(2));
+    expect(createSpy.mock.calls[1]?.[0]).toEqual(createSpy.mock.calls[0]?.[0]);
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledOnce());
+    const patch = (updateSpy.mock.calls[0]?.[0] as { patch: { lines: { unitPriceMinor?: number }[] } }).patch;
+    expect(patch.lines[0]?.unitPriceMinor).toBe(20000);
+  });
+
   it('a replay that hands back another type: the editor adopts the engine\'s type, says so, and issues nothing yet', async () => {
     // The editor says Offerte; the engine already holds an INVOICE under the act's key.
     const createSpy = engineCreate({ storedType: 'invoice' });

@@ -95,7 +95,9 @@
       "no_matching_tax_code": "No configured VAT code matches this rate.",
       "needs_open_claim": "Pick or create an expense claim before committing.",
       "currency_conflict": "The amount and the currency on this receipt disagree. Correct the amount or the currency before committing.",
-      "qr_payload_invalid": "This QR code does not follow the QR-bill rules, so no field was filled in:"
+      "qr_payload_invalid": "This QR code does not follow the QR-bill rules, so no field was filled in:",
+      "receipt_already_booked": "This receipt is already booked. Taking it over again would book it twice.",
+      "document_already_linked": "This receipt is already attached to another record and is not taken away from it."
     },
     "discarded": {
       "title": "Correction to the previous bill discarded",
@@ -169,7 +171,8 @@
         "notification": "The bill is a notice, not a payment slip: the amount is paid by direct debit or eBill. Enter it by hand.",
         "country_user_assigned": "XK (Kosovo) is not an ISO 3166-1 code; SIX does not list it. Check the address before you commit."
       }
-    }
+    },
+    "alreadyBooked": "This receipt is already booked. It was not added to the list again."
   },
   "help": {
     "Capture": {
@@ -178,5 +181,20 @@
       "concepts": [],
       "docsPath": "swiss/qr-bill"
     }
+  },
+  "belegeingang": {
+    "folder": "Belegeingang folder: {folder}",
+    "lastScan": "last read {at}",
+    "never": "not read yet",
+    "change": "Change folder",
+    "state": {
+      "off": "Watching is switched off.",
+      "folder_missing": "Folder not found.",
+      "folder_invalid": "Folder not valid.",
+      "folder_shared": "Another client uses the same folder. It is not read.",
+      "no_actor": "Nobody with the right to file receipts is set up.",
+      "not_local": "Only read while TILL runs on this computer."
+    },
+    "errors": "{count} files could not be read: {files}"
   }
 }

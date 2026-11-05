@@ -192,7 +192,7 @@ test('U2: the recovery under its OWN key books exactly once, and both memos stay
 
 // --- U3: holes the NEW key could introduce ---------------------------------------------------------
 
-test('U3: a recovery key is scoped per run, so the same literal key on two runs does its own work', () => {
+test('U3: run B is never answered from run A memo; the same literal key on another run refuses, its own key does its own work', () => {
   const { deps, setNow } = steppingDeps('2026-07-16T00:00:00.000Z');
   const { workspaceId } = seed(deps, 'u3');
   const runA = deferredFeeRun(deps, workspaceId, 'u3');
@@ -203,9 +203,16 @@ test('U3: a recovery key is scoped per run, so the same literal key on two runs 
   const proposedB = must(call(deps, 'propose_dunning_run', { workspaceId, idempotencyKey: 'u3-p2' }), 'propose B');
   assert.notEqual(proposedB.runId, null, `no second run to test with: ${JSON.stringify(proposedB)}`);
   assert.equal(proposedB.items[0].level, 2);
+  // N01 US-N01.5 (one key, one meaning): the engine scopes this key per run, but the registry records
+  // what the KEY was spent with, so the same literal key on another run is another call and refuses,
+  // naming runId, writing nothing. Before N01 it did run B's work; it never answered from A's memo.
+  const shared = call(deps, 'issue_dunning_run', { workspaceId, runId: proposedB.runId, confirmed: true, idempotencyKey: 'SHARED' });
+  assert.equal(shared.error, 'idempotency_key_conflict', JSON.stringify(shared));
+  assert.deepEqual(shared.fields, ['runId']);
+  assert.equal(feeEntries(deps, workspaceId), 1, 'the refused call booked nothing');
   const issuedB = must(
-    call(deps, 'issue_dunning_run', { workspaceId, runId: proposedB.runId, confirmed: true, idempotencyKey: 'SHARED' }),
-    'issue B under the same literal key',
+    call(deps, 'issue_dunning_run', { workspaceId, runId: proposedB.runId, confirmed: true, idempotencyKey: 'SHARED-B' }),
+    'issue B under its own key',
   );
   assert.equal(issuedB.runId, proposedB.runId, 'run B was answered from run A memo');
   assert.equal(feeEntries(deps, workspaceId), 2, 'run B booked its own fee');

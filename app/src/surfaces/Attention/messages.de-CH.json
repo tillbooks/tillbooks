@@ -40,7 +40,8 @@
       "qrMatch": "Abgleich",
       "dunningRun": "Mahnwesen",
       "reviewFlag": "Markierungen",
-      "agentActionBank": "Bank-Vorschläge des Agenten"
+      "agentActionBank": "Bank-Vorschläge des Agenten",
+      "autopilot": "Automatik"
     },
     "queueLabel": {
       "qr_match": "Abgleich",
@@ -53,7 +54,8 @@
       "bank_activation": "Bank-Freischaltung",
       "bank_fetch_failed": "Bankabruf",
       "bank_statement_gap": "Auszugslücken",
-      "bank_lines_waiting": "Bankbuchungen"
+      "bank_lines_waiting": "Bankbuchungen",
+      "autopilot": "Automatik"
     },
     "collapsedWith": "auch in {queue}",
     "overflow": {
@@ -91,6 +93,37 @@
         "reasonByStudio": "Markiert im Studio: {reason}",
         "reasonByUnknown": "Markiert: {reason}",
         "reasonSelf": "Von dir markiert: {reason}"
+      },
+      "autobookDigest": {
+        "title": "Automatisch gebucht ({count})",
+        "subtitle": "{date}, {notBooked} für dich offen",
+        "line": "{counterparty}, Regel {rule}",
+        "undone": "Rückgängig gemacht",
+        "notBooked": "Nicht automatisch",
+        "reason": {
+          "outranked": "etwas anderes passt zuerst auf diese Zeile",
+          "not_sure": "die Regel ist bei dieser Zeile nicht sicher",
+          "currency": "eine andere Währung als die Obergrenze",
+          "over_ceiling": "über der Obergrenze",
+          "period_locked": "die Periode ist abgeschlossen",
+          "refused": "die Buchung wurde abgelehnt",
+          "granter_lost_capability": "wer sie eingeschaltet hat, darf nicht mehr buchen"
+        }
+      },
+      "scheduleNote": {
+        "title": {
+          "skipped": "Dauerbuchung {label} {period} ist nicht gelaufen",
+          "proposed": "Dauerbuchung {label} {period} wartet auf dich"
+        },
+        "subtitle": "Fällig am {date}",
+        "reason": {
+          "catch_up": "eine verpasste Periode wird vorgeschlagen, nicht gebucht",
+          "no_post_right": "wer sie eingerichtet hat, darf nicht mehr buchen, darum ein Vorschlag",
+          "vorlage_changed": "die Vorlage hat sich geändert, darum ein Vorschlag, bis du sie neu bestätigst",
+          "vorlage_cleared": "die Vorlage wurde gelöscht",
+          "period_locked": "die Periode ist abgeschlossen",
+          "invalid": "die Vorlage konnte nicht buchen"
+        }
       }
     },
     "events": {
@@ -128,7 +161,10 @@
         "reject": "Vorschlag abgelehnt. Gebucht wurde nichts.",
         "resolve": "Markierung erledigt, Buchung freigegeben.",
         "issue": "Mahnlauf ausgestellt.",
-        "confirm_gap": "Bestätigt: in dieser Lücke fehlt nichts."
+        "confirm_gap": "Bestätigt: in dieser Lücke fehlt nichts.",
+        "seen": "Als gesehen markiert.",
+        "undo": "Buchung rückgängig gemacht: eine Korrekturbuchung ist gebucht, die Zeile ist wieder offen.",
+        "autobook_off": "Die Automatik ist für diese Regel aus."
       },
       "error": {
         "generic": "Das hat nicht geklappt. Die Zeile bleibt stehen: versuche es noch einmal oder öffne die Seite, zu der sie gehört.",
@@ -143,7 +179,9 @@
         "gap_not_chained": "In dieser Lücke steht Geld, das noch nicht im Buch ist. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge.",
         "gap_not_found": "Diese Lücke ist inzwischen geschlossen. Die Liste wird neu geladen.",
         "human_only": "Das bestätigt eine Person, nicht der Agent.",
-        "gap_has_waiting_statement": "In dieser Lücke wartet ein Auszug, der nicht anschliesst. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge."
+        "gap_has_waiting_statement": "In dieser Lücke wartet ein Auszug, der nicht anschliesst. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge.",
+        "receipt_already_booked": "Der Beleg ist bereits gebucht. Genehmige diese Zeile einzeln und gib den Grund für die zweite Buchung an.",
+        "holders_changed": "Nicht ausgeführt: Der Beleg wurde inzwischen anderswo gebucht. Die Zeile zeigt jetzt, wo."
       },
       "checkInBank": "In der Bank prüfen",
       "assign": "Zuordnen",
@@ -151,7 +189,10 @@
       "importStatement": "Auszug importieren",
       "importStatements": "Auszüge importieren",
       "importStatementParts": "Fehlende Teile importieren",
-      "reimportStatement": "Auszug neu importieren"
+      "reimportStatement": "Auszug neu importieren",
+      "seen": "Gesehen",
+      "undo": "Rückgängig",
+      "autobookOff": "Automatik aus"
     },
     "grouping": {
       "label": "Gruppierung",
@@ -181,7 +222,8 @@
         "rule": "Buchungsregel"
       },
       "staleShort": "Seit dem Vorschlag geändert",
-      "titleWith": "{counterparty} · {thing}"
+      "titleWith": "{counterparty} · {thing}",
+      "scheduledByAgent": "Dauerbuchung, vom Agenten eingerichtet"
     },
     "batch": {
       "label": "Vorschläge gemeinsam genehmigen",
@@ -251,6 +293,21 @@
       "since": "seit {date}",
       "twoBalances": "2 Salden",
       "partsMissing": "Teile fehlen"
+    },
+    "ruleProposed": {
+      "title": "Regel vorschlagen: {counterparty}, {repeats}× gleich gebucht",
+      "backtest": "Seit {date}: {hits} Zeilen, {identical} genau so gebucht",
+      "create": "Regel anlegen",
+      "adjust": "Anpassen",
+      "dismiss": "Nicht vorschlagen",
+      "evidence": "Gleich gebucht",
+      "evidenceValue": "{date}, {amount}"
+    },
+    "autobookOffer": {
+      "title": "Regel {counterparty}: {count}× unverändert gebucht. Künftig automatisch buchen?",
+      "meta": "Bis {ceiling} pro Zeile, nur in {currency}",
+      "grant": "Künftig automatisch",
+      "dismiss": "Nicht jetzt"
     }
   },
   "help": {

@@ -1217,6 +1217,32 @@ describe('Belege on bank lines (D142 in B2)', () => {
     await waitFor(() => expect(row).not.toHaveAttribute('data-just-committed'), { timeout: 2000 });
   });
 
+  it('N02 R1: a receipt already booked elsewhere is attached to the line only with the person\'s reason', async () => {
+    const { transport, calls } = recording(
+      happy({
+        list_drafted_actions: ok({ actions: [] }),
+        files_upload: ok({ file: { id: 'file_1' } }),
+        files_link: (input: Record<string, unknown>) =>
+          input.bookAgain === true
+            ? ok({ file: { id: 'file_1' }, retentionDerived: false })
+            : { status: 409, body: { ok: false, error: 'receipt_already_booked', holders: [{ entityKind: 'vendor_bill', entityId: 'vb_9', reservedBy: null }], override: 'bookAgain with overrideReason' } },
+      }),
+    );
+    renderBank(transport);
+    const row = await findRow(/Alpina Telecom AG/);
+    const file = new File(['synthetischer Beleg'], 'beleg.pdf', { type: 'application/pdf' });
+    fireEvent.drop(row, { dataTransfer: { files: [file], types: ['Files'], dropEffect: 'none' } });
+    const ask = await screen.findByRole('alertdialog', { name: 'Beleg schon gebucht' });
+    expect(within(ask).getByText('Kreditorenrechnung')).toBeInTheDocument();
+    fireEvent.change(within(ask).getByLabelText('Grund'), { target: { value: 'Sammelrechnung' } });
+    fireEvent.click(within(ask).getByRole('button', { name: 'Trotzdem buchen' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    const links = calls.filter((c) => c.action === 'files_link');
+    expect(links).toHaveLength(2);
+    expect(links[1]?.input).toMatchObject({ entityKind: 'bank_txn', entityId: 'bt_alpina', bookAgain: true, overrideReason: 'Sammelrechnung' });
+    expect(links[1]?.input.idempotencyKey).toBe(links[0]?.input.idempotencyKey);
+  });
+
   it('"Anhängen" in the Details picks a file for that line', async () => {
     const { transport, calls } = recording(happy({ list_drafted_actions: ok({ actions: [] }), ...filing }));
     renderBank(transport);

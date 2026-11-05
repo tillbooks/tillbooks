@@ -142,14 +142,23 @@ test('A16 §5: the write round-trips over REST and the read reflects it on the n
   const list = handleRest('list_open_items', { workspaceId }, deps);
   assert.deepEqual(Object.keys(list.body.bucketTotals), ['0-10', '11-20', '21-30', '30+']);
 
-  // The same key again writes nothing, over the wire as well as in the engine.
+  // The same key again writes nothing, over the wire as well as in the engine: the identical call
+  // replays, and (N01 US-N01.5) the same key with OTHER arguments is refused rather than answered with
+  // the first call's result.
   const replay = handleRest(
     'set_aging_bucket_config',
-    { workspaceId, boundariesDays: [99], idempotencyKey: 'rest-1' },
+    { workspaceId, boundariesDays: [10, 20, 30], idempotencyKey: 'rest-1' },
     deps,
   );
   assert.equal(replay.status, 200);
   assert.deepEqual(replay.body.boundariesDays, [10, 20, 30]);
+  const other = handleRest(
+    'set_aging_bucket_config',
+    { workspaceId, boundariesDays: [99], idempotencyKey: 'rest-1' },
+    deps,
+  );
+  assert.equal(other.body.error, 'idempotency_key_conflict', JSON.stringify(other.body));
+  assert.deepEqual(handleRest('get_aging_bucket_config', { workspaceId }, deps).body.boundariesDays, [10, 20, 30]);
   assert.equal(
     deps.store.db.prepare('SELECT COUNT(*) AS n FROM aging_bucket_config WHERE workspace_id = ?').get(workspaceId).n,
     1,

@@ -57,6 +57,7 @@ import Checklists from '../surfaces/Checklists';
 import Correspondence from '../surfaces/Correspondence';
 import WritingStyle from '../surfaces/WritingStyle';
 import MySettings from '../surfaces/MySettings';
+import Hausbuch from '../surfaces/Hausbuch';
 import DocumentTemplates from '../surfaces/DocumentTemplates';
 import Dispatch from '../surfaces/Dispatch';
 import Deals from '../surfaces/Deals';
@@ -95,6 +96,7 @@ import Adjustments from '../surfaces/Adjustments';
 import ReasonCodes from '../surfaces/ReasonCodes';
 import InventoryAlerts from '../surfaces/InventoryAlerts';
 import Review from '../surfaces/Review/Review';
+import Drop from '../surfaces/Drop';
 import Export from '../surfaces/Review/Export';
 
 /** Built surfaces, keyed by their route path. Unlisted paths render the Placeholder. */
@@ -144,6 +146,8 @@ const SURFACES: Record<string, ReactElement> = {
   '/writing-style': <WritingStyle />,
   // D178 point 7: the person's own preferences (G00 spec §10).
   '/my-settings': <MySettings />,
+  // N00: the house notes (Einstellungen > Hausbuch).
+  '/hausbuch': <Hausbuch />,
   '/document-templates': <DocumentTemplates />,
   '/dispatch': <Dispatch />,
   '/deals': <Deals />,
@@ -233,6 +237,10 @@ export const routes: RouteObject[] = [
   // to the surface, so a colleague's link opens the right screen in the right books. Without this
   // splat the shape had no match and the router 404 raised into RouteCrash.
   { path: '/w/:workspaceId/*', element: <WorkspaceSurfaceRoute />, errorElement: <RouteCrash /> },
+  // N02 (D183): the drop page a one-time link opens (`files_drop_link`). Outside the Shell, like `/w/:id`:
+  // the person came from a chat to drop ONE receipt onto ONE booking, so it renders no rail. Its calls
+  // run through the Studio-key-seated drop face, never through an MCP tool.
+  { path: '/drop/:token', element: <Drop />, errorElement: <RouteCrash /> },
   {
     path: '/',
     element: <Shell />,

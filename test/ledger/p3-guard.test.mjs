@@ -44,6 +44,12 @@ test('P3 guard: the ledger exposes exactly its intended verbs, no raw writer', (
     'prevalidateImportMigration',
     'prevalidateOpeningBalances',
     'setOpeningBalances',
+    // N01 US-N01.3 (D158): post_entry's own checks with nothing written, the pre-write half `postEntry`
+    // itself runs (`previewPostingLines`); it never writes.
+    'prevalidatePostEntry',
+    // N01 US-N01.1: A04's id-first, workspace-fenced account resolver, read by the registry's input
+    // boundary. A read: it writes nothing.
+    'resolveAccountReference',
   ].sort();
   const exportedFns = Object.keys(ledger)
     .filter((k) => typeof ledger[k] === 'function')

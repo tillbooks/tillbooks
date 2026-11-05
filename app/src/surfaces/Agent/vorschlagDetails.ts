@@ -44,7 +44,8 @@ export function payloadTitle(payload: Record<string, unknown>): { key: string; t
 }
 
 /** Keys that are transport plumbing, never a fact about the proposal. */
-const PLUMBING: ReadonlySet<string> = new Set(['workspaceId', 'idempotencyKey', 'confirmed']);
+// N03: a mined rule's stored evidence and the slot guard are the engine's bookkeeping, said in their own rows or not at all.
+const PLUMBING: ReadonlySet<string> = new Set(['workspaceId', 'idempotencyKey', 'confirmed', 'minedFacts', 'expectSlotStandardId']);
 
 /** The bank-line verbs that carry a "Zur Bankzeile" link (A39). */
 const BANK_LINE_VERBS: ReadonlySet<string> = new Set(['book_bank_line', 'ignore_bank_line', 'reopen_bank_line']);

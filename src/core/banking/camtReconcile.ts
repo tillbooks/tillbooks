@@ -68,9 +68,11 @@ import {
   lineBookingDate,
   readBankTxn,
   readBankTxnDetail,
+  withDecisionProvenance,
   writeLineLink,
 } from './bankLines.js';
 import type { BankLineState, BankTxnRow, BookBankLineTarget } from './bankLines.js';
+import { computeRuleProvenance } from './ruleStats.js';
 import { performBooking, BankAbort, runBankGuarded } from './bankBooking.js';
 import { liveBatchOfBill } from './pain001.js';
 import type { BookBankLineOk } from './bankBooking.js';
@@ -1124,35 +1126,41 @@ export function confirmCamtMatch(ctx: WorkspaceContext, input: ConfirmCamtMatchI
         .prepare('SELECT ledger_account_id FROM bank_account WHERE workspace_id = ? AND id = ?')
         .get(ctx.workspaceId, row.bank_account_id) as { ledger_account_id: string } | undefined;
       if (bankAccount === undefined) throw new BankAbort(err('needs_bank_account', { bankAccountId: row.bank_account_id }));
-      const paid = recordPayment(ctx, {
-        direction: 'outgoing',
-        date: lineBookingDate(row),
-        amountMinor: row.amount_minor,
-        currency: row.currency,
-        bankAccountId: bankAccount.ledger_account_id,
-        allocations: input.allocations.map((a) => ({
-          ...(a.vendorBillId !== undefined ? { vendorBillId: a.vendorBillId } : {}),
-          ...(a.targetId !== undefined ? { targetId: a.targetId } : {}),
-          amountMinor: (a.amountMinor ?? row.amount_minor) as number,
-        })),
-        source: 'camt',
-        intent: PAYMENT_INTENTS.record,
-        idempotencyKey: `camt-confirm-${row.id}-g${lineGeneration(ctx, row.id)}`,
+      // N03 (D183): this split writes its decision itself (it never reaches `performBooking`), so it reads
+      // the booking's provenance here, BEFORE the payment posts, and binds it for the one decision writer.
+      const allocations = input.allocations;
+      const provenance = computeRuleProvenance(ctx, row, { target: { kind: 'open_item' } });
+      return withDecisionProvenance(ctx, row.id, provenance, () => {
+        const paid = recordPayment(ctx, {
+          direction: 'outgoing',
+          date: lineBookingDate(row),
+          amountMinor: row.amount_minor,
+          currency: row.currency,
+          bankAccountId: bankAccount.ledger_account_id,
+          allocations: allocations.map((a) => ({
+            ...(a.vendorBillId !== undefined ? { vendorBillId: a.vendorBillId } : {}),
+            ...(a.targetId !== undefined ? { targetId: a.targetId } : {}),
+            amountMinor: (a.amountMinor ?? row.amount_minor) as number,
+          })),
+          source: 'camt',
+          intent: PAYMENT_INTENTS.record,
+          idempotencyKey: `camt-confirm-${row.id}-g${lineGeneration(ctx, row.id)}`,
+        });
+        if (!paid.ok) throw new BankAbort(paid as Err);
+        const paymentId = paid['paymentId'] as string;
+        writeLineLink(ctx, {
+          bankTxnId: row.id,
+          kind: 'payment',
+          targetId: paymentId,
+          state: 'booked',
+          targetKind: 'open_item',
+          paymentId,
+          entryId: typeof paid['entryId'] === 'string' ? (paid['entryId'] as string) : null,
+          claims: bankLegsOf(ctx, bankAccount.ledger_account_id, [paid['entryId'] as string | undefined]).map((l) => l.lineId),
+        });
+        ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'confirm', actor: ctx.actor, at: ctx.clock.now() });
+        return ok<ConfirmCamtMatchOk>({ bankTxnId: row.id, kind: 'payment', targetId: paymentId });
       });
-      if (!paid.ok) throw new BankAbort(paid as Err);
-      const paymentId = paid['paymentId'] as string;
-      writeLineLink(ctx, {
-        bankTxnId: row.id,
-        kind: 'payment',
-        targetId: paymentId,
-        state: 'booked',
-        targetKind: 'open_item',
-        paymentId,
-        entryId: typeof paid['entryId'] === 'string' ? (paid['entryId'] as string) : null,
-        claims: bankLegsOf(ctx, bankAccount.ledger_account_id, [paid['entryId'] as string | undefined]).map((l) => l.lineId),
-      });
-      ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'confirm', actor: ctx.actor, at: ctx.clock.now() });
-      return ok<ConfirmCamtMatchOk>({ bankTxnId: row.id, kind: 'payment', targetId: paymentId });
     }),
   );
 }

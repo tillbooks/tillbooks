@@ -117,7 +117,7 @@ export function hrActions(h: HrActionHelpers): readonly ActionDef[] {
       'expense_line_upsert',
       'write:correctable:internal',
       'Add or edit a claim line (only while the claim is draft). line carries expense_date, category (travel|meals|supplies|it|other), amountMinor (integer Rappen, the receipt total), currency (default CHF), an optional fxRate for a foreign line, an optional taxCode (an input-side Vorsteuer code, or none), an optional receiptDocumentId (an E00 file), and optional costCenterId/projectId/expenseAccountId. The per-line tax_code + base + tax are resolved ONCE by A05 and stored as values (MWSTG Art. 28). Requires spesen.submit. Pass line.lineId to edit.',
-      ctxSchema({ claimId: STR, line: OBJ, idempotencyKey: STR }, ['claimId', 'line', 'idempotencyKey']),
+      ctxSchema({ claimId: STR, line: OBJ, idempotencyKey: STR, bookAgain: { type: 'boolean' }, overrideReason: { type: 'string' } }, ['claimId', 'line', 'idempotencyKey']),
       (ctx, input) => upsertLine(ctx, as(input)),
     ),
     ctxAction(

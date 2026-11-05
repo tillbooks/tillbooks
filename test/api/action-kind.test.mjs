@@ -160,7 +160,7 @@ test('MCP: every write takes destructiveHint, the reversibility key and the cons
   for (const a of ACTIONS) {
     const tool = /** @type {any} */ (toolFor(a));
     if (a.kind === 'read') {
-      assert.deepEqual(tool.annotations, { readOnlyHint: true }, `${a.name}: a read`);
+      assert.deepEqual(tool.annotations, { title: tool.title, readOnlyHint: true }, `${a.name}: a read`);
       assert.equal(tool._meta, undefined, `${a.name}: a read carries no class and no consequence`);
       continue;
     }

@@ -230,7 +230,11 @@
       "sync": "Sync publishing",
       "accrual": "Accrual",
       "provision": "Provision",
-      "workspace_setting": "Setting"
+      "workspace_setting": "Setting",
+      "receipt_override": "Second booking of a receipt",
+      "hausbuch_note": "House note",
+      "rule_autobook_grant": "Automatic booking of a rule",
+      "vorlage_schedule": "Recurring template"
     },
     "emptyHint": "TILL records every posting, every lock and every change to your master data here. You do not have to enter any of it yourself."
   },

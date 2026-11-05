@@ -15,7 +15,9 @@
  *     An agent that cannot trust the schema falls back to guessing arguments.
  *  3. HONEST ANNOTATIONS. `readOnlyHint` defaults to FALSE in the MCP spec, so a read verb must SAY
  *     it is read-only, and a write verb must never claim it. Asserted on the real wire, and the
- *     claim is then TESTED (rule 4), because an untested hint is marketing.
+ *     claim is then TESTED (rule 4), because an untested hint is marketing. Every tool also carries a
+ *     non-empty human `title` (in `Tool.title` and `annotations.title`), and every write states its
+ *     `destructiveHint`.
  *  4. READ MEANS READ. Every read verb is called and the whole database is compared before and
  *     after. A read verb that writes is the failure mode a client cannot defend against.
  *  5. STRUCTURED ERRORS. Garbage in gives `{ok:false, error:'<stable code>'}`. Never a throw, never
@@ -332,6 +334,11 @@ test('conformance: tools/list advertises exactly the registry, name for name, wi
       const hint = t.annotations?.readOnlyHint;
       if (a.kind === 'read') c.check(hint === true, `${a.name}: a read verb must advertise readOnlyHint`);
       else c.check(hint !== true, `${a.name}: a write verb must not advertise readOnlyHint`);
+      // A human title on every tool, in both places a client reads it (MCP 2025-06-18 `Tool.title`, and
+      // `annotations.title`): the Claude directory refuses a tool without one.
+      c.check(typeof t.title === 'string' && t.title.trim().length > 0, `${a.name}: advertises no title`);
+      c.check(t.annotations?.title === t.title, `${a.name}: annotations.title drifted from Tool.title`);
+      if (a.kind === 'write') c.check(typeof t.annotations?.destructiveHint === 'boolean', `${a.name}: a write verb must state destructiveHint`);
     }
     c.done('tools/list');
   });

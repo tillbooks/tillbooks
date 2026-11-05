@@ -32,11 +32,15 @@
  * UX judge round 2, item 8: two groups, "Erkennung" (the name and the text) and "Buchung" (what happens and
  * the legs). Each leg is one line, its account and a labelled "Bekommt den Rest" radio, with its details
  * (MWST, how its amount comes about, its label) behind a disclosure that says them in words.
+ *
+ * N03 (D183): "Testen" beside Speichern (a bank rule that books, when the host can test it) runs the rule as
+ * it stands in the form over the lines already there (`backtest_bank_rule`, a read) and says it in one line:
+ * "Seit 01.01.2026: 14 Zeilen, 13 genau so gebucht", or "Keine Treffer seit …". It saves nothing.
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import type { Err } from '../../lib/client';
-import { formatMoney, useT } from '../../i18n';
+import { formatDate, formatMoney, useT } from '../../i18n';
 import { PickerButton, type ComboboxOption } from '../../components/AccountCombobox';
 import { TaxCodeCombobox } from '../../components/TaxCodeCombobox';
 import { Segmented } from '../../components/Segmented';
@@ -128,6 +132,16 @@ export interface RuleEditorProps {
   vorlagen?: readonly VorlageOption[];
   onSave: (payload: RulePayload) => Promise<Err | null>;
   onCancel: () => void;
+  /** N03: test the rule as it stands (`backtest_bank_rule`); absent hides "Testen". */
+  onTest?: (payload: RulePayload) => Promise<RuleTestResult | Err>;
+}
+
+/** N03: what "Testen" says: since when, booked hits, of them booked exactly so, and the hits still open. */
+export interface RuleTestResult {
+  since: string;
+  hits: number;
+  identical: number;
+  openLines: number;
 }
 
 /** D177: how a leg that is not the rest gets its amount on a bank rule. */
@@ -189,6 +203,7 @@ export function RuleEditor({
   vorlagen = [],
   onSave,
   onCancel,
+  onTest,
 }: RuleEditorProps) {
   const t = useT();
   const baseId = useId();
@@ -226,6 +241,9 @@ export function RuleEditor({
   const [openLegs, setOpenLegs] = useState<ReadonlySet<number>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<Err | null>(null);
+  /** N03: the last "Testen" answer (or its refusal), and whether a test runs. */
+  const [tested, setTested] = useState<RuleTestResult | Err | null>(null);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     nameRef.current?.focus();
@@ -288,9 +306,8 @@ export function RuleEditor({
     setRest((r) => (r === null ? null : r === index ? null : r > index ? r - 1 : r));
   };
 
-  const save = async (replaceStandardId: string | null = null) => {
-    if (blocker !== null || busy) return;
-    if (!ignoring && rest === null) return;
+  /** The rule as the form holds it, as `set_bank_standard` (and the test) take it. */
+  const payloadOf = (replaceStandardId: string | null = null): RulePayload => {
     // "Ohne MWST" leaves `taxCode` out: the engine reads a missing code as none (bankStandards.ts), and the
     // registry's boundary check types the field as a string.
     const recipe: RecipeLegInput[] = ignoring
@@ -319,9 +336,7 @@ export function RuleEditor({
             ...(!manual && leg.against ? { against: true } : {}),
           };
         });
-    setBusy(true);
-    setRefusal(null);
-    const refused = await onSave({
+    return {
       scope,
       outcome,
       label: name.trim(),
@@ -332,11 +347,37 @@ export function RuleEditor({
       ignoreNote: ignoring && ignoreNote.trim() !== '' ? ignoreNote.trim() : null,
       followUpStandardId: manual || followUp === NO_FOLLOW_UP ? null : followUp,
       ...(replaceStandardId !== null ? { replaceStandardId } : {}),
-    });
+    };
+  };
+
+  const save = async (replaceStandardId: string | null = null) => {
+    if (blocker !== null || busy) return;
+    if (!ignoring && rest === null) return;
+    setBusy(true);
+    setRefusal(null);
+    const refused = await onSave(payloadOf(replaceStandardId));
     setBusy(false);
     // A refusal keeps every input as typed (A39 §14.5); success closes the form from the host.
     if (refused !== null) setRefusal(refused);
   };
+
+  /** N03: "Testen" runs the rule as the form holds it; a bank rule that books, complete enough to save. */
+  const canTest = onTest !== undefined && !manual && !ignoring;
+  const test = async () => {
+    if (onTest === undefined || blocker !== null || testing || rest === null) return;
+    setTesting(true);
+    const answer = await onTest(payloadOf());
+    setTesting(false);
+    setTested(answer);
+  };
+  const testWords =
+    tested === null
+      ? null
+      : 'error' in tested
+        ? (explainRefusal(t, tested, { currency })?.title ?? t('bankInbox.rules.test.failed'))
+        : tested.hits === 0
+          ? t('bankInbox.rules.test.none', { date: formatDate(tested.since) })
+          : t('bankInbox.rules.test.result', { date: formatDate(tested.since), hits: tested.hits, identical: tested.identical });
 
   const legName = (accountId: string) => accountLabel(lookups, accountId) || t('bankInbox.legs.unknownAccount');
   // Critic D176-C2: a name another Vorlage holds is said at the name field, with "Ersetzen" beside it.
@@ -758,7 +799,17 @@ export function RuleEditor({
           >
             {busy ? t('bankInbox.rules.pop.busy') : t('bankInbox.rules.pop.save')}
           </button>
+          {canTest && (
+            <button type="button" className="btn btn--ghost btn--sm bank-rule-form__test" disabled={blocker !== null || testing || busy} onClick={() => void test()}>
+              {testing ? t('bankInbox.rules.test.busy') : t('bankInbox.rules.test.button')}
+            </button>
+          )}
         </span>
+        {canTest && (
+          <p className="bank-rule-form__tested t-num" role="status" aria-live="polite">
+            {testWords ?? ''}
+          </p>
+        )}
         {blocker !== null && (
           <p id={blockerId} className="bank-rule-form__blocker">
             {blocker}

@@ -11,7 +11,7 @@
  * module graph stays acyclic: `registry.ts` imports this file and this file must not import it back.
  */
 
-import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
+import type { ActionDef, ActionInput, ApiDeps, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
 import {
@@ -22,6 +22,8 @@ import {
   listCaptures,
   getCapture,
 } from '../core/purchase/index.js';
+import { readSourcePath } from '../core/files/index.js';
+import { err } from '../core/result.js';
 import type { ActionKind } from './actionKind.js';
 
 export interface CaptureActionHelpers {
@@ -30,7 +32,7 @@ export interface CaptureActionHelpers {
     kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
-    call: (ctx: WorkspaceContext, input: ActionInput) => Result,
+    call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,
   ): ActionDef;
   ctxSchema(props?: Record<string, unknown>, required?: string[]): JsonSchema;
   STR: { readonly type: 'string' };
@@ -44,6 +46,28 @@ function as<T>(input: ActionInput): T {
 const ARR = { type: 'array' } as const;
 const OBJ = { type: 'object' } as const;
 
+/**
+ * N02 (D183): `capture_document` by PATH. Exactly one of `contentBase64` and `sourcePath`; the confined
+ * read (local hosts only, `files.source_roots`) answers the bytes and their sniffed type, and the capture
+ * engine then runs exactly as for base64, its own accepted-mime rule included (a WebP refuses
+ * `unsupported_mime`, A31 §6b).
+ */
+function captureFromInput(ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps): Result {
+  if (input.sourcePath === undefined) return captureIntake(ctx, as(input));
+  if (input.contentBase64 !== undefined) {
+    return err('invalid_input', { field: 'sourcePath', reason: 'exactly_one_of', fields: ['contentBase64', 'sourcePath'] });
+  }
+  const read = readSourcePath(ctx, deps.localFiles, input.sourcePath);
+  if ((read as { ok?: unknown }).ok === false) return read as Result;
+  const file = (read as { file: { bytes: Buffer; mime: string; filename: string } }).file;
+  return captureIntake(ctx, {
+    contentBase64: file.bytes.toString('base64'),
+    mime: file.mime,
+    filename: typeof input.filename === 'string' ? input.filename : file.filename,
+    ...(typeof input.idempotencyKey === 'string' ? { idempotencyKey: input.idempotencyKey } : {}),
+  });
+}
+
 /** The A31 verbs, in append order. */
 export function captureActions(h: CaptureActionHelpers): readonly ActionDef[] {
   const { ctxAction, ctxSchema, STR } = h;
@@ -52,9 +76,9 @@ export function captureActions(h: CaptureActionHelpers): readonly ActionDef[] {
     ctxAction(
       'capture_document',
       'write:correctable:internal',
-      'Ingest a supplier document into the Belegeingang queue (Belegerfassung). contentBase64 is the raw bytes; mime must be one of application/pdf, image/jpeg, image/png, image/heic, image/tiff (the queue refuses anything else, unlike E00). The file is stored via E00 and the deterministic pass decodes any Swiss QR Code payload present as text (creditor, IBAN, amount, currency, QRR/SCOR reference revalidated by check digit, and the Swico S1 billing information), landing each value as a provenance-stamped field. A byte-identical re-drop returns the existing capture ({duplicate:true}) and writes nothing; a hash matching only a discarded capture creates a fresh one cross-linking it (recovery). Posts nothing.',
-      ctxSchema({ contentBase64: STR, mime: STR, filename: STR, idempotencyKey: STR }, ['contentBase64', 'mime', 'idempotencyKey']),
-      (ctx, input) => captureIntake(ctx, as(input)),
+      'Ingest a supplier document into the Belegeingang queue (Belegerfassung). contentBase64 is the raw bytes; mime must be one of application/pdf, image/jpeg, image/png, image/heic, image/tiff (the queue refuses anything else, unlike E00). The file is stored via E00 and the deterministic pass decodes any Swiss QR Code payload present as text (creditor, IBAN, amount, currency, QRR/SCOR reference revalidated by check digit, and the Swico S1 billing information), landing each value as a provenance-stamped field. A byte-identical re-drop returns the existing capture ({duplicate:true}) and writes nothing; a hash matching only a discarded capture creates a fresh one cross-linking it (recovery). Posts nothing. Instead of contentBase64 and mime, sourcePath names a file on THIS computer under files.source_roots (local till mcp or till up only, else source_path_local_only): the bytes are read, sniffed and captured as above (path_not_allowed, file_not_found, unsupported_type for anything but a PDF or an image). A receipt that already evidences a live booking (or waits for a Vorschlag) is queued like any other, and the answer names it: alreadyBooked: true and holders (each entityKind, entityId, and reservedBy for a waiting Vorschlag); committing it then meets the receipt rule (files.duplicate_beleg).',
+      ctxSchema({ contentBase64: STR, mime: STR, sourcePath: STR, filename: STR, idempotencyKey: STR }, ['idempotencyKey']),
+      (ctx, input, deps) => captureFromInput(ctx, input, deps),
     ),
     ctxAction(
       'capture_extract',
@@ -66,8 +90,8 @@ export function captureActions(h: CaptureActionHelpers): readonly ActionDef[] {
     ctxAction(
       'capture_commit',
       'write:correctable:internal',
-      "Commit a reviewed capture into a DRAFT: target.kind='vendor_bill' delegates to A17 create_vendor_bill (+ attach_receipt + the E00 entity link that derives OR 958f retention), and target.kind='expense_line' delegates to E02 (onto target.claimId, or a fresh draft claim for target.employeeId). Requires the delegated verb's own capability (post for a bill, spesen.submit for an expense), re-checked inside the delegation. Posts NOTHING: the target lands as a draft and posting it is A17's separately-dialled step (P8). corrections (each {key,value}) land as operator fields before delegation. Idempotent: a double-commit returns the original target_id and never creates a second draft.",
-      ctxSchema({ captureId: STR, target: OBJ, corrections: ARR, idempotencyKey: STR }, ['captureId', 'target', 'idempotencyKey']),
+      "Commit a reviewed capture into a DRAFT: target.kind='vendor_bill' delegates to A17 create_vendor_bill (+ attach_receipt + the E00 entity link that derives OR 958f retention), and target.kind='expense_line' delegates to E02 (onto target.claimId, or a fresh draft claim for target.employeeId). Requires the delegated verb's own capability (post for a bill, spesen.submit for an expense), re-checked inside the delegation. Posts NOTHING: the target lands as a draft and posting it is A17's separately-dialled step (P8). corrections (each {key,value}) land as operator fields before delegation. Idempotent: a double-commit returns the original target_id and never creates a second draft. Refuses document_already_linked when the capture's own document already belongs to another record, and receipt_already_booked (naming the holders) when the same receipt already evidences a live booking (an entry not reversed, a bill not void, a payment, a booked bank line, an expense claim) or waits for another Vorschlag; a person's bookAgain: true with an overrideReason books it anyway, recorded on the audit trail (never an agent's: human_only).",
+      ctxSchema({ captureId: STR, target: OBJ, corrections: ARR, bookAgain: { type: 'boolean' }, overrideReason: STR, idempotencyKey: STR }, ['captureId', 'target', 'idempotencyKey']),
       (ctx, input) => captureCommit(ctx, as(input)),
     ),
     ctxAction(

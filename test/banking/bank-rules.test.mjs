@@ -720,7 +720,16 @@ test('generation 15 opens a generation-14 book: the recipe columns and the text-
     assert.ok(db.prepare("SELECT 1 FROM pragma_table_info('bank_line_decision') WHERE name = 'rule_id'").get(), 'bank_line_decision.rule_id arrives');
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = 'bank_line_decision_rule_frozen'").get(), 'and is frozen');
     const objects = db.prepare("SELECT name FROM sqlite_master WHERE tbl_name = 'bank_standard' AND name LIKE 'bank_standard_%' ORDER BY name").all().map((r) => r.name);
-    assert.deepEqual(objects, ['bank_standard_no_delete', 'bank_standard_one_live_rule', 'bank_standard_outcome_frozen', 'bank_standard_recipe_frozen', 'bank_standard_supersede_only']);
+    // N03 (D183) adds the version chain's index and its freeze trigger to every book, this one included.
+    assert.deepEqual(objects, [
+      'bank_standard_by_replaces',
+      'bank_standard_chain_frozen',
+      'bank_standard_no_delete',
+      'bank_standard_one_live_rule',
+      'bank_standard_outcome_frozen',
+      'bank_standard_recipe_frozen',
+      'bank_standard_supersede_only',
+    ]);
     const after = db.prepare('SELECT * FROM bank_standard ORDER BY rowid').all();
     assert.deepEqual(
       after.map(({ scope, outcome, ignore_reason, ignore_note, follow_up_standard_id, ...d175 }) => [scope, outcome, ignore_reason, ignore_note, follow_up_standard_id]),

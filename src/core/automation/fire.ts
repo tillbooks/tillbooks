@@ -158,7 +158,8 @@ function occurrenceKey(event: string, rawId: string, input: Record<string, unkno
 /** The derived key that makes the TARGET verb refuse a double-execute independently of our index. */
 const DERIVED_KEY_PREFIX = 'auto:';
 const DERIVED_KEY_DIGEST_LENGTH = 16;
-function derivedIdempotencyKey(ruleId: string, eventRef: string): string {
+/** Exported for `test/api/idempotency-reserved-keys.test.mjs`: its prefix is a reserved one. */
+export function derivedIdempotencyKey(ruleId: string, eventRef: string): string {
   const digest = createHash('sha256').update(`${ruleId}::${eventRef}`).digest('hex');
   return `${DERIVED_KEY_PREFIX}${ruleId}:${digest.slice(0, DERIVED_KEY_DIGEST_LENGTH)}`;
 }

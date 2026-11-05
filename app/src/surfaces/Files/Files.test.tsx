@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
@@ -193,6 +193,33 @@ describe('Dateien, the five states', () => {
   it('renders the no-workspace state before a workspace is chosen', () => {
     renderFiles({ files_search: LIST, folders_list: TREE }, null);
     expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument();
+  });
+});
+
+describe('N02 R1: a new version of a booked receipt', () => {
+  it('asks for the reason, then sends the same version with it', async () => {
+    const user = userEvent.setup();
+    const versions: Record<string, unknown>[] = [];
+    renderFiles({
+      files_search: ok({ files: [file({ entityKind: 'journal_entry', entityId: 'je_5' })] }),
+      folders_list: TREE,
+      files_new_version: (input) => {
+        versions.push(input);
+        return input.bookAgain === true
+          ? ok({ file: file(), supersededId: 'file_1' })
+          : reject('receipt_replace_needs_reason', { fileId: 'file_1', entityKind: 'journal_entry', entityId: 'je_5', holders: [], override: 'bookAgain with overrideReason' }, 409);
+      },
+    });
+    await user.click(await screen.findByRole('row', { name: 'Mietvertrag' }));
+    const drawer = screen.getByRole('dialog');
+    await user.upload(within(drawer).getByLabelText('Neue Version'), new File(['%PDF-1.4 x'], 'neu.pdf', { type: 'application/pdf' }));
+    const ask = await screen.findByRole('alertdialog', { name: 'Gebuchten Beleg ersetzen' });
+    expect(within(ask).getByText('je_5')).toBeInTheDocument();
+    fireEvent.change(within(ask).getByLabelText('Grund'), { target: { value: 'Falsche Seite' } });
+    fireEvent.click(within(ask).getByRole('button', { name: 'Trotzdem ersetzen' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(versions).toHaveLength(2);
+    expect(versions[1]).toMatchObject({ fileId: 'file_1', bookAgain: true, overrideReason: 'Falsche Seite', idempotencyKey: versions[0]?.idempotencyKey });
   });
 });
 
@@ -601,6 +628,34 @@ describe('the shared linked-files panel', () => {
     );
     // The upload SUCCEEDED, so the message must not imply the file was lost.
     expect(await screen.findByText(/Die Datei ist gespeichert und unter Dateien erreichbar/)).toBeInTheDocument();
+  });
+
+  it('N02 R1: a receipt already booked elsewhere is linked only after the person gives the reason', async () => {
+    const user = userEvent.setup();
+    const links: Record<string, unknown>[] = [];
+    renderLinked(
+      {
+        files_list_linked: ok({ files: [] }),
+        files_upload: ok({ file: file() }),
+        files_link: (input) => {
+          links.push(input);
+          return input.bookAgain === true
+            ? ok({ file: file() })
+            : reject('receipt_already_booked', { holders: [{ entityKind: 'vendor_bill', entityId: 'vb_3', reservedBy: null }], override: 'bookAgain with overrideReason' });
+        },
+      },
+      'journal_entry',
+      'je_1',
+    );
+    await screen.findByText('Noch keine Dateien zu diesem Datensatz.');
+    await user.upload(screen.getByLabelText('Mit Datensatz verknüpfen'), new File(['x'], 'beleg.pdf', { type: 'application/pdf' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Beleg schon gebucht' });
+    expect(within(dialog).getByText('Kreditorenrechnung')).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('Grund'), 'Teillieferung');
+    await user.click(within(dialog).getByRole('button', { name: 'Trotzdem buchen' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(links).toHaveLength(2);
+    expect(links[1]).toMatchObject({ bookAgain: true, overrideReason: 'Teillieferung', idempotencyKey: links[0]?.idempotencyKey });
   });
 
   // F8: attaching is upload THEN link, so the affordance needs BOTH `manage_files` and the target

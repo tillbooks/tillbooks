@@ -37,9 +37,12 @@ import { Status } from '../../components/Status';
 import { Tooltip } from '../../components/Tooltip';
 import { AgentMarkGlyph } from '../../components/icons';
 import { InfoGlyph } from '../../components/states/glyphs';
+import { AgentReasonQuote } from './AgentReasonQuote';
 import { LABELLED_VERBS, type DraftedAction, type VorschlagFigures } from './model';
 import { argumentRows, bankLineOf, essentials, keyFigure, payloadAmount, payloadTitle, type AccountNameMap, type DetailRow } from './vorschlagDetails';
 import type { DialLevels } from './useDialLevels';
+import { VorschlagBelege } from './VorschlagBelege';
+import { ReceiptHolderNotice } from '../../components/BookAgain';
 import '../../components/ConsequenceLine.css';
 import './VorschlagLine.css';
 
@@ -99,6 +102,11 @@ export interface VorschlagLineProps {
   status?: VorschlagStatus | null;
   /** D178, Pendenzen: the bank-line link sits in the ⋯ instead of the meta line. */
   bankLineInMenu?: boolean;
+  /** N03, a mined rule in Pendenzen: the approve and reject words ("Regel anlegen", "Nicht vorschlagen"). */
+  approveLabel?: string;
+  rejectLabel?: string;
+  /** N03, a mined rule: rows that lead the Details (the bookings it was found in). */
+  extraDetails?: DetailRow[];
 }
 
 /** One line's part in a batch approval (D178 point 5). */
@@ -202,6 +210,9 @@ export function VorschlagLine({
   staleText,
   status = null,
   bankLineInMenu = false,
+  approveLabel,
+  rejectLabel,
+  extraDetails = [],
 }: VorschlagLineProps) {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
@@ -239,7 +250,7 @@ export function VorschlagLine({
 
   const details = (): DetailRow[] => {
     const figures = action.figures ?? null;
-    const rows: DetailRow[] = [];
+    const rows: DetailRow[] = [...extraDetails];
     const omit = new Set<string>();
     if (bankLine !== null) omit.add('bankTxnId'); // the link names the line; its id is no fact for a person
     // D167 polish 11: the title's text is not repeated, and the entry's source is no fact here (it read
@@ -280,7 +291,7 @@ export function VorschlagLine({
       : []),
     ...extraMenuItems,
     ...(canDecide && offers.reject
-      ? [{ key: 'reject', label: t('agent.card.reject'), onSelect: () => setConfirming('reject'), danger: true, disabled: busy }]
+      ? [{ key: 'reject', label: rejectLabel ?? t('agent.card.reject'), onSelect: () => setConfirming('reject'), danger: true, disabled: busy }]
       : []),
   ];
 
@@ -312,7 +323,7 @@ export function VorschlagLine({
         aria-describedby={consequence !== null ? consequenceId : undefined}
         onClick={() => onApprove(action.actionId, false)}
       >
-        {t('agent.card.approve')}
+        {approveLabel ?? t('agent.card.approve')}
       </button>
     );
   } else if (isDraftingActor) {
@@ -393,6 +404,8 @@ export function VorschlagLine({
               )}
             </span>
           )}
+          {/* N01 US-N01.8: why the agent proposes this, in its own words, quoted under the title. */}
+          <AgentReasonQuote text={action.agentReason} />
         </div>
         {statusInRow && statusLine}
         {(consequence !== null || (compact && changed)) && (
@@ -418,6 +431,15 @@ export function VorschlagLine({
       {!compact && changed && <Status kind="warn" label={t('agent.card.changed')} className="vorschlag-line-changed" />}
       {/* Outside Pendenzen a refused line says so under the row. */}
       {!statusInRow && statusLine}
+
+      {/* N02 R1: the receipt is already booked elsewhere; approving books it a second time (with a reason). */}
+      {action.receiptHolders !== undefined && action.receiptHolders.length > 0 && (
+        <ReceiptHolderNotice holders={action.receiptHolders} className="vorschlag-line-changed" />
+      )}
+      {/* N02 (critic round 2): the Belege this approval will link, seen before the approve control. */}
+      {action.belege !== undefined && action.belege.length > 0 && (
+        <VorschlagBelege actionId={action.actionId} belege={action.belege} canPreview={canDecide} />
+      )}
 
       {showDetails && (
         <dl id={detailsId} className="vorschlag-readback" aria-label={t('agent.line.detailsOf', { title })}>

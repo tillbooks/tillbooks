@@ -9,6 +9,6 @@ export {
   valueFitsSchema,
 } from './registry.js';
 export type { LocalisedText, SettingDef, SettingDialCapability, SettingSchema, SettingValue } from './registry.js';
-export { getSetting, settingsGet, settingsList, settingsReset, settingsSet } from './settings.js';
+export { getSetting, refuseHumanOnly, settingsGet, settingsList, settingsReset, settingsSet } from './settings.js';
 export type { SettingView, SettingsGetOk, SettingsListOk, SettingsResetInput, SettingsSetInput, SettingsSetOk } from './settings.js';
 export { SETTINGS_SCHEMA_SQL } from './schema.js';

@@ -52,6 +52,9 @@ import {
 } from './enums.js';
 import { readClaimRow, readLineRows, readEmployeeRow, claimEcho, holds, ownEmployeeId } from './reads.js';
 import type { ClaimRow, LineRow, EmployeeRow } from './reads.js';
+import { receiptHolderGuard } from '../files/receiptGuard.js';
+import { deriveStatutoryOnPost } from '../files/postedFloor.js';
+import { linkFile, refuseReceiptLink } from '../files/files.js';
 
 /** The receipt threshold (spec §2.3): a line whose base amount exceeds this needs a receipt at submit.
  *  CHF 50.00. A configurable per-workspace `receipt_required_over_rappen` is a documented follow-up;
@@ -278,7 +281,12 @@ export function upsertLine(ctx: WorkspaceContext, input: LineUpsertInput): Resul
       .prepare('SELECT id FROM stored_file WHERE workspace_id = ? AND id = ?')
       .get(ctx.workspaceId, line.receiptDocumentId) as { id: string } | undefined;
     if (doc === undefined) return err('invalid_reference', { field: 'receiptDocumentId' });
+    // Security review (re-link hijack): the receipt is linked to this claim on write (`linkLineReceipt`),
+    // so a file filed against another record is refused here, before anything is written.
+    const elsewhere = refuseReceiptLink(ctx, line.receiptDocumentId, 'expense_claim', claim.id);
+    if (elsewhere !== undefined) return elsewhere;
   }
+
 
   const scopedKey = JSON.stringify(['expense_line_upsert', input.claimId, input.idempotencyKey]);
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'expense_line_upsert');
@@ -297,6 +305,20 @@ export function upsertLine(ctx: WorkspaceContext, input: LineUpsertInput): Resul
       .get(ctx.workspaceId, input.idempotencyKey) as { id: string; claim_id: string } | undefined;
     if (holder !== undefined) return err('idempotency_key_conflict', { idempotencyKey: input.idempotencyKey, lineId: holder.id, claimId: holder.claim_id });
   }
+  // R1 (N02, `../files/receiptGuard.ts`): a receipt that already evidences another live booking (a filing
+  // row, a bill's or another claim's pointer, a Vorschlag's reservation) is judged before the line
+  // points at it, BEFORE the memo, so a refusal is never memoised. A line that keeps its receipt is not
+  // judged again. A pass records nothing here: the line's link (`linkLineReceipt` -> `linkFile`) meets
+  // the same guard under the same confirmation inside the act and records it there, once.
+  if (line.receiptDocumentId !== undefined && line.receiptDocumentId !== existing?.receipt_document_id) {
+    const doc = ctx.store.db
+      .prepare('SELECT sha256 FROM stored_file WHERE workspace_id = ? AND id = ?')
+      .get(ctx.workspaceId, line.receiptDocumentId) as { sha256: string } | undefined;
+    if (doc !== undefined) {
+      const judged = receiptHolderGuard(ctx, doc.sha256, { kind: 'expense_claim', id: claim.id });
+      if ((judged as { ok?: unknown }).ok === false) return judged as Result;
+    }
+  }
 
   return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'expense_line_upsert', () => {
     const now = ctx.clock.now();
@@ -311,6 +333,7 @@ export function upsertLine(ctx: WorkspaceContext, input: LineUpsertInput): Resul
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(id, ctx.workspaceId, claim.id, line.expenseDate, line.category, line.description ?? null, line.amountMinor, currency, amountBase, fxRate, taxCode, taxBase, taxAmount, acc.id, line.costCenterId ?? null, line.receiptDocumentId ?? null, line.projectId ?? null, input.idempotencyKey, now, now);
+      linkLineReceipt(ctx, line.receiptDocumentId, claim.id);
       return ok({ lineId: id, claim: claimEcho(ctx, claim) });
     }
     ctx.store.db
@@ -321,8 +344,24 @@ export function upsertLine(ctx: WorkspaceContext, input: LineUpsertInput): Resul
           WHERE workspace_id = ? AND id = ?`,
       )
       .run(line.expenseDate, line.category, line.description ?? null, line.amountMinor, currency, amountBase, fxRate, taxCode, taxBase, taxAmount, acc.id, line.costCenterId ?? null, line.receiptDocumentId ?? null, line.projectId ?? null, now, ctx.workspaceId, existing.id);
+    linkLineReceipt(ctx, line.receiptDocumentId, claim.id);
     return ok({ lineId: existing.id, claim: claimEcho(ctx, claim) });
   });
+}
+
+/**
+ * N01 critic finding 3 (N02 US-N02.4): a line's receipt IS the claim's Beleg, so it is linked to the
+ * claim (E00 `linkFile`, kind `expense_claim`), in the line's own transaction, the way A17's
+ * `attach_receipt` links a bill's Beleg. The claim is not posted yet, so the link derives nothing now
+ * (D63); E02's approval runs the posting hook and the floor attaches then. Both doors get it: the
+ * direct `expense_line_upsert` and the capture commit, which writes its line through here.
+ */
+function linkLineReceipt(ctx: WorkspaceContext, fileId: string | undefined, claimId: string): void {
+  if (fileId === undefined) return;
+  const linked = linkFile(ctx, { fileId, entityKind: 'expense_claim', entityId: claimId });
+  // The file was checked above (`invalid_reference`), so a refusal here is a defect: thrown, the line
+  // rolls back with it.
+  if (!linked.ok) throw new Error(`expense_line_upsert: linking the receipt ${fileId} failed: ${linked.error}`);
 }
 
 // --- submit ---------------------------------------------------------------------------------------
@@ -509,6 +548,9 @@ export function approveClaim(ctx: WorkspaceContext, input: ClaimApproveInput): R
       ctx.store.db
         .prepare("UPDATE expense_claim SET status = 'approved', posted_entry_id = ?, approved_at = ? WHERE workspace_id = ? AND id = ? AND status = 'submitted'")
         .run(entryId, now, ctx.workspaceId, claim.id);
+      // N02 US-N02.4 (D63): the claim is posted evidence from this write on, so every Beleg already
+      // linked to it gets its OR 958f floor in this same transaction (`src/core/files/postedFloor.ts`).
+      deriveStatutoryOnPost(ctx, 'expense_claim', claim.id);
       ctx.audit.record({ entityKind: 'expense_claim', entityId: claim.id, action: 'approve', actor: ctx.actor, at: now });
       return ok({ claimId: claim.id, postedEntryId: entryId, confirmed: true, claim: claimEcho(ctx, readClaimRow(ctx, claim.id) as ClaimRow) });
     }),

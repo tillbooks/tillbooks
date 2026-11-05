@@ -44,6 +44,8 @@ export { satisfies, isValidRange, parseVersion } from './compat.js';
 
 export {
   registerMoneyPathTools,
+  registerDispatcherTools,
+  isDispatcherTool,
   registerCoreToolNames,
   moneyPathTools,
   coreToolNames,

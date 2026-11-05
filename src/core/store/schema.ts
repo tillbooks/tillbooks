@@ -29,6 +29,7 @@ import { FILES_SCHEMA_SQL } from '../files/schema.js';
 // segments). Appended at the END of the SCHEMA_SQL union: it references only `workspace`, which
 // CORE_SCHEMA_SQL creates first, so its position after SYNC_SCHEMA_SQL is safe.
 import { FILE_UPLOAD_SCHEMA_SQL } from '../files/uploadSchema.js';
+import { CHAT_BELEGE_SCHEMA_SQL } from '../files/chatBelegeSchema.js';
 import { DUNNING_SCHEMA_SQL } from '../dunning/schema.js';
 import { RECURRING_SCHEMA_SQL } from '../recurring/schema.js';
 import { QR_MATCH_SCHEMA_SQL } from '../banking/qrMatchSchema.js';
@@ -202,11 +203,17 @@ import { LIQUIDITY_SCHEMA_SQL } from '../liquidity/schema.js';
 // D172 workspace settings: `workspace_setting` (one row per overridden setting) and the append-only
 // `workspace_setting_change` history. Both reference only `workspace`, so they go at the end of the union.
 import { SETTINGS_SCHEMA_SQL } from '../settings/schema.js';
+// N00 the Hausbuch: `hausbuch_note` (the house notes) and the append-only `hausbuch_note_change` history.
+// Both reference only `workspace` (and the history its note), so they go at the end of the union.
+import { HAUSBUCH_SCHEMA_SQL } from '../hausbuch/schema.js';
 // A02 §4b, the Belegnummer (D178 point 2): `journal_entry_number` (append-only, one row per numbered
 // entry), `journal_numbering_pending` (the catch-up marker) and the guards that keep the `journal` rows of
 // `document_number_seq` moving forward only. They reference `workspace`, `journal_entry` and
 // `document_number_seq`, all in the core DDL above, so they go at the end of the union.
 import { ENTRY_NUMBER_SCHEMA_SQL, ENTRY_NUMBER_ADDITIVE_COLUMNS, ENTRY_NUMBER_ADDITIVE_DDL } from '../ledger/entryNumberSchema.js';
+// N04 (D183), Autopilot: the autobook grant, its run record and the seen marks; the Dauerbuchung schedules.
+import { AUTOBOOK_SCHEMA_SQL, AUTOBOOK_ADDITIVE_COLUMNS, AUTOBOOK_ADDITIVE_DDL } from '../banking/autobookSchema.js';
+import { VORLAGE_SCHEDULE_SCHEMA_SQL } from '../ledger/vorlageScheduleSchema.js';
 
 /**
  * Additive column migrations (M-3). `CREATE TABLE IF NOT EXISTS` never widens an EXISTING table, so
@@ -586,9 +593,19 @@ export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: st
   // written before it widens on open with every existing decision reading NULL; no schema generation (the
   // D177 `closed_by_link_id` precedent). Frozen by its own trigger in bankInboxSchema.ts.
   { table: 'bank_line_decision', column: 'contact_id', ddl: 'contact_id TEXT REFERENCES contact(id)' },
+  // N03 (D183): the provenance of a booking (which Buchungsregel proposed it, and whether the person changed
+  // it) and the rule version chain. Nullable and additive: a book written before N03 widens on open with
+  // every existing decision reading NULL (unknown, never clean) and every rule starting its own chain. No
+  // schema generation (the contact_id precedent). Frozen by their own triggers in bankInboxSchema.ts.
+  { table: 'bank_line_decision', column: 'proposed_rule_id', ddl: 'proposed_rule_id TEXT REFERENCES bank_standard(id)' },
+  { table: 'bank_line_decision', column: 'rule_changed', ddl: 'rule_changed INTEGER CHECK (rule_changed IN (0, 1))' },
+  { table: 'bank_standard', column: 'replaces_id', ddl: 'replaces_id TEXT REFERENCES bank_standard(id)' },
   // A02 §4b (D178 point 2, critic r2 L2-1): the Belegnummer's `voucher_ref`, for a number table a
   // pre-release round-1 build created at generation 17 without it.
   ...ENTRY_NUMBER_ADDITIVE_COLUMNS,
+  // N04 (D183): the channel an automatic booking is stamped with on its decision row. Nullable and additive
+  // (the N03 provenance precedent): every existing decision reads NULL, a manual booking.
+  ...AUTOBOOK_ADDITIVE_COLUMNS,
 ];
 
 /**
@@ -703,9 +720,23 @@ export const ADDITIVE_INDEXES: readonly { name: string; ddl: string }[] = [
     ddl: `CREATE UNIQUE INDEX IF NOT EXISTS bank_standard_one_live_rule
           ON bank_standard (workspace_id, counterparty_key, direction, COALESCE(match_text, '')) WHERE superseded_at IS NULL`,
   },
+  // N03 (D183): a rule's uses are read by its versions (`ruleStats.ts`), and a version's successor by its
+  // predecessor; both name additive columns, so they run after them.
+  {
+    name: 'bank_line_decision_by_proposed_rule',
+    ddl: `CREATE INDEX IF NOT EXISTS bank_line_decision_by_proposed_rule
+          ON bank_line_decision (workspace_id, proposed_rule_id) WHERE proposed_rule_id IS NOT NULL`,
+  },
+  {
+    name: 'bank_standard_by_replaces',
+    ddl: `CREATE INDEX IF NOT EXISTS bank_standard_by_replaces
+          ON bank_standard (workspace_id, replaces_id) WHERE replaces_id IS NOT NULL`,
+  },
   // A02 §4b (D178 point 2): the Belegnummer's probe indexes and its one-reader backstop trigger, which name
   // `journal_entry_number.voucher_ref` and so run after the additive columns (critic r2 M2-2 and L2-1).
   ...ENTRY_NUMBER_ADDITIVE_DDL,
+  // N04 (D183): the decision channel's freeze trigger names the additive `channel` column.
+  ...AUTOBOOK_ADDITIVE_DDL,
 ];
 
 /**
@@ -1570,6 +1601,22 @@ CREATE TABLE IF NOT EXISTS idempotency (
   PRIMARY KEY (workspace_id, verb, key)
 );
 
+-- N01 US-N01.5 (§H-IDEMPOTENT, one key, one meaning): what a registry verb SPENT a caller's key with,
+-- one row per (workspace, verb, caller key), written by the store's write chokepoint inside the act's
+-- own transaction and checked at the registry boundary before the verb runs (src/core/store/
+-- idempotencyArgs.ts). Independent of how an engine rescopes its own memo key. A new table, so a
+-- pre-N01 file gains it on open with no rows: every key spent before replays as it always did.
+-- Operational, like idempotency: never in a backup, an export or an environment copy.
+CREATE TABLE IF NOT EXISTS idempotency_args (
+  workspace_id      TEXT NOT NULL,
+  verb              TEXT NOT NULL,
+  caller_key        TEXT NOT NULL,
+  args_hash         TEXT NOT NULL,
+  field_hashes_json TEXT NOT NULL,
+  created_at        TEXT NOT NULL,
+  PRIMARY KEY (workspace_id, verb, caller_key)
+);
+
 -- Reversed-once (§6b reversal mechanics): at most one entry may reverse a given entry, enforced at
 -- the DB layer so even a cross-process TOCTOU race cannot post two reversals of the same entry.
 CREATE UNIQUE INDEX IF NOT EXISTS journal_entry_one_reversal
@@ -1624,4 +1671,4 @@ END;
  * and joins it here. That keeps the money-path DDL beside the code that writes it, and it keeps
  * concurrent capability branches from all editing one 300-line string.
  */
-export const SCHEMA_SQL = `${CORE_SCHEMA_SQL}\n${PAYMENT_SCHEMA_SQL}\n${DEBTORS_SCHEMA_SQL}\n${BANKING_SCHEMA_SQL}\n${ACCESS_SCHEMA_SQL}\n${CUSTOMIZATION_SCHEMA_SQL}\n${AUTOMATION_SCHEMA_SQL}\n${SALES_SCHEMA_SQL}\n${CONTACT_ACTIVITY_SCHEMA_SQL}\n${PURCHASE_SCHEMA_SQL}\n${CAPTURE_SCHEMA_SQL}\n${FILES_SCHEMA_SQL}\n${DUNNING_SCHEMA_SQL}\n${RECURRING_SCHEMA_SQL}\n${QR_MATCH_SCHEMA_SQL}\n${CAMT_SCHEMA_SQL}\n${PAIN001_SCHEMA_SQL}\n${REVIEW_SCHEMA_SQL}\n${AGENT_SCHEMA_SQL}\n${MIGRATION_SCHEMA_SQL}\n${ONBOARDING_SCHEMA_SQL}\n${MOVE_SCHEMA_SQL}\n${GL_ARCHIVE_SCHEMA_SQL}\n${EXTRACTION_MANIFEST_SCHEMA_SQL}\n${PROJECTS_SCHEMA_SQL}\n${TASKS_SCHEMA_SQL}\n${TIME_SCHEMA_SQL}\n${DEALS_SCHEMA_SQL}\n${STOCK_SCHEMA_SQL}\n${SALES_ORDER_SCHEMA_SQL}\n${PURCHASE_ORDER_SCHEMA_SQL}\n${HR_SCHEMA_SQL}\n${RETAINER_SCHEMA_SQL}\n${SIGN_SCHEMA_SQL}\n${PORTAL_SCHEMA_SQL}\n${REMITTANCE_SCHEMA_SQL}\n${REPORTBUILDER_SCHEMA_SQL}\n${MAIL_SCHEMA_SQL}\n${VOICE_SCHEMA_SQL}\n${DRAFTING_SCHEMA_SQL}\n${DATA_SCHEMA_SQL}\n${DOCUMENT_TEMPLATE_SCHEMA_SQL}\n${NOTIFICATIONS_SCHEMA_SQL}\n${PLUGINS_SCHEMA_SQL}\n${DISPATCH_SCHEMA_SQL}\n${PAYROLL_HANDOFF_SCHEMA_SQL}\n${EBILL_SCHEMA_SQL}\n${EBICS_SCHEMA_SQL}\n${MANAGED_SCHEMA_SQL}\n${ASSETS_SCHEMA_SQL}\n${ASSET_MASTER_SCHEMA_SQL}\n${PROCUREMENT_SCHEMA_SQL}\n${INVENTORY_SCHEMA_SQL}\n${DEPRECIATION_SCHEMA_SQL}\n${TRACKING_SCHEMA_SQL}\n${ASSET_TRANSACTION_SCHEMA_SQL}\n${PO_VERSION_SCHEMA_SQL}\n${ASSET_TRANSFER_SCHEMA_SQL}\n${MAINTENANCE_SCHEMA_SQL}\n${MOVEMENT_SCHEMA_SQL}\n${DEPRECIATION_RUN_SCHEMA_SQL}\n${RECEIPT_SCHEMA_SQL}\n${VALUATION_SCHEMA_SQL}\n${LANDED_COST_SCHEMA_SQL}\n${THREE_WAY_MATCH_SCHEMA_SQL}\n${RECONCILIATION_SCHEMA_SQL}\n${STOCKTAKE_SCHEMA_SQL}\n${ADJUST_SCHEMA_SQL}\n${SYNC_SCHEMA_SQL}\n${IMPLEMENTATION_PROJECT_SCHEMA_SQL}\n${ACCRUALS_SCHEMA_SQL}\n${VAT_SETTLEMENT_SCHEMA_SQL}\n${CHECKLISTS_SCHEMA_SQL}\n${FILE_UPLOAD_SCHEMA_SQL}\n${LIQUIDITY_SCHEMA_SQL}\n${SETTINGS_SCHEMA_SQL}\n${ENTRY_NUMBER_SCHEMA_SQL}`;
+export const SCHEMA_SQL = `${CORE_SCHEMA_SQL}\n${PAYMENT_SCHEMA_SQL}\n${DEBTORS_SCHEMA_SQL}\n${BANKING_SCHEMA_SQL}\n${ACCESS_SCHEMA_SQL}\n${CUSTOMIZATION_SCHEMA_SQL}\n${AUTOMATION_SCHEMA_SQL}\n${SALES_SCHEMA_SQL}\n${CONTACT_ACTIVITY_SCHEMA_SQL}\n${PURCHASE_SCHEMA_SQL}\n${CAPTURE_SCHEMA_SQL}\n${FILES_SCHEMA_SQL}\n${DUNNING_SCHEMA_SQL}\n${RECURRING_SCHEMA_SQL}\n${QR_MATCH_SCHEMA_SQL}\n${CAMT_SCHEMA_SQL}\n${PAIN001_SCHEMA_SQL}\n${REVIEW_SCHEMA_SQL}\n${AGENT_SCHEMA_SQL}\n${MIGRATION_SCHEMA_SQL}\n${ONBOARDING_SCHEMA_SQL}\n${MOVE_SCHEMA_SQL}\n${GL_ARCHIVE_SCHEMA_SQL}\n${EXTRACTION_MANIFEST_SCHEMA_SQL}\n${PROJECTS_SCHEMA_SQL}\n${TASKS_SCHEMA_SQL}\n${TIME_SCHEMA_SQL}\n${DEALS_SCHEMA_SQL}\n${STOCK_SCHEMA_SQL}\n${SALES_ORDER_SCHEMA_SQL}\n${PURCHASE_ORDER_SCHEMA_SQL}\n${HR_SCHEMA_SQL}\n${RETAINER_SCHEMA_SQL}\n${SIGN_SCHEMA_SQL}\n${PORTAL_SCHEMA_SQL}\n${REMITTANCE_SCHEMA_SQL}\n${REPORTBUILDER_SCHEMA_SQL}\n${MAIL_SCHEMA_SQL}\n${VOICE_SCHEMA_SQL}\n${DRAFTING_SCHEMA_SQL}\n${DATA_SCHEMA_SQL}\n${DOCUMENT_TEMPLATE_SCHEMA_SQL}\n${NOTIFICATIONS_SCHEMA_SQL}\n${PLUGINS_SCHEMA_SQL}\n${DISPATCH_SCHEMA_SQL}\n${PAYROLL_HANDOFF_SCHEMA_SQL}\n${EBILL_SCHEMA_SQL}\n${EBICS_SCHEMA_SQL}\n${MANAGED_SCHEMA_SQL}\n${ASSETS_SCHEMA_SQL}\n${ASSET_MASTER_SCHEMA_SQL}\n${PROCUREMENT_SCHEMA_SQL}\n${INVENTORY_SCHEMA_SQL}\n${DEPRECIATION_SCHEMA_SQL}\n${TRACKING_SCHEMA_SQL}\n${ASSET_TRANSACTION_SCHEMA_SQL}\n${PO_VERSION_SCHEMA_SQL}\n${ASSET_TRANSFER_SCHEMA_SQL}\n${MAINTENANCE_SCHEMA_SQL}\n${MOVEMENT_SCHEMA_SQL}\n${DEPRECIATION_RUN_SCHEMA_SQL}\n${RECEIPT_SCHEMA_SQL}\n${VALUATION_SCHEMA_SQL}\n${LANDED_COST_SCHEMA_SQL}\n${THREE_WAY_MATCH_SCHEMA_SQL}\n${RECONCILIATION_SCHEMA_SQL}\n${STOCKTAKE_SCHEMA_SQL}\n${ADJUST_SCHEMA_SQL}\n${SYNC_SCHEMA_SQL}\n${IMPLEMENTATION_PROJECT_SCHEMA_SQL}\n${ACCRUALS_SCHEMA_SQL}\n${VAT_SETTLEMENT_SCHEMA_SQL}\n${CHECKLISTS_SCHEMA_SQL}\n${FILE_UPLOAD_SCHEMA_SQL}\n${CHAT_BELEGE_SCHEMA_SQL}\n${LIQUIDITY_SCHEMA_SQL}\n${SETTINGS_SCHEMA_SQL}\n${ENTRY_NUMBER_SCHEMA_SQL}\n${HAUSBUCH_SCHEMA_SQL}\n${AUTOBOOK_SCHEMA_SQL}\n${VORLAGE_SCHEDULE_SCHEMA_SQL}`;

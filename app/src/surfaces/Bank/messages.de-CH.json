@@ -3,6 +3,10 @@
     "bankInbox": "Bankzeilen"
   },
   "bankInbox": {
+    "houseRule": {
+      "title": "Hausregel",
+      "open": "Im Hausbuch öffnen"
+    },
     "title": "Bank",
     "subtitleMany": "{count} Bankkonten",
     "loading": "Die Bankzeilen werden geladen.",
@@ -1382,6 +1386,28 @@
         "computedHow": "Berechnet: {how}",
         "asked": "Jedes Mal eingeben: {label}",
         "askedBare": "Jedes Mal eingeben"
+      },
+      "stats": {
+        "used": "{count}× verwendet, zuletzt {date}",
+        "changed": "{count}× geändert",
+        "never": "Noch nie verwendet",
+        "loading": "–"
+      },
+      "health": "Regel anpassen?",
+      "healthHint": "{changed} der letzten {uses} Vorschläge dieser Regel hast du vor dem Buchen geändert.",
+      "test": {
+        "button": "Testen",
+        "busy": "Wird getestet …",
+        "result": "Seit {date}: {hits} Zeilen, {identical} genau so gebucht",
+        "none": "Keine Treffer seit {date}",
+        "failed": "Der Test hat nicht geklappt."
+      },
+      "saveFromBooked": {
+        "action": "Als Regel speichern",
+        "already": "Bereits durch Regel «{name}» gebucht",
+        "title": "Regel aus dieser Buchung",
+        "loading": "Die Buchung wird gelesen.",
+        "saved": "Buchungsregel «{name}» aus der Buchung gespeichert."
       }
     },
     "woher": {
@@ -1739,5 +1765,56 @@
     "titleAll": "Auszüge {ranges} fehlen",
     "whyAllChain": "Es fehlt kein Geld: die Salden schliessen genau an.",
     "titleMany": "Lücken schliessen"
+  },
+  "autobook": {
+    "chip": {
+      "active": "Automatisch",
+      "stopped": "Automatik gestoppt",
+      "paused": "Pausiert: {reason}"
+    },
+    "suspended": {
+      "reopened": "eine Buchung wurde rückgängig gemacht",
+      "payment_reversed": "eine Zahlung wurde storniert",
+      "changed_booking": "eine Buchung wurde geändert",
+      "granter_lost_capability": "wer sie eingeschaltet hat, darf nicht mehr buchen"
+    },
+    "switch": {
+      "label": "Künftig automatisch",
+      "ceiling": "Bis {ceiling} pro Zeile, nur in {currency}",
+      "notEarned": "Bisher {uses} von {needed} Mal unverändert gebucht",
+      "notNow": "Gerade nicht möglich: die Automatik ist aus, oder keine unveränderte Buchung wurde von einer Person bestätigt",
+      "failed": "Das hat nicht geklappt. Nichts wurde geändert."
+    },
+    "ineligible": {
+      "not_a_bank_rule": "Nur eine Bankregel bucht selbst",
+      "ignore_rule": "Eine Regel, die Zeilen ignoriert, bucht nichts",
+      "name_key": "Die Regel erkennt die Gegenpartei nur am Namen; sie braucht eine IBAN",
+      "via_account": "Eine Regel mit Durchlaufkonto bucht nie selbst",
+      "own_account": "Überträge zwischen deinen eigenen Konten buchen nie selbst",
+      "rule_invalid": "Die Regel ist so nicht gültig",
+      "asks_amount": "Die Regel fragt nach einem Betrag",
+      "mode_not_bulk": "Buchungsregeln sind nicht auf Sammelbuchen gestellt"
+    }
+  },
+  "vorlage": {
+    "schedule": {
+      "title": "Wiederholen",
+      "next": "Nächste Ausführung: {date}",
+      "noNext": "Keine weitere Ausführung",
+      "none": "Wird nicht wiederholt",
+      "dropped": "(schlägt vor, bis du sie neu setzt: die Vorlage hat sich geändert)",
+      "every": "Jeden",
+      "every_month": "Monat",
+      "every_quarter": "Quartal",
+      "every_year": "Jahr",
+      "day": "Tag (31 = letzter Tag)",
+      "start": "Ab",
+      "end": "Bis",
+      "mode": "Dann",
+      "propose": "Vorschlagen",
+      "post": "Direkt buchen",
+      "save": "Wiederholen",
+      "stop": "Nicht mehr wiederholen"
+    }
   }
 }

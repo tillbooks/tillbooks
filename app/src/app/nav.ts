@@ -114,6 +114,8 @@ export const SURFACE_CATALOG: readonly Surface[] = [
   { path: '/writing-style', labelKey: 'nav.writingStyle', icon: 'correspondence', navId: 'writing-style' },
   // D178 point 7: the person's own preferences (look and arrangement), every member, no capability.
   { path: '/my-settings', labelKey: 'nav.mySettings', icon: 'setup', navId: 'my-settings' },
+  // N00: the Hausbuch, the house notes every agent reads first in workspace_brief.
+  { path: '/hausbuch', labelKey: 'nav.hausbuch', icon: 'setup', navId: 'hausbuch' },
   { path: '/document-templates', labelKey: 'nav.documentTemplates', icon: 'documents', navId: 'document-templates' },
   { path: '/dispatch', labelKey: 'nav.dispatch', icon: 'documents', navId: 'dispatch' },
   { path: '/migration', labelKey: 'nav.migration', icon: 'migration', navId: 'migration' },
@@ -458,6 +460,8 @@ export const NAV_TREE: readonly NavTreeGroup[] = [
       leaf('operations'),
       // D178 point 7: Meine Einstellungen, the person's own preferences, after the workspace pair (K-16).
       leaf('my-settings'),
+      // N00: the Hausbuch, the workspace's house notes, beside the workspace settings it belongs to.
+      leaf('hausbuch'),
       leaf('members'),
       leaf('customization'),
       leaf('automations'),

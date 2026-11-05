@@ -15,6 +15,7 @@ import './costSeams.js';
 export {
   createVendorBill,
   recordExpense,
+  prevalidateRecordExpense,
   postVendorBill,
   attachReceipt,
   voidVendorBill,

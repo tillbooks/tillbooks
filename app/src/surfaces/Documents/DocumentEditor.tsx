@@ -637,8 +637,13 @@ function DocumentEditorBody({ onStatusChanged, forcedType }: DocumentEditorProps
    * one. A definite answer ends the act: on success the draft exists and every later save is an
    * update; on a refusal the engine has memoised that refusal under the key, so the next save is a
    * new act with a new key. `sig` is the content the act first sent, see the follow-up below.
+   *
+   * N01 US-N01.5 (one key, one meaning): the retry resends `content`, the FIRST attempt's arguments,
+   * never the screen's current ones. The engine refuses a spent key with other arguments
+   * (`idempotency_key_conflict`), so a retry that carried the edits would be refused, and the next save
+   * would mint a new key and a second draft. The edits reach the draft through the patch below.
    */
-  const createAct = useRef<{ key: string; sig: string } | null>(null);
+  const createAct = useRef<{ key: string; sig: string; content: Record<string, unknown> } | null>(null);
   // F1 (critic): true from the first create attempt until the engine gives a definite answer. While
   // it is open the Typ control is locked: the retry replays whatever type the first attempt stored,
   // and no later patch can change a type.
@@ -662,10 +667,10 @@ function DocumentEditorBody({ onStatusChanged, forcedType }: DocumentEditorProps
         lines: buildLinePayload(),
       };
       const sig = JSON.stringify(content);
-      if (createAct.current === null) createAct.current = { key: idemKey('doc-create'), sig };
+      if (createAct.current === null) createAct.current = { key: idemKey('doc-create'), sig, content };
       const act = createAct.current;
       setCreatePending(true);
-      const { body } = await client.call('create_document', { workspaceId, ...content, idempotencyKey: act.key });
+      const { body } = await client.call('create_document', { workspaceId, ...act.content, idempotencyKey: act.key });
       if (isErr(body)) {
         if (body.error !== 'transport_error') {
           createAct.current = null;

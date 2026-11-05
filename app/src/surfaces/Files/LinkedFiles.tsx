@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
+import { useBookAgain } from '../../components/BookAgain';
 import { isErr, type Err } from '../../lib/client';
 import { CAP, editCapabilityForKind, useCapabilities, type EntityKind } from '../../lib/capabilities';
 import { useT, formatDate } from '../../i18n';
@@ -71,6 +72,7 @@ export function LinkedFiles({ workspaceId, entityKind, entityId, title, attachLa
   const [failed, setFailed] = useState(false);
   const [error, setError] = useState<Err | null>(null);
   const [busy, setBusy] = useState(false);
+  const { ask: askBookAgain, dialog: bookAgainDialog } = useBookAgain();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,23 +120,29 @@ export function LinkedFiles({ workspaceId, entityKind, entityId, title, attachLa
         return;
       }
       const file = (uploaded.body as unknown as { file: { id: string } }).file;
-      const linked = await client.call('files_link', {
-        workspaceId,
-        fileId: file.id,
-        entityKind,
-        entityId,
-        idempotencyKey: crypto.randomUUID(),
-      });
+      const linkKey = crypto.randomUUID();
+      const link = (confirmation: Record<string, unknown> = {}) =>
+        client.call('files_link', { workspaceId, fileId: file.id, entityKind, entityId, idempotencyKey: linkKey, ...confirmation });
+      const linked = await link();
       if (isErr(linked.body)) {
+        // N02 R1: a receipt already booked elsewhere is linked only with the person's reason; the same
+        // link is sent again with it (the refused one wrote nothing).
+        const asked = askBookAgain(linked.body, async (confirmation) => {
+          const again = await link({ ...confirmation });
+          if (isErr(again.body)) return again.body;
+          await load();
+          onChanged?.();
+          return null;
+        });
         // The bytes ARE stored and reachable from the Dateien surface, so the message says so instead
         // of implying the upload was lost.
-        setError(linked.body);
+        if (!asked) setError(linked.body);
         return;
       }
       await load();
       onChanged?.();
     },
-    [client, workspaceId, entityKind, entityId, load, onChanged],
+    [askBookAgain, client, workspaceId, entityKind, entityId, load, onChanged],
   );
 
   /**
@@ -188,6 +196,7 @@ export function LinkedFiles({ workspaceId, entityKind, entityId, title, attachLa
         )}
       </header>
 
+      {bookAgainDialog}
       {error !== null && (
         <ErrorBanner
           message={

@@ -38,6 +38,9 @@ const USAGE = `till ${VERSION} - Swiss accounting your agent can actually use
   work on one ledger. Set TILL_DB_PATH=:memory: for a throwaway run. On start,
   mcp prints on stderr the ledger it opened and the Studio where a human approves
   what the agent drafts (Agent > Vorschläge), or that none runs and till up starts it.
+  mcp --profile essentials (or TILL_MCP_PROFILE=essentials) lists about forty
+  everyday tools; get_api_catalog finds any other verb and call_tool runs it.
+  The default profile, full, lists every tool.
 
   serve binds 127.0.0.1:8788. TILL_PORT takes decimal digits, 1 to 65535, and
   refuses anything else instead of reinterpreting it. TILL_HOST accepts loopback
@@ -65,7 +68,16 @@ switch (command) {
   case 'mcp': {
     // Loaded lazily from the build output so `version`/`help` never pay for the server or its
     // native SQLite dependency. The stdio transport keeps the process alive once connected.
-    const { startMcpServer } = await import(new URL('../dist/api/mcp.js', import.meta.url));
+    const { startMcpServer, resolveToolProfile } = await import(new URL('../dist/api/mcp.js', import.meta.url));
+    // N01 US-N01.9: the tool profile is the process's (`--profile essentials` or TILL_MCP_PROFILE); an
+    // unknown name is refused here, before any book is opened.
+    let profile;
+    try {
+      profile = resolveToolProfile(process.argv.slice(3), process.env);
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
     const { ensureDbChoice, adoptedUnavailableRefusal } = await import(new URL('../dist/api/db-path.js', import.meta.url));
     // Always a resolved path, never an implicit in-memory database: an agent that posts into a
     // ledger nobody else can see is worse than one that refuses to start.
@@ -90,7 +102,7 @@ switch (command) {
     }
     try {
       dbPath = choice.path;
-      ({ store } = await startMcpServer({ dbPath }));
+      ({ store } = await startMcpServer({ dbPath, profile }));
     } catch (e) {
       // A refused open (a book written by a newer TILL, `schema_newer_than_runtime`) is a sentence for
       // the human on stderr and a non-zero exit, the way `up` and `serve` fail below, never a stack

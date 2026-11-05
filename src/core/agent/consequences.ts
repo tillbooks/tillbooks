@@ -480,6 +480,12 @@ export const CONSEQUENCE_FOR_VERB: Readonly<Record<string, Consequence>> = {
     'de-CH': 'Entfernt einen Standard: Spätere Bankzeilen dieser Gegenpartei werden nicht mehr damit vorbelegt. Bereits Gebuchtes bleibt, wie es ist; der Standard bleibt erhalten, und du kannst ihn wieder setzen.',
     reversibility: 'reversible',
   },
+  // N04 (D183): a Dauerbuchung schedule books (or proposes) a Vorlage on each due date from now on.
+  set_vorlage_schedule: {
+    en: 'Lets this Vorlage book on every due date: as a proposal you approve or, set by a person, posted directly. Nothing is booked now; end it any time, and a booking is corrected by a reversing entry.',
+    'de-CH': 'Lässt diese Vorlage an jedem Fälligkeitstag buchen: als Vorschlag oder, von einer Person so gesetzt, direkt. Jetzt wird nichts gebucht; du kannst es jederzeit beenden, Gebuchtes korrigiert eine Korrekturbuchung.',
+    reversibility: 'reversible',
+  },
   reopen_bank_line: {
     en: 'Opens the bank line again: a booking or payment it made is reversed with a correcting entry, but a payment run keeps its payments. The old decision stays on record; you can book the line afresh.',
     'de-CH': 'Öffnet die Bankzeile wieder: eine Buchung oder Zahlung daraus wird mit einer Korrekturbuchung korrigiert, ein Zahlungslauf behält seine Zahlungen. Der alte Entscheid bleibt erhalten.',

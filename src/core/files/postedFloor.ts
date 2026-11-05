@@ -11,8 +11,10 @@
  *
  * CALLED FROM THE POSTING PATHS, inside their own transaction: A02's status flip in
  * `src/core/ledger/postEntry.ts` (which covers a direct post, a draft promoted in place, a reversal
- * and every poster-delegate post), and A10's issue transition in `src/core/sales/document.ts` (the
- * same write that stamps `issue_date` and consumes the gap-free number). A payment needs no hook:
+ * and every poster-delegate post), A10's issue transition in `src/core/sales/document.ts` (the
+ * same write that stamps `issue_date` and consumes the gap-free number), A17's bill post in
+ * `src/core/purchase/vendorBill.ts` (the write that stamps `entry_id`) and E02's claim approval in
+ * `src/core/hr/claims.ts` (the write that stamps `posted_entry_id`), N02 US-N02.4. A payment needs no hook:
  * `record_payment` posts in the same call, so a payment row never exists un-posted and `linkFile`
  * derives immediately.
  *

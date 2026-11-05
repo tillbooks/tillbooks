@@ -43,6 +43,7 @@ import {
   vatAnnualReconciliation,
 } from '../core/accruals/index.js';
 import type { ActionKind } from './actionKind.js';
+import { PROVISION_REASONS } from '../core/accruals/lines.js';
 
 export interface AccrualActionHelpers {
   ctxAction(
@@ -125,7 +126,8 @@ export function accrualActions(h: AccrualActionHelpers): ActionDef[] {
       "Describe a Rückstellung (OR Art. 960e) and save it as a DRAFT: `reason` is one of the eight statutory ids (Garantie, Ferien und Überzeit, Prozess, Grossreparatur, Sanierung, Restrukturierung, Steuern, Sonstige; `invalid_reason` names the exact ids, and `sonstige` needs a description of at least 10 characters); `provisionAccount` is 2330, 2600 or a liability numbered 23xx/26xx; `expenseAccount` is the P&L account the formation is charged to. Returns the draft with its lines (Dr expense / Cr provision). Nothing is posted.",
       ctxSchema(
         {
-          reason: STR,
+          // N01: a closed code (the eight statutory ids), so never free text in the idempotency identity.
+          reason: { type: 'string', enum: [...PROVISION_REASONS] },
           periodEnd: STR,
           amountMinor: INT,
           provisionAccount: STR,

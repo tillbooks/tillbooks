@@ -28,7 +28,7 @@ import type { Err, Result } from '../result.js';
 import { requireDate, requireString } from '../ledger/inputGuards.js';
 import { expandEntry, intentLineEffect } from '../ledger/compose.js';
 import type { ComposeExpandOk, IntentLine } from '../ledger/compose.js';
-import { postEntry } from '../ledger/postEntry.js';
+import { postEntry, previewPostingLines } from '../ledger/postEntry.js';
 import type { PostEntryInput, PostEntryOk } from '../ledger/postEntry.js';
 import { readLiveRule, recipeOfRow, restLegIndex, ruleInvalidReason } from './bankStandards.js';
 import type { RecipeLeg, RecipeSide } from './bankStandards.js';
@@ -189,35 +189,65 @@ export function composeTemplate(ctx: WorkspaceContext, input: ComposeTemplateInp
 export type PostTemplateInput = Omit<PostEntryInput, 'lines'> & { template?: unknown; lines?: unknown };
 
 /**
+ * The steps `post_entry { template }` takes before it posts, shared with its pre-draft screen (N01, D158) so
+ * the two cannot drift: the capability and key guards, the replay (`{ replayed }`), the expansion and the
+ * composition (a refusal), or the plain `post_entry` input the template composes to (`{ post }`).
+ */
+function prepareTemplatePost(
+  ctx: WorkspaceContext,
+  input: PostTemplateInput,
+): { refused: Result<PostEntryOk> } | { replayed: Result<PostEntryOk> } | { post: PostEntryInput } {
+  const capable = ctx.capabilities.assert('post');
+  if (!capable.ok) return { refused: capable };
+  // The template is a rule row, read under the bank inbox's read right (as `compose_entry`'s template form).
+  const reads = ctx.capabilities.assert('read_sales');
+  if (!reads.ok) return { refused: reads };
+  const keyGuard = requireString(input.idempotencyKey, 'idempotencyKey') ?? requireDate(input.date, 'date');
+  if (keyGuard) return { refused: keyGuard };
+  if (input.lines !== undefined && input.lines !== null) {
+    return { refused: err('invalid_input', { field: 'lines', reason: 'post either lines or a template, not both' }) };
+  }
+  const parsed = parseTemplate(input.template);
+  if ('error' in parsed) return { refused: parsed.error };
+  const replayed = ctx.store.recallIdempotent<Result<PostEntryOk>>(ctx.workspaceId, input.idempotencyKey, 'post_entry');
+  if (replayed !== undefined) return { replayed };
+  const expanded = expandTemplate(ctx, input.date, parsed.template);
+  if (!expanded.ok) return { refused: expanded.error };
+  const composed = expandEntry(ctx, { date: input.date, lines: expanded.lines, ...(input.entryId !== undefined ? { entryId: input.entryId } : {}) });
+  if (!composed.ok) return { refused: composed };
+  if (!composed.verdict.ok) return { refused: composed.verdict };
+  const { template: _template, lines: _lines, ...rest } = input;
+  return {
+    post: {
+      ...rest,
+      description: typeof input.description === 'string' && input.description.trim() !== '' ? input.description : expanded.expanded.label,
+      lines: composed.lines.map((l) => ({ ...l })),
+    },
+  };
+}
+
+/**
  * `post_entry { template }`: replay first (a retry answers the stored result even after the Vorlage changed),
  * then expand, compose, and post the composed lines verbatim through `postEntry`, under the caller's key and
  * in the `post_entry` scope, so the posting is the ordinary one in every respect. The entry's text defaults
  * to the Vorlage's name.
  */
 export function postEntryFromTemplate(ctx: WorkspaceContext, input: PostTemplateInput): Result<PostEntryOk> {
-  const capable = ctx.capabilities.assert('post');
-  if (!capable.ok) return capable;
-  // The template is a rule row, read under the bank inbox's read right (as `compose_entry`'s template form).
-  const reads = ctx.capabilities.assert('read_sales');
-  if (!reads.ok) return reads;
-  const keyGuard = requireString(input.idempotencyKey, 'idempotencyKey') ?? requireDate(input.date, 'date');
-  if (keyGuard) return keyGuard;
-  if (input.lines !== undefined && input.lines !== null) {
-    return err('invalid_input', { field: 'lines', reason: 'post either lines or a template, not both' });
-  }
-  const parsed = parseTemplate(input.template);
-  if ('error' in parsed) return parsed.error;
-  const replayed = ctx.store.recallIdempotent<Result<PostEntryOk>>(ctx.workspaceId, input.idempotencyKey, 'post_entry');
-  if (replayed !== undefined) return replayed;
-  const expanded = expandTemplate(ctx, input.date, parsed.template);
-  if (!expanded.ok) return expanded.error;
-  const composed = expandEntry(ctx, { date: input.date, lines: expanded.lines, ...(input.entryId !== undefined ? { entryId: input.entryId } : {}) });
-  if (!composed.ok) return composed;
-  if (!composed.verdict.ok) return composed.verdict;
-  const { template: _template, lines: _lines, ...rest } = input;
-  return postEntry(ctx, {
-    ...rest,
-    description: typeof input.description === 'string' && input.description.trim() !== '' ? input.description : expanded.expanded.label,
-    lines: composed.lines.map((l) => ({ ...l })),
-  });
+  const prepared = prepareTemplatePost(ctx, input);
+  if ('refused' in prepared) return prepared.refused;
+  if ('replayed' in prepared) return prepared.replayed;
+  return postEntry(ctx, prepared.post);
+}
+
+/**
+ * N01 US-N01.3 (D158): what `post_entry { template }` would refuse, without writing: the shared steps above,
+ * then the composed post through A02's own pre-write half (`previewPostingLines`). Undefined when the verb
+ * would accept it or replay its key.
+ */
+export function prevalidatePostEntryFromTemplate(ctx: WorkspaceContext, input: PostTemplateInput): Result | undefined {
+  const prepared = prepareTemplatePost(ctx, input);
+  if ('refused' in prepared) return prepared.refused;
+  if ('replayed' in prepared) return undefined;
+  const preview = previewPostingLines(ctx, prepared.post);
+  return preview.ok ? undefined : preview.error;
 }

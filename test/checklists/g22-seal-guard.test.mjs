@@ -153,5 +153,6 @@ test('idempotency: a key that already sealed replays its result even once a run 
     .prepare("INSERT INTO checklist_run (id, workspace_id, template_id, period_label, period_start, period_end, status, created_by, created_key, created_at) VALUES ('chkrun_race', ?, 'year_close', '2026', '2026-01-01', '2026-12-31', 'open', 'studio', 'race', '2027-02-15T09:00:00.000Z')")
     .run(w.a);
   assert.deepEqual(w.call(w.a, 'close_year', { year: '2026', idempotencyKey: k }), first);
-  assert.deepEqual(w.call(w.a, 'close_year', { year: '2026', runId: 'chkrun_race', idempotencyKey: k }), first);
+  // N01 US-N01.5: the key was spent without a runId, so adding one is another call and refuses.
+  assert.equal(w.call(w.a, 'close_year', { year: '2026', runId: 'chkrun_race', idempotencyKey: k }).error, 'idempotency_key_conflict');
 });

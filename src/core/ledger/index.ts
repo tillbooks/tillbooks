@@ -3,7 +3,7 @@
  * Verbs are added here as they are built, test-first.
  */
 
-export { postEntry } from './postEntry.js';
+export { postEntry, prevalidatePostEntry } from './postEntry.js';
 export type { LineInput, PostEntryInput } from './postEntry.js';
 export { reverseEntry } from './reverseEntry.js';
 export type { ReverseEntryInput } from './reverseEntry.js';
@@ -40,6 +40,7 @@ export { hardCloseYear } from './yearClose.js';
 export {
   setOpeningBalances,
   prevalidateOpeningBalances,
+  resolveAccountReference,
   getOpeningBalances,
   OPENING_CONTRA_ACCOUNT_NUMBER,
   OPENING_KEY_PREFIX,

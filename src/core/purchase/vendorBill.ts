@@ -40,12 +40,13 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { requireString, requireDate, optionalDate, optionalId, optionalText } from '../ledger/inputGuards.js';
-import { postEntry, statesConversionBasis } from '../ledger/postEntry.js';
+import { postEntry, previewPostingLines, statesConversionBasis } from '../ledger/postEntry.js';
 import { reverseOwnedEntry, VENDOR_BILL_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
 import { buildVatLines, computeLineTax } from '../vat/applyVat.js';
 import type { VatJournalLine } from '../vat/applyVat.js';
 import { resolveTax } from '../vat/resolveTax.js';
 import { resolveFxRate, baseCurrencyOf } from '../fx/rates.js';
+import { parseRate } from '../fx/rateMath.js';
 import { ROLE_ACCOUNT_NUMBER } from '../payments/accounts.js';
 import { resolveContactRef } from '../sales/contact.js';
 import { readProject } from '../projects/index.js';
@@ -54,6 +55,8 @@ import type { VendorBillStatus } from './enums.js';
 import { readVendorBillRow, vendorBillEcho, settledOnVendorBill } from './reads.js';
 import type { VendorBillRow } from './reads.js';
 import { dueDateFor } from '../setup/paymentTerms.js';
+import { deriveStatutoryOnPost } from '../files/postedFloor.js';
+import { linkReceiptPointer, refuseReceiptLink } from '../files/files.js';
 
 /** 2000 Kreditoren, from A14's one role map. A17 states no account number of its own. */
 const PAYABLE_ACCOUNT = ROLE_ACCOUNT_NUMBER.payable;
@@ -400,6 +403,11 @@ function prepare(ctx: WorkspaceContext, input: CreateVendorBillInput): PreparedB
   if (input.taxCode !== undefined && input.taxCode !== null && typeof input.taxCode !== 'string') {
     return err('invalid_input', { field: 'taxCode' });
   }
+  // N01 critic (pre-existing defect): the declared fxRate is a decimal string or absent; a foreign bill
+  // stores it and posts at it (needs_fx_rate tells a caller to pass one).
+  if (input.fxRate !== undefined && input.fxRate !== null && parseRate(input.fxRate) === null) {
+    return err('invalid_input', { field: 'fxRate' });
+  }
 
   const vendor = resolveVendor(ctx, input.vendorId);
   if ('ok' in vendor) return vendor;
@@ -521,17 +529,20 @@ export function createVendorBill(ctx: WorkspaceContext, input: CreateVendorBillI
   const prepared = prepare(ctx, input);
   if ('ok' in prepared) return prepared;
 
-  return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'create_vendor_bill', () => {
-    const id = insertDraft(ctx, input, prepared);
-    ctx.audit.record({
-      entityKind: 'vendor_bill',
-      entityId: id,
-      action: 'create',
-      actor: ctx.actor,
-      at: ctx.clock.now(),
-    });
-    return ok({ vendorBill: vendorBillEcho(ctx, id), vendorBillId: id });
-  });
+  // `runGuarded`: a receipt refusal (R1) thrown from `insertDraft` rolls the bill back, never memoised.
+  return runGuarded(() =>
+    ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'create_vendor_bill', () => {
+      const id = insertDraft(ctx, input, prepared);
+      ctx.audit.record({
+        entityKind: 'vendor_bill',
+        entityId: id,
+        action: 'create',
+        actor: ctx.actor,
+        at: ctx.clock.now(),
+      });
+      return ok({ vendorBill: vendorBillEcho(ctx, id), vendorBillId: id });
+    }),
+  );
 }
 
 function insertDraft(ctx: WorkspaceContext, input: CreateVendorBillInput, prepared: PreparedBill): string {
@@ -545,7 +556,7 @@ function insertDraft(ctx: WorkspaceContext, input: CreateVendorBillInput, prepar
           base_gross_minor, base_payable_minor, fx_rate, entry_id, reversal_entry_id, void_reason,
           idempotency_key, created_by, created_at, posted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft',
-               NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, NULL)`,
+               NULL, NULL, NULL, NULL, ?, NULL, NULL, NULL, ?, ?, ?, NULL)`,
     )
     .run(
       id,
@@ -566,11 +577,26 @@ function insertDraft(ctx: WorkspaceContext, input: CreateVendorBillInput, prepar
       input.costCenterId ?? null,
       input.projectId ?? null,
       input.receiptRef ?? null,
+      // N01 critic: the caller's rate for a foreign bill (read by postBillRow as its explicit rate).
+      foreignRate(ctx, prepared.currency, input.fxRate),
       input.idempotencyKey,
       ctx.actor,
       ctx.clock.now(),
     );
+  linkPointedReceipt(ctx, input.receiptRef, id);
   return id;
+}
+
+/**
+ * R1 (N02): a `receiptRef` that names a STORED file of this workspace is the bill's receipt, so the file
+ * is linked to the bill (the OR 958f floor follows it) through `linkFile`, whose receipt guard judges a
+ * receipt that already evidences another live booking. A reference that names no stored file (a paper
+ * archive number) stays a pointer: there are no bytes to judge. Throws `BillAbort` on a refusal.
+ */
+function linkPointedReceipt(ctx: WorkspaceContext, receiptRef: string | undefined, vendorBillId: string): void {
+  if (typeof receiptRef !== 'string' || receiptRef.length === 0) return;
+  const linked = linkReceiptPointer(ctx, receiptRef, 'vendor_bill', vendorBillId);
+  if (linked !== undefined && !linked.ok) throw new BillAbort(linked);
 }
 
 // --- postVendorBill -------------------------------------------------------------------------------
@@ -730,6 +756,10 @@ function postBillRow(ctx: WorkspaceContext, bill: VendorBillRow): Result {
       bill.id,
     );
 
+  // N02 US-N02.4 (D63): the bill is posted evidence from this write on, so every Beleg already linked
+  // to it gets its OR 958f floor in this same transaction (`src/core/files/postedFloor.ts`).
+  deriveStatutoryOnPost(ctx, 'vendor_bill', bill.id);
+
   ctx.audit.record({
     entityKind: 'vendor_bill',
     entityId: bill.id,
@@ -888,6 +918,54 @@ export function recordExpense(ctx: WorkspaceContext, input: CreateVendorBillInpu
   );
 }
 
+/**
+ * N01 US-N01.3 (D158): what `recordExpense` would refuse, decided WITHOUT writing, for the transport seam
+ * to run before it drafts a governed call. The same steps in the same order: the key guard, the replay
+ * (a key the verb would replay passes: undefined), the key held by another bill, `prepare` (vendor,
+ * expense account, cost centre, project, payable, the tax code's side, the figures), the bill-date rate
+ * `postBillRow` resolves, and the posting itself through A02's own pre-write half (`previewPostingLines`:
+ * line validation, the VAT gate, the period check). An agent's expense on an archived account or into a
+ * locked period is refused here and never queued as a Vorschlag the approval could only fail.
+ */
+export function prevalidateRecordExpense(ctx: WorkspaceContext, input: CreateVendorBillInput): Result | undefined {
+  const guard = requireString(input.idempotencyKey, 'idempotencyKey');
+  if (guard) return guard;
+  const scopedKey = JSON.stringify(['record_expense', input.idempotencyKey]);
+  if (ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'record_expense') !== undefined) return undefined;
+  const holder = ctx.store.db
+    .prepare('SELECT id FROM vendor_bill WHERE workspace_id = ? AND idempotency_key = ?')
+    .get(ctx.workspaceId, input.idempotencyKey) as { id: string } | undefined;
+  if (holder !== undefined) {
+    return err('idempotency_key_conflict', {
+      idempotencyKey: input.idempotencyKey,
+      vendorBillId: holder.id,
+      reason: 'this key already created a different bill; a retry must repeat the same input',
+    });
+  }
+  const prepared = prepare(ctx, input);
+  if ('ok' in prepared) return prepared;
+  // The rate `postBillRow` will use: the caller's for a foreign bill (`insertDraft` stores it), else the store's.
+  const explicitRate = foreignRate(ctx, prepared.currency, input.fxRate);
+  const resolution = resolveFxRate(ctx, { currency: prepared.currency, date: prepared.billDate, ...(explicitRate !== null ? { explicitRate } : {}) });
+  if (!resolution.ok) return resolution;
+  const foreign = statesConversionBasis({ currency: prepared.currency, baseCurrency: baseCurrencyOf(ctx) });
+  const preview = previewPostingLines(ctx, {
+    date: prepared.billDate,
+    source: PURCHASE_SOURCE,
+    ...(input.vendorReference !== undefined ? { ref: input.vendorReference } : {}),
+    description: `Kreditorenrechnung ${input.vendorReference ?? 'Entwurf'}`,
+    lines: prepared.figures.lines,
+    ...(foreign ? { currency: prepared.currency, fxRate: resolution.resolved.rate } : {}),
+  });
+  return preview.ok ? undefined : preview.error;
+}
+
+/** The caller's rate to store on a FOREIGN bill (a base-currency bill converts nothing), else null. */
+function foreignRate(ctx: WorkspaceContext, currency: string, fxRate: string | null | undefined): string | null {
+  if (typeof fxRate !== 'string' || fxRate.trim() === '') return null;
+  return statesConversionBasis({ currency, baseCurrency: baseCurrencyOf(ctx) }) ? fxRate.trim() : null;
+}
+
 // --- attachReceipt --------------------------------------------------------------------------------
 
 /**
@@ -917,19 +995,37 @@ export function attachReceipt(ctx: WorkspaceContext, input: AttachReceiptInput):
   if (bill === undefined) return err('not_found', { vendorBillId: input.vendorBillId });
   if (bill.status === 'void') return err('already_void', { vendorBillId: bill.id });
 
-  return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'attach_receipt', () => {
-    ctx.store.db
-      .prepare('UPDATE vendor_bill SET receipt_ref = ? WHERE workspace_id = ? AND id = ?')
-      .run(input.receiptRef, ctx.workspaceId, bill.id);
-    ctx.audit.record({
-      entityKind: 'vendor_bill',
-      entityId: bill.id,
-      action: 'update',
-      actor: ctx.actor,
-      at: ctx.clock.now(),
-    });
-    return ok({ vendorBillId: bill.id, receiptRef: input.receiptRef, vendorBill: vendorBillEcho(ctx, bill.id) });
-  });
+  // N01 critic finding 2 (N02 US-N02.4): a receiptRef that names a stored file of this workspace IS the
+  // Beleg, so it is linked to the bill in the same transaction as the pointer. On a posted bill the link
+  // derives the OR 958f floor at once; on a draft the posting hook attaches it when the bill posts. A ref
+  // that names no stored file (a path, an archive number) stays the plain pointer it always was.
+  // Security review (re-link hijack): only an unlinked file, or one already on this bill, is linked; a
+  // file filed against another record is refused here, before anything is written.
+  const receiptFile = ctx.store.db
+    .prepare('SELECT id FROM stored_file WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, input.receiptRef) as { id: string } | undefined;
+  if (receiptFile !== undefined) {
+    const elsewhere = refuseReceiptLink(ctx, receiptFile.id, 'vendor_bill', bill.id);
+    if (elsewhere !== undefined) return elsewhere;
+  }
+
+  return runGuarded(() =>
+    ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'attach_receipt', () => {
+      ctx.store.db
+        .prepare('UPDATE vendor_bill SET receipt_ref = ? WHERE workspace_id = ? AND id = ?')
+        .run(input.receiptRef, ctx.workspaceId, bill.id);
+      // R1: the link goes through the receipt guard (`linkReceiptPointer` -> `linkFile`).
+      linkPointedReceipt(ctx, input.receiptRef, bill.id);
+      ctx.audit.record({
+        entityKind: 'vendor_bill',
+        entityId: bill.id,
+        action: 'update',
+        actor: ctx.actor,
+        at: ctx.clock.now(),
+      });
+      return ok({ vendorBillId: bill.id, receiptRef: input.receiptRef, vendorBill: vendorBillEcho(ctx, bill.id) });
+    }),
+  );
 }
 
 // --- voidVendorBill -------------------------------------------------------------------------------

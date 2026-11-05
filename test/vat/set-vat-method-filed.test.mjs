@@ -123,7 +123,10 @@ test('the dated route the refusal names works: vat_configure with methodChange f
     registered: true,
     asOf: '2027-01-01',
     methodChange: { validFrom: '2027-01-01' },
-    idempotencyKey: 'svm-dated-cfg',
+    // Its OWN key (N01 US-N01.5). This call used to reuse `svm-dated-cfg`, the key `cafe` already spent
+    // on the setup's configure, so the old same-key replay answered ok with the SETUP's result and the
+    // dated route was never run at all. A spent key with other arguments now refuses.
+    idempotencyKey: 'svm-dated-change',
   });
   assert.equal(dated.ok, true, JSON.stringify(dated));
   const again = call(deps, 'vat_return', { workspaceId, ...H1 });

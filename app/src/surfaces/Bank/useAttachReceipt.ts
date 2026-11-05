@@ -22,14 +22,19 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { CAP, editCapabilityForKind, useCapabilities } from '../../lib/capabilities';
 import { readFileAsUpload } from '../Files/model';
+import type { BookAgainConfirmation } from '../../lib/receiptHolders';
 
 export interface AttachReceipt {
   /** The person may attach a Beleg to a bank line (both halves of the gate). */
   canAttach: boolean;
   /** The line an attach is running for, or null. */
   busyLine: string | null;
-  /** Upload, then link to the line. Resolves to the refusal, or null when both calls landed. */
-  attach: (bankTxnId: string, file: File) => Promise<Err | null>;
+  /**
+   * Upload, then link to the line. Resolves to the refusal, or null when both calls landed. N02 R1:
+   * `confirmation` is the person's reason for booking a receipt a second time (a booked line only: an
+   * open line is judged when it is booked), sent with the link.
+   */
+  attach: (bankTxnId: string, file: File, confirmation?: BookAgainConfirmation) => Promise<Err | null>;
 }
 
 /** One attach intent: this file on this line (a File is known by what it is, not by its object). */
@@ -46,7 +51,7 @@ export function useAttachReceipt(workspaceId: string | null): AttachReceipt {
   const keys = useRef(new Map<string, { upload: string; link: string }>());
 
   const attach = useCallback(
-    async (bankTxnId: string, file: File): Promise<Err | null> => {
+    async (bankTxnId: string, file: File, confirmation?: BookAgainConfirmation): Promise<Err | null> => {
       if (workspaceId === null) return null;
       setBusyLine(bankTxnId);
       const intent = intentOf(bankTxnId, file);
@@ -68,6 +73,7 @@ export function useAttachReceipt(workspaceId: string | null): AttachReceipt {
           entityKind: 'bank_txn',
           entityId: bankTxnId,
           idempotencyKey: key.link,
+          ...(confirmation ?? {}),
         });
         if (isErr(linked.body)) return linked.body;
         keys.current.delete(intent);

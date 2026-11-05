@@ -40,7 +40,15 @@ test('FACT for F1: a create replayed under its key returns the STORED type, and 
   const { store, run } = setup();
   const first = run('create_document', { type: 'invoice', contactId: 'ct_1', currency: 'CHF', lines: [line], idempotencyKey: 'K1' });
   assert.ok(first.ok, JSON.stringify(first));
-  const retry = run('create_document', { type: 'quote', contactId: 'ct_1', currency: 'CHF', lines: [line], idempotencyKey: 'K1' });
+  // N01 US-N01.5: a retry under the key with ANOTHER type is no longer answered with the stored draft;
+  // it refuses `idempotency_key_conflict` and writes nothing. The editor's lost-create retry therefore
+  // resends the FIRST attempt's content (DocumentEditor `createAct.content`) and patches afterwards.
+  const docs = () => store.db.prepare('SELECT COUNT(*) AS n FROM document').get().n;
+  const before = docs();
+  const changed = run('create_document', { type: 'quote', contactId: 'ct_1', currency: 'CHF', lines: [line], idempotencyKey: 'K1' });
+  assert.equal(changed.error, 'idempotency_key_conflict', JSON.stringify(changed));
+  assert.equal(docs(), before);
+  const retry = run('create_document', { type: 'invoice', contactId: 'ct_1', currency: 'CHF', lines: [line], idempotencyKey: 'K1' });
   assert.ok(retry.ok);
   assert.equal(retry.document.id, first.document.id);
   assert.equal(retry.document.type, 'invoice');

@@ -380,6 +380,32 @@ describe('A1: Beleg anhängen', () => {
     expect(calls.filter((c) => c.action === 'post_entry')).toHaveLength(1);
   });
 
+  it('N02 R1: a Beleg already booked elsewhere is linked after the post only with the person\'s reason', async () => {
+    const { dialog, calls, onClose, onWritten } = await openDrawer({
+      ...POST_OK,
+      files_upload: uploadOk,
+      files_link: (input) =>
+        input.bookAgain === true
+          ? { status: 200, body: { ok: true } }
+          : { status: 409, body: { ok: false, error: 'receipt_already_booked', holders: [{ entityKind: 'journal_entry', entityId: 'je_4', reservedBy: null }], override: 'bookAgain with overrideReason' } },
+    });
+    await userEvent.upload(within(dialog).getByTestId('journal-beleg-input'), PDF());
+    await satz(dialog, '6900', '1020', '12.00');
+    await waitFor(() => expect(postButton(dialog)).toBeEnabled());
+    await userEvent.click(postButton(dialog));
+    // The post stands; the person is asked for the reason before the second booking of the receipt.
+    const ask = await screen.findByRole('alertdialog', { name: 'Receipt already booked' });
+    expect(onWritten).toHaveBeenCalledWith('je_new');
+    expect(within(ask).getByText('je_4')).toBeInTheDocument();
+    fireEvent.change(within(ask).getByLabelText('Reason'), { target: { value: 'Second instalment' } });
+    fireEvent.click(within(ask).getByRole('button', { name: 'Book anyway' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const links = calls.filter((c) => c.action === 'files_link');
+    expect(links).toHaveLength(2);
+    expect(links[1]?.input).toMatchObject({ bookAgain: true, overrideReason: 'Second instalment', idempotencyKey: links[0]?.input.idempotencyKey });
+    expect(calls.filter((c) => c.action === 'post_entry')).toHaveLength(1);
+  });
+
   it('holds Post while the upload failed, and retries it', async () => {
     let tries = 0;
     const { dialog } = await openDrawer({

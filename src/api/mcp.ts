@@ -1,7 +1,8 @@
 /**
  * Phase E, the MCP stdio server: one thin adapter over the shared action registry.
  *
- * Each `ActionDef` becomes an MCP tool. A `read` tool advertises `annotations.readOnlyHint`; every write
+ * Each `ActionDef` becomes an MCP tool with a human `title` derived from its name (`toolTitle`, carried
+ * both as `Tool.title` and as `annotations.title`). A `read` tool advertises `annotations.readOnlyHint`; every write
  * advertises `destructiveHint` from its declared D159 class (false only for an append-only `correctable`
  * one), that class under `_meta['tillbooks/reversibility']`, its D160 consequence tag (plus the D156
  * sentence in both languages where the catalogue has one) under `_meta['tillbooks/consequence']`, and, when
@@ -20,11 +21,15 @@ import {
   CallToolRequestSchema,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { ServerResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { randomUUID } from 'node:crypto';
+import { homedir } from 'node:os';
 
 import { SqliteStore } from '../core/store/sqlite-store.js';
 import { systemClock } from '../core/clock.js';
@@ -140,9 +145,111 @@ export function renderPromptOverActions(
  */
 export const MCP_SERVER_INSTRUCTIONS =
   'TILL is an agent-first ERP for Swiss SMEs: sales, purchasing, payments, stock, projects, books and MWST in one local file. ' +
-  'Call whoami first: it names your seat and which areas run at ask, where a write returns a proposal a person approves instead of executing. ' +
+  // N00: the brief joins the whoami sentence, so the instructions stay at the D156 two to four sentences.
+  'Call whoami first, then workspace_brief: whoami names your seat and which areas run at ask, where a write returns a proposal a person approves instead of executing; the brief says how this workspace books, and its Hausregeln (house notes) are the owner\'s rules to follow. ' +
   'Every write that adds or moves something takes an idempotencyKey, and resending the same key never doubles a result; the few without one are safe to repeat: they set an absolute state or key themselves. ' +
   'Posted entries and issued documents are corrected by a new linked document (correcting entry, credit note), never edited.';
+
+/**
+ * N01 US-N01.9: THE TOOL PROFILE, a property of the MCP PROCESS (`tools/list` carries no workspace, so it
+ * cannot be a workspace setting). `full` (the default, D183 rule 5) lists every verb; `essentials` lists the
+ * verbs an agent books a month with (`ESSENTIALS_TOOLS`) and reaches every other verb through
+ * `get_api_catalog { query }` and `call_tool { name, args }`, which dispatches through the same governed
+ * door. A profile changes what is LISTED, never what may run: a listed or unlisted verb meets the same
+ * permissions, dial and trace.
+ */
+export const TOOL_PROFILES = ['full', 'essentials'] as const;
+export type ToolProfile = (typeof TOOL_PROFILES)[number];
+
+/** The environment variable `till mcp` reads when no `--profile` is given. */
+export const TOOL_PROFILE_ENV = 'TILL_MCP_PROFILE';
+
+/**
+ * The essentials profile, in the order an agent meets them: orient, then the ledger, the bank inbox, sales,
+ * purchases, payments, the Vorschläge, and the two doors to everything else. Every name is held to the
+ * registry by `test/api/mcp-tool-profile.test.mjs`.
+ */
+export const ESSENTIALS_TOOLS: readonly string[] = [
+  // orient
+  'whoami',
+  'workspace_brief',
+  'list_workspaces',
+  'hausbuch_notes',
+  'hausbuch_note_set',
+  'search_global',
+  'get_company_profile',
+  // the two doors to every other verb
+  'get_api_catalog',
+  'call_tool',
+  // the ledger
+  'list_accounts',
+  'vat_codes',
+  'list_journal',
+  'get_entry',
+  'compose_entry',
+  'post_entry',
+  'post_entries',
+  'reverse_entry',
+  'list_period_locks',
+  'trial_balance',
+  'balance_sheet',
+  'income_statement',
+  // the bank inbox
+  'list_bank_inbox',
+  'book_bank_line',
+  'book_bank_lines',
+  'ignore_bank_line',
+  'reopen_bank_line',
+  'list_bank_standards',
+  'set_bank_standard',
+  // sales and purchases
+  'list_contacts',
+  'create_contact',
+  'list_items',
+  'list_documents',
+  'get_document',
+  'create_document',
+  'issue_invoice',
+  'list_open_items',
+  'record_expense',
+  'create_vendor_bill',
+  'list_vendor_bills',
+  'record_payment',
+  // Belege and the Vorschläge
+  'files_upload',
+  'list_drafted_actions',
+];
+
+/** The tools one profile advertises, in registry order. */
+export function actionsForProfile(profile: ToolProfile): readonly ActionDef[] {
+  if (profile === 'full') return ACTIONS;
+  const wanted = new Set(ESSENTIALS_TOOLS);
+  return ACTIONS.filter((a) => wanted.has(a.name));
+}
+
+/**
+ * The profile `till mcp` runs: `--profile <name>` or `--profile=<name>` on the command line, else
+ * `TILL_MCP_PROFILE`, else `full`. An unknown name THROWS (the CLI prints it and exits): a typo must not
+ * silently serve the full list to a client that asked for a lean one.
+ */
+export function resolveToolProfile(argv: readonly string[], env: Readonly<Record<string, string | undefined>>): ToolProfile {
+  let named: string | undefined;
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i] as string;
+    if (arg === '--profile') named = argv[i + 1] ?? '';
+    else if (arg.startsWith('--profile=')) named = arg.slice('--profile='.length);
+  }
+  const value = (named ?? env[TOOL_PROFILE_ENV] ?? 'full').trim();
+  if ((TOOL_PROFILES as readonly string[]).includes(value)) return value as ToolProfile;
+  throw new Error(`Unknown tool profile "${value}": choose ${TOOL_PROFILES.join(' or ')} (--profile or ${TOOL_PROFILE_ENV}).`);
+}
+
+/** The server instructions for a profile: the essentials connection says how to reach the rest. */
+export function instructionsFor(profile: ToolProfile): string {
+  return profile === 'full'
+    ? MCP_SERVER_INSTRUCTIONS
+    : `${MCP_SERVER_INSTRUCTIONS} This connection lists the essential tools only: get_api_catalog { query } finds any other verb and its input, and call_tool { name, args } runs it through the same checks.`;
+}
 
 /**
  * D156/D160: the namespaced `_meta` key carrying a write's consequence (MCP `_meta` key rules): on EVERY
@@ -176,15 +283,81 @@ export interface ConsequenceMeta {
   reversibility?: Reversibility;
 }
 
+/**
+ * How one snake_case word of a verb name is written in its human title, where plain lower case would be
+ * wrong: an acronym or a standard's own spelling (`VAT`, `eBill`, `pain.001`, `eCH-0217`), an abbreviation
+ * a reader should not have to decode (`txn`, `prefs`, `defs`), and the de-CH nouns the product keeps in
+ * German (a German noun is capitalised wherever it stands). Every other word stays as it is.
+ */
+export const TOOL_TITLE_WORDS: Readonly<Record<string, string>> = {
+  api: 'API',
+  belegeingang: 'Belegeingang',
+  camt: 'camt',
+  compat: 'compatibility',
+  csv: 'CSV',
+  defs: 'definitions',
+  ebill: 'eBill',
+  ech0217: 'eCH-0217',
+  env: 'environment',
+  fx: 'FX',
+  gl: 'GL',
+  grir: 'GR/IR',
+  hausbuch: 'Hausbuch',
+  hr: 'HR',
+  kpis: 'KPIs',
+  nbv: 'NBV',
+  pain001: 'pain.001',
+  pdf: 'PDF',
+  pl: 'P&L',
+  po: 'PO',
+  pos: 'POs',
+  prefs: 'preferences',
+  qa: 'QA',
+  qr: 'QR',
+  saldo: 'Saldo',
+  skonto: 'Skonto',
+  testmandant: 'Testmandant',
+  txn: 'transaction',
+  vat: 'VAT',
+  vorlage: 'Vorlage',
+  wip: 'WIP',
+};
+
+/** The verbs whose name is not a phrase of its words, titled whole. */
+export const TOOL_TITLE_WHOLE: Readonly<Record<string, string>> = {
+  whoami: 'Who am I',
+};
+
+/**
+ * The human `title` a tool advertises (MCP 2025-06-18: `Tool.title`, and `annotations.title` for clients
+ * that read the older place), DERIVED from the verb's own name so 844 verbs carry one without 844
+ * hand-written strings to drift: the words in sentence case, each one spelled through `TOOL_TITLE_WORDS`
+ * (`post_entry` -> "Post entry", `vat_export_ech0217` -> "VAT export eCH-0217"). Presentation only: the
+ * name stays the tool's identity (§H-ENUM) and the description stays the summary.
+ */
+export function toolTitle(name: string): string {
+  const whole = TOOL_TITLE_WHOLE[name];
+  if (whole !== undefined) return whole;
+  // Sentence case: only the first word is raised, and only when it is a plain word (an acronym or a
+  // standard's spelling such as `camt` or `eBill` keeps its own form wherever it stands).
+  return name
+    .split('_')
+    .filter((w) => w.length > 0)
+    .map((w, i) => TOOL_TITLE_WORDS[w] ?? (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(' ');
+}
+
 /** The MCP `Tool` this server advertises for one action (exported so the parity test reads the same shape). */
 export function toolFor(a: ActionDef): Record<string, unknown> {
   const props = a.inputSchema.properties;
+  const title = toolTitle(a.name);
   if (a.kind === 'read') {
     return {
       name: a.name,
+      title,
       description: a.consequence === undefined ? a.summary : `${a.summary} CONSEQUENCE: ${a.consequence}`,
       inputSchema: a.inputSchema,
-      annotations: { readOnlyHint: true },
+      annotations: { title, readOnlyHint: true },
     };
   }
   // Every write carries both (the registry asserts it at load); a hand-built ActionDef that does not is
@@ -200,6 +373,7 @@ export function toolFor(a: ActionDef): Record<string, unknown> {
   // whose key is optional only replays when the caller passes one, so it claims nothing.
   const idempotent = a.inputSchema.required.includes('idempotencyKey') || !('idempotencyKey' in props);
   const annotations = {
+    title,
     // MCP: `destructiveHint: false` means additive-only. Only a `correctable` write is (append-only); a
     // `reversible` one may overwrite state and a `final` one has no way back. D159: the verb's own
     // declared class decides, never the catalogue's.
@@ -213,6 +387,7 @@ export function toolFor(a: ActionDef): Record<string, unknown> {
   };
   return {
     name: a.name,
+    title,
     // A35 (critic F11): the consequence sentence reaches the MCP CLIENT here, appended to the
     // advertised description, so "the MCP client's confirmation prose" consumer is real: a client
     // deciding whether to call a governed write reads what it does and what can still be done after.
@@ -223,6 +398,52 @@ export function toolFor(a: ActionDef): Record<string, unknown> {
     // renders. D159/D160: every write also carries its declared class and its consequence tag.
     _meta: { [CONSEQUENCE_META_KEY]: consequence, [REVERSIBILITY_META_KEY]: reversibility },
   };
+}
+
+/**
+ * N00: the workspace brief as an MCP RESOURCE, for clients that load resources. The URI names the
+ * workspace (a book holds several, A23), so the brief is a TEMPLATE (`resources/templates/list`) and one
+ * concrete resource per workspace the session may open (`resources/list`, through `list_workspaces`).
+ */
+export const BRIEF_RESOURCE_TEMPLATE = 'till://workspace/{id}/brief';
+
+/** The brief's URI for one workspace. */
+export function briefResourceUri(workspaceId: string): string {
+  return `till://workspace/${encodeURIComponent(workspaceId)}/brief`;
+}
+
+const BRIEF_URI = /^till:\/\/workspace\/([^/]+)\/brief$/;
+
+/**
+ * `resources/list`: one brief per workspace the session may open, read through the governed
+ * `list_workspaces` exactly as a tool call would (a served subject sees only its own mandates).
+ */
+export function listBriefResources(deps: ApiDeps): { uri: string; name: string; description: string; mimeType: string }[] {
+  const action = getAction('list_workspaces');
+  if (action === undefined) return [];
+  const listed = runGoverned(deps, action, {});
+  if (!listed.ok || !Array.isArray(listed.workspaces)) return [];
+  return (listed.workspaces as { workspaceId: string; name: string }[]).map((w) => ({
+    uri: briefResourceUri(w.workspaceId),
+    name: `${w.name}: workspace brief`,
+    description: 'How this workspace books: the chart, VAT codes, Bankkonten, Buchungsregeln, the Hausregeln to follow, and what waits in Pendenzen (workspace_brief).',
+    mimeType: 'application/json',
+  }));
+}
+
+/**
+ * `resources/read`: the brief of the workspace the URI names, rendered by running `workspace_brief`
+ * through the GOVERNED dispatch under the session's seat (the G22 prompt precedent), so the per-section
+ * read gates and the A35 trace apply exactly as for the tool. A verb refusal reads back as its Result
+ * JSON; a URI that names no brief THROWS, which the client sees as a protocol error.
+ */
+export function readBriefResource(deps: ApiDeps, uri: string): { uri: string; mimeType: string; text: string } {
+  const match = BRIEF_URI.exec(uri);
+  if (match === null) throw new Error(`unknown_resource: ${uri}`);
+  const workspaceId = decodeURIComponent(match[1] as string);
+  const action = getAction('workspace_brief');
+  const result = action === undefined ? err('unknown_action', { action: 'workspace_brief' }) : runGoverned(deps, action, { workspaceId });
+  return { uri, mimeType: 'application/json', text: JSON.stringify(result) };
 }
 
 /**
@@ -240,15 +461,17 @@ export function toolFor(a: ActionDef): Record<string, unknown> {
  */
 export function buildMcpServer(
   deps: ApiDeps,
-  opts: { pinnedActor?: string; servedIdentity?: ServedIdentity } = {},
+  opts: { pinnedActor?: string; servedIdentity?: ServedIdentity; profile?: ToolProfile } = {},
 ): Server {
+  const profile = opts.profile ?? 'full';
   const server = new Server(
     // The running package's version, so a client (and every directory that scans the server) sees
     // the release it talks to, not a placeholder.
     { name: 'tillbooks', version: TILL_PACKAGE_VERSION },
     // G22 (D127): `prompts` beside `tools`. One prompt per checklist template, rendered from the
     // governed `checklist_get` under the session actor (see `renderPromptOverActions`).
-    { capabilities: { tools: {}, prompts: {} }, instructions: MCP_SERVER_INSTRUCTIONS },
+    // N00: `resources` beside them, the workspace brief per workspace (see `readBriefResource`).
+    { capabilities: { tools: {}, prompts: {}, resources: {} }, instructions: instructionsFor(profile) },
   );
 
   // A35 §2a: ONE MCP CONNECTION IS ONE SESSION. The key is minted per `Server` (one per stdio
@@ -291,8 +514,26 @@ export function buildMcpServer(
     };
   });
 
+  server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources: listBriefResources(sessionDeps()) }));
+
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({
+    resourceTemplates: [
+      {
+        uriTemplate: BRIEF_RESOURCE_TEMPLATE,
+        name: 'workspace brief',
+        description: 'How a workspace books, in one read (workspace_brief); {id} is the workspace id from list_workspaces.',
+        mimeType: 'application/json',
+      },
+    ],
+  }));
+
+  server.setRequestHandler(ReadResourceRequestSchema, (request) => ({
+    contents: [readBriefResource(sessionDeps(), request.params.uri)],
+  }));
+
   server.setRequestHandler(ListToolsRequestSchema, () => ({
-    tools: ACTIONS.map(toolFor),
+    // N01 US-N01.9: the process's profile decides what is LISTED; every verb still answers a call.
+    tools: actionsForProfile(profile).map(toolFor),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, (request) => {
@@ -350,15 +591,20 @@ export function makeApiDeps(dbPath?: string, hostPorts: HostEbicsPorts = {}): { 
  * checkpoints the write-ahead log, and a process that exits without doing so leaves the WAL to grow.
  */
 export async function startMcpServer(
-  opts: { dbPath?: string } = {},
+  opts: { dbPath?: string; profile?: ToolProfile } = {},
 ): Promise<{ server: Server; store: SqliteStore }> {
   // D108: attach the private live bank wire when the operator configured one; otherwise the EBICS
   // network steps degrade honestly. Resolved once at startup and shared by every session's deps.
   const hostPorts = await resolveEbicsRuntime();
-  const { deps, store } = makeApiDeps(opts.dbPath, hostPorts);
+  const opened = makeApiDeps(opts.dbPath, hostPorts);
+  const { store } = opened;
+  // N02 (D183): stdio is a LOCAL door (the agent runs on this computer), so it may hand TILL a receipt by
+  // path, confined to `files.source_roots`. `till serve` builds its deps through `makeApiDeps` too and
+  // never gets this grant.
+  const deps: ApiDeps = { ...opened.deps, localFiles: { home: homedir() } };
   // F12: the stdio door IS the agent door (the Studio never speaks stdio), so the seat is pinned
   // from the transport and a client-declared `till-studio` name cannot shed the dial or the trace.
-  const server = buildMcpServer(deps, { pinnedActor: 'agent' });
+  const server = buildMcpServer(deps, { pinnedActor: 'agent', ...(opts.profile !== undefined ? { profile: opts.profile } : {}) });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   return { server, store };

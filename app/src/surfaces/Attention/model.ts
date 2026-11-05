@@ -47,6 +47,106 @@ export interface Item {
   posts: boolean;
   /** D178: a Vorschlag the engine voided as stale, kept listed while its bank line is open. */
   stale: boolean;
+  /** N03: a mined Buchungsregel's Vorschlag: who for, how often booked so, its backtest and evidence. */
+  ruleProposal?: RuleProposal;
+  /** N04: the offer "künftig automatisch" of a proven rule (its Vorschlag row). */
+  autobookOffer?: AutobookOffer;
+  /** N04: one day's automatic bookings (the digest card). */
+  autobookDigest?: AutobookDigest;
+  /** N04 (critic F5): a Dauerbuchung's Vorschlag: the schedule was set by an agent. */
+  scheduledByAgent?: boolean;
+}
+
+/** N04 (D183): the engine's facts of an autobook offer (`AttentionAutobookOffer`). */
+export interface AutobookOffer {
+  standardId: string;
+  counterparty: string;
+  label: string | null;
+  cleanUses: number;
+  ceilingMinor: number;
+  currency: string;
+}
+
+/** N04 (D183): one line of a digest day (`AttentionAutobookDigest`). */
+export interface AutobookDigestLine {
+  bankTxnId: string;
+  standardId: string;
+  counterparty: string;
+  ruleLabel: string | null;
+  amountMinor: number;
+  currency: string;
+  lineDate: string;
+  entryId: string | null;
+  stands: boolean;
+  reason: string | null;
+  grantLive: boolean;
+}
+
+export interface AutobookDigest {
+  day: string;
+  lines: AutobookDigestLine[];
+}
+
+function parseAutobookOffer(raw: unknown): AutobookOffer | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.standardId !== 'string' || typeof r.counterparty !== 'string' || typeof r.currency !== 'string') return undefined;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return { standardId: r.standardId, counterparty: r.counterparty, label: typeof r.label === 'string' ? r.label : null, cleanUses: num(r.cleanUses), ceilingMinor: num(r.ceilingMinor), currency: r.currency };
+}
+
+function parseAutobookDigest(raw: unknown): AutobookDigest | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.day !== 'string' || !Array.isArray(r.lines)) return undefined;
+  const lines = r.lines.flatMap((l): AutobookDigestLine[] => {
+    const x = (l ?? {}) as Record<string, unknown>;
+    if (typeof x.bankTxnId !== 'string' || typeof x.standardId !== 'string' || typeof x.currency !== 'string') return [];
+    return [
+      {
+        bankTxnId: x.bankTxnId,
+        standardId: x.standardId,
+        counterparty: typeof x.counterparty === 'string' ? x.counterparty : '',
+        ruleLabel: typeof x.ruleLabel === 'string' ? x.ruleLabel : null,
+        amountMinor: typeof x.amountMinor === 'number' ? x.amountMinor : 0,
+        currency: x.currency,
+        lineDate: typeof x.lineDate === 'string' ? x.lineDate : '',
+        entryId: typeof x.entryId === 'string' ? x.entryId : null,
+        stands: x.stands === true,
+        reason: typeof x.reason === 'string' ? x.reason : null,
+        grantLive: x.grantLive === true,
+      },
+    ];
+  });
+  return { day: r.day, lines };
+}
+
+/** N03 (D183): the engine's facts of a mined rule's Vorschlag (`AttentionRuleProposal`). */
+export interface RuleProposal {
+  counterparty: string;
+  repeats: number;
+  since: string;
+  hits: number;
+  identical: number;
+  bankTxnId: string;
+  evidence: { bankTxnId: string; date: string; amountMinor: number; currency: string }[];
+}
+
+/** N03: the rule proposal an item carries, or undefined when it carries none (or a malformed one). */
+function parseRuleProposal(raw: unknown): RuleProposal | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  if (typeof r.counterparty !== 'string' || typeof r.bankTxnId !== 'string' || typeof r.since !== 'string') return undefined;
+  const evidence = Array.isArray(r.evidence)
+    ? r.evidence.flatMap((e) => {
+        const x = (e ?? {}) as Record<string, unknown>;
+        return typeof x.bankTxnId === 'string' && typeof x.date === 'string' && typeof x.currency === 'string'
+          ? [{ bankTxnId: x.bankTxnId, date: x.date, amountMinor: num(x.amountMinor), currency: x.currency }]
+          : [];
+      })
+    : [];
+  return { counterparty: r.counterparty, repeats: num(r.repeats), since: r.since, hits: num(r.hits), identical: num(r.identical), bankTxnId: r.bankTxnId, evidence };
 }
 
 export interface Section {
@@ -121,6 +221,10 @@ export function parseItem(raw: unknown): Item | null {
     batchable: n.batchable === true,
     posts: n.posts === true,
     stale: n.stale === true,
+    ...(parseRuleProposal(n.ruleProposal) !== undefined ? { ruleProposal: parseRuleProposal(n.ruleProposal) as RuleProposal } : {}),
+    ...(parseAutobookOffer(n.autobookOffer) !== undefined ? { autobookOffer: parseAutobookOffer(n.autobookOffer) as AutobookOffer } : {}),
+    ...(n.scheduledBy !== null && typeof n.scheduledBy === 'object' ? { scheduledByAgent: (n.scheduledBy as Record<string, unknown>).agent === true } : {}),
+    ...(parseAutobookDigest(n.autobookDigest) !== undefined ? { autobookDigest: parseAutobookDigest(n.autobookDigest) as AutobookDigest } : {}),
   };
 }
 
@@ -184,6 +288,8 @@ export function vorschlagOf(item: Item, drafted: DraftedAction | undefined): Dra
     actor: item.proposedBy ?? drafted?.actor ?? '',
     dialCapability: drafted?.dialCapability ?? (keyed.startsWith(CONSEQUENCE_PREFIX) ? keyed.slice(CONSEQUENCE_PREFIX.length) : null),
     actionTool: typeof tool === 'string' && tool.length > 0 ? tool : (drafted?.actionTool ?? ''),
+    // N01 US-N01.8: the agent's sentence rides from the drafted read onto the Pendenzen line.
+    agentReason: drafted?.agentReason ?? null,
     payload: drafted?.payload ?? {},
     payloadLabels: drafted?.payloadLabels ?? {},
     status: 'pending',
@@ -191,6 +297,10 @@ export function vorschlagOf(item: Item, drafted: DraftedAction | undefined): Dra
     rejectReason: null,
     figures: item.figures ?? drafted?.figures ?? null,
     changedSinceProposal: item.changedSinceProposal === true,
+    // N02 (critic round 2): the Belege the approval will link, from the drafted read.
+    ...(drafted?.belege !== undefined && drafted.belege.length > 0 ? { belege: drafted.belege } : {}),
+    // N02 R1: the records that already hold its receipt (the card's warning).
+    ...(drafted?.receiptHolders !== undefined && drafted.receiptHolders.length > 0 ? { receiptHolders: drafted.receiptHolders } : {}),
   };
 }
 

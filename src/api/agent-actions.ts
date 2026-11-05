@@ -38,6 +38,24 @@ import {
   agentProseDelete,
 } from '../core/agent/index.js';
 import type { ActionKind } from './actionKind.js';
+import { withBelege } from './chat-belege-actions.js';
+import { storeVorschlagHolders, withReceiptOverride, type ReceiptHolder } from '../core/files/receiptGuard.js';
+
+/**
+ * R1 (N02): approve a Vorschlag with the approver's own confirmation of a second booking of a receipt in
+ * force, judged against the holders AT APPROVAL TIME. A holder the card did not show refuses
+ * `holders_changed`, and the card then shows the new list (stored in a transaction of its own: the act's
+ * rolled back), so the next approval decides on what it sees.
+ */
+function approveWithReceiptConfirmation(ctx: WorkspaceContext, input: ActionInput, approve: () => Result): Result {
+  const actionId = typeof input.actionId === 'string' ? input.actionId : null;
+  const outcome = withReceiptOverride({ bookAgain: input.bookAgain, overrideReason: input.overrideReason, approvingActionId: actionId }, approve);
+  if (!outcome.ok && outcome.error === 'holders_changed' && actionId !== null && Array.isArray(outcome.holders)) {
+    const holders = outcome.holders as ReceiptHolder[];
+    ctx.store.tx(() => storeVorschlagHolders(ctx, actionId, holders));
+  }
+  return outcome;
+}
 
 export interface AgentActionHelpers {
   ctxAction(
@@ -102,17 +120,18 @@ export function agentActions(h: AgentActionHelpers): readonly ActionDef[] {
     ctxAction(
       'list_drafted_actions',
       'read',
-      'List the drafted agent actions (Vorschläge) of a workspace: pending by default (oldest first), or executed/rejected via status. Each row carries its verb, parsed payload, dial capability, proposer and resolution, so the approval queue renders from one read on every face.',
+      'List the drafted agent actions (Vorschläge) of a workspace: pending by default (oldest first), or executed/rejected via status. Each row carries its verb, parsed payload, dial capability, proposer and resolution, so the approval queue renders from one read on every face. A pending row whose approval links Belege names them under belege (file name, type, size, and whether the agent attached it, a person dropped it, or it is an existing file); files_pending_preview reads one for the person who decides.',
       ctxSchema({ status: STR }),
-      (ctx, input) => listDraftedActions(ctx, as(input)),
+      // N02 (critic round 2): the Belege a pending Vorschlag will link ride on the row (`withBelege`).
+      (ctx, input) => withBelege(ctx, listDraftedActions(ctx, as(input))),
     ),
     // The one A26 verb holding an invoker: registered through the same handshake G01/A12 use, below.
     ctxAction(
       'approve_drafted_action',
       'write:final:access',
-      'Approve a drafted agent action from the inbox: replay its verb through the shared dispatch as the approver (RBAC re-checked, idempotent on the stored key, so approve-twice never double-posts) and mark it executed. allowFuture additionally records the standing per-capability grant to auto (D103): the same attributed, revocable dial write set_agent_dial performs. The agent can never self-approve; a second, independent actor must review. Owner-gated (manage_agent_dial).',
-      ctxSchema({ actionId: STR, allowFuture: BOOL }, ['actionId']),
-      (ctx, input, deps) => approveDraftedAction(ctx, invokerFor(deps), as(input)),
+      'Approve a drafted agent action from the inbox: replay its verb through the shared dispatch as the approver (RBAC re-checked, idempotent on the stored key, so approve-twice never double-posts) and mark it executed. allowFuture additionally records the standing per-capability grant to auto (D103): the same attributed, revocable dial write set_agent_dial performs. The agent can never self-approve; a second, independent actor must review. Owner-gated (manage_agent_dial). Receipt uniqueness (R1): when the act would book a receipt that already evidences another live booking, the approval is judged against the holders as they are NOW: a holder the card did not show refuses holders_changed (the card then lists it), and a holder it showed needs bookAgain: true with an overrideReason (receipt_already_booked otherwise), recorded on the audit chain.',
+      ctxSchema({ actionId: STR, allowFuture: BOOL, bookAgain: BOOL, overrideReason: STR }, ['actionId']),
+      (ctx, input, deps) => approveWithReceiptConfirmation(ctx, input, () => approveDraftedAction(ctx, invokerFor(deps), as(input))),
     ),
     ctxAction(
       'reject_drafted_action',

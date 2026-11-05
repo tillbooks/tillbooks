@@ -275,6 +275,16 @@ export const AUDIT_ENTITY_KINDS = [
   // D172, the workspace settings registry: a change of one setting stamps `update` (set or reset; the
   // setting's own history table holds which, the old and new value and the reason).
   'workspace_setting',
+  // N02 R1 (receipt uniqueness, `src/core/files/receiptGuard.ts`): a person confirmed a SECOND booking of
+  // a receipt that already evidenced a live booking, with the required reason (`confirm`). The row names
+  // the holders it met; the booking itself carries its own stamp.
+  'receipt_override',
+  // N00, the Hausbuch: a house note stamps `create`, `update`, `archive` and `unarchive` (a restore); the
+  // note's own history table holds the old and new text and scope.
+  'hausbuch_note',
+  // N04, the autopilot: a per-rule autobook grant (granted, suspended, revoked) and a Vorlage schedule.
+  'rule_autobook_grant',
+  'vorlage_schedule',
 ] as const;
 
 /** Every action the audit log can name. */

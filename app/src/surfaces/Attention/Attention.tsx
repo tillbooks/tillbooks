@@ -40,6 +40,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent 
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
+import { useBookAgain } from '../../components/BookAgain';
 import { isErr, type RestResponse } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useCan, useCapabilities } from '../../lib/capabilities';
@@ -63,13 +64,14 @@ import { useDialLevels } from '../Agent/useDialLevels';
 import { AttentionRow } from './AttentionRow';
 import { BatchBar, BatchConfirm, batchTotalsOf } from './Batch';
 import { IssueDunningConfirm } from './IssueDunningConfirm';
+import { AutobookDigestLines } from './AutobookDigestLines';
 import { Amount } from './Amount';
 import { Mark, sectionMarkOf } from './kindGlyph';
 import { verbLabel, type DecisionOption } from './RowDecision';
 import { itemTitle, queueName } from './itemText';
 import { announceAttentionChanged } from './attentionSummary';
 import { readLastSeen, writeLastSeen, isNew } from './marker';
-import { appendPage, isVorschlag, parseGrouped, standTime, vorschlagOf, type Grouped, type Grouping, type Item, type Section } from './model';
+import { appendPage, isVorschlag, parseGrouped, standTime, vorschlagOf, type Grouped, type Grouping, type Item, type RuleProposal, type Section } from './model';
 import './Attention.css';
 
 const newKey = () => crypto.randomUUID();
@@ -79,6 +81,10 @@ const SEP = ' · ';
 
 /** The refusal codes the hub carries its own sentence for; anything else renders the generic one. */
 const KNOWN_ACT_ERRORS: ReadonlySet<string> = new Set([
+  // N02 R1: the receipt is already booked (a batch row; a single approval asks for the reason instead),
+  // or was booked elsewhere since the card was drawn.
+  'receipt_already_booked',
+  'holders_changed',
   'period_locked',
   'permission_denied',
   'cannot_self_approve',
@@ -162,6 +168,8 @@ export function Attention() {
   // The act in flight (one at a time: a double press on any row cannot fire twice) and its outcome.
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [actFeedback, setActFeedback] = useState<{ tone: FeedbackTone; message: string; id?: number } | null>(null);
+  // N02 R1: the reason a person gives for booking a receipt a second time (a single approval).
+  const { ask: askBookAgain, dialog: bookAgainDialog } = useBookAgain();
   const feedbackSeq = useRef(0);
   const [moreBusy, setMoreBusy] = useState<string | null>(null);
   // D178 point 5: the batch. The ticked bank Vorschläge (by action id), the run, each row's part, the result.
@@ -274,13 +282,33 @@ export function Attention() {
         ...(option.humanConfirm ? { confirmed: true } : {}),
         ...(reason !== undefined && reason !== '' ? { reason } : {}),
       };
-      const res = send !== undefined ? await send(input) : await client.call(option.verb, input);
+      const verb = option.verb;
+      const call = (body: Record<string, unknown>) => (send !== undefined ? send(body) : client.call(verb, body));
+      const res = await call(input);
       if (activeWs.current !== ws) return;
       setBusyKey(null);
       if (isErr(res.body)) {
         const code = res.body.error;
+        // N02 R1: approving would book a receipt a second time: the person gives the reason, and the
+        // same approval is sent again with it.
+        const asked =
+          verb === 'approve_drafted_action' &&
+          askBookAgain(res.body, async (confirmation) => {
+            const again = await call({ ...input, ...confirmation });
+            if (activeWs.current !== ws) return null;
+            if (isErr(again.body)) {
+              if (again.body.error !== 'holders_changed') return again.body;
+              setActFeedback({ tone: 'error', message: refusalText(t, again.body, ACT_WORDING) });
+            } else {
+              setActFeedback({ tone: 'success', message: t(`attention.act.done.${option.id}`), id: ++feedbackSeq.current });
+              announceAttentionChanged();
+            }
+            void load();
+            return null;
+          });
+        if (asked) return;
         setActFeedback({ tone: 'error', message: refusalText(t, res.body, ACT_WORDING) });
-        if (['not_found', 'already_applied', 'already_executed', 'gap_not_found', 'vorschlag_stale'].includes(code)) void load();
+        if (['not_found', 'already_applied', 'already_executed', 'gap_not_found', 'vorschlag_stale', 'holders_changed', 'offer_stale'].includes(code)) void load();
         return;
       }
       setActFeedback({ tone: 'success', message: t(`attention.act.done.${option.id}`), id: ++feedbackSeq.current });
@@ -288,7 +316,7 @@ export function Attention() {
       announceAttentionChanged();
       await load();
     },
-    [batchRunning, busyKey, client, load, t, workspaceId],
+    [askBookAgain, batchRunning, busyKey, client, load, t, workspaceId],
   );
 
   const createTask = useCallback(
@@ -385,6 +413,10 @@ export function Attention() {
    * here), then the drafted thing's own text.
    */
   const vorschlagTitle = (row: Item): string => {
+    // N03: a mined Buchungsregel says what it proposes and why: "Regel vorschlagen: Swisscom, 3× gleich gebucht".
+    if (row.ruleProposal !== undefined) return t('attention.ruleProposed.title', { counterparty: row.ruleProposal.counterparty, repeats: row.ruleProposal.repeats });
+    // N04: the offer of a proven rule: "Regel Swisscom: 10× unverändert gebucht. Künftig automatisch buchen?".
+    if (row.autobookOffer !== undefined) return t('attention.autobookOffer.title', { counterparty: row.autobookOffer.label ?? row.autobookOffer.counterparty, count: row.autobookOffer.cleanUses });
     const d = drafted.get(row.entityId);
     const text = d !== undefined && typeof d.payload.text === 'string' && d.payload.text !== '' ? d.payload.text : null;
     const counterparty = typeof row.subtitleParams?.counterparty === 'string' ? row.subtitleParams.counterparty : '';
@@ -551,6 +583,20 @@ export function Attention() {
    */
   const hasLineFacts = (item: Item): boolean => typeof item.subtitleParams?.date === 'string' && item.subtitleParams.date !== '';
 
+  /** N03: a mined rule's meta: its backtest ("Seit 01.01.2026: 14 Zeilen, 13 genau so gebucht"). */
+  const ruleMeta = (item: Item): ReactNode => {
+    const r = item.ruleProposal;
+    if (r === undefined) return null;
+    return <span className="att-row-sub t-num">{t('attention.ruleProposed.backtest', { date: formatDate(r.since), hits: r.hits, identical: r.identical })}</span>;
+  };
+
+  /** N04: an autobook offer's meta: the ceiling it would book up to, fixed now, and its one currency. */
+  const offerMeta = (item: Item): ReactNode => {
+    const o = item.autobookOffer;
+    if (o === undefined) return null;
+    return <span className="att-row-sub t-num">{t('attention.autobookOffer.meta', { ceiling: formatMoney(o.ceilingMinor, o.currency), currency: o.currency })}</span>;
+  };
+
   /** A Vorschlag's meta in the hub's one order: the amount, what it books onto, the date. */
   const vorschlagMeta = (item: Item): ReactNode => {
     const parts: ReactNode[] = [];
@@ -566,6 +612,21 @@ export function Attention() {
     if (date !== null) parts.push(<span key="date">{date}</span>);
     return parts.flatMap((part, i) => (i === 0 ? [part] : [<span key={`sep-${i}`} aria-hidden="true">{SEP}</span>, part]));
   };
+
+  /**
+   * N03 (D183): a mined Buchungsregel's line: "Regel anlegen" approves it, "Nicht vorschlagen" rejects it for
+   * good, "Anpassen" (in the ⋯) opens the rule prefilled from the newest booking in the bank, and Details lead
+   * with the bookings it was found in.
+   */
+  const ruleLineProps = (r: RuleProposal) => ({
+    approveLabel: t('attention.ruleProposed.create'),
+    rejectLabel: t('attention.ruleProposed.dismiss'),
+    extraDetails: r.evidence.map((e, i) => ({
+      key: `__evidence${i}`,
+      label: t('attention.ruleProposed.evidence'),
+      value: t('attention.ruleProposed.evidenceValue', { date: formatDate(e.date.slice(0, 10)), amount: formatMoney(Math.abs(e.amountMinor), e.currency) }),
+    })),
+  });
 
   const renderVorschlag = (item: Item, withBoxColumn: boolean) => {
     const index = nextFocus();
@@ -612,13 +673,32 @@ export function Attention() {
           bankLineInMenu
           mark={<span className="att-lead">{mark}</span>}
           titleText={vorschlagTitle(item)}
-          meta={hasLineFacts(item) ? vorschlagMeta(item) : undefined}
-          metaTail={hasLineFacts(item) ? undefined : (vorschlagDate(item) ?? undefined)}
+          meta={item.ruleProposal !== undefined ? ruleMeta(item) : item.autobookOffer !== undefined ? offerMeta(item) : hasLineFacts(item) ? vorschlagMeta(item) : undefined}
+          metaTail={
+            item.ruleProposal !== undefined || item.autobookOffer !== undefined || hasLineFacts(item)
+              ? undefined
+              : item.scheduledByAgent === true
+                ? [t('attention.vorschlag.scheduledByAgent'), vorschlagDate(item)].filter((x): x is string => x !== null && x !== undefined).join(SEP)
+                : (vorschlagDate(item) ?? undefined)
+          }
+          {...(item.ruleProposal !== undefined ? ruleLineProps(item.ruleProposal) : {})}
+          {...(item.autobookOffer !== undefined ? { approveLabel: t('attention.autobookOffer.grant'), rejectLabel: t('attention.autobookOffer.dismiss') } : {})}
           recovery={recovery?.deepLink !== undefined ? { label: t(recovery.labelKey), onClick: () => openLink(recovery.deepLink as { route: string; params: Record<string, string> }) } : null}
           staleText={t('attention.vorschlag.staleShort')}
           status={rowStatus.get(item.entityId) ?? null}
           offers={{ approve: option('approve') !== undefined, approveAllow: option('approve_allow') !== undefined, reject: option('reject') !== undefined }}
-          extraMenuItems={triageOf(item)}
+          extraMenuItems={
+            item.ruleProposal !== undefined
+              ? [
+                  {
+                    key: 'rule-adjust',
+                    label: t('attention.ruleProposed.adjust'),
+                    onSelect: () => openLink({ route: '/bank', params: { line: (item.ruleProposal as RuleProposal).bankTxnId, rule: 'save' } }),
+                  },
+                  ...triageOf(item),
+                ]
+              : triageOf(item)
+          }
           onApprove={(_, allowFuture) => {
             const chosen = option(allowFuture ? 'approve_allow' : 'approve');
             if (chosen !== undefined) void act(item, chosen);
@@ -659,6 +739,9 @@ export function Attention() {
           focusCurrent={focus.current}
           onFocusIn={focus.onFocus}
         />
+        {item.autobookDigest !== undefined ? (
+          <AutobookDigestLines digest={item.autobookDigest} busy={busyKey !== null || batchRunning} onAct={(option) => void act(item, option)} />
+        ) : null}
       </li>
     );
   };
@@ -849,6 +932,7 @@ export function Attention() {
         </div>
       ))}
 
+      {bookAgainDialog}
       {actFeedback !== null && (
         <ActionFeedback
           key={actFeedback.id ?? 0}

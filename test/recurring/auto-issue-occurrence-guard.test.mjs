@@ -37,6 +37,19 @@ import { freshDeps, mintWorkspace } from '../api/support.mjs';
 const mcp = (deps, name, args) => JSON.parse(callTool(deps, name, args).content[0].text);
 const human = (deps, name, input) => getAction(name).run({ ...deps, actor: 'studio' }, input);
 /**
+ * The agent's squat under the tick key. N01 (security review, 02.11.2026): `recurring:` is a RESERVED
+ * key prefix, so over the wire the squat is now refused at the door (`invalid_input`, reason
+ * `reserved_prefix`), asserted on every call here. The provenance guard below is the SECOND layer, so
+ * the squat is then planted in-process as the agent actor, past the door, the way a book written
+ * before the door existed (or a second writer) still carries it; the guard must hold against it.
+ */
+function plantSquat(deps, name, args) {
+  const overTheWire = mcp(deps, name, args);
+  assert.equal(overTheWire.ok, false, `the door let a reserved key through: ${JSON.stringify(overTheWire)}`);
+  assert.equal(overTheWire.reason, 'reserved_prefix', JSON.stringify(overTheWire));
+  return getAction(name).run({ ...deps, actor: 'agent' }, args);
+}
+/**
  * D161: the agent seat's own `run_due_recurring` is a Vorschlag under `issue` (asserted in the first
  * test and in test/agent/dial-covers-d161.test.mjs). The guard under test is the tick's, whoever runs
  * it, so the tick here is the person's (or the scheduler's) door; the squats stay the agent's.
@@ -73,7 +86,7 @@ const postedEntries = (deps, workspaceId) =>
 
 test('F1: a draft squatted under the tick key is NOT auto-issued; the period records draft_diverged', () => {
   const { deps, workspaceId, scheduleId, otherId } = world();
-  const squat = mcp(deps, 'create_document', {
+  const squat = plantSquat(deps, 'create_document', {
     workspaceId,
     type: 'invoice',
     contactId: otherId,
@@ -101,7 +114,7 @@ test('F1: a draft squatted under the tick key is NOT auto-issued; the period rec
 
 test('a squatted QUOTE under the tick key never settles the period as issued', () => {
   const { deps, workspaceId, scheduleId, aboId } = world();
-  const squat = mcp(deps, 'create_document', {
+  const squat = plantSquat(deps, 'create_document', {
     workspaceId,
     type: 'quote',
     contactId: aboId,
@@ -162,7 +175,7 @@ test('regression: a genuine occurrence still auto-issues, and so does a waiting 
 // --- Round 2 (the non-author critic's R2 findings, 28.09.2026) ------------------------------------------
 
 function squatAndTick(deps, workspaceId, scheduleId, doc) {
-  const squat = mcp(deps, 'create_document', { workspaceId, type: 'invoice', ...doc, idempotencyKey: `recurring:${scheduleId}:2026-07-16` });
+  const squat = plantSquat(deps, 'create_document', { workspaceId, type: 'invoice', ...doc, idempotencyKey: `recurring:${scheduleId}:2026-07-16` });
   assert.equal(squat.ok, true, JSON.stringify(squat));
   const ticked = tick(deps, { workspaceId });
   assert.equal(ticked.ok, true, JSON.stringify(ticked));
@@ -221,7 +234,7 @@ test('R2-1 (F2 shape): a waiting draft re-currencied or re-noted during a lock i
 
 test('R2-4: a squatted quote the agent SENDS never settles the invoice period as issued (the type check bites)', () => {
   const { deps, workspaceId, scheduleId, aboId } = world();
-  const squat = mcp(deps, 'create_document', {
+  const squat = plantSquat(deps, 'create_document', {
     workspaceId,
     type: 'quote',
     contactId: aboId,

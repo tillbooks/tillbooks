@@ -28,6 +28,7 @@ import { AGENT_ACTOR, SERVED_MEMBER_ACTOR_PREFIX } from '../access/actors.js';
 import { checklistItemsDueProvider } from '../checklists/attentionProvider.js';
 import { bankActivationProvider, bankKeysReviewProvider } from '../banking/ebics/attentionProvider.js';
 import { bankFetchFailedProvider, bankLinesWaitingProvider, bankStatementGapProvider } from '../banking/attentionProviders.js';
+import { autopilotProvider } from '../banking/autopilotAttention.js';
 import type { ActorKind, AttentionDecisionOption, AttentionItem, AttentionKind, QueueProvider } from './types.js';
 import { vorschlagProvider } from './vorschlaege.js';
 
@@ -453,4 +454,6 @@ export const ATTENTION_PROVIDERS: readonly QueueProvider[] = [
   bankFetchFailedProvider,
   bankStatementGapProvider,
   bankLinesWaitingProvider,
+  // N04 (D183): the autopilot's daily digest and the Dauerbuchung notes, defined beside the engine. `note`.
+  autopilotProvider,
 ];

@@ -12,7 +12,7 @@
 import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
-import { settingsGet, settingsList, settingsReset, settingsSet } from '../core/settings/index.js';
+import { refuseHumanOnly, settingsGet, settingsList, settingsReset, settingsSet } from '../core/settings/index.js';
 import type { ActionKind } from './actionKind.js';
 
 export interface SettingsActionHelpers {
@@ -24,14 +24,24 @@ export interface SettingsActionHelpers {
     call: (ctx: WorkspaceContext, input: ActionInput) => Result,
   ): ActionDef;
   ctxSchema(props?: Record<string, unknown>, required?: string[]): JsonSchema;
+  /** N02/N04 (D183): attach a verb's pure pre-draft validation (`ActionDef.prevalidate`). */
+  withPrevalidate(def: ActionDef, check: (ctx: WorkspaceContext, input: ActionInput) => Result | undefined): ActionDef;
   STR: { readonly type: 'string' };
+}
+
+/**
+ * N02/N04 (D183): a `humanOnly` setting is refused for a governed seat BEFORE a Vorschlag is drafted, so
+ * the agent cannot even queue a change for a careless approval. The verb refuses the same at execution.
+ */
+function humanOnlyScreen(ctx: WorkspaceContext, input: ActionInput): Result | undefined {
+  return refuseHumanOnly(ctx, input.key) ?? undefined;
 }
 
 /** A setting's value: the key's own schema (integer, number, boolean, string or enum) decides. */
 const VALUE = { type: ['integer', 'number', 'boolean', 'string'] } as const;
 
 export function settingsActions(h: SettingsActionHelpers): ActionDef[] {
-  const { ctxAction, ctxSchema, STR } = h;
+  const { ctxAction, ctxSchema, STR, withPrevalidate } = h;
   return [
     ctxAction(
       'settings_list',
@@ -47,22 +57,22 @@ export function settingsActions(h: SettingsActionHelpers): ActionDef[] {
       ctxSchema({ key: STR }, ['key']),
       (ctx, input) => settingsGet(ctx, input),
     ),
-    ctxAction(
+    withPrevalidate(ctxAction(
       'settings_set',
       'write:reversible:internal',
-      "Change one workspace setting. value must fit the key's schema exactly (invalid_setting_value otherwise; an unknown key is unknown_setting), reason is required (a missing or blank reason is reason_required on every face) and recorded with the old and new value in the setting's history and on the audit trail. Needs the capability that owns the key. A Belegnummer setting is also refused when ledger.belegnummer_prefix is not empty or 1 to 12 characters from A-Z a-z 0-9 . _ / - starting with a letter or digit and not ending in a digit (belegnummer_prefix_invalid), and when the change could hand out a voucher number that already exists (belegnummer_display_clash, naming it). Setting the value already in force changes nothing. The way back is settings_set to the previous value or settings_reset.",
+      "Change one workspace setting. value must fit the key's schema exactly (invalid_setting_value otherwise; an unknown key is unknown_setting), reason is required (a missing or blank reason is reason_required on every face) and recorded with the old and new value in the setting's history and on the audit trail. Needs the capability that owns the key. A human-only setting (humanOnly: true in settings_list, e.g. files.source_roots) refuses an agent seat human_only, also as a proposal. A Belegnummer setting is also refused when ledger.belegnummer_prefix is not empty or 1 to 12 characters from A-Z a-z 0-9 . _ / - starting with a letter or digit and not ending in a digit (belegnummer_prefix_invalid), and when the change could hand out a voucher number that already exists (belegnummer_display_clash, naming it). Setting the value already in force changes nothing. The way back is settings_set to the previous value or settings_reset.",
       // `reason` is required by the VERB (reason_required, on every face), not by the schema: a schema-required
       // gap is refused at the registry boundary as invalid_input, which would answer a missing reason
       // differently on REST/MCP than in the engine (critic D172 r1).
       ctxSchema({ key: STR, value: VALUE, reason: STR, idempotencyKey: STR }, ['key', 'value', 'idempotencyKey']),
       (ctx, input) => settingsSet(ctx, input),
-    ),
-    ctxAction(
+    ), humanOnlyScreen),
+    withPrevalidate(ctxAction(
       'settings_reset',
       'write:reversible:internal',
-      "Return one workspace setting to its default by removing this workspace's override. reason is required (reason_required when missing or blank) and recorded with the old value in the setting's history and on the audit trail. A setting without an override is left as it is. A Belegnummer setting whose default could hand out a voucher number that already exists is refused (belegnummer_display_clash). The way back is settings_set to the previous value.",
+      "Return one workspace setting to its default by removing this workspace's override. reason is required (reason_required when missing or blank) and recorded with the old value in the setting's history and on the audit trail. A human-only setting refuses an agent seat human_only. A setting without an override is left as it is. A Belegnummer setting whose default could hand out a voucher number that already exists is refused (belegnummer_display_clash). The way back is settings_set to the previous value.",
       ctxSchema({ key: STR, reason: STR, idempotencyKey: STR }, ['key', 'idempotencyKey']),
       (ctx, input) => settingsReset(ctx, input),
-    ),
+    ), humanOnlyScreen),
   ];
 }

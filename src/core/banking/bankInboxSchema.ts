@@ -88,7 +88,17 @@ CREATE TABLE IF NOT EXISTS bank_line_decision (
   rule_id              TEXT REFERENCES bank_standard(id),
   -- D178 E3 (A39 §17.7): the contact a \`contact\` target booked the line to, NULL for every other decision.
   -- Listed in ADDITIVE_COLUMNS (store/schema.ts) for a book written before it.
-  contact_id           TEXT REFERENCES contact(id)
+  contact_id           TEXT REFERENCES contact(id),
+  -- N03 (D183): the PROVENANCE of a booking. The Buchungsregel whose proposal stood on the line when it was
+  -- booked (the rule rung's standardId; NULL for the several-rules picker, no rule, an ignore, and every
+  -- decision written before N03), and whether the booking differed from that rule's own legs (1) or not
+  -- (0); NULL exactly when proposed_rule_id is NULL. Stamped by the one decision writer as the row is
+  -- inserted, frozen by its own trigger below. Listed in ADDITIVE_COLUMNS (store/schema.ts).
+  proposed_rule_id     TEXT REFERENCES bank_standard(id),
+  rule_changed         INTEGER CHECK (rule_changed IN (0, 1)),
+  -- N04 (D183): the channel of an AUTOMATIC booking (\`autobook:<ruleId>\`), NULL for every other decision.
+  -- Stamped by the one decision writer, frozen by its own trigger (\`autobookSchema.ts\`). In ADDITIVE_COLUMNS.
+  channel              TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS bank_line_decision_one_active
@@ -169,6 +179,17 @@ END;
 CREATE TRIGGER IF NOT EXISTS bank_line_decision_contact_frozen
 BEFORE UPDATE ON bank_line_decision
 WHEN NEW.contact_id IS NOT OLD.contact_id
+BEGIN
+  SELECT RAISE(ABORT, 'bank_line_decision: only the supersession stamp may be written, and only once');
+END;
+
+-- N03 (D183): the provenance of a booking is as immutable as the rest of the row, by its own trigger (every
+-- existing book keeps its A39 trigger as it is, the rule and contact precedent). N04's earned autonomy reads
+-- it, so nothing may rewrite it after the booking.
+CREATE TRIGGER IF NOT EXISTS bank_line_decision_provenance_frozen
+BEFORE UPDATE ON bank_line_decision
+WHEN NEW.proposed_rule_id IS NOT OLD.proposed_rule_id
+  OR NEW.rule_changed IS NOT OLD.rule_changed
 BEGIN
   SELECT RAISE(ABORT, 'bank_line_decision: only the supersession stamp may be written, and only once');
 END;
@@ -298,7 +319,12 @@ CREATE TABLE IF NOT EXISTS bank_standard (
   outcome             TEXT NOT NULL DEFAULT 'legs' CHECK (outcome IN ('legs', 'ignore')),
   ignore_reason       TEXT,
   ignore_note         TEXT,
-  follow_up_standard_id TEXT REFERENCES bank_standard(id)
+  follow_up_standard_id TEXT REFERENCES bank_standard(id),
+  -- N03 (D183): the rule version this row REPLACED when it was set (the edited row, else the slot's live
+  -- row), so a rule's versions form a chain its stats and N04's grant follow. \`superseded_by\` holds the
+  -- actor, never the successor. NULL for a first version, after a clear, and for every row set before N03.
+  -- Always an older row. Listed in ADDITIVE_COLUMNS (store/schema.ts); frozen by its own trigger below.
+  replaces_id         TEXT REFERENCES bank_standard(id)
 );
 
 -- D175: the one-live index is \`bank_standard_one_live_rule\` over (workspace, key, direction,
@@ -345,6 +371,14 @@ END;
 
 -- D176: the scope, the outcome and the follow-up are as immutable as the recipe (an edit supersedes). A
 -- THIRD trigger, for the reason the second one is separate: every existing trigger stays exactly as it is.
+-- N03: the version chain is as immutable as the recipe, by a FOURTH trigger for the same reason.
+CREATE TRIGGER IF NOT EXISTS bank_standard_chain_frozen
+BEFORE UPDATE ON bank_standard
+WHEN NEW.replaces_id IS NOT OLD.replaces_id
+BEGIN
+  SELECT RAISE(ABORT, 'bank_standard: only the supersession stamp may be written, and only once');
+END;
+
 CREATE TRIGGER IF NOT EXISTS bank_standard_outcome_frozen
 BEFORE UPDATE ON bank_standard
 WHEN NEW.scope IS NOT OLD.scope

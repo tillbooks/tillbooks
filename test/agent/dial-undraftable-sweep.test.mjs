@@ -57,6 +57,9 @@ const GOVERNED_SHAPE = {
   set_creditor_profile: (input) => ({ ...input, iban: 'CH5604835012345678009' }),
   // D161.3: the MWST number is the governed input of update_company_profile.
   update_company_profile: (input) => ({ ...input, mwstNo: 'CHE-116.281.710 MWST' }),
+  // N04 (D183): mode post is human-only (refused before any draft, under every dial); an agent proposes a
+  // schedule that proposes, which is the governed input it drafts.
+  set_vorlage_schedule: (input) => ({ ...input, mode: 'propose' }),
 };
 
 /**

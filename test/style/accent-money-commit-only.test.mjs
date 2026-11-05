@@ -77,7 +77,7 @@ export const PROVEN_POSTING_VERBS = [
     why: 'books one outgoing payment per item through A14 recordPayment',
     hops: [
       { at: 'src/core/banking/pain001.ts:1160', fn: 'markBatchPaid', calls: 'recordPayment' },
-      { at: 'src/core/payments/payment.ts:2055', fn: 'recordPayment', calls: 'postEntry' },
+      { at: 'src/core/payments/payment.ts:2056', fn: 'recordPayment', calls: 'postEntry' },
     ],
   },
   {
@@ -85,11 +85,12 @@ export const PROVEN_POSTING_VERBS = [
     // in no name-map set; the proof is the accounts path. A match posts nothing and a settlement posts
     // through A14, but the row's Buchen (A39, B2) commits all three with the one verb.
     verb: 'book_bank_line',
-    why: 'books a bank line to accounts: performBooking routes an accounts target to bookToAccounts, which posts the entry',
+    why: 'books a bank line to accounts: performBooking (N03: with its provenance bound) hands an accounts target to dispatchBooking, which routes it to bookToAccounts, which posts the entry',
     hops: [
-      { at: 'src/core/banking/bankBooking.ts:932', fn: 'bookBankLine', calls: 'performBooking' },
-      { at: 'src/core/banking/bankBooking.ts:1058', fn: 'performBooking', calls: 'bookToAccounts' },
-      { at: 'src/core/banking/bankBooking.ts:2401', fn: 'bookToAccounts', calls: 'postEntry' },
+      { at: 'src/core/banking/bankBooking.ts:935', fn: 'bookBankLine', calls: 'performBooking' },
+      { at: 'src/core/banking/bankBooking.ts:1052', fn: 'performBooking', calls: 'dispatchBooking' },
+      { at: 'src/core/banking/bankBooking.ts:1083', fn: 'dispatchBooking', calls: 'bookToAccounts' },
+      { at: 'src/core/banking/bankBooking.ts:2426', fn: 'bookToAccounts', calls: 'postEntry' },
     ],
   },
   {
@@ -125,7 +126,7 @@ const KNOWN_NON_POSTING = ['create_credit_note', 'stock_run_valuation', 'stock_s
 export const APPROVAL_COMMIT = {
   verb: 'approve_drafted_action',
   why: 'replays the drafted verb as the approver through the shared dispatch; the batch reaches only the bank-line decisions',
-  replay: { at: 'src/core/agent/draftedActions.ts:606', fn: 'approveOnce', calls: 'invoke' },
+  replay: { at: 'src/core/agent/draftedActions.ts:651', fn: 'approveOnce', calls: 'invoke' },
   reach: { file: 'src/core/attention/vorschlaege.ts', name: 'BATCHABLE_VERBS' },
   surface: 'app/src/surfaces/Attention/Batch.tsx',
 };

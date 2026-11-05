@@ -474,6 +474,20 @@ const EXPECTED_NAMES = [
   'set_bank_standard',
   'clear_bank_standard',
   'list_bank_standards',
+  // N03 (D183), Buchungsregeln that learn (rule-learning-actions.ts, spread right after the bank inbox):
+  // the miner, which drafts Vorschläge and never a rule, and two reads of derived evidence.
+  'mine_rules',
+  'bank_rule_stats',
+  'backtest_bank_rule',
+  // N04 (D183), Autopilot: the earned autobook grant and its stop, the digest and its "Gesehen", the Dauerbuchungen.
+  'autobook_candidates',
+  'grant_rule_autobook',
+  'revoke_rule_autobook',
+  'autobook_digest',
+  'autopilot_mark_seen',
+  'set_vorlage_schedule',
+  'clear_vorlage_schedule',
+  'vorlage_schedules',
   // A18, creditor payments (pain001-actions.ts, spread after A21's QR matching). Five writes and
   // three reads. `set_creditor_bank_profile` and `mark_batch_paid` sit on the G01 denylist (D65 leg
   // (f) and the D77 judgment-confirmation leg, respectively); `discard_payment_batch` is the F4
@@ -506,6 +520,11 @@ const EXPECTED_NAMES = [
   'prefs_get',
   'prefs_set',
   'prefs_reset',
+  // N00, the workspace brief and the Hausbuch (D183), spread in right after the per-person preferences.
+  'workspace_brief',
+  'hausbuch_notes',
+  'hausbuch_note_set',
+  'hausbuch_note_archive',
   // A23, multi-client workspaces. `list_workspaces` (D12) moved here from its inline slot when A23
   // took ownership of the roster: a tool's position is part of its history, not its meaning, and
   // the NAME (the stable external contract) did not change.
@@ -534,6 +553,11 @@ const EXPECTED_NAMES = [
   'reject_drafted_action',
   'agent_ask',
   'agent_prose_delete',
+  // N01, agent ergonomics: the two batch writes, the batch approval and the dispatcher.
+  'book_bank_lines',
+  'post_entries',
+  'approve_drafted_actions',
+  'call_tool',
   // A35, agent conversation & oversight: three reads over the trace, zero writes.
   'list_agent_sessions',
   'get_agent_session',
@@ -1037,6 +1061,10 @@ const EXPECTED_NAMES = [
   'env_copy',
   'env_reset',
   'env_delete',
+  // N02, chat Belege (D183): the drop link and the Belegeingang status
+  'files_drop_link',
+  'files_pending_preview',
+  'belegeingang_status',
 ];
 
 test('tool names are unique', () => {
@@ -1116,6 +1144,9 @@ test('ctx-based tools require workspaceId in their input schema', () => {
     // M00: `delivery_status` describes the running process, not a tenant, and the first-run flow
     // calls it before any ledger exists, so it carries no workspaceId for the boundary to resolve.
     'delivery_status',
+    // N01: the dispatcher's tenant is the NAMED verb's (`args.workspaceId`), checked by that verb's own
+    // boundary when it runs; `call_tool` itself has no tenant to resolve.
+    'call_tool',
   ]);
   for (const a of ACTIONS) {
     if (preWorkspace.has(a.name)) {

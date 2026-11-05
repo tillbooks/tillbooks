@@ -135,6 +135,11 @@ const CONVERTED = [
   // `postEntry` (`id` is the near name a consumer would reach for).
   { module: './dist/core/banking/bankTemplates.js', verb: 'composeTemplate', field: 'template', absent: 'expanded' },
   { module: './dist/core/banking/bankTemplates.js', verb: 'postEntryFromTemplate', field: 'entryId', absent: 'id' },
+  // N03 (D183): the rule card reads `stats` (each rule's record), the editor's Testen reads `identical`, and
+  // the miner's run is read by its `groups`; `rules`, `same` and `proposals` are the near names.
+  { module: './dist/core/banking/ruleStats.js', verb: 'ruleStats', field: 'stats', absent: 'rules' },
+  { module: './dist/core/banking/ruleMiner.js', verb: 'backtestRule', field: 'identical', absent: 'same' },
+  { module: './dist/core/banking/ruleMiner.js', verb: 'mineRules', field: 'groups', absent: 'proposals' },
   // A38's MWST-Saldierung model (D129 leg 2): the ONE function the preview returns and the post writes,
   // so its shape is the contract between the two faces. `lines` is what the poster books; `entries` is
   // the read a caller writes when it mistakes the model for a journal listing.
@@ -356,6 +361,22 @@ const CONVERTED = [
   { module: './dist/core/customization/prefs.js', verb: 'prefsGet', field: 'pref', absent: 'preference' },
   { module: './dist/core/customization/prefs.js', verb: 'prefsSet', field: 'previousValue', absent: 'oldValue' },
   { module: './dist/core/customization/prefs.js', verb: 'prefsReset', field: 'reset', absent: 'keys' },
+  // N00 (the workspace brief and the Hausbuch): the Studio reads `omitted` beside the brief's sections,
+  // `notes` from the list and `changeId`/`changed` after a set or an archive.
+  { module: './dist/core/hausbuch/brief.js', verb: 'workspaceBrief', field: 'omitted', absent: 'denied' },
+  { module: './dist/core/hausbuch/notes.js', verb: 'listNotes', field: 'notes', absent: 'items' },
+  { module: './dist/core/hausbuch/notes.js', verb: 'setNote', field: 'changeId', absent: 'historyId' },
+  { module: './dist/core/hausbuch/notes.js', verb: 'archiveNote', field: 'changed', absent: 'archived' },
+  // N04 (D183): the autopilot. A grant answers `alreadyGranted` (a person's second click is not a new grant),
+  // never `granted`; a revoke the ids it revoked, never one `grantId`; the candidates `rules`, never the
+  // `standards` of list_bank_standards; a digest day `notBooked`, never `skipped` (a schedule run's word);
+  // a schedule set names what it replaced; the list `schedules`, never `items`.
+  { module: './dist/core/banking/autobook.js', verb: 'grantRuleAutobook', field: 'alreadyGranted', absent: 'granted' },
+  { module: './dist/core/banking/autobook.js', verb: 'revokeRuleAutobook', field: 'revokedGrantIds', absent: 'grantId' },
+  { module: './dist/core/banking/autobook.js', verb: 'autobookCandidates', field: 'rules', absent: 'standards' },
+  { module: './dist/core/banking/autobook.js', verb: 'autobookDigest', field: 'notBooked', absent: 'skipped' },
+  { module: './dist/core/ledger/vorlageSchedule.js', verb: 'setVorlageSchedule', field: 'replacedScheduleId', absent: 'previousId' },
+  { module: './dist/core/ledger/vorlageSchedule.js', verb: 'listVorlageSchedules', field: 'schedules', absent: 'items' },
 ];
 
 /**
@@ -381,7 +402,11 @@ const UNDECLARED = { module: './dist/core/ledger/draft.js', verb: 'deleteDraft' 
 // 65 since D178 (2026-10-21): the four per-person preference verbs (point 7) and `journalNumberingPlan` (point 2).
 // 69 since D178 point 4 (2026-10-21): `importBankStatement`, `bankCsvPreview`, `getBankCsvMapping`, `setBankCsvMapping`.
 // 70 since D178 point 19 (2026-10-21): `resolvePossibleDuplicate`.
-const DECLARED_FLOOR = 70;
+// 74 since N00 (2026-11-02): `workspaceBrief`, `listNotes`, `setNote`, `archiveNote`.
+// 77 since N03 (2026-11-02): `ruleStats`, `backtestRule`, `mineRules`.
+// 83 since N04 (2026-11-03): `grantRuleAutobook`, `revokeRuleAutobook`, `autobookCandidates`, `autobookDigest`,
+// `setVorlageSchedule`, `listVorlageSchedules`.
+const DECLARED_FLOOR = 83;
 
 /**
  * The resolved compiler options of `tsconfig.test.json`, read through TypeScript's own JSONC parser
@@ -516,17 +541,22 @@ function signatureCensus() {
   let open = 0;
   let declared = 0;
   let containers = 0;
+  /** @type {string[]} */
+  const containerFiles = [];
   for (const file of declarations) {
     const text = readFileSync(join(ROOT, 'dist', file), 'utf8');
     // Only a RETURN position counts. `=> Result` inside a parameter type (the registry's `call`
     // helpers) is not a verb's own promise about what it sends back.
     for (const match of text.matchAll(/\): Result(<[^;]*>)?;/g)) {
-      if (match[0] === CONTAINER_SIGNATURE) containers += 1;
+      if (match[0] === CONTAINER_SIGNATURE) {
+        containers += 1;
+        containerFiles.push(file.split('\\').join('/'));
+      }
       else if (match[1] === undefined) open += 1;
       else declared += 1;
     }
   }
-  return { open, declared, containers, total: open + declared };
+  return { open, declared, containers, containerFiles: containerFiles.sort(), total: open + declared };
 }
 
 // -------------------------------------------------------------------------------------------
@@ -551,12 +581,16 @@ test('the corpus is real: dist carries emitted declarations and the pilot is amo
   // The subtraction is asserted, not trusted. If a second generic container appears the count below
   // is quietly wrong again, and if the dispatcher's `run` stops matching, `declared` silently gains
   // one and the ratchet goes slack by exactly the amount it is meant to measure.
-  assert.equal(
-    census.containers,
-    1,
-    `${census.containers} generic \`${CONTAINER_SIGNATURE}\` signatures in dist, expected exactly ` +
-      'one (`ActionDef.run`). A container parameterised over its payload is not a verb declaring ' +
-      'one, and counting it as such is how this ratchet would pass with the pilot reverted.',
+  // The containers are NAMED, not counted: `ActionDef.run` (the dispatcher) and N01's
+  // `claimIdempotencyArgs` (D183, the registry-level idempotency claim that wraps every verb's run and
+  // hands its result back unchanged). A third generic container must be added here by name, so it can
+  // never stand in silently for a verb's conversion.
+  assert.deepEqual(
+    census.containerFiles,
+    ['api/registry.d.ts', 'core/store/idempotencyArgs.d.ts'],
+    `generic \`${CONTAINER_SIGNATURE}\` signatures in dist sit in ${census.containerFiles.join(', ')}, expected ` +
+      'exactly `ActionDef.run` and `claimIdempotencyArgs`. A container parameterised over its payload is not ' +
+      'a verb declaring one, and counting it as such is how this ratchet would pass with the pilot reverted.',
   );
 });
 

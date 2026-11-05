@@ -492,6 +492,8 @@ test('A24: a viewer READS the books, and the reads it is refused are named one b
     'export_statements',
     'export_vat',
     'files_get_content',
+    // N02 (critic round 2): the Vorschlag Beleg preview, for the seat that decides (`manage_agent_dial`).
+    'files_pending_preview',
     'get_agent_dial',
     'get_diagnostics',
     // G13: the archive PREVIEW renders the not-yet-imported source export, which is plan material
@@ -669,6 +671,11 @@ test('A24: a NON-MEMBER of a provisioned workspace reads nothing, which is the D
   //                     asserts membership itself (`notOwnSeat` in `core/customization/prefs.ts`) and
   //                     keys every row by the session actor: a stranger is refused `permission_denied`
   //                     with role null, which the loop below holds, and never reads anyone's row.
+  //   workspace_brief   N00's brief composes six read domains (the F00 argument once more): every
+  //                     section asserts its source verb's own read gate in the engine and is listed in
+  //                     `omitted` when refused (`core/hausbuch/brief.ts`), and its counts are
+  //                     attention_summary's own per-queue answer. A non-member gets its own whoami, no
+  //                     header, every section omitted and `{ total: null, queues: {} }`: no row of the book.
   const exempt = reads
     .filter((a) => isUngated(CAPABILITY_FOR_ACTION[a.name]))
     .map((a) => a.name)
@@ -688,6 +695,7 @@ test('A24: a NON-MEMBER of a provisioned workspace reads nothing, which is the D
       'reports_preview',
       'search_global',
       'whoami',
+      'workspace_brief',
     ],
     'the set of ungated ctx reads changed'
   );

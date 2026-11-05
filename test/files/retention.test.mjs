@@ -29,6 +29,10 @@ import {
   RETENTION_SOURCES,
   OR_958F_YEARS,
 } from '../../dist/core/files/index.js';
+import { withReceiptOverride } from '../../dist/core/files/receiptGuard.js';
+
+/** R1 (security review): replacing a booked receipt is a person's act with a reason. */
+const versionAsPerson = (ctx, input) => withReceiptOverride({ bookAgain: true, overrideReason: 'Korrigierte Fassung', approvingActionId: null }, () => newFileVersion(ctx, input));
 import { ENTITY_KIND_IDS, entityKindDef } from '../../dist/core/customization/index.js';
 import { createContact, createDocument, transitionDocument } from '../../dist/core/sales/index.js';
 import { postEntry } from '../../dist/core/ledger/index.js';
@@ -70,7 +74,7 @@ test('every accounting entity kind is a kind the shared registry really knows', 
   for (const kind of ACCOUNTING_ENTITY_KINDS) {
     assert.ok(ENTITY_KIND_IDS.includes(kind), `${kind} is not a registered entity kind`);
   }
-  assert.deepEqual([...ACCOUNTING_ENTITY_KINDS], ['document', 'payment', 'journal_entry', 'bank_txn']);
+  assert.deepEqual([...ACCOUNTING_ENTITY_KINDS], ['document', 'payment', 'journal_entry', 'bank_txn', 'vendor_bill', 'expense_claim']);
 });
 
 test('master data is deliberately NOT an accounting kind', () => {
@@ -194,7 +198,7 @@ test('a SUPERSEDED version is retained too: v2 existing is not a reason v1 may g
   const v1 = file(ctx);
   const doc = issuedInvoice(ctx);
   linkFile(ctx, { fileId: v1.id, entityKind: 'document', entityId: doc.id, idempotencyKey: 'l' });
-  const v2 = newFileVersion(ctx, { fileId: v1.id, contentBase64: b64('fassung zwei'), idempotencyKey: 'v' }).file;
+  const v2 = versionAsPerson(ctx, { fileId: v1.id, contentBase64: b64('fassung zwei'), idempotencyKey: 'v' }).file;
 
   // The successor inherited the lock, so it is locked for its own reason.
   assert.equal(v2.retentionUntil, '2036-12-31');
@@ -530,7 +534,7 @@ test('the statutory column carries forward to a new version, provenance and all'
   const v1 = file(ctx);
   const doc = issuedInvoice(ctx);
   linkFile(ctx, { fileId: v1.id, entityKind: 'document', entityId: doc.id, idempotencyKey: 'l' });
-  const v2 = newFileVersion(ctx, { fileId: v1.id, contentBase64: b64('fassung zwei'), idempotencyKey: 'v' }).file;
+  const v2 = versionAsPerson(ctx, { fileId: v1.id, contentBase64: b64('fassung zwei'), idempotencyKey: 'v' }).file;
   assert.equal(v2.retentionStatutoryUntil, '2036-12-31');
 
   // And the escape is closed on the SUCCESSOR too: extending v2 by hand then re-linking it away must

@@ -47,6 +47,7 @@ import { decodeSwissQrBill, type QrDecodeIssue } from './qrbill/decode.js';
 import { decodedBillFields } from './qrbill/fields.js';
 import { billIdentity } from './qrbill/identity.js';
 import { mergeBill, applyTypedField, SUPERSEDED, type Bill } from './billMerge.js';
+import { isReceiptBookingKind, liveReceiptHolders } from '../files/receiptGuard.js';
 import { applySavedView } from '../customization/views.js';
 import { baseCurrencyOf } from '../fx/rates.js';
 
@@ -223,6 +224,9 @@ export function captureIntake(ctx: WorkspaceContext, input: CaptureIntakeInput):
   if (liveTwin !== undefined) {
     return ok({ captureId: liveTwin.id, duplicate: true });
   }
+  // R1 (N02): a receipt that already evidences a live booking (or waits for a Vorschlag) is queued like
+  // any other; the answer names its holders, so the person sees it before committing. The commit itself
+  // meets the receipt guard like every other door.
   // A hash matching only DISCARDED captures cross-links the newest discarded twin (recovery).
   const discardedTwin = ctx.store.db
     .prepare("SELECT id FROM captures WHERE workspace_id = ? AND sha256 = ? AND status = 'discarded' ORDER BY created_at DESC, rowid DESC LIMIT 1")
@@ -242,6 +246,7 @@ export function captureIntake(ctx: WorkspaceContext, input: CaptureIntakeInput):
 
     const id = ctx.ids.next('cap');
     const at = ctx.clock.now();
+    const holders = liveReceiptHolders(ctx, sha256, { target: { kind: 'capture', id }, exceptFileIds: [documentId] });
     ctx.store.db
       .prepare(
         `INSERT INTO captures
@@ -266,7 +271,12 @@ export function captureIntake(ctx: WorkspaceContext, input: CaptureIntakeInput):
       );
     mergeBill(ctx, id, bytesBill(parsed), { kind: 'bytes' });
     ctx.audit.record({ entityKind: 'capture', entityId: id, action: 'intake', actor: ctx.actor, at });
-    return ok({ captureId: id, duplicate: false, ...(discardedTwin !== undefined ? { rescuedFromCaptureId: discardedTwin.id } : {}) });
+    return ok({
+      captureId: id,
+      duplicate: false,
+      ...(discardedTwin !== undefined ? { rescuedFromCaptureId: discardedTwin.id } : {}),
+      ...(holders.length > 0 ? { alreadyBooked: true, holders } : {}),
+    });
   };
 
   const wrapped = (): Result =>
@@ -479,6 +489,12 @@ export interface CaptureCommitInput {
     expenseDate?: string;
   };
   corrections?: { key: string; value?: unknown }[];
+  /**
+   * R1: a person commits although the receipt already evidences another live booking (needs
+   * `overrideReason`). Read by the receipt guard from the call's frame (the registry puts it there).
+   */
+  bookAgain?: boolean;
+  overrideReason?: string;
   idempotencyKey: string;
 }
 
@@ -517,6 +533,25 @@ export function captureCommit(ctx: WorkspaceContext, input: CaptureCommitInput):
       if ((c as { value?: unknown }).value === undefined) return err('invalid_input', { field: 'value', key: (c as { key: string }).key });
     }
   }
+  // N02 (D183, critic F1): a capture whose OWN document already evidences a BOOKING (a person linked it
+  // by hand) is never committed over it: re-linking would MOVE the Beleg off that booking (a file has one
+  // primary link). Refused before anything is written, naming the holder. A document filed on a record
+  // that books nothing (a contact, a project) is moved to the bill, as `files_link` would move it.
+  const documentLink = ctx.store.db
+    .prepare('SELECT entity_kind, entity_id FROM stored_file WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, capture.document_id) as { entity_kind: string | null; entity_id: string | null } | undefined;
+  if (documentLink !== undefined && documentLink.entity_kind !== null && isReceiptBookingKind(documentLink.entity_kind)) {
+    return err('document_already_linked', {
+      captureId: capture.id,
+      fileId: capture.document_id,
+      entityKind: documentLink.entity_kind,
+      entityId: documentLink.entity_id,
+    });
+  }
+  // R1 (N02): the same RECEIPT evidencing another live booking (another filing row, a receipt pointer, a
+  // Vorschlag's reservation) is judged by the receipt guard at the door the commit reaches: the bill's
+  // `attach_receipt` (which links the document) or the expense line's `expense_line_upsert`. A refusal
+  // there rolls the whole commit back, and a person's `bookAgain` + `overrideReason` is recorded there.
 
   const run = (): Result => {
     // Corrections land as operator fields FIRST, so the delegated write reads the corrected values.
@@ -574,17 +609,21 @@ export function captureCommit(ctx: WorkspaceContext, input: CaptureCommitInput):
       if (bill === undefined || bill.status !== 'draft' || bill.contact_id !== vendorId || bill.idempotency_key !== `${delegatedKey}:vb`) {
         throw new CaptureAbort(notOwn('create_vendor_bill', { vendorBillId: targetId }));
       }
-      // The receipt reference (A17's own pointer) AND the E00 entity link (which derives OR 958f
-      // retention) do different jobs; both fire.
-      const attached = ctx.store.innerWrite('capture_commit', () => attachReceipt(ctx, { vendorBillId: targetId, receiptRef: capture.document_id, idempotencyKey: `${delegatedKey}:ar` }));
-      if (!attached.ok) throw new CaptureAbort(attached);
-      const receiptRef = ctx.store.db.prepare('SELECT receipt_ref FROM vendor_bill WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, targetId) as { receipt_ref: string | null };
-      if (receiptRef.receipt_ref !== capture.document_id) throw new CaptureAbort(notOwn('attach_receipt', { vendorBillId: targetId }));
+      // The E00 entity link (which derives OR 958f retention) AND the receipt reference (A17's own
+      // pointer) do different jobs; both fire. The LINK first: the capture owns the document it uploaded,
+      // so it files it against the bill (moving a link a squatter set, K1); it is the receipt guard's door
+      // for this commit (R1, the document's own current link excluded: it moves). A17's pointer then finds
+      // it already on this bill (`refuseReceiptLink` never lets a pointer move a link), so `attach_receipt`
+      // links nothing a second time.
       const linked = ctx.store.innerWrite('capture_commit', () => linkFile(ctx, { fileId: capture.document_id, entityKind: 'vendor_bill', entityId: targetId, idempotencyKey: `${delegatedKey}:lk` }));
       if (!linked.ok) throw new CaptureAbort(linked);
       if (!fileLinkedTo(ctx, capture.document_id, 'vendor_bill', targetId)) {
         throw new CaptureAbort(notOwn('files_link', { fileId: capture.document_id, vendorBillId: targetId }));
       }
+      const attached = ctx.store.innerWrite('capture_commit', () => attachReceipt(ctx, { vendorBillId: targetId, receiptRef: capture.document_id, idempotencyKey: `${delegatedKey}:ar` }));
+      if (!attached.ok) throw new CaptureAbort(attached);
+      const receiptRef = ctx.store.db.prepare('SELECT receipt_ref FROM vendor_bill WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, targetId) as { receipt_ref: string | null };
+      if (receiptRef.receipt_ref !== capture.document_id) throw new CaptureAbort(notOwn('attach_receipt', { vendorBillId: targetId }));
     } else {
       // expense_line: onto a supplied draft claim, or a fresh one for the target employee.
       let claimId = target.claimId;
@@ -614,6 +653,13 @@ export function captureCommit(ctx: WorkspaceContext, input: CaptureCommitInput):
       const expenseDate = target.expenseDate ?? (typeof field('invoice_date') === 'string' ? (field('invoice_date') as string) : ctx.clock.now().slice(0, 10));
       const lineClaimId = claimId;
       const lineMinor = amount.minor;
+      // The capture owns the document it uploaded: it files it against the claim first (moving a link a
+      // squatter set, as the bill branch does), so E02's receipt pointer finds it already on this claim.
+      const claimLinked = ctx.store.innerWrite('capture_commit', () => linkFile(ctx, { fileId: capture.document_id, entityKind: 'expense_claim', entityId: lineClaimId, idempotencyKey: `${delegatedKey}:lkc` }));
+      if (!claimLinked.ok) throw new CaptureAbort(claimLinked);
+      if (!fileLinkedTo(ctx, capture.document_id, 'expense_claim', lineClaimId)) {
+        throw new CaptureAbort(notOwn('files_link', { fileId: capture.document_id, claimId: lineClaimId }));
+      }
       const line = ctx.store.innerWrite('capture_commit', () => upsertLine(ctx, {
         claimId: lineClaimId,
         line: {

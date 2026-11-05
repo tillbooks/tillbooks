@@ -117,7 +117,8 @@
         "recipient": "To",
         "vat": "VAT",
         "gross": "Total"
-      }
+      },
+      "holdersChanged": "Not carried out: the receipt was booked elsewhere in the meantime. The card now shows where. Check it and approve again."
     },
     "line": {
       "more": "More for: {title}",
@@ -126,6 +127,8 @@
       "detailsOf": "Details: {title}",
       "consequence": "What this does",
       "origin": "Agent proposal",
+      "agentReasonLabel": "The agent's reason:",
+      "agentReason": "“{text}”",
       "proposed": "Proposed",
       "proposedValue": "on {date} by {actor}",
       "agentActor": "Agent",
@@ -407,7 +410,10 @@
       "inventory_adjust": "Adjust stock",
       "inventory_adjust_batch": "Adjust stock in a batch",
       "inventory_adjust_reverse": "Reverse stock adjustment",
-      "portal_quote_accept": "Accept quote via portal link"
+      "portal_quote_accept": "Accept quote via portal link",
+      "hausbuch_note_set": "Save house note",
+      "hausbuch_note_archive": "Archive house note",
+      "set_vorlage_schedule": "Schedule a template"
     },
     "field": {
       "amount": "Amount",
@@ -457,6 +463,18 @@
       "question": "Question",
       "year": "Year",
       "method": "Method"
+    },
+    "belege": {
+      "head": "Receipts attached on approval ({count})",
+      "kind": {
+        "pdf": "PDF",
+        "image": "Image",
+        "file": "File"
+      },
+      "dropped": "dropped through a link",
+      "open": "Open",
+      "thumbAlt": "Receipt {name}",
+      "failed": "The receipt could not be opened."
     }
   }
 }

@@ -131,6 +131,40 @@
         "download": "Du siehst die Ablage, darfst den Inhalt aber nicht herunterladen.",
         "link": "Dir fehlt ein Recht, um Dateien an diesen Datensatz anzuhängen."
       }
+    },
+    "bookAgain": {
+      "title": "Beleg schon gebucht",
+      "lead": "Dieser Beleg ist bereits gebucht bei:",
+      "question": "Wenn du ihn ein zweites Mal buchst, brauchst du einen Grund. Er wird im Änderungsprotokoll festgehalten.",
+      "reasonLabel": "Grund",
+      "confirm": "Trotzdem buchen",
+      "working": "Wird gebucht …",
+      "cancel": "Abbrechen",
+      "close": "Schliessen",
+      "notice": "Dieser Beleg ist bereits gebucht ({list}).",
+      "kind": {
+        "journal_entry": "Buchung",
+        "vendor_bill": "Kreditorenrechnung",
+        "expense_claim": "Spesenabrechnung",
+        "bank_txn": "Bankzeile",
+        "payment": "Zahlung",
+        "document": "Rechnung",
+        "drafted_action": "anderer Vorschlag, wartet",
+        "other": "anderer Datensatz"
+      },
+      "error": {
+        "reason_required": "Gib einen Grund an.",
+        "receipt_already_booked": "Ein Beleg darf hier nur einmal gebucht werden (Einstellung Belege).",
+        "holders_changed": "Der Beleg wurde inzwischen anderswo gebucht. Prüf den Vorschlag erneut.",
+        "human_only": "Nur eine Person kann eine zweite Buchung bestätigen.",
+        "receipt_replace_needs_reason": "Diese Datei ist der Beleg einer Buchung: Ersetzen braucht einen Grund."
+      },
+      "replace": {
+        "title": "Gebuchten Beleg ersetzen",
+        "lead": "Diese Datei belegt bereits:",
+        "question": "Die neue Version wird der Beleg dieser Buchung, die alte bleibt als Beleg erhalten und kann nicht anderswo gebucht werden. Gib den Grund an, er wird im Änderungsprotokoll festgehalten.",
+        "confirm": "Trotzdem ersetzen"
+      }
     }
   },
   "sign": {

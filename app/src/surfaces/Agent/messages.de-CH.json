@@ -117,7 +117,8 @@
         "recipient": "An",
         "vat": "MWST",
         "gross": "Total"
-      }
+      },
+      "holdersChanged": "Nicht ausgeführt: Der Beleg wurde inzwischen anderswo gebucht. Die Karte zeigt jetzt, wo. Prüf sie und genehmige erneut."
     },
     "line": {
       "more": "Mehr zu: {title}",
@@ -126,6 +127,8 @@
       "detailsOf": "Details: {title}",
       "consequence": "Was das bewirkt",
       "origin": "Vorschlag des Agenten",
+      "agentReasonLabel": "Begründung des Agenten:",
+      "agentReason": "«{text}»",
       "proposed": "Vorgeschlagen",
       "proposedValue": "am {date} von {actor}",
       "agentActor": "Agent",
@@ -407,7 +410,10 @@
       "inventory_adjust": "Bestand korrigieren",
       "inventory_adjust_batch": "Bestand gesammelt korrigieren",
       "inventory_adjust_reverse": "Lagerkorrektur zurücknehmen",
-      "portal_quote_accept": "Offerte über Portal-Link annehmen"
+      "portal_quote_accept": "Offerte über Portal-Link annehmen",
+      "hausbuch_note_set": "Hausregel speichern",
+      "hausbuch_note_archive": "Hausregel archivieren",
+      "set_vorlage_schedule": "Vorlage wiederholen"
     },
     "field": {
       "amount": "Betrag",
@@ -457,6 +463,18 @@
       "question": "Frage",
       "year": "Jahr",
       "method": "Methode"
+    },
+    "belege": {
+      "head": "Belege, die beim Genehmigen angehängt werden ({count})",
+      "kind": {
+        "pdf": "PDF",
+        "image": "Bild",
+        "file": "Datei"
+      },
+      "dropped": "über einen Ablage-Link abgelegt",
+      "open": "Öffnen",
+      "thumbAlt": "Beleg {name}",
+      "failed": "Der Beleg konnte nicht geöffnet werden."
     }
   }
 }

@@ -473,6 +473,20 @@ export const SCENARIOS = {
 
   // --- A02, the money path ---------------------------------------------------------------------
   post_entry: (fx) => ({ workspaceId: fx.workspaceId, ...manualPost(fx.accId, 'pe-1') }),
+  // N01 (US-N01.6): two entries in ONE call, each item ONE post_entry under its own key (the second names
+  // its accounts by number, so the batch also drives the input boundary). Key-exempt: the items key
+  // themselves, so the replay replays each item and posts nothing. As the Studio seat, so the items post
+  // (an agent seat drafts each item, measured in test/api/n01-agent-ergonomics.test.mjs).
+  post_entries: (fx) => {
+    fx.deps.actor = 'studio';
+    return {
+      workspaceId: fx.workspaceId,
+      items: [
+        manualPost(fx.accId, 'pes-1'),
+        { ...manualPost(fx.accId, 'pes-2', 1200), lines: [{ account: '6500', debit: 1200 }, { account: '1000', credit: 1200 }] },
+      ],
+    };
+  },
 
   reverse_entry: (fx) => {
     const posted = fx.call('post_entry', manualPost(fx.accId, 're-seed'));
@@ -2565,6 +2579,32 @@ export const SCENARIOS = {
     };
   },
 
+  // N01 (US-N01.6): two real imported lines booked in ONE call, each item ONE book_bank_line under the key
+  // <idempotencyKey>:<bankTxnId>, one leg named by its account number. As the Studio seat, so the items book
+  // (an agent seat drafts each item). The replay must post ZERO further entries or lines.
+  book_bank_lines: (fx) => {
+    // One Bankkonto, one CSV statement carrying two lines on two days (an IBAN registers once).
+    const bankAccountId = bankAccount(fx, 'bbls');
+    fx.call('import_bank_statement', {
+      bankAccountId,
+      content: 'Datum;Text;Betrag\n02.03.2026;Papeterie Lindenhof;-25.00\n03.03.2026;Kontoführung März;-12.00\n',
+      mapping: { columns: { bookingDate: 'Datum', text: 'Text', amount: 'Betrag' }, dateFormat: 'dd.mm.yyyy' },
+      idempotencyKey: 'bbls-csv',
+    });
+    const [a, b] = fx.deps.store.db
+      .prepare('SELECT id AS bankTxnId FROM bank_txn WHERE workspace_id = ? AND bank_account_id = ? ORDER BY booking_date')
+      .all(fx.workspaceId, bankAccountId);
+    fx.deps.actor = 'studio';
+    return {
+      workspaceId: fx.workspaceId,
+      items: [
+        { bankTxnId: a.bankTxnId, target: { kind: 'accounts', legs: [{ accountId: '6500', amountMinor: 2500 }] } },
+        { bankTxnId: b.bankTxnId, target: { kind: 'accounts', legs: [{ accountId: fx.accId('6800'), amountMinor: 1200 }] }, text: 'Kontoführung' },
+      ],
+      idempotencyKey: 'bbls-1',
+    };
+  },
+
   reopen_bank_line: (fx) => {
     const line = importedLine(fx, 'rbl', 2500, 'DBIT');
     fx.call('book_bank_line', {
@@ -2616,6 +2656,23 @@ export const SCENARIOS = {
     const line = importedPartyLine(fx, 'cbs', 1880, 'DBIT');
     const set = fx.call('set_bank_standard', { bankTxnId: line.bankTxnId, accountId: fx.accId('6500'), taxCode: null, idempotencyKey: 'cbs-set' });
     return { workspaceId: fx.workspaceId, standardId: set.standard.id, idempotencyKey: 'cbs-1' };
+  },
+
+  // N03 (D183): the miner over a REAL pattern, not an empty book: three lines of one invented counterparty
+  // (the published sample IBAN of importedPartyLine), each booked to 6500 through book_bank_line, so the
+  // first call drafts ONE set_bank_standard Vorschlag (as system) and the replay finds its key and adds no
+  // row. It posts nothing and writes no rule.
+  mine_rules: (fx) => {
+    const bankAccountId = bankAccount(fx, 'mnr');
+    for (const n of [1, 2, 3]) {
+      const line = importedPartyLine(fx, `mnr${n}`, 4100 + n, 'DBIT', bankAccountId);
+      fx.call('book_bank_line', {
+        bankTxnId: line.bankTxnId,
+        target: { kind: 'accounts', legs: [{ accountId: fx.accId('6500'), amountMinor: 4100 + n }] },
+        idempotencyKey: `mnr-book-${n}`,
+      });
+    }
+    return { workspaceId: fx.workspaceId };
   },
 
   set_bank_sync_schedule: (fx) => {
@@ -3456,6 +3513,20 @@ export const SCENARIOS = {
     return { workspaceId: fx.workspaceId, area: 'appearance' };
   },
 
+  // --- N00, the Hausbuch (D183) -------------------------------------------------------------------
+  // A counterparty note given as a raw name (folded into the bank's `name:` key) and an account note by
+  // number. The set CHANGES a note the setup really wrote, so its double call proves a replay rewrites
+  // nothing and writes no second history row; the archive retires a really-stored note, so its double
+  // call proves a replay archives nothing twice.
+  hausbuch_note_set: (fx) => {
+    const seeded = fx.call('hausbuch_note_set', { text: 'Bürobedarf immer auf 6500 buchen.', scope: { kind: 'counterparty', ref: 'Papeterie Lindengrund AG' }, idempotencyKey: 'hbs-seed' });
+    return { workspaceId: fx.workspaceId, id: seeded.note.id, text: 'Bürobedarf auf 6500, Vorsteuer mit VST81.', scope: { kind: 'account', ref: '6500' }, idempotencyKey: 'hbs-1' };
+  },
+  hausbuch_note_archive: (fx) => {
+    const seeded = fx.call('hausbuch_note_set', { text: 'Bezugsteuer wird nicht deklariert.', scope: { kind: 'topic', ref: 'MWST' }, idempotencyKey: 'hba-seed' });
+    return { workspaceId: fx.workspaceId, id: seeded.note.id, idempotencyKey: 'hba-1' };
+  },
+
   // --- A33, EBICS bank channel -----------------------------------------------------------------
   // No EBICS transport is wired in the conformance context, so every A33 write returns its honest
   // OSS-core outcome (ok:true): connect generates keys + files the INI letter locally (keys_generated),
@@ -3632,6 +3703,17 @@ export const SCENARIOS = {
   files_delete: (fx) => {
     const file = storedFile(fx, 'fdl');
     return { workspaceId: fx.workspaceId, fileId: file.id, idempotencyKey: 'fdl-1' };
+  },
+
+  // N02 (D183): a one-time drop link onto a posted entry. One row per key; the replay answers the
+  // minting call's memo (the same link and token), so a second call writes nothing.
+  files_drop_link: (fx) => {
+    const posted = fx.call('post_entry', manualPost(fx.accId, 'fdk-seed'));
+    return {
+      workspaceId: fx.workspaceId,
+      target: { kind: 'journal_entry', id: posted.entryId },
+      idempotencyKey: 'fdk-1',
+    };
   },
 
   folders_upsert: (fx) => ({
@@ -3926,6 +4008,37 @@ export const SCENARIOS = {
     return { workspaceId: fx.workspaceId, actionId: id };
   },
 
+  // N01 (US-N01.7): two Vorschläge approved in ONE call, each id ONE approve_drafted_action. Key-exempt like
+  // the single verb: the ids are the keys, and the second call answers already_resolved for both.
+  approve_drafted_actions: (fx) => {
+    // N01 critic: only bank-line decisions are batched, so the two Vorschläge book two real lines.
+    const bankAccountId = bankAccount(fx, 'aas');
+    fx.call('import_bank_statement', {
+      bankAccountId,
+      content: 'Datum;Text;Betrag\n02.03.2026;Papeterie Lindenhof;-25.00\n03.03.2026;Kontoführung März;-12.00\n',
+      mapping: { columns: { bookingDate: 'Datum', text: 'Text', amount: 'Betrag' }, dateFormat: 'dd.mm.yyyy' },
+      idempotencyKey: 'aas-csv',
+    });
+    const lines = fx.deps.store.db.prepare('SELECT id, amount_minor FROM bank_txn WHERE workspace_id = ? AND bank_account_id = ? ORDER BY booking_date').all(fx.workspaceId, bankAccountId);
+    const ids = lines.map((line, i) =>
+      seedDraftedAction(fx, `aas-${i}`, 'book_bank_line', {
+        workspaceId: fx.workspaceId,
+        bankTxnId: line.id,
+        target: { kind: 'accounts', legs: [{ accountId: fx.accId('6500'), amountMinor: Math.abs(line.amount_minor) }] },
+        idempotencyKey: `aas-${i}-inner`,
+      }),
+    );
+    fx.deps.actor = 'studio';
+    return { workspaceId: fx.workspaceId, ids };
+  },
+
+  // N01 (US-N01.9): the dispatcher runs post_entry by name; the inner verb carries its own key, so the
+  // replay replays the inner post and moves nothing. Pre-workspace itself (the tenant is the args').
+  call_tool: (fx) => {
+    fx.deps.actor = 'studio';
+    return { name: 'post_entry', args: { workspaceId: fx.workspaceId, ...manualPost(fx.accId, 'ct-1') } };
+  },
+
   reject_drafted_action: (fx) => {
     // F1: reject rides manage_agent_dial too; the decider is human. The reason (F-08, J5.6) rides
     // along so the scenario exercises the stored sentence, not only the status flip.
@@ -3960,11 +4073,9 @@ export const SCENARIOS = {
   // A36 §4.7 (D150): the confirmation that a CHAINED statement gap holds nothing. A real gap in the
   // books (statements 1 and 3 imported by hand, 3 opening on 1's close): the confirm appends ONE ack row
   // and its replay none. The withdrawal appends one more row beside it, never touching the confirm.
-  // PLACED HERE, after the A35 block, on purpose: the confirmation is a person's act, so these run as
-  // the Studio seat (`chainedGapAccount` sets it), and the shared restore worlds
-  // (`test/data/restore-worlds.mjs`) drive every scenario in this order in ONE fixture, where the seat
-  // is already the Studio's from `set_agent_dial` on. Earlier, the switch would change the seat of
-  // every scenario between here and there.
+  // The confirmation is a person's act, so these run as the Studio seat (`chainedGapAccount` sets it).
+  // The shared restore worlds (`test/data/restore-worlds.mjs`) drive every scenario in ONE fixture and
+  // put the fixture's seat back before each one, so a seat switch here never leaks into a later scenario.
   confirm_statement_gap: (fx) => {
     const gap = chainedGapAccount(fx, 'csg');
     return { workspaceId: fx.workspaceId, ...gap, reason: 'Tag ohne Buchungen', confirmed: true, idempotencyKey: 'csg-1' };
@@ -3974,6 +4085,41 @@ export const SCENARIOS = {
     const gap = chainedGapAccount(fx, 'rsg');
     fx.call('confirm_statement_gap', { ...gap, reason: 'Tag ohne Buchungen', confirmed: true, idempotencyKey: 'rsg-confirm' });
     return { workspaceId: fx.workspaceId, ...gap, reason: 'doch eine Buchung gefunden', confirmed: true, idempotencyKey: 'rsg-1' };
+  },
+
+  // --- N04 (D183), Autopilot. As with the gap confirmation: a
+  // grant and a direct-posting schedule are a PERSON's act (the engine refuses a governed seat), so these
+  // run as the Studio seat (`earnedRule` / `rentVorlage` set it). The grant is driven over a REAL earned rule:
+  // a Buchungsregel whose proposal three lines were booked exactly as (a person's clean uses).
+  grant_rule_autobook: (fx) => {
+    const ruleId = earnedRule(fx, 'gra');
+    return { workspaceId: fx.workspaceId, standardId: ruleId, idempotencyKey: 'gra-1' };
+  },
+
+  revoke_rule_autobook: (fx) => {
+    const ruleId = earnedRule(fx, 'rva');
+    fx.call('grant_rule_autobook', { standardId: ruleId, idempotencyKey: 'rva-grant' });
+    return { workspaceId: fx.workspaceId, standardId: ruleId, idempotencyKey: 'rva-1' };
+  },
+
+  // "Gesehen" on a digest day: one row per (kind, ref), a pure UI state of the workspace. Key-exempt
+  // (absolute: closing a closed day is the same closed day). A schedule note's close is driven by the suite
+  // (test/banking/n04-autopilot.test.mjs), which needs the scheduler's run to exist first.
+  // Critic N04 F3: closing a card for everyone is a PERSON's act, so it runs as the Studio seat too.
+  autopilot_mark_seen: (fx) => {
+    fx.deps.actor = 'studio';
+    return { workspaceId: fx.workspaceId, kind: 'digest', ref: '2026-07-16' };
+  },
+
+  set_vorlage_schedule: (fx) => {
+    const vorlageId = rentVorlage(fx, 'svs');
+    return { workspaceId: fx.workspaceId, vorlageId, every: 'month', anchorDay: 31, start: '2026-08-01', mode: 'post', asks: { 0: 250000 }, idempotencyKey: 'svs-1' };
+  },
+
+  clear_vorlage_schedule: (fx) => {
+    const vorlageId = rentVorlage(fx, 'cvs');
+    const set = fx.call('set_vorlage_schedule', { vorlageId, every: 'quarter', anchorDay: 15, start: '2026-08-01', asks: { 0: 250000 }, idempotencyKey: 'cvs-set' });
+    return { workspaceId: fx.workspaceId, scheduleId: set.schedule.scheduleId, idempotencyKey: 'cvs-1' };
   },
 
   // --- G10, migration maps ---------------------------------------------------------------------
@@ -5962,6 +6108,71 @@ function postedVendorBill(fx, seed) {
   return created.vendorBillId;
 }
 
+/**
+ * N04: a Buchungsregel that EARNED its grant, as the Studio seat: the offer threshold set to 3, one statement
+ * of four lines of the invented counterparty (the published sample IBAN of `importedPartyLine`, distinct
+ * amounts five days apart, so none reads as a possible duplicate), a complete rule saved from the first,
+ * and the other three booked exactly as it proposes. Answers the rule id.
+ */
+function earnedRule(fx, seed) {
+  fx.deps.actor = 'studio';
+  fx.call('settings_set', { key: 'rules.autobook_offer_after', value: 3, reason: 'conformance', idempotencyKey: `${seed}-oa` });
+  const bankAccountId = bankAccount(fx, seed);
+  const iban = fx.call('get_bank_account', { bankAccountId }).bankAccount.iban;
+  const amounts = [2100, 2200, 2300, 2400];
+  const entries = amounts
+    .map((minor, i) => {
+      const day = `2026-03-${String(1 + i * 5).padStart(2, '0')}`;
+      return `<Ntry><NtryRef>${seed.toUpperCase()}-N${i}</NtryRef><Amt Ccy="CHF">${(minor / 100).toFixed(2)}</Amt><CdtDbtInd>DBIT</CdtDbtInd>
+<Sts><Cd>BOOK</Cd></Sts><BookgDt><Dt>${day}</Dt></BookgDt><ValDt><Dt>${day}</Dt></ValDt>
+<BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>OTHR</SubFmlyCd></Fmly></Domn></BkTxCd>
+<NtryDtls><TxDtls><RltdPties><Cdtr><Pty><Nm>Papeterie Lindenhof AG</Nm></Pty></Cdtr><CdtrAcct><Id><IBAN>CH5604835012345678009</IBAN></Id></CdtrAcct></RltdPties></TxDtls></NtryDtls></Ntry>`;
+    })
+    .join('\n');
+  const total = amounts.reduce((a, b) => a + b, 0);
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+<BkToCstmrStmt><GrpHdr><MsgId>${seed}-msg</MsgId><CreDtTm>2026-03-20T08:00:00</CreDtTm></GrpHdr>
+<Stmt><Id>${seed.toUpperCase()}-STMT</Id><ElctrncSeqNb>1</ElctrncSeqNb>
+<FrToDt><FrDtTm>2026-03-01T00:00:00</FrDtTm><ToDtTm>2026-03-16T23:59:59</ToDtTm></FrToDt>
+<Acct><Id><IBAN>${iban}</IBAN></Id></Acct>
+<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">1000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">${((100000 - total) / 100).toFixed(2)}</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+${entries}
+</Stmt></BkToCstmrStmt></Document>`;
+  const imported = fx.call('import_camt', { bankAccountId, xml, idempotencyKey: `${seed}-import` });
+  const lines = fx.deps.store.db
+    .prepare('SELECT id, entry_ref FROM bank_txn WHERE workspace_id = ? AND statement_id = ? ORDER BY entry_ref')
+    .all(fx.workspaceId, imported.statementId)
+    .map((r) => r.id);
+  const ruleId = fx.call('set_bank_standard', { bankTxnId: lines[0], accountId: fx.accId('6500'), taxCode: null, idempotencyKey: `${seed}-rule` }).standard.id;
+  for (let i = 1; i < lines.length; i += 1) {
+    fx.call('book_bank_line', {
+      bankTxnId: lines[i],
+      target: { kind: 'accounts', legs: [{ accountId: fx.accId('6500'), amountMinor: amounts[i] }] },
+      idempotencyKey: `${seed}-book-${i}`,
+    });
+  }
+  return ruleId;
+}
+
+/**
+ * N04: a rent Vorlage (6000 Miete asked, 2300 the rest), as the Studio seat, for the Dauerbuchung scenarios.
+ * The fixture book has every period open, so a schedule's run would post or propose for real.
+ */
+function rentVorlage(fx, seed) {
+  fx.deps.actor = 'studio';
+  return fx.call('set_bank_standard', {
+    scope: 'manual',
+    label: `Miete ${seed}`,
+    legs: [
+      { accountId: fx.accId('6000'), taxCode: null, side: 'debit', amount: { kind: 'ask', label: 'Miete' } },
+      { accountId: fx.accId('2300'), taxCode: null, side: 'credit', amount: { kind: 'rest' } },
+    ],
+    idempotencyKey: `${seed}-vorlage`,
+  }).standard.id;
+}
+
 /** One registered Bankkonto, linked to the seeded 1020, for the A19 scenarios that need one to exist. */
 function bankAccount(fx, seed) {
   const created = fx.call('create_bank_account', {
@@ -6253,6 +6464,26 @@ export const READ_SCENARIOS = {
   prefs_get: (fx) => {
     fx.call('prefs_set', { key: 'appearance.theme', value: 'dark' });
     return { workspaceId: fx.workspaceId, key: 'appearance.theme' };
+  },
+  // --- N02 (D183): the Belegeingang status over a book with a capture waiting; a pure read --------
+  belegeingang_status: (fx) => {
+    fx.call('capture_document', {
+      contentBase64: Buffer.from('%PDF-1.4 Beleg Bürobedarf').toString('base64'),
+      mime: 'application/pdf',
+      filename: 'beleg.pdf',
+      idempotencyKey: 'bgs-seed',
+    });
+    return { workspaceId: fx.workspaceId };
+  },
+  // --- N00, the workspace brief and the Hausbuch (D183): two pure reads over really-stored notes ---------
+  workspace_brief: (fx) => {
+    fx.call('vat_seed_defaults', {});
+    fx.call('hausbuch_note_set', { text: 'Spesen immer mit Beleg buchen.', scope: { kind: 'workspace' }, idempotencyKey: 'wbr-seed' });
+    return { workspaceId: fx.workspaceId };
+  },
+  hausbuch_notes: (fx) => {
+    fx.call('hausbuch_note_set', { text: 'Lastschrift monatlich, Konto 6500.', scope: { kind: 'counterparty', ref: 'CH93 0076 2011 6238 5295 7' }, idempotencyKey: 'hbn-seed' });
+    return { workspaceId: fx.workspaceId, status: 'all' };
   },
   // --- A20, camt reconciliation: the statement list is a pure read over bank_statement/bank_txn ----
   // One import first, so the read answers with a real statement and its open-line count rather than
@@ -7530,8 +7761,12 @@ function seedForecastWorld(fx, prefix) {
  * a saved mapping, and `get_bank_csv_mapping` over a saved one; both pure SELECTs, the snapshot proves
  * them inert.
  * D178 point 13 adds `dashboard_series` (+1, ONE HUNDRED AND THIRTY-THREE): a pure SELECT over the ledger and the Erfolgsrechnung, proven inert.
+ * N00 adds two (+2, ONE HUNDRED AND THIRTY-FIVE): `workspace_brief` over a seeded chart, VAT codes and a
+ * really-stored note, and `hausbuch_notes` over a stored counterparty note; both pure reads, proven inert.
+ * N02 (D183) adds `belegeingang_status` (+1, ONE HUNDRED AND THIRTY-SIX): pure SELECTs over the scan row,
+ * the settings and the waiting captures, proven inert over a book with a capture waiting.
  */
-export const READ_SCENARIO_FLOOR = 133;
+export const READ_SCENARIO_FLOOR = 136;
 
 /**
  * THE ONE BLESSED READ-VERB WRITER (D96), and nothing else.
@@ -7574,6 +7809,8 @@ export const READ_WRITE_CARVEOUTS = Object.freeze({
  * writes that MINT or MOVE something, and those all carry a key.
  */
 export const IDEMPOTENCY_KEY_EXEMPT = Object.freeze({
+  autopilot_mark_seen:
+    'Asserts the absolute state "this digest day (or this schedule note) is closed" for the workspace, one row per thing (INSERT OR IGNORE on its primary key): a second delivery finds it closed, answers alreadySeen and writes nothing, so a key would add ceremony without adding a guarantee (N04 section 6).',
   inventory_ensure_default_location:
     'Idempotent by construction (J00): it takes no input beyond the workspace and asserts the absolute state "a MAIN/DEFAULT warehouse+location pair exists". A second call re-reads the same pair rather than minting a second one, guarded by the one-default-per-workspace and one-default-per-warehouse partial-unique indexes, so a key would add ceremony without adding a guarantee.',
   set_diagnostics:
@@ -7640,8 +7877,17 @@ export const IDEMPOTENCY_KEY_EXEMPT = Object.freeze({
     'Puts one schedule in the active state. Already active settles to the same answer (A12 section 5).',
   end_recurring_schedule:
     'Puts one schedule in the terminal ended state. Ending an ended schedule settles to the same answer rather than rejecting, because a replay of a completed end must answer what the first call made true (A12 section 5).',
+  mine_rules:
+    'SELF-KEYED, the run_due_automations exemption in mechanism: every Vorschlag the miner drafts is keyed mine:<counterparty key>:<shape hash>, and enqueueDraftedAction answers a second draft under a known key from the row it already minted (pending, executed or rejected), so a replayed run drafts nothing twice whatever key the caller passed. An idempotencyKey would key the RUN, which is not the thing that must not repeat (N03 section 4).',
   run_due_recurring:
     'SELF-KEYED, the run_due_automations exemption in mechanism: every occurrence derives its key from (schedule_id, period_key) for the create_document / issue_invoice it invokes, and the partial UNIQUE index on recurring_run_log refuses a second settle of the same period. An idempotencyKey would key the TICK, which is not the thing that must not repeat (A12 section 4).',
+  // N01: the batch writes and the dispatcher, each keyed by what it runs.
+  post_entries:
+    'SELF-KEYED per item (N01 US-N01.6): every item is one post_entry carrying its OWN idempotencyKey (an item without one is refused), so a second call replays each item\'s own act and posts nothing. A batch key would key the batch, which is not the thing that must not repeat.',
+  approve_drafted_actions:
+    'Addressed by actionIds, each of which IS a key (N01 US-N01.7): a second call finds every id resolved and answers already_resolved without running anything, and an id that does run is one approve_drafted_action whose replayed verb carries its own stored key.',
+  call_tool:
+    'A dispatcher (N01 US-N01.9): the named verb carries its own idempotencyKey in args, or is itself exempt for its own written reason, so a second call replays the named verb exactly as calling it directly would. A key on call_tool would key the dispatch, which moves nothing.',
   approve_drafted_action:
     'Addressed by actionId, which IS the key: a second approve finds the action already executed and replays the STORED result, so there is no second execution a key on this verb could prevent. The replayed verb additionally carries its own stored idempotency key, so even a re-approve after a crash cannot double-post (A26 section 4).',
   reject_drafted_action:

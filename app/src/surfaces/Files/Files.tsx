@@ -32,6 +32,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
+import { useBookAgain } from '../../components/BookAgain';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate } from '../../i18n';
@@ -90,6 +91,8 @@ export function Files() {
   const [denied, setDenied] = useState(false);
   const [listError, setListError] = useState<Err | null>(null);
   const [drawerError, setDrawerError] = useState<Err | null>(null);
+  // N02 R1: replacing a booked receipt with a new version asks the person for the reason.
+  const { ask: askBookAgain, dialog: bookAgainDialog } = useBookAgain();
   const [busy, setBusy] = useState(false);
   // E01: the open file's sign requests (null while in flight), the signer picker's contacts, the
   // engine's last sign refusal, and the id set behind the "Offene Signaturen" list filter.
@@ -566,6 +569,7 @@ export function Files() {
         </div>
       </div>
 
+      {bookAgainDialog}
       {open !== null && (
         <FileDrawer
           // KEYED ON THE FILE, so the drawer's drafts cannot outlive the file they were typed for:
@@ -590,18 +594,24 @@ export function Files() {
           }}
           onNewVersion={(fileId, picked) => {
             void (async () => {
+              if (workspaceId === null) return;
               const payload = await readFileAsUpload(picked);
-              await write(
-                'files_new_version',
-                {
-                  fileId,
-                  contentBase64: payload.contentBase64,
-                  mime: payload.mime,
-                  filename: payload.filename,
-                  idempotencyKey: newKey(),
-                },
-                'drawer',
-              );
+              const input = { workspaceId, fileId, contentBase64: payload.contentBase64, mime: payload.mime, filename: payload.filename, idempotencyKey: newKey() };
+              setDrawerError(null);
+              const first = await client.call('files_new_version', input);
+              if (!isErr(first.body)) {
+                await load();
+                return;
+              }
+              // N02 R1: this file is the receipt of a live booking. Replacing it needs the person's reason;
+              // the same version is sent again with it (the refused one wrote nothing).
+              const asked = askBookAgain(first.body, async (confirmation) => {
+                const again = await client.call('files_new_version', { ...input, ...confirmation });
+                if (isErr(again.body)) return again.body;
+                await load();
+                return null;
+              });
+              if (!asked) setDrawerError(first.body);
             })();
           }}
           onDelete={(fileId) => {

@@ -21,6 +21,10 @@ import {
   retentionFloor,
   effectiveRetentionUntil,
 } from '../../dist/core/files/index.js';
+import { withReceiptOverride } from '../../dist/core/files/receiptGuard.js';
+
+/** R1 (security review): replacing a booked receipt is a person's act with a reason. */
+const versionAsPerson = (ctx, input) => withReceiptOverride({ bookAgain: true, overrideReason: 'Korrigierte Fassung', approvingActionId: null }, () => newFileVersion(ctx, input));
 import { postEntry, saveDraft } from '../../dist/core/ledger/index.js';
 import { createContact, createDocument, transitionDocument, issueInvoice } from '../../dist/core/sales/index.js';
 import { listAccounts } from '../../dist/core/accounts/index.js';
@@ -252,7 +256,7 @@ test('D63 adversarial A5: posting raises the SUPERSEDED version too, not only th
   const v1 = upload(ctx, 'v1');
   const draft = saveDraft(ctx, { date: '2026-06-01', lines: lines(ctx), idempotencyKey: 'a5-draft' });
   linkFile(ctx, { fileId: v1.id, entityKind: 'journal_entry', entityId: draft.entryId, idempotencyKey: 'a5-l' });
-  const v2 = newFileVersion(ctx, { fileId: v1.id, contentBase64: b64('korrigiert'), idempotencyKey: 'a5-v' });
+  const v2 = versionAsPerson(ctx, { fileId: v1.id, contentBase64: b64('korrigiert'), idempotencyKey: 'a5-v' });
   assert.equal(v2.ok, true, JSON.stringify(v2));
   const v2Id = v2.file.id;
   postEntry(ctx, {

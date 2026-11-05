@@ -58,6 +58,13 @@ export type BankInboxDecision = {
    * the engine's answer; optional in the type only so a surface's own fixtures may leave it out.
    */
   contactId?: string | null;
+  /**
+   * N03 (D183): the Buchungsregel whose proposal stood on the line when it was booked, and whether the booking
+   * differed from it (both null for no rule, an ignore, and a booking made before N03). Optional in the type
+   * only so a surface's own fixtures may leave them out.
+   */
+  proposedRuleId?: string | null;
+  ruleChanged?: boolean | null;
 };
 
 export type BankInboxLine = {
@@ -749,6 +756,8 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
       decidedAt: link.createdAt,
       ruleId: link.ruleId,
       contactId: link.contactId,
+      proposedRuleId: link.proposedRuleId,
+      ruleChanged: link.ruleChanged,
     });
   }
 

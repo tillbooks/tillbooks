@@ -69,3 +69,47 @@ export type { RetentionSource, RetentionFacts } from './retention.js';
 export { IS_HEAD } from './head.js';
 export { FILES_SCHEMA_SQL } from './schema.js';
 export { FILE_UPLOAD_SCHEMA_SQL } from './uploadSchema.js';
+
+// N02 (D183), Chat Belege: the confined reader, the attach seam, pending files, the drop link and the
+// Belegeingang.
+export { uploadFileBytes, isPendingFile, headFilesBySha, fileView, fileContentRefusal, storedFileRow } from './files.js';
+export type { UploadBytesMeta } from './files.js';
+export { readConfinedFile, sniffType, expandHome, parseRoots, realRoots, isInside, SOURCE_PATH_TYPES } from './sourcePath.js';
+export type { LocalFileGrant, ConfinedFile, SourcePathType } from './sourcePath.js';
+export {
+  ATTACH_TARGET_KIND,
+  MAX_ATTACHMENTS,
+  isAttachAct,
+  parseAttach,
+  sourceRoots,
+  readSourcePath,
+  withAttach,
+  prepareDraftAttach,
+  attachBytes,
+} from './attach.js';
+export type { AttachAct, AttachEntry, AttachedFile, DraftAttachPrep, BytesInHand } from './attach.js';
+export { sweepPendingFiles, pendingFilesOf, pendingRowOf } from './pending.js';
+export {
+  DROP_TARGET_KINDS,
+  DROP_PATH_PREFIX,
+  mintDropLink,
+  pruneDropLinks,
+  resolveDropLink,
+  redeemDropLinkGuarded,
+  dropLinkByToken,
+  hashDropToken,
+} from './dropLink.js';
+export type { DropTargetKind, DropTargetView, ResolvedDropLink, DropLinkState } from './dropLink.js';
+export {
+  ERLEDIGT,
+  BELEGEINGANG_STATES,
+  scanBelegeingang,
+  belegeingangStatus,
+  belegeingangFolder,
+  existingFolder,
+} from './belegeingang.js';
+export type { BelegeingangReport, BelegeingangState, BelegeingangError, BelegeingangCapture } from './belegeingang.js';
+export { CHAT_BELEGE_SCHEMA_SQL } from './chatBelegeSchema.js';
+export { vorschlagBelege } from './belegeView.js';
+export type { VorschlagBeleg } from './belegeView.js';
+export { previewVorschlagBeleg } from './preview.js';

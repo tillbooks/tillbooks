@@ -36,6 +36,7 @@ import { Tabs, type TabItem } from '../../components/Tabs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { CopyButton } from '../../components/CopyButton';
 import { ActionFeedback } from '../../components/ActionFeedback';
+import { useBookAgain } from '../../components/BookAgain';
 import { MCP_ENDPOINT } from '../../lib/mcp-transport';
 import { connectSnippet, studioVersion } from './connectSnippet';
 import { TurnList } from './TurnList';
@@ -239,7 +240,9 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
   // The Commit moment (D122 D-I) for a decision: the card leaves the queue with the re-read (no exit
   // animation on a list item), so the acknowledgement lands on the banner that names the outcome, as
   // the bank inbox does for the same two verbs. The `id` re-mounts it, so each approval lands again.
-  const [decided, setDecided] = useState<{ id: number; kind: 'approved' | 'rejected' | 'stale' } | null>(null);
+  const [decided, setDecided] = useState<{ id: number; kind: keyof typeof DECIDED_MESSAGE } | null>(null);
+  // N02 R1: an approval that would book a receipt a second time asks the person for the reason first.
+  const { ask: askBookAgain, dialog: bookAgainDialog } = useBookAgain();
   const decidedSeq = useRef(0);
   // D167: the Freigabe level each line names is READ from the dial, re-read after a decision (a
   // "künftig automatisch" grant moves it).
@@ -281,12 +284,15 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
       const ws = workspaceId;
       setBusy(true);
       setDecided(null);
-      const res = await client.call(verb, {
-        workspaceId: ws,
-        actionId,
-        ...(allowFuture ? { allowFuture: true } : {}),
-        ...(reason !== undefined ? { reason } : {}),
-      });
+      const send = (confirmation: Record<string, unknown> = {}) =>
+        client.call(verb, {
+          workspaceId: ws,
+          actionId,
+          ...(allowFuture ? { allowFuture: true } : {}),
+          ...(reason !== undefined ? { reason } : {}),
+          ...confirmation,
+        });
+      const res = await send();
       setBusy(false);
       // A switch overtook the answer: neither its banner nor a re-read of the OLD queue may paint the
       // workspace now on screen (that one's own load already ran on the switch).
@@ -297,10 +303,31 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
         // N1: the record changed after the proposal; nothing ran and the row is void. Say so, since
         // the card leaves the queue with the re-read below.
         setDecided({ id: ++decidedSeq.current, kind: 'stale' });
+      } else if (res.body.error === 'holders_changed') {
+        // N02 R1: the receipt was booked elsewhere since the card was drawn; the re-read shows where.
+        setDecided({ id: ++decidedSeq.current, kind: 'holdersChanged' });
+      } else if (
+        askBookAgain(res.body, async (confirmation) => {
+          const again = await send({ ...confirmation });
+          if (activeWs.current !== ws) return null;
+          if (isErr(again.body)) {
+            if (again.body.error === 'holders_changed') {
+              setDecided({ id: ++decidedSeq.current, kind: 'holdersChanged' });
+              void load();
+              return null;
+            }
+            return again.body;
+          }
+          setDecided({ id: ++decidedSeq.current, kind: 'approved' });
+          void load();
+          return null;
+        })
+      ) {
+        return;
       }
       void load();
     },
-    [busy, client, load, workspaceId],
+    [askBookAgain, busy, client, load, workspaceId],
   );
 
   if (state === 'loading') return <Skeleton rows={3} height={48} />;
@@ -311,7 +338,7 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
     decided === null ? null : (
       <ActionFeedback
         key={decided.id}
-        tone={decided.kind === 'approved' ? 'success' : decided.kind === 'stale' ? 'warn' : 'info'}
+        tone={decided.kind === 'approved' ? 'success' : decided.kind === 'stale' || decided.kind === 'holdersChanged' ? 'warn' : 'info'}
         message={t(DECIDED_MESSAGE[decided.kind])}
         landed={decided.kind === 'approved'}
         onDismiss={() => setDecided(null)}
@@ -348,6 +375,7 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
     return (
       <div className="agent-queue">
         {ack}
+        {bookAgainDialog}
         {actions.map(card)}
       </div>
     );
@@ -357,6 +385,7 @@ function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
   return (
     <div className="agent-queue">
       {ack}
+      {bookAgainDialog}
       <h2 className="agent-group-head">{t('agent.queue.group.geld')}</h2>
       {geld.map(card)}
       <h2 className="agent-group-head">{t('agent.queue.group.system')}</h2>

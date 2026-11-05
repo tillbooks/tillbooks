@@ -187,9 +187,12 @@ test('G19: setManifest instantiates one item per guide row at status open, idemp
   const created = must(call('migration_set_manifest', { planId, sourceAccessUntil: '2024-08-01', idempotencyKey: 'sm-1' }), 'set manifest');
   assert.equal(created.items.length, bexio.items.length, 'one item per guide row');
   assert.ok(created.items.every((i) => i.status === 'open'));
-  // Idempotent: same key replays the same manifest id.
-  const again = must(call('migration_set_manifest', { planId, idempotencyKey: 'sm-1' }), 'replay');
+  // Idempotent: same key AND same arguments replay the same manifest id. N01 US-N01.5: the replay
+  // used to leave out `sourceAccessUntil`, which is another call under the same key and now refuses.
+  const again = must(call('migration_set_manifest', { planId, sourceAccessUntil: '2024-08-01', idempotencyKey: 'sm-1' }), 'replay');
   assert.equal(again.manifestId, created.manifestId);
+  const other = call('migration_set_manifest', { planId, idempotencyKey: 'sm-1' });
+  assert.equal(other.error, 'idempotency_key_conflict', JSON.stringify(other));
 });
 
 test('G19: setManifestItem records status/evidence and completeness excludes not_used', () => {

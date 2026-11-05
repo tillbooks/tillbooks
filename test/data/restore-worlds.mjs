@@ -56,11 +56,17 @@ export const WORLD_SKIPPED_VERBS = {
  */
 export function conformanceWorld(names = Object.keys(SCENARIOS)) {
   const fx = fixture();
+  // Every scenario is written for the fixture's own seat (the conformance suite gives each a fresh
+  // fixture). Several switch `fx.deps.actor` (the Studio seat, an invitee) and never switch back, so in
+  // ONE shared world the seat would leak into every later scenario: an automation rule saved by the
+  // leaked Studio seat lands enabled and fires on every later contact. Each scenario starts on the seat.
+  const seat = fx.deps.actor;
   const ran = [];
   const failed = [];
   for (const name of names) {
     const scenario = SCENARIOS[name];
     if (scenario === undefined || WORLD_SKIPPED_VERBS[name] !== undefined) continue;
+    fx.deps.actor = seat;
     try {
       const input = scenario(fx);
       const res = getAction(name).run(fx.deps, input);

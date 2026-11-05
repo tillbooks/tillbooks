@@ -17,6 +17,7 @@ const QUEUE: Readonly<Record<string, { area: string; kind: string }>> = {
   bank_fetch_failed: { area: 'bank', kind: 'do' },
   bank_keys_review: { area: 'bank', kind: 'do' },
   bank_activation: { area: 'bank', kind: 'do' },
+  autopilot: { area: 'bank', kind: 'note' },
 };
 
 const AREAS = ['bank', 'accounting', 'sales', 'system'];

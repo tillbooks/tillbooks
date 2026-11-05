@@ -836,6 +836,7 @@ function runOccurrence(
   row: ScheduleRow,
   period: string,
   today: string,
+  issue: RecurringIssueMode = 'schedule',
 ): OccurrenceStep {
   const author = row.created_by;
   const templateLines = normalizeTemplateLines(JSON.parse(row.lines_json));
@@ -919,7 +920,9 @@ function runOccurrence(
     return { kind: 'settle', outcome: 'issued', documentId, dueStamped, generatedDocument: true };
   }
 
-  if (row.auto_issue !== 1) {
+  // N04 (D183, `recurring.auto_generate` = `draft`): the scheduler's unattended run never issues, whatever
+  // the schedule's autoIssue; the draft is the product, exactly as in review mode.
+  if (row.auto_issue !== 1 || issue === 'never') {
     // Review mode (the P8 default): the draft is the product. Drafting is not the financial event,
     // so this settles even inside a locked period.
     return { kind: 'settle', outcome: 'drafted', documentId, dueStamped, generatedDocument: true };
@@ -979,6 +982,13 @@ function runOccurrence(
   return { kind: 'settle', outcome: 'issued', documentId, dueStamped, generatedDocument: true };
 }
 
+/**
+ * N04 (D183): whether a run may issue. `schedule` (the verb, and `recurring.auto_generate` =
+ * `honour_auto_issue`): each schedule's autoIssue decides. `never` (the scheduler under `draft`): drafts only.
+ * An ENGINE option: `run_due_recurring` takes no such input, so a caller of the verb always gets `schedule`.
+ */
+export type RecurringIssueMode = 'schedule' | 'never';
+
 /** One schedule's share of the tick. Returns how many documents it generated. */
 function tickSchedule(
   ctx: WorkspaceContext,
@@ -987,6 +997,7 @@ function tickSchedule(
   asOfDay: string,
   today: string,
   results: OccurrenceResult[],
+  issue: RecurringIssueMode = 'schedule',
 ): number {
   const row = { ...schedule };
   let generated = 0;
@@ -1005,7 +1016,7 @@ function tickSchedule(
       endAtBound(ctx, row);
       break;
     }
-    const step = runOccurrence(ctx, invoke, row, period, today);
+    const step = runOccurrence(ctx, invoke, row, period, today, issue);
     if (step.kind === 'settle') {
       settleAndAdvance(ctx, row, period, step);
       results.push({
@@ -1043,7 +1054,7 @@ function tickSchedule(
 export function runDueRecurring(
   ctx: WorkspaceContext,
   invoke: ActionInvoker,
-  input: { asOf?: string } = {},
+  input: { asOf?: string; issue?: RecurringIssueMode } = {},
 ): Result {
   const now = ctx.clock.now();
   const today = dayOf(now);
@@ -1068,7 +1079,7 @@ export function runDueRecurring(
     // INVARIANT I3: one poisoned schedule never stops a sibling or the verb. Anything thrown inside
     // becomes that schedule's own failed observation, and the loop keeps going.
     try {
-      generated += tickSchedule(ctx, invoke, schedule, asOfDay, today, results);
+      generated += tickSchedule(ctx, invoke, schedule, asOfDay, today, results, input.issue === 'never' ? 'never' : 'schedule');
     } catch (e) {
       // The throw path reports like every handled refusal does (critic X1b): a STABLE code, never
       // the exception's own message (`schema.ts`: "never a stack trace"), and a failed run row, so

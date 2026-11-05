@@ -21,6 +21,7 @@ import type { Clock } from '../clock.js';
 import { systemClock } from '../clock.js';
 import { SCHEMA_SQL, ADDITIVE_COLUMNS, ADDITIVE_INDEXES, SCHEMA_GENERATION } from './schema.js';
 import { DATA_MIGRATIONS } from './migrations.js';
+import { IdempotencyKeyConflictError, differingArgs, type ArgsIdentity, type IdempotencyArgsClaim } from './idempotencyArgs.js';
 import {
   SchemaNewerThanRuntimeError,
   assertGenerationNotNewer,
@@ -827,11 +828,15 @@ export class SqliteStore {
     this.transactionRunner ??= this.db.transaction((body: () => unknown): unknown => {
       this.assertGenerationKnown();
       const marking = this.commitMarks.length > 0;
-      const changesBefore = marking ? this.changeCount() : 0;
+      const claiming = this.argsClaims.length > 0;
+      const changesBefore = marking || claiming ? this.changeCount() : 0;
       const unmarkedBefore = this.unmarkedChanges;
       this.ownTransactions += 1;
       try {
         const result = body();
+        // N01 US-N01.5: a transaction that wrote while a registry claim runs records the claim inside
+        // itself, so the key is spent exactly when (and only if) the act's write commits.
+        if (claiming && this.changeCount() - changesBefore > 0) this.recordIdempotencyArgsIn();
         // D165: a transaction that wrote while a commit mark is armed writes the mark INSIDE itself,
         // so the mark commits exactly when (and only if) the write does. See `withCommitMark`. It says
         // the act RAN only for writes outside every `withoutCommitMark` scope: a transaction opened
@@ -1199,6 +1204,82 @@ export class SqliteStore {
           .run(workspaceId, key, scope, JSON.stringify(result), this.clock.now()),
       );
       return result;
+    });
+  }
+
+  /**
+   * The write dispatches running right now, innermost last (`withIdempotencyArgs`), each with its claim
+   * (null for a dispatch without a key). Empty outside the registry's dispatch.
+   */
+  private readonly argsClaims: (IdempotencyArgsClaim | null)[] = [];
+
+  /**
+   * N01 US-N01.5, §H-IDEMPOTENT "one key, one meaning": run `fn` as the write dispatch `claim`
+   * describes (its workspace, verb, caller key and argument identity; see `./idempotencyArgs.ts`), or as
+   * a keyless one (`null`). While it runs, every transaction of this store that WRITES records each
+   * running claim in `idempotency_args`, inside itself (see `recordIdempotencyArgsIn`), so a key is
+   * spent exactly when its act committed something. The registry is the one caller
+   * (`claimIdempotencyArgs`), for every write dispatch; nested dispatches (an approval replay, a G01
+   * firing, an A12 tick) push their own claim and the outer one resumes when they return. Synchronous,
+   * like `innerWrite`: the claim is dynamic state on this store.
+   */
+  withIdempotencyArgs<T>(claim: IdempotencyArgsClaim | null, fn: () => T): T {
+    this.argsClaims.push(claim);
+    try {
+      return fn();
+    } finally {
+      this.argsClaims.pop();
+    }
+  }
+
+  /** Is a write dispatch running right now (so the next one is NESTED)? */
+  inIdempotencyDispatch(): boolean {
+    return this.argsClaims.length > 0;
+  }
+
+  /** The argument identity `verb` spent `key` with in this workspace, or undefined (never spent, or spent before N01). */
+  recordedIdempotencyArgs(workspaceId: string, verb: string, key: string): ArgsIdentity | undefined {
+    const row = this.db
+      .prepare('SELECT args_hash, field_hashes_json FROM idempotency_args WHERE workspace_id = ? AND verb = ? AND caller_key = ?')
+      .get(workspaceId, verb, key) as { args_hash: string; field_hashes_json: string } | undefined;
+    if (row === undefined) return undefined;
+    let fieldHashes: Record<string, string> = {};
+    try {
+      const parsed = JSON.parse(row.field_hashes_json) as unknown;
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) fieldHashes = parsed as Record<string, string>;
+    } catch {
+      fieldHashes = {};
+    }
+    return { argsHash: row.args_hash, fieldHashes };
+  }
+
+  /**
+   * The write chokepoint's half of the claim: record every running claim in the transaction that just
+   * wrote, as bookkeeping (it never says an armed commit mark's act ran). The first write of a key
+   * decides what it was spent with; a nested savepoint and its enclosing transaction may both get here.
+   *
+   * THE CROSS-PROCESS HALF (critic follow-up): the registry's check runs before the act's transaction,
+   * and D12 puts a second writer on the file, so another process may have spent the key in between.
+   * This runs INSIDE the act's transaction, which holds the write lock, so it reads the record as it
+   * really stands: the same arguments are fine, other arguments throw `IdempotencyKeyConflictError`,
+   * which rolls the act back (a claim that does not refuse, a nested system dispatch, leaves it be).
+   */
+  private recordIdempotencyArgsIn(): void {
+    const claims = this.argsClaims.filter((c): c is IdempotencyArgsClaim => c !== null);
+    if (claims.length === 0) return;
+    this.withoutCommitMark(() => {
+      const insert = this.db.prepare(
+        'INSERT OR IGNORE INTO idempotency_args (workspace_id, verb, caller_key, args_hash, field_hashes_json, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      );
+      for (const c of claims) {
+        const existing = this.recordedIdempotencyArgs(c.workspaceId, c.verb, c.key);
+        if (existing !== undefined) {
+          const fields = differingArgs(existing, c, c.excluded);
+          if (fields.length > 0 && c.refuses) throw new IdempotencyKeyConflictError(c.verb, c.key, fields);
+          continue;
+        }
+        insert.run(c.workspaceId, c.verb, c.key, c.argsHash, JSON.stringify(c.fieldHashes), this.clock.now());
+      }
     });
   }
 

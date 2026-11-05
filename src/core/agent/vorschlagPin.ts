@@ -682,6 +682,16 @@ export const PIN_RECORDS = {
     columns: ['value_json'],
     figures: {},
   },
+  /**
+   * N00: one house note as a change or an archive consumes it. A person who edits or archives the note
+   * after the agent proposed a change makes the approval refuse `vorschlag_stale`, so an approval never
+   * overwrites a text the person did not see.
+   */
+  hausbuch_note: {
+    table: 'hausbuch_note',
+    columns: ['scope_kind', 'scope_ref', 'scope_label', 'text', 'status'],
+    figures: {},
+  },
 } as const satisfies Record<string, RecordSpec>;
 
 export type PinRecordKind = keyof typeof PIN_RECORDS;
@@ -826,6 +836,9 @@ export const PIN_FOR_VERB: Readonly<Record<string, readonly PinField[]>> = {
   // D172: the setting's override row in force when the change was proposed.
   settings_set: [{ field: 'key', record: 'workspace_setting' }],
   settings_reset: [{ field: 'key', record: 'workspace_setting' }],
+  // N00: the note a change or an archive names (a new note has no id and pins nothing).
+  hausbuch_note_set: [{ field: 'id', record: 'hausbuch_note' }],
+  hausbuch_note_archive: [{ field: 'id', record: 'hausbuch_note' }],
 };
 
 /** The closed set of reasons a governed verb with a record id needs no pin. */
@@ -942,7 +955,10 @@ export const NOT_PINNED: Readonly<Record<string, NotPinned>> = {
   import_bank_statement: pay('the statement file is in the payload, and a drafted CSV import must carry its mapping there too (refused at draft time otherwise)'),
   set_bank_csv_mapping: pay('the whole mapping is in the payload; the Bankkonto is only where it is saved'),
   set_creditor_bank_profile: pay('the new IBAN is in the payload'),
-  set_bank_standard: pay('the account and the MWST code are in the payload; the line is an imported bank fact, read only for its counterparty and direction'),
+  // N03 (critic, findings 1 and 2): the recipe is in the payload, because a drafted save from a booked line
+  // must name its legs (`legs_required` at draft time and at approval), and the slot it replaces is held by
+  // the verb itself when the payload names it (`expectSlotStandardId`, refused `rule_slot_changed`).
+  set_bank_standard: pay('the recipe (accounts, MWST codes, amounts) is in the payload: a drafted save from a booked line must name its legs and is refused at draft time and at approval otherwise; the line is an imported bank fact, read only for its counterparty and direction; the rule a save replaces is checked by the verb against expectSlotStandardId when the payload names it'),
   migration_record_approval: pay('the approval binds the check hash in the payload'),
   migration_waive_control: pay('the waiver reason is in the payload'),
   import_open_items: pay('the open items are in the payload'),
@@ -960,6 +976,8 @@ export const NOT_PINNED: Readonly<Record<string, NotPinned>> = {
   // open, a candidate it is not named against all refuse), so a stale proposal refuses rather than records.
   resolve_possible_duplicate: st('answers the flag on an imported bank line; the flag, the candidates and the line state are checked again at approval'),
   clear_bank_standard: st('retires a standard; nothing booked changes'),
+  // N04 (D183): the Vorlage is named by a VERSION id, and a version never changes (an edit is a new row).
+  set_vorlage_schedule: pay('the cadence, the day, the dates, the mode and the asked amounts are in the payload; the Vorlage is named by a version id and a version is immutable (an edit makes a new row), so the approval sets exactly the schedule it showed; a later version makes a post schedule propose until a person sets it again'),
   migration_rollback_step: st('rolls a committed step back'),
   migration_close_plan: st('closes a finished plan; the steps it closes were committed through governed verbs'),
   implementation_project_close: st('closes an implementation project'),
@@ -1034,6 +1052,8 @@ export const LIVE_READ_TABLES: Readonly<
   provision: { policy: 'pin', why: 'a draft provision is freely discarded' },
   accrual: { policy: 'pin', why: 'a draft accrual is freely discarded' },
   recurring_schedule: { policy: 'pin', why: 'a schedule is freely paused' },
+  // N04 (D183): set_vorlage_schedule reads the series' active schedule only to end it as replaced.
+  vorlage_schedule: { policy: 'gate-only', why: 'read only to end the series\' active schedule as replaced; the free clear_vorlage_schedule only ends a schedule, which changes nothing the new one holds, and runs stay one per (series, period) by the UNIQUE run row' },
   asset: { policy: 'pin', why: 'the asset master (accounts, useful life, method) is freely updated (asset_update) or transferred' },
   // not pinned, with the reason a free change cannot alter the act.
   // Critic round 3 (N1): column-scoped. The free branches of update_company_profile (no mwstNo) and
@@ -1050,6 +1070,17 @@ export const LIVE_READ_TABLES: Readonly<
   automation_rule: { policy: 'gate-only', why: 'read by the G01 dispatch after the act to fire rules; the free writers only archive or disable a rule, and what a rule may do is governed by its tier (ruleTier.ts)' },
   audit_head: { policy: 'bookkeeping', why: 'the head of the hash-chained audit log, advanced by every audited write' },
   agent_turn: { policy: 'bookkeeping', why: 'the agent trace (A35), read to delete or blank prose; no act books or sends from it' },
+  // N01: the dispatchers (book_bank_lines, post_entries, call_tool) are free writes whose items run
+  // through the transport seam, so under a draft dial they add pending Vorschläge (and a newer bank-line
+  // Vorschlag supersedes an older one, D177). An approval reads only its OWN row; what a free change does to
+  // it is a status move (superseded, stale), which can only make that approval refuse, never change it.
+  agent_action: { policy: 'gate-only', why: 'the Vorschlag queue: an approval reads its own row, and a free dispatcher only adds pending rows or supersedes an older bank-line row, which can only make an approval refuse (already_rejected), never change what it does' },
+  // N01 x N02 (integration): a free dispatcher's book_bank_line item drafts through the transport seam, and
+  // since N02 a drafted item with `attach` stores its `sourcePath` receipts as pending rows bound to its OWN
+  // new Vorschlag. An approval reads its own pending rows by its action id, and the receipt guard counts
+  // another Vorschlag's reservation only when it is OLDER than the approval's own (`reservationBefore`), so
+  // a freshly added row can only make a later act refuse (receipt_already_booked), never change what it books.
+  stored_file_pending: { policy: 'gate-only', why: 'a free dispatcher only adds pending receipt rows bound to its own new Vorschlag; an approval reads its own rows by action id and only older reservations of others, so a new row can only make an act refuse, never change it' },
   agent_call: { policy: 'bookkeeping', why: 'the agent trace (A35), read to blank a contact\'s traces; no act books or sends from it' },
   agent_session: { policy: 'bookkeeping', why: 'the agent trace (A35), read to delete a session\'s prose; no act books or sends from it' },
   inbox_item: { policy: 'bookkeeping', why: 'the notification inbox; marking read or archiving changes nothing an act consumes' },
@@ -1085,6 +1116,9 @@ export const LIVE_READ_TABLES: Readonly<
     why: 'an agent-owned step completed freely (checklist_item_complete outside its governed attestation and sign-off branches) only moves a run toward its seal steps, which are governed and re-check their prerequisites; no act books or sends from a step\'s state',
   },
   migration_extraction_manifest: { policy: 'gate-only', why: 'read by the extraction checks before a trial load, not by a commit' },
+  // N03 (D183): a booking reads the camt match config only for its PROVENANCE (which rule the ladder puts on
+  // the line, recorded beside the decision); what it books, and whether it refuses, never depend on it.
+  camt_match_config: { policy: 'bookkeeping', why: 'read by a bank booking only to record which Buchungsregel proposed it (N03 provenance); nothing it books or refuses depends on the match window or threshold' },
 };
 
 // --- the column census (B-1, independent critic 13.10.2026) -------------------------------------------
@@ -1281,7 +1315,14 @@ const STATUS_GATE = 'reads the row\'s status; the free writer only moves a draft
 const MIGRATION_STATE = 'a lifecycle step on the plan; the content it moves was committed through migration_commit_step, which pins the step, its rows, maps and source';
 const ENV = 'copies or resets an environment\'s data root wholesale; it consumes no row\'s content as an effect';
 
+const FILE_REFERENCE_GUARD =
+  'the file_in_use guard (src/core/files/files.ts fileReferences) reads whether any row points at the file by foreign key; it can only make the delete refuse, never change what is deleted';
+
 export const LIVE_READ_WAIVERS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  // N01 critic follow-up: the erasures that pass through `deleteFile` read the referencing tables only to
+  // refuse `file_in_use`.
+  files_delete: { sign_request: FILE_REFERENCE_GUARD },
+  gl_archive_purge: { sign_request: FILE_REFERENCE_GUARD },
   // Settlement of issued documents.
   record_payment: { document: ISSUED, contact: CONTACT_NAME },
   allocate_payment: { document: ISSUED, contact: CONTACT_NAME },
@@ -1751,7 +1792,7 @@ export function pinReadShapes(): { table: string; columns: readonly string[]; se
 
 /** The refusal sentence, in both languages the product speaks (EN and de-CH, `du`). */
 export const VORSCHLAG_STALE_MESSAGE = {
-  en: 'The record behind this proposal changed after the agent made it, so nothing ran. Ask the agent to propose it again.',
+  en: 'The record behind this proposal changed after the agent made it, so nothing ran. Ask the agent to propose it again; a proposal with other arguments takes a new idempotency key.',
   'de-CH':
-    'Die Daten hinter diesem Vorschlag haben sich geändert, nachdem der Agent ihn gemacht hat. Darum wurde nichts ausgeführt. Bitte den Agenten, ihn neu vorzuschlagen.',
+    'Die Daten hinter diesem Vorschlag haben sich geändert, nachdem der Agent ihn gemacht hat. Darum wurde nichts ausgeführt. Bitte den Agenten, ihn neu vorzuschlagen; ein Vorschlag mit anderen Angaben braucht einen neuen Idempotenz-Schlüssel.',
 } as const;

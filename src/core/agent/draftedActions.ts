@@ -61,6 +61,8 @@ import { requireString, optionalText } from '../ledger/inputGuards.js';
 import { isGovernedSeat } from '../access/capability.js';
 import { isDialCapability, writeDialLevel } from './dial.js';
 import { APPROVAL_CONFIRMS_FIELD } from './dialMap.js';
+import { verbArgsIdentity, freeTextPolicy } from './argsIdentity.js';
+import { idempotencyKeyConflict, differingArgs, excludedFreeText, type ArgsIdentity } from '../store/idempotencyArgs.js';
 import { backfillDraftingCall, entityRefOf } from './trace.js';
 import { pinFor, VORSCHLAG_STALE_MESSAGE, type VorschlagFigures } from './vorschlagPin.js';
 import { withApproving } from './approving.js';
@@ -154,6 +156,13 @@ function enqueueOnce(ctx: WorkspaceContext, input: EnqueueDraftedActionInput, re
       .get(ctx.workspaceId, actionTool, idempotencyKey) as
       | AgentActionRow
       | undefined;
+    // N01 US-N01.5 (§H-IDEMPOTENT, one key, one meaning): every replay below answers the row the key
+    // already minted, or the act the key was already spent on, so it is an answer only for the same
+    // arguments. The identity is the verb's own (`verbArgsIdentity`), the one the registry boundary
+    // compares, under the workspace's free-text policy.
+    const identity = verbArgsIdentity(actionTool, payload);
+    const policy = freeTextPolicy(ctx);
+    let voided = false;
     // Critic N1: a pending Vorschlag whose pinned record changed since it was drafted is VOID, and the
     // same-key proposal that arrives now is the "propose again" the refusal asks for. The old row goes
     // `stale` (never approvable again) and a fresh one is minted below with the record as it is now,
@@ -161,18 +170,35 @@ function enqueueOnce(ctx: WorkspaceContext, input: EnqueueDraftedActionInput, re
     // D165: a pending row whose replay already committed (a process died before its status flip) and
     // whose pin reads what its own act left is the replay target too (`settleable`), never voided over
     // the act's own move.
-    if (existing !== undefined && existing.status === 'pending' && existing.pin_digest !== null) {
-      if (!settleable(ctx, existing, payload)) {
-        // D165 round 2 (critic finding 4): a void that lost its compare-and-set means another
-        // process committed this row's act (or resolved it) since the read above. Never mint a
-        // second pending row beside it: read again and answer from the row as it is now. The draft
-        // seam runs this inside an IMMEDIATE transaction, where no other process can commit in
-        // between; the engine seam holds without one too.
-        if (!markStale(ctx, existing)) return lostRace(existing, () => enqueueOnce(ctx, input, true), retried);
-      } else {
+    // N01 critic finding 6: the void comes FIRST, so a re-proposal with other arguments still leaves the
+    // unsettleable row stale (never pending behind the refusal), and is then refused below.
+    const settles = existing !== undefined && existing.status === 'pending' && existing.pin_digest !== null ? settleable(ctx, existing, payload) : true;
+    if (existing !== undefined && existing.status === 'pending' && existing.pin_digest !== null && !settles) {
+      // D165 round 2 (critic finding 4): a void that lost its compare-and-set means another
+      // process committed this row's act (or resolved it) since the read above. Never mint a
+      // second pending row beside it: read again and answer from the row as it is now. The draft
+      // seam runs this inside an IMMEDIATE transaction, where no other process can commit in
+      // between; the engine seam holds without one too.
+      if (!markStale(ctx, existing)) return lostRace(existing, () => enqueueOnce(ctx, input, true), retried);
+      voided = true;
+    }
+    if (existing !== undefined) {
+      const fields = draftArgsDiffer(actionTool, existing, identity, excludedFreeText(actionTool, policy));
+      if (fields.length > 0) {
+        return idempotencyKeyConflict(idempotencyKey, actionTool, fields, { actionId: existing.id, status: voided ? 'stale' : existing.status });
+      }
+    }
+    // The key spent DIRECTLY (outside any Vorschlag), on other arguments: the approval of this proposal
+    // could only replay that other act, so it is refused here, before anything is drafted.
+    const spent = ctx.store.recordedIdempotencyArgs(ctx.workspaceId, actionTool, idempotencyKey);
+    if (spent !== undefined) {
+      const fields = differingArgs(spent, identity, excludedFreeText(actionTool, policy));
+      if (fields.length > 0) return idempotencyKeyConflict(idempotencyKey, actionTool, fields);
+    }
+    if (existing !== undefined && !voided) {
+      if (existing.status === 'pending' && existing.pin_digest !== null) {
         return ok({ actionId: existing.id, status: existing.status, replayed: true });
       }
-    } else if (existing !== undefined) {
       let result: Result | undefined;
       if (existing.status === 'executed' && existing.result_json !== null) {
         try {
@@ -356,6 +382,22 @@ function completedMemo(ctx: WorkspaceContext, row: AgentActionRow, payload: Reco
   return ctx.store.recallIdempotent<unknown>(ctx.workspaceId, key, row.action_tool) !== undefined;
 }
 
+/**
+ * The arguments a same-key proposal changes against the row it would replay (N01 US-N01.5), sorted;
+ * empty for the same call. A stored payload that does not parse answers empty, so such a row replays
+ * exactly as before and its approval keeps reporting `corrupt_drafted_action`.
+ */
+function draftArgsDiffer(actionTool: string, row: AgentActionRow, identity: ArgsIdentity, excluded: readonly string[]): string[] {
+  let stored: unknown;
+  try {
+    stored = JSON.parse(row.payload_json);
+  } catch {
+    return [];
+  }
+  if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return [];
+  return differingArgs(verbArgsIdentity(actionTool, stored as Record<string, unknown>), identity, excluded);
+}
+
 function loadAction(ctx: WorkspaceContext, actionId: string): AgentActionRow | undefined {
   // §H-TENANT: the workspace is part of the lookup key, so an action id from another workspace reads
   // as not-found rather than leaking or acting across tenants.
@@ -428,6 +470,9 @@ export function listDraftedActions(ctx: WorkspaceContext, input: ListDraftedActi
         actionTool: row.action_tool,
         payload,
         payloadLabels: payloadLabelsOf(ctx, payload),
+        // N01 US-N01.8: the agent's own sentence on why it proposes this (transport-only, never part of
+        // the act's arguments), shown quoted on the card; null when it gave none.
+        agentReason: typeof payload.agentReason === 'string' && payload.agentReason.trim() !== '' ? payload.agentReason.trim() : null,
         // Critic N1: the key figures of the record as it stood when the agent proposed this, and
         // whether it has changed since (a pending row only): the card shows what is being approved.
         figures,

@@ -44,6 +44,19 @@ const SCOPED_CALLEES = new Set(['postEntryInternal', 'postEntryInternalChecked',
  * `<file>|<callee>|<key source text>`; a reason is a statement about the code a reader can check.
  */
 const DECIDED = {
+  // --- N01 (D183): a batch item IS the public single call, under the key the spec names. ----------------
+  'src/api/batch-actions.ts|governedRun|`${batchKey}:${bankTxnId}`':
+    "N01 US-N01.6: each book_bank_lines item is deliberately ONE public book_bank_line through the transport seam (its own act, its own Vorschlag under a draft dial), so its key lives in the public scope on purpose; a caller who spent <batchKey>:<bankTxnId> first is held by the registry argument claim (idempotency_args, US-N01.5): the same arguments replay the same act, other arguments refuse idempotency_key_conflict, so no other act is ever replayed as the item",
+  // --- N04 (D183): the autobook offer's Vorschlag key is its rejection memory, derived on purpose. -------
+  'src/core/banking/autobook.ts|enqueueDraftedAction|rowKey':
+    "the key of the offer's Vorschlag ROW (agent_action), derived from the rule version, the grants made on it and the ceiling it shows (critic N04 F2: a moved ceiling re-drafts the offer; a re-offer of the same figures adds a minted suffix), so a rejected offer is never asked again for that version until a grant on it ends; only system rows answer for it (the lookup filters actor = system), and the act it drafts (grant_rule_autobook) carries a MINTED key, so a squat can only put a Vorschlag where the offer would be, never replay a grant",
+  // --- N02 (D183): the Belegeingang tick's own top-level capture, not a composite's inner write. -------
+  'src/core/files/belegeingang.ts|opts.capture|`belegeingang:${file.sha256}:${st.size}:${mtimeMs}:${name}`':
+    'the scheduler calls capture_document as its own verb (no composite memo around it); the key names the very bytes it captures (sha256, size, mtime) and the file name the call carries, so a caller who used it first stored the same receipt under the same arguments and its replay is the right answer (a copy under another name is its own call, never an idempotency_key_conflict)',
+
+  // --- N03 (D183): the miner's Vorschlag key is the rejection memory, derived on purpose. ----------------
+  'src/core/banking/ruleMiner.ts|enqueueDraftedAction|mineKey':
+    "the key of the Vorschlag ROW (agent_action), derived from the pattern so a later run finds the row the owner rejected and never offers it again (N03 section 2); the act it drafts (set_bank_standard) carries a MINTED key, so a squat of this key can only put another Vorschlag where the suggestion would be, never replay a rule",
   // --- Writers with a fixed scope of their own (landed with cl-periods, critic R5-2/R6-1). ------------
   'src/core/vat/abrechnung.ts|lockPeriodSealed|`${input.idempotencyKey}:${month}`':
     'lockPeriodSealed memoises under its own scope (lock_period_sealed), which no public verb writes, and the filing reads every month back as {hard, vat_filed}',

@@ -68,9 +68,10 @@
 
 import type { Result } from '../result.js';
 import { err } from '../result.js';
-import { isReservedMoneyPathTool, moneyPathTools } from './reserved.js';
+import { isDispatcherTool, isReservedMoneyPathTool, moneyPathTools } from './reserved.js';
 import { withinPluginCall } from './callScope.js';
 import { dialCapabilitiesForCall, hasBookKeyedDialRule } from '../agent/dialMap.js';
+import { refuseReservedIdempotencyKey } from '../store/idempotencyArgs.js';
 
 // --- Scopes -------------------------------------------------------------------------------------
 
@@ -164,6 +165,11 @@ export function runPluginToolCall(
   if (isReservedMoneyPathTool(args.tool)) {
     return err('capability_forbidden', { reason: 'no_second_posting_path', tool: args.tool });
   }
+  // N01 critic (HIGH): a dispatcher (a batch, call_tool) runs other verbs by name, which this bridge
+  // would never see: refused outright, so P3 and the granted scopes hold for what a plugin really runs.
+  if (isDispatcherTool(args.tool)) {
+    return err('capability_forbidden', { reason: 'dispatcher', tool: args.tool });
+  }
   if (!grantedToolNames(args.grantedScopes).has(args.tool)) {
     return err('forbidden', { tool: args.tool, reason: 'scope_not_granted' });
   }
@@ -172,6 +178,10 @@ export function runPluginToolCall(
   if (dialCapabilitiesForCall(args.tool, args.input).length > 0 || hasBookKeyedDialRule(args.tool)) {
     return err('capability_forbidden', { reason: 'needs_a_person', tool: args.tool });
   }
+  // N01 security review: a plugin is a caller, so a key only the system mints is refused here as at
+  // every transport door (`refuseReservedIdempotencyKey`).
+  const reserved = refuseReservedIdempotencyKey(args.input);
+  if (reserved !== undefined) return reserved;
   return withinPluginCall(args.pluginActor, () => invoke(args.tool, args.input, args.pluginActor));
 }
 

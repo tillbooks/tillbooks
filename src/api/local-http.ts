@@ -35,6 +35,7 @@ import { checkStudioKey, resolveServedActor, STUDIO_ACTOR, type HostStudioKey } 
 import { createStudioDoorHandler, STUDIO_DOOR_PREFIX, STUDIO_REOPEN_PATH, type StudioDoor } from './studio-door.js';
 import { extractSubject, type ServedModeConfig } from './served-mode.js';
 import type { ApiDeps } from './registry.js';
+import { DROP_FACE_PREFIX, DROP_RESOLVE_PATH, handleDropCall } from './drop-face.js';
 
 /** The mount path for the MCP endpoint. Kept in one place so every host agrees. */
 export const MCP_PATH = '/mcp';
@@ -285,6 +286,40 @@ export function createLocalHttpRouter(deps: ApiDeps, opts: LocalHttpOptions = {}
     },
   };
 
+  /**
+   * N02 (D183): the drop page's face (`drop-face.ts`): seated by the Studio key exactly like the REST
+   * twins, before the body is read, and mounted only beside them in LOCAL mode. Not a registry verb, so no
+   * MCP session reaches it.
+   */
+  const dropFace: LocalFace = {
+    name: 'studio-drop',
+    probePath: DROP_RESOLVE_PATH,
+    matches: (pathname) => pathname.startsWith(DROP_FACE_PREFIX),
+    async serve(req, res) {
+      const op = pathnameOf(req).slice(DROP_FACE_PREFIX.length);
+      if (req.method !== 'POST' || op === '') return false;
+      const local = studioRestDeps(req, res);
+      if ('refused' in local) {
+        req.resume();
+        return true;
+      }
+      let raw: string;
+      try {
+        raw = await readBody(req, bodyCap);
+      } catch (e) {
+        if (e instanceof BodyTooLargeError) {
+          sendJson(res, 413, { ok: false, error: 'request_body_too_large', max: e.max, bytes: e.bytes });
+          return true;
+        }
+        throw e;
+      }
+      const input = raw.length > 0 ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      const answer = handleDropCall(local.deps, op, input);
+      sendJson(res, answer.status, answer.body);
+      return true;
+    },
+  };
+
   // D166: the door is a face like the others, so the guard below runs in front of it too.
   const door = opts.studioDoor === undefined ? undefined : createStudioDoorHandler(opts.studioDoor);
   const doorFace: LocalFace | undefined =
@@ -300,6 +335,7 @@ export function createLocalHttpRouter(deps: ApiDeps, opts: LocalHttpOptions = {}
   const faces: readonly LocalFace[] = [
     mcpFace,
     ...(opts.rest === true ? [restFace] : []),
+    ...(opts.rest === true && (servedMode === undefined || !servedMode.enabled) ? [dropFace] : []),
     ...(doorFace !== undefined ? [doorFace] : []),
   ];
 

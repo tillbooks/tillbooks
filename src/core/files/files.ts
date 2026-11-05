@@ -36,6 +36,8 @@ import type { Result } from '../result.js';
 import { entityKindDef, ENTITY_KIND_IDS, tenantColumnOf } from '../customization/entities.js';
 import { IS_HEAD } from './head.js';
 import { isGovernedSeat } from '../access/capability.js';
+import { guardFile, isLiveReceiptTarget, isReceiptBookingKind, receiptReplaceGuard, type GuardPass, type ReservationMark } from './receiptGuard.js';
+import { tillTables } from '../store/schemaShape.js';
 import {
   RETENTION_SOURCES,
   accountingRecordDate,
@@ -162,6 +164,17 @@ function readFile(ctx: WorkspaceContext, id: unknown): StoredFileRow | undefined
   return ctx.store.db
     .prepare('SELECT * FROM stored_file WHERE workspace_id = ? AND id = ?')
     .get(ctx.workspaceId, id) as StoredFileRow | undefined;
+}
+
+/**
+ * N02 (D183): does `id` name a PENDING file, one stored for a Vorschlag that still waits? A pending file
+ * is NOT a `stored_file` row (critic F2): it lives in `stored_file_pending` until the approval of its
+ * own Vorschlag releases it (`releasePendingFile`), so no reader, verb, link, sign request, expense
+ * receipt or portal grant anywhere can name it by id. Inert by construction, not by every reader
+ * remembering a filter.
+ */
+export function isPendingFile(ctx: WorkspaceContext, id: string): boolean {
+  return ctx.store.db.prepare('SELECT 1 AS p FROM stored_file_pending WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, id) !== undefined;
 }
 
 function isHead(ctx: WorkspaceContext, id: string): boolean {
@@ -319,10 +332,15 @@ function putBlob(ctx: WorkspaceContext, sha256: string, bytes: Buffer): void {
  * is gone, so the count it takes is the count that will be true once the transaction commits.
  */
 function dropBlobIfUnreferenced(ctx: WorkspaceContext, sha256: string): void {
+  // N02 (D183): a PENDING file names its blob too (`stored_file_pending.sha256`), so a twin's deletion
+  // never takes the bytes a waiting Vorschlag will link on approval.
   const remaining = (
     ctx.store.db
-      .prepare('SELECT COUNT(*) AS n FROM stored_file WHERE workspace_id = ? AND storage_ref = ?')
-      .get(ctx.workspaceId, sha256) as { n: number }
+      .prepare(
+        `SELECT (SELECT COUNT(*) FROM stored_file WHERE workspace_id = ? AND storage_ref = ?)
+              + (SELECT COUNT(*) FROM stored_file_pending WHERE workspace_id = ? AND sha256 = ?) AS n`,
+      )
+      .get(ctx.workspaceId, sha256, ctx.workspaceId, sha256) as { n: number }
   ).n;
   if (remaining === 0) {
     ctx.store.db
@@ -344,7 +362,27 @@ export interface UploadFileInput {
 export function uploadFile(ctx: WorkspaceContext, input: UploadFileInput): Result {
   const decoded = decodeContent(input.contentBase64);
   if (!isDecoded(decoded)) return decoded;
+  return storeUploadedBytes(ctx, decoded.bytes, input);
+}
 
+/** The metadata of an upload whose bytes are already in hand (N02: a confined read, a drop). */
+export type UploadBytesMeta = Omit<UploadFileInput, 'contentBase64'>;
+
+/**
+ * N02 (D183): store bytes that arrived some other way than base64 (`sourcePath`'s confined read, a drop
+ * page upload), through exactly the validation, deduplicated blob and transaction `files_upload` uses.
+ * The size cap is re-checked here, because the caller's bytes never passed `decodeContent`.
+ */
+export function uploadFileBytes(ctx: WorkspaceContext, bytes: Buffer, meta: UploadBytesMeta): Result {
+  if (bytes.byteLength === 0) return err('file_unreadable', { field: 'content', reason: 'empty' });
+  if (bytes.byteLength > MAX_FILE_BYTES) {
+    return err('file_too_large', { bytes: bytes.byteLength, max: MAX_FILE_BYTES, useLane: 'files_upload_begin' });
+  }
+  return storeUploadedBytes(ctx, bytes, meta);
+}
+
+function storeUploadedBytes(ctx: WorkspaceContext, bytes: Buffer, input: UploadBytesMeta): Result {
+  const decoded = { bytes };
   for (const [value, field] of [
     [input.title, 'title'],
     [input.filename, 'filename'],
@@ -526,10 +564,22 @@ export function newFileVersion(
     const textErr = validateText(value, field);
     if (textErr !== null) return textErr;
   }
+  // R1 (N02, `receiptGuard.ts`, security review): a new version carries the record's link forward, so NEW
+  // bytes on a live booking become that booking's receipt, while the old bytes stay its evidence (a
+  // superseded version is still a holder). Replacing a booked receipt is therefore a person's act with a
+  // reason, and new bytes booked elsewhere are judged too. Before the memo, so a refusal is never memoised.
+  let receiptPass: GuardPass | undefined;
+  const newSha = sha256Of(decoded.bytes);
+  if (newSha !== existing.sha256 && existing.entity_kind !== null && existing.entity_id !== null && isReceiptBookingKind(existing.entity_kind) && isLiveReceiptTarget(ctx, existing.entity_kind, existing.entity_id)) {
+    const judged = receiptReplaceGuard(ctx, { id: existing.id, entity_kind: existing.entity_kind, entity_id: existing.entity_id }, newSha);
+    if ((judged as { ok?: unknown }).ok === false) return judged as Result;
+    receiptPass = judged as GuardPass;
+  }
 
   const run = (): Result => {
     const id = ctx.ids.next('file');
     const at = ctx.clock.now();
+    receiptPass?.record();
     const sha256 = sha256Of(decoded.bytes);
     putBlob(ctx, sha256, decoded.bytes);
     ctx.store.db
@@ -593,13 +643,29 @@ export function newFileVersion(
  *
  * RE-LINKING REPLACES, because a file has one primary link (§4). The alternative, refusing, would make
  * a mis-filed voucher permanently mis-filed.
+ *
+ * R1, RECEIPT UNIQUENESS (N02, `receiptGuard.ts`): a link to a LIVE record of a booking kind is judged by
+ * the receipt guard before anything is written (an open bank line is judged when it is booked), with the row's own current link excluded (it moves with the row),
+ * so a refusal is never memoised. A row already on this very record is left as it is and not judged
+ * again. `receipt` carries a release's place in the reservation queue (`attach.ts`); the person's
+ * confirmation (`bookAgain` + `overrideReason`) comes from the call's frame.
  */
 export function linkFile(
   ctx: WorkspaceContext,
-  input: { fileId: string; entityKind: string; entityId: string; idempotencyKey?: string },
+  input: {
+    fileId: string;
+    entityKind: string;
+    entityId: string;
+    idempotencyKey?: string;
+    receipt?: { exceptActionId: string | null; reservationBefore: ReservationMark };
+  },
 ): Result {
   const existing = readFile(ctx, input.fileId);
   if (existing === undefined) return err('not_found', { fileId: input.fileId });
+  // R1 (critic): a SUPERSEDED version is part of its record's evidence chain (it stays a holder of its
+  // bytes); linking it elsewhere would move the old receipt out of that chain unjudged. Only the head of
+  // a chain is ever (re-)linked.
+  if (!isHead(ctx, existing.id)) return err('not_head_version', { fileId: existing.id, version: existing.version });
 
   const def = entityKindDef(input.entityKind);
   if (def === undefined) {
@@ -616,9 +682,19 @@ export function linkFile(
   if (target === undefined) {
     return err('entity_not_found', { entityKind: def.kind, entityId: input.entityId });
   }
+  let receiptPass: GuardPass | undefined;
+  const sameRecord = existing.entity_kind === def.kind && existing.entity_id === input.entityId;
+  if (!sameRecord && isReceiptBookingKind(def.kind) && isLiveReceiptTarget(ctx, def.kind, input.entityId)) {
+    const judged = guardFile(ctx, existing, { kind: def.kind, id: input.entityId }, {
+      ...(input.receipt !== undefined ? { exceptActionId: input.receipt.exceptActionId, reservationBefore: input.receipt.reservationBefore } : {}),
+    });
+    if ((judged as { ok?: unknown }).ok === false) return judged as Result;
+    receiptPass = judged as GuardPass;
+  }
 
   const run = (): Result => {
     const at = ctx.clock.now();
+    receiptPass?.record();
     // THE OR 958f DERIVATION, ANCHORED ON THE RECORD'S OWN DATE and not on this moment. A journal
     // entry may be dated in the future (A02 has no future-date guard) and a payment carries a
     // caller-supplied date, so reading the clock derived a SHORTER answer than the statute demands.
@@ -674,9 +750,246 @@ export function linkFile(
 }
 
 /**
+ * N02 (D183): a SECOND filing row over the same stored bytes, for a receipt that already evidences
+ * another record. A file has ONE primary link and re-linking replaces it, so linking the existing row
+ * would take the Beleg off the record that holds it (a posted bill would lose its receipt to its
+ * payment). The new row names the same blob (`storage_ref` is the sha256, and the blob is per
+ * workspace), so nothing is stored twice; it starts unlinked and without retention, and the caller links
+ * it in the same transaction. Answers the new id, or undefined when the source row is not in this
+ * workspace.
+ */
+export function addFilingRowFor(ctx: WorkspaceContext, sourceId: string): string | undefined {
+  const source = readFile(ctx, sourceId);
+  if (source === undefined) return undefined;
+  const id = ctx.ids.next('file');
+  const at = ctx.clock.now();
+  ctx.store.db
+    .prepare(
+      `INSERT INTO stored_file
+         (id, workspace_id, folder_id, title, filename, mime, bytes, sha256, storage_ref, tags,
+          entity_kind, entity_id, retention_until, retention_source, retention_statutory_until,
+          version, supersedes_id, pending_delete, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, 1, NULL, 0, ?, ?)`,
+    )
+    .run(
+      id,
+      ctx.workspaceId,
+      source.folder_id,
+      source.title,
+      source.filename,
+      source.mime,
+      source.bytes,
+      source.sha256,
+      source.storage_ref,
+      source.tags,
+      at,
+      at,
+    );
+  return id;
+}
+
+/**
+ * R1 (N02): link the stored file a receipt POINTER names (A17 `receipt_ref`) to the record that points at
+ * it, under the one-primary-link rule: already on it, nothing; unlinked, the row itself; linked elsewhere,
+ * a second filing row over the same bytes, so a Beleg is never moved off what holds it. The receipt guard
+ * runs in `linkFile`. Undefined when the pointer names no stored file of this workspace (a paper
+ * reference): there are no bytes to judge and nothing to link. Inside the caller's transaction.
+ */
+export function linkReceiptPointer(ctx: WorkspaceContext, fileId: string, entityKind: string, entityId: string): Result | undefined {
+  const row = readFile(ctx, fileId);
+  if (row === undefined) return undefined;
+  if (row.entity_kind === entityKind && row.entity_id === entityId) return ok({ fileId: row.id });
+  const linkId = row.entity_kind === null ? row.id : addFilingRowFor(ctx, row.id);
+  if (linkId === undefined) return err('not_found', { fileId });
+  const linked = linkFile(ctx, { fileId: linkId, entityKind, entityId });
+  return linked.ok ? ok({ fileId: linkId }) : linked;
+}
+
+/** N02: the one projection of a row, by id, for a composite that answers with the file it touched. */
+export function fileView(ctx: WorkspaceContext, id: string): ReturnType<typeof mapFile> | undefined {
+  const row = readFile(ctx, id);
+  return row === undefined ? undefined : mapFile(row, today(ctx));
+}
+
+/** N02: the raw row, for the attach seam's twin and pending checks (tenant-scoped like every read here). */
+export function storedFileRow(ctx: WorkspaceContext, id: string): StoredFileRow | undefined {
+  return readFile(ctx, id);
+}
+
+/**
+ * N02 (D183): every CURRENT row of this workspace holding these exact bytes, oldest first: the twins a
+ * known receipt is resolved against. A pending file is never one (it is not a `stored_file` row).
+ */
+export function headFilesBySha(ctx: WorkspaceContext, sha256: string): StoredFileRow[] {
+  return ctx.store.db
+    .prepare(
+      `SELECT f.* FROM stored_file f
+        WHERE f.workspace_id = ? AND f.sha256 = ? AND ${IS_HEAD('f')}
+        ORDER BY f.created_at ASC, f.rowid ASC`,
+    )
+    .all(ctx.workspaceId, sha256) as StoredFileRow[];
+}
+
+/** The metadata a pending file keeps until its release. */
+export interface PendingFileRow {
+  id: string;
+  workspace_id: string;
+  action_id: string | null;
+  source: 'draft' | 'drop';
+  title: string;
+  filename: string;
+  mime: string;
+  bytes: number;
+  sha256: string;
+  created_at: string;
+}
+
+/**
+ * N02 (D183): store bytes as a PENDING file, inside the caller's transaction: the blob (deduplicated
+ * like any upload) and one `stored_file_pending` row, never a `stored_file` row. The id is minted as a
+ * file id because it BECOMES the file's id at release, so the Vorschlag payload naming it stays true.
+ */
+export function storePendingFile(
+  ctx: WorkspaceContext,
+  bytes: Buffer,
+  meta: { filename: string; title: string; mime: string },
+  binding: { actionId: string | null; source: 'draft' | 'drop' },
+): { fileId: string } | Result {
+  if (bytes.byteLength === 0) return err('file_unreadable', { field: 'content', reason: 'empty' });
+  if (bytes.byteLength > MAX_FILE_BYTES) return err('file_too_large', { bytes: bytes.byteLength, max: MAX_FILE_BYTES });
+  for (const [value, field] of [
+    [meta.title, 'title'],
+    [meta.filename, 'filename'],
+    [meta.mime, 'mime'],
+  ] as const) {
+    const textErr = validateText(value, field);
+    if (textErr !== null) return textErr;
+  }
+  const id = ctx.ids.next('file');
+  const sha256 = sha256Of(bytes);
+  putBlob(ctx, sha256, bytes);
+  ctx.store.db
+    .prepare(
+      `INSERT INTO stored_file_pending (id, workspace_id, action_id, source, title, filename, mime, bytes, sha256, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(id, ctx.workspaceId, binding.actionId, binding.source, meta.title.trim(), meta.filename.trim(), meta.mime, bytes.byteLength, sha256, ctx.clock.now());
+  return { fileId: id };
+}
+
+/**
+ * N02 (D183): RELEASE a pending file into the filing (its Vorschlag's approval is linking it now): the
+ * `stored_file` row is born with the pending id, version 1, unlinked, and the pending row goes. Runs
+ * inside the act's transaction. False when `id` is not pending in this workspace.
+ */
+export function releasePendingFile(ctx: WorkspaceContext, id: string): boolean {
+  const pending = ctx.store.db.prepare('SELECT * FROM stored_file_pending WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, id) as
+    | PendingFileRow
+    | undefined;
+  if (pending === undefined) return false;
+  const at = ctx.clock.now();
+  ctx.store.db
+    .prepare(
+      `INSERT INTO stored_file
+         (id, workspace_id, folder_id, title, filename, mime, bytes, sha256, storage_ref, tags,
+          entity_kind, entity_id, retention_until, retention_source, retention_statutory_until,
+          version, supersedes_id, pending_delete, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, '[]', NULL, NULL, NULL, NULL, NULL, 1, NULL, 0, ?, ?)`,
+    )
+    .run(pending.id, ctx.workspaceId, pending.title, pending.filename, pending.mime, pending.bytes, pending.sha256, pending.sha256, pending.created_at, at);
+  ctx.store.db.prepare('DELETE FROM stored_file_pending WHERE workspace_id = ? AND id = ?').run(ctx.workspaceId, id);
+  return true;
+}
+
+/**
+ * N02 (D183): erase a PENDING file whose Vorschlag will never run (the sweep), with its blob when no
+ * other row (filed or pending) names it. Nothing can reference a pending row, so this cannot meet a
+ * foreign key. Runs inside the caller's transaction; false when `id` is not pending.
+ */
+export function erasePendingFile(ctx: WorkspaceContext, id: string): boolean {
+  const pending = ctx.store.db.prepare('SELECT sha256 FROM stored_file_pending WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, id) as
+    | { sha256: string }
+    | undefined;
+  if (pending === undefined) return false;
+  ctx.store.db.prepare('DELETE FROM stored_file_pending WHERE workspace_id = ? AND id = ?').run(ctx.workspaceId, id);
+  dropBlobIfUnreferenced(ctx, pending.sha256);
+  return true;
+}
+
+/**
  * Is `fileId` linked to exactly this record right now? Read off the row, never off a result: the K1
  * read-back a composite runs after its inner `linkFile`, so a link it reports is a link the file holds.
  */
+/** A (table, column) that holds a foreign key to `stored_file(id)`, and whether the table is tenant-keyed. */
+interface FileReferenceColumn {
+  readonly table: string;
+  readonly column: string;
+  readonly tenantKeyed: boolean;
+}
+
+/** Every referencing column, bar the file's own version chain, read off the schema once per connection. */
+const fileReferenceColumns = new WeakMap<object, readonly FileReferenceColumn[]>();
+
+function referenceColumnsOf(ctx: WorkspaceContext): readonly FileReferenceColumn[] {
+  const db = ctx.store.db;
+  const cached = fileReferenceColumns.get(db);
+  if (cached !== undefined) return cached;
+  const out: FileReferenceColumn[] = [];
+  for (const name of tillTables(db)) {
+    if (name === 'stored_file') continue; // `supersedes_id` is the chain, answered by `not_head_version`
+    const fks = db.prepare(`SELECT "table" AS target, "from" AS col FROM pragma_foreign_key_list(?)`).all(name) as { target: string; col: string }[];
+    const referencing = fks.filter((fk) => fk.target === 'stored_file');
+    if (referencing.length === 0) continue;
+    const tenantKeyed = (db.prepare('SELECT name FROM pragma_table_info(?)').all(name) as { name: string }[]).some((c) => c.name === 'workspace_id');
+    for (const fk of referencing) out.push({ table: name, column: fk.col, tenantKeyed });
+  }
+  fileReferenceColumns.set(db, out);
+  return out;
+}
+
+/**
+ * The records that point at `fileId` by foreign key, as `{ table, column }` (at most one per column).
+ * §H-TENANT: scoped to this workspace wherever the referencing table carries `workspace_id`.
+ */
+function fileReferences(ctx: WorkspaceContext, fileId: string): { table: string; column: string }[] {
+  const found: { table: string; column: string }[] = [];
+  for (const ref of referenceColumnsOf(ctx)) {
+    // The names come from the schema itself, never from a caller; the values are bound.
+    const hit = ref.tenantKeyed
+      ? ctx.store.db.prepare(`SELECT 1 AS one FROM "${ref.table}" WHERE workspace_id = ? AND "${ref.column}" = ? LIMIT 1`).get(ctx.workspaceId, fileId)
+      : ctx.store.db.prepare(`SELECT 1 AS one FROM "${ref.table}" WHERE "${ref.column}" = ? LIMIT 1`).get(fileId);
+    if (hit !== undefined) found.push({ table: ref.table, column: ref.column });
+  }
+  return found;
+}
+
+/**
+ * N01 critic findings 2 and 3, security review (re-link hijack): may a RECEIPT POINTER (A17's
+ * `attach_receipt` receiptRef, E02's line `receiptDocumentId`) file this stored file against
+ * `(entityKind, entityId)`? Only a file that is UNLINKED or already linked to that same record. A file
+ * filed against any other record (a posted entry's Beleg, a payroll hand-off artefact, a report run, a
+ * contact's document) is refused `receipt_linked_elsewhere` naming its current link: a pointer never
+ * moves a file's link, so it can never strip evidence off another record. Answers undefined when the
+ * link may be made (or the file is not this workspace's, which the caller treats as a plain pointer).
+ */
+export function refuseReceiptLink(
+  ctx: WorkspaceContext,
+  fileId: string,
+  entityKind: string,
+  entityId: string,
+): ReturnType<typeof err> | undefined {
+  const row = ctx.store.db
+    .prepare('SELECT entity_kind, entity_id FROM stored_file WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, fileId) as { entity_kind: string | null; entity_id: string | null } | undefined;
+  if (row === undefined || row.entity_kind === null) return undefined;
+  if (row.entity_kind === entityKind && row.entity_id === entityId) return undefined;
+  return err('receipt_linked_elsewhere', {
+    fileId,
+    linkedTo: { entityKind: row.entity_kind, entityId: row.entity_id },
+    reason: 'this file is filed against another record; a receipt pointer never moves it. Upload the Beleg again for this record, or re-file it with files_link',
+  });
+}
+
 export function fileLinkedTo(ctx: WorkspaceContext, fileId: string, entityKind: string, entityId: string): boolean {
   const row = ctx.store.db
     .prepare('SELECT entity_kind, entity_id FROM stored_file WHERE workspace_id = ? AND id = ?')
@@ -937,7 +1250,25 @@ function escapeLike(value: string): string {
 export function getFileContent(ctx: WorkspaceContext, input: { fileId: string }): Result {
   const file = readFile(ctx, input.fileId);
   if (file === undefined) return err('not_found', { fileId: input.fileId });
+  const refused = fileContentRefusal(ctx, file);
+  if (refused !== null) return refused;
 
+  const blob = ctx.store.db
+    .prepare('SELECT content, bytes FROM stored_file_blob WHERE workspace_id = ? AND sha256 = ?')
+    .get(ctx.workspaceId, file.storage_ref) as { content: Buffer; bytes: number } | undefined;
+  if (blob === undefined) {
+    return err('content_not_found', { fileId: file.id, storageRef: file.storage_ref });
+  }
+  return contentAnswer(file, blob.content);
+}
+
+/**
+ * The gates on READING a filed file's bytes back, beyond the A24 capabilities of the verb, in ONE place:
+ * `files_get_content`, the Vorschlag preview and the attach seam (which must not copy a file a caller
+ * could not read into a record with laxer rules, N02 security review) all ask it. Null when the read may
+ * proceed.
+ */
+export function fileContentRefusal(ctx: WorkspaceContext, file: StoredFileRow): Result | null {
   // G18 US-G18.4: a migration-class blob (over the single-call bound) is stored in segments and is
   // NOT served base64 in one shot, because that would materialise the whole file. It is read through
   // the streaming byte-range reader (`readBlobByteSource`) instead. The refusal names the lane so a
@@ -965,15 +1296,12 @@ export function getFileContent(ctx: WorkspaceContext, input: { fileId: string })
       if (!sensitive.ok) return err('forbidden', { capability: 'hr.sensitive', entityKind: 'payroll_handoff', fileId: file.id });
     }
   }
+  return null;
+}
 
-  const blob = ctx.store.db
-    .prepare('SELECT content, bytes FROM stored_file_blob WHERE workspace_id = ? AND sha256 = ?')
-    .get(ctx.workspaceId, file.storage_ref) as { content: Buffer; bytes: number } | undefined;
-  if (blob === undefined) {
-    return err('content_not_found', { fileId: file.id, storageRef: file.storage_ref });
-  }
-
-  const bytes = Buffer.isBuffer(blob.content) ? blob.content : Buffer.from(blob.content as unknown as Uint8Array);
+/** The integrity-checked answer of a content read (the hash re-computed, see `getFileContent`). */
+function contentAnswer(file: StoredFileRow, content: Buffer): Result {
+  const bytes = Buffer.isBuffer(content) ? content : Buffer.from(content as unknown as Uint8Array);
   const actual = sha256Of(bytes);
   if (actual !== file.sha256) {
     // Deliberately reports BOTH hashes. The operator's next question is "which of my copies is right",
@@ -1154,6 +1482,18 @@ export function deleteFile(
     .get(ctx.workspaceId, existing.id) as { id: string } | undefined;
   if (successor !== undefined) {
     return err('not_head_version', { fileId: existing.id, supersededBy: successor.id });
+  }
+  // A file another record still points at by FOREIGN KEY (an expense line's receipt on a draft claim, a
+  // payroll hand-off artefact, a sign request's document, a remittance advice) is refused by name here,
+  // where it used to reach the DELETE and escape as a raw constraint error (N01 critic follow-up). The
+  // referencing columns are read off the schema, so a table added later is covered with no list to keep.
+  const referencedBy = fileReferences(ctx, existing.id);
+  if (referencedBy.length > 0) {
+    return err('file_in_use', {
+      fileId: existing.id,
+      referencedBy,
+      reason: 'another record still points at this file; remove that reference (e.g. the receipt on the expense line) before deleting it',
+    });
   }
 
   // P8. `agent` is the D13 actor a `till mcp` session runs as; a human at the Studio is `studio`. The

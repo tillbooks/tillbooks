@@ -43,9 +43,15 @@ import {
   recordAgentCall,
 } from '../core/agent/index.js';
 import type { ActionDef, ActionInput, ApiDeps } from './registry.js';
-import { actionInputTypeMismatch, actionInputRequiredGap } from './registry.js';
+import { actionInputTypeMismatch, actionInputRequiredGap, normalizeActionInput, bindGovernedDispatch } from './registry.js';
+import { unknownFields, unknownFieldsMode, unknownFieldRefusal, type UnknownFieldWarning } from './input-boundary.js';
+import { undoHintFor, UNDO_HINTS_SETTING } from './undo-hints.js';
+import { getSetting } from '../core/settings/settings.js';
 import { approvalPointer, HUMAN_DECISION_CAPABILITY, type ApprovalPointer } from './approval-pointer.js';
 import { isGrantLive, type PortalGrantRow } from '../core/portal/index.js';
+import type { DraftAttachPrep } from '../core/files/index.js';
+import { addVorschlagHolders, draftReceiptHolders, isProposeInstead, type ReceiptHolder } from '../core/files/receiptGuard.js';
+import { refuseReservedIdempotencyKey } from '../core/store/idempotencyArgs.js';
 
 /**
  * D161 (owner, via coordinator): the token verbs the seam governs although they take no
@@ -234,6 +240,22 @@ type GovernedPlan = { done: Result } | { execute: (outcome: Result) => Result };
 
 const PASS_THROUGH: GovernedPlan = { execute: (outcome) => outcome };
 
+/** N02 (D183): a preparation (`ActionDef.prepareDraft`) rather than a refusal or nothing. */
+function isDraftPrep(value: unknown): value is DraftAttachPrep {
+  return typeof value === 'object' && value !== null && typeof (value as { stage?: unknown }).stage === 'function';
+}
+
+/** N02 (D183): a draft's staging refused (or its enqueue did); thrown inside the draft transaction to roll it back. */
+class DraftStagingRefused extends Error {
+  /** `recorded`: a staging refusal is traced as not_draftable; an enqueue that failed answers as it always did. */
+  constructor(
+    public readonly result: Result,
+    public readonly recorded: boolean,
+  ) {
+    super(result.ok ? 'draft_staging_refused' : result.error);
+  }
+}
+
 /**
  * Dispatch one transport call. For every non-agent actor this IS `action.run`, byte for byte. For
  * the agent seat it records the call, and for a dial-governed write it routes execute/draft/deny.
@@ -241,11 +263,84 @@ const PASS_THROUGH: GovernedPlan = { execute: (outcome) => outcome };
 export function runGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Result {
   const unavailable = refuseUnavailableBook(deps, action.name);
   if (unavailable !== undefined) return unavailable;
-  return withinStoredRuleTx(deps, action, () => {
+  // N01 security review: a key only the system mints is refused at the door, for every face and actor.
+  const reserved = refuseReservedIdempotencyKey(input);
+  if (reserved !== undefined) return reserved;
+  const screened = screenTransportInput(deps, action, input);
+  if ('refused' in screened) return screened.refused;
+  const outcome = withinStoredRuleTx(deps, action, () => {
     const plan = planGoverned(deps, action, input);
     if ('done' in plan) return plan.done;
     return plan.execute(action.run(deps, input));
   });
+  return finishTransport(deps, action, input, screened.warnings, outcome);
+}
+
+// N01: the batch verbs and `call_tool` dispatch their items through THIS door (a binding, so the module
+// graph stays acyclic: the registry cannot import the gate, which imports the registry).
+bindGovernedDispatch(runGoverned);
+
+/** N01 US-N01.8: the longest `agentReason` a governed write stores on its Vorschlag. */
+export const AGENT_REASON_MAX_LENGTH = 500;
+
+/**
+ * N01, the transport half of the input boundary (US-N01.4, US-N01.8), run for EVERY seat at both doors and
+ * never for an internal invoke (those call `action.run` directly). `agentReason` must be a string of at most
+ * 500 characters. An unknown top-level field is a warning, a refusal or nothing, by the seat's setting
+ * (`mcp.unknown_fields_agent` for a governed agent seat, `mcp.unknown_fields_studio` for every other seat).
+ * A refusal waits for the A24 gate: a caller the verb would deny is told `permission_denied` by the verb, and
+ * never learns how a workspace it may not read is set.
+ */
+function screenTransportInput(
+  deps: ApiDeps,
+  action: ActionDef,
+  input: ActionInput,
+): { refused: Result } | { warnings: UnknownFieldWarning[] } {
+  const reason = input.agentReason;
+  if (reason !== undefined && reason !== null && (typeof reason !== 'string' || reason.length > AGENT_REASON_MAX_LENGTH)) {
+    return { refused: err('invalid_input', { field: 'agentReason', maxLength: AGENT_REASON_MAX_LENGTH, reason: 'agentReason is one sentence of at most 500 characters' }) };
+  }
+  const unknown = unknownFields(action.inputSchema, input);
+  if (unknown.length === 0) return { warnings: [] };
+  const workspaceId = typeof input.workspaceId === 'string' && input.workspaceId.length > 0 ? input.workspaceId : undefined;
+  const known = workspaceId !== undefined && deps.store.db.prepare('SELECT 1 AS p FROM workspace WHERE id = ?').get(workspaceId) !== undefined;
+  const ctx = known && workspaceId !== undefined ? contextFor(deps, workspaceId) : undefined;
+  // N01 critic: the workspace's setting is read only for a caller the verb's own A24 rule admits; anyone
+  // else gets the default (warn) and meets the verb's own denial, learning nothing of how the book is set.
+  let admitted = ctx !== undefined && workspaceId !== undefined;
+  if (admitted && workspaceId !== undefined) {
+    const port = capabilityPort(deps.store, workspaceId, deps.actor, deps.identitySource);
+    admitted = requiredCapabilitiesFor(action.name, input).every((capability) => port.assert(capability).ok);
+  }
+  const mode = admitted ? unknownFieldsMode(ctx, isAgentSeat(deps)) : 'warn';
+  if (mode === 'ignore') return { warnings: [] };
+  if (mode === 'warn') return { warnings: unknown };
+  return { refused: unknownFieldRefusal(action.name, unknown) };
+}
+
+/**
+ * N01: what the transport adds to an answer, never to the stored act: the unknown-field warnings (appended
+ * to a verb's own `warnings` when it has them) and, for an executed write that has an unambiguous inverse,
+ * the undo hint (`src/api/undo-hints.ts`, setting `agent.undo_hints`).
+ */
+function finishTransport(deps: ApiDeps, action: ActionDef, input: ActionInput, warnings: readonly UnknownFieldWarning[], outcome: Result): Result {
+  let result = outcome;
+  if (warnings.length > 0) {
+    const own = (result as { warnings?: unknown }).warnings;
+    result = { ...result, warnings: [...(Array.isArray(own) ? own : []), ...warnings] } as Result;
+  }
+  const hint = action.kind === 'write' ? undoHintFor(action.name, input, result) : undefined;
+  if (hint !== undefined && undoHintsOn(deps, input)) result = { ...result, undo: hint } as Result;
+  return result;
+}
+
+function undoHintsOn(deps: ApiDeps, input: ActionInput): boolean {
+  const workspaceId = typeof input.workspaceId === 'string' ? input.workspaceId : '';
+  try {
+    return getSetting<string>(contextFor(deps, workspaceId), UNDO_HINTS_SETTING) !== 'off';
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -281,13 +376,17 @@ function withinStoredRuleTx(deps: ApiDeps, action: ActionDef, run: () => Result)
 export async function runGovernedAsync(deps: ApiDeps, action: ActionDef, input: ActionInput): Promise<Result> {
   const unavailable = refuseUnavailableBook(deps, action.name);
   if (unavailable !== undefined) return unavailable;
+  const reserved = refuseReservedIdempotencyKey(input);
+  if (reserved !== undefined) return reserved;
   // A stored-rule write has no `runAsync`: it takes the synchronous door, so its read and its write
   // share one transaction there (critic L2).
   if (action.runAsync === undefined && readsStoredRule(action.name)) return runGoverned(deps, action, input);
+  const screened = screenTransportInput(deps, action, input);
+  if ('refused' in screened) return screened.refused;
   const plan = planGoverned(deps, action, input);
-  if ('done' in plan) return plan.done;
+  if ('done' in plan) return finishTransport(deps, action, input, screened.warnings, plan.done);
   const outcome = action.runAsync !== undefined ? await action.runAsync(deps, input) : action.run(deps, input);
-  return plan.execute(outcome);
+  return finishTransport(deps, action, input, screened.warnings, plan.execute(outcome));
 }
 
 function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): GovernedPlan {
@@ -340,6 +439,16 @@ function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Gov
   if (exists === undefined) return PASS_THROUGH;
 
   const started = Date.now();
+  // R1 (N02, `receiptGuard.ts`): only a PERSON confirms a second booking of a receipt. An agent that
+  // passes `bookAgain` is refused here, before anything is drafted, so no Vorschlag ever carries an
+  // agent's confirmation into an approval.
+  if (action.kind === 'write' && input.bookAgain !== undefined && input.bookAgain !== false) {
+    const refused = err('human_only', { field: 'bookAgain', reason: 'only a person confirms a second booking of a receipt; an agent proposes it' });
+    record(deps, workspaceId, {
+      verb: action.name, kind: action.kind, input, mode: 'deny', reason: 'human_only', result: refused, durationMs: Date.now() - started,
+    });
+    return { done: refused };
+  }
   // THE ONE TIER PICK (D141.5, critic R4-1): the name-keyed map, then the input-keyed rules (G22: the
   // ePortal attestation input of checklist_item_complete is governed under vat-file, the rest of the
   // verb is not), and for a write that lets an automation rule fire, the tier of the verb the STORED
@@ -386,6 +495,18 @@ function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Gov
       forceAsk: dialCapabilityIsForceAsk(ctx, dialCapability),
     });
     if (decision.mode === 'draft') {
+      // N01 US-N01.1: an account NUMBER becomes its id before the screen and the draft (the input
+      // boundary `run` applies too), so a Vorschlag stores what the verb will see, and a number that names
+      // no account is refused here exactly as a direct call refuses it, with nothing drafted.
+      const normalized = normalizeActionInput(deps, action, input);
+      if (!normalized.ok) {
+        record(deps, workspaceId, {
+          verb: action.name, kind: action.kind, input, mode: 'deny', reason: 'not_draftable',
+          dialCapability, result: normalized.error, durationMs: Date.now() - started,
+        });
+        return { done: normalized.error };
+      }
+      input = normalized.input;
       // D158: a verb that declares its own pure validation (`ActionDef.prevalidate`) runs it BEFORE a
       // draft is queued. An input the verb would refuse gets the verb's own Result here, the same one a
       // direct call answers, so drafting never turns a refusal into a 200 (A04's REST/MCP parity broke
@@ -399,77 +520,13 @@ function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Gov
         });
         return { done: invalid };
       }
-      // Inside `store.tx` (M3, critic R1 F1): a draft is a row too, and a pending Vorschlag queued
-      // into a book a newer TILL migrated meanwhile would be replayed by the wrong build later.
-      let drafted: Result;
-      try {
-        drafted = ctx.store.tx(() =>
-          enqueueDraftedAction(ctx, {
-            actionTool: action.name,
-            payload: input,
-            dialCapability,
-            // D177 (critic D177-C1): a draft supersedes older Vorschläge only after the verb's own full
-            // pre-draft screen passed (the `prevalidate` above answered nothing).
-            screened: action.prevalidate !== undefined,
-          }),
-        );
-      } catch (e) {
-        if (e instanceof SchemaNewerThanRuntimeError) return { done: err(SCHEMA_NEWER_THAN_RUNTIME, { action: action.name, ...refusalFields(e) }) };
-        // D12 (critic R2-2): the draft's transaction waited out the busy timeout behind the other
-        // process's write lock. This runs outside the registry's `guarded()`, so without this the
-        // SQLITE_BUSY escaped `callTool` as a JSON-RPC internal error and `handleRest` as a bare 500;
-        // it is the same retryable `store_busy` every verb answers, and nothing was queued.
-        if (isBusyError(e)) {
-          deps.diagnostics?.record({
-            kind: 'verb_error',
-            at: new Date().toISOString(),
-            code: 'store_busy',
-            action: action.name,
-            error: e,
-          });
-          const message = e instanceof Error ? e.message : String(e);
-          // `partial: false`: the seam wrote nothing of this call before the draft (see `guarded`).
-          return { done: err('store_busy', { action: action.name, retryable: true, partial: false, message }) };
-        }
-        throw e;
-      }
-      if (!drafted.ok) return { done: drafted };
-      const actionId = typeof drafted.actionId === 'string' ? drafted.actionId : undefined;
-      const replayed = drafted.replayed === true;
-      // F-08 (c): a same-key replay of a draft the human ALREADY APPROVED answers with the verb's own
-      // stored result, which is exactly what the verb's idempotency would answer had the call executed:
-      // one object, one result, recorded as an execute row that points at that object (`entityRef`)
-      // and at the draft it settled through, with a reason that says nothing ran again.
-      if (replayed && drafted.status === 'executed' && typeof drafted.result === 'object' && drafted.result !== null) {
-        const stored = drafted.result as Result;
-        record(deps, workspaceId, {
-          verb: action.name, kind: action.kind, input, mode: 'execute', reason: 'idempotent_replay',
-          dialCapability, result: stored, durationMs: Date.now() - started, agentActionId: actionId,
-        });
-        return { done: stored };
-      }
-      // A fresh draft, or a replay of a draft still pending (or already rejected): the SAME Vorschlag,
-      // named by the id the key minted the first time, never a second one (J3.10).
-      const result = ok({
-        drafted: true,
-        actionId: drafted.actionId,
-        status: typeof drafted.status === 'string' ? drafted.status : 'pending',
-        dialCapability,
-        reason: decision.reason,
-        replayed,
-        approveAt: pointerFor(deps),
-        // D177 (critic D177-C3): the drafting agent learns which of its Vorschläge this one replaced.
-        ...(Array.isArray(drafted.supersededActionIds) ? { supersededActionIds: drafted.supersededActionIds } : {}),
-      });
-      record(deps, workspaceId, {
-        verb: action.name, kind: action.kind, input, mode: 'draft', reason: replayed ? 'replayed' : decision.reason,
-        dialCapability, result, durationMs: Date.now() - started,
-        agentActionId: actionId,
-      });
-      return { done: result };
+      return { done: draftCall(deps, action, input, ctx, workspaceId, dialCapability, decision.reason, started) };
     }
     return {
       execute: (outcome) => {
+        // R1: the act met a receipt that already evidences another live booking. An agent never books
+        // it a second time, at any dial: the call becomes a Vorschlag whose card shows the holders.
+        if (isProposeInstead(outcome)) return draftCall(deps, action, input, ctx, workspaceId, dialCapability, 'receipt_already_booked', started, outcome.holders);
         record(deps, workspaceId, {
           verb: action.name, kind: action.kind, input, mode: 'execute', reason: decision.reason,
           dialCapability, result: outcome, durationMs: Date.now() - started,
@@ -481,6 +538,11 @@ function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Gov
 
   return {
     execute: (outcome) => {
+      // R1: an ungoverned door that met a receipt holder is proposed too, so a person decides on the
+      // second booking (filed under the verb's own dial family, else `RECEIPT_DIAL_FALLBACK`).
+      if (isProposeInstead(outcome)) {
+        return draftCall(deps, action, input, contextFor(deps, workspaceId), workspaceId, governable[0] ?? RECEIPT_DIAL_FALLBACK, 'receipt_already_booked', started, outcome.holders);
+      }
       record(deps, workspaceId, {
         verb: action.name, kind: action.kind, input,
         mode: 'execute', reason: action.kind === 'read' ? 'read' : 'ungoverned',
@@ -489,4 +551,129 @@ function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Gov
       return withHumanDecisionPointer(deps, outcome);
     },
   };
+}
+
+/**
+ * R1: the dial capability a Vorschlag is filed under when an UNGOVERNED door met a receipt holder (no
+ * dial names the verb): `close-period`, the one `files_link` takes to a booking record (`dialMap.ts`).
+ */
+const RECEIPT_DIAL_FALLBACK = 'close-period';
+
+/**
+ * The draft half of a governed call (D141, N02): store what the draft needs (`ActionDef.prepareDraft`),
+ * queue the Vorschlag, record it. Shared by a call the dial drafts and by a call whose execution met a
+ * receipt holder (R1, `metHolders`): an agent's second booking of a receipt is always a proposal.
+ */
+function draftCall(
+  deps: ApiDeps,
+  action: ActionDef,
+  input: ActionInput,
+  ctx: WorkspaceContext,
+  workspaceId: string,
+  dialCapability: string,
+  reason: string,
+  started: number,
+  metHolders: readonly ReceiptHolder[] = [],
+): Result {
+  const decision = { reason };
+  // N02 (D183): what the draft must store BEFORE it queues (a `sourcePath` receipt, read once and kept
+  // pending), and the payload the Vorschlag then carries. Its I/O runs here, outside the transaction;
+  // a refusal queues nothing, exactly like the `prevalidate` above.
+  const prepared = action.prepareDraft?.(deps, ctx, input);
+  if (prepared !== undefined && !isDraftPrep(prepared) && prepared.ok === false) {
+    record(deps, workspaceId, {
+      verb: action.name, kind: action.kind, input, mode: 'deny', reason: 'not_draftable',
+      dialCapability, result: prepared, durationMs: Date.now() - started,
+    });
+    return prepared;
+  }
+  const staging = isDraftPrep(prepared) ? prepared : undefined;
+  // Inside `store.tx` (M3, critic R1 F1): a draft is a row too, and a pending Vorschlag queued
+  // into a book a newer TILL migrated meanwhile would be replayed by the wrong build later.
+  let drafted: Result;
+  try {
+    drafted = ctx.store.tx(() => {
+      const staged = staging?.stage();
+      if (staged !== undefined && 'refusal' in staged) throw new DraftStagingRefused(staged.refusal, true);
+      const queued = enqueueDraftedAction(ctx, {
+        actionTool: action.name,
+        payload: staged?.payload ?? input,
+        dialCapability,
+        // D177 (critic D177-C1): a draft supersedes older Vorschläge only after the verb's own full
+        // pre-draft screen passed (the `prevalidate` above answered nothing).
+        screened: action.prevalidate !== undefined,
+      });
+      // A draft that did not queue keeps nothing it staged: the throw rolls the staging back.
+      if (staging !== undefined && !queued.ok) throw new DraftStagingRefused(queued, false);
+      staging?.settle(queued);
+      // R1: the receipt holders the act would meet, stored on a FRESH Vorschlag for its card (the
+      // attach staging's, the door's own, and a refusal's that turned the call into this draft).
+      if (queued.ok && queued.replayed !== true && typeof queued.actionId === 'string') {
+        addVorschlagHolders(ctx, queued.actionId, [...(staging?.holders?.() ?? []), ...draftReceiptHolders(ctx, action.name, staged?.payload ?? input), ...metHolders]);
+      }
+      return queued;
+    });
+  } catch (e) {
+    if (e instanceof DraftStagingRefused) {
+      if (e.recorded) {
+        record(deps, workspaceId, {
+          verb: action.name, kind: action.kind, input, mode: 'deny', reason: 'not_draftable',
+          dialCapability, result: e.result, durationMs: Date.now() - started,
+        });
+      }
+      return e.result;
+    }
+    if (e instanceof SchemaNewerThanRuntimeError) return err(SCHEMA_NEWER_THAN_RUNTIME, { action: action.name, ...refusalFields(e) });
+    // D12 (critic R2-2): the draft's transaction waited out the busy timeout behind the other
+    // process's write lock. This runs outside the registry's `guarded()`, so without this the
+    // SQLITE_BUSY escaped `callTool` as a JSON-RPC internal error and `handleRest` as a bare 500;
+    // it is the same retryable `store_busy` every verb answers, and nothing was queued.
+    if (isBusyError(e)) {
+      deps.diagnostics?.record({
+        kind: 'verb_error',
+        at: new Date().toISOString(),
+        code: 'store_busy',
+        action: action.name,
+        error: e,
+      });
+      const message = e instanceof Error ? e.message : String(e);
+      // `partial: false`: the seam wrote nothing of this call before the draft (see `guarded`).
+      return err('store_busy', { action: action.name, retryable: true, partial: false, message });
+    }
+    throw e;
+  }
+  if (!drafted.ok) return drafted;
+  const actionId = typeof drafted.actionId === 'string' ? drafted.actionId : undefined;
+  const replayed = drafted.replayed === true;
+  // F-08 (c): a same-key replay of a draft the human ALREADY APPROVED answers with the verb's own
+  // stored result, which is exactly what the verb's idempotency would answer had the call executed:
+  // one object, one result, recorded as an execute row that points at that object (`entityRef`)
+  // and at the draft it settled through, with a reason that says nothing ran again.
+  if (replayed && drafted.status === 'executed' && typeof drafted.result === 'object' && drafted.result !== null) {
+    const stored = drafted.result as Result;
+    record(deps, workspaceId, {
+      verb: action.name, kind: action.kind, input, mode: 'execute', reason: 'idempotent_replay',
+      dialCapability, result: stored, durationMs: Date.now() - started, agentActionId: actionId,
+    });
+    return stored;
+  }
+  // A fresh draft, or a replay of a draft still pending (or already rejected): the SAME Vorschlag,
+  // named by the id the key minted the first time, never a second one (J3.10).
+  const result = ok({
+    drafted: true,
+    actionId: drafted.actionId,
+    status: typeof drafted.status === 'string' ? drafted.status : 'pending',
+    dialCapability,
+    reason: decision.reason,
+    replayed,
+    approveAt: pointerFor(deps),
+    // D177 (critic D177-C3): the drafting agent learns which of its Vorschläge this one replaced.
+    ...(Array.isArray(drafted.supersededActionIds) ? { supersededActionIds: drafted.supersededActionIds } : {}),
+  });
+  record(deps, workspaceId, {
+    verb: action.name, kind: action.kind, input, mode: 'draft', reason: replayed ? 'replayed' : decision.reason,
+    dialCapability, result, durationMs: Date.now() - started,
+    agentActionId: actionId,
+  });
+  return result;
 }

@@ -2004,6 +2004,34 @@
   font-weight: 600;
 }
 
+/* N03 (D183): a rule's track record under its name, and the health flag that opens its form. */
+.bank-rules__stats {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-rules__health {
+  margin: 0;
+  justify-self: start;
+  color: var(--t-warn);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+/* N03: "Testen" sits beside Speichern; its answer is one line under them. */
+.bank-rule-form__tested {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-rule-form__tested:empty {
+  display: none;
+}
+
 .bank-rules__editor {
   padding: var(--t-space-1) 0;
 }
@@ -3354,4 +3382,79 @@ textarea.field.bank-panel__text-input {
     white-space: nowrap;
     text-overflow: ellipsis;
   }
+}
+
+/* N00 (US-N00.4): the counterparty's house rule under the facts card: plain text, no box, one quiet link. */
+.bank-house-rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) 0;
+}
+
+.bank-house-rule__title {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+  margin: 0;
+}
+
+.bank-house-rule__text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.bank-house-rule__link {
+  align-self: flex-start;
+}
+
+/* N04: a rule's autopilot chip and switch, and a Vorlage's "Wiederholen" section. */
+.bank-rules__auto {
+  font-size: var(--t-font-sm, inherit);
+  color: var(--t-text-dim);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: 0 var(--t-space-1);
+  white-space: nowrap;
+}
+.bank-rules__autoswitch,
+.bank-rules__schedule {
+  display: grid;
+  gap: var(--t-space-1);
+  margin-block-end: var(--t-space-2);
+}
+.bank-rules__autoswitch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+.bank-rules__autoswitch-hint,
+.bank-rules__schedule-next {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+.bank-rules__schedule-title {
+  margin: 0;
+  font-size: var(--t-font-md, inherit);
+}
+.bank-rules__schedule-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  align-items: end;
+}
+.bank-rules__schedule-form label {
+  display: grid;
+  gap: var(--t-space-1);
+}
+.bank-rules__schedule-mode {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  gap: var(--t-space-2);
+}
+.bank-rules__schedule-acts {
+  display: flex;
+  gap: var(--t-space-1);
 }

@@ -80,9 +80,10 @@ export const SELF_CORRECTABLE: readonly string[] = [
 
 /**
  * D161: the upload sessions that lapse by themselves (an upload nobody finishes expires and leaves no
- * file), the only writes that carry an explicit empty way back.
+ * file), the only writes that carry an explicit empty way back. N02 (D183): a drop link is the same shape:
+ * nobody redeeming it lets it expire (`files.drop_link_hours`), and it never stored a file.
  */
-export const LAPSES_BY_ITSELF: readonly string[] = ['files_upload_begin', 'files_upload_chunk'];
+export const LAPSES_BY_ITSELF: readonly string[] = ['files_upload_begin', 'files_upload_chunk', 'files_drop_link'];
 
 /**
  * Where the reviewed map contradicts a D161 ruling, what it said and why the entry here differs. The parity
@@ -202,6 +203,8 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   suggest_bank_lines: ['book_bank_line', 'ignore_bank_line'],
   set_bank_standard: ['clear_bank_standard', 'self'],
   clear_bank_standard: ['set_bank_standard'],
+  // N03 (D183): a mined Vorschlag is declined by rejecting it (and never offered again).
+  mine_rules: ['reject_drafted_action'],
   set_creditor_bank_profile: ['self'],
   create_payment_batch: ['discard_payment_batch'],
   generate_pain001: ['discard_payment_batch'],
@@ -470,6 +473,7 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   refresh_plugin_compat: ['disable_plugin'],
   files_upload_begin: [],
   files_upload_chunk: [],
+  files_drop_link: [],
   files_upload_commit: ['files_delete'],
   files_upload: ['files_delete'],
   files_update: ['self'],
@@ -492,6 +496,20 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   // to the default; a reset goes back by setting the value it removed.
   prefs_set: ['self', 'prefs_reset'],
   prefs_reset: ['prefs_set'],
+  // N00: a note goes back by setting its previous text (the history names it) or by archiving it; an
+  // archive goes back by setting the note again on its id, which brings it back active.
+  hausbuch_note_set: ['self', 'hausbuch_note_archive'],
+  hausbuch_note_archive: ['hausbuch_note_set'],
+  // N01: a batch's way back is its items' way back (every item is one single call).
+  book_bank_lines: ['reopen_bank_line', 'reverse_payment'],
+  post_entries: ['reverse_entry'],
+  // N04: a grant goes back by switching it off; switching off goes back by a person granting it again (once
+  // the rule earns it anew). A schedule goes back by setting the previous one again or by clearing it; a
+  // cleared schedule goes back by setting it again.
+  grant_rule_autobook: ['revoke_rule_autobook'],
+  revoke_rule_autobook: ['grant_rule_autobook'],
+  set_vorlage_schedule: ['self', 'clear_vorlage_schedule'],
+  clear_vorlage_schedule: ['set_vorlage_schedule'],
 };
 
 /** The registry facts `wayBackProblems` needs about one verb (an `ActionDef` satisfies it). */

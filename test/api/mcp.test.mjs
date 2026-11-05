@@ -1,11 +1,11 @@
 // Smoke: the MCP server wires over the registry without throwing, callTool serialises a verb Result
-// as a JSON content block, and read/write tools carry the right MCP annotations.
+// as a JSON content block, and read/write tools carry the right MCP annotations and a human title.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildMcpServer, makeApiDeps, callTool, startMcpServer } from '../../dist/api/mcp.js';
-import { ACTIONS } from '../../dist/api/registry.js';
+import { buildMcpServer, makeApiDeps, callTool, startMcpServer, toolFor, toolTitle, TOOL_TITLE_WORDS, TOOL_TITLE_WHOLE } from '../../dist/api/mcp.js';
+import { ACTIONS, getAction } from '../../dist/api/registry.js';
 
 test('makeApiDeps opens a store and buildMcpServer wires without throwing', () => {
   const { deps, store } = makeApiDeps();
@@ -45,16 +45,45 @@ test('a verb rejection is returned as content, not as an MCP protocol error', ()
   store.close();
 });
 
-test('read tools would advertise readOnlyHint; write tools would not', () => {
-  // Mirror the tool-list mapping the ListTools handler uses, to assert the annotation policy.
-  const tools = ACTIONS.map((a) => ({
-    name: a.name,
-    ...(a.kind === 'read' ? { annotations: { readOnlyHint: true } } : {}),
-  }));
-  const getEntry = tools.find((t) => t.name === 'get_entry');
-  const postEntry = tools.find((t) => t.name === 'post_entry');
+test('read tools advertise readOnlyHint; write tools do not (the real toolFor, not a mirror of it)', () => {
+  const getEntry = /** @type {any} */ (toolFor(/** @type {any} */ (getAction('get_entry'))));
+  const postEntry = /** @type {any} */ (toolFor(/** @type {any} */ (getAction('post_entry'))));
   assert.equal(getEntry.annotations.readOnlyHint, true);
-  assert.equal(postEntry.annotations, undefined);
+  assert.notEqual(postEntry.annotations.readOnlyHint, true);
+  assert.equal(typeof postEntry.annotations.destructiveHint, 'boolean', 'a write states its destructiveHint');
+});
+
+test('every advertised tool carries a non-empty human title, the same in Tool.title and annotations.title, and no two tools share one', () => {
+  const seen = new Map();
+  for (const a of ACTIONS) {
+    const tool = /** @type {any} */ (toolFor(a));
+    assert.equal(typeof tool.title, 'string', `${a.name}: Tool.title`);
+    assert.ok(tool.title.trim().length > 0, `${a.name}: a non-empty title`);
+    assert.equal(tool.title, tool.title.trim(), `${a.name}: no stray whitespace`);
+    assert.doesNotMatch(tool.title, /_/, `${a.name}: the title is words, not the snake_case name`);
+    assert.equal(tool.annotations.title, tool.title, `${a.name}: annotations.title matches Tool.title`);
+    assert.equal(tool.title, toolTitle(a.name), `${a.name}: derived from the name, never hand-written`);
+    assert.ok(
+      tool.annotations.readOnlyHint === true || typeof tool.annotations.destructiveHint === 'boolean',
+      `${a.name}: readOnlyHint or destructiveHint, as the Claude directory requires`,
+    );
+    assert.equal(seen.get(tool.title), undefined, `${a.name}: title "${tool.title}" already used by ${seen.get(tool.title)}`);
+    seen.set(tool.title, a.name);
+  }
+});
+
+test('toolTitle: sentence case over the verb words, acronyms and standards in their own spelling', () => {
+  assert.equal(toolTitle('post_entry'), 'Post entry');
+  assert.equal(toolTitle('vat_export_ech0217'), 'VAT export eCH-0217');
+  assert.equal(toolTitle('generate_pain001'), 'Generate pain.001');
+  assert.equal(toolTitle('get_ebill_config'), 'Get eBill config');
+  assert.equal(toolTitle('import_camt'), 'Import camt');
+  assert.equal(toolTitle('review_bank_txn'), 'Review bank transaction');
+  assert.equal(toolTitle('whoami'), 'Who am I');
+  // Every mapped word is a word some verb really uses, so the map cannot rot into dead entries.
+  const words = new Set(ACTIONS.flatMap((a) => a.name.split('_')));
+  for (const w of Object.keys(TOOL_TITLE_WORDS)) assert.ok(words.has(w), `TOOL_TITLE_WORDS.${w}: no verb uses it`);
+  for (const n of Object.keys(TOOL_TITLE_WHOLE)) assert.ok(getAction(n) !== undefined, `TOOL_TITLE_WHOLE.${n}: not a verb`);
 });
 
 test('startMcpServer is exported as a function (the bin entry point)', () => {

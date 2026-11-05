@@ -29,6 +29,7 @@ import { approvingActionIds } from '../agent/approving.js';
 import { appendDraftHistory } from '../agent/draftHistory.js';
 import type { CamtClassification, CamtCreditDebit } from './camt.js';
 import { duplicateDecisionPending } from './statementDedupe.js';
+import { bankLineReceiptRefusal } from '../files/receiptGuard.js';
 
 /**
  * A refusal found INSIDE a memoised write, thrown so nothing commits and nothing is memoised, and unwrapped
@@ -129,6 +130,12 @@ export interface ActiveLink {
   ruleId: string | null;
   /** D178 E3: the contact a `contact` target booked the line to (`contact_id`), or null. */
   contactId: string | null;
+  /** N03: the Buchungsregel whose proposal stood on the line when it was booked, or null (`proposed_rule_id`). */
+  proposedRuleId: string | null;
+  /** N03: whether that booking differed from the rule (null exactly when `proposedRuleId` is null). */
+  ruleChanged: boolean | null;
+  /** N04: the channel of an automatic booking (`autobook:<ruleId>`), null for every other decision. */
+  channel: string | null;
 }
 
 /** A line's state and, when it is decided, the decision behind it. */
@@ -192,6 +199,9 @@ interface ActiveRow {
   difference_minor: number | null;
   rule_id: string | null;
   contact_id: string | null;
+  proposed_rule_id: string | null;
+  rule_changed: number | null;
+  channel: string | null;
 }
 
 /**
@@ -204,7 +214,7 @@ const ACTIVE_LINK_SQL = `
   SELECT l.id, l.kind, l.created_by, l.created_at,
          d.state, d.target_kind, d.entry_id, d.payment_id, d.journal_line_id,
          d.ignore_reason, d.note, d.remainder_mode, d.remainder_minor, d.accept_difference,
-         d.difference_minor, d.rule_id, d.contact_id
+         d.difference_minor, d.rule_id, d.contact_id, d.proposed_rule_id, d.rule_changed, d.channel
     FROM bank_line_decision d
     JOIN bank_txn_link l ON l.id = d.link_id
    WHERE d.workspace_id = ? AND d.bank_txn_id = ? AND d.superseded_at IS NULL
@@ -249,6 +259,9 @@ export function readActiveLink(ctx: WorkspaceContext, bankTxnId: string): Active
     createdAt: row.created_at,
     ruleId: row.rule_id,
     contactId: row.contact_id,
+    proposedRuleId: row.proposed_rule_id,
+    ruleChanged: row.rule_changed === null ? null : row.rule_changed === 1,
+    channel: row.channel,
   };
 }
 
@@ -382,7 +395,15 @@ export function writeLineLink(ctx: WorkspaceContext, input: WriteLineLinkInput):
   // line while it was open becomes a retained voucher the moment the line is booked or matched, counted
   // from the later of the line's date and its claimed entries' dates, in this same transaction. A Beleg
   // attached afterwards derives in `linkFile`. Nothing here, and nothing on reopen, lowers a floor.
-  if (input.state === 'booked' || input.state === 'matched') deriveStatutoryOnPost(ctx, 'bank_txn', input.bankTxnId);
+  if (input.state === 'booked' || input.state === 'matched') {
+    // R1 (N02, `../files/receiptGuard.ts`), THE LIVENESS TRANSITION: a line becoming live judges every
+    // receipt it already holds, after its decision row exists so the decision's own settlement (E1: the
+    // payment and what it pays, the entry it links, the bills of its payment run) is no conflict. A
+    // refusal rolls the whole decision back.
+    const refused = bankLineReceiptRefusal(ctx, input.bankTxnId);
+    if (refused !== null) throw new BankAbort(refused);
+    deriveStatutoryOnPost(ctx, 'bank_txn', input.bankTxnId);
+  }
   // D177 (A39 §16.1, critic D177-C6): the line is DECIDED, so no pending Vorschlag for it can still run.
   resolveLineDraftsOnDecision(ctx, input.bankTxnId, linkId);
   return linkId;
@@ -533,6 +554,75 @@ export function bankLegIdsFor(ctx: WorkspaceContext, row: Pick<BankTxnRow, 'bank
   return ledger === undefined ? [] : bankLegsOf(ctx, ledger, entryIds).map((l) => l.lineId);
 }
 
+// --- N03 (D183): the PROVENANCE of a booking ----------------------------------------------------------
+
+/**
+ * Which Buchungsregel proposed a booking, and whether the person changed it. `ruleChanged` is null exactly
+ * when `proposedRuleId` is null. Computed by `ruleStats.ts` (`computeRuleProvenance`) BEFORE the booking
+ * writes anything: once the booking's own entry sits on the bank ledger, rung (a) of the ladder would
+ * propose matching it, so a read after the fact would answer the booking, not the proposal.
+ */
+export interface DecisionProvenance {
+  proposedRuleId: string | null;
+  ruleChanged: boolean | null;
+}
+
+/** The provenance bound for one line while its booking runs (`withDecisionProvenance`), or null. */
+let boundProvenance: { workspaceId: string; bankTxnId: string; value: DecisionProvenance } | null = null;
+
+/**
+ * N03: run `body`, a booking of ONE line, with its provenance bound, so the ONE decision writer
+ * (`writeLineLink`, through `insertDecision`) stamps it on the decision row AS IT IS INSERTED. The row is
+ * immutable after the insert (`bank_line_decision_supersede_only`, and `..._provenance_frozen` for these
+ * two columns), so the insert is the only moment. THE CHOKEPOINT, NOT AN ENUMERATION: `performBooking`
+ * dispatches to eight booking paths, and binding here covers every one of them (and any future one) without
+ * threading a value through each. Only a decision for THIS workspace and THIS line takes it; anything else
+ * written meanwhile reads NULL. Synchronous and scoped (restored on return and on a throw), so it can never
+ * leak into the next booking. A dry run binds nothing: what it writes is rolled back anyway.
+ */
+export function withDecisionProvenance<T>(ctx: WorkspaceContext, bankTxnId: string, value: DecisionProvenance, body: () => T): T {
+  const outer = boundProvenance;
+  boundProvenance = { workspaceId: ctx.workspaceId, bankTxnId, value };
+  try {
+    return body();
+  } finally {
+    boundProvenance = outer;
+  }
+}
+
+/** N04: the channel bound for one line while an automatic booking of it runs (`withDecisionChannel`), or null. */
+let boundChannel: { workspaceId: string; bankTxnId: string; channel: string } | null = null;
+
+/**
+ * N04 (D183): run `body`, an AUTOMATIC booking of ONE line, with its channel (`autobook:<ruleId>`) bound, so
+ * the ONE decision writer stamps it on the decision row as it is inserted: the entry never reads as manual
+ * (OR 957a: every automatic booking names its rule). The `withDecisionProvenance` chokepoint, scoped the same
+ * way (this workspace, this line, restored on return and on a throw). Every booking outside it writes NULL.
+ */
+export function withDecisionChannel<T>(ctx: WorkspaceContext, bankTxnId: string, channel: string, body: () => T): T {
+  const outer = boundChannel;
+  boundChannel = { workspaceId: ctx.workspaceId, bankTxnId, channel };
+  try {
+    return body();
+  } finally {
+    boundChannel = outer;
+  }
+}
+
+/** The channel bound for this decision's line, or null (a manual booking). */
+function channelFor(ctx: WorkspaceContext, bankTxnId: string): string | null {
+  const bound = boundChannel;
+  if (bound === null || bound.workspaceId !== ctx.workspaceId || bound.bankTxnId !== bankTxnId) return null;
+  return bound.channel;
+}
+
+/** The provenance bound for this decision's line, or the unknown pair. */
+function provenanceFor(ctx: WorkspaceContext, bankTxnId: string): DecisionProvenance {
+  const bound = boundProvenance;
+  if (bound === null || bound.workspaceId !== ctx.workspaceId || bound.bankTxnId !== bankTxnId) return { proposedRuleId: null, ruleChanged: null };
+  return bound.value;
+}
+
 function insertDecision(
   ctx: WorkspaceContext,
   linkId: string,
@@ -540,13 +630,21 @@ function insertDecision(
   createdAt: string,
   superseded: { at: string; by: string; reason: string } | null,
 ): void {
+  // N03: an ignore is no booking: its rule use is not counted (spec N03 §2), so it never carries provenance.
+  const provenance: DecisionProvenance =
+    input.state === 'booked' || input.state === 'matched' ? provenanceFor(ctx, input.bankTxnId) : { proposedRuleId: null, ruleChanged: null };
+  const proposedRuleId = provenance.proposedRuleId;
+  const ruleChanged = proposedRuleId === null || provenance.ruleChanged === null ? null : provenance.ruleChanged ? 1 : 0;
+  // N04: only a booking carries a channel (an ignore is no booking).
+  const channel = input.state === 'booked' || input.state === 'matched' ? channelFor(ctx, input.bankTxnId) : null;
   ctx.store.db
     .prepare(
       `INSERT INTO bank_line_decision
          (link_id, workspace_id, bank_txn_id, state, target_kind, entry_id, payment_id, journal_line_id,
           ignore_reason, note, remainder_mode, remainder_minor, accept_difference, difference_minor,
-          created_by, created_at, superseded_at, superseded_by, supersede_reason, rule_id, contact_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          created_by, created_at, superseded_at, superseded_by, supersede_reason, rule_id, contact_id,
+          proposed_rule_id, rule_changed, channel)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       linkId,
@@ -570,6 +668,9 @@ function insertDecision(
       superseded?.reason ?? null,
       input.ruleId ?? null,
       input.contactId ?? null,
+      ruleChanged === null ? null : proposedRuleId,
+      ruleChanged,
+      channel,
     );
 }
 

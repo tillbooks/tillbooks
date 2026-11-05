@@ -103,6 +103,8 @@ export function signActions(h: SignActionHelpers): readonly ActionDef[] {
           originalSha256: STR,
           mime: STR,
           idempotencyKey: STR,
+          bookAgain: BOOL,
+          overrideReason: STR,
         },
         ['signRequestId', 'signedContentBase64', 'originalSha256'],
       ),

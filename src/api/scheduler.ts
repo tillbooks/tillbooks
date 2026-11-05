@@ -34,6 +34,26 @@
  * only and on the denylist. The probe never pins, confirms, resends a leg or changes trust; it runs as
  * the same live-checked seated actor as the fetch. The rules for when live in `activationCheck.ts`.
  *
+ * THE THIRD BRANCH: THE DAILY RULE MINER (N03, D183). Once a Swiss day per live workspace (the first tick
+ * after `till up` starts is the catch-up), the tick runs N03's miner (`mineRules`), which groups the
+ * lookback's bank bookings and drafts a `set_bank_standard` Vorschlag per pattern. Like the activation
+ * check it is an ENGINE call, not a registry verb, and it runs as `system`: A24 would refuse `system` in a
+ * provisioned workspace, and the miner writes no rule, posts nothing and only drafts Vorschläge a person
+ * approves (drafted as `system` whoever runs it). Its own setting (`rules.miner` = `off`) turns it off;
+ * a failure is a diagnostics entry and the next day decides again. Which day ran is held per process: a
+ * restart mines once more, which drafts nothing twice (each Vorschlag is keyed by its pattern).
+ *
+ * THE AUTOPILOT STEPS (N04, D183). After the miner, three engine steps per live workspace, each item in its
+ * own transaction, none of them a G01 rule (their verbs are on the denylist) and none of them inside an import:
+ *  - `autobook`: a Buchungsregel a PERSON granted books its new lines through the registry's own
+ *    `book_bank_line`, AS THAT PERSON, whose `post` right is checked live (a governed or demoted granter
+ *    suspends the grant); the offers of "künftig automatisch" are drafted here as `system`;
+ *  - `dauerbuchungen`: a Vorlage schedule proposes (as `system`) or posts (through `post_entry`, as the person
+ *    who set it, `post` checked live, else proposed) the periods that are due;
+ *  - `recurring_invoices`: A12's due run as the owner seat (`studio`, its `issue` right checked live, never a
+ *    governed seat), drafts only under `recurring.auto_generate` = `draft` (the default).
+ * A failure is a diagnostics entry and never stops the next workspace; the next tick decides again.
+ *
  * `run_due_automations` NEVER THROWS PAST HERE. It always RETURNS a Result (P9), and the shared
  * dispatch's throw guard converts any escape into one, so a bad result on one workspace cannot stop
  * the tick reaching the next. The scheduler ignores the per-workspace Result on purpose: G01's own
@@ -41,12 +61,28 @@
  */
 
 import type { ApiDeps } from './registry.js';
-import { getAction } from './registry.js';
+import { getAction, wiredContext } from './registry.js';
+import { runAutobookStep } from '../core/banking/autobook.js';
+import { runDauerbuchungenStep } from '../core/ledger/vorlageSchedule.js';
+import { runDueRecurring } from '../core/recurring/index.js';
+import type { ActionInvoker } from '../core/automation/index.js';
 import { setSchedulerStatus } from './runtime-state.js';
 import { makeContext } from '../core/context.js';
 import { err } from '../core/result.js';
 import type { Result } from '../core/result.js';
 import type { ActivationCheckReport } from '../core/banking/ebics/index.js';
+import { capabilityFor, isGovernedSeat } from '../core/access/index.js';
+import {
+  belegeingangFolder,
+  existingFolder,
+  scanBelegeingang,
+  sweepPendingFiles,
+  pruneDropLinks,
+  type BelegeingangCapture,
+  type BelegeingangReport,
+} from '../core/files/index.js';
+import { getSetting } from '../core/settings/index.js';
+import { mineRules } from '../core/banking/index.js';
 import {
   activationCheckConnections,
   activationCheckDecision,
@@ -60,6 +96,7 @@ import {
   autoSyncDecision,
   isRetryableAutoOutcome,
   recordAutoSyncAttempt,
+  zurichParts,
 } from '../core/banking/ebics/index.js';
 
 /** The default tick interval: one minute. */
@@ -88,9 +125,23 @@ export type BankAutoSyncReport =
   | { workspaceId: string; connectionId: string; skipped: 'sync_in_progress' }
   | { workspaceId: string; connectionId: string; activationCheck: ActivationCheckReport };
 
+/**
+ * N02 (D183): the seat the Belegeingang captures as: the owner seat (D13's `studio`, the D142 fallback),
+ * with `manage_files` checked LIVE on this tick, never a governed seat. Null when it does not hold it.
+ */
+export const BELEGEINGANG_SEAT = 'studio';
+
 export interface Scheduler {
   /** Run exactly one tick now. Returns how many workspaces it drove `run_due_automations` for. */
   tickOnce(asOf?: string): number;
+  /** N04 (D183): the three autopilot steps once, for one workspace (the tick runs them for every one). */
+  autopilotTickOnce(workspaceId: string): void;
+  /**
+   * N02 (D183): the Belegeingang step and the pending-file sweep, once, for every live workspace (the
+   * tick runs it after G01). Only on a host holding the local-file grant (`till up` in local mode);
+   * elsewhere the sweep runs alone.
+   */
+  belegeingangTickOnce(): BelegeingangReport[];
   /**
    * D142: run the daily bank fetch branch once, awaited (the tick starts it without waiting; one runs
    * at a time). Resolves with what each due connection's attempt did.
@@ -119,7 +170,20 @@ export interface SchedulerOptions {
   now?: () => Date;
   /** D142: turn the daily bank fetch branch off (a suite that only drives G01). Defaults to on. */
   bankAutoSync?: boolean;
+  /** N02: turn the Belegeingang step and the pending sweep off (a suite that only drives G01). Defaults to on. */
+  belegeingang?: boolean;
+  /** N03: turn the daily rule miner off (a suite that only drives G01). Defaults to on. */
+  ruleMiner?: boolean;
+  /** N04: turn the autobook step off (a suite that only drives G01). Defaults to on. */
+  autobook?: boolean;
+  /** N04: turn the Dauerbuchungen step off. Defaults to on. */
+  dauerbuchungen?: boolean;
+  /** N04: turn the recurring-invoices step off. Defaults to on. */
+  recurringInvoices?: boolean;
 }
+
+/** N04 (D183): the seat the recurring-invoices step runs as: the owner seat, the D142 fallback. */
+export const RECURRING_SEAT = 'studio';
 
 /** Every non-archived workspace id, the default population a tick drives. */
 function liveWorkspaceIds(deps: ApiDeps): string[] {
@@ -148,6 +212,74 @@ export function createScheduler(deps: ApiDeps, opts: SchedulerOptions = {}): Sch
 
   let timer: ReturnType<typeof setInterval> | undefined;
   let bankTick: Promise<BankAutoSyncReport[]> | undefined;
+  /** N03: the Swiss day each workspace's rule miner last ran, in this process. */
+  const minedOn = new Map<string, string>();
+
+  /** N03: run the rule miner for one workspace, once a Swiss day, as `system` (see the header). */
+  function mineDaily(workspaceId: string): void {
+    if (opts.ruleMiner === false) return;
+    const day = zurichParts(now().toISOString()).date;
+    if (minedOn.get(workspaceId) === day) return;
+    minedOn.set(workspaceId, day);
+    try {
+      const ctx = makeContext(deps.store, { workspaceId, actor: 'system', clock: deps.clock, ids: deps.ids });
+      ctx.store.tx(() => mineRules(ctx));
+    } catch (e) {
+      // The miner only drafts proposals: a failure is a diagnostics entry, and tomorrow decides again.
+      deps.diagnostics?.record({ kind: 'verb_error', at: new Date().toISOString(), code: 'rule_miner_failed', action: 'mine_rules', error: e });
+    }
+  }
+
+  /** N04: a registry write, through the shared dispatch, as `actor` (A24 resolved against them, live). */
+  function registryWrite(name: string): (actor: string, input: Record<string, unknown>) => Result {
+    return (actor, input) => {
+      const action = getAction(name);
+      if (action === undefined || action.kind !== 'write') return err('unknown_action_tool', { tool: name });
+      return action.run({ ...deps, actor }, input);
+    };
+  }
+
+  /** N04: does `actor` hold `post` in `workspaceId` now, and is it a person (never a governed seat)? */
+  function holdsPost(workspaceId: string): (actor: string) => boolean {
+    return (actor) => !isGovernedSeat(deps.store, actor) && capabilityFor(deps.store, workspaceId, actor, 'post');
+  }
+
+  function stepFailed(code: string, action: string, e: unknown): void {
+    deps.diagnostics?.record({ kind: 'verb_error', at: new Date().toISOString(), code, action, error: e });
+  }
+
+  /** N04 (D183): the three autopilot steps for one workspace (see the header). */
+  function autopilotSteps(workspaceId: string): void {
+    const system = (): ReturnType<typeof wiredContext> => wiredContext({ ...deps, actor: 'system' }, workspaceId);
+    if (opts.autobook !== false) {
+      try {
+        runAutobookStep(system(), { book: registryWrite('book_bank_line'), holdsPost: holdsPost(workspaceId) });
+      } catch (e) {
+        stepFailed('autobook_step_failed', 'autobook', e);
+      }
+    }
+    if (opts.dauerbuchungen !== false) {
+      try {
+        runDauerbuchungenStep(system(), { post: registryWrite('post_entry'), holdsPost: holdsPost(workspaceId) }, (_scheduleId, e) =>
+          stepFailed('dauerbuchung_failed', 'dauerbuchungen', e),
+        );
+      } catch (e) {
+        stepFailed('dauerbuchungen_step_failed', 'dauerbuchungen', e);
+      }
+    }
+    if (opts.recurringInvoices !== false) {
+      try {
+        const mode = getSetting<string>(system(), 'recurring.auto_generate');
+        // The owner seat, its right to run the due invoices checked live; never a governed seat.
+        if (mode !== 'off' && !isGovernedSeat(deps.store, RECURRING_SEAT) && capabilityFor(deps.store, workspaceId, RECURRING_SEAT, 'issue')) {
+          const invoke: ActionInvoker = (tool, input, asActor) => registryWrite(tool)(asActor, input);
+          runDueRecurring(wiredContext({ ...deps, actor: RECURRING_SEAT }, workspaceId), invoke, { issue: mode === 'honour_auto_issue' ? 'schedule' : 'never' });
+        }
+      } catch (e) {
+        stepFailed('recurring_step_failed', 'run_due_recurring', e);
+      }
+    }
+  }
 
   async function bankTickOnce(): Promise<BankAutoSyncReport[]> {
     const reports: BankAutoSyncReport[] = [];
@@ -270,9 +402,61 @@ export function createScheduler(deps: ApiDeps, opts: SchedulerOptions = {}): Sch
       });
   }
 
+  /**
+   * N02 (D183): sweep the pending files of decided Vorschläge, then scan each workspace's Belegeingang as
+   * the seated owner. A folder two live workspaces name is skipped for both. A failure in one workspace is
+   * a diagnostics entry and never stops the next.
+   */
+  function belegeingangTickOnce(): BelegeingangReport[] {
+    const reports: BelegeingangReport[] = [];
+    const ids = listWorkspaceIds(deps);
+    const ctxOf = (workspaceId: string, actor: string) => makeContext(deps.store, { workspaceId, actor, clock: deps.clock, ids: deps.ids });
+    for (const workspaceId of ids) {
+      try {
+        const swept = sweepPendingFiles(ctxOf(workspaceId, 'system'));
+        for (const skipped of swept.skipped) {
+          deps.diagnostics?.record({ kind: 'verb_error', at: new Date().toISOString(), code: 'pending_file_sweep_skipped', action: 'pending_file_sweep', error: new Error(`${skipped.fileId}: ${skipped.reason}`) });
+        }
+        // Critic F3/F7: expired drop links lose their clear token, and old link rows are pruned.
+        pruneDropLinks(ctxOf(workspaceId, 'system'));
+      } catch (e) {
+        deps.diagnostics?.record({ kind: 'verb_error', at: new Date().toISOString(), code: 'pending_file_sweep_failed', action: 'pending_file_sweep', error: e });
+      }
+    }
+    if (deps.localFiles === undefined) return reports;
+    // Which real folder each workspace scans, so a folder two books name is never fed into either.
+    const named = new Map<string, number>();
+    for (const workspaceId of ids) {
+      const ctx = ctxOf(workspaceId, 'system');
+      if (getSetting<string>(ctx, 'files.belegeingang_scan') !== 'on') continue;
+      const real = existingFolder(belegeingangFolder(ctx, deps.localFiles));
+      if (real !== null) named.set(real, (named.get(real) ?? 0) + 1);
+    }
+    const shared = new Set([...named].filter(([, n]) => n > 1).map(([folder]) => folder));
+    const action = getAction('capture_document');
+    for (const workspaceId of ids) {
+      try {
+        const seated = capabilityFor(deps.store, workspaceId, BELEGEINGANG_SEAT, 'manage_files') && !isGovernedSeat(deps.store, BELEGEINGANG_SEAT);
+        const capture: BelegeingangCapture | null =
+          seated && action !== undefined
+            ? (input) => action.run({ ...deps, actor: BELEGEINGANG_SEAT }, { workspaceId, ...input })
+            : null;
+        reports.push(scanBelegeingang(ctxOf(workspaceId, BELEGEINGANG_SEAT), { grant: deps.localFiles, capture, sharedFolders: shared }));
+      } catch (e) {
+        deps.diagnostics?.record({ kind: 'verb_error', at: new Date().toISOString(), code: 'belegeingang_scan_failed', action: 'belegeingang', error: e });
+      }
+    }
+    return reports;
+  }
+
   function tickOnce(asOf?: string): number {
     const ids = listWorkspaceIds(deps);
     for (const id of ids) runDue(id, asOf);
+    if (opts.belegeingang !== false) belegeingangTickOnce();
+    // N03: the daily rule miner, after the G01 cadences of the tick.
+    for (const id of ids) mineDaily(id);
+    // N04: the autopilot steps (autobook, Dauerbuchungen, recurring invoices), after the miner.
+    for (const id of ids) autopilotSteps(id);
     // D142: the daily bank fetch, started and not awaited: it runs in the sync worker while the tick
     // returns, and a fetch still running when the next tick fires is not started twice.
     startBankTick();
@@ -287,6 +471,8 @@ export function createScheduler(deps: ApiDeps, opts: SchedulerOptions = {}): Sch
 
   return {
     tickOnce,
+    autopilotTickOnce: autopilotSteps,
+    belegeingangTickOnce,
     bankTickOnce,
     start() {
       if (timer !== undefined) return;

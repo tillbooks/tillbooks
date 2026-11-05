@@ -12,6 +12,9 @@ import assert from 'node:assert/strict';
 
 import { getAction } from '../../dist/api/registry.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
+import { makeContext } from '../../dist/core/context.js';
+import { ledgerPorts } from '../../dist/core/ledger/index.js';
+import { provisionRelease } from '../../dist/core/accruals/provision.js';
 
 const call = (deps, workspaceId, name, input) => getAction(name).run(deps, { workspaceId, ...input });
 
@@ -282,12 +285,22 @@ test('a release key already bound to ANOTHER provision is refused by name before
 
   const clash = call(deps, ws, 'provision_release', { provisionId: b, date: '2027-03-15', amountMinor: 50000, targetAccount: '6800', idempotencyKey: 'rel-shared' });
   assert.equal(clash.ok, false);
-  assert.equal(clash.error, 'invalid_input', JSON.stringify(clash));
-  assert.equal(clash.field, 'idempotencyKey');
-  assert.equal(clash.reason, 'key_bound_to_another_provision');
+  // N01 US-N01.5: the registry's record of the key answers first, naming what differs; the engine's own
+  // `key_bound_to_another_provision` stays the second layer for a call that bypasses the registry.
+  assert.equal(clash.error, 'idempotency_key_conflict', JSON.stringify(clash));
+  assert.deepEqual(clash.fields, ['amountMinor', 'provisionId']);
   assert.equal(entryCount(deps, ws), entries, 'the ledger is untouched');
   assert.equal(deps.store.db.prepare('SELECT COUNT(*) AS n FROM provision_release').get().n, 1);
   assert.equal(call(deps, ws, 'provision_get', { provisionId: b }).openBalanceMinor, 120000);
+
+  // The engine's own layer, reached by a direct engine call that bypasses the registry's record.
+  const ctx = makeContext(deps.store, { workspaceId: ws, actor: 'user_1', clock: deps.clock, ids: deps.ids, ...ledgerPorts({ store: deps.store, workspaceId: ws, ids: deps.ids }) });
+  const direct = provisionRelease(ctx, { provisionId: b, date: '2027-03-15', amountMinor: 50000, targetAccount: '6800', idempotencyKey: 'rel-shared' });
+  assert.equal(direct.ok, false);
+  assert.equal(direct.error, 'invalid_input', JSON.stringify(direct));
+  assert.equal(direct.field, 'idempotencyKey');
+  assert.equal(direct.reason, 'key_bound_to_another_provision');
+  assert.equal(entryCount(deps, ws), entries, 'the engine layer posts nothing either');
 });
 
 test('a reversal honours a caller date and refuses not_posted on a draft', () => {

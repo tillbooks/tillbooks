@@ -1238,6 +1238,24 @@ export function previewPostingLines(
   return { ok: true, lines: validated.lines, fx: fx.resolved };
 }
 
+/**
+ * N01 US-N01.3 (D158): what the public `post_entry` would refuse, decided WITHOUT writing, for the transport
+ * seam to run before it drafts a governed call. `postEntryUnder`'s own steps in its own order: the key
+ * guard, then `previewPostingLines` with the replay at exactly the point the verb consults it (a key the
+ * verb would replay passes: undefined). An agent's entry on an unknown or archived account, unbalanced, or
+ * into a locked period is refused with the verb's own Result and never queued as a Vorschlag.
+ */
+export function prevalidatePostEntry(ctx: WorkspaceContext, input: PostEntryInput): Result | undefined {
+  const keyGuard = requireString(input.idempotencyKey, 'idempotencyKey');
+  if (keyGuard) return keyGuard;
+  const scope = input.source === 'reversal' ? 'reverse_entry' : 'post_entry';
+  const prepared = previewPostingLines(ctx, input, () =>
+    ctx.store.recallIdempotent<Result<PostEntryOk>>(ctx.workspaceId, input.idempotencyKey, scope),
+  );
+  if (prepared.ok === 'replayed') return undefined;
+  return prepared.ok ? undefined : prepared.error;
+}
+
 export function postEntry(ctx: WorkspaceContext, input: PostEntryInput): Result<PostEntryOk> {
   // A reversal's post lives in its own namespace, so reusing the original post key as the reversal key
   // is not a collision.

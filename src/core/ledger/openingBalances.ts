@@ -172,6 +172,18 @@ export function accountIsPostable(ctx: WorkspaceContext, account: string): boole
   return resolveAccount(ctx, account) !== undefined;
 }
 
+/**
+ * N01 US-N01.1: the account `account` (an id OR a number) names in THIS workspace, as `{ id, number }`, or
+ * undefined. The SAME resolver A04 posts with, exported rather than forked, so the registry's input
+ * boundary (`src/api/input-boundary.ts`) resolves a number exactly as an opening position does: id first
+ * (a value that IS an account id always resolves to that account, whatever another account's number
+ * reads), then number, never outside the workspace (§H-TENANT).
+ */
+export function resolveAccountReference(ctx: WorkspaceContext, account: string): { id: string; number: string } | undefined {
+  const row = resolveAccount(ctx, account);
+  return row === undefined ? undefined : { id: row.id, number: row.number };
+}
+
 /** Does this workspace have a chart at all? P9: the CTA is A01, not a per-account complaint. */
 function hasChart(ctx: WorkspaceContext): boolean {
   const row = ctx.store.db

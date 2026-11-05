@@ -50,7 +50,8 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Err, Result } from '../result.js';
 import { requireString } from '../ledger/inputGuards.js';
-import { BANK_LINE_IGNORE_REASONS, controlAccountRoleOf, readBankTxn, readBankTxnDetail } from './bankLines.js';
+import { approvingActionIds } from '../agent/approving.js';
+import { BANK_LINE_IGNORE_REASONS, bankLedgerOfLine, controlAccountRoleOf, readActiveLink, readBankTxn, readBankTxnDetail } from './bankLines.js';
 import type { BankLineIgnoreReason, BankTxnRow } from './bankLines.js';
 import { counterpartyKeyOf, textTokens } from './bankProposals.js';
 
@@ -492,7 +493,7 @@ function toStandard(ctx: WorkspaceContext, r: StandardRow, accounts: ReadonlyMap
   };
 }
 
-function liveRuleFor(ctx: WorkspaceContext, key: string, direction: BankStandardDirection, matchText: string | null): StandardRow | undefined {
+export function liveRuleFor(ctx: WorkspaceContext, key: string, direction: BankStandardDirection, matchText: string | null): StandardRow | undefined {
   // The slot is (key, direction, text); a Vorlage's key carries its own prefix, so the slot names its scope.
   return ctx.store.db
     .prepare(
@@ -607,6 +608,13 @@ export function listBankStandards(ctx: WorkspaceContext, input: { scope?: unknow
 export interface SetBankStandardInput {
   /** The line a bank rule is saved from (its counterparty and direction). Never with a Vorlage. */
   bankTxnId?: string;
+  /**
+   * N03 (D183): save the rule from a line ALREADY BOOKED to accounts: its counterparty and direction as with
+   * `bankTxnId` (which, when also given, must name the same line), and, unless `legs` or `accountId` is
+   * given, the booked legs read off its entry (`bookedShapeOf`): every account and code, the sides, the
+   * Durchlaufkonto; the largest leg is the rest, every other leg asks its amount.
+   */
+  fromBankTxnId?: string;
   /** D176: EDIT this live rule (supersede it) instead of saving from a line. */
   standardId?: string;
   /** D176: `bank` (default) or `manual` (a Vorlage). */
@@ -641,7 +649,42 @@ export interface SetBankStandardInput {
   replaceStandardId?: string | null;
   /** Retired by critic D176-R2-1: refused with `invalid_input`, naming `replaceStandardId`. */
   replace?: unknown;
+  /**
+   * N03 (critic, finding 1): the live rule of the target slot this save expects to replace, or null when it
+   * expects the slot empty. Given, the save refuses `rule_slot_changed` once the slot holds anything else (a
+   * person set or cleared a rule there since): a mined Vorschlag approved late never replaces a newer rule.
+   */
+  expectSlotStandardId?: string | null;
+  /** N03: the miner's evidence a mined Vorschlag shows (its backtest and bookings); the save ignores it. */
+  minedFacts?: unknown;
   idempotencyKey?: string;
+}
+
+/** N03 (critic, finding 6): the key prefix only the rule miner uses (its Vorschlag rows); no caller may claim it. */
+export const RESERVED_MINER_KEY_PREFIX = 'mine:';
+
+/**
+ * N03 (critic, findings 2 and 6): what a set_bank_standard call may not carry, checked before anything is
+ * read or drafted. A key under the miner's reserved prefix (`mine:`) is refused: a caller who claimed one
+ * could stand in for the miner's Vorschlag and silence it. And a save from a booked line that names no legs
+ * (`fromBankTxnId` alone) is refused while it is being DRAFTED or APPROVED: such a save reads the line's
+ * booking when it runs, so a Vorschlag of it would save whatever the line is booked to at approval, not what
+ * the person saw (D162). The drafting seat names the legs (`backtest_bank_rule { recipe: { fromBankTxnId } }`
+ * answers them), and the Studio always sends them.
+ */
+export function setBankStandardRefusal(input: SetBankStandardInput, drafted: boolean): Err | undefined {
+  if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.startsWith(RESERVED_MINER_KEY_PREFIX)) {
+    return err('invalid_input', { field: 'idempotencyKey', reason: `keys starting with ${RESERVED_MINER_KEY_PREFIX} are reserved for the rule miner` });
+  }
+  const from = input.fromBankTxnId;
+  const ownLegs = (input.legs !== undefined && input.legs !== null) || (input.accountId !== undefined && input.accountId !== null) || input.outcome === 'ignore';
+  if (drafted && from !== undefined && from !== null && !ownLegs) {
+    return err('legs_required', {
+      field: 'legs',
+      reason: 'a Vorschlag saves exactly the legs it names: read them with backtest_bank_rule { recipe: { fromBankTxnId } } and pass them as legs',
+    });
+  }
+  return undefined;
 }
 
 export type SetBankStandardOk = { standard: BankStandard; supersededId: string | null; unchanged: boolean };
@@ -857,6 +900,133 @@ function checkLegs(ctx: WorkspaceContext, legs: readonly RecipeLeg[], ledgers: R
   return null;
 }
 
+// --- N03 (D183): a rule from a booked line ------------------------------------------------------------
+
+/** One booked leg read back off a posted entry: the account, its code, its side, how much it moved. */
+export interface BookedLeg {
+  accountId: string;
+  taxCode: string | null;
+  /** True when the leg runs against the line's direction (a fee taken out of money in, a refund). */
+  against: boolean;
+  /** The leg's size, net plus the VAT its tagged lines carry (only for choosing the rest leg). */
+  sizeMinor: number;
+}
+
+/** A booked line's legs and Durchlaufkonto, as a recipe reads them. */
+export interface BookedShape {
+  legs: BookedLeg[];
+  viaAccountId: string | null;
+}
+
+/**
+ * N03: the legs of a line's booking, read off its posted entry (`entryId`) on the line's bank ledger: every
+ * line off the bank ledger and off the VAT accounts, grouped by account. An account the entry moves both
+ * ways to nothing is the Durchlaufkonto (the bank against it, it against each leg). A leg's side is its net
+ * (a credit on the leg's account is money in), its code the code its tagged line carries, its size the net
+ * plus that line's VAT. Null when the entry moves nothing besides the bank, or more than one Durchlaufkonto.
+ * §H-TENANT: the entry must be this workspace's.
+ */
+export function bookedShapeOf(ctx: WorkspaceContext, row: Pick<BankTxnRow, 'bank_account_id' | 'credit_debit'>, entryId: string): BookedShape | null {
+  const ledger = bankLedgerOfLine(ctx, row);
+  if (ledger === undefined) return null;
+  const lines = ctx.store.db
+    .prepare(
+      `SELECT l.account_id AS accountId, a.number AS number, l.debit_minor AS debit, l.credit_minor AS credit,
+              l.tax_code AS taxCode, l.tax_amount_minor AS taxAmount
+         FROM journal_line l JOIN journal_entry e ON e.id = l.entry_id AND e.workspace_id = ?
+         JOIN account a ON a.id = l.account_id
+        WHERE l.entry_id = ? ORDER BY l.rowid`,
+    )
+    .all(ctx.workspaceId, entryId) as { accountId: string; number: string; debit: number; credit: number; taxCode: string | null; taxAmount: number | null }[];
+  const byAccount = new Map<string, { net: number; debits: number; credits: number; taxCode: string | null; tax: number }>();
+  for (const l of lines) {
+    if (l.accountId === ledger || VAT_ACCOUNT_NUMBERS.includes(l.number)) continue;
+    const at = byAccount.get(l.accountId) ?? { net: 0, debits: 0, credits: 0, taxCode: null, tax: 0 };
+    at.net += l.debit - l.credit;
+    if (l.debit > 0) at.debits += 1;
+    if (l.credit > 0) at.credits += 1;
+    if (l.taxCode !== null && at.taxCode === null) at.taxCode = l.taxCode;
+    if (l.taxCode !== null) at.tax += Math.abs(l.taxAmount ?? 0);
+    byAccount.set(l.accountId, at);
+  }
+  const vias = [...byAccount.entries()].filter(([, a]) => a.net === 0 && a.debits > 0 && a.credits > 0 && a.taxCode === null).map(([id]) => id);
+  if (vias.length > 1) return null;
+  const moneyIn = row.credit_debit === 'CRDT';
+  const legs: BookedLeg[] = [];
+  for (const [accountId, a] of byAccount) {
+    if (vias.includes(accountId) || a.net === 0) continue;
+    const legIn = a.net < 0;
+    legs.push({ accountId, taxCode: a.taxCode, against: legIn !== moneyIn, sizeMinor: Math.abs(a.net) + a.tax });
+  }
+  if (legs.length === 0 || legs.length > BANK_RULE_MAX_LEGS) return null;
+  return { legs, viaAccountId: vias[0] ?? null };
+}
+
+/** The recipe a booked shape stands for: the largest leg in the line's direction is the rest, every other leg asks. */
+export function recipeOfShape(ctx: WorkspaceContext, shape: BookedShape): RecipeLeg[] | null {
+  let restAt = -1;
+  shape.legs.forEach((l, i) => {
+    if (!l.against && (restAt < 0 || l.sizeMinor > shape.legs[restAt]!.sizeMinor)) restAt = i;
+  });
+  if (restAt < 0) return null;
+  const nameOf = ctx.store.db.prepare('SELECT name FROM account WHERE workspace_id = ? AND id = ?');
+  return shape.legs.map((l, i): RecipeLeg => {
+    const name = ((nameOf.get(ctx.workspaceId, l.accountId) as { name: string } | undefined)?.name ?? '').trim();
+    const label = (name === '' ? 'Betrag' : name).slice(0, BANK_RULE_ASK_LABEL_MAX).trim();
+    return {
+      accountId: l.accountId,
+      taxCode: l.taxCode,
+      amount: i === restAt ? { kind: 'rest' } : { kind: 'ask', label },
+      ...(i !== restAt && l.against ? { against: true } : {}),
+    };
+  });
+}
+
+/**
+ * N03: what `set_bank_standard` does with `fromBankTxnId`, before anything else: the line is the one the rule
+ * is saved from (`bankTxnId`), and without `legs`, `accountId` or the ignore outcome the recipe is its
+ * booking's. A line that is not booked to accounts by a live decision refuses `not_booked_to_accounts`; so
+ * does a booking whose legs make no recipe (nothing but the bank, or no leg in the line's direction).
+ */
+function prefillFromBooking(ctx: WorkspaceContext, input: SetBankStandardInput): { input: SetBankStandardInput } | { error: Err } {
+  const from = input.fromBankTxnId;
+  if (from === undefined || from === null) return { input };
+  if (typeof from !== 'string' || from.length === 0) return { error: err('invalid_input', { field: 'fromBankTxnId' }) };
+  if ((input.scope ?? 'bank') !== 'bank' || (input.standardId !== undefined && input.standardId !== null)) {
+    return { error: err('invalid_input', { field: 'fromBankTxnId', reason: 'a new bank rule is saved from a booked line; an edit or a Vorlage names none' }) };
+  }
+  if (input.bankTxnId !== undefined && input.bankTxnId !== null && input.bankTxnId !== from) {
+    return { error: err('invalid_input', { field: 'bankTxnId', reason: 'bankTxnId and fromBankTxnId name the same line, or only fromBankTxnId is given' }) };
+  }
+  const base: SetBankStandardInput = { ...input, bankTxnId: from };
+  delete base.fromBankTxnId;
+  const ownLegs = (input.legs !== undefined && input.legs !== null) || (input.accountId !== undefined && input.accountId !== null) || input.outcome === 'ignore';
+  if (ownLegs) return { input: base };
+  const row = readBankTxn(ctx, from);
+  if (row === undefined) return { error: err('not_found', { bankTxnId: from }) };
+  const link = readActiveLink(ctx, row.id);
+  const entryId = link !== undefined && link.state === 'booked' && (link.targetKind === 'accounts' || link.targetKind === 'legacy') ? link.entryId : null;
+  const shape = entryId === null ? null : bookedShapeOf(ctx, row, entryId);
+  const legs = shape === null ? null : recipeOfShape(ctx, shape);
+  if (shape === null || legs === null) {
+    return {
+      error: err('not_booked_to_accounts', {
+        bankTxnId: row.id,
+        state: link?.state ?? 'open',
+        targetKind: link?.targetKind ?? null,
+        reason: 'a rule is saved from a line booked to accounts; an open, ignored or settled line has no legs to save',
+      }),
+    };
+  }
+  return {
+    input: {
+      ...base,
+      legs,
+      ...((input.viaAccountId === undefined || input.viaAccountId === null) && shape.viaAccountId !== null ? { viaAccountId: shape.viaAccountId } : {}),
+    },
+  };
+}
+
 /**
  * Save a Buchungsregel. A BANK rule is saved from one line (`bankTxnId`: its counterparty and direction), or
  * EDITS a live bank rule (`standardId`: its counterparty and direction, no line needed, D176). Called with
@@ -865,9 +1035,17 @@ function checkLegs(ctx: WorkspaceContext, legs: readonly RecipeLeg[], ledgers: R
  * its slot (and an edit the edited one) in the same transaction; the same recipe, label, text, Durchlaufkonto,
  * outcome and follow-up as the live row of the slot answers `unchanged: true` and writes nothing.
  */
-export function setBankStandard(ctx: WorkspaceContext, input: SetBankStandardInput): Result<SetBankStandardOk> {
+export function setBankStandard(ctx: WorkspaceContext, given: SetBankStandardInput): Result<SetBankStandardOk> {
   const capable = ctx.capabilities.assert('post');
   if (!capable.ok) return capable;
+  // N03 (critic, findings 2 and 6): the reserved miner prefix, and a legless save from a booked line while a
+  // Vorschlag of it is approved (`approvingActionIds`: the replay of an approval is running).
+  const refusedInput = setBankStandardRefusal(given, approvingActionIds().length > 0);
+  if (refusedInput !== undefined) return refusedInput;
+  // N03 (D183): a rule saved from a booked line (`fromBankTxnId`) becomes a save from that line, with its legs.
+  const prefilled = prefillFromBooking(ctx, given);
+  if ('error' in prefilled) return prefilled.error;
+  const input = prefilled.input;
   const scopeRaw = input.scope ?? 'bank';
   if (!(BANK_RULE_SCOPES as readonly unknown[]).includes(scopeRaw)) return err('invalid_input', { field: 'scope', allowed: [...BANK_RULE_SCOPES] });
   const scope = scopeRaw as BankRuleScope;
@@ -1102,6 +1280,22 @@ export function setBankStandard(ctx: WorkspaceContext, input: SetBankStandardInp
     }
   }
 
+  // N03 (critic, finding 1): the slot holds what the caller expected (a mined Vorschlag names the slot as it
+  // was when it was drafted). Checked before the memo, so the refusal is never memoised; a replay of a save
+  // that ran answers from the memo above, never from here.
+  if (input.expectSlotStandardId !== undefined) {
+    const expected = input.expectSlotStandardId;
+    if (expected !== null && (typeof expected !== 'string' || expected.length === 0)) return err('invalid_input', { field: 'expectSlotStandardId' });
+    const holder = liveRuleFor(ctx, target.key, target.direction, matchText);
+    if ((holder?.id ?? null) !== expected) {
+      return err('rule_slot_changed', {
+        expectedStandardId: expected,
+        liveStandardId: holder?.id ?? null,
+        reason: 'the rule this save would replace changed since it was proposed (a rule was set, edited or removed there): look again',
+      });
+    }
+  }
+
   return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'set_bank_standard', () => {
     const accounts = accountsById(ctx);
     const slot = liveRuleFor(ctx, target.key, target.direction, matchText);
@@ -1119,8 +1313,9 @@ export function setBankStandard(ctx: WorkspaceContext, input: SetBankStandardInp
     ctx.store.db
       .prepare(
         `INSERT INTO bank_standard (id, workspace_id, counterparty_key, counterparty_label, direction, account_id, tax_code, set_by, set_at,
-                                    label, match_text, legs_json, via_account_id, scope, outcome, ignore_reason, ignore_note, follow_up_standard_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    label, match_text, legs_json, via_account_id, scope, outcome, ignore_reason, ignore_note, follow_up_standard_id,
+                                    replaces_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -1141,6 +1336,9 @@ export function setBankStandard(ctx: WorkspaceContext, input: SetBankStandardInp
         ignoreReason,
         ignoreNote,
         followUpStandardId,
+        // N03 (D183): the version this row replaces (the edited row, else the slot's live row), so the rule's
+        // versions form one chain (`ruleStats.ts`). A clear leaves no live row, so the next set starts a chain.
+        target.edited?.id ?? slot?.id ?? null,
       );
     const written = readLiveRule(ctx, id) as StandardRow;
     return ok<SetBankStandardOk>({
@@ -1182,4 +1380,9 @@ export function clearBankStandard(ctx: WorkspaceContext, input: ClearBankStandar
       ? ok<ClearBankStandardOk>({ standardId: row.id, cleared: true })
       : ok<ClearBankStandardOk>({ standardId: row.id, alreadyCleared: true });
   });
+}
+
+/** N03: a bank recipe's SHAPE checked exactly as `set_bank_standard` checks it (the backtest's input). */
+export function shapeRecipe(raw: unknown): { legs: RecipeLeg[] } | { error: Err } {
+  return shapeLegs(raw, 'bank');
 }

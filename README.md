@@ -1,9 +1,14 @@
 # TILL
 
+[![npm (beta)](https://img.shields.io/npm/v/tillbooks/beta?label=npm%20beta&color=555)](https://www.npmjs.com/package/tillbooks)
+[![MCP Registry](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.modelcontextprotocol.io%2Fv0%2Fservers%2Fio.github.tillbooks%252Ftillbooks%2Fversions%2Flatest&query=%24.server.version&label=MCP%20Registry&color=555)](https://registry.modelcontextprotocol.io/v0/servers?search=tillbooks)
+[![Glama score](https://glama.ai/mcp/servers/tillbooks/tillbooks/badges/score.svg)](https://glama.ai/mcp/servers/tillbooks/tillbooks)
+[![License: MIT](https://img.shields.io/badge/license-MIT-555)](LICENSE)
+
 **Trusted Independent Ledger Library.** An agent-first ERP for Swiss SMEs.
 
 TILL is a free, open-source (MIT) ERP for Swiss small businesses: sales, purchasing, payments, stock,
-projects, books and MWST. Every function is exposed as an MCP tool, 822 of them, so your AI agent runs
+projects, books and MWST. Every function is exposed as an MCP tool, 844 of them, so your AI agent runs
 it and the Studio (the app you work in) shows you what it did. It works with Claude Desktop, Cursor
 and other MCP clients that can start a local stdio server. TILL runs on your own computer, or on a
 server you host yourself. Your books are a single SQLite file on that machine, and no server of ours
@@ -16,7 +21,7 @@ as drafts and contact details, runs without asking, and every call the agent mak
 The dial covers agents that connect to TILL. An agent that can drive your browser or run commands on
 your computer can act as you: give your agent TILL, not your browser or your shell.
 
-> **Public beta, version 1.0.0-beta.1.** Nomadik GmbH, the company behind TILL, keeps its own books
+> **Public beta, version 1.0.0-beta.2.** Nomadik GmbH, the company behind TILL, keeps its own books
 > in it. If you move your books to TILL, keep your old system running until the figures match, and
 > read [what the beta does not do yet](#what-the-beta-does-not-do-yet) first.
 
@@ -99,6 +104,10 @@ In Claude Code, the same server is one line:
 claude mcp add tillbooks -- npx -y tillbooks@beta mcp
 ```
 
+Or install it as a plugin, which pins the server to the current beta: in Claude Code,
+`/plugin install tillbooks --marketplace tillbooks/tillbooks`. The same
+[plugin folder](plugins/tillbooks) works in Cursor.
+
 The agent and the Studio work on the same file, so what the agent does shows up in the Studio.
 
 To work on TILL itself, build it from a checkout:
@@ -120,6 +129,31 @@ node bin/till.mjs up
   in a feedback mail you send yourself.
 - You can export a whole company at any time in an open, documented format, and a backup restores
   into a fresh workspace without touching the ones you have.
+
+## Privacy Policy
+
+TILL is software you run yourself. Nomadik GmbH, which publishes it, does not run a server for it and
+receives nothing from it. This covers the `tillbooks` package, its MCP server, the Studio and the
+plugin in [plugins/tillbooks](plugins/tillbooks).
+
+- **Data collection.** TILL collects no data about you or how you use it: no account, no sign-up, no
+  telemetry, no analytics. Error details are recorded only if you switch that on.
+- **Usage and storage.** What you enter (your company, contacts, documents and postings) is stored in
+  one SQLite file on your machine, `~/.till/till.db` or the path in `TILL_DB_PATH`. Diagnostics,
+  backups and feedback reports you create stay in `~/.till` or `TILL_SUPPORT_DIR`. TILL itself opens
+  no outbound connection: the MCP server talks over stdio and the Studio listens on 127.0.0.1 only.
+- **Third-party sharing.** TILL shares nothing with anyone. Two things leave your machine because
+  other software sends them: `npm` or `npx` downloads the package from the npm registry, under npm's
+  terms, and what your agent reads through TILL's tools becomes part of your conversation with your
+  AI provider, under that provider's terms. Files TILL writes for you (an eCH-0217 return, a pain.001
+  payment file, an invoice PDF, a feedback report) leave only when you upload or send them yourself.
+- **Data retention.** Your data stays on your disk until you delete it. Posted entries are
+  append-only, as Swiss bookkeeping requires; a correction is a reversing entry. Deleting the
+  database file and `~/.till` removes everything TILL stored. Keeping your books for the statutory
+  period (OR Art. 958f) is your responsibility.
+- **Contact.** Nomadik GmbH, Männedorf, Switzerland,
+  [hello@tillbooks.ch](mailto:hello@tillbooks.ch). The privacy statement for the tillbooks.ch website
+  is at [tillbooks.ch/en/legal](https://tillbooks.ch/en/legal/#datenschutz).
 
 ## What the beta does not do yet
 

@@ -61,6 +61,25 @@ export interface DataActionHelpers {
   catalogActions: () => CatalogAction[];
 }
 
+/**
+ * N01 US-N01.9 (D183: `get_api_catalog` gains filters instead of a `find_tools` verb): the catalog rows a
+ * caller asked for. `query` is split on whitespace and EVERY word must appear in the tool's name or summary
+ * (case-insensitive; `_` and space are the same); `names` keeps exactly those tools; `kind` keeps reads or
+ * writes. No filter keeps everything, as before.
+ */
+export function filterCatalog(rows: readonly CatalogAction[], input: ActionInput): CatalogAction[] {
+  const words = typeof input.query === 'string' ? input.query.toLowerCase().replace(/_/g, ' ').split(/\s+/).filter((w) => w.length > 0) : [];
+  const names = Array.isArray(input.names) ? new Set(input.names.filter((n): n is string => typeof n === 'string')) : undefined;
+  const kind = input.kind === 'read' || input.kind === 'write' ? input.kind : undefined;
+  return rows.filter((row) => {
+    if (names !== undefined && !names.has(row.name)) return false;
+    if (kind !== undefined && row.kind !== kind) return false;
+    if (words.length === 0) return true;
+    const text = `${row.name.replace(/_/g, ' ')} ${row.summary}`.toLowerCase();
+    return words.every((w) => text.includes(w));
+  });
+}
+
 /** The A24 capability gating the four workspace-scoped artifact verbs. */
 export const MANAGE_DATA_EXPORT = 'manage_data_export';
 
@@ -195,9 +214,9 @@ export function dataActions(h: DataActionHelpers): readonly ActionDef[] {
     depsAction(
       'get_api_catalog',
       'read',
-      'Return an OpenAPI 3.x document of every MCP tool and its REST twin (route, input shape, read/write, required capability), generated from the live registry. Describes the software contract, not workspace data.',
-      depsSchema({}, []),
-      () => getApiCatalog(catalogActions()),
+      'Return an OpenAPI 3.x document of every MCP tool and its REST twin (route, input shape, read/write, required capability), generated from the live registry. Describes the software contract, not workspace data. N01: narrow it with query (words that must all appear in a tool name or description, e.g. "bank line book"), names (exact tool names) and kind (read | write); with the essentials tool profile, find a tool here and run it with call_tool.',
+      depsSchema({ query: STR, names: { type: 'array', items: STR }, kind: { type: 'string', enum: ['read', 'write'] } }, []),
+      (_deps, input) => getApiCatalog(filterCatalog(catalogActions(), input)),
     ),
   ];
 }

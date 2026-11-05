@@ -637,6 +637,15 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // whether a human has said so on this occasion. An agent that holds both capabilities still stages.
   files_set_retention: ['manage_files', 'manage_settings'],
   files_delete: ['manage_files', 'manage_settings'],
+  // N02 (D183): minting a drop link is contributing evidence (`manage_files`); the TARGET's own write
+  // right (the `files_link` rule, a Vorschlag's through its act) is asserted in the engine
+  // (`mintDropLink`), because the input names a Vorschlag the map cannot resolve without the book.
+  files_drop_link: 'manage_files',
+  // The Belegeingang's last scan is a read of the filing register, the `files_search` answer.
+  belegeingang_status: 'read_master_data',
+  // N02 (critic round 2): the bytes of a Beleg a Vorschlag will link, for the seat that DECIDES it (the
+  // agent seat never holds `manage_agent_dial`, A24 step 0) and may download files (D62).
+  files_pending_preview: ['manage_agent_dial', 'read_file_content'],
 
   // --- A10/A11, documents and invoices ---------------------------------------------------------
   create_document: 'issue',
@@ -929,6 +938,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // to accounts needs; listing them is a read of the inbox.
   set_bank_standard: 'post',
   clear_bank_standard: 'post',
+  // N03 (D183): the miner drafts set_bank_standard Vorschläge (as `system`, approved under `post` like any
+  // rule); running it needs the right a rule needs, so a seat that cannot set rules cannot queue them.
+  mine_rules: 'post',
 
   // --- A19, bank accounts ----------------------------------------------------------------------
   create_bank_account: 'manage_master_data',
@@ -1166,6 +1178,15 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // capability is the second lock.
   set_agent_dial: 'manage_agent_dial',
   approve_drafted_action: 'manage_agent_dial',
+  // N01: the batch approval is the single one many times, on the same right; every id is then re-checked
+  // as one `approve_drafted_action` through the transport seam.
+  approve_drafted_actions: 'manage_agent_dial',
+  // N01: a batch asks exactly what its items ask, all of them (the union of the single verb's
+  // input-keyed rule over the items), so a seat that may book every item singly may book the batch and no
+  // other; every item is re-checked as the single verb when it runs. An empty or malformed list asks the
+  // single verb's plain right, and the verb then refuses it.
+  book_bank_lines: (input) => unionOverItems('book_bank_line', input['items'], 'post'),
+  post_entries: (input) => unionOverItems('post_entry', input['items'], 'post'),
   reject_drafted_action: 'manage_agent_dial',
   // `agent_prose_delete` erases the conversation record's prose (D90 D-5): governance over the agent
   // surface, so it sits with the dial verbs rather than with the reads it erases beside.
@@ -1399,6 +1420,10 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // reserved name `manage_data_restore` records the intent without pretending to gate here.
   verify_backup: ungated('pre_workspace', 'Inspects an ARBITRARY file, not this workspace`s data: there is no tenant on the input to resolve a capability against.'),
   list_restorable_backups: ungated('pre_workspace', 'Lists the bundle manifests in THIS MACHINE`s backup directory (machine state, the same posture as delivery_status), for the first-run restore door before any workspace exists: there is no tenant to resolve a capability against, and the read opens no database and verifies nothing.'),
+  // N01: the dispatcher names a verb and its input; it is pre-workspace itself (its tenant is the named
+  // verb's `workspaceId`), and the named verb runs through the transport seam, where ITS OWN rule is checked
+  // against the caller exactly as for a direct call. A gate here could only be weaker or stronger than that.
+  call_tool: ungated('pre_workspace', 'A dispatcher: the named verb runs through the transport seam under the caller`s seat, where that verb`s own capability rule is checked exactly as for a direct call (US-N01.9).'),
   get_api_catalog: ungated('pre_workspace', 'Describes the software`s data-access contract (every tool + REST route), not any workspace`s data, so any authenticated actor may read it (US-G04.4).'),
   restore_backup: ungated('pre_workspace', 'Mints the tenant the capability would be resolved in (the create_workspace shape). Fenced instead by never-overwriting an existing workspace, the P8 confirmed gate, and the pre-commit balance + referential-integrity re-check.'),
 
@@ -2072,6 +2097,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   bank_csv_preview: 'read_sales',
   get_bank_csv_mapping: 'read_sales',
   list_bank_standards: 'read_sales',
+  // N03 (D183): a rule's track record and its backtest read the inbox's bookings, as list_bank_standards does.
+  bank_rule_stats: 'read_sales',
+  backtest_bank_rule: 'read_sales',
 
   // --- read_master_data: the registers, and the workspace's own party record -------------------
   get_company_profile: 'read_master_data',
@@ -2555,6 +2583,34 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   prefs_get: ungated('asserted_in_engine', 'Own preferences need only membership: asserted in core/customization/prefs.ts (notOwnSeat); every row is keyed by the session actor.'),
   prefs_set: ungated('asserted_in_engine', 'Own preferences need only membership: asserted in core/customization/prefs.ts (notOwnSeat); a plugin call may not write them.'),
   prefs_reset: ungated('asserted_in_engine', 'Own preferences need only membership: asserted in core/customization/prefs.ts (notOwnSeat); a plugin call may not write them.'),
+
+  // --- N00, the workspace brief and the Hausbuch ----------------------------------------------------
+  // The brief composes six read domains (the chart, the VAT codes, the bank, the rules, the notes, the
+  // Pendenzen counts), so it is gated PER SECTION in the engine, the F00 `dashboard_overview` shape: a
+  // refused section is listed in `omitted`, never answered. House notes are workspace configuration: the
+  // list reads `read_master_data` (the `settings_list` twin), the two writes need `manage_settings`.
+  workspace_brief: ungated(
+    'asserted_in_engine',
+    'Per-section RBAC: each section asserts its source verb’s own read gate in core/hausbuch/brief.ts and is listed in omitted when refused; the counts carry attention_summary’s own per-queue filter.',
+  ),
+  hausbuch_notes: 'read_master_data',
+  hausbuch_note_set: 'manage_settings',
+  hausbuch_note_archive: 'manage_settings',
+
+  // --- N04, Autopilot -------------------------------------------------------------------------------
+  // A grant lets a rule book lines as the granter, so it needs the right those bookings need (`post`, the
+  // `book_bank_line` right for a booking to accounts); the engine additionally refuses a governed seat. The
+  // revoke stops it under the same right. A schedule books a Vorlage: `post` plus the template read
+  // `post_entry`'s template form asks. The reads and "Gesehen" read the bank inbox (`read_sales`, the
+  // `list_bank_standards` twin).
+  autobook_candidates: 'read_sales',
+  grant_rule_autobook: 'post',
+  revoke_rule_autobook: 'post',
+  autobook_digest: 'read_sales',
+  autopilot_mark_seen: 'read_sales',
+  set_vorlage_schedule: ['post', 'read_sales'],
+  clear_vorlage_schedule: 'post',
+  vorlage_schedules: 'read_sales',
 };
 
 /**
@@ -2565,6 +2621,22 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
  * permissive empty array so that "unreachable" stays true if the check is ever moved: failing
  * closed on an unknown verb is the only safe direction for this function.
  */
+/**
+ * N01: what a BATCH of `verb` asks, all of it: the union of `verb`'s own rule over the items, in first-seen
+ * order. A list that is empty, not a list, or holds no object asks `fallback` (the verb then refuses it).
+ */
+function unionOverItems(verb: string, items: unknown, fallback: Capability): Capability | readonly Capability[] {
+  if (!Array.isArray(items)) return fallback;
+  const union: Capability[] = [];
+  for (const item of items) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) continue;
+    for (const capability of requiredCapabilitiesFor(verb, item as Record<string, unknown>)) {
+      if (!union.includes(capability)) union.push(capability);
+    }
+  }
+  return union.length === 0 ? fallback : union;
+}
+
 export function requiredCapabilitiesFor(
   actionName: string,
   input: Record<string, unknown>,

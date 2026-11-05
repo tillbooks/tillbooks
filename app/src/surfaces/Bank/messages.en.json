@@ -3,6 +3,10 @@
     "bankInbox": "Bank lines"
   },
   "bankInbox": {
+    "houseRule": {
+      "title": "House rule",
+      "open": "Open in the house book"
+    },
     "title": "Bank",
     "subtitleMany": "{count} bank accounts",
     "loading": "Loading the bank lines.",
@@ -1382,6 +1386,28 @@
         "computedHow": "Computed: {how}",
         "asked": "Entered each time: {label}",
         "askedBare": "Entered each time"
+      },
+      "stats": {
+        "used": "Used {count}×, last on {date}",
+        "changed": "changed {count}×",
+        "never": "Never used yet",
+        "loading": "–"
+      },
+      "health": "Adjust rule?",
+      "healthHint": "You changed {changed} of the last {uses} proposals of this rule before booking.",
+      "test": {
+        "button": "Test",
+        "busy": "Testing …",
+        "result": "Since {date}: {hits} lines, {identical} booked exactly like this",
+        "none": "No hits since {date}",
+        "failed": "The test did not work."
+      },
+      "saveFromBooked": {
+        "action": "Save as rule",
+        "already": "Already booked by rule «{name}»",
+        "title": "Rule from this booking",
+        "loading": "Reading the booking.",
+        "saved": "Rule «{name}» saved from the booking."
       }
     },
     "woher": {
@@ -1739,5 +1765,56 @@
     "titleAll": "Statements {ranges} are missing",
     "whyAllChain": "No money is missing: the balances chain exactly.",
     "titleMany": "Close gaps"
+  },
+  "autobook": {
+    "chip": {
+      "active": "Automatic",
+      "stopped": "Automatic stopped",
+      "paused": "Paused: {reason}"
+    },
+    "suspended": {
+      "reopened": "a booking was undone",
+      "payment_reversed": "a payment was reversed",
+      "changed_booking": "a booking was changed",
+      "granter_lost_capability": "the person who switched it on can no longer post"
+    },
+    "switch": {
+      "label": "Book automatically from now on",
+      "ceiling": "Up to {ceiling} per line, only in {currency}",
+      "notEarned": "Booked unchanged {uses} of {needed} times so far",
+      "notNow": "Not possible right now: automatic booking is off, or no unchanged booking was confirmed by a person",
+      "failed": "That did not work. Nothing changed."
+    },
+    "ineligible": {
+      "not_a_bank_rule": "Only a bank rule can book on its own",
+      "ignore_rule": "A rule that ignores lines books nothing",
+      "name_key": "The rule recognises the counterparty by name only; it needs an IBAN",
+      "via_account": "A rule with a clearing account never books on its own",
+      "own_account": "Transfers between your own accounts never book on their own",
+      "rule_invalid": "The rule is not valid as it stands",
+      "asks_amount": "The rule asks for an amount",
+      "mode_not_bulk": "Buchungsregeln are not set to book in bulk"
+    }
+  },
+  "vorlage": {
+    "schedule": {
+      "title": "Repeat",
+      "next": "Next run: {date}",
+      "noNext": "No further run",
+      "none": "Not repeated",
+      "dropped": "(proposes until you set it again: the template changed)",
+      "every": "Every",
+      "every_month": "Month",
+      "every_quarter": "Quarter",
+      "every_year": "Year",
+      "day": "Day (31 = last day)",
+      "start": "From",
+      "end": "Until",
+      "mode": "Then",
+      "propose": "Propose",
+      "post": "Post directly",
+      "save": "Repeat",
+      "stop": "Stop repeating"
+    }
   }
 }

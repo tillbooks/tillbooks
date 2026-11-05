@@ -79,8 +79,11 @@ import {
   readBankTxnDetail,
   signedAmountOf,
   supersedeActiveLink,
+  withDecisionProvenance,
   writeLineLink,
 } from './bankLines.js';
+import { computeRuleProvenance } from './ruleStats.js';
+import { autobookAfterBooking, autobookAfterReopen } from './autobook.js';
 import { duplicateDecisionPending } from './statementDedupe.js';
 import type {
   ActiveLink,
@@ -593,7 +596,7 @@ function dryRunCapture(
   try {
     ctx.store.discardingChanges(() =>
       ctx.store.tx(() => {
-        const result = runGuarded(() => performBooking(ctx, row, target, {}));
+        const result = runGuarded(() => performBooking(ctx, row, target, { dryRun: true }));
         let entries: { currency: string; lines: BankPreviewLine[] }[] = [];
         if (result.ok) {
           const done = result as unknown as BookBankLineOk;
@@ -1002,7 +1005,7 @@ function dryRunBooking(ctx: WorkspaceContext, row: BankTxnRow, target: BookableB
     // or an unexpected throw from inside would be reported as a refusal that changed the book.
     ctx.store.discardingChanges(() =>
       ctx.store.tx(() => {
-        throw new DryRunDone(runGuarded(() => performBooking(ctx, row, target, { text })));
+        throw new DryRunDone(runGuarded(() => performBooking(ctx, row, target, { text, dryRun: true })));
       }),
     );
   } catch (e) {
@@ -1015,13 +1018,14 @@ function dryRunBooking(ctx: WorkspaceContext, row: BankTxnRow, target: BookableB
 /**
  * The booking itself, INSIDE the caller's transaction, throwing `BankAbort` on any refusal. Shared by
  * `book_bank_line` and the A20 wrappers (`confirm_match`, `create_entry_for_txn`), which memoise under
- * their own verb names.
+ * their own verb names. `dryRun` (N03): the caller rolls everything back (`dryRunCapture`, `dryRunBooking`),
+ * so the provenance read is skipped.
  */
 export function performBooking(
   ctx: WorkspaceContext,
   row: BankTxnRow,
   target: BookableBankLineTarget,
-  opts: { text?: string | undefined; ruleId?: string },
+  opts: { text?: string | undefined; ruleId?: string; dryRun?: boolean },
 ): Result<BookBankLineOk> {
   const current = lineStateOf(ctx, row);
   if (current.state !== 'open') abort(lineNotOpen(row, current.state, current.link));
@@ -1041,25 +1045,46 @@ export function performBooking(
     abort(err('currency_mismatch', { bankTxnId: row.id, lineCurrency: row.currency, accountCurrency: bank.currency }));
   }
   const warnings = row.reversal_ind === 1 ? ['reversal_line'] : [];
+  // N03 (D183): the booking's PROVENANCE, read now, BEFORE anything is written (the booking's own entry would
+  // otherwise stand on the bank ledger as rung (a)'s proposal), and bound for the ONE decision writer, which
+  // stamps it on the decision row as it is inserted, whichever of the paths below writes it. A dry run (the
+  // settlement preview, the pre-draft screen) skips it: everything it writes is rolled back.
+  if (opts.dryRun === true) return dispatchBooking(ctx, row, bank.ledgerAccountId, target, opts, warnings);
+  const provenance = computeRuleProvenance(ctx, row, { target, ruleId: opts.ruleId });
+  const booked = withDecisionProvenance(ctx, row.id, provenance, () => dispatchBooking(ctx, row, bank.ledgerAccountId, target, opts, warnings));
+  // N04 (D183): a CHANGED booking of a rule's proposal pauses the rule's automatic booking (in this transaction).
+  if (booked.ok) autobookAfterBooking(ctx, provenance);
+  return booked;
+}
+
+/** `performBooking`'s dispatch to the path that books the target (every guard above has passed). */
+function dispatchBooking(
+  ctx: WorkspaceContext,
+  row: BankTxnRow,
+  bankLedgerId: string,
+  target: BookableBankLineTarget,
+  opts: { text?: string | undefined; ruleId?: string },
+  warnings: string[],
+): Result<BookBankLineOk> {
   switch (target.kind) {
     case 'open_item':
       // D178 E3 (A39 §17.2): several documents in one payment; one document keeps its own path.
-      if (target.allocations !== undefined) return bookAllocations(ctx, row, bank.ledgerAccountId, target, warnings);
-      return bookOpenItem(ctx, row, bank.ledgerAccountId, target as OpenItemTarget, opts, warnings);
+      if (target.allocations !== undefined) return bookAllocations(ctx, row, bankLedgerId, target, warnings);
+      return bookOpenItem(ctx, row, bankLedgerId, target as OpenItemTarget, opts, warnings);
     case 'payment_batch':
-      return bookPaymentBatch(ctx, row, bank.ledgerAccountId, target.batchId, warnings);
+      return bookPaymentBatch(ctx, row, bankLedgerId, target.batchId, warnings);
     case 'existing_entry':
-      return matchExistingEntry(ctx, row, bank.ledgerAccountId, target.entryId, target.acceptDifference === true ? (target.differenceReason ?? '') : null, warnings);
+      return matchExistingEntry(ctx, row, bankLedgerId, target.entryId, target.acceptDifference === true ? (target.differenceReason ?? '') : null, warnings);
     case 'accounts':
       // D178 E3 (A39 §17.4): a leg in the transaction currency books through the conversion entry.
       if (target.legs.some((l) => l.fx !== undefined)) {
-        return bookToAccountsFx(ctx, row, bank.ledgerAccountId, target, opts, warnings);
+        return bookToAccountsFx(ctx, row, bankLedgerId, target, opts, warnings);
       }
-      return bookToAccounts(ctx, row, bank.ledgerAccountId, target.legs, opts, warnings, target.viaAccountId);
+      return bookToAccounts(ctx, row, bankLedgerId, target.legs, opts, warnings, target.viaAccountId);
     case 'contact':
-      return bookContact(ctx, row, bank.ledgerAccountId, target, opts, warnings);
+      return bookContact(ctx, row, bankLedgerId, target, opts, warnings);
     case 'expense_claims':
-      return bookExpenseClaims(ctx, row, bank.ledgerAccountId, target.claimIds, warnings);
+      return bookExpenseClaims(ctx, row, bankLedgerId, target.claimIds, warnings);
   }
 }
 
@@ -2738,6 +2763,8 @@ export function reopenBankLine(ctx: WorkspaceContext, input: ReopenBankLineInput
         }
       }
       syncCreditRow(ctx, row, 'open', { reversedPaymentId: creditPaymentReversed });
+      // N04 (D183): undoing an AUTOMATIC booking pauses the grant that booked it (in this transaction).
+      autobookAfterReopen(ctx, supersededLinkId);
       ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'reopen', actor: ctx.actor, at: ctx.clock.now() });
       // D177 (the UX walk): undoing the decision gives back the Vorschläge it closed.
       const revivedActionIds = supersededLinkId === null ? [] : reviveLineDraftsOnReopen(ctx, row, supersededLinkId);

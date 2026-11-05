@@ -40,7 +40,8 @@
       "qrMatch": "Reconciliation",
       "dunningRun": "Dunning",
       "reviewFlag": "Flags",
-      "agentActionBank": "The agent's bank proposals"
+      "agentActionBank": "The agent's bank proposals",
+      "autopilot": "Autopilot"
     },
     "queueLabel": {
       "qr_match": "Reconciliation",
@@ -53,7 +54,8 @@
       "bank_activation": "Bank activation",
       "bank_fetch_failed": "Bank fetch",
       "bank_statement_gap": "Statement gaps",
-      "bank_lines_waiting": "Bank lines"
+      "bank_lines_waiting": "Bank lines",
+      "autopilot": "Autopilot"
     },
     "collapsedWith": "also in {queue}",
     "overflow": {
@@ -91,6 +93,37 @@
         "reasonByStudio": "Flagged in the Studio: {reason}",
         "reasonByUnknown": "Flagged: {reason}",
         "reasonSelf": "Flagged by you: {reason}"
+      },
+      "autobookDigest": {
+        "title": "Booked automatically ({count})",
+        "subtitle": "{date}, {notBooked} left for you",
+        "line": "{counterparty}, rule {rule}",
+        "undone": "Undone",
+        "notBooked": "Not automatic",
+        "reason": {
+          "outranked": "something else matches this line first",
+          "not_sure": "the rule is not sure about this line",
+          "currency": "another currency than the ceiling",
+          "over_ceiling": "above the amount ceiling",
+          "period_locked": "the period is closed",
+          "refused": "the booking was refused",
+          "granter_lost_capability": "the person who switched it on can no longer post"
+        }
+      },
+      "scheduleNote": {
+        "title": {
+          "skipped": "Recurring entry {label} {period} did not run",
+          "proposed": "Recurring entry {label} {period} waits for you"
+        },
+        "subtitle": "Due {date}",
+        "reason": {
+          "catch_up": "a missed period is proposed, not posted",
+          "no_post_right": "the person who set it can no longer post, so it is proposed",
+          "vorlage_changed": "the template changed, so it is proposed until you confirm it again",
+          "vorlage_cleared": "the template was deleted",
+          "period_locked": "the period is closed",
+          "invalid": "the template could not book"
+        }
       }
     },
     "events": {
@@ -128,7 +161,10 @@
         "reject": "Proposal rejected. Nothing was posted.",
         "resolve": "Flag resolved, entry approved.",
         "issue": "Reminder run issued.",
-        "confirm_gap": "Confirmed: nothing is missing in this gap."
+        "confirm_gap": "Confirmed: nothing is missing in this gap.",
+        "seen": "Marked as seen.",
+        "undo": "Booking undone: a reversing entry was posted and the line is open again.",
+        "autobook_off": "Automatic booking is off for this rule."
       },
       "error": {
         "generic": "That did not work. The row stays: try again or open the page it belongs to.",
@@ -143,7 +179,9 @@
         "gap_not_chained": "There is money in this gap that is not in the books yet. It cannot be confirmed: import the missing statements.",
         "gap_not_found": "This gap has been closed in the meantime. The list reloads.",
         "human_only": "A person confirms this, not the agent.",
-        "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on. It cannot be confirmed: import the missing statements."
+        "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on. It cannot be confirmed: import the missing statements.",
+        "receipt_already_booked": "The receipt is already booked. Approve this line on its own and give the reason for the second booking.",
+        "holders_changed": "Not carried out: the receipt was booked elsewhere in the meantime. The line now shows where."
       },
       "checkInBank": "Check in the bank",
       "assign": "Assign",
@@ -151,7 +189,10 @@
       "importStatement": "Import statement",
       "importStatements": "Import statements",
       "importStatementParts": "Import missing parts",
-      "reimportStatement": "Re-import statement"
+      "reimportStatement": "Re-import statement",
+      "seen": "Seen",
+      "undo": "Undo",
+      "autobookOff": "Automatic off"
     },
     "grouping": {
       "label": "Grouping",
@@ -181,7 +222,8 @@
         "rule": "Booking rule"
       },
       "staleShort": "Changed since the proposal",
-      "titleWith": "{counterparty} · {thing}"
+      "titleWith": "{counterparty} · {thing}",
+      "scheduledByAgent": "Recurring entry set up by the agent"
     },
     "batch": {
       "label": "Approve proposals together",
@@ -251,6 +293,21 @@
       "since": "since {date}",
       "twoBalances": "2 balances",
       "partsMissing": "parts missing"
+    },
+    "ruleProposed": {
+      "title": "Propose a rule: {counterparty}, booked the same way {repeats}×",
+      "backtest": "Since {date}: {hits} lines, {identical} booked exactly like this",
+      "create": "Create rule",
+      "adjust": "Adjust",
+      "dismiss": "Don't propose",
+      "evidence": "Booked the same way",
+      "evidenceValue": "{date}, {amount}"
+    },
+    "autobookOffer": {
+      "title": "Rule {counterparty}: booked unchanged {count}×. Book automatically from now on?",
+      "meta": "Up to {ceiling} per line, only in {currency}",
+      "grant": "Book automatically",
+      "dismiss": "Not now"
     }
   },
   "help": {

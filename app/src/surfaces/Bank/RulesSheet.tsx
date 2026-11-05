@@ -17,6 +17,13 @@
  *
  * The sheet reads `list_bank_standards` itself each time it opens, so it shows the rules as they are and
  * not as the inbox last read them. Loading is a skeleton of the list; a failed read offers a retry.
+ *
+ * N03 (D183): each bank rule says its track record under its name, read off `bank_rule_stats` beside the
+ * list ("12× verwendet, zuletzt 28.10.2026, 1× geändert", "Noch nie verwendet", a dash while it loads), and a
+ * rule whose last five proposals were changed too often asks "Regel anpassen?", which opens its form. The
+ * form tests the rule as it stands ("Testen", `backtest_bank_rule`). Opened from a BOOKED line ("Als Regel
+ * speichern", or "Anpassen" on a proposed rule in Pendenzen), the sheet opens a new rule's form prefilled
+ * with that booking's legs (the backtest's resolved recipe) and saves it with `fromBankTxnId`.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -28,11 +35,16 @@ import { Modal } from '../../components/Modal';
 import { IconButton } from '../../components/IconButton';
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { ErrorBanner, Skeleton } from '../../components/states';
+import { formatDate } from '../../i18n';
 import type { BankStandard } from './model';
+import type { BankRuleStatsOk } from '../../../../src/core/banking/ruleStats';
+import type { BacktestOk } from '../../../../src/core/banking/ruleMiner';
 import { parseStandards } from './model';
 import type { Lookups } from './lookups';
-import { RuleEditor, type EditorLeg, type RulePayload } from './RuleEditor';
+import { RuleEditor, type EditorLeg, type RulePayload, type RuleTestResult } from './RuleEditor';
 import { invalidReasonText, matchInWords, routeLinesOf, ruleInputOf, ruleName } from './rules';
+import { RuleAutopilotChip, RuleAutopilotSwitch, readCandidates, type AutobookCandidatesOk } from './RuleAutopilot';
+import { VorlageScheduleSection } from './VorlageSchedule';
 
 export interface RulesSheetProps {
   open: boolean;
@@ -50,6 +62,33 @@ export interface RulesSheetProps {
    * form opens and it scrolls into view, once the list is read. Null opens the list as it is.
    */
   focusStandardId?: string | null;
+  /**
+   * N03: a BOOKED line the sheet opens a new rule's form for, prefilled with the booking's legs ("Als Regel
+   * speichern"); saved with `fromBankTxnId`. Null opens the list as it is.
+   */
+  fromBookedLine?: BookedLineRef | null;
+}
+
+/** N03: the booked line a rule is saved from: its id, its counterparty as the line names it, its direction. */
+export interface BookedLineRef {
+  bankTxnId: string;
+  party: string;
+  direction: 'in' | 'out';
+  amountMinor?: number;
+}
+
+/** N03: one rule's track record, as `bank_rule_stats` answers it (the fields the sheet says). */
+interface RuleRecord {
+  uses: number;
+  lastUsedAt: string | null;
+  changed: number;
+  lastFive: { uses: number; changed: number };
+  health: 'ok' | 'adjust';
+}
+
+/** N03: the backtest's input for the rule a form holds (the recipe fields `backtest_bank_rule` reads). */
+function testRecipeOf(payload: RulePayload): Record<string, unknown> {
+  return { legs: payload.legs, matchText: payload.matchText, viaAccountId: payload.viaAccountId };
 }
 
 /** Entfernen's confirm is a consequential dialog; held as a value so the Modal role travels as a prop. */
@@ -85,10 +124,14 @@ function editorLegsOf(rule: BankStandard): EditorLeg[] {
   }));
 }
 
-function RulesSheetPanel({ workspaceId, lookups, currency, canEdit, onClose, onChanged, focusStandardId = null }: Omit<RulesSheetProps, 'open'>) {
+function RulesSheetPanel({ workspaceId, lookups, currency, canEdit, onClose, onChanged, focusStandardId = null, fromBookedLine = null }: Omit<RulesSheetProps, 'open'>) {
   const t = useT();
   const client = useClient();
   const [rules, setRules] = useState<BankStandard[] | null>(null);
+  /** N03: each live bank rule's track record (null while it loads, or when it could not be read). */
+  const [records, setRecords] = useState<ReadonlyMap<string, RuleRecord> | null>(null);
+  /** N03: the booked line's recipe, read through the backtest (null while it loads). */
+  const [fromBooked, setFromBooked] = useState<{ legs: EditorLeg[]; rest: number | null; viaAccountId: string | null } | Err | null>(null);
   const [readError, setReadError] = useState<Err | null>(null);
   const [nonce, setNonce] = useState(0);
   const [editing, setEditing] = useState<string | null>(null);
@@ -96,6 +139,8 @@ function RulesSheetPanel({ workspaceId, lookups, currency, canEdit, onClose, onC
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState<Err | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  /** N04: each bank rule's autopilot (grant state, eligibility), read beside the list. */
+  const [autopilot, setAutopilot] = useState<AutobookCandidatesOk | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -113,7 +158,94 @@ function RulesSheetPanel({ workspaceId, lookups, currency, canEdit, onClose, onC
     };
   }, [client, workspaceId, nonce]);
 
+  // N04: the rules' autopilot, read beside the list each time it is read.
+  useEffect(() => {
+    let live = true;
+    void readCandidates(client, workspaceId).then((read) => {
+      if (live) setAutopilot(read);
+    });
+    return () => {
+      live = false;
+    };
+  }, [client, workspaceId, nonce]);
+
+  // N03: the rules' track records, read beside the list each time it is read.
+  useEffect(() => {
+    let live = true;
+    setRecords(null);
+    void client.call('bank_rule_stats', { workspaceId }).then(({ body }) => {
+      if (!live || isErr(body)) return;
+      setRecords(new Map((body as unknown as BankRuleStatsOk).stats.map((r) => [r.standardId, r])));
+    });
+    return () => {
+      live = false;
+    };
+  }, [client, workspaceId, nonce]);
+
+  // N03: opened on a booked line, the booking's legs prefill a new rule (the backtest answers its recipe).
+  const bookedId = fromBookedLine?.bankTxnId ?? null;
+  useEffect(() => {
+    if (bookedId === null) return;
+    let live = true;
+    setFromBooked(null);
+    void client.call('backtest_bank_rule', { workspaceId, recipe: { fromBankTxnId: bookedId } }).then(({ body }) => {
+      if (!live) return;
+      if (isErr(body)) {
+        setFromBooked(body);
+        return;
+      }
+      const recipe = (body as unknown as BacktestOk).recipe;
+      const rest = recipe.legs.findIndex((l) => l.amount.kind === 'rest');
+      setFromBooked({
+        legs: recipe.legs.map((leg) => ({
+          accountId: leg.accountId,
+          taxCode: leg.taxCode ?? '',
+          against: leg.against === true,
+          ...(leg.amount.kind === 'ask' ? { askLabel: leg.amount.label } : {}),
+        })),
+        rest: rest < 0 ? null : rest,
+        viaAccountId: recipe.viaAccountId,
+      });
+    });
+    return () => {
+      live = false;
+    };
+  }, [client, workspaceId, bookedId]);
+
   const reread = useCallback(() => setNonce((n) => n + 1), []);
+
+  /** N03: "Testen": the rule as the form holds it, over the lines already there. */
+  const testRule = async (ident: { standardId: string } | { fromBankTxnId: string }, payload: RulePayload): Promise<RuleTestResult | Err> => {
+    const { body } = await client.call('backtest_bank_rule', { workspaceId, recipe: { ...ident, ...testRecipeOf(payload) } });
+    if (isErr(body)) return body;
+    const tested = body as unknown as BacktestOk;
+    return { since: tested.since, hits: tested.hits, identical: tested.identical, openLines: tested.openLines };
+  };
+
+  /** N03: the rule saved from the booked line: `fromBankTxnId` names the line, the form's legs are the recipe. */
+  const saveFromBooked = async (line: BookedLineRef, payload: RulePayload): Promise<Err | null> => {
+    const response = await client.call('set_bank_standard', {
+      workspaceId,
+      fromBankTxnId: line.bankTxnId,
+      ...ruleInputOf(payload),
+      idempotencyKey: crypto.randomUUID(),
+    });
+    if (isErr(response.body)) return response.body;
+    setStatus(t('bankInbox.rules.saveFromBooked.saved', { name: payload.label }));
+    setFromBooked(null);
+    reread();
+    onChanged();
+    return null;
+  };
+
+  /** N03: a rule's record in words, or the dash while it loads. */
+  const recordWords = (rule: BankStandard): string => {
+    if (records === null) return t('bankInbox.rules.stats.loading');
+    const r = records.get(rule.id);
+    if (r === undefined || r.uses === 0) return t('bankInbox.rules.stats.never');
+    const used = t('bankInbox.rules.stats.used', { count: r.uses, date: r.lastUsedAt === null ? '' : formatDate(r.lastUsedAt.slice(0, 10)) });
+    return r.changed > 0 ? `${used}, ${t('bankInbox.rules.stats.changed', { count: r.changed })}` : used;
+  };
 
   // D177: opened on one rule, the sheet opens that rule's form once the list has it, and brings it into view.
   const focused = useRef<string | null>(null);
@@ -175,6 +307,7 @@ function RulesSheetPanel({ workspaceId, lookups, currency, canEdit, onClose, onC
       <li key={rule.id} className="bank-rules__item" data-rule={rule.id} data-focused={rule.id === focusStandardId ? 'true' : undefined} data-scope={rule.scope} data-invalid={rule.invalidReason !== null ? 'true' : undefined}>
         <div className="bank-rules__head">
           <p className="bank-rules__name">{name}</p>
+          {rule.scope === 'bank' && <RuleAutopilotChip candidate={autopilot?.rules.find((c) => c.standardId === rule.id)} />}
           {canEdit && (
             <span className="bank-rules__tools">
               <IconButton icon="edit" small context={t('bankInbox.rules.sheet.editContext', { name })} onClick={() => setEditing(editing === rule.id ? null : rule.id)} />
@@ -197,6 +330,24 @@ function RulesSheetPanel({ workspaceId, lookups, currency, canEdit, onClose, onC
           )}
         </div>
         <p className="bank-rules__match">{matchInWords(t, rule)}</p>
+        {rule.scope === 'bank' && (
+          <p className="bank-rules__stats t-num" data-stats={records === null ? 'loading' : 'read'}>
+            {recordWords(rule)}
+          </p>
+        )}
+        {rule.scope === 'bank' && records?.get(rule.id)?.health === 'adjust' && (() => {
+          const r = records.get(rule.id) as RuleRecord;
+          const hint = t('bankInbox.rules.healthHint', { changed: r.lastFive.changed, uses: r.lastFive.uses });
+          return canEdit ? (
+            <button type="button" className="link-inline bank-rules__health" title={hint} onClick={() => setEditing(rule.id)}>
+              {t('bankInbox.rules.health')}
+            </button>
+          ) : (
+            <p className="bank-rules__health" title={hint}>
+              {t('bankInbox.rules.health')}
+            </p>
+          );
+        })()}
         {/* The recognition line above, the booking below it, one short line per leg (LOW d). */}
         <p className="bank-rules__route t-num">
           {routeLinesOf(t, lookups, rule).map((words, i) => (
@@ -213,6 +364,9 @@ function RulesSheetPanel({ workspaceId, lookups, currency, canEdit, onClose, onC
         )}
         {editing === rule.id && (
           <div className="bank-rules__editor">
+            {rule.scope === 'bank' && autopilot !== null && (
+              <RuleAutopilotSwitch workspaceId={workspaceId} candidate={autopilot.rules.find((c) => c.standardId === rule.id)} offerAfter={autopilot.offerAfter} onChanged={reread} />
+            )}
             <RuleEditor
               mode="edit"
               scope={rule.scope}
@@ -233,7 +387,17 @@ function RulesSheetPanel({ workspaceId, lookups, currency, canEdit, onClose, onC
               vorlagen={vorlagen}
               onSave={(payload) => save(rule, payload)}
               onCancel={() => setEditing(null)}
+              {...(rule.scope === 'bank' ? { onTest: (payload: RulePayload) => testRule({ standardId: rule.id }, payload) } : {})}
             />
+            {rule.scope === 'manual' && (
+              <VorlageScheduleSection
+                workspaceId={workspaceId}
+                vorlageId={rule.id}
+                asks={rule.legs.flatMap((l, index) => (l.amount.kind === 'ask' ? [{ index, label: l.amount.label }] : []))}
+                canEdit={canEdit}
+                today={new Date().toISOString().slice(0, 10)}
+              />
+            )}
           </div>
         )}
       </li>
@@ -248,8 +412,40 @@ function RulesSheetPanel({ workspaceId, lookups, currency, canEdit, onClose, onC
   } else {
     const bank = rules.filter((r) => r.scope === 'bank');
     const manual = rules.filter((r) => r.scope === 'manual');
+    const booked =
+      fromBookedLine === null || !canEdit ? null : fromBooked === null ? (
+        <Skeleton rows={1} height={72} labelKey="bankInbox.rules.saveFromBooked.loading" />
+      ) : 'error' in fromBooked ? (
+        <ErrorBanner error={fromBooked} />
+      ) : (
+        <div className="bank-rules__editor" data-from-booked={fromBookedLine.bankTxnId}>
+          <RuleEditor
+            mode="create"
+            party={fromBookedLine.party}
+            direction={fromBookedLine.direction}
+            currency={currency}
+            initialName={fromBookedLine.party}
+            initialText=""
+            legs={fromBooked.legs}
+            initialRest={fromBooked.rest}
+            viaAccountId={fromBooked.viaAccountId}
+            lookups={lookups}
+            {...(fromBookedLine.amountMinor !== undefined ? { lineAmountMinor: Math.abs(fromBookedLine.amountMinor) } : {})}
+            vorlagen={vorlagen}
+            onSave={(payload) => saveFromBooked(fromBookedLine, payload)}
+            onCancel={() => setFromBooked(null)}
+            onTest={(payload) => testRule({ fromBankTxnId: fromBookedLine.bankTxnId }, payload)}
+          />
+        </div>
+      );
     body = (
       <>
+        {booked !== null && (
+          <section className="bank-rules__group" aria-label={t('bankInbox.rules.saveFromBooked.title')}>
+            <h3 className="bank-rules__group-title">{t('bankInbox.rules.saveFromBooked.title')}</h3>
+            {booked}
+          </section>
+        )}
         <section className="bank-rules__group" aria-labelledby="bank-rules-group-bank">
           {/* Words on demand (UX judge round 2, item 12): the sheet's intro sentence behind the (i). */}
           <div className="bank-rules__head bank-rules__head--group">

@@ -87,6 +87,7 @@ import { revertReimbursedClaimsForPayment } from '../hr/reimbursementReversal.js
 // D178 E3: the VAT clearing of a received Anzahlung applied to an invoice. A LEAF module (it imports neither
 // the payments nor the banking barrel), the same discipline as the two leaf edges above.
 import { clearAnzahlungVatOnAllocation } from '../banking/anzahlungVat.js';
+import { autobookAfterPaymentReversed } from '../banking/autobook.js';
 
 // --- Fixed §H-ENUM value lists this spec owns ---------------------------------------------------
 
@@ -2560,6 +2561,8 @@ export function reversePayment(ctx: WorkspaceContext, input: ReversePaymentInput
       // 2260 liability the reversing entry just reopened: `reimbursed -> approved`. A no-op for every
       // ordinary payment (no claim references it). A throw here rolls the whole reversal back.
       revertReimbursedClaimsForPayment(ctx, payment.id);
+      // N04 (D183): reversing a payment an AUTOMATIC booking created pauses the grant that booked it.
+      autobookAfterPaymentReversed(ctx, payment.id);
 
       const documents: { id: string; number: string | null; status: string; grossMinor: number; paidMinor: number; openMinor: number }[] = [];
       // A vendor bill needs NO unwinding step at all, and that is the payoff of deriving its

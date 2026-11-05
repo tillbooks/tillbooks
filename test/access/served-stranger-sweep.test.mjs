@@ -69,6 +69,7 @@ const SERVED_ALLOW = {
   migration_get_extraction_guide: 'one extraction guide, build-time, no tenant data',
   portal_resolve: 'token-authenticated; the resolver triple-fences every read itself',
   portal_quote_accept: 'token-authenticated; fence-checks scope + contact then delegates',
+  call_tool: 'N01 dispatcher: the named verb runs through the transport seam with the SAME deps (the served actor and identity source), so its own tenant check, A24 rule and served fences (D111, F2-F4) answer exactly as a direct call; it reaches nothing a direct call could not',
 };
 
 test('SWEEP completeness: every ungated pre_workspace/machine_scope verb is classified served-deny or served-allow', () => {

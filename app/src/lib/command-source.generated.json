@@ -1,7 +1,7 @@
 {
   "generatedFrom": "src/api/registry.ts via scripts/generate-command-source.mjs",
   "note": "DO NOT EDIT BY HAND. Regenerate: npm run generate:commands. Guarded by command-source-drift.test.mjs.",
-  "verbCount": 822,
+  "verbCount": 844,
   "consequenceFamilies": {
     "close-period": {
       "en": "Closes the period to further bookings. A soft close or a plain hard lock can be lifted with the right; a filed MWST period or a closed year stays sealed.",
@@ -303,6 +303,19 @@
       "kind": "write",
       "reqCount": 1,
       "hasComplexInput": false,
+      "capabilities": [
+        "manage_agent_dial"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "approve_drafted_actions",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": true,
       "capabilities": [
         "manage_agent_dial"
       ],
@@ -1206,6 +1219,58 @@
       "consequence": null
     },
     {
+      "name": "autobook_candidates",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_sales"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "autobook_digest",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_sales"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "autopilot_mark_seen",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_sales"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "backtest_bank_rule",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": true,
+      "capabilities": [
+        "read_sales"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "balance_sheet",
       "kind": "read",
       "reqCount": 1,
@@ -1292,6 +1357,19 @@
       "consequence": null
     },
     {
+      "name": "bank_rule_stats",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_sales"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "bank_sync",
       "kind": "write",
       "reqCount": 0,
@@ -1307,6 +1385,19 @@
         "de-CH": "Holt neue Tagesend-Auszüge von deiner Bank und importiert sie; jede neue Bankzeile wartet im Bankeingang, gebucht wird nichts. Die Bank erhält ihre Quittung; ein Import lässt sich nicht zurücknehmen.",
         "reversibility": "final"
       }
+    },
+    {
+      "name": "belegeingang_status",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_master_data"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
     },
     {
       "name": "billing_generate_invoice",
@@ -1376,7 +1467,29 @@
       }
     },
     {
+      "name": "book_bank_lines",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": true,
+      "capabilities": [],
+      "gateDynamic": true,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "bootstrap_workspace",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "call_tool",
       "kind": "write",
       "reqCount": 1,
       "hasComplexInput": false,
@@ -1413,7 +1526,7 @@
     {
       "name": "capture_document",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 0,
       "hasComplexInput": false,
       "capabilities": [
         "manage_files"
@@ -1589,6 +1702,19 @@
       "consequence": null
     },
     {
+      "name": "clear_vorlage_schedule",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "close_month",
       "kind": "write",
       "reqCount": 1,
@@ -1638,7 +1764,7 @@
     {
       "name": "compose_entry",
       "kind": "read",
-      "reqCount": 1,
+      "reqCount": 0,
       "hasComplexInput": false,
       "capabilities": [
         "read_books",
@@ -3097,6 +3223,19 @@
       }
     },
     {
+      "name": "files_drop_link",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": true,
+      "capabilities": [
+        "manage_files"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "files_get_content",
       "kind": "read",
       "reqCount": 1,
@@ -3156,6 +3295,20 @@
       }
     },
     {
+      "name": "files_pending_preview",
+      "kind": "read",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "manage_agent_dial",
+        "read_file_content"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "files_search",
       "kind": "read",
       "reqCount": 0,
@@ -3198,7 +3351,7 @@
     {
       "name": "files_upload",
       "kind": "write",
-      "reqCount": 1,
+      "reqCount": 0,
       "hasComplexInput": false,
       "capabilities": [
         "manage_files"
@@ -4141,6 +4294,66 @@
       "hasComplexInput": true,
       "capabilities": [
         "manage_master_data"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "grant_rule_autobook",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "hausbuch_note_archive",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "manage_settings"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "customize",
+      "consequence": {
+        "en": "Changes how this workspace is set up for everyone in it. You can change it back, but the earlier setting is not kept.",
+        "de-CH": "Ändert, wie dieser Arbeitsbereich für alle eingerichtet ist. Du kannst es zurückändern, aber die frühere Einstellung wird nicht aufbewahrt.",
+        "reversibility": "reversible"
+      }
+    },
+    {
+      "name": "hausbuch_note_set",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": true,
+      "capabilities": [
+        "manage_settings"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "customize",
+      "consequence": {
+        "en": "Changes how this workspace is set up for everyone in it. You can change it back, but the earlier setting is not kept.",
+        "de-CH": "Ändert, wie dieser Arbeitsbereich für alle eingerichtet ist. Du kannst es zurückändern, aber die frühere Einstellung wird nicht aufbewahrt.",
+        "reversibility": "reversible"
+      }
+    },
+    {
+      "name": "hausbuch_notes",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_master_data"
       ],
       "gateDynamic": false,
       "denylisted": false,
@@ -7097,6 +7310,19 @@
       }
     },
     {
+      "name": "mine_rules",
+      "kind": "write",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "month_end_checklist",
       "kind": "read",
       "reqCount": 1,
@@ -7626,6 +7852,17 @@
       "capabilities": [],
       "gateDynamic": false,
       "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "post_entries",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": true,
+      "capabilities": [],
+      "gateDynamic": true,
+      "denylisted": true,
       "dialCapability": null,
       "consequence": null
     },
@@ -9183,6 +9420,19 @@
       }
     },
     {
+      "name": "revoke_rule_autobook",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "revoke_statement_gap_confirmation",
       "kind": "write",
       "reqCount": 4,
@@ -9855,6 +10105,24 @@
       "consequence": {
         "en": "Changes how MWST is worked out for your returns: effective or net tax rate method, agreed or received payments. You can set it back, but the earlier setting is not kept.",
         "de-CH": "Ändert, wie die MWST für deine Abrechnungen ermittelt wird: effektive oder Saldosteuersatz-Methode, vereinbarte oder vereinnahmte Entgelte. Zurückstellen geht, die frühere Einstellung bleibt nicht erhalten.",
+        "reversibility": "reversible"
+      }
+    },
+    {
+      "name": "set_vorlage_schedule",
+      "kind": "write",
+      "reqCount": 4,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post",
+        "read_sales"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Lets this Vorlage book on every due date: as a proposal you approve or, set by a person, posted directly. Nothing is booked now; end it any time, and a booking is corrected by a reversing entry.",
+        "de-CH": "Lässt diese Vorlage an jedem Fälligkeitstag buchen: als Vorschlag oder, von einer Person so gesetzt, direkt. Jetzt wird nichts gebucht; du kannst es jederzeit beenden, Gebuchtes korrigiert eine Korrekturbuchung.",
         "reversibility": "reversible"
       }
     },
@@ -11356,6 +11624,19 @@
       }
     },
     {
+      "name": "vorlage_schedules",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_sales"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "wage_journal_post",
       "kind": "write",
       "reqCount": 1,
@@ -11469,6 +11750,17 @@
     },
     {
       "name": "whoami",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "workspace_brief",
       "kind": "read",
       "reqCount": 0,
       "hasComplexInput": false,

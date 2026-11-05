@@ -407,6 +407,14 @@ export const DIAL_CAPABILITY_FOR_ACTION: Readonly<Record<string, string>> = {
   inventory_adjust: 'stock',
   inventory_adjust_batch: 'stock',
   inventory_adjust_reverse: 'stock',
+  // customize (N00): the house notes every agent reads in `workspace_brief`. The settings writes' floor
+  // family: an agent's note waits for the owner as a Vorschlag at the default level.
+  hausbuch_note_set: 'customize',
+  hausbuch_note_archive: 'customize',
+  // post (N04): a Dauerbuchung schedule books a Vorlage on its due dates, so a governed seat proposes it
+  // under `post` like the booking itself (and mode `post` is a person's act: refused human_only before any
+  // draft). The grant is human-only and the stops (revoke, clear) and "Gesehen" are exempt by their tags.
+  set_vorlage_schedule: 'post',
 };
 
 /**
@@ -423,6 +431,10 @@ export const INSTANCE_WIDE_DIAL_ACTIONS: ReadonlySet<string> = new Set(['env_res
  * deletes, discards, purges, resets, merges or revokes, to be listed here, and drops a stale entry.
  */
 export const NOT_DIAL_GOVERNED: Readonly<Record<string, string>> = {
+  grant_rule_autobook:
+    'human-only (N04, D183): the engine refuses every governed seat with human_only under every dial, as a call and as a proposal, so no agent ever runs or drafts it; the only drafted form is the system offer a person approves. It is undone by revoke_rule_autobook',
+  revoke_rule_autobook:
+    'the stop direction (N04, D183): it only stops a rule booking on its own and keeps the grant row; nothing posted moves, and the way back is a new grant, which is human-only',
   restore_backup:
     'pre-workspace: it takes no workspaceId, so the transport seam has no tenant whose dial it could read, and it only ever creates a brand-new workspace (never overwrites one); without confirmed:true it returns a plan and writes nothing',
   implementation_signoff_record:
@@ -490,6 +502,18 @@ export const NOT_DIAL_GOVERNED: Readonly<Record<string, string>> = {
     'human-only: approveDraftedAction refuses every governed seat with cannot_self_approve before it reads the row, and A24 step 0 denies the governed seat manage_agent_dial; an approval is the human act a Vorschlag waits for, so drafting one would ask the same person twice',
   set_agent_dial:
     'human-only: setAgentDial refuses every governed seat with cannot_self_grant, writeDialLevel throws for one, and A24 step 0 denies the governed seat manage_agent_dial; a dial grant is the human act that decides what drafts, so it cannot itself be a draft',
+  // N01: the batch approval is the single approval many times, human-only for the same reason.
+  approve_drafted_actions:
+    'human-only: approveDraftedActions refuses every governed seat with cannot_self_approve before it reads a row, A24 step 0 denies the governed seat manage_agent_dial, and every id is then one approve_drafted_action through the transport seam',
+  // N01: the three DISPATCHERS. Drafting the batch as one Vorschlag would hide its items from the person;
+  // instead every item is the single verb itself, dispatched through the transport seam (`governedRun`),
+  // where the dial governs it: under ask each item is its own Vorschlag (D182 §4).
+  book_bank_lines:
+    'dispatch: every item is one book_bank_line run through the transport seam under the caller\'s seat, governed by the dial per item (under ask each item is its own Vorschlag), never as a batch',
+  post_entries:
+    'dispatch: every item is one post_entry run through the transport seam under the caller\'s seat, governed by the dial per item (under ask each item is its own Vorschlag), never as a batch',
+  call_tool:
+    'dispatch: the named verb runs through the transport seam under the caller\'s seat, governed by the dial exactly as a direct call of that verb; call_tool refuses the verbs that keep their own door',
 };
 
 /**
@@ -983,12 +1007,35 @@ export function dialCapabilitiesForCall(
   rules: ReadonlyArray<InputKeyedDialRule> = INPUT_KEYED_DIAL_RULES,
 ): string[] {
   const byName = DIAL_CAPABILITY_FOR_ACTION[name];
-  if (byName !== undefined) return [byName];
+  if (byName !== undefined) return withAttachTier(name, input, [byName]);
   const matched = new Set<string>();
   for (const rule of rules) {
     if (rule.action === name && rule.when(input)) matched.add(rule.capability);
   }
-  return [...matched].sort((a, b) => severityOf(a) - severityOf(b));
+  return withAttachTier(name, input, [...matched].sort((a, b) => severityOf(a) - severityOf(b)));
+}
+
+/**
+ * N02 (D183): the four acts that take `attach`, mirrored from `ATTACH_TARGET_KIND` in
+ * `src/core/files/attach.ts` (`test/files/chat-belege.test.mjs` holds the two lists equal). Kept here as a
+ * plain list so the agent module never imports the files module.
+ */
+export const ATTACH_DIAL_ACTS: readonly string[] = ['post_entry', 'book_bank_line', 'create_vendor_bill', 'record_expense'];
+
+/**
+ * N02 (D183), THE ONE INPUT THAT WIDENS A BY-NAME VERB: a call that links a Beleg through `attach` is
+ * governed by the STRICTER of its own dial and the dial that governs `files_link` (linking posted
+ * evidence locks it for ten years), so `attach` never carries a link past the dial `files_link` would
+ * meet. The candidates stay most severe first; the transport seam drafts when ANY of them would.
+ * `create_vendor_bill`, ungoverned by itself, is governed by the `files_link` family alone when it attaches.
+ */
+function withAttachTier(name: string, input: Readonly<Record<string, unknown>>, caps: string[]): string[] {
+  if (!ATTACH_DIAL_ACTS.includes(name)) return caps;
+  const attach = input.attach;
+  if (!Array.isArray(attach) || attach.length === 0) return caps;
+  const linkTier = DIAL_CAPABILITY_FOR_ACTION.files_link;
+  if (linkTier === undefined || caps.includes(linkTier)) return caps;
+  return [...caps, linkTier].sort((a, b) => severityOf(a) - severityOf(b));
 }
 
 /**

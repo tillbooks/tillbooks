@@ -96,6 +96,12 @@ export const SECRET_COLUMNS: readonly SecretColumn[] = [
     why: 'A per-session agent transport key. Nulled so a copied env carries no live agent-transport credential.',
   },
   {
+    table: 'file_drop_link',
+    column: 'token_hash',
+    strategy: 'randomize',
+    why: 'N02 (D183): SHA-256 of a one-time drop-link token. A held link would still resolve against a raw copy and let a person drop a receipt into the copied books; randomizing it (NOT NULL UNIQUE) kills every outstanding link in the copy.',
+  },
+  {
     table: 'model_decision_key',
     column: 'secret',
     strategy: 'randomize',
@@ -105,7 +111,7 @@ export const SECRET_COLUMNS: readonly SecretColumn[] = [
 
 /**
  * Tables a copy NEVER carries (the `portability.ts` snapshot/restore exclusions): identity
- * (`user`, `workspace_member`, `invite`), operational (`idempotency`, `backups`) and the fail-closed
+ * (`user`, `workspace_member`, `invite`), operational (`idempotency`, `idempotency_args`, `backups`) and the fail-closed
  * `agent_dial`. `invite.token` (a plaintext token) lives here, which is why it needs no neutralization:
  * it is dropped on the way in, never reaching a target. Kept in sync with `portability.ts` by the
  * `landscape-copy` test, which asserts none of these appears in a copy.
@@ -115,6 +121,7 @@ export const NEVER_COPIED_TABLES: ReadonlySet<string> = new Set([
   'workspace_member',
   'invite',
   'idempotency',
+  'idempotency_args',
   'backups',
   'agent_dial',
 ]);

@@ -451,6 +451,20 @@ export interface AcceptQuoteInput {
   idempotencyKey?: string;
 }
 
+/**
+ * The memo key of a quote verb. On the TOKEN path it is scoped by the token's hash (critic follow-up on
+ * N01): the memo used to be keyed by the caller's key alone and was recalled BEFORE the token was
+ * checked, so a bogus token sent with a key someone else had spent answered that person's stored
+ * result. Scoped by the hash, only the holder of the real token reaches the replay; any other token
+ * misses it and meets the token check (`invalid_token`), exactly as without a key. The token is
+ * single-use (cleared on accept), so this is also what lets the real holder's retry replay at all.
+ */
+function quoteMemoKey(input: { token?: string; idempotencyKey?: string }): string | undefined {
+  const key = input.idempotencyKey;
+  if (typeof key !== 'string' || key.length === 0) return undefined;
+  return typeof input.token === 'string' && input.token.length > 0 ? JSON.stringify(['token', hashToken(input.token), key]) : key;
+}
+
 export function acceptQuote(ctx: WorkspaceContext, input: AcceptQuoteInput): Result {
   const run = (): Result => {
     // Resolve the quote either by its single-use token (the cloud accept host) or by id (the human
@@ -492,7 +506,7 @@ export function acceptQuote(ctx: WorkspaceContext, input: AcceptQuoteInput): Res
     return quoteViewOf(ctx, quoteId);
   };
 
-  return runTx(ctx, 'quotes_accept', input.idempotencyKey, run);
+  return runTx(ctx, 'quotes_accept', quoteMemoKey(input), run);
 }
 
 /**
@@ -560,7 +574,7 @@ export function declineQuote(ctx: WorkspaceContext, input: DeclineQuoteInput): R
     return quoteViewOf(ctx, quoteId);
   };
 
-  return runTx(ctx, 'quotes_decline', input.idempotencyKey, run);
+  return runTx(ctx, 'quotes_decline', quoteMemoKey(input), run);
 }
 
 export interface SweepExpiredInput {

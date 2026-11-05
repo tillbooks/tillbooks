@@ -24,7 +24,7 @@
  * erase a business record.
  */
 
-import type { ActionDef, ActionInput, JsonSchema } from './registry.js';
+import type { ActionDef, ActionInput, ApiDeps, JsonSchema } from './registry.js';
 import type { WorkspaceContext } from '../core/context.js';
 import type { Result } from '../core/result.js';
 import {
@@ -45,7 +45,10 @@ import {
   fileUploadCommit,
   MAX_FILE_BYTES,
   MAX_MIGRATION_FILE_BYTES,
+  readSourcePath,
+  uploadFileBytes,
 } from '../core/files/index.js';
+import { err } from '../core/result.js';
 import type { ActionKind } from './actionKind.js';
 
 export interface FileActionHelpers {
@@ -54,7 +57,7 @@ export interface FileActionHelpers {
     kind: ActionKind,
     summary: string,
     inputSchema: JsonSchema,
-    call: (ctx: WorkspaceContext, input: ActionInput) => Result,
+    call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result,
   ): ActionDef;
   ctxSchema(props?: Record<string, unknown>, required?: string[]): JsonSchema;
   STR: { readonly type: 'string' };
@@ -64,6 +67,31 @@ export interface FileActionHelpers {
 /** Widen an `ActionInput` to the engine's own input shape (the same cast `registry.ts` uses). */
 function as<T>(input: ActionInput): T {
   return input as unknown as T;
+}
+
+/**
+ * N02 (D183): `files_upload` by PATH. Exactly one of `contentBase64` and `sourcePath`; the path is read
+ * through the confined reader (local hosts only, `files.source_roots`, PDF and images by their bytes) and
+ * stored through the very upload path base64 takes, the sniffed type as its mime.
+ */
+function uploadFromInput(ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps): Result {
+  if (input.sourcePath === undefined) return uploadFile(ctx, as(input));
+  if (input.contentBase64 !== undefined) {
+    return err('invalid_input', { field: 'sourcePath', reason: 'exactly_one_of', fields: ['contentBase64', 'sourcePath'] });
+  }
+  const read = readSourcePath(ctx, deps.localFiles, input.sourcePath);
+  if ((read as { ok?: unknown }).ok === false) return read as Result;
+  const file = (read as { file: { bytes: Buffer; mime: string; filename: string } }).file;
+  const text = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+  const filename = text(input.filename) ?? file.filename;
+  return uploadFileBytes(ctx, file.bytes, {
+    filename,
+    title: text(input.title) ?? filename,
+    mime: file.mime,
+    ...(input.folderId !== undefined ? { folderId: input.folderId as string | null } : {}),
+    ...(Array.isArray(input.tags) ? { tags: input.tags as string[] } : {}),
+    ...(typeof input.idempotencyKey === 'string' ? { idempotencyKey: input.idempotencyKey } : {}),
+  });
 }
 
 /** The E00 verbs, in append order. */
@@ -103,20 +131,21 @@ export function fileActions(h: FileActionHelpers): readonly ActionDef[] {
     ctxAction(
       'files_upload',
       'write:reversible:internal',
-      `Store a file on this device: the bytes arrive base64-encoded in contentBase64, are hashed with sha256, and are kept content-addressed inside the ledger so nothing leaves the machine. Optionally filed into a folder and tagged. Refuses a payload that is not base64 (file_unreadable) or larger than ${MIB} (file_too_large), and never trusts a caller-supplied hash.`,
+      `Store a file on this device: the bytes arrive base64-encoded in contentBase64, are hashed with sha256, and are kept content-addressed inside the ledger so nothing leaves the machine. Optionally filed into a folder and tagged. Refuses a payload that is not base64 (file_unreadable) or larger than ${MIB} (file_too_large), and never trusts a caller-supplied hash. Instead of contentBase64, sourcePath names a file on THIS computer (an absolute path or one starting with ~/, inside a folder of files.source_roots, by default ~/.claude/uploads and ~/TILL/Belegeingang): only a PDF, JPEG, PNG, HEIC or WebP is read, by its bytes (unsupported_type otherwise), and the sniffed type is the mime; refuses path_not_allowed (outside the folders, a symlink leading out, a hard-linked file, not a regular file), file_not_found, and source_path_local_only on a TILL that is not the local till mcp or till up.`,
       ctxSchema(
         {
           folderId: STR,
           title: STR,
           filename: STR,
           contentBase64: STR,
+          sourcePath: STR,
           mime: STR,
           tags: STR_LIST,
           idempotencyKey: STR,
         },
-        ['contentBase64'],
+        [],
       ),
-      (ctx, input) => uploadFile(ctx, as(input)),
+      (ctx, input, deps) => uploadFromInput(ctx, input, deps),
     ),
     ctxAction(
       'files_update',
@@ -129,7 +158,7 @@ export function fileActions(h: FileActionHelpers): readonly ActionDef[] {
       'files_new_version',
       'write:correctable:books',
       'Add a version that supersedes the current one, keeping both. The chain is linear and append-only (OR 958f): the prior version stays readable and stays retained, and superseding a version something already supersedes is refused with not_head_version. Folder, title, tags, the entity link and the retention date all carry forward.',
-      ctxSchema({ fileId: STR, contentBase64: STR, mime: STR, filename: STR, idempotencyKey: STR }, [
+      ctxSchema({ fileId: STR, contentBase64: STR, mime: STR, filename: STR, idempotencyKey: STR, bookAgain: BOOL, overrideReason: STR }, [
         'fileId',
         'contentBase64',
       ]),
@@ -138,13 +167,21 @@ export function fileActions(h: FileActionHelpers): readonly ActionDef[] {
     ctxAction(
       'files_link',
       'write:final:statutory',
-      'Attach a stored file to any record TILL knows (the OP3 linkEntity): entityKind is validated against the shared entity registry and entityId must exist in this workspace. Linking to POSTED accounting evidence (a document whose issue posted an entry, a payment, a posted journal entry) derives the OR 958f ten-year lock from the END of the fiscal year that RECORD belongs to, so a future-dated entry is kept longer and a backdated one is kept from its own year. A link to a record that has not posted derives nothing until it posts (D63): a draft, and equally an issued quote or order, which carry a number but no booking. The floor attaches at the posting moment and is then permanent, and a never-posted draft that is deleted leaves no lock behind. The derived date is remembered separately, so it survives a later manual extension and a re-link. Re-linking replaces the link. Requires whatever writing the target itself requires.',
-      ctxSchema({ fileId: STR, entityKind: STR, entityId: STR, idempotencyKey: STR }, [
+      'Attach a stored file to any record TILL knows (the OP3 linkEntity): entityKind is validated against the shared entity registry and entityId must exist in this workspace. Linking to POSTED accounting evidence (a document whose issue posted an entry, a payment, a posted journal entry) derives the OR 958f ten-year lock from the END of the fiscal year that RECORD belongs to, so a future-dated entry is kept longer and a backdated one is kept from its own year. A link to a record that has not posted derives nothing until it posts (D63): a draft, and equally an issued quote or order, which carry a number but no booking. The floor attaches at the posting moment and is then permanent, and a never-posted draft that is deleted leaves no lock behind. The derived date is remembered separately, so it survives a later manual extension and a re-link. Re-linking replaces the link. Requires whatever writing the target itself requires. Receipt uniqueness (R1, files.duplicate_beleg): linking to a booking record (journal entry, document, payment, bank line, vendor bill, expense claim) a receipt whose bytes already evidence another live booking, or wait for another Vorschlag, refuses receipt_already_booked naming the holders; a person books it a second time with bookAgain: true and an overrideReason, recorded on the audit chain. An agent never passes bookAgain (human_only): its call becomes a Vorschlag showing the holders.',
+      ctxSchema({ fileId: STR, entityKind: STR, entityId: STR, idempotencyKey: STR, bookAgain: BOOL, overrideReason: STR }, [
         'fileId',
         'entityKind',
         'entityId',
       ]),
-      (ctx, input) => linkFile(ctx, as(input)),
+      // Only the caller's own fields: a release's place in the reservation queue (`receipt`) is never
+      // the caller's to claim (R1).
+      (ctx, input) =>
+        linkFile(ctx, {
+          fileId: input.fileId as string,
+          entityKind: input.entityKind as string,
+          entityId: input.entityId as string,
+          ...(typeof input.idempotencyKey === 'string' ? { idempotencyKey: input.idempotencyKey } : {}),
+        }),
     ),
     ctxAction(
       'files_list_linked',

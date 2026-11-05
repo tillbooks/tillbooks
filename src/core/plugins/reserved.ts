@@ -63,6 +63,22 @@ export function isReservedMoneyPathTool(name: unknown): boolean {
   return typeof name === 'string' && _moneyPathTools !== undefined && _moneyPathTools.has(name);
 }
 
+let _dispatcherTools: ReadonlySet<string> = new Set();
+
+/**
+ * N01 critic (HIGH): the verbs that DISPATCH other verbs (`ActionDef.dispatches`: the batches and
+ * `call_tool`). The plugin bridge checks only the OUTER name, so a dispatcher would carry a plugin past
+ * P3 and past its granted scopes. Refused at the bridge and as a requested or granted scope at install.
+ */
+export function registerDispatcherTools(names: readonly string[]): void {
+  _dispatcherTools = new Set(names);
+}
+
+/** Is `name` a verb that dispatches other verbs (never reachable from a plugin)? */
+export function isDispatcherTool(name: unknown): boolean {
+  return typeof name === 'string' && _dispatcherTools.has(name);
+}
+
 /** Is `name` an existing core tool name (a registering capability may not collide with one)? */
 export function isCoreToolName(name: unknown): boolean {
   return typeof name === 'string' && _coreToolNames !== undefined && _coreToolNames.has(name);

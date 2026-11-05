@@ -4,6 +4,15 @@
    genuinely Capture-specific: the notice, the field key/value table and its provenance/confidence
    notes, the commit target set and the pickers. */
 
+/* N02 (D183): the Belegeingang status line, quiet text above the queue. */
+.capture__belegeingang {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1) var(--t-space-3);
+  margin: 0 0 var(--t-space-2);
+  color: var(--t-text-dim);
+}
+
 .capture__notice {
   padding: var(--t-space-1) var(--t-space-2);
   border: 1px solid var(--t-border);

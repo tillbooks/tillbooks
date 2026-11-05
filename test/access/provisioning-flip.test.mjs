@@ -109,7 +109,8 @@ test('A24 before the flip: an unprovisioned workspace has zero member rows and g
   // four verbs riding that capability are therefore expected denials FOR THIS ACTOR and only those;
   // a human actor on an unprovisioned workspace still holds every write (asserted in the F1
   // regression suite the other way round).
-  const F1_GOVERNOR_VERBS = new Set(['set_agent_dial', 'approve_drafted_action', 'reject_drafted_action', 'agent_prose_delete']);
+  // N01: the batch approval rides the same capability (`approve_drafted_actions`).
+  const F1_GOVERNOR_VERBS = new Set(['set_agent_dial', 'approve_drafted_action', 'approve_drafted_actions', 'reject_drafted_action', 'agent_prose_delete']);
   const denied = [];
   for (const action of verbs) {
     const res = action.run(deps, validFiller(action, workspaceId));

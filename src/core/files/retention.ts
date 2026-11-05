@@ -83,8 +83,22 @@ export const OR_958F_YEARS = 10;
  * entry. It is posted evidence only while the line has a live `booked` or `matched` decision (see
  * `ACCOUNTING_POSTED_CLAUSES`); an open or ignored line derives nothing, and a reopened line lowers
  * nothing (the recorded floor is sealed).
+ *
+ * `vendor_bill` AND `expense_claim` JOINED ON 02.11.2026 (N02 US-N02.4, Wave 0). `docs/CONTRACT.md`
+ * already promised it (`capture_commit`: "the E00 entity link that derives OR 958f retention" on a
+ * vendor bill), and the list did not say so: a Beleg filed against a posted Kreditorenrechnung or an
+ * approved Spesenabrechnung could be erased the next day. Both are the creditor-side and the employee
+ * side of the same evidence a `document` is on the debtor side, and both follow D63: posted evidence
+ * only (`ACCOUNTING_POSTED_CLAUSES`), so a draft bill or an unapproved claim derives nothing.
  */
-export const ACCOUNTING_ENTITY_KINDS: readonly string[] = ['document', 'payment', 'journal_entry', 'bank_txn'];
+export const ACCOUNTING_ENTITY_KINDS: readonly string[] = [
+  'document',
+  'payment',
+  'journal_entry',
+  'bank_txn',
+  'vendor_bill',
+  'expense_claim',
+];
 
 export function isAccountingEntityKind(kind: unknown): boolean {
   return typeof kind === 'string' && ACCOUNTING_ENTITY_KINDS.includes(kind);
@@ -103,12 +117,19 @@ export function isAccountingEntityKind(kind: unknown): boolean {
  * `document` IS THE NULLABLE ONE and it is the reason the fallback exists rather than being a
  * defensive flourish: `issue_date` is NULL on a draft, and attaching the PDF before the invoice is
  * issued is the ordinary order of work.
+ *
+ * `vendor_bill` counts from `bill_date`, which is the date its entry posts under (A17 posts the bill
+ * on its own `bill_date`). `expense_claim` has no business date of its own: it counts from
+ * `approved_at`, the moment E02 posts the claim's entry, and the entry is dated that same day. The
+ * column holds a timestamp, so the day is read off its leading `YYYY-MM-DD` (`accountingRecordDate`).
  */
 export const ACCOUNTING_DATE_COLUMNS: ReadonlyMap<string, string> = new Map([
   ['document', 'issue_date'],
   ['payment', 'date'],
   ['journal_entry', 'date'],
   ['bank_txn', 'booking_date'],
+  ['vendor_bill', 'bill_date'],
+  ['expense_claim', 'approved_at'],
 ]);
 
 /**
@@ -150,6 +171,12 @@ export const ACCOUNTING_DATE_ALSO: ReadonlyMap<string, string> = new Map([
  *  * `payment`: `record_payment` posts its balanced entry in the same call, so a payment row never
  *    exists un-posted. The predicate is the tautology, kept as a row so the map stays total.
  *  * `journal_entry`: the A02 status flip, the exact moment the immutability triggers seal it.
+ *  * `vendor_bill`: `entry_id`, stamped by A17's post in the same transaction as its entry. A void
+ *    books a reversal into `reversal_entry_id` and leaves `entry_id` standing, so a bill that once
+ *    posted stays evidence, exactly like a cancelled document. A migrated bill (G21) posts nothing and
+ *    carries no entry, so it derives nothing here.
+ *  * `expense_claim`: `posted_entry_id`, stamped by E02's approval in the same transaction as its
+ *    entry; a reversal books into `reversal_entry_id` and leaves it standing.
  *
  * One row per `ACCOUNTING_ENTITY_KINDS` entry and no more, asserted in
  * `test/files/posted-floor.test.mjs` the same way `ACCOUNTING_DATE_COLUMNS` is held, so the map
@@ -159,6 +186,8 @@ export const ACCOUNTING_POSTED_CLAUSES: ReadonlyMap<string, string> = new Map([
   ['document', 'posted_entry_id IS NOT NULL'],
   ['payment', '1 = 1'],
   ['journal_entry', "status = 'posted'"],
+  ['vendor_bill', 'entry_id IS NOT NULL'],
+  ['expense_claim', 'posted_entry_id IS NOT NULL'],
   // D142: a bank line is posted evidence while its live decision booked or matched it (an ignore, and a
   // line reopened to open, are not). Correlated on the outer `bank_txn` row.
   [
@@ -195,6 +224,9 @@ export function isPostedAccountingRecord(
 
 const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** A day, or a timestamp that starts with one (`expense_claim.approved_at`): its `YYYY-MM-DD` day. */
+const ISO_DAY_PREFIX_RE = /^\d{4}-\d{2}-\d{2}(?:$|T)/;
+
 /**
  * The linked record's own date, or null when there is no reachable dated record.
  *
@@ -219,7 +251,7 @@ export function accountingRecordDate(
     .prepare(`SELECT ${column} AS d FROM ${def.table} WHERE workspace_id = ? AND ${def.idColumn} = ?`)
     .get(ctx.workspaceId, entityId) as { d: string | null } | undefined;
   const value = row?.d;
-  const own = typeof value === 'string' && ISO_DAY_RE.test(value) ? value : null;
+  const own = typeof value === 'string' && ISO_DAY_PREFIX_RE.test(value) ? value.slice(0, 10) : null;
   const also = ACCOUNTING_DATE_ALSO.get(entityKind);
   if (also === undefined) return own;
   const extra = (ctx.store.db.prepare(also).get(ctx.workspaceId, entityId) as { d: string | null } | undefined)?.d;

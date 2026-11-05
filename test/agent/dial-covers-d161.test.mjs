@@ -99,7 +99,8 @@ const GOVERNED_SHAPE = {
  */
 const NEVER_HELD_BY_THE_SEAT = { agent_prose_delete: 'manage_agent_dial' };
 
-const TRACE_AND_QUEUE = new Set(['agent_session', 'agent_turn', 'agent_call', 'agent_action', 'idempotency']);
+// `idempotency_args` (N01) is the memo's argument half: bookkeeping exactly like `idempotency`.
+const TRACE_AND_QUEUE = new Set(['agent_session', 'agent_turn', 'agent_call', 'agent_action', 'idempotency', 'idempotency_args']);
 
 /** Every business table, row for row: "the proposal changed nothing" is this digest staying equal. */
 function digest(db) {

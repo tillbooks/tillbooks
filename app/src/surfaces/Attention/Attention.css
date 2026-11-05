@@ -739,3 +739,30 @@ button.att-row-title {
   color: var(--t-text-dim);
   margin: 0;
 }
+
+/* N04: the digest card's lines (Automatisch gebucht), under the card's own row. */
+.att-digest {
+  list-style: none;
+  margin: 0 0 var(--t-space-2) 0;
+  padding: 0 0 0 var(--att-lead);
+  display: grid;
+  gap: var(--t-space-1);
+}
+.att-digest-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--t-space-2);
+  font-size: var(--t-font-md);
+}
+.att-digest-what {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.att-digest-acts {
+  display: inline-flex;
+  gap: var(--t-space-1);
+}
+.att-digest-state {
+  color: var(--t-text-dim);
+}

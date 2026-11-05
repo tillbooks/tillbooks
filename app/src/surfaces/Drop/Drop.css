@@ -1,0 +1,82 @@
+/**
+ * N02 (D183), the drop page. No rail and no chrome: one column on the paper ground, left-aligned, the
+ * panel the elevated ground (no border: the hairline is earned), the drop zone the shared FileDrop.
+ */
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--t-space-6) var(--t-space-4);
+  min-height: 100vh;
+  box-sizing: border-box;
+  background: var(--t-bg);
+  color: var(--t-text);
+}
+
+.drop-eyebrow {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.drop-title {
+  margin: 0;
+}
+
+.drop-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.drop-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  padding: var(--t-space-4);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+}
+
+.drop-h2 {
+  margin: 0;
+}
+
+.drop-lead {
+  margin: 0;
+  color: var(--t-text-dim);
+  max-width: 60ch;
+}
+
+.drop-problem {
+  margin: 0;
+  color: var(--t-danger);
+}
+
+.drop-zone {
+  align-self: stretch;
+}
+
+.drop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+.drop-progress {
+  width: 100%;
+}
+
+.drop-thumb {
+  max-width: 100%;
+  max-height: 20rem;
+  border-radius: var(--t-radius-md);
+}
+
+.drop-file {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

@@ -33,7 +33,10 @@ import type { VorschlagFigures } from '../agent/vorschlagPin.js';
 import type { WorkspaceContext } from '../context.js';
 import { listDraftedActions, CONSEQUENCE_FOR_ACTION } from '../agent/index.js';
 import { LINE_STATE_EXPR, LINE_STATE_JOINS } from '../banking/bankLines.js';
-import type { AttentionDecisionOption, AttentionItem, QueueProvider } from './types.js';
+import { isMinedRuleVorschlag, storedMinedFacts } from '../banking/ruleMiner.js';
+import { isAutobookOffer, storedOfferFacts } from '../banking/autobook.js';
+import { isGovernedSeat } from '../access/capability.js';
+import type { AttentionAutobookOffer, AttentionDecisionOption, AttentionItem, AttentionRuleProposal, QueueProvider } from './types.js';
 
 /**
  * The drafted verbs that file a Vorschlag under Bank: the verbs whose owning surface sits in the rail's
@@ -313,22 +316,47 @@ function vorschlagItem(ctx: WorkspaceContext, queueId: string, a: Record<string,
     });
   }
   // A stale row is void in the engine: it can neither be approved nor rejected any more.
+  // N03: a mined rule was drafted by no seat (system, no dial family): there is nothing to allow in future.
+  const mined = isMinedRuleVorschlag(tool, payload, a.actor);
+  // N04 (D183): the offer "künftig automatisch" is drafted by `system` with no dial family, like a mined rule:
+  // there is nothing to allow in future, and its two answers are "Künftig automatisch" and "Nicht jetzt".
+  const offer = isAutobookOffer(tool, payload, a.actor);
+  // Critic N04 F5: a Dauerbuchung's Vorschlag is drafted by `system`; the card names who set the schedule.
+  const scheduledBy = tool === 'post_entry' && a.actor === 'system' ? scheduleSetterOf(ctx, actionId) : null;
   if (!stale) {
     options.push(
-      { id: 'approve', verb: 'approve_drafted_action', labelKey: 'agent.card.approve', role: 'primary', input: { actionId }, capability: 'manage_agent_dial' },
       {
-        id: 'approve_allow',
+        id: 'approve',
         verb: 'approve_drafted_action',
-        labelKey: 'agent.card.approveAllow',
-        role: 'secondary',
-        input: { actionId, allowFuture: true },
+        labelKey: mined ? 'attention.ruleProposed.create' : offer ? 'attention.autobookOffer.grant' : 'agent.card.approve',
+        role: 'primary',
+        input: { actionId },
         capability: 'manage_agent_dial',
-        hintKey: 'agent.card.grantHint',
       },
-      { id: 'reject', verb: 'reject_drafted_action', labelKey: 'agent.card.reject', role: 'danger', input: { actionId }, capability: 'manage_agent_dial', reasonField: true },
+      ...(mined || offer
+        ? []
+        : [
+            {
+              id: 'approve_allow',
+              verb: 'approve_drafted_action',
+              labelKey: 'agent.card.approveAllow',
+              role: 'secondary' as const,
+              input: { actionId, allowFuture: true },
+              capability: 'manage_agent_dial',
+              hintKey: 'agent.card.grantHint',
+            },
+          ]),
+      { id: 'reject', verb: 'reject_drafted_action', labelKey: mined ? 'attention.ruleProposed.dismiss' : offer ? 'attention.autobookOffer.dismiss' : 'agent.card.reject', role: 'danger', input: { actionId }, capability: 'manage_agent_dial', reasonField: true },
     );
   }
   const subtitleParams: Record<string, string | number> = { tool };
+  // N03 (D183): a mined Buchungsregel shows who it is for, how often it was booked so and its backtest, as
+  // the miner stored them when it drafted it (bank facts: only for a seat that reads the bank, as above).
+  const ruleProposal = !stale && mined && ctx.capabilities.assert('read_sales').ok ? minedRuleOf(ctx, payload) : null;
+  if (ruleProposal !== null) subtitleParams.counterparty = ruleProposal.counterparty;
+  // N04: the offer's facts, as the step stored them when it drafted it (bank facts: a seat that reads the bank).
+  const autobookOffer = !stale && offer && ctx.capabilities.assert('read_sales').ok ? autobookOfferOf(payload) : null;
+  if (autobookOffer !== null) subtitleParams.counterparty = autobookOffer.counterparty;
   if (shown !== null) {
     subtitleParams.date = shown.date;
     // The counterparty leads the row's title in the Studio (the fresh-eyes judge, N4 M3).
@@ -362,6 +390,39 @@ function vorschlagItem(ctx: WorkspaceContext, queueId: string, a: Record<string,
     ...(!changed && isBatchable(tool) ? { posts: postsEntry(ctx, tool, payload) } : {}),
     // A Vorschlag that can no longer be approved waits for a person to decide the line: Erledigen.
     ...(changed ? { kind: 'do' as const } : {}),
+    ...(ruleProposal !== null ? { ruleProposal } : {}),
+    ...(autobookOffer !== null ? { autobookOffer } : {}),
+    ...(scheduledBy !== null ? { scheduledBy } : {}),
+  };
+}
+
+/** N04: who set the Dauerbuchung whose run drafted this Vorschlag, and whether that seat is an agent. */
+function scheduleSetterOf(ctx: WorkspaceContext, actionId: string): { actor: string; agent: boolean } | null {
+  const row = ctx.store.db
+    .prepare('SELECT s.set_by AS by FROM vorlage_schedule_run r JOIN vorlage_schedule s ON s.workspace_id = r.workspace_id AND s.id = r.schedule_id WHERE r.workspace_id = ? AND r.action_id = ?')
+    .get(ctx.workspaceId, actionId) as { by: string } | undefined;
+  return row === undefined ? null : { actor: row.by, agent: isGovernedSeat(ctx.store, row.by) };
+}
+
+/** N04: an autobook offer's facts for the hub, as the step stored them (never recomputed on read). */
+function autobookOfferOf(payload: Readonly<Record<string, unknown>>): AttentionAutobookOffer | null {
+  const f = storedOfferFacts(payload);
+  if (f === null) return null;
+  return { standardId: f.standardId, counterparty: f.counterparty, label: f.label, cleanUses: f.cleanUses, ceilingMinor: f.ceilingMinor, currency: f.currency };
+}
+
+/** N03: a mined rule's facts for the hub, as the miner stored them in the Vorschlag (critic, finding 5: never recomputed on read). */
+function minedRuleOf(_ctx: WorkspaceContext, payload: Readonly<Record<string, unknown>>): AttentionRuleProposal | null {
+  const facts = storedMinedFacts(payload);
+  if (facts === null) return null;
+  return {
+    counterparty: facts.counterparty,
+    repeats: facts.repeats,
+    since: facts.since,
+    hits: facts.hits,
+    identical: facts.identical,
+    bankTxnId: String(payload['bankTxnId']),
+    evidence: facts.evidence.map((e) => ({ bankTxnId: e.bankTxnId, date: e.date, amountMinor: e.amountMinor, currency: e.currency })),
   };
 }
 

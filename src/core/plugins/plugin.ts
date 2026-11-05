@@ -41,7 +41,7 @@ import {
   type PluginCapabilityKind,
 } from './enums.js';
 import { satisfies, isValidRange, parseVersion } from './compat.js';
-import { moneyPathTools, isReservedMoneyPathTool, isCoreToolName } from './reserved.js';
+import { moneyPathTools, isReservedMoneyPathTool, isCoreToolName, isDispatcherTool } from './reserved.js';
 import { registryClient } from './registryClient.js';
 
 // --- Rows, manifests, and wire views ------------------------------------------------------------
@@ -275,6 +275,10 @@ function checkCapabilities(
     if (isReservedMoneyPathTool(cap.name)) {
       return err('capability_forbidden', { reason: 'no_second_posting_path', name: cap.name });
     }
+    // N01 critic: a capability naming a dispatcher (a batch, call_tool) would reach any verb by name.
+    if (isDispatcherTool(cap.name)) {
+      return err('capability_forbidden', { reason: 'dispatcher', name: cap.name });
+    }
   }
   // Name conflict, only for REGISTERING kinds (mcp_tool/studio_screen/report_source). An
   // `automation_action` is a REFERENCE to an existing tool, so naming one is legal for it.
@@ -418,6 +422,10 @@ export function installPlugin(ctx: WorkspaceContext, input: InstallPluginInput):
   }
 
   const grantedScopes = (input.grantedScopes as string[] | undefined) ?? [];
+  // N01 critic (HIGH): a scope on a dispatcher (a batch, call_tool) is refused, requested or granted.
+  for (const scope of [...manifest.requested, ...grantedScopes]) {
+    if (isDispatcherTool(scope.slice(scope.indexOf(':') + 1))) return err('capability_forbidden', { reason: 'dispatcher', scope });
+  }
   const granted = intersectScopes(manifest.requested, grantedScopes);
   const compatible = satisfies(CORE_CONTRACT_VERSION, manifest.compatRange);
   const status: PluginStatus = compatible ? 'installed' : 'incompatible';

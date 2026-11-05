@@ -707,3 +707,77 @@ describe('the Commit moment on a decision (D122 D-I)', () => {
     expect(container.querySelector('.action-feedback--info')?.hasAttribute('data-just-committed')).toBe(false);
   });
 });
+
+describe('N02 R1: a receipt that is already booked (receipt uniqueness)', () => {
+  const holder = { entityKind: 'journal_entry', entityId: 'je_7', reservedBy: null };
+  const pendingWithHolder = ok({
+    actions: [
+      {
+        actionId: 'a9', actor: 'agent', dialCapability: 'close-period', actionTool: 'post_entry', payload: { date: '2026-09-02' },
+        status: 'pending', createdAt: '2026-09-02T10:00:00.000Z', receiptHolders: [holder],
+      },
+    ],
+  });
+  const confirmable: RestResponse = { status: 409, body: { ok: false, error: 'receipt_already_booked', holders: [holder], override: 'bookAgain with overrideReason' } };
+
+  it('the card says the receipt is booked; approving asks for the reason and sends the same approval with it', async () => {
+    const approvals: Record<string, unknown>[] = [];
+    renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: pendingWithHolder,
+      approve_drafted_action: (input) => {
+        approvals.push(input);
+        return input.bookAgain === true ? ok({ actionId: 'a9', status: 'executed' }) : confirmable;
+      },
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    expect(await screen.findByText('Dieser Beleg ist bereits gebucht (Buchung).')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Genehmigen' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Beleg schon gebucht' });
+    expect(within(dialog).getByText('je_7')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Trotzdem buchen' }));
+    expect(await within(dialog).findByText('Gib einen Grund an.')).toBeInTheDocument();
+    expect(approvals).toHaveLength(1);
+    fireEvent.change(within(dialog).getByLabelText('Grund'), { target: { value: 'Zwei Positionen' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Trotzdem buchen' }));
+    expect(await screen.findByText('Genehmigt und ausgeführt')).toBeInTheDocument();
+    expect(approvals[1]).toMatchObject({ actionId: 'a9', bookAgain: true, overrideReason: 'Zwei Positionen' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('holders_changed: nothing is asked, the person is told and the queue re-reads', async () => {
+    let reads = 0;
+    renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: () => {
+        reads += 1;
+        return pendingWithHolder;
+      },
+      approve_drafted_action: { status: 409, body: { ok: false, error: 'holders_changed', actionId: 'a9', holders: [holder] } },
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    const before = reads;
+    fireEvent.click(screen.getByRole('button', { name: 'Genehmigen' }));
+    expect(await screen.findByText(/Der Beleg wurde inzwischen anderswo gebucht/)).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(reads).toBeGreaterThan(before));
+  });
+
+  it('under refuse (no override hint) the refusal is not a question', async () => {
+    let approved = 0;
+    renderAgent({
+      list_agent_sessions: SESSIONS,
+      list_drafted_actions: pendingWithHolder,
+      approve_drafted_action: () => {
+        approved += 1;
+        return { status: 409, body: { ok: false, error: 'receipt_already_booked', holders: [holder], setting: 'files.duplicate_beleg' } };
+      },
+    });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
+    await screen.findAllByRole('article');
+    fireEvent.click(screen.getByRole('button', { name: 'Genehmigen' }));
+    await waitFor(() => expect(approved).toBe(1));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+});
