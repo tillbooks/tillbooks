@@ -10,6 +10,9 @@
   },
   "homepage": "https://tillbooks.ch",
   "repository": "https://github.com/tillbooks/tillbooks",
+  "documentationUrl": "https://github.com/tillbooks/tillbooks/tree/develop/site-docs",
+  "supportUrl": "https://github.com/tillbooks/tillbooks/issues",
+  "privacyPolicyUrl": "https://github.com/tillbooks/tillbooks#privacy-policy",
   "license": "MIT",
   "keywords": ["accounting", "erp", "swiss", "switzerland", "mwst", "vat", "ledger", "bookkeeping", "local-first", "mcp"]
 }
