@@ -1,0 +1,2 @@
+# Vendored SIX schema: store byte-for-byte (no CRLF normalization) so the sha256 pin holds.
+*.xsd -text

@@ -1,0 +1,259 @@
+/**
+ * A35: the /agent surface and the Vorschlag line it shares with Pendenzen. D167 retired the dock and
+ * its pill: no element of this surface floats over the page any more. A list spends no accent: the
+ * line's Genehmigen is a secondary on every row.
+ */
+
+/* ------------------------------------------------------------------------------------ the turns */
+
+.agent-turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.agent-turn-head {
+  display: flex;
+  gap: var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.agent-turn-text {
+  margin: var(--t-space-1) 0 0;
+}
+
+.agent-turn-outcome {
+  margin: var(--t-space-1) 0 0;
+  font-weight: 500;
+}
+
+.agent-trace {
+  list-style: none;
+  margin: var(--t-space-1) 0 0;
+  padding: 0 0 0 var(--t-space-2);
+  border-left: 1px solid var(--t-border);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.trace-row-line {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 32px;
+  flex-wrap: wrap;
+}
+
+.trace-status {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  white-space: nowrap;
+}
+
+.trace-status[data-status='fehlgeschlagen'],
+.trace-status[data-status='verweigert'] {
+  color: var(--t-danger);
+}
+
+.trace-label {
+  flex: 1 1 auto;
+}
+
+.trace-dial,
+.trace-duration {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-variant-numeric: tabular-nums;
+}
+
+/* D167: a call's Details are label and value pairs (the Vorschlag line's read-back), never code. */
+.trace-details {
+  margin: var(--t-space-1) 0 0;
+  padding-left: var(--t-space-3);
+}
+
+/* The decision beside a drafting call: a word, in neutral ink, never a coloured badge. */
+.trace-decision {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* ---------------------------------------------------------------------------------- the surface */
+
+/* The page header (SurfaceHeader), the tab strip (Tabs) and both the Gespräche and Berechtigungen
+ * tables are shared primitives now (D118 B2 / D135): DataTable owns the frame, the sticky header and
+ * the right-aligned tabular numeric columns, so this surface no longer carries any table CSS. */
+
+.agent-running {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.agent-queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 640px;
+}
+
+.agent-group-head {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  margin: var(--t-space-3) 0 var(--t-space-1);
+}
+
+.agent-trust-window {
+  color: var(--t-text-dim);
+}
+
+.agent-trust-nohistory,
+.agent-trust-disagree,
+.agent-trust-statutory {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* The Stufe cell stacks the level word over its muted context lines (disagreement, attribution,
+ * strong-default reason, no-history), so a row that used to spill into extra table rows now reads
+ * top-to-bottom inside its one aligned cell. */
+.agent-trust-stufe {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The D103 ceremonies (grant-confirm, the D-3 suggestion) sit beneath the aligned table, one quiet
+ * bordered block per capability, so the grid above them stays clean. */
+.agent-trust-ceremony {
+  margin: var(--t-space-1) 0 var(--t-space-2);
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  max-width: 640px;
+}
+
+.agent-trust-ceremony p {
+  margin: 0 0 var(--t-space-1);
+}
+
+.agent-trust-ceremony-label {
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.agent-session-meta {
+  color: var(--t-text-dim);
+}
+
+.agent-month {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin-bottom: var(--t-space-2);
+}
+
+.agent-month-label {
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+  text-align: center;
+}
+
+.agent-month-empty {
+  color: var(--t-text-dim);
+}
+
+.agent-trust-grantedby {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.vorschlag-amount-figure {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------------- Verbindung */
+
+.agent-connect {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 640px;
+}
+
+.agent-connect-intro {
+  margin: 0;
+}
+
+.agent-connect-mode {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.agent-connect-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.agent-connect-line,
+.agent-connect-hint,
+.agent-connect-empty {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.agent-connect-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.agent-connect-url {
+  font-family: var(--t-font-mono, monospace);
+  background: var(--t-bg-code);
+  border-radius: var(--t-radius-sm);
+  padding: 0 var(--t-space-1);
+}
+
+.agent-connect-config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  align-items: flex-start;
+}
+
+.agent-connect-code {
+  margin: 0;
+  width: 100%;
+  background: var(--t-bg-code);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-2);
+  overflow-x: auto;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.agent-connect-clients {
+  margin: 0;
+  padding-left: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

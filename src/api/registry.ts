@@ -1,0 +1,3006 @@
+/**
+ * Phase E, the shared action registry: parity by construction.
+ *
+ * Every agent-facing verb is exposed exactly ONCE here, as an `ActionDef`. The MCP stdio server
+ * (`mcp.ts`) and the REST twins (`rest.ts`) are two thin adapters over this SAME array: each looks up
+ * an action by name and calls `action.run`, so the two faces cannot drift. Adding a verb is a single
+ * append here; both surfaces pick it up for free.
+ *
+ * `run` is the one place a verb is invoked. It maps a camelCase input object straight through to the
+ * engine verb, building the `WorkspaceContext` with the REAL A03 ledger ports (so a post stamps the
+ * hash-chained audit log and honours period locks) for ctx-based verbs, or calling the deps-based
+ * setup verbs (`create_workspace`, `bootstrap_workspace`) with `{ store, clock, ids, actor }` directly.
+ */
+
+import type { OkFields, Result } from '../core/result.js';
+import { ok, err } from '../core/result.js';
+import type { SqliteStore } from '../core/store/sqlite-store.js';
+import type { AdoptedBookUnavailable } from './db-path.js';
+import { isBusyError } from '../core/store/sqlite-store.js';
+import { SchemaNewerThanRuntimeError, SCHEMA_NEWER_THAN_RUNTIME, refusalFields } from '../core/store/generation.js';
+import { claimIdempotencyArgs, declareVerbFreeText, type ClaimSite, type FreeTextPolicy } from '../core/store/idempotencyArgs.js';
+import { verbArgsIdentity, freeTextPolicy } from '../core/agent/argsIdentity.js';
+import { ACCOUNT_REF, normalizeAccountRefs, schemaHasAccountRefs } from './input-boundary.js';
+import { batchActions } from './batch-actions.js';
+import type { Clock } from '../core/clock.js';
+import type { IdGen } from '../core/ids.js';
+import type {
+  WorkspaceContext,
+  EmailRelayPort,
+  SignTransmitterPort,
+  EbillTransmitterPort,
+  EbicsTransportPort,
+  EbicsKeystorePort,
+  ManagedChannelPort,
+} from '../core/context.js';
+import type { DiagnosticsPort } from '../core/ports.js';
+import { makeContext } from '../core/context.js';
+import { postEntryFromTemplate, prevalidatePostEntryFromTemplate } from '../core/banking/bankTemplates.js';
+import { withAttach, type LocalFileGrant, type DraftAttachPrep } from '../core/files/index.js';
+import { ReceiptGuardAbort, withReceiptOverride } from '../core/files/receiptGuard.js';
+import { approvingActionIds } from '../core/agent/approving.js';
+import { chatBelegeActions, attachable } from './chat-belege-actions.js';
+import { closeYearGuarded } from '../core/checklists/index.js';
+
+import {
+  ledgerPorts,
+  postEntry,
+  prevalidatePostEntry,
+  reverseEntry,
+  saveDraft,
+  deleteDraft,
+  getEntry,
+  listJournal,
+  softCloseMonth,
+  reopenMonth,
+  lockPeriod,
+  unlockPeriod,
+  getAuditLog,
+  listPeriodLocks,
+} from '../core/ledger/index.js';
+import {
+  createWorkspace,
+  bootstrapWorkspace,
+  setFiscalConfig,
+  setVatMethod,
+  setCreditorProfile,
+  getCompanyProfile,
+  updateCompanyProfile,
+} from '../core/setup/index.js';
+import {
+  createAccount,
+  updateAccount,
+  archiveAccount,
+  unarchiveAccount,
+  deleteAccount,
+  listAccounts,
+  createCostCenter,
+  archiveCostCenter,
+  unarchiveCostCenter,
+  deleteCostCenter,
+  listCostCenters,
+} from '../core/accounts/index.js';
+import {
+  seedTaxCodes,
+  configureVat,
+  getVatConfig,
+  listSaldoGenerations,
+  setSaldoDeclarationBasis,
+  listTaxCodes,
+  upsertTaxCode,
+  deactivateTaxCode,
+  reactivateTaxCode,
+  setAccountTaxDefault,
+  computeLineTax,
+  computeVatReturn,
+  exportVatReturnEch0217,
+  listVatPeriods,
+  markVatPeriodFiled,
+  saldoEligibility,
+} from '../core/vat/index.js';
+import { fxActions } from './fx-actions.js';
+import { accrualActions, vatSettlementActions } from './accrual-actions.js';
+import { paymentActions } from './payment-actions.js';
+import { debtorActions } from './debtor-actions.js';
+import { bankActions } from './bank-actions.js';
+import { reportActions } from './report-actions.js';
+import { openingActions } from './opening-actions.js';
+import { supportActions } from './support-actions.js';
+import { migrationMapActions } from './migration-map-actions.js';
+import { migrationActions } from './migration-actions.js';
+// G11 Eröffnungsprüfung
+import { migrationCheckActions } from './migration-check-actions.js';
+import { migrationOpenItemsActions } from './migration-open-items-actions.js';
+// G12 Testmandant
+import { migrationTestmandantActions } from './migration-testmandant-actions.js';
+// G03 onboarding & demo workspace
+import { onboardingActions } from './onboarding-actions.js';
+// G13 GL archive
+import { glArchiveActions } from './gl-archive-actions.js';
+// G19 extraction companion (guides + export-completeness manifest)
+import { migrationExtractionActions } from './migration-extraction-actions.js';
+import { migrationProjectActions } from './migration-project-actions.js';
+// G22 checklists (D127): the MWST-Periode checklist and its siblings.
+import { checklistActions } from './checklist-actions.js';
+import { permissionActions } from './permission-actions.js';
+import { customizationActions } from './customization-actions.js';
+import { documentTemplateActions } from './document-template-actions.js';
+import { dispatchActions } from './dispatch-actions.js';
+import { automationActions } from './automation-actions.js';
+import { contactActions } from './contact-actions.js';
+import { taskActions } from './task-actions.js';
+import { notificationActions } from './notification-actions.js';
+import { pluginActions } from './plugin-actions.js';
+import {
+  registerMoneyPathTools,
+  registerCoreToolNames,
+  registerDispatcherTools,
+} from '../core/plugins/index.js';
+import { dealActions } from './deal-actions.js';
+import { quoteActions } from './quote-actions.js';
+import { forecastActions } from './forecast-actions.js';
+import { searchActions } from './search-actions.js';
+import { fileActions } from './file-actions.js';
+import { signActions } from './sign-actions.js';
+import { portalActions } from './portal-actions.js';
+import { vendorPortalActions } from './vendor-portal-actions.js';
+import { itemActions } from './item-actions.js';
+import { assetActions } from './asset-actions.js';
+import { maintenanceActions } from './maintenance-actions.js';
+import { assetReportsActions } from './asset-reports-actions.js';
+import { requisitionActions } from './requisition-actions.js';
+import { inventoryActions } from './inventory-actions.js';
+import { trackingActions } from './tracking-actions.js';
+import { movementActions } from './movement-actions.js';
+import { stocktakeActions } from './stocktake-actions.js';
+import { inventoryAdjustActions } from './inventory-adjust-actions.js';
+// I02 goods receipt
+import { receiptActions } from './receipt-actions.js';
+import { valuationActions } from './valuation-actions.js';
+import { valuationRunActions } from './valuation-run-actions.js';
+import { landedCostActions } from './landed-cost-actions.js';
+import { threeWayMatchActions } from './three-way-match-actions.js';
+import { supplierPerformanceActions } from './supplier-performance-actions.js';
+import { procurementAnalyticsActions } from './procurement-analytics-actions.js';
+import { inventoryAgentActions } from './inventory-agent-actions.js';
+import { projectActions } from './project-actions.js';
+import { timeActions } from './time-actions.js';
+import { billingActions } from './billing-actions.js';
+import { retainerActions } from './retainer-actions.js';
+import { costingActions } from './costing-actions.js';
+import { dashboardActions } from './dashboard-actions.js';
+import { attentionActions } from './attention-actions.js';
+import { guidanceActions } from './guidance-actions.js';
+import { deliveryActions } from './delivery-actions.js';
+import { syncActions } from './sync-actions.js';
+import { moveActions } from './move-actions.js';
+import { envActions } from './env-actions.js';
+import { reportBuilderActions } from './report-builder-actions.js';
+import { stockActions } from './stock-actions.js';
+import { salesOrderActions } from './sales-order-actions.js';
+import { purchaseOrderActions } from './purchase-order-actions.js';
+import { poAmendmentActions } from './po-amendment-actions.js';
+import { purchaseActions } from './purchase-actions.js';
+import { captureActions } from './capture-actions.js';
+import { payrollActions } from './payroll-actions.js';
+import { ebillActions } from './ebill-actions.js';
+import { ebicsActions } from './ebics-actions.js';
+import { hrActions } from './hr-actions.js';
+import { mailActions } from './mail-actions.js';
+import { voiceActions } from './voice-actions.js';
+import { draftActions } from './draft-actions.js';
+import { composeActions } from './compose-actions.js';
+import { journalNumberingActions } from './journal-numbering-actions.js';
+import { egressActions } from './egress-actions.js';
+import { dunningActions } from './dunning-actions.js';
+import { recurringActions } from './recurring-actions.js';
+import { qrMatchActions } from './qr-match-actions.js';
+import { camtActions } from './camt-actions.js';
+import { settlementActions } from './settlement-actions.js';
+import { bankInboxActions } from './bank-inbox-actions.js';
+import { belegActions } from './beleg-actions.js';
+import { ruleLearningActions } from './rule-learning-actions.js';
+import { autopilotActions } from './autopilot-actions.js';
+import { pain001Actions } from './pain001-actions.js';
+import { getPaymentBatch } from '../core/banking/pain001.js';
+import { liquidityActions } from './liquidity-actions.js';
+import { settingsActions } from './settings-actions.js';
+import { prefsActions } from './prefs-actions.js';
+import { hausbuchActions } from './hausbuch-actions.js';
+import { workspaceActions } from './workspace-actions.js';
+import { reviewActions } from './review-actions.js';
+import { agentActions } from './agent-actions.js';
+import { agentOversightActions } from './agent-oversight-actions.js';
+import { CONSEQUENCE_FOR_ACTION } from '../core/agent/index.js';
+// Imported from the module, not the barrel: the registry's own boundary check, not a verb's engine.
+import { dialCapabilitiesForVerb } from '../core/agent/dialMap.js';
+import { REVERSIBILITY_LEVELS } from '../core/agent/consequences.js';
+import { CONSEQUENCE_TAGS } from '../core/agent/consequenceTag.js';
+import { wayBackProblems } from '../core/agent/wayBack.js';
+import type { ActionKind, ConsequenceTag, Reversibility } from './actionKind.js';
+import { dataActions } from './data-actions.js';
+import type { CatalogAction } from '../core/data/index.js';
+import { assertEveryActionIsGated, capabilityPort, isGovernedSeat, requiredCapabilitiesFor } from '../core/access/index.js';
+import {
+  dispatchAutomationEvent,
+  eventsEmittedBy,
+  registerWriteActions,
+} from '../core/automation/index.js';
+import type { ActionInvoker } from '../core/automation/index.js';
+import { postedBankLedgerLegs } from '../core/banking/automationGuard.js';
+import {
+  createContact,
+  updateContact,
+  archiveContact,
+  unarchiveContact,
+  getContact,
+  listContacts,
+  createItem,
+  updateItem,
+  archiveItem,
+  unarchiveItem,
+  getItem,
+  listItems,
+  createDocument,
+  updateDocument,
+  transitionDocumentVerb,
+  convertDocument,
+  getDocument,
+  listDocuments,
+  issueInvoice,
+  sendInvoice,
+  buildQrBill,
+  renderInvoicePdf,
+  createCreditNote,
+  issueCreditNote,
+  renderCreditNotePdf,
+} from '../core/sales/index.js';
+
+/** What a single request is handed: the store and seams, plus the actor to stamp. Per-request. */
+export interface ApiDeps {
+  store: SqliteStore;
+  clock: Clock;
+  ids: IdGen;
+  actor: string;
+  /**
+   * D166 point 8 (critic N1): set by `till up` while the ADOPTED book could not be opened and the
+   * process runs on an in-memory stand-in. The transport dispatch (`runGoverned`, `agent-gate.ts`, the
+   * one door both faces call) then refuses every verb but `delivery_status` with
+   * `adopted_book_unavailable`, so nothing, an agent included, writes into a book that is not the
+   * person's. Absent everywhere else.
+   */
+  adoptedBookUnavailable?: AdoptedBookUnavailable | undefined;
+  /**
+   * M01: the proxy-attested subject in served mode, absent locally. Set per request by the transport
+   * (see `served-mode.ts`), threaded onto `WorkspaceContext` so `whoami` can name it. Never consulted
+   * for authorization: the `actor` is what A24 gates on.
+   */
+  subject?: string | undefined;
+  /** M01: how identity was established (`local_client` by default, `served_subject` in served mode). */
+  identitySource?: import('../core/access/index.js').IdentitySource | undefined;
+  /**
+   * The outbound email transport, when the HOST wired one. Absent means there is no transport, and
+   * `send_invoice` then degrades honestly rather than claiming a send: there is no transport in the
+   * MIT core by design, and a configured `workspace.email_relay` mode alone can never mean "sent".
+   *
+   * This is the seam a host fills. `EmailRelayPort` lives on `WorkspaceContext` and `makeContext`
+   * carries it through, but `ApiDeps` is what MCP, the REST twins and the Studio bridge all hand to
+   * `action.run`, so without it here the port was unreachable from every shipped surface.
+   */
+  emailRelay?: EmailRelayPort | undefined;
+  /** The E01 e-sign transmitter (OP4), when the host wired one. Absent in the MIT core. */
+  signTransmitter?: SignTransmitterPort | undefined;
+  /** A32's eBill connector (OP4), when the host wired one. Absent in the MIT core: transmit degrades to cloud_tier. */
+  ebillTransmitter?: EbillTransmitterPort | undefined;
+  /** A33's EBICS transport (OP4), when the host wired one. Absent means the channel's network steps degrade honestly. */
+  ebicsTransport?: EbicsTransportPort | undefined;
+  /** A33's key custody seam. Absent means the core's in-process `defaultEbicsKeystore`. */
+  ebicsKeystore?: EbicsKeystorePort | undefined;
+  /**
+   * D142: the host's off-thread runner for `bank_sync`. `till up` wires one that runs the whole verb in a
+   * `worker_threads` worker on its own SQLite connection (`bank-sync-offload.ts`), so the process keeps
+   * answering while the bank wire waits. Absent (stdio MCP, the suites, `till serve`) the verb runs in
+   * process, exactly as before. Only doors that can await use it (`runAsync`, `runGovernedAsync`).
+   */
+  bankSyncRunner?: ((deps: ApiDeps, input: ActionInput) => Promise<Result>) | undefined;
+  /**
+   * D143 critic F1: the same off-thread runner for the scheduler's daily activation check (an HPB-only
+   * probe, `checkBankActivation`), so no tick blocks the process on the wire. Not a verb and not
+   * reachable from any door: only `scheduler.ts` calls it, with `{workspaceId, connectionId, now}`, and it
+   * answers `ok({report})`. Absent (the suites, an in-memory book) the probe runs in process.
+   */
+  bankActivationRunner?: ((deps: ApiDeps, input: ActionInput) => Promise<Result>) | undefined;
+  /** A37's managed connectivity relay (OP4, owner-gated). Absent means the cloud tier is off: managed actions degrade to cloud_tier. */
+  managedChannel?: ManagedChannelPort | undefined;
+  /**
+   * G08's seam. Absent means nothing is recorded, which is the correct default for an embedder that
+   * wired no host: the core notices a defect, it does not decide whether to write one down.
+   */
+  diagnostics?: DiagnosticsPort | undefined;
+  /** G08: the `~/.till/` directory, injected so tests never touch the developer's home. */
+  supportDir?: string | undefined;
+  /** G04: the backup-bundle directory, injected so tests never write into the developer's home. */
+  backupDir?: string | undefined;
+  /**
+   * A35: the stable per-connection key of an MCP session, minted by the transport (one connection is
+   * one session). Absent for connectionless callers (the REST twins): the recorder's idle-gap rule
+   * applies. Never client-supplied: a client that could pick its session could hide a call.
+   */
+  agentTransportKey?: string | undefined;
+  /** A35: the client name captured at `initialize`, rendered as the session's provenance line. */
+  agentClientLabel?: string | undefined;
+  /**
+   * N02 (D183): the host's grant to read a receipt by PATH (`sourcePath` on `files_upload`,
+   * `capture_document` and the four acts' `attach`) and to watch the Belegeingang folder. Only the two
+   * LOCAL hosts set it: `till mcp` over stdio and `till up` outside served mode. Absent everywhere else
+   * (`till serve`, served mode, an embedder, the suites), and its absence IS the refusal
+   * `source_path_local_only`: fail closed, so a served TILL never reads the server's disk for a caller.
+   */
+  localFiles?: LocalFileGrant | undefined;
+}
+
+/** A tool input, decoded from JSON. camelCase keys map straight through to the engine verb. */
+export type ActionInput = Record<string, unknown>;
+
+/** A minimal JSON Schema for a tool's input (field names + types; the workspace id where required). */
+export interface JsonSchema {
+  type: 'object';
+  properties: Record<string, unknown>;
+  required: string[];
+  additionalProperties: boolean;
+}
+
+/**
+ * One agent-facing verb, as both faces see it.
+ *
+ * WHY THIS IS GENERIC, AND WHY THE DEFAULTS MATTER MORE THAN THE PARAMETERS.
+ *
+ * `run` used to be typed `(deps, input) => Result`, the OPEN `Result`. `src/core/result.ts` made the
+ * success payload declarable (`Result<PostEntryOk>`) and `postEntry` declared one, but this line then
+ * threw it away: the dispatcher BOTH surfaces go through erased every declared payload on its way to
+ * the wire, so nothing downstream of here could state what a tool answers with. That is the last
+ * type-level link in this repo's longest-running defect family, "the Studio assumed a shape the
+ * engine never sends".
+ *
+ * `N` and `T` both DEFAULT to what was written here before (`string`, `OkFields`), so a bare
+ * `ActionDef` means exactly what it always meant: every one of the five action-group modules, both
+ * adapters, `ACTIONS` itself and every suite compile unchanged. Declaring a payload stays a per-verb
+ * decision, made one verb at a time, and an undeclared verb pays nothing.
+ *
+ * `N` carries the snake_case tool NAME as a literal, which is the half `app/src/lib/payloads.ts`
+ * could not derive: the Studio had to hand-write `post_entry: PayloadOf<typeof postEntry>` because
+ * nothing at the dispatcher tied that wire name to that payload. With the name on the type, the
+ * binding is read off the definition instead of restated beside it.
+ *
+ * An INTERFACE is safe here, unlike `Ok` in `src/core/result.ts`, and the difference is worth
+ * stating because it looks like the same trap. There, the payload type had to be a type ALIAS: an
+ * interface is denied the implicit index signature, so `Ok<PostEntryOk>` would have stopped being
+ * assignable to the open `Ok` the other verbs return. That constraint is on `T` (a type ALIAS is
+ * still what a payload must be declared as), not on the container: nothing requires `ActionDef` to
+ * satisfy `Record<string, unknown>`, and `ActionDef<'post_entry', PostEntryOk>` is assignable to
+ * `ActionDef` through ordinary property and return-type covariance. `test/api/wire-payload-binding.test.mjs`
+ * proves that assignability rather than assuming it.
+ */
+export interface ActionDef<N extends string = string, T extends OkFields = OkFields> {
+  /** snake_case tool name, e.g. `post_entry`. Stable: this IS the §H-ENUM tool identity. */
+  name: N;
+  /**
+   * `read` tools carry `readOnlyHint` on MCP; `write` tools do not. Always the plain split: a
+   * registration's `write:<class>` lands here as `write` and its class on `reversibility`.
+   */
+  kind: 'read' | 'write';
+  /**
+   * D159: how far this write can be undone (`reversible`, `correctable`, `final`), declared on its
+   * registration line as `write:<class>:<tag>` and split off by `ctxAction` / `depsAction`. Set on every
+   * write (the load assert `assertEveryWriteIsClassified` refuses a write without it), absent on a read.
+   * The MCP adapter derives `destructiveHint` and `_meta['tillbooks/reversibility']` from it.
+   */
+  reversibility?: Reversibility;
+  /**
+   * D160: what this write touches, the closed consequence tag (`books`, `statutory`, `outbound`, `access`,
+   * `erase`, or one of the exemption reasons), declared as the third part of `write:<class>:<tag>`. Set on
+   * every write, absent on a read. Named `consequenceTag` because `consequence` is already the A35 sentence
+   * below, read by the catalog and the MCP description.
+   */
+  consequenceTag?: ConsequenceTag;
+  /** One-line human description surfaced as the MCP tool description. */
+  summary: string;
+  /**
+   * A35/G16: the consequence sentence beside `summary` on money-path writes: what the write
+   * IRREVERSIBLY does, for a human deciding whether to run or approve it. One field, three
+   * consumers (the palette's review step, the Vorschlag card, an MCP client's confirmation prose).
+   * Populated from `CONSEQUENCE_FOR_ACTION` after `ACTIONS` is built; absent on everything else.
+   */
+  consequence?: string;
+  /** The tool's input schema. */
+  inputSchema: JsonSchema;
+  /** The SINGLE invocation of the underlying verb. Both MCP and REST call exactly this. */
+  run(deps: ApiDeps, input: ActionInput): Result<T>;
+  /**
+   * D142: the same verb for a door that can AWAIT (the MCP handler, the REST face, the scheduler). Set
+   * only on a verb whose host may run it off the main thread (`bank_sync`); every other verb has none
+   * and the awaiting doors fall back to `run`. It never changes what the verb answers, only where it runs.
+   */
+  runAsync?(deps: ApiDeps, input: ActionInput): Promise<Result<T>>;
+  /**
+   * D158: the verb's own validation, with nothing written. The transport seam (`agent-gate.ts`) runs
+   * it for a dial-governed call BEFORE it drafts, so an input the verb would refuse is refused with the
+   * verb's own Result, drafted or direct, on every face, instead of queuing a Vorschlag the approval
+   * replay can only fail. Undefined means "the verb would accept it" (or would replay its key); set
+   * only through `withPrevalidate`, on a verb whose validation can run without writing.
+   */
+  prevalidate?(deps: ApiDeps, input: ActionInput): Result | undefined;
+  /**
+   * N01 critic: this verb DISPATCHES other verbs by name (the batches, `call_tool`). A caller that checks
+   * only the outer name (the plugin bridge) must refuse it (`registerDispatcherTools`).
+   */
+  dispatches?: true;
+  /**
+   * N02 (D183): what a drafted call stores BEFORE its Vorschlag is queued, and the payload the Vorschlag
+   * then carries. The transport seam calls it after `prevalidate`, with the governed seat's context: it
+   * may answer a refusal (nothing is queued), nothing (the draft queues exactly as before), or a
+   * preparation whose `stage` runs inside the draft's transaction (storing a `sourcePath` receipt
+   * pending and rewriting the payload to `{fileId}`) and whose `settle` binds what it stored to the
+   * Vorschlag. Set only through `attachable` (`./chat-belege-actions.ts`).
+   */
+  prepareDraft?(deps: ApiDeps, ctx: WorkspaceContext, input: ActionInput): DraftAttachPrep | Result | undefined;
+}
+
+/**
+ * D158: attach a verb's pure pre-draft validation (`ActionDef.prevalidate`). The check receives the
+ * same wired context the verb itself gets and runs inside the same throw guard, so an exception in it
+ * is a structured Result like any other; an ok answer counts as "accepted".
+ */
+export function withPrevalidate<D extends ActionDef>(
+  def: D,
+  check: (ctx: WorkspaceContext, input: ActionInput) => Result | undefined,
+): D {
+  def.prevalidate = (deps, input) => {
+    // N01 US-N01.5: the screen runs under the same argument claim as the verb, so a key already spent
+    // on different arguments is refused here, before a Vorschlag is drafted, not at its approval.
+    const outcome = guarded(
+      def.name,
+      () =>
+        claimIdempotencyArgs(
+          deps.store,
+          claimSite(def.name, input, def.inputSchema),
+          () => verbArgsIdentity(def.name, input),
+          () => policyFor(deps, input),
+          () => check(ctxOf(deps, input), input) ?? ok({}),
+        ),
+      deps,
+    );
+    return outcome.ok ? undefined : outcome;
+  };
+  return def;
+}
+
+/**
+ * N01: THE GOVERNED DISPATCH, BOUND LATE. The batch verbs (`book_bank_lines`, `post_entries`,
+ * `approve_drafted_actions`) and `call_tool` run each item through the SAME transport seam a single call
+ * takes (`runGoverned`, `agent-gate.ts`), so the dial, the A24 gate, the trace and the input boundary hold
+ * per item. The gate imports this module, so this module cannot import the gate; the gate binds itself here
+ * when it loads (`bindGovernedDispatch`), which every transport (MCP, REST, the local router) does.
+ *
+ * FAIL-CLOSED WHEN UNBOUND: a caller that loaded the registry without the gate (an embedder, a suite
+ * driving `action.run`) gets the verb's own `run` for a seat the dial does not govern, which is exactly what
+ * `runGoverned` is for that seat, and `governed_dispatch_unavailable` for a governed seat, never an
+ * ungoverned agent write.
+ */
+type GovernedDispatch = (deps: ApiDeps, action: ActionDef, input: ActionInput) => Result;
+let governedDispatch: GovernedDispatch | undefined;
+
+/** Called once by `agent-gate.ts` at load. */
+export function bindGovernedDispatch(dispatch: GovernedDispatch): void {
+  governedDispatch = dispatch;
+}
+
+/** Run `tool` with `input` through the governed dispatch under `deps`' seat (see above). */
+function governedRun(deps: ApiDeps, tool: string, input: ActionInput): Result {
+  const action = getAction(tool);
+  if (action === undefined) return err('unknown_action', { action: tool });
+  if (governedDispatch !== undefined) return governedDispatch(deps, action, input);
+  if (isGovernedSeat(deps.store, deps.actor)) return err('governed_dispatch_unavailable', { action: tool });
+  return action.run(deps, input);
+}
+
+/**
+ * N01 US-N01.1: the input boundary's account resolution for a caller OTHER than the verb's own `run` (the
+ * transport seam, before it screens and drafts a governed call), so a Vorschlag stores ids exactly as a
+ * direct call would hand them to the verb. A call without a workspace, or to a verb that takes no account,
+ * comes back untouched; `run` resolves again on the approval replay, which an id passes unchanged.
+ */
+export function normalizeActionInput(
+  deps: ApiDeps,
+  action: ActionDef,
+  input: ActionInput,
+): { ok: true; input: ActionInput } | { ok: false; error: Result } {
+  if (typeof input.workspaceId !== 'string' || input.workspaceId.length === 0) return { ok: true, input };
+  if (!schemaHasAccountRefs(action.inputSchema)) return { ok: true, input };
+  const normalized = normalizeAccountRefs(ctxOf(deps, input), action.inputSchema, input);
+  return normalized.ok ? normalized : { ok: false, error: normalized.error };
+}
+
+/**
+ * N01 US-N01.5: where a ctx verb's argument identity is recorded and looked up (`ClaimSite`). The
+ * workspace is the one `ctxAction` has already authenticated the actor in, EXCEPT on a call that
+ * authenticates by `token` (the verb resolves its tenant from the token, so the `workspaceId` it names
+ * proves nothing yet): that call is unclaimed (security review). A pre-workspace verb passes
+ * `workspaceId: null` itself (`depsAction`).
+ */
+function claimSite(verb: string, input: ActionInput, schema: JsonSchema): ClaimSite {
+  const tokenAuthenticated = 'token' in schema.properties && typeof input.token === 'string' && input.token.length > 0;
+  const workspaceId = typeof input.workspaceId === 'string' && input.workspaceId.length > 0 && !tokenAuthenticated ? input.workspaceId : null;
+  return { verb, workspaceId, input };
+}
+
+/** N01: the workspace's free-text policy (`idempotency.hash_free_text`); the default without a workspace. */
+function policyFor(deps: ApiDeps, input: ActionInput): FreeTextPolicy {
+  return typeof input.workspaceId === 'string' && input.workspaceId.length > 0 ? freeTextPolicy(ctxOf(deps, input)) : 'exclude';
+}
+
+/**
+ * Build a wired `WorkspaceContext` for a ctx-based verb: real A03 period + audit ports, and, since
+ * A24, the real capability port.
+ *
+ * THE CAPABILITY PORT USED TO BE MISSING HERE, and its absence was invisible by construction.
+ * `makeContext` falls back to `allowAllCapabilities` (`core/ports.ts`), so the twelve
+ * `ctx.capabilities.assert(...)` call sites that A02, A03 and A14 have carried since Wave 0 all
+ * returned ok, on every call, in every build that ever shipped. Nothing was broken and nothing was
+ * enforced: the call sites existed exactly so there would be no bypass to retrofit, and the
+ * retrofit is this line.
+ */
+/**
+ * N02 (D183): the same wired context a ctx verb gets, for the one engine call that is deliberately NOT a
+ * verb (the drop page's redemption, `drop-face.ts`): real audit and period ports, the real capability port.
+ */
+export function wiredContext(deps: ApiDeps, workspaceId: string): WorkspaceContext {
+  return ctxOf(deps, { workspaceId });
+}
+
+function ctxOf(deps: ApiDeps, input: ActionInput): WorkspaceContext {
+  const workspaceId = typeof input.workspaceId === 'string' ? input.workspaceId : '';
+  return makeContext(deps.store, {
+    workspaceId,
+    actor: deps.actor,
+    clock: deps.clock,
+    ids: deps.ids,
+    capabilities: capabilityPort(deps.store, workspaceId, deps.actor, deps.identitySource),
+    // M01: carried through only when served mode set them, so a local ctx stays absent (not an explicit
+    // undefined) under exactOptionalPropertyTypes.
+    ...(deps.subject !== undefined ? { subject: deps.subject } : {}),
+    ...(deps.identitySource !== undefined ? { identitySource: deps.identitySource } : {}),
+    ...ledgerPorts({ store: deps.store, workspaceId, ids: deps.ids }),
+    // Spread only when the host wired one: under `exactOptionalPropertyTypes` an explicit
+    // `undefined` is not the same as absent, and "absent" is what the honest degradation reads.
+    ...(deps.emailRelay !== undefined ? { emailRelay: deps.emailRelay } : {}),
+    ...(deps.signTransmitter !== undefined ? { signTransmitter: deps.signTransmitter } : {}),
+    ...(deps.ebillTransmitter !== undefined ? { ebillTransmitter: deps.ebillTransmitter } : {}),
+    ...(deps.ebicsTransport !== undefined ? { ebicsTransport: deps.ebicsTransport } : {}),
+    ...(deps.ebicsKeystore !== undefined ? { ebicsKeystore: deps.ebicsKeystore } : {}),
+    ...(deps.managedChannel !== undefined ? { managedChannel: deps.managedChannel } : {}),
+  });
+}
+
+// A cast that documents intent: the JSON input object is handed to the verb as its typed input. The
+// engine verbs read the fields they need and ignore the rest (workspaceId included), so passing the
+// whole object through is safe and is what keeps the mapping a straight camelCase pass-through.
+function as<T>(input: ActionInput): T {
+  return input as unknown as T;
+}
+
+/**
+ * Convert any thrown exception into a structured Result. A verb should always RETURN its rejection
+ * (P9, result.ts), but a type-invalid input the schema did not catch (a null id, an object where a
+ * string was expected, a missing tenant) can still throw inside the engine or the SQLite driver. If
+ * that escaped, it would be a 500 on REST and a JSON-RPC protocol error on MCP: the ONE way the two
+ * faces could diverge. Catching it HERE, in the shared dispatch both adapters call, keeps every input
+ * mapping to a Result and keeps the faces identical.
+ *
+ * `partial` (critic R2-4): every Result made here says whether THIS call had already written to the
+ * book before it threw. A verb that commits in steps (the send recorded before and after its email,
+ * the draft settled after the verb it approved) can fail at a later step, and the sentences these
+ * codes carry ("the book was not changed", the Studio's "nothing was changed") are then false. The
+ * connection's change count is read before the verb and again here, so the rule holds for every verb,
+ * including one written next year, with no census to keep true.
+ *
+ * `checkAfter` (critic R3-2): the marker is read again AFTER the verb, for every call the registry
+ * also checks BEFORE it (every workspace verb, reads included, and every pre-workspace write). The
+ * check before holds no snapshot, so a read verb whose statements straddle a newer TILL's migration
+ * read some rows at the old meaning and some at the new one, and answered ok. The connection's write
+ * chokepoint keeps every WRITE out of a newer book, but a read has nothing to refuse it mid-verb. So
+ * a book that is newer once the verb is done turns ANY answer (ok, a rejection, or an error the newer
+ * schema caused) into `schema_newer_than_runtime`, with `partial` measured as above: a read reports
+ * `partial: false`, and a write that had already committed says so.
+ */
+function guarded<T extends OkFields>(name: string, run: () => Result<T>, deps?: ApiDeps, checkAfter = false): Result<T> {
+  const changesBefore = changeCountOf(deps);
+  const refusalsBefore = refusalCountOf(deps);
+  const partialSince = (): boolean => {
+    const changesAfter = changeCountOf(deps);
+    return changesBefore !== undefined && changesAfter !== undefined && changesAfter > changesBefore;
+  };
+  let outcome: Result<T>;
+  try {
+    outcome = run();
+  } catch (e) {
+    const partial = partialSince();
+    // The book moved on under this process: a newer TILL migrated it after this store opened it, and
+    // the store refused the write before it ran (critic finding M3). That is a condition the caller
+    // must act on (update TILL), not a fault, so it keeps its code and its version pair. An error of
+    // another kind thrown on a book that has moved on (a statement meeting the newer schema) is the
+    // same condition, and is named as such.
+    const moved = e instanceof SchemaNewerThanRuntimeError ? e : checkAfter ? bookMovedOn(deps) : undefined;
+    if (moved !== undefined) {
+      return err(SCHEMA_NEWER_THAN_RUNTIME, { action: name, ...refusalFields(moved, partial) });
+    }
+    // Lock contention is NOT an unexpected error, and flattening it into one loses the only fact the
+    // caller can act on. D12 put a second writer on the file (the Studio and an agent subprocess hold
+    // the same SQLite database), so a write can legitimately lose a race after waiting out its busy
+    // timeout. `store_busy` says "nothing is broken, try again in a moment"; `unexpected_error` says
+    // "something is broken, stop". A Studio must be able to tell those apart before it decides
+    // whether to retry a post.
+    deps?.diagnostics?.record({
+      kind: 'verb_error',
+      at: new Date().toISOString(),
+      code: isBusyError(e) ? 'store_busy' : 'unexpected_error',
+      action: name,
+      error: e,
+    });
+    const message = e instanceof Error ? e.message : String(e);
+    if (isBusyError(e)) {
+      return err('store_busy', { action: name, retryable: true, partial, message });
+    }
+    return err('unexpected_error', { action: name, partial, message });
+  }
+  if (checkAfter) {
+    // Read BEFORE the check below, which raises (and counts) a refusal of its own.
+    const refusalsAfter = refusalCountOf(deps);
+    const moved = bookMovedOn(deps);
+    if (moved !== undefined) {
+      // SAVED WHOLE (`completed`) only when the verb answered ok AND no refusal was raised while it
+      // ran (critic R4-2). The chokepoint refuses every write after the move, so such a verb wrote
+      // nothing after it. A verb that swallowed a refusal (a tick answering ok with per-item
+      // failures) did not finish its work, and says part of it was saved. Unknown counts (a store
+      // stub) are never taken as proof.
+      const refusedDuring = refusalsBefore === undefined || refusalsAfter === undefined || refusalsAfter > refusalsBefore;
+      return err(SCHEMA_NEWER_THAN_RUNTIME, { action: name, ...refusalFields(moved, partialSince(), outcome.ok && !refusedDuring) });
+    }
+  }
+  return outcome;
+}
+
+/** The verb store's refusal count (`SqliteStore.refusalCount`, critic R4-2), or undefined. Never throws. */
+function refusalCountOf(deps?: ApiDeps): number | undefined {
+  try {
+    const store: unknown = deps?.store;
+    if (typeof store !== 'object' || store === null) return undefined;
+    const count = (store as { refusalCount?: unknown }).refusalCount;
+    return typeof count === 'function' ? (count.call(store) as number) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The typed refusal when the verb store's book has moved on to a generation newer than this build,
+ * else undefined. Never throws: a unit suite's store stub has no marker to read, and a failed read is
+ * not evidence that the book moved on.
+ */
+function bookMovedOn(deps?: ApiDeps): SchemaNewerThanRuntimeError | undefined {
+  try {
+    const store: unknown = deps?.store;
+    if (typeof store !== 'object' || store === null) return undefined;
+    const check = (store as { assertGenerationKnown?: unknown }).assertGenerationKnown;
+    if (typeof check === 'function') check.call(store);
+    return undefined;
+  } catch (e) {
+    return e instanceof SchemaNewerThanRuntimeError ? e : undefined;
+  }
+}
+
+/**
+ * The verb store's change count (`SqliteStore.changeCount`), or undefined when there is none to read:
+ * a unit suite's store stub, or a store whose connection is already gone. Never throws, because it is
+ * read inside the catch above.
+ */
+function changeCountOf(deps?: ApiDeps): number | undefined {
+  try {
+    const store: unknown = deps?.store;
+    if (typeof store !== 'object' || store === null) return undefined;
+    const count = (store as { changeCount?: unknown }).changeCount;
+    return typeof count === 'function' ? (count.call(store) as number) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Boundary type validation. The MCP specification puts "validate all tool inputs" on the SERVER, and
+ * an `inputSchema` a client never has to honour is a suggestion, not a check: an MCP caller is free
+ * to send `{ itemId: [] }` for a field the schema declares as a string.
+ *
+ * Without this, such a value travelled all the way into the SQLite driver, which threw
+ * `Too few parameter values were provided`. The throw guard turned that into `unexpected_error` with
+ * the driver's own message attached, which is wrong twice over: the input was invalid (the caller's
+ * fault, a stable code they can act on), not an internal failure, and the response leaked an engine
+ * internal to an untrusted client. The conformance gate found this on eight verbs.
+ *
+ * The check is deliberately narrow. `undefined` and `null` mean ABSENT and pass straight through, so
+ * the verb's own required-field and domain rules keep owning that answer and no existing rejection
+ * code changes. Only a value that is PRESENT and of the wrong declared primitive type is rejected,
+ * with `invalid_input` naming the field. Living in the shared registry, it covers both faces and
+ * every future verb for free.
+ */
+export function actionInputTypeMismatch(schema: JsonSchema, input: ActionInput): string | undefined {
+  return typeMismatch(schema, input);
+}
+
+/**
+ * D156 critic F1: the first schema-required field that is absent, null, or a blank string where the
+ * schema declares a string; undefined when every required field is there. The transport seam refuses
+ * a dial-governable call with such a gap (it can be neither drafted nor run past the dial), and the
+ * registry face refuses the same call with the same answer, so every face agrees (conformance rule 7).
+ *
+ * D161: the empty string is missing whatever the declared shape, a union (`anyOf`) included:
+ * `inventory_stocktake_approve_lines` takes `lineIds` as a list OR the string `all_review_required`,
+ * and `lineIds: ''` was drafted as a Vorschlag the approval could only fail. An EMPTY LIST is left to
+ * the verb on purpose: treating it as missing here would answer `invalid_input` before A24 for every
+ * governed list verb (`post_entry` with `lines: []` from a viewer must stay `permission_denied`,
+ * test/access/permission-boundary.test.mjs), and the verbs refuse an empty selection themselves.
+ */
+export function actionInputRequiredGap(schema: JsonSchema, input: ActionInput): string | undefined {
+  for (const field of schema.required) {
+    const value = input[field];
+    if (value === undefined || value === null) return field;
+    if (value === '') return field;
+    const declared = (schema.properties[field] as { type?: unknown } | undefined)?.type;
+    if (declared === 'string' && typeof value !== 'string') return field;
+  }
+  return undefined;
+}
+
+function typeMismatch(schema: JsonSchema, input: ActionInput): string | undefined {
+  for (const [field, spec] of Object.entries(schema.properties)) {
+    const value = input[field];
+    if (value === undefined || value === null) continue;
+    const declared = (spec as { type?: unknown }).type;
+    const bad =
+      (declared === 'string' && typeof value !== 'string') ||
+      (declared === 'boolean' && typeof value !== 'boolean') ||
+      (declared === 'integer' && !Number.isInteger(value)) ||
+      (declared === 'array' && !Array.isArray(value)) ||
+      (declared === 'object' && (typeof value !== 'object' || Array.isArray(value)));
+    if (bad) return field;
+  }
+  return undefined;
+}
+
+/**
+ * A24's PRIMARY enforcement point, and the reason it is here rather than in sixty-two verbs.
+ *
+ * An agent has exactly two doors into this engine, MCP stdio (`mcp.ts`) and the REST twins
+ * (`rest.ts`), and both resolve an `ActionDef` out of `ACTIONS` and call `action.run`. There is no
+ * third. So a check placed in this shared dispatch cannot be routed around by choosing a different
+ * face, and it covers every verb at once, including the fifty whose engine code has never contained
+ * a capability check and every verb a later capability appends.
+ *
+ * It runs AFTER the tenant checks and BEFORE the verb, which is the only correct order: a denial on
+ * a workspace that does not exist would leak whether it exists, and a denial after the verb would
+ * be a denial after the write.
+ *
+ * The rule comes from `CAPABILITY_FOR_ACTION` (`core/access/actionCapabilities.ts`), where every
+ * verb, read and write, declares a capability or an explicit `ungated(reason)`, and where a verb
+ * that declares neither makes this module fail to load at all (see the check under `ACTIONS`).
+ */
+function assertActionCapability(
+  name: string,
+  deps: ApiDeps,
+  input: ActionInput,
+  workspaceId: string,
+): Result | undefined {
+  // READS PASS THROUGH HERE TOO, as of D50. This function used to open with
+  // `if (kind !== 'write') return undefined`, which left forty-nine read verbs ungated: a non-member
+  // of a provisioned workspace could list the journal, read the audit trail and export the whole
+  // ledger to CSV. There is no `kind` parameter any more, because the branch that used it was the
+  // defect and a parameter nobody reads is an invitation to reinstate it.
+  //
+  // ALL OF, in declaration order, so the rejection names the FIRST capability the actor lacks and
+  // two roles missing two different halves of the same rule are told two different things.
+  const port = capabilityPort(deps.store, workspaceId, deps.actor, deps.identitySource);
+  for (const capability of requiredCapabilitiesFor(name, input)) {
+    const allowed = port.assert(capability);
+    if (!allowed.ok) return allowed;
+  }
+  return undefined;
+}
+
+/**
+ * D159/D160: split a registration kind into the `ActionDef` fields. `read` passes through with no class;
+ * `write:<class>:<tag>` becomes `kind: 'write'` plus `reversibility` and `consequenceTag`. Anything else
+ * THROWS, naming the verb, at module load: a bare `write`, a class with no tag, an unknown class or tag.
+ * The type already refuses each of those literals; this is the belt for a cast or a plain-JS caller.
+ */
+export function splitActionKind(
+  name: string,
+  declared: ActionKind,
+): { kind: 'read' } | { kind: 'write'; reversibility: Reversibility; consequenceTag: ConsequenceTag } {
+  const raw: unknown = declared;
+  if (raw === 'read') return { kind: 'read' };
+  if (typeof raw === 'string') {
+    const parts = raw.split(':');
+    if (parts.length === 3 && parts[0] === 'write') {
+      const level = REVERSIBILITY_LEVELS.find((l) => l === parts[1]);
+      const tag = CONSEQUENCE_TAGS.find((t) => t === parts[2]);
+      if (level !== undefined && tag !== undefined) return { kind: 'write', reversibility: level, consequenceTag: tag };
+    }
+  }
+  throw new Error(
+    `Action '${name}' is registered with the malformed kind ${JSON.stringify(raw)}: expected 'read' or 'write:<class>:<tag>', ` +
+      `the class one of ${REVERSIBILITY_LEVELS.join(', ')} and the tag one of ${CONSEQUENCE_TAGS.join(', ')} (D159/D160).`,
+  );
+}
+
+/** The `ActionDef` fields a registration kind yields: a read carries neither a class nor a tag key. */
+function kindFields(name: string, declared: ActionKind): Pick<ActionDef, 'kind' | 'reversibility' | 'consequenceTag'> {
+  return splitActionKind(name, declared);
+}
+
+/**
+ * A ctx-based action: validates the tenant, checks the capability, then builds the context and calls
+ * the verb, all inside the throw guard. A missing/blank `workspaceId` is `invalid_input`; a
+ * well-formed but nonexistent one is `workspace_not_found` (never a silent `ok` on a typo'd tenant,
+ * and never the `''`-tenant FK crash).
+ */
+function ctxAction<N extends string, T extends OkFields = OkFields>(
+  name: N,
+  declaredKind: ActionKind,
+  summary: string,
+  inputSchema: JsonSchema,
+  // The THIRD parameter exists for G01 and is ignored by every other call site. A verb that FIRES
+  // another verb needs an `ActionInvoker`, and an invoker can only be built from `deps`. Widening
+  // this callback by one optional argument was the smallest way to give two verbs what they need
+  // without putting an api concern on `WorkspaceContext`, where seventy-six unrelated verbs would
+  // then carry it. TypeScript lets a narrower function satisfy a wider signature, so nothing else
+  // in this file, or in any of the six action-group modules, changed.
+  call: (ctx: WorkspaceContext, input: ActionInput, deps: ApiDeps) => Result<T>,
+): ActionDef<N, T> {
+  const fields = kindFields(name, declaredKind);
+  const kind = fields.kind;
+  // N01 US-N01.1: whether this verb's schema marks an account reference at all, decided once.
+  const takesAccounts = schemaHasAccountRefs(inputSchema);
+  const def: ActionDef<N, T> = {
+    name,
+    ...fields,
+    summary,
+    inputSchema,
+    run: (deps, rawInput) =>
+      guarded(name, () => {
+        let input = rawInput;
+        const mismatch = typeMismatch(inputSchema, input);
+        if (mismatch !== undefined) return err('invalid_input', { field: mismatch });
+        const workspaceId = input.workspaceId;
+        if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
+          return err('invalid_input', { field: 'workspaceId' });
+        }
+        const exists = deps.store.db
+          .prepare('SELECT archived FROM workspace WHERE id = ?')
+          .get(workspaceId) as { archived: number } | undefined;
+        if (exists === undefined) return err('workspace_not_found', { workspaceId });
+        // M3: a book a newer TILL migrated under this process is refused before the verb runs, reads
+        // included (their numbers may mean something else now). Every write the verb then issues is
+        // checked again under the write lock by the connection's chokepoint (`GuardedDatabase` in
+        // `core/store/sqlite-store.ts`), and `guarded` reads the marker once more after the verb, so
+        // a read that straddles a newer TILL's migration is refused as well (critic R3-2).
+        deps.store.assertGenerationKnown();
+        // D156 critic F1: a write the agent dial can govern refuses a schema-required gap HERE, on
+        // every face and for every actor, before A24, exactly where the transport seam refuses it for a
+        // governed seat. Its schema says the field is required; the verb behind it no longer gets to
+        // treat it as optional (an unkeyed `contacts_anonymise` erased with no Vorschlag).
+        if (kind === 'write' && dialCapabilitiesForVerb(name).length > 0) {
+          const gap = actionInputRequiredGap(inputSchema, input);
+          if (gap !== undefined) return err('invalid_input', { field: gap }) as Result<T>;
+        }
+        // The `as Result<T>` is the same widening every rejection path here performs: an `Err` is a
+        // `Result<T>` for every T, and this branch only ever returns one.
+        const denied = assertActionCapability(name, deps, input, workspaceId);
+        if (denied !== undefined) return denied as Result<T>;
+        // A23: an ARCHIVED workspace is read-only (a retired mandate's books stay intact and
+        // exportable, OR 958f, but nothing may move in them). Enforced HERE, at the one boundary
+        // every write funnels through (humans, agents, and G01 firings alike), so a verb registered
+        // next year is read-only-in-archive with no edit anywhere. `archive_workspace` itself is the
+        // one exception, because unarchiving IS a write into an archived workspace. AFTER the A24
+        // gate, so a non-member is told `permission_denied` and never learns a book's archive state.
+        if (kind === 'write' && name !== 'archive_workspace' && exists.archived === 1) {
+          return err('workspace_archived', { workspaceId });
+        }
+        // N01 US-N01.1: an account NUMBER becomes its id here, after the A24 gate (a non-member never
+        // learns which numbers a chart holds) and before the argument claim (a number and its id are the
+        // same arguments), so every guard behind this line still sees ids. `src/api/input-boundary.ts`.
+        if (takesAccounts) {
+          const normalized = normalizeAccountRefs(ctxOf(deps, input), inputSchema, input);
+          if (!normalized.ok) return normalized.error;
+          input = normalized.input;
+        }
+        if (kind !== 'write') return call(ctxOf(deps, input), input, deps);
+        // N01 US-N01.5 (§H-IDEMPOTENT, one key, one meaning): a write runs under its argument claim, so
+        // its key replays only the arguments it was first called with and refuses others
+        // (`idempotency_key_conflict`, nothing written). Here, at the one door, it covers every verb.
+        // The G01 emits run INSIDE the same dispatch, so a firing is a nested dispatch (it stamps, it
+        // never refuses), exactly like an A12 tick or an approval replay.
+        // N01 critic: a DISPATCHER (`dispatches`) holds no argument claim of its own: every item it runs
+        // is a single call that claims its own key, and an outer hash over raw items (unresolved account
+        // numbers, an item's agentReason) would be a second, weaker meaning of the same acts.
+        // R1 (N02, `receiptGuard.ts`): the call's own confirmation of a second booking of a receipt
+        // (`bookAgain` + `overrideReason`) is in force for every door this verb reaches, and only for it.
+        // While an approval replays a Vorschlag, the approval's own confirmation is the one in force, never
+        // the payload's. A refusal thrown from a write with no Result channel answers as itself, after the
+        // act's transaction (and its argument claim) rolled back.
+        if (def.dispatches === true) return call(ctxOf(deps, input), input, deps);
+        try {
+          return claimIdempotencyArgs(deps.store, claimSite(name, input, inputSchema), () => verbArgsIdentity(name, input), () => policyFor(deps, input), () => {
+            const outcome =
+              approvingActionIds().length > 0
+                ? call(ctxOf(deps, input), input, deps)
+                : withReceiptOverride({ bookAgain: input.bookAgain, overrideReason: input.overrideReason, approvingActionId: null }, () =>
+                    call(ctxOf(deps, input), input, deps),
+                  );
+            if (outcome.ok) {
+              emitAutomationEvents(deps, name, input, outcome);
+              emitDelegatedEvents(deps, name, input, outcome);
+            }
+            return outcome;
+          });
+        } catch (e) {
+          if (e instanceof ReceiptGuardAbort) return e.result as Result<T>;
+          throw e;
+        }
+      }, deps, true),
+  };
+  return def;
+}
+
+/**
+ * G01's BUILD-ONCE hook: one place, after any write verb has committed, covering every verb at once.
+ *
+ * WHY HERE AND NOT IN THE EMITTING VERBS. G01's spec had all 44 emitting verbs call the dispatcher
+ * themselves. That is 44 edits across nine capability modules, 44 chances to forget one, and no
+ * mechanism at all for noticing the 45th when it lands next week. It is the same argument
+ * `actionCapabilities.ts` makes about A24's gate, and it buys the same three things.
+ *
+ * IT ALSO RUNS AFTER THE COMMIT RATHER THAN INSIDE IT, which the in-verb design could not do. A rule
+ * firing inside `issueInvoice`'s transaction can roll back the invoice that triggered it, and an
+ * automation must never be able to unwind the business event it is reacting to.
+ *
+ * A FAILURE HERE NEVER CHANGES THE VERB'S RESULT. The throw is recorded through G08's diagnostics
+ * port and swallowed: an automation defect must not be able to turn a good post into a failed one.
+ * Nothing is logged when no rule matches, which is the overwhelmingly common case.
+ */
+/**
+ * A40 (critic M7): a verb that creates another capability's objects through that capability's own
+ * engine function (not through its verb) publishes that capability's events for each object, so a rule
+ * on `payment_batch.created` sees a run drafted from a payment proposal exactly as it sees one made on
+ * the Zahlungslauf tab. The event is A18's own row (`emittedBy: 'create_payment_batch'`, resolved from
+ * `result.batchId`), so no event is invented and nothing in G01 changes; the dispatch's UNIQUE occurrence
+ * key makes an idempotent replay of the drafting call publish nothing twice.
+ *
+ * THE PAYLOAD IS A18's OWN SHAPE (critic R2-L1): the input `create_payment_batch` was called with
+ * (`workspaceId`, `bankAccountId`, `itemIds`, `executionDate`, `idempotencyKey`, each batch entry of the
+ * draft carries them) and A18's own result `{ batchId, batch }`, the batch echo read back through A18's
+ * `getPaymentBatch` in the same synchronous call, so a rule on `input.executionDate` or on
+ * `result.batch.*` fires for a drafted run exactly as for one made on the Zahlungslauf tab.
+ */
+const DELEGATED_EMISSIONS: Readonly<
+  Record<
+    string,
+    (deps: ApiDeps, input: ActionInput, outcome: OkFields) => readonly { name: string; input: ActionInput; outcome: OkFields }[]
+  >
+> = {
+  liquidity_plan_draft_batches: (deps, input, outcome) => {
+    const ctx = ctxOf(deps, input);
+    const out: { name: string; input: ActionInput; outcome: OkFields }[] = [];
+    const batches = Array.isArray(outcome.batches) ? (outcome.batches as Record<string, unknown>[]) : [];
+    for (const b of batches) {
+      if (typeof b.batchId !== 'string') continue;
+      const read = getPaymentBatch(ctx, { batchId: b.batchId });
+      if (!read.ok) continue;
+      out.push({
+        name: 'create_payment_batch',
+        input: {
+          workspaceId: input.workspaceId,
+          bankAccountId: input.bankAccountId,
+          itemIds: b.itemIds,
+          executionDate: b.executionDate,
+          idempotencyKey: b.batchIdempotencyKey,
+        },
+        outcome: { ok: true, batchId: b.batchId, batch: read.batch },
+      });
+    }
+    return out;
+  },
+};
+
+function emitDelegatedEvents(deps: ApiDeps, name: string, input: ActionInput, outcome: OkFields): void {
+  const delegate = DELEGATED_EMISSIONS[name];
+  if (delegate === undefined) return;
+  let events: readonly { name: string; input: ActionInput; outcome: OkFields }[];
+  try {
+    events = delegate(deps, input, outcome);
+  } catch (e) {
+    // Like every automation defect, a failure to build the payload never changes the verb's result.
+    deps.diagnostics?.record({ kind: 'verb_error', at: new Date().toISOString(), code: 'automation_dispatch_failed', action: name, error: e });
+    return;
+  }
+  for (const e of events) emitAutomationEvents(deps, e.name, e.input, e.outcome);
+}
+
+function emitAutomationEvents(
+  deps: ApiDeps,
+  name: string,
+  input: ActionInput,
+  outcome: OkFields,
+): void {
+  if (eventsEmittedBy(name).length === 0) return;
+  try {
+    dispatchAutomationEvent(ctxOf(deps, input), automationInvokerFor(deps), name, input, outcome);
+  } catch (e) {
+    deps.diagnostics?.record({
+      kind: 'verb_error',
+      at: new Date().toISOString(),
+      code: 'automation_dispatch_failed',
+      action: name,
+      error: e,
+    });
+  }
+}
+
+/**
+ * How G01 reaches the shared dispatch, and the reason its P3 guarantee is structural.
+ *
+ * A fired action goes through the SAME `action.run` the MCP stdio server and the REST twins call, so
+ * it gets the tenant check, the boundary type check, the A24 capability gate and the throw guard for
+ * free, because they are literally the same code. There is no second write path to audit.
+ *
+ * `asActor` OVERRIDES `deps.actor`, and that one line is the whole permission model: the firing runs
+ * as the rule's author, so `assertActionCapability` resolves the target verb's capability against
+ * THEM, live, on every firing. An author who is later revoked or demoted starts failing
+ * `permission_denied` with nothing to invalidate and no cache to go stale. There is deliberately no
+ * automation identity: one would need capabilities of its own, and granting them would be a hole
+ * through the permission system that 74 specs depend on.
+ */
+function invokerFor(deps: ApiDeps): ActionInvoker {
+  return (tool, actionInput, asActor) => {
+    const action = getAction(tool);
+    if (action === undefined) return err('unknown_action_tool', { tool });
+    // Belt and braces: `createAutomationRule` already refused a read verb at save time, but a rule
+    // stored before a verb changed kind would otherwise reach a read through the write path.
+    if (action.kind !== 'write') return err('action_not_writable', { tool });
+    return action.run({ ...deps, actor: asActor }, actionInput);
+  };
+}
+
+/** Thrown inside a firing's savepoint to roll it back; never escapes `automationInvokerFor`. */
+class FiringRolledBack {
+  constructor(readonly refusal: Result) {}
+}
+
+/**
+ * The invoker a STORED RULE fires through (A39 critic A39R2-5, owner decision): `invokerFor` plus the
+ * fire-time half of "a stored rule never moves a bank ledger". The firing runs inside a savepoint; when
+ * it posted a leg onto a Bankkonto's ledger account (the count of posted bank-ledger legs grew, which also
+ * catches a posted draft or a reversal), the savepoint rolls back and the firing answers
+ * `action_not_automatable` with `reason: 'bank_ledger_leg'`, which G01 records on the run row. Every
+ * other firing is untouched. Used for event dispatch, the G01 firing verbs and the camt review signal;
+ * an agent-approval replay keeps the plain `invokerFor` (a human approved it).
+ */
+function automationInvokerFor(deps: ApiDeps): ActionInvoker {
+  const plain = invokerFor(deps);
+  return (tool, actionInput, asActor) => {
+    const workspaceId = typeof actionInput['workspaceId'] === 'string' ? (actionInput['workspaceId'] as string) : undefined;
+    if (workspaceId === undefined) return plain(tool, actionInput, asActor);
+    // The generation marker is read BEFORE the savepoint opens, exactly where every verb path reads it
+    // (the registry's pre-verb check): inside the transaction a newer TILL could not move the book, so
+    // the check has to see the book as the firing meets it, and a refusal counts on the store.
+    deps.store.assertGenerationKnown();
+    try {
+      return deps.store.tx(() => {
+        const before = postedBankLedgerLegs(deps.store.db, workspaceId);
+        const result = plain(tool, actionInput, asActor);
+        if (result.ok && firingPostedBankLeg(before, postedBankLedgerLegs(deps.store.db, workspaceId))) {
+          throw new FiringRolledBack(
+            err('action_not_automatable', {
+              tool,
+              reason: 'bank_ledger_leg',
+              detail: 'a stored rule never posts onto a Bankkonto ledger account; book the bank line instead',
+            }),
+          );
+        }
+        return result;
+      });
+    } catch (e) {
+      if (e instanceof FiringRolledBack) return e.refusal;
+      throw e;
+    }
+  };
+}
+
+function firingPostedBankLeg(before: number, after: number): boolean {
+  return after > before;
+}
+
+/** A deps-based action (pre-workspace setup): `run` calls the verb with the raw deps, throw-guarded. */
+function depsAction<N extends string, T extends OkFields = OkFields>(
+  name: N,
+  declaredKind: ActionKind,
+  summary: string,
+  inputSchema: JsonSchema,
+  call: (deps: ApiDeps, input: ActionInput) => Result<T>,
+): ActionDef<N, T> {
+  const fields = kindFields(name, declaredKind);
+  const kind = fields.kind;
+  return {
+    name,
+    ...fields,
+    summary,
+    inputSchema,
+    run: (deps, input) =>
+      guarded(name, () => {
+        const mismatch = typeMismatch(inputSchema, input);
+        if (mismatch !== undefined) return err('invalid_input', { field: mismatch });
+        // M3, as in `ctxAction`: a pre-workspace WRITE never lands in a book a newer TILL migrated.
+        // Pre-workspace READS stay open on purpose (critic R1 F6 asked which): `delivery_status`
+        // reports the book's generation, which is how the mismatch is diagnosed at all;
+        // `list_workspaces` reads names and ids, never an amount; `verify_backup` (which applies its
+        // own generation rule to the bundle), `list_restorable_backups`, `get_api_catalog`, the
+        // `list_concepts`/`get_concept` guidance and the `migration_list_*`/extraction-guide
+        // registries do not read the book at all. None interprets a number whose meaning a
+        // generation can change.
+        if (kind === 'write') deps.store.assertGenerationKnown();
+        // N01 US-N01.5, as in `ctxAction`: a keyed pre-workspace write holds its key to one meaning.
+        return kind === 'write'
+          ? // A pre-workspace verb has no authenticated workspace to key a claim on (security review): it is
+            // marked as a dispatch and left to its engine's own memo.
+            claimIdempotencyArgs(deps.store, { verb: name, workspaceId: null, input }, () => verbArgsIdentity(name, input), () => 'exclude', () => call(deps, input))
+          : call(deps, input);
+      }, deps, kind === 'write'),
+  };
+}
+
+// --- Schema fragments (kept minimal: field names and types) -----------------------------------
+
+const STR = { type: 'string' } as const;
+const INT = { type: 'integer' } as const;
+const BOOL = { type: 'boolean' } as const;
+
+/** A ctx-tool schema: `workspaceId` is always required, plus the verb's own fields. */
+function ctxSchema(props: Record<string, unknown> = {}, required: string[] = []): JsonSchema {
+  return {
+    type: 'object',
+    properties: { workspaceId: STR, ...props },
+    required: ['workspaceId', ...required],
+    additionalProperties: true,
+  };
+}
+
+/** A deps-tool schema (no workspaceId in input: the verb mints or is pre-workspace). */
+function depsSchema(props: Record<string, unknown>, required: string[]): JsonSchema {
+  return { type: 'object', properties: props, required, additionalProperties: true };
+}
+
+const LINES = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      // N01 US-N01.1: an account id or its number, resolved at the input boundary.
+      account: ACCOUNT_REF,
+      debit: INT,
+      credit: INT,
+      costCenter: STR,
+      taxCode: STR,
+      taxBase: INT,
+      taxAmount: INT,
+      // A06 threads the Leistungsdatum (supply date) per line; values already pass through, and the
+      // schema lists it so an agent can discover the field (a straddle leg is priced at its supply
+      // date's rate, A06 §3/F2).
+      supplyDate: STR,
+    },
+    required: ['account'],
+  },
+} as const;
+
+/**
+ * A10 document positions: the shared line shape create_document / update_document accept. `quantityMilli`
+ * is thousandths (10.5 units -> 10500), integer, never a float; `unitPriceMinor` is Rappen (P2).
+ */
+const DOC_LINES = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      itemId: STR,
+      description: STR,
+      quantityMilli: INT,
+      unitPriceMinor: INT,
+      taxCode: STR,
+      supplyDate: STR,
+    },
+    required: ['unitPriceMinor'],
+  },
+} as const;
+
+/**
+ * A13 partial-credit selection: which invoice positions to credit, quantity at most the original.
+ * NOT the DOC_LINES shape: a credit note's lines are DERIVED (§4b.1), so the input names positions,
+ * never prices.
+ */
+const CREDIT_NOTE_LINES = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      position: INT,
+      quantityMilli: INT,
+    },
+    required: ['position'],
+  },
+} as const;
+
+/**
+ * D164: the document-level Leistungsdatum (the Studio's "Datum"), an ISO day. A line's own
+ * `supplyDate` wins; absent or null means the issue date (`lineSupplyDate`, the one rule).
+ */
+const DOC_SUPPLY_DATE = {
+  type: 'string',
+  description: "Document-level Leistungsdatum (ISO YYYY-MM-DD). A line's own supplyDate wins; absent (or null on update) means the issue date.",
+} as const;
+
+/** The draft-only patch update_document accepts (a posted document is immutable, §H-AUDIT). */
+const DOC_PATCH = {
+  type: 'object',
+  properties: { contactId: STR, lines: DOC_LINES, currency: STR, supplyDate: DOC_SUPPLY_DATE, dueDate: STR, notes: STR },
+} as const;
+
+const CREDITOR_ADDRESS = {
+  type: 'object',
+  properties: { street: STR, buildingNo: STR, zip: STR, town: STR, country: STR },
+  required: ['street', 'buildingNo', 'zip', 'town', 'country'],
+} as const;
+
+const CONTACT_ADDRESS = {
+  type: 'object',
+  properties: { street: STR, houseNo: STR, zip: STR, city: STR, country: STR },
+} as const;
+
+const CONTACT_FIELDS = {
+  partyRole: STR,
+  name: STR,
+  address: CONTACT_ADDRESS,
+  vatNumber: STR,
+  email: STR,
+  defaultCurrency: STR,
+  paymentTermsDays: INT,
+} as const;
+
+const ITEM_FIELDS = {
+  name: STR,
+  defaultUnitPriceMinor: INT,
+  currency: STR,
+  defaultTaxCode: STR,
+  revenueAccountId: STR,
+  unit: STR,
+  // N01 US-N01.4 (the schema survey): the D00 master-data fields the engine reads (`CreateItemInput`,
+  // `ItemPatch`) and the Studio sends, so an agent can discover them and the unknown-field check is quiet.
+  sku: STR,
+  kind: STR,
+  categoryId: STR,
+  costPriceMinor: INT,
+  trackStock: BOOL,
+  reorderPointQty: INT,
+} as const;
+
+/**
+ * The business sources a caller may post through `post_entry`. The internal `reversal` and `close`
+ * sources (data model §D0) are DELIBERATELY absent: reversal is the `reverse_entry` tool and year-end
+ * sealing is `close_year`. Keeping them off the agent-facing post boundary is a money-path guardrail
+ * (see the guard in `post_entry.run` below and postEntry's own note).
+ *
+ * A22 narrows `fx` off this list for the same reason `purchase`/`dunning`/`credit_note`/`camt` are
+ * absent: an FX revaluation entry is written ONLY by `post_fx_revaluation`, which pairs it with the
+ * next-period reversal and the `fx_revaluation` run row (§7 tripwire 3). A caller who could post
+ * `source='fx'` through `post_entry` could forge a revaluation entry with no run behind it and no
+ * auto-reversal, so the source stays engine-only.
+ */
+export const POST_ENTRY_SOURCES: readonly string[] = ['manual', 'invoice', 'payment', 'import', 'agent'];
+const POST_ENTRY_SOURCE_SET = new Set(POST_ENTRY_SOURCES);
+
+/**
+ * A14's settlement verbs, built ONCE here so G02 can single-source the reserved money-path tool NAMES
+ * (P3) from the registry's OWN A14 write set rather than a hand-copied literal. This is a throwaway
+ * sibling of the live objects `ACTIONS` spreads inline below: same verbs, same names, so filtering it
+ * to the write names is identical to filtering the live ones, while the inline call in `ACTIONS` stays
+ * the form the orientation/contract source parsers understand. Handed to the plugin engine at load
+ * (see `registerMoneyPathTools` under the list).
+ */
+const a14PaymentActions = paymentActions({ ctxAction, ctxSchema, STR, INT });
+
+// --- The declared actions ----------------------------------------------------------------------
+
+/**
+ * `post_entry`, the pilot, defined HERE as a named const and merely referenced from the list below.
+ *
+ * WHY IT IS NOT INLINE LIKE THE OTHER 107. Its type has to survive, and inside the array literal it
+ * does not. TypeScript applies SUBTYPE REDUCTION when it infers an array literal's element type, and
+ * the list spreads in five action groups (`fxActions`, `paymentActions`, `debtorActions`,
+ * `bankActions`, `reportActions`) that are each declared `ActionDef[]`, the open one. Every declared
+ * entry is a SUBTYPE of that, so the union collapses and the whole list infers as plain `ActionDef`.
+ * Measured, not assumed: with the spreads present the derivation below produced a map with zero keys;
+ * with them removed it produced `ActionDef<'post_entry', PostEntryOk>`. Naming the const is what keeps
+ * the array's own annotation (`readonly ActionDef[]`, unchanged) from being the thing that erases it.
+ *
+ * The definition itself is byte-for-byte what stood in the list, guardrail and all. Nothing about the
+ * behaviour of this action moved; only where the value is bound.
+ */
+/**
+ * The agent post boundary's guardrail, shared by the verb and its pre-draft screen (N01, D158): only the
+ * business sources, and never a reversal slot. Undefined when the input passes it.
+ */
+function postEntryGuardrail(input: ActionInput): Result | undefined {
+  if (input.reversesEntryId !== undefined) {
+    return err('forbidden_field', {
+      field: 'reversesEntryId',
+      reason: 'reversal is the reverse_entry tool, not post_entry',
+    });
+  }
+  const source = input.source;
+  if (typeof source !== 'string' || !POST_ENTRY_SOURCE_SET.has(source)) {
+    return err('invalid_source', { source, allowed: [...POST_ENTRY_SOURCES] });
+  }
+  return undefined;
+}
+
+// N01 US-N01.3 (D158): a governed seat's entry is screened like a direct call BEFORE it is drafted, through
+// the verb's own pure preview (`prevalidatePostEntry`, `prevalidatePostEntryFromTemplate`), so an entry the
+// verb would refuse (an unknown account, unbalanced, a locked period, a Vorlage that no longer fits) is
+// refused at once and never queued as a Vorschlag the approval could only fail.
+const postEntryAction = withPrevalidate(ctxAction(
+  'post_entry',
+  'write:correctable:books',
+  'Post a balanced double-entry journal entry (business sources only; reversal/close are separate tools). A line names its account by id or by number (6500). currency (ISO 4217, default the base currency) and fxRate (a decimal string, the price of one unit in base currency; absent, the rate is read from the rate store for the date, else needs_fx_rate) post a foreign-currency entry. An agent seat whose entry is drafted is refused at draft time with exactly the refusals a direct call gets. Instead of lines, template { standardId, asks } books a Vorlage (a Buchungsregel of scope manual, list_bank_standards): asks { legIndex: amountMinor } fills its asked legs (gross on a taxed leg), a same leg copies the asked leg it names, the rest leg balances the entry on its own side, and the lines are composed and judged exactly as compose_entry with that template answers them (the entry text defaults to the Vorlage name). Template refusals: rule_not_found, rule_invalid (an account or code the Vorlage names is no longer valid: archived, now a Bankkonto ledger, a code gone; invalidReason says which), wrong_scope (a bank rule), ask_missing, rest_is_zero, rest_changes_side; lines and template together are invalid_input.',
+  ctxSchema(
+    // D176 (A39 §15.2): `lines` OR `template`; the engine refuses a call with neither (or both).
+    // N01 US-N01.4 (the schema survey): `currency` and `fxRate` are read by the engine (§H-FX) and were
+    // missing here, so an agent could not discover them and the unknown-field check would warn on them.
+    { entryId: STR, date: STR, ref: STR, description: STR, lines: LINES, template: { type: 'object' }, source: STR, currency: STR, fxRate: STR, idempotencyKey: STR, attach: { type: 'array' }, bookAgain: BOOL, overrideReason: STR },
+    ['date', 'source', 'idempotencyKey'],
+  ),
+  // Money-path guardrail: the agent post boundary carries only the business sources, and never a
+  // reversal slot. `source='reversal'`/`'close'` and any `reversesEntryId` are rejected HERE, before
+  // the verb, so neither MCP nor REST can occupy a reversal slot or forge a sealing entry.
+  (ctx, input, deps) => {
+    const refused = postEntryGuardrail(input);
+    if (refused !== undefined) return refused as Result<never>;
+    // N02 (D183): `attach` links each Beleg to the posted entry inside the posting's own transaction.
+    return withAttach(
+      ctx,
+      deps.localFiles,
+      'post_entry',
+      input,
+      // Critic D176-R2-2: a null template is absent, as the engine reads a null `lines`.
+      () => (input.template !== undefined && input.template !== null ? postEntryFromTemplate(ctx, as(input)) : postEntry(ctx, as(input))),
+      (r) => (r.ok && typeof r.entryId === 'string' ? r.entryId : null),
+    ) as ReturnType<typeof postEntry>;
+  },
+), (ctx, input) => {
+  const refused = postEntryGuardrail(input);
+  if (refused !== undefined) return refused;
+  if (input.template !== undefined && input.template !== null) return prevalidatePostEntryFromTemplate(ctx, as(input));
+  return prevalidatePostEntry(ctx, as(input));
+});
+// N02 (D183): a drafted post_entry stores its `sourcePath` receipts pending, before the Vorschlag queues.
+attachable(postEntryAction, 'post_entry');
+
+/**
+ * The rest of the A02 front door, hoisted for the same reason `postEntryAction` is: a declared
+ * payload does not survive the action list's element inference.
+ *
+ * These are byte-for-byte the definitions that stood inline in `ACTIONS`, moved and not edited.
+ * `delete_draft` is deliberately NOT here: `deleteDraft` answers `ok()` with no fields, and an empty
+ * payload cannot be pinned by `PinnedAction` below (`OkFields extends {}` is true, so the filter
+ * reads it as the open default and drops it). Declaring it would raise the census while leaving the
+ * wire map unchanged, which is the kind of half-landing this whole chain exists to stop.
+ */
+const reverseEntryAction = ctxAction(
+  'reverse_entry',
+  'write:correctable:books',
+  'Reverse a posted entry by posting its faithful mirror (OR 957a). Refuses `owned_by` on an entry a capability minted with a row of its own (an MWST-Saldierung, an Abgrenzung, a Rückstellung, a payment, a bank-line booking, a vendor bill, an issued invoice or credit note, a depreciation run, an inventory valuation run, and their mirrors): reverse those through the owning verb the refusal names (`vat_settlement_reverse`, `accrual_reverse`, `provision_reverse`, `provision_release_reverse`, `reverse_payment`, `reopen_bank_line`, `void_vendor_bill`, `transition_document` to cancelled, `asset_depreciation_run_reverse`, `inventory_valuation_reverse`) so the row moves with the entry. An entry a bank line holds (booked or matched on it) always refuses `owned_by reopen_bank_line` with that line\'s `bankTxnId`.',
+  ctxSchema({ entryId: STR, date: STR, description: STR, idempotencyKey: STR }, ['entryId', 'idempotencyKey']),
+  (ctx, input) => reverseEntry(ctx, as(input)),
+);
+
+const saveDraftAction = ctxAction(
+  'save_draft',
+  'write:reversible:internal',
+  'Create or update a draft journal entry (no money effect until posted).',
+  ctxSchema(
+    { entryId: STR, date: STR, ref: STR, description: STR, lines: LINES, idempotencyKey: STR },
+    ['date', 'lines', 'idempotencyKey'],
+  ),
+  (ctx, input) => saveDraft(ctx, as(input)),
+);
+
+const getEntryAction = ctxAction(
+  'get_entry',
+  'read',
+  // Both money pairs are named, because both are sent. A caller handed `baseDebit` as a bare
+  // integer has to guess its unit, and guessing is how a EUR-base entry got read as francs.
+  'Read a journal entry and its lines. The entry reports its Belegnummer (number, null on a draft). Each line reports the transaction amounts (debit, credit) under its currency, and the amounts the books hold (baseDebit, baseCredit) under baseCurrency, which is the workspace base currency.',
+  ctxSchema({ entryId: STR }, ['entryId']),
+  (ctx, input) => getEntry(ctx, as(input)),
+);
+
+const listJournalAction = ctxAction(
+  'list_journal',
+  'read',
+  // The currency is named because `total` is the TRANSACTION amount: a caller handed a bare
+  // integer for a EUR entry has no way to know it is not Rappen, and guessing is how money gets
+  // reported wrong. `baseTotal` is stated as derived so no caller tries to recompute it.
+  'List journal entries, filtered by date range, account, source, status, or Belegnummer (number: an exact match on the number as shown, or for a plain integer every series\' entry with that number). Each entry reports its Belegnummer (number, null on a draft), the currency its total is in (null when the entry has no lines), plus the base-currency total, rate and base currency for a foreign-currency entry, all derived from its posted rows. savedViewId applies a saved view (G00): its stored filters are merged underneath any filter named explicitly here.',
+  ctxSchema({ from: STR, to: STR, account: STR, source: STR, status: STR, number: STR, savedViewId: STR }),
+  (ctx, input) => listJournal(ctx, as(input)),
+);
+
+/**
+ * A03's period-lock read, hoisted for the same reason the four above are.
+ *
+ * Its payload is declared so that the Studio's two phantom permission reads become compile errors.
+ * `Periods.tsx` gated the soft-close control on `body.canManage !== false` and the hard-lock UNLOCK
+ * control on `body.canUnlock !== false`; this verb answers `ok({ locks })` and has never sent either
+ * field, so both gates read `undefined !== false` and stood open. The definition is byte-for-byte the
+ * one that stood inline in the list; only where the value is bound has moved.
+ */
+const listPeriodLocksAction = ctxAction(
+  'list_period_locks',
+  'read',
+  'List all period locks for the workspace.',
+  ctxSchema(),
+  (ctx) => listPeriodLocks(ctx),
+);
+
+/**
+ * Every action whose success payload is DECLARED, as the definitions themselves rather than as a
+ * list of names. `ActionResults` below is read off this, so there is no second place where a wire
+ * name is written next to a payload and no second place for the two to drift apart.
+ *
+ * A tuple (`as const`), so the entries keep their individual types: an ordinary array literal would
+ * reduce them exactly the way the action list does, and the reduction is silent.
+ *
+ * ADDING A VERB. Declare the payload on the verb (see `src/core/result.ts`), hoist its action out of
+ * the list to a const beside `postEntryAction`, and add it here. `test/api/wire-payload-binding.test.mjs`
+ * then checks the rest: that the const is the very object the list dispatches under that name, and
+ * that the count never falls.
+ */
+export const DECLARED_ACTIONS = [
+  postEntryAction,
+  reverseEntryAction,
+  saveDraftAction,
+  getEntryAction,
+  listJournalAction,
+  listPeriodLocksAction,
+] as const;
+
+/** The success payload a definition's `run` promises, read off the definition instead of restated. */
+type PayloadOfDef<A extends ActionDef> = Omit<Extract<ReturnType<A['run']>, { ok: true }>, 'ok'>;
+
+/**
+ * The entries of `DECLARED_ACTIONS` that actually pin something: a LITERAL tool name and a payload
+ * narrower than the open default.
+ *
+ * The filter is not ceremony. An entry that lost its declaration (its verb widened back to the open
+ * `Result`, or its action came to be typed `ActionDef` somewhere along the way) would otherwise map
+ * its name to `{ [x: string]: unknown }`, which answers for every field name, and the map would look
+ * full while promising nothing. Filtered out instead, it makes the key count fall, and the count is
+ * what the ratchet in `test/api/wire-payload-binding.test.mjs` watches.
+ */
+type PinnedAction<A> = A extends ActionDef
+  ? string extends A['name']
+    ? never
+    : OkFields extends PayloadOfDef<A>
+      ? never
+      : A
+  : never;
+
+type Pinned = PinnedAction<(typeof DECLARED_ACTIONS)[number]>;
+
+/**
+ * WIRE ACTION NAME to the success payload that action answers with, derived from the dispatcher.
+ *
+ * This is the link the chain was missing. `app/src/lib/payloads.ts` had to hand-write
+ * `post_entry: PayloadOf<typeof postEntry>` and said so in its own comment: the value side was
+ * derived from the verb, but the NAME was bound by hand, because nothing here connected the two. A
+ * verb re-pointed to a different action name, or an action re-pointed to a different verb, was
+ * therefore invisible to every consumer of the wire. The Studio would have kept type-checking
+ * against a payload the wire no longer sends, which is the defect family's shape exactly.
+ *
+ * Both halves now come off the same object. `run`'s return type carries the payload, `name` carries
+ * the wire identity, and neither can be edited without the other following.
+ */
+export type ActionResults = {
+  [N in Pinned['name']]: PayloadOfDef<Extract<Pinned, { name: N }>>;
+};
+
+// --- The append-only action list --------------------------------------------------------------
+
+/**
+ * The single source of truth for the tool surface (§H-ENUM). Append only; never reorder or rename an
+ * existing entry (a name is a stable external contract). The registry test asserts names are unique
+ * and that the list stays sorted-stable.
+ */
+export const ACTIONS: readonly ActionDef[] = [
+  // A00, company & fiscal setup.
+  depsAction(
+    'create_workspace',
+    'write:correctable:pre-workspace',
+    'Mint a new workspace (tenant) with its KMU chart of accounts. A new workspace starts with a 30-day default Zahlungsfrist (defaultPaymentTermsDays, 0 to 365; null for none).',
+    depsSchema(
+      { name: STR, baseCurrency: STR, fiscalYearStart: STR, legalForm: STR, defaultPaymentTermsDays: INT, idempotencyKey: STR },
+      ['name'],
+    ),
+    (deps, input) => createWorkspace(deps, as(input)),
+  ),
+  depsAction(
+    'bootstrap_workspace',
+    'write:correctable:pre-workspace',
+    'One-call agent setup: parse a short description into a workspace and VAT config.',
+    depsSchema({ description: STR, name: STR, idempotencyKey: STR }, ['description', 'idempotencyKey']),
+    (deps, input) => bootstrapWorkspace(deps, as(input)),
+  ),
+  ctxAction(
+    'set_fiscal_config',
+    'write:reversible:internal',
+    'Set legal form, base currency, or fiscal year start (currency/year lock once the ledger is non-empty).',
+    ctxSchema({ legalForm: STR, baseCurrency: STR, fiscalYearStart: STR }),
+    (ctx, input) => setFiscalConfig(ctx, as(input)),
+  ),
+  ctxAction(
+    'set_vat_method',
+    'write:reversible:statutory',
+    'Set the VAT method (effektiv/saldo) and accounting timing (soll/ist).',
+    ctxSchema({ vatMethod: STR, vatAccounting: STR }, ['vatMethod', 'vatAccounting']),
+    (ctx, input) => setVatMethod(ctx, as(input)),
+  ),
+  ctxAction(
+    'set_creditor_profile',
+    'write:reversible:books',
+    'Set the QR-bill creditor: IBAN (a QR-IBAN gives a QRR reference, a plain IBAN gives SCOR), optional name (defaults to the company name) and optional structured address. The IBAN saves without the address; the address is needed before the first QR-bill renders (buildQrBill answers needs_creditor_address until then). A partial address is refused (needs_structured_address).',
+    ctxSchema({ creditorName: STR, address: CREDITOR_ADDRESS, qrIban: STR, iban: STR }, []),
+    (ctx, input) => setCreditorProfile(ctx, as(input)),
+  ),
+  ctxAction(
+    'get_company_profile',
+    'read',
+    'Read the workspace company & fiscal profile.',
+    ctxSchema(),
+    (ctx) => getCompanyProfile(ctx),
+  ),
+  ctxAction(
+    'update_company_profile',
+    'write:reversible:internal',
+    'Update company identity fields (name, legal form, UID, MWST number) and the workspace default Zahlungsfrist (defaultPaymentTermsDays, 0 to 365 days; null clears it). A document whose customer or supplier has no terms of its own falls due that many days after its date.',
+    ctxSchema({ name: STR, legalForm: STR, uid: STR, mwstNo: STR, defaultPaymentTermsDays: INT }),
+    (ctx, input) => updateCompanyProfile(ctx, as(input)),
+  ),
+
+  // A01, chart of accounts & cost centres.
+  ctxAction(
+    'create_account',
+    'write:reversible:internal',
+    'Create a ledger account.',
+    ctxSchema(
+      { number: STR, name: STR, type: STR, vatCodeDefault: STR, costCenterAllowed: BOOL, idempotencyKey: STR },
+      ['number', 'name', 'type'],
+    ),
+    (ctx, input) => createAccount(ctx, as(input)),
+  ),
+  ctxAction(
+    'update_account',
+    'write:reversible:internal',
+    'Rename an account or change its VAT default, its cost-centre flag, or statementIsVoucher ("Beleg = Kontoauszug": the bank statement is the voucher, so a bank line booked to such accounts alone is not counted as missing a Beleg; on by default for 6900 Finanzaufwand). Number and type are frozen.',
+    ctxSchema({ accountId: STR, name: STR, vatCodeDefault: STR, costCenterAllowed: BOOL, statementIsVoucher: BOOL }, ['accountId']),
+    (ctx, input) => updateAccount(ctx, as(input)),
+  ),
+  ctxAction(
+    'archive_account',
+    'write:reversible:internal',
+    'Archive an account (soft; the account keeps its postings).',
+    ctxSchema({ accountId: STR }, ['accountId']),
+    (ctx, input) => archiveAccount(ctx, as(input)),
+  ),
+  ctxAction(
+    'unarchive_account',
+    'write:reversible:internal',
+    'Reactivate a soft-archived account (idempotent).',
+    ctxSchema({ accountId: STR }, ['accountId']),
+    (ctx, input) => unarchiveAccount(ctx, as(input)),
+  ),
+  ctxAction(
+    'delete_account',
+    'write:final:erase',
+    'Hard-delete an account that never carried a posting.',
+    ctxSchema({ accountId: STR, idempotencyKey: STR }, ['accountId']),
+    (ctx, input) => deleteAccount(ctx, as(input)),
+  ),
+  ctxAction(
+    'list_accounts',
+    'read',
+    'List accounts, optionally filtered by search text. savedViewId applies a saved view (G00): its stored filters are merged underneath any filter named explicitly here.',
+    ctxSchema({ search: STR, includeArchived: BOOL, savedViewId: STR }),
+    (ctx, input) => listAccounts(ctx, as(input)),
+  ),
+  ctxAction(
+    'create_cost_center',
+    'write:reversible:internal',
+    'Create a cost centre (Kostenstelle).',
+    ctxSchema({ code: STR, name: STR, idempotencyKey: STR }, ['code', 'name']),
+    (ctx, input) => createCostCenter(ctx, as(input)),
+  ),
+  ctxAction(
+    'archive_cost_center',
+    'write:reversible:internal',
+    'Archive a cost centre (soft).',
+    ctxSchema({ costCenterId: STR }, ['costCenterId']),
+    (ctx, input) => archiveCostCenter(ctx, as(input)),
+  ),
+  ctxAction(
+    'unarchive_cost_center',
+    'write:reversible:internal',
+    'Reactivate a soft-archived cost centre (idempotent).',
+    ctxSchema({ costCenterId: STR }, ['costCenterId']),
+    (ctx, input) => unarchiveCostCenter(ctx, as(input)),
+  ),
+  ctxAction(
+    'delete_cost_center',
+    'write:final:erase',
+    'Hard-delete a cost centre that no posted line references.',
+    ctxSchema({ costCenterId: STR }, ['costCenterId']),
+    (ctx, input) => deleteCostCenter(ctx, as(input)),
+  ),
+  ctxAction(
+    'list_cost_centers',
+    'read',
+    'List cost centres. savedViewId applies a saved view (G00): its stored filters are merged underneath any filter named explicitly here.',
+    ctxSchema({ includeArchived: BOOL, savedViewId: STR }),
+    (ctx, input) => listCostCenters(ctx, as(input)),
+  ),
+
+  // A02, the double-entry journal. Every action here whose verb DECLARES a success payload is
+  // defined above rather than inline, so that the declaration survives the array's element
+  // inference; see `postEntryAction` for the measurement. `delete_draft` is the one that stays
+  // inline, because its verb answers `ok()` with no fields at all: see `deleteDraftAction`'s
+  // absence and the note on `DECLARED_ACTIONS`.
+  postEntryAction,
+  reverseEntryAction,
+  saveDraftAction,
+  ctxAction(
+    'delete_draft',
+    'write:final:erase',
+    'Delete a draft journal entry (never a posted one).',
+    ctxSchema({ entryId: STR, idempotencyKey: STR }, ['entryId', 'idempotencyKey']),
+    (ctx, input) => deleteDraft(ctx, as(input)),
+  ),
+  getEntryAction,
+  listJournalAction,
+  // D152 amendment: `compose_entry`, the composer's one read. It expands intent into the exact post_entry
+  // lines through the same pre-write steps postEntry runs, and decomposes stored lines back into intent,
+  // so no surface does VAT math of its own. Defined in `./compose-actions.ts`, spread in as one line.
+  ...composeActions({ ctxAction, ctxSchema, STR, INT, BOOL, LINES }),
+  // D178 point 2: `journal_numbering_plan`, the Belegnummer inspection read (A02 §4b.6). It writes nothing;
+  // a number is assigned only inside postEntry's own transaction. Defined in `./journal-numbering-actions.ts`.
+  ...journalNumberingActions({ ctxAction, ctxSchema }),
+
+  // A03, period locks, close, and the audit trail.
+  ctxAction(
+    'close_month',
+    'write:reversible:statutory',
+    'Soft-close a month (reversible guardrail).',
+    ctxSchema({ period: STR, idempotencyKey: STR }, ['period', 'idempotencyKey']),
+    (ctx, input) => softCloseMonth(ctx, as(input)),
+  ),
+  ctxAction(
+    'reopen_month',
+    'write:reversible:statutory',
+    'Reopen a soft-closed month (a hard-sealed month refuses).',
+    ctxSchema({ period: STR, idempotencyKey: STR }, ['period', 'idempotencyKey']),
+    (ctx, input) => reopenMonth(ctx, as(input)),
+  ),
+  ctxAction(
+    'close_year',
+    'write:final:statutory',
+    'Hard-close a fiscal year: sweep the P&L into equity and seal the year. Refuses year_already_closed on a sealed year. While an open year_close checklist run exists for the year, a call WITHOUT runId refuses year_close_in_progress (naming yearRunId): the run seals the year from its seal row, which calls close_year WITH its runId. A call with runId runs only for an open year_close run of this workspace for exactly this year whose year_sealed row is unblocked (not_found, run_abandoned, run_not_year_close, run_year_mismatch, prerequisite_open otherwise).',
+    ctxSchema({ year: STR, idempotencyKey: STR, runId: STR }, ['year', 'idempotencyKey']),
+    // The G22 §10.12 guard, then exactly the A03 close (`closeYearGuarded` in the checklist engine).
+    (ctx, input) => closeYearGuarded(ctx, as(input)),
+  ),
+  ctxAction(
+    'lock_period',
+    'write:reversible:statutory',
+    'Lock a month or year, soft or hard, with an optional reason. The seal reasons (vat_filed, year_close) are reserved and refused with reserved_lock_reason: a filed MWST period is sealed by vat_mark_filed and a fiscal year by close_year, never by a lock.',
+    ctxSchema({ period: STR, kind: STR, reason: STR, idempotencyKey: STR }, ['period', 'kind', 'idempotencyKey']),
+    (ctx, input) => lockPeriod(ctx, as(input)),
+  ),
+  ctxAction(
+    'unlock_period',
+    'write:reversible:statutory',
+    'Unlock a period (a filing/year seal refuses).',
+    ctxSchema({ period: STR, idempotencyKey: STR }, ['period', 'idempotencyKey']),
+    (ctx, input) => unlockPeriod(ctx, as(input)),
+  ),
+  ctxAction(
+    'get_audit_log',
+    'read',
+    'Read the tamper-evident audit trail and its chain-verification status.',
+    ctxSchema({ entityKind: STR, from: STR, to: STR }),
+    (ctx, input) => getAuditLog(ctx, as(input)),
+  ),
+  listPeriodLocksAction,
+
+  // A05, MWST configuration and tax codes.
+  ctxAction(
+    'vat_seed_defaults',
+    'write:correctable:internal',
+    'Seed the default Swiss tax-code set (idempotent).',
+    ctxSchema(),
+    (ctx) => seedTaxCodes(ctx),
+  ),
+  ctxAction(
+    'vat_configure',
+    'write:correctable:statutory',
+    'Configure VAT: method, timing, registration, VAT number, and the ESTV Bewilligung (asOf picks the statutory rate era). A filer holding several Saldosteuersätze maps each Tätigkeit to its Ertragskonten with saldoActivities, which is how MWSTV Art. 84 Abs. 3 books the Erträge separately per rate. Changing an approval that already governs posted turnover must say which it is: saldoGrant for a new ESTV Bewilligung from a given day, saldoCorrection to rewrite the open one. A change of method or timing is dated with methodChange: { validFrom }, a 01.01, the start of a Steuerperiode (MWSTG Art. 37 Abs. 4, Art. 39 Abs. 3). The one mid-year exception is MWSTV Art. 81 Abs. 2: Saldo to effektiv (timing may change too, Abs. 5) on the day the ESTV adjusted a Saldosteuersatz of this book, stated with basis: mwstv_81_2 on a day a saldoGrant took effect. Any other mid-year day refuses vat_method_change_not_period_start, naming what is unmet.',
+    ctxSchema(
+      {
+        method: STR,
+        timing: STR,
+        registered: BOOL,
+        vatNumber: STR,
+        saldoRates: { type: 'array', items: { type: 'object', properties: { rateBp: INT }, required: ['rateBp'] } },
+        // A Tätigkeit points at a rate it must ALSO appear in `saldoRates`, and owns its Ertragskonten
+        // by account NUMBER (the chart is what a person and an agent both name). Several Tätigkeiten
+        // may share one Saldosteuersatz: MWSTV Art. 86 Abs. 3 says so, so `rateBp` is not unique here.
+        saldoActivities: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              activityId: STR,
+              name: STR,
+              rateBp: INT,
+              activityCode: STR,
+              accounts: { type: 'array', items: STR },
+            },
+            required: ['activityId', 'name', 'rateBp'],
+          },
+        },
+        saldoGrant: { type: 'object', properties: { validFrom: STR }, required: ['validFrom'] },
+        saldoCorrection: BOOL,
+        methodChange: { type: 'object', properties: { validFrom: STR, basis: STR }, required: ['validFrom'] },
+        asOf: STR,
+        idempotencyKey: STR,
+      },
+      ['method', 'timing', 'registered', 'idempotencyKey'],
+    ),
+    (ctx, input) => configureVat(ctx, as(input)),
+  ),
+  ctxAction(
+    'vat_config',
+    'read',
+    'Read the current VAT configuration, including the Saldosteuersätze in force today, each Tätigkeit with the Ertragskonten mapped to it, and the elected MWSTV Art. 88 Abs. 6 declaration basis.',
+    ctxSchema(),
+    (ctx) => getVatConfig(ctx),
+  ),
+  ctxAction(
+    'vat_saldo_generations',
+    'read',
+    'The Bewilligungsverlauf: every ESTV Saldosteuersatz approval this workspace has recorded, oldest first, with the days each governed and the Tätigkeiten and Ertragskonten it carried. Under Saldo no rate is stamped on a journal line, so this history is the only evidence of what a filed period was computed with.',
+    ctxSchema(),
+    (ctx) => listSaldoGenerations(ctx),
+  ),
+  ctxAction(
+    'vat_saldo_eligibility',
+    'read',
+    'The MWSTG Art. 37 Abs. 1 Saldo eligibility limits in force today (both halves of the cumulative test, era-scoped, boundary 1.1.2024) beside the measured steuerbarer Umsatz of one calendar year (Ziffer 299, computed by the same path as the Abrechnung). Never a verdict: eligibility turns on EXPECTED turnover (ESTV practice, MWST-Info 12) and on a tax-due half that needs a rate the ESTV has not granted yet, so this read compares and stops.',
+    ctxSchema({ year: STR }),
+    (ctx, input) => saldoEligibility(ctx, as(input)),
+  ),
+  ctxAction(
+    'vat_saldo_declaration_basis',
+    'write:reversible:statutory',
+    'Elect, or withdraw, the MWSTV Art. 88 Abs. 6 simplification for one Steuerperiode: `highest_rate` declares the whole taxable turnover at the highest approved Saldosteuersatz on one Ziffer, `per_activity` restores the Abs. 1 split per Tätigkeit. It is voluntary and usually raises the tax due, so the engine never applies it on its own.',
+    ctxSchema({ taxPeriod: STR, basis: STR, idempotencyKey: STR }, ['taxPeriod', 'basis', 'idempotencyKey']),
+    (ctx, input) => setSaldoDeclarationBasis(ctx, as(input)),
+  ),
+  ctxAction(
+    'vat_codes',
+    'read',
+    'List tax codes (active only by default).',
+    ctxSchema({ includeArchived: BOOL }),
+    (ctx, input) => listTaxCodes(ctx, as(input)),
+  ),
+  ctxAction(
+    'vat_code_upsert',
+    'write:correctable:internal',
+    'Add or edit a tax code at the single tax enumeration point.',
+    ctxSchema(
+      { code: STR, kind: STR, rateBp: INT, formLine: STR, label: STR, validFrom: STR, idempotencyKey: STR },
+      ['code', 'kind', 'rateBp', 'formLine'],
+    ),
+    (ctx, input) => upsertTaxCode(ctx, as(input)),
+  ),
+  ctxAction(
+    'vat_code_deactivate',
+    'write:reversible:internal',
+    'Archive a tax code (never deletes; a posted line always resolves its code).',
+    ctxSchema({ code: STR }, ['code']),
+    (ctx, input) => deactivateTaxCode(ctx, as(input)),
+  ),
+  ctxAction(
+    'vat_code_reactivate',
+    'write:reversible:internal',
+    'Reactivate an archived tax code, so it appears again on new documents. The exact mirror of vat_code_deactivate; posted lines never depended on the flag.',
+    ctxSchema({ code: STR }, ['code']),
+    (ctx, input) => reactivateTaxCode(ctx, as(input)),
+  ),
+  ctxAction(
+    'account_set_tax_default',
+    'write:reversible:internal',
+    "Set (or clear) an account's default tax code.",
+    ctxSchema({ accountId: STR, taxCode: STR }, ['accountId']),
+    (ctx, input) => setAccountTaxDefault(ctx, as(input)),
+  ),
+
+  // A06, VAT on transactions. The ONLY new tool is this read-only preview; the write surface is the
+  // per-line `tax` field on post_entry/issue_invoice/record_expense, which all call buildVatLines.
+  // vat_preview runs the SAME computeLineTax the GUI readout uses: agent preview and human figure are
+  // one code path, never two. Read-only, so it needs a parity case (test/api/parity.test.mjs), not a
+  // conformance write scenario. The spec's `GET /api/vat/preview` is conceptual: the REST twin is the
+  // generic action-name dispatcher (rest.ts handleRest), not a path router, covered by parity.
+  ctxAction(
+    'vat_preview',
+    'read',
+    'Preview a line VAT (net/tax/gross, ESTV form line, kind, deductibility) without posting.',
+    ctxSchema(
+      {
+        amountMinor: INT,
+        amountIsGross: BOOL,
+        taxCode: STR,
+        // The Leistungsdatum, an ISO day (a full ISO timestamp names its day). The format is ALSO
+        // enforced by the engine: a malformed date is a structured `invalid_date`, never silently
+        // treated as absent (which would book the CURRENT rate for a mistyped historical date).
+        supplyDate: {
+          type: 'string',
+          format: 'date',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}(T.*)?$',
+          description: 'Supply date (Leistungsdatum), ISO YYYY-MM-DD; picks the statutory rate era.',
+        },
+      },
+      ['amountMinor'],
+    ),
+    (ctx, input) => computeLineTax(ctx, as(input)),
+  ),
+
+  // A07, the MWST-Abrechnung. Two reads and one write, and the write TRANSMITS NOTHING: there is no
+  // ESTV submission API anywhere in public ESTV, eCH or vendor documentation. eCH-0217 is a file
+  // FORMAT, not a transport, so the ceiling on this whole capability is a valid file handed to a
+  // human who uploads it to the ePortal himself. `vat_mark_filed` records that he did, by applying
+  // A03's hard lock; it is deliberately not nameable as an automation action, because the act it
+  // records is irreversible with the tax authority.
+  ctxAction(
+    'vat_return',
+    'read',
+    'Compute the MWST-Abrechnung for a period: ESTV form lines with base/tax, the payable or credit, and the drill-down entry ids.',
+    ctxSchema(
+      {
+        periodStart: {
+          type: 'string',
+          format: 'date',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          description: 'First day of the reported period, ISO YYYY-MM-DD (inclusive).',
+        },
+        periodEnd: {
+          type: 'string',
+          format: 'date',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          description: 'Last day of the reported period, ISO YYYY-MM-DD (inclusive).',
+        },
+      },
+      ['periodStart', 'periodEnd'],
+    ),
+    (ctx, input) => computeVatReturn(ctx, as(input)),
+  ),
+  // The export, and the reason A07 has a primary action at all. It PRODUCES A FILE and transmits
+  // nothing: `computeVatReturn`'s figures serialised as eCH-0217 v2.0.0 for a person to upload to
+  // the ESTV ePortal himself. A read, because it writes nothing and must answer the same twice,
+  // which is why `generationTime` comes off the injected clock rather than the wall clock.
+  ctxAction(
+    'vat_export_ech0217',
+    'read',
+    'Export the MWST-Abrechnung for a period as an eCH-0217 v2.0.0 XML file for upload to the ESTV ePortal. Produces a file and transmits nothing: there is no ESTV submission API.',
+    ctxSchema(
+      {
+        periodStart: {
+          type: 'string',
+          format: 'date',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          description: 'First day of the reported period, ISO YYYY-MM-DD (inclusive).',
+        },
+        periodEnd: {
+          type: 'string',
+          format: 'date',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          description: 'Last day of the reported period, ISO YYYY-MM-DD (inclusive).',
+        },
+        typeOfSubmission: {
+          type: 'integer',
+          enum: [1, 2, 3],
+          description: 'eCH-0217 typeOfSubmission: 1 Ersteinreichung (default), 2 Korrekturabrechnung, 3 Jahresabstimmung.',
+        },
+      },
+      ['periodStart', 'periodEnd'],
+    ),
+    (ctx, input) => exportVatReturnEch0217(ctx, as(input)),
+  ),
+  ctxAction(
+    'vat_periods',
+    'read',
+    'List the statutory reporting periods of a year (quarterly under effektiv, semi-annual under Saldo) and whether each is filed. In a year the method switched under MWSTV Art. 81 Abs. 2 each method lists its periods inside its own era, and the part of a period the switch cut is listed under stubs (computed by dates, not sealed).',
+    ctxSchema({ year: { type: 'string', pattern: '^\\d{4}$', description: 'Calendar year, YYYY, from 1995 (the MWST era).' } }),
+    (ctx, input) => listVatPeriods(ctx, as(input)),
+  ),
+  ctxAction(
+    'vat_mark_filed',
+    'write:final:statutory',
+    'Record that a VAT period was filed with the ESTV, applying the A03 hard lock (reason vat_filed) to its months in one transaction: a month under a soft or an ordinary hard lock is upgraded to the seal, every month is read back, and the filing refuses filing_seal_not_held (and rolls back) unless each month holds the seal. Only a filing period as vat_periods lists it for that year can be marked: any other label refuses not_a_filing_period, and a label touching a switch-year stub refuses switch_year_stub_not_modelled, sealing nothing. Transmits nothing.',
+    ctxSchema(
+      {
+        period: {
+          type: 'string',
+          pattern: '^\\d{4}-(Q[1-4]|H[12])$',
+          description: 'Period label as vat_periods lists it, from 1995: YYYY-Qn (effektiv) or YYYY-Hn (Saldo).',
+        },
+        idempotencyKey: STR,
+      },
+      ['period', 'idempotencyKey'],
+    ),
+    (ctx, input) => markVatPeriodFiled(ctx, as(input)),
+  ),
+
+  // A09, contacts & items (invoicing-lite master data).
+  ctxAction(
+    'create_contact',
+    'write:correctable:internal',
+    'Create a customer/vendor contact. paymentTermsDays is its own Zahlungsfrist in days: omit it and its documents fall due after the workspace default (update_company_profile), 0 means due immediately.',
+    ctxSchema({ ...CONTACT_FIELDS, description: STR, idempotencyKey: STR }, ['partyRole']),
+    (ctx, input) => createContact(ctx, as(input)),
+  ),
+  ctxAction(
+    'update_contact',
+    'write:reversible:internal',
+    'Update a contact from a patch. patch.paymentTermsDays null clears its own Zahlungsfrist back to the workspace default; 0 means due immediately.',
+    ctxSchema({ contactId: STR, patch: { type: 'object', properties: CONTACT_FIELDS } }, ['contactId', 'patch']),
+    (ctx, input) => updateContact(ctx, as(input)),
+  ),
+  ctxAction(
+    'archive_contact',
+    'write:reversible:internal',
+    'Archive a contact (soft).',
+    ctxSchema({ contactId: STR }, ['contactId']),
+    (ctx, input) => archiveContact(ctx, as(input)),
+  ),
+  ctxAction(
+    'unarchive_contact',
+    'write:reversible:internal',
+    'Reactivate a soft-archived contact (idempotent).',
+    ctxSchema({ contactId: STR }, ['contactId']),
+    (ctx, input) => unarchiveContact(ctx, as(input)),
+  ),
+  ctxAction(
+    'get_contact',
+    'read',
+    'Read a contact.',
+    ctxSchema({ contactId: STR }, ['contactId']),
+    (ctx, input) => getContact(ctx, as(input)),
+  ),
+  ctxAction(
+    'list_contacts',
+    'read',
+    'List contacts, filtered by query or party role. savedViewId applies a saved view (G00): its stored filters are merged underneath any filter named explicitly here.',
+    // N01 (the schema survey): `kind`, `segment` and `role` are filters `listContacts` applies and the
+    // Studio sends; they were missing here.
+    ctxSchema({ query: STR, partyRole: STR, includeArchived: BOOL, kind: STR, segment: STR, role: STR, savedViewId: STR }),
+    (ctx, input) => listContacts(ctx, as(input)),
+  ),
+  ctxAction(
+    'create_item',
+    'write:reversible:internal',
+    'Create an invoicing item (a reusable line default).',
+    // N01 (the schema survey): `variantOfId` is a create-only field (`ItemPatch` has none).
+    ctxSchema({ ...ITEM_FIELDS, variantOfId: STR, idempotencyKey: STR }, ['name', 'defaultUnitPriceMinor']),
+    (ctx, input) => createItem(ctx, as(input)),
+  ),
+  ctxAction(
+    'update_item',
+    'write:reversible:internal',
+    'Update an item from a patch.',
+    ctxSchema({ itemId: STR, patch: { type: 'object', properties: ITEM_FIELDS } }, ['itemId', 'patch']),
+    (ctx, input) => updateItem(ctx, as(input)),
+  ),
+  ctxAction(
+    'archive_item',
+    'write:reversible:internal',
+    'Archive an item (soft).',
+    ctxSchema({ itemId: STR }, ['itemId']),
+    (ctx, input) => archiveItem(ctx, as(input)),
+  ),
+  ctxAction(
+    'unarchive_item',
+    'write:reversible:internal',
+    'Reactivate a soft-archived item (idempotent).',
+    ctxSchema({ itemId: STR }, ['itemId']),
+    (ctx, input) => unarchiveItem(ctx, as(input)),
+  ),
+  ctxAction(
+    'get_item',
+    'read',
+    'Read an item.',
+    ctxSchema({ itemId: STR }, ['itemId']),
+    (ctx, input) => getItem(ctx, as(input)),
+  ),
+  ctxAction(
+    'list_items',
+    'read',
+    'List items, filtered by query. savedViewId applies a saved view (G00): its stored filters are merged underneath any filter named explicitly here.',
+    ctxSchema({ query: STR, includeArchived: BOOL, savedViewId: STR }),
+    (ctx, input) => listItems(ctx, as(input)),
+  ),
+
+  // D12's `list_workspaces` sat inline here (appended after A09) until A23 took ownership of the
+  // workspace roster and migrated it into `./workspace-actions.ts`, spread in with its three
+  // siblings near the end of this list. A tool's position is part of its history, not its meaning.
+
+  // A10, document lifecycle (the shared quote/order/invoice/credit_note state machine). Appended at
+  // the end because the list is append-only. issue/send/cancel are all `transition_document`; posting
+  // on issue is delegated to A11/A13 through the engine's poster seam.
+  ctxAction(
+    'create_document',
+    'write:reversible:internal',
+    'Create a document draft (quote, order, invoice, or credit note) with positions.',
+    ctxSchema(
+      { type: STR, contactId: STR, lines: DOC_LINES, currency: STR, supplyDate: DOC_SUPPLY_DATE, dueDate: STR, notes: STR, idempotencyKey: STR },
+      ['type'],
+    ),
+    (ctx, input) => createDocument(ctx, as(input)),
+  ),
+  ctxAction(
+    'update_document',
+    'write:reversible:internal',
+    'Patch a draft document (draft-only; an issued document is immutable and corrected by reversal).',
+    ctxSchema({ documentId: STR, patch: DOC_PATCH, idempotencyKey: STR }, ['documentId', 'patch']),
+    (ctx, input) => updateDocument(ctx, as(input)),
+  ),
+  ctxAction(
+    'transition_document',
+    'write:correctable:books',
+    'Advance a document (issue, send, accept, decline, confirm, cancel); issuing an invoice posts via the delegate. Accepting a quote is quotes_accept: an expired quote refuses quote_expired, the acceptance is stamped, and the customer link is spent.',
+    ctxSchema({ documentId: STR, to: STR, idempotencyKey: STR }, ['documentId', 'to']),
+    // A quote's `accepted` edge is `acceptQuote` (expiry, accepted_by, token spend): critic B1.
+    (ctx, input) => transitionDocumentVerb(ctx, as(input)),
+  ),
+  ctxAction(
+    'convert_document',
+    'write:correctable:internal',
+    'Convert an accepted quote to an order or invoice (or a confirmed order to an invoice), linking the source.',
+    ctxSchema({ documentId: STR, toType: STR, idempotencyKey: STR }, ['documentId', 'toType']),
+    (ctx, input) => convertDocument(ctx, as(input)),
+  ),
+  ctxAction(
+    'get_document',
+    'read',
+    "Read a document with its positions and status trail. For an invoice, include 'qr' and/or 'pdf' to attach the Swiss QR-bill payload and the rendered PDF (A11, D14).",
+    ctxSchema(
+      { documentId: STR, include: { type: 'array', items: STR } },
+      ['documentId'],
+    ),
+    (ctx, input) => getDocumentWithIncludes(ctx, input),
+  ),
+  ctxAction(
+    'list_documents',
+    'read',
+    'List documents, filtered by type, status, contact, credited invoice (A13: the credit notes of invoice X), or date range. savedViewId applies a saved view (G00): its stored filters are merged underneath any filter named explicitly here, so an explicit one always wins.',
+    ctxSchema({ type: STR, status: STR, contactId: STR, creditedDocumentId: STR, from: STR, to: STR, savedViewId: STR }),
+    (ctx, input) => listDocuments(ctx, as(input)),
+  ),
+
+  // A11, invoice: the ONLY two invoice-named tools (D14). Create/edit/read/list ride A10's generic
+  // document tools; there is no create_invoice. issue_invoice posts through A11's onIssue delegate;
+  // send_invoice is the outbound channel, P8-gated (draft_by_default). Appended at the end because the
+  // list is append-only.
+  ctxAction(
+    'issue_invoice',
+    'write:correctable:books',
+    'Issue a draft invoice: assign the gap-free number, post the balanced VAT entry (A10 onIssue delegate), and attach the QR-bill summary.',
+    ctxSchema({ invoiceId: STR, idempotencyKey: STR }, ['invoiceId']),
+    (ctx, input) => issueInvoice(ctx, as(input)),
+  ),
+  ctxAction(
+    'send_invoice',
+    'write:final:outbound',
+    'Send an issued invoice by email (renders + attaches the PDF, transitions to sent). Outbound step is P8-gated: pass confirmed=true or enable the workspace dial.',
+    ctxSchema({ invoiceId: STR, email: STR, confirmed: BOOL, idempotencyKey: STR }, ['invoiceId']),
+    (ctx, input) => sendInvoice(ctx, as(input)),
+  ),
+
+  // A13, credit notes: the ONLY two credit-note-named tools (D14 parity with A11). Create derives a
+  // DRAFT from an issued invoice (full, by positions, or by an apportioned net amount); issue posts
+  // the mirror entry through A13's onIssue delegate. Read/list/PDF ride get_document
+  // (include:['pdf']) and list_documents(type:'credit_note', creditedDocumentId?). Cancellation is
+  // A10's shared transition_document. Placed beside its capability rather than at the bottom.
+  ctxAction(
+    'create_credit_note',
+    'write:reversible:internal',
+    'Draft a Gutschrift against an issued invoice: full, selected positions (reduced quantities), or a net amount apportioned over the remaining line nets. Always a draft; issuing is a separate, confirmed step (P8).',
+    ctxSchema(
+      { fromInvoiceId: STR, mode: STR, lines: CREDIT_NOTE_LINES, amountMinor: INT, reason: STR, idempotencyKey: STR },
+      ['fromInvoiceId', 'idempotencyKey'],
+    ),
+    (ctx, input) => createCreditNote(ctx, as(input)),
+  ),
+  ctxAction(
+    'issue_credit_note',
+    'write:correctable:books',
+    'Issue a drafted Gutschrift: assign the gap-free G-number and post the mirror entry (debit revenue and output VAT, credit 1100 Debitoren) dated today, closing against the invoice per rate class (D67/D71).',
+    ctxSchema({ creditNoteId: STR, idempotencyKey: STR }, ['creditNoteId', 'idempotencyKey']),
+    (ctx, input) => issueCreditNote(ctx, as(input)),
+  ),
+
+  // A32, eBill issuing. The five verbs (config pair + prepare/transmit/status), defined in
+  // `./ebill-actions.ts` and spread in as one line, the shape §H-FX established, so concurrent appends
+  // to this append-only list collide over a line rather than a block. Packages an issued A11 invoice
+  // as an outward-facing eBill payload (OP4, cloud-tier transmit); posts nothing (P3 by absence).
+  ...ebillActions({ ctxAction, ctxSchema, STR, BOOL }),
+
+  // A33, EBICS bank channel. The five verbs (connect/sync/transmit/disconnect + the status read),
+  // defined in `./ebics-actions.ts` and spread in as one line, the same shape §H-FX established, so
+  // concurrent appends to this append-only list collide over a line rather than a block. The local
+  // EBICS client is OSS-core (D29): it uploads A18 pain.001 batches (P8-gated, WITHOUT the signature
+  // flag, so the bank authorizes) and pulls camt.053/054 + pain.002 into A20. Posts nothing (P3 by
+  // delegation): statements enter only through A20's import, and nothing here marks anything paid.
+  ...ebicsActions({ ctxAction, ctxSchema, STR, BOOL, INT }),
+
+  // A22 / §H-FX, the exchange-rate verbs. Defined in `./fx-actions.ts` and spread in as one line, so
+  // several agents appending to this append-only list at once collide over a line rather than a
+  // block. The helpers are passed in rather than imported there, which keeps the module graph acyclic.
+  ...fxActions({ ctxAction, ctxSchema, STR }),
+
+  // A38, Abgrenzungen und Rückstellungen. Defined in `./accrual-actions.ts` (N2's block on top, N3's
+  // settlement block below its seam) and spread in as one line, the A22 shape. `accrual` and
+  // `provision` as journal sources are deliberately NOT in POST_ENTRY_SOURCES: only the accrual pair
+  // and the provision verbs write them.
+  ...accrualActions({ ctxAction, ctxSchema, STR, INT }),
+  // The MWST-Saldierung and the annual reconciliation (two writes on `post`, three reads on
+  // `read_books`), the bottom block of the same file; `vat_settlement` as a journal source is likewise
+  // NOT in POST_ENTRY_SOURCES: only `vat_settlement_post` may write one, under the §H-PERIOD carve-out
+  // of A38 §4.6.
+  ...vatSettlementActions({ ctxAction, ctxSchema, STR, INT }),
+
+  // A14, payments and matching: the settlement half of the money path. Defined in
+  // `./payment-actions.ts` and spread in as one line, the same shape §H-FX established, so
+  // concurrent appends to this append-only list collide over a line rather than a block. (The
+  // identical `a14PaymentActions` const above exists ONLY to derive the reserved money-path NAMES
+  // for G02; it is a throwaway sibling, never the live objects, so this stays the inline call form
+  // the orientation/contract generators parse.)
+  ...paymentActions({ ctxAction, ctxSchema, STR, INT }),
+
+  // A16, Debitoren: the OP-Liste, its aging buckets, and the reconciliation to 1100. Defined in
+  // `./debtor-actions.ts` and spread in as one line, the same shape §H-FX and A14 established.
+  ...debtorActions({ ctxAction, ctxSchema, STR }),
+  // A19, the bank-account register: the anchor A18/A20/A21/A22 hang their own tables off. Defined
+  // in `./bank-actions.ts` and spread in as one line, the same shape §H-FX and A14 established.
+  ...bankActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // A08, the financial statements: Saldenbilanz, Bilanz, Erfolgsrechnung, Kontoblatt and the local
+  // export. Five READS and no write, so nothing here owes a conformance scenario. Defined in
+  // `./report-actions.ts` and spread in as one line, the same shape §H-FX, A14, A16 and A19 use.
+  ...reportActions({ ctxAction, ctxSchema, STR }),
+  // A04, opening balances: the position every statement above it is measured from. Defined in
+  // `./opening-actions.ts` and spread in as one line, the same shape §H-FX and A14 established.
+  ...openingActions({ ctxAction, ctxSchema, STR, INT, BOOL, withPrevalidate }),
+
+  // G08, feedback and diagnostics. Same one-line spread the FX and payment verbs use, for the same
+  // reason: this list is append-only and several agents append to it at once.
+  ...supportActions({ ctxAction, ctxSchema, STR, BOOL }),
+
+  // A24, access control. Same one-line spread, and `depsSchema`/`depsAction` ride along because
+  // `accept_invite` is pre-workspace: the accepter is not a member yet.
+  ...permissionActions({ ctxAction, depsAction, ctxSchema, depsSchema, STR }),
+
+  // G00, the customization framework. The four tools A09, A10, A11 and A14 have been naming in their
+  // own §5 tables while `PENDING_TOOLS` held the place become real on this line.
+  ...customizationActions({ ctxAction, ctxSchema, STR, BOOL, INT }),
+
+  // G05, document templates: presentation only, around content the consuming capability computed.
+  ...documentTemplateActions({ ctxAction, ctxSchema, STR, BOOL }),
+
+  // G05, dispatch texts and the cross-document send log (the §10 / D29 amendment). The three tools
+  // `PENDING_TOOLS` held the place for become real on this line; the send verbs themselves are
+  // untouched and merely append log rows through the shared `recordDispatch` delegate.
+  ...dispatchActions({ ctxAction, ctxSchema, STR }),
+
+  // G01, automation rules. The one capability whose verbs can cause another verb to run, which is why
+  // `invokerFor` rides along: it is the only route from an engine module back into this dispatch, and
+  // it is the reason G01 needs no write path of its own.
+  ...automationActions({ ctxAction, ctxSchema, invokerFor: automationInvokerFor, STR, BOOL, INT }),
+
+  // D00, the products/items master's NEW verbs (delete_item, the category tree, the price lists and
+  // the resolver). Defined in `./item-actions.ts` and spread in as one line; the item CRUD itself
+  // stays on A09's create_item/update_item, extended through the additionalProperties boundary.
+  ...itemActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // C00, the contacts / CRM verbs (tag, activity log + timeline, merge, import, anonymise). A09's
+  // contact CRUD is extended in place, so only C00's genuinely new surface is spread in here, the
+  // same one-line shape §H-FX and G00 use.
+  ...contactActions({ ctxAction, ctxSchema, STR }),
+
+  // E03, tasks & reminders. The cross-entity to-do spine: five lifecycle writes, the queue read,
+  // and tasks_reminders_due, the ONE reminder-trigger surface C01/A16/G06 poll. Defined in
+  // `./task-actions.ts` and spread in as one line, the same shape C00 and E00 use.
+  ...taskActions({ ctxAction, ctxSchema, STR, BOOL }),
+
+  // G06, notifications & inbox. The ONE delivery surface: notifications_deliver is the OP8 action
+  // a G01 rule targets (an OP8 CONSUMER, not a second engine), the queue around it is self-scoped
+  // (an inbox is not a shared mailbox), and the digest is the OP4 outbound half that always stops
+  // at a local artifact in the OSS core. Defined in `./notification-actions.ts`, spread as one line.
+  ...notificationActions({ ctxAction, ctxSchema, STR, BOOL }),
+
+  // G02, plugin architecture & extension registry. Ten verbs (five writes, five reads): the manifest
+  // lifecycle (preview/install/enable/disable/uninstall/compat-refresh), the installed-list reads,
+  // and the registry-discovery seam. Every write asserts `manage_plugins` (owner-only by default);
+  // the reserved money-path names a plugin can never register (P3) are single-sourced from the
+  // A02/A14 write set and handed to the engine below. Defined in `./plugin-actions.ts`, spread as one
+  // line, the same shape every sibling uses.
+  ...pluginActions({ ctxAction, ctxSchema, STR, INT }),
+
+  // C01, leads & deals. The pre-financial pipeline between C00's contacts and A10's documents:
+  // eight writes (lifecycle + the §6b pipeline configuration pair) and the one board read. Two
+  // verbs hold an invoker (`deals_to_quote` reaches the quote verb, `deals_log_activity`'s
+  // reminder half reaches `tasks_create`), which is why `invokerFor` rides along, exactly as it
+  // does for G01, A12 and A26. Defined in `./deal-actions.ts` and spread in as one line.
+  ...dealActions({ ctxAction, ctxSchema, invokerFor, STR, INT, BOOL }),
+
+  // C02, quotes / proposals: the Offerte lifecycle riding A10's shared document machine. Eight
+  // writes (create, update, send, accept, decline, expire-sweep, revise, convert) and two reads,
+  // spread in as one line, the same shape every sibling uses. No verb holds an invoker: the quote
+  // engine reaches A10 directly, never back through the dispatch, and it opens NO posting path
+  // (convert delegates entirely to A10's convertDocument).
+  ...quoteActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // C03, sales forecasting: four reads and not one write (P5), spread in as one line. The pure read
+  // model over C01 deals + C02 quotes + A08 actuals; it owns no table and opens no posting path.
+  ...forecastActions({ ctxAction, ctxSchema, STR, INT }),
+
+  // A17, vendor bills and expenses: the CREDITOR half of the money path, and the first purchase verbs
+  // this registry has ever carried. Five writes and two reads, spread in as one line. There is no pay
+  // verb among them on purpose: a bill is settled by A14's `record_payment` with `vendorBillId` on the
+  // allocation, exactly as an invoice is settled with `documentId`.
+  ...purchaseActions({ ctxAction, ctxSchema, withPrevalidate, STR, INT, BOOL }),
+  ...captureActions({ ctxAction, ctxSchema, STR }),
+  // A34 payroll hand-off: the employee-master export (local artifact, OP4) and the ONE wage-journal
+  // posting through A02 (P8 preview-then-confirm), spread in as one line. `wage_journal_post` is the
+  // only path a wage journal reaches the ledger (P3); the migration harness routes `payroll` here.
+  ...payrollActions({ ctxAction, ctxSchema, STR, INT, BOOL, withPrevalidate }),
+
+  // E00, file management: the filing tree, the content-addressed store, the version chain, the OP3
+  // entity link and the OR 958f retention lock. The prefix is `files_` and not `documents_` because
+  // A10 owns that noun four verbs up this same array (see `./file-actions.ts`).
+  ...fileActions({ ctxAction, ctxSchema, STR, BOOL }),
+
+  // E01, e-signature: the sign-request lifecycle over E00 files (request, send via the OP4 seam,
+  // track, complete back into E00 as a new version). Six writes and two reads, spread in as one
+  // line, the same shape E00 and E03 use. It opens NO posting path: a sign request is a tracking
+  // record, and completion delegates every byte to E00's files_new_version.
+  ...signActions({ ctxAction, ctxSchema, STR, BOOL }),
+
+  // F02, customer portal: scoped, expiring, tokened grants that let one customer self-serve their own
+  // invoices, quotes and documents. Four operator verbs (create/send/revoke/list) gated by A24, and
+  // TWO token-authenticated pre-workspace verbs (`portal_resolve`, `portal_quote_accept`), so
+  // `depsAction`/`depsSchema` ride along the `accept_invite`/A23 shape. `portal_quote_accept` reaches
+  // C02's accept engine directly (no invoker), opens NO posting path, and shares the `portal_grant`
+  // table with F03. Spread in as one line, the same shape every sibling uses.
+  ...portalActions({ ctxAction, depsAction, ctxSchema, depsSchema, STR, BOOL }),
+
+  // F03, vendor portal: the CREDITOR-side mirror of F02. Six workspace-scoped verbs (the token is a
+  // second fence WITHIN the workspace, not a pre-workspace depsAction): three portal.manage writes
+  // (grant/revoke/remittance-create), three read_master_data reads (grants list + two scoped reads).
+  // Reuses F02's shared grant engine (kind=vendor) and adds the remittance_advice snapshot; opens NO
+  // posting path. Spread in as one line, the same shape every sibling uses.
+  ...vendorPortalActions({ ctxAction, ctxSchema, STR }),
+
+  // A15, Mahnwesen: the escalating reminder loop over A16's open items. Four writes and four reads,
+  // spread in as one line. `dunning` as a journal source is deliberately NOT in POST_ENTRY_SOURCES:
+  // only issue_dunning_run may book a Mahngebühr, so a caller cannot forge one (the A17 precedent).
+  ...dunningActions({ ctxAction, ctxSchema, STR, INT, BOOL, withPrevalidate }),
+  // A12, recurring invoices (Serienrechnungen): schedules whose tick INVOKES create_document /
+  // issue_invoice through this same dispatch as the schedule's author, which is why `invokerFor`
+  // rides along exactly as it does for G01. Spread in as one line, the same shape every sibling uses.
+  ...recurringActions({ ctxAction, ctxSchema, invokerFor, STR, INT, BOOL }),
+
+  // A21, QR incoming matching: the Abgleich queue over A19's register, settling only through A14.
+  // Four writes and two reads, spread in as one line. `set_qr_auto_apply` is on the G01 denylist
+  // (D65 leg (e)).
+  ...qrMatchActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // A20, camt reconciliation: import a camt.053/054 statement, propose matches, settle a debit or
+  // link a manual entry, and the reconciled-to-balance read. Three writes and two reads, spread in
+  // as one line. A CREDIT never settles here (`confirm_match` refuses `use_qr_queue`): it is decided
+  // in A21's own queue, which `import_camt` routes it into.
+  ...camtActions({ ctxAction, ctxSchema, STR, INT, BOOL, withPrevalidate }),
+
+  // D185, the settlement socket: import a till-settlement/v1 file through the owner's booking template,
+  // and that template's save and read. Two writes and one read, spread in as one line.
+  ...settlementActions({ ctxAction, ctxSchema, STR, withPrevalidate }),
+
+  // A39, the bank inbox: one line, one proposal, confirm, undo by reversal. Three writes and one read,
+  // spread in as one line; the A20 verbs above stay as wrappers over the same core.
+  ...bankInboxActions({ ctxAction, ctxSchema, STR, INT, BOOL, withPrevalidate }),
+
+  // A41, the Beleg-Abgleich (D184): the person's receipt verbs of the A41.3 re-cut, assign_beleg, release_beleg
+  // and confirm_capture_figures. Three human-only writes, spread in as one line; the autobook receipt verdict
+  // reads the assignment they write (`belegVerdict.ts`).
+  ...belegActions({ ctxAction, ctxSchema, withPrevalidate, STR }),
+
+  // N03, Buchungsregeln that learn: the rule miner (drafts Vorschläge, never a rule), the rules' track
+  // record and the backtest. One write and two reads, spread in as one line.
+  ...ruleLearningActions({ ctxAction, ctxSchema, STR, INT }),
+
+  // N04, Autopilot: a Buchungsregel that earned it books its own lines, and a Vorlage books on a schedule.
+  // Five writes and three reads, spread in as one line. The bookings themselves run on the scheduler tick,
+  // as the person who granted or set them; no verb books on its own.
+  ...autopilotActions({ ctxAction, ctxSchema, withPrevalidate, STR, INT }),
+
+  // A18, creditor payments: select A17's open items, generate a pain.001.001.09 credit-transfer
+  // initiation, mark paid through A14's recordPayment. Eight verbs (five writes, three reads), spread
+  // in as one line. `set_creditor_bank_profile`, `get_payment_batch`, `list_payment_batches` and
+  // `discard_payment_batch` are additions beyond the spec's four named tools (see the reconciliation
+  // note atop `core/banking/pain001.ts`).
+  ...pain001Actions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // A40, payment timing: the liquidity forecast over the scheduled flows and the Skonto-versus-floor
+  // pay-date proposal. Nine verbs (four writes, five reads), spread in as one line. Nothing posts or
+  // pays; the draft step reaches A18's createPaymentBatch and nothing else.
+  ...liquidityActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // G00, workspace settings (D172). The generic registry of user settings: every behaviour choice is a
+  // setting with a sensible default. Four verbs (two reads, two writes), spread in as one line.
+  ...settingsActions({ ctxAction, ctxSchema, STR, withPrevalidate }),
+
+  // G00, per-person preferences (D178 point 7). The person's own looks and arrangements, keyed by the
+  // calling seat: four verbs (two reads, two writes), spread in as one line.
+  ...prefsActions({ ctxAction, ctxSchema, STR }),
+
+  // N00, the workspace brief and the Hausbuch. The one read an agent makes first, and the owner's house
+  // notes it follows: four verbs (two reads, two writes), spread in as one line.
+  ...hausbuchActions({ ctxAction, ctxSchema, STR }),
+
+  // A23, multi-client workspaces (Treuhänder onboarding and archive). `list_workspaces` (D12) moved
+  // here from its inline registration; `depsAction`/`depsSchema` ride along because listing and
+  // onboarding are pre-workspace, the `accept_invite`/`create_workspace` shape. Spread in as one
+  // line, the same shape every sibling uses.
+  ...workspaceActions({ ctxAction, depsAction, ctxSchema, depsSchema, STR, BOOL }),
+
+  // A25, Treuhänder review & export: the entry_review sidecar over the immutable journal (comment,
+  // flag, approve, the coverage read, the agent's prepare) and the three filing exports, which only
+  // ever repackage what A02/A08/A07 already computed. Locking stays A03's lock_period. Defined in
+  // `./review-actions.ts` and spread in as one line, the same shape §H-FX and A14 established.
+  ...reviewActions({ ctxAction, ctxSchema, STR }),
+
+  // A26, agent bookkeeping. Three convenience reads, the dial pair, and the two inbox verbs. A26 adds
+  // NO agent-only financial or customization write tool beyond the dial itself (§6b): the money and
+  // customization stories reach the existing A00-A25 / G00-G02 verbs, routed through the dial.
+  // `approve_drafted_action` holds an invoker (it replays a drafted verb as the approver), which is
+  // why `invokerFor` rides along, exactly as it does for G01 and A12. A35 added the queue read
+  // (`list_drafted_actions`), the composer verb (`agent_ask`, D90 D-1) and the prose delete
+  // (`agent_prose_delete`, D90 D-5) to this block: the write mechanics over agent artifacts stay
+  // A26's even when A35 is the face that renders them.
+  ...agentActions({ ctxAction, ctxSchema, invokerFor, STR, BOOL }),
+
+  // N01, agent ergonomics. The two batch writes (`book_bank_lines`, `post_entries`), the batch approval
+  // (`approve_drafted_actions`) and the dispatcher (`call_tool`): every item is one single call through the
+  // governed transport seam (`governedRun`, bound late by `agent-gate.ts`), never all or nothing. Defined
+  // in `./batch-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...batchActions({ ctxAction, depsAction, ctxSchema, depsSchema, governedRun, getAction, STR }),
+
+  // A35, agent conversation & oversight. The three READS over the trace the transport seam records
+  // (`src/api/agent-gate.ts`): the Gespräche archive pair and the Vertrauen trust evidence. A35
+  // registers ZERO write verbs. Defined in `./agent-oversight-actions.ts` and spread in as one line,
+  // the same shape every sibling uses.
+  ...agentOversightActions({ ctxAction, ctxSchema, STR, BOOL }),
+
+  // G10, migration maps and the locale seam. The persisted column/account/tax/currency maps a
+  // Datenübernahme resolves through, the operator-scoped Zuordnungsvorlagen, and the two ungated
+  // catalog reads (adapters with their cleanRoomSource, locale packs). Six ctx verbs on
+  // `manage_import` plus two depsAction catalog reads; defined in `./migration-map-actions.ts` and
+  // spread in as one line, the same shape every sibling uses.
+  ...migrationMapActions({ ctxAction, depsAction, ctxSchema, depsSchema, STR }),
+
+  // G09, the migration harness. The plan and step machine G10's maps feed: discovery over pure byte
+  // adapters, scope, the six-condition commit gate and the money path (a migrated document posts
+  // nothing, a money-path class establishes opening balances through A04's single entry). Twelve
+  // ctx verbs, seven writes and five reads; the writes gate on `manage_import`, a money-path commit
+  // additionally on `commit_migration` inside the engine. Defined in `./migration-actions.ts` and
+  // spread in as one line, the same shape every sibling uses.
+  ...migrationActions({ ctxAction, ctxSchema, STR }),
+
+  // G11, the Eröffnungsprüfung. The migration family's check: control totals declared from the old
+  // system, the persisted append-only check whose hash a G09 approval binds to, the waiver with a
+  // recorded reason, and the Prüfbericht export. Six ctx verbs, three writes and three reads, all
+  // on `manage_import`; defined in `./migration-check-actions.ts` and spread in as one line, the
+  // same shape every sibling uses.
+  ...migrationCheckActions({ ctxAction, ctxSchema, STR }),
+
+  // G21, open-items AR/AP migration. The two verbs that carry open Debitoren/Kreditoren across from an
+  // old system as origin=migrated documents / vendor bills that post NOTHING (their only ledger effect
+  // is A04's opening 1100/2000 line): preview_open_items (read, the control tie-out without a write)
+  // and import_open_items (write, atomic + idempotent, rides commit_migration, denylisted from
+  // automation). Defined in `./migration-openitems-actions.ts` and spread in as one line, the sibling
+  // shape.
+  ...migrationOpenItemsActions({ ctxAction, ctxSchema, STR }),
+
+  // G12 Testmandant. The disposable trial workspace, its go-productive promotion and its discard.
+  // Five ctx verbs: two reads (get, and the family's one two-workspace diff) plus three writes.
+  // `migration_create_testmandant` gates on `manage_import`; `go_productive` on `promote_workspace`
+  // AND `commit_migration` (minting real books is the G04 restore analogy, committing money-path data
+  // the G09 one), with the type-to-confirm checked engine-side; `discard_testmandant` on
+  // `manage_import`. Both `go_productive` and `discard_testmandant` are denylisted from automation.
+  // Defined in `./migration-testmandant-actions.ts` and spread in as one line, the sibling shape.
+  ...migrationTestmandantActions({ ctxAction, depsAction, ctxSchema, depsSchema, STR }),
+
+  // G03, onboarding & migration. The first-run on-ramp OVER the family above, never a second door:
+  // the wizard resume pointer (two ctx verbs, bookkeeping and never a gate), the pre-workspace
+  // `create_demo_workspace` (the `create_workspace`/`onboard_client` depsAction shape, seeds sample
+  // books through the owning verbs, kind='demo' never promotes) and `discard_demo_workspace` (the
+  // demo's one exit, hard delete fenced to kind='demo', denylisted from automation alongside
+  // `discard_testmandant`). No import verb lives here: imports are G09-G13's. Defined in
+  // `./onboarding-actions.ts` and spread in as one line, the sibling shape.
+  ...onboardingActions({ ctxAction, depsAction, ctxSchema, depsSchema, STR, BOOL }),
+
+  // G13 GL archive. The read-only prior-system ledger beside the live one, hard-partitioned from it
+  // (an archive row never reaches list_journal or a live statement; the labelled comparative is the
+  // one meeting point, composed at the API layer). Six ctx verbs: four reads on `read_books` (the
+  // archive IS the books, historical or not), `gl_archive_import` on `commit_migration`, and the
+  // destructive, denylisted `gl_archive_purge` on the owner-only `purge_archive`. Defined in
+  // `./gl-archive-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...glArchiveActions({ ctxAction, ctxSchema, STR }),
+
+  // G19, the extraction companion core. The first mile of a migration as product data: the guide
+  // registry (getting data OUT of the old system) and the export-completeness manifest. Two guide
+  // reads are depsActions with NO workspaceId (they describe the software, ungated, the
+  // `migration_list_source_adapters` shape); the three manifest verbs are ctx verbs (two writes, one
+  // read) on `manage_import` like the rest of the import domain. The core stores no vendor
+  // credential or session state; the browser companion is a separate optional package. Defined in
+  // `./migration-extraction-actions.ts` and spread in as one line, the sibling shape.
+  ...migrationExtractionActions({ ctxAction, depsAction, ctxSchema, depsSchema, STR }),
+
+  // G20, implementation projects. The cutover as a first-class object above the migration plan(s):
+  // the project, its runbook tasks, decisions, sign-offs and the parallel-run reconciliation, plus the
+  // cross-client roster (composed over A23 client-side). Eleven ctx verbs, prefixed `implementation_`
+  // because B00 owns the bare `project_*` names for its billing projects (spec §5 reconciled). Eight
+  // writes gate on `manage_implementation`; `implementation_signoff_record` rides `commit_migration`;
+  // the roster list gates on `read_master_data`. Defined in `./migration-project-actions.ts` and
+  // spread in as one line, the sibling shape.
+  ...migrationProjectActions({ ctxAction, ctxSchema, STR }),
+
+  // G22, checklists. Recurring checklists as shipped product data (D127), the MWST-Periode first:
+  // a template instantiates into a run whose items are derived live (system checks, hash-bound verb
+  // evidence, append-only sign-offs). Three reads on `read_books`, five writes on the new
+  // `manage_checklists`; no money moves and no table carries a Rappen. Defined in
+  // `./checklist-actions.ts` and spread in as one line, the sibling shape.
+  ...checklistActions({ ctxAction, ctxSchema, STR }),
+
+  // B00, the projects master (phases, milestones, budget vs actual, status): the cluster-B spine
+  // every later B-capability keys against. Seven writes and three reads, all on the master-data
+  // capability pair; B00 posts nothing (its one money read is the P5 budget-vs-actual query over
+  // the read-only cost-source seam). Defined in `./project-actions.ts` and spread in as one line,
+  // the same shape every sibling uses.
+  ...projectActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // B01, time tracking (timers, timesheets, rate cards): the first leaf on B00's spine. Ten writes
+  // (the entry lifecycle, the submit/approve/lock chain, the versioned rate-card pair) and three
+  // reads; B01 posts nothing (time is pre-financial, the one money figure is derived round-once at
+  // read from the OP1 snapshot). Defined in `./time-actions.ts` and spread in as one line, the
+  // same shape every sibling uses.
+  ...timeActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // B02, time -> billing: approved unbilled time (B01) becomes A11 invoice DRAFT lines, plus the WIP
+  // read model. Two writes (`billing_generate_invoice`, `billing_release_time`) gated on
+  // `billing.generate`, two reads (`billing_unbilled_preview`, `billing_wip_report`) on
+  // `billing.read`. B02 posts nothing: generation delegates to A10 `createDocument` (P3), and A11 ->
+  // A02 own the only journal entry, at issue. Defined in `./billing-actions.ts`, spread in as one line.
+  ...billingActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // B04, retainers & mandates: a recurring fee that bills itself as an A11 draft, drawing approved
+  // B01 time down against included hours and pricing the over-cap excess with B02's round-once
+  // semantics on the SAME invoice. Five writes (create/update/close/generate_invoice/run_due) gate on
+  // `retainer.manage`, two reads (burndown/list) on `billing.read`. B04 posts nothing (P3); generation
+  // delegates to A10 createDocument. Defined in `./retainer-actions.ts`, spread in as one line.
+  ...retainerActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // B03, job costing / project P&L: the pure P5 read model over B00/B01/B02/A11. Four reads and
+  // not one write (the A08 shape): the card, the portfolio list, budget-vs-actual and the
+  // drilldown, all gated on `costing.read` (the revDSG pay-data gate, see actionCapabilities.ts).
+  // B03 owns no table, posts nothing and emits no events; the A17/D02 components degrade honestly
+  // until their project references land. Defined in `./costing-actions.ts`, spread in as one line.
+  ...costingActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // F00, dashboards & KPIs: the pure P5 tile wall over the read models above. Three reads and not
+  // one write (the B03 shape; D178 point 13 added `dashboard_series`, the charts' monthly money in
+  // and out and top expenses, gated `read_books`): the overview and the single tile, each composing
+  // A08/A16/A17/A07/B01/B03/D01 (+ A19's account list and G00's saved views) in-process, RBAC
+  // asserted PER TILE inside the engine (the boundary is ungated 'asserted_in_engine'). F00 owns
+  // no table, posts nothing and emits no events. Defined in `./dashboard-actions.ts`, spread in
+  // as one line.
+  ...dashboardActions({ ctxAction, ctxSchema, STR, INT }),
+
+  // G15, the attention hub: two READS that compose the module work queues into one answer. Owns no
+  // table, posts nothing and emits no events (pure P5, the F00 posture). RBAC is the union of the
+  // providers' read gates, asserted per queue in the engine, so both verbs are ungated at the
+  // boundary. Defined in `./attention-actions.ts`, spread in as one line.
+  ...attentionActions({ ctxAction, ctxSchema, STR, INT }),
+
+  // F01, report builder: ten verbs (six writes, four reads) composing REPORT_SOURCES read models
+  // into saved reports rendered to local CSV/PDF artifacts. Owns saved_reports + report_runs, posts
+  // nothing (P3). Defined in `./report-builder-actions.ts`, spread in as one line.
+  ...reportBuilderActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // D01, inventory / stock: the OP2 stock seam D03 later consumes. Ten verbs (six writes, four
+  // reads). The operational writes gate on `manage_master_data`, the reads on `read_master_data`.
+  // Since K68 `stock_run_valuation` is REPORT-ONLY (it computes and returns the valuation but mints
+  // no journal entry), so it too gates on `read_master_data`; J06 `inventory_valuation_post` is the
+  // sole ledger-reaching poster (see actionCapabilities.ts). Defined in `./stock-actions.ts` and
+  // spread in as one line, the same shape every sibling uses.
+  ...stockActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // D03, sales orders & delivery notes: the order -> delivery -> invoice fulfilment bridge. Eleven
+  // verbs (eight writes, three reads). The writes gate on `issue` (the sales-document write capability
+  // C02/A11 use), the reads on `read_sales`. Invoicing delegates to A10 createDocument (no posting
+  // path, P3); issue movements are minted only through D01 stock.move (OP2). Defined in
+  // `./sales-order-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...salesOrderActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // D02, purchasing: PO -> goods receipt -> 3-way match against the A17 vendor bill, plus supplier
+  // prices. Twelve verbs (eight writes, four reads). The writes gate on `manage_master_data` (D02 posts
+  // NOTHING, P3; a match override additionally asserts `post` inside the engine), the reads on
+  // `read_master_data`. Receipts mint stock only through D01 stock.move (OP2); matching links the A17
+  // bill and posts nothing. Defined in `./purchase-order-actions.ts` and spread in as one line, DISJOINT
+  // from A17's own `purchase-actions.ts`.
+  ...purchaseOrderActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // I01, Advanced Purchase Order (OP14): ten versioning + amendment verbs (six writes, four reads) that
+  // LAYER controlled versioning over the live D02 PO without touching D02's public surface. Writes gate
+  // on `manage_master_data`, reads on `read_master_data`, exactly as the D02 purchasing verbs do.
+  // `po_amendment_apply` re-renders the P8 outbound artifact (transmitted:false) and never posts (P3).
+  // Defined in `./po-amendment-actions.ts` and spread in as one line, DISJOINT from D02's own file.
+  ...poAmendmentActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // E02, HR-lite: employees, absences and expense claims (Spesen). Fourteen verbs (nine writes, five
+  // reads). The money path is `expense_claim_approve` (posts the reimbursement liability via A02) and
+  // `expense_claim_reimburse` (pays via A14), both P8 draft-gated; the reads self-scope to the
+  // caller's own personnel/Spesen rows unless they hold `hr.manage`/`spesen.approve`. Defined in
+  // `./hr-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...hrActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // E04, local mail store. Seven verbs (three writes, four reads) over the mail store a client on
+  // this machine already writes: connect (no credential exists to ask for), reindex (locators and
+  // hashes, never a body: OP6), the thread queue and read, and the draft write-back into the
+  // client's LOCAL Drafts folder. NO send verb exists and none may be added (P8 by construction);
+  // erasure rides C00 contacts_anonymise, never a second entry point. Defined in
+  // `./mail-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...mailActions({ ctxAction, ctxSchema, STR }),
+
+  // E05, voice profile and the OP6 local runtime. Seven verbs (two writes, five reads): learn a
+  // style card from the E04 outbound corpus (locators, vectors and hashes, never an excerpt:
+  // Art. 321 index-never-copy), retrieve the nearest exemplars for E06's drafting, and the model
+  // picker over the companion package's static manifest (a file, never a fetch; the RAM floor
+  // enforced in the verb). `runtime.register` is deliberately NOT a tool (an agent must never swap
+  // the model out from under a user); erasure rides C00 contacts_anonymise, never a second entry
+  // point. Defined in `./voice-actions.ts` and spread in as one line, the same shape every sibling
+  // uses.
+  ...voiceActions({ ctxAction, ctxSchema, STR, INT }),
+
+  // E06, ledger-grounded drafts. Three verbs (two writes, one read): generate a reply for an E04
+  // thread through E05's OP6 adapter (the one inference door), grounded in the A16/A11/B00 READ
+  // models ONLY for a contact whose own consent flag is on (the parameter can only force grounding
+  // OFF, never on), and hand it to E04's Drafts write-back. NO send verb exists and none may be
+  // added (P8 by construction); no prompt byte reaches the disk (draft_run stores prompt_sha256);
+  // erasure rides C00 contacts_anonymise, never a second entry point. Defined in
+  // `./draft-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...draftActions({ ctxAction, ctxSchema, STR, BOOL }),
+
+  // E07, the offline proof & the honest threat model (the CAPSTONE of the local-first claim). Two
+  // READS (no writes): `egress_self_test` installs a socket-level probe over every network vector and
+  // runs the REAL E04/E05/E06 loop under it, reporting `passed:true, socketsOpened:0` only when it is
+  // measured (never a simulation); `egress_status` is the standing indicator's observed-never-stored
+  // read model. Both gate on `egress.read` and are deliberately readable by an agent auditing the
+  // claim. No new screen, no new table, no money path. Defined in `./egress-actions.ts` and spread in
+  // as one line, the same shape every sibling uses.
+  ...egressActions({ ctxAction, ctxSchema }),
+
+  // G04, data freedom (export / backup / restore / verify / delete + the API catalog). Four ctx
+  // verbs gate on `manage_data_export`; `verify_backup` and `get_api_catalog` are pre-workspace
+  // reads and `restore_backup` is the `create_workspace` shape (it MINTS the tenant), so all three
+  // are deps verbs. `get_api_catalog` reads the whole surface lazily through `catalogActions`, which
+  // resolves against `ACTIONS` at REQUEST time (fully built by then), so there is no init cycle.
+  // Defined in `./data-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...dataActions({
+    ctxAction,
+    depsAction,
+    ctxSchema,
+    depsSchema,
+    STR,
+    BOOL,
+    catalogActions: buildCatalogActions,
+  }),
+
+  // G07, global search. One READ over the declarative searchable-kind roster plus the G00
+  // custom-field values, fenced per kind by that kind's own read capability in the engine (the F00
+  // dashboards posture), so it owes no conformance write scenario and no idempotency key. Defined
+  // in `./search-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...searchActions({ ctxAction, ctxSchema, STR, INT }),
+
+  // H00, fixed-asset categories & defaults (Wave 12, plain master data, no money path): the six
+  // asset_category_* verbs (create/update/archive/list/get/resolve_defaults) carrying the
+  // depreciation and GL-account defaults H01 assets inherit. Defined in `./asset-actions.ts` and
+  // spread in as one line, the same shape every sibling uses.
+  ...assetActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // H08, Simple Maintenance Log (Wave 12, NON-POSTING): the five asset_maintenance_log_* verbs
+  // (create/update/cancel/get/list), an append-oriented per-asset log with descriptive cost capture and
+  // no GL side-effect. Defined in `./maintenance-actions.ts` and spread in as one line, the same shape
+  // every sibling uses; appended right after the asset cluster it extends.
+  ...maintenanceActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // H09, Asset Reports & Agent Tools (Wave 12, READ-ONLY): the six pure report verbs
+  // (asset_register_report, asset_depreciation_forecast, asset_disposal_summary,
+  // asset_acquisition_summary, asset_nbv_summary, asset_end_of_life_list) over the H00-H08 cluster.
+  // Reconciliation and per-asset transaction history already ship inside H07 and are re-used, not
+  // re-minted. Defined in `./asset-reports-actions.ts` and spread in as one line; appended after the
+  // maintenance log it reports over.
+  ...assetReportsActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // I00, requisitions (Wave 14, cluster I root, plain operational document, no money path): the eleven
+  // requisition_* verbs (upsert/submit/approve/reject/return/convert_to_po/cancel/close + get/list/
+  // my_pending_approvals) that open the procure-to-pay chain and convert approved demand into a D02 PO.
+  // Defined in `./requisition-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...requisitionActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // J00, warehouses & locations (Wave 13, inventory root, plain master data, no money path): the
+  // fifteen warehouse_* / location_* / inventory_* verbs. Warehouses on the `warehouse` table,
+  // locations on D01's extended `stock_location` table (spec §4 Reconciliation), on-hand always the
+  // SUM over the OP2 movement ledger. Defined in `./inventory-actions.ts` and spread in as one line.
+  ...inventoryActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // J01, lot & serial tracking (Wave 13, inventory, plain master data, no money path): the eighteen
+  // item_set_tracking_mode / lot_* / serial_* / inventory_on_hand_by_lot / inventory_available_serials
+  // verbs. Lot and serial masters carry no quantity column; on-hand is the SUM over the OP2 movement
+  // ledger (J02 fills the stock_movement.lot_id/serial_id extension points). Defined in
+  // `./tracking-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...trackingActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // J02, the inventory movement ledger (Wave 13, inventory, MONEY-PATH: append-only quantity truth,
+  // the OR 958c Bestandesnachweis): inventory_move, inventory_transfer, inventory_balance,
+  // inventory_movement_list, inventory_movement_get, inventory_get_config, inventory_set_config. The
+  // one write path for on-hand; on-hand is always SUM(stock_movement.qty), never a stored column, and
+  // a movement row is immutable (BEFORE UPDATE/DELETE triggers). Defined in `./movement-actions.ts`
+  // and spread in as one line, the same shape every sibling uses.
+  ...movementActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // I02, the goods receipt (Wave 14, cluster I, MONEY-PATH by way of J02): the thirteen
+  // goods_receipt_* verbs (create/upsert_lines/post/accept_lines/reject_lines/reverse/cancel/
+  // set_config + preview/get/list/lines_for_match/get_config). The reversible, inspection-aware
+  // document over a D02/I01 purchase order. It writes stock ONLY through J02's inventory_move, posts
+  // no journal entry (P3), and maintains po_line.received_qty together with D02's shared
+  // goods_receipt_line trail so the two can never disagree. Writes gate on manage_master_data and
+  // reads on read_master_data (the D02 purchasing surface's own vocabulary). Defined in
+  // `./receipt-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...receiptActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // J03, advanced valuation methods (Wave 13, inventory, MONEY-PATH: this is the figure that reaches
+  // the balance sheet): inventory_valuation_preview, inventory_valuation_methods,
+  // inventory_valuation_layers, inventory_valuation_method_history, and the three policy writes
+  // inventory_valuation_method_set_enabled, inventory_valuation_set_default,
+  // inventory_valuation_set_item_method. Pure calculators over the J02 ledger (weighted average,
+  // FIFO layers, standard cost, and the compulsory OR 960c clamp), plus an append-only DATED method
+  // assignment: resolution at an as-of date returns the method in force THEN, and the period lock
+  // answers to effectiveFrom rather than the call date, so a closed year cannot be restated. J03
+  // posts nothing; J06 takes these numbers to A02. Defined in `./valuation-actions.ts` and spread in
+  // as one line, the same shape every sibling uses.
+  ...valuationActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // J06, inventory valuation run & GL link (Wave 13, MONEY-PATH, OP11): the nine
+  // inventory_valuation_* / inventory_reconciliation_* verbs (create / post / reverse / opening
+  // writes, get / list / report / reconciliation_report / reconciliation_check reads). J06 is the ONLY
+  // path an inventory valuation figure reaches the General Ledger: a run takes J03's computed valuation
+  // (which already folds in I03 landed cost) and posts the delta against the live GL through ONE
+  // balanced A02 entry (source `inventory_valuation`), and the reconciliation proves sub-ledger == GL.
+  // Writes gate on `inventory.setup` (create) and `post` (post/reverse/opening), reads on
+  // `read_master_data`. Defined in `./valuation-run-actions.ts` and spread in as one line.
+  ...valuationRunActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // J04, cycle count / stocktake (Wave 13, inventory, MONEY-PATH): the nine inventory_stocktake_*
+  // verbs (create / count / approve_lines / request_recount / commit / cancel writes, report / get /
+  // list reads). A session freezes a J02 balance-as-of snapshot, accepts counts (blind or open),
+  // surfaces variance against thresholds, and commits every non-zero variance EXCLUSIVELY as an OP13 /
+  // J02 inventory_move (movement_type adjustment): J04 never writes a quantity, so on-hand stays the
+  // SUM over the ledger. Writes gate on `manage_master_data` (the inventory_move register), reads on
+  // `read_master_data`. Defined in `./stocktake-actions.ts` and spread in as one line.
+  ...stocktakeActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  ...inventoryAdjustActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // I03, landed cost allocation (Wave 14, cluster I, MONEY-PATH): the six landed_cost_* verbs
+  // (voucher_create / allocate_confirm / reverse writes, allocate_preview / list / get reads). A
+  // voucher capitalises freight/duty/handling onto inventory by writing value-only J02 landed_cost
+  // movements (qty 0, a signed cost_amount bound to the receipt movement) and ONE balanced A02 entry;
+  // J03 folds the cost into the valuation and reverse nets it back out. Writes gate on
+  // `procurement.landed_cost`, reads on `read_master_data`. Defined in `./landed-cost-actions.ts` and
+  // spread in as one line, the same shape every sibling uses.
+  ...landedCostActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // I04, the three-way match (Wave 14, cluster I): match_three_way_create / _override / _reverse
+  // (the three writes) then _evaluate / _get / _list / _exceptions / match_status_for_bill (the five
+  // reads). A first-class, pure, auditable elevation of D02's minimal match: it compares the A17 bill
+  // aggregate against the I01 PO lines and I02 receipts, persists an immutable match (or an override
+  // with a mandatory reason), gates payment, and reverses by restoring billed_qty. It POSTS NOTHING
+  // (P3): it increments po_line.billed_qty and marks I02 receipt lines only; A17 -> A02 stays the sole
+  // posting path. Writes gate on purchasing.match (override additionally on purchasing.match_override,
+  // reverse on purchasing.match_override); reads on read_master_data. Defined in
+  // `./three-way-match-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...threeWayMatchActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // I05, supplier performance (Wave 14, cluster I): five PURE READS deriving a supplier scorecard,
+  // ranking, metric trend, metric explanation and threshold alerts from the live I02 goods receipts
+  // and the D02 po_match trail (supplier_scorecard_get, supplier_performance_rank / _trend / _explain
+  // / _alerts). Owns no table and writes nothing: every figure recomputes from source on each call, so
+  // a scorecard is referentially transparent and never posts to the GL. Reads gate on read_master_data
+  // (the D02/I01/I02 purchasing read domain). Defined in `./supplier-performance-actions.ts` and spread
+  // in as one line, the same shape every sibling uses.
+  ...supplierPerformanceActions({ ctxAction, ctxSchema, STR, INT }),
+  // I06, procurement analytics & agent tools (Wave 14, cluster I): ten PURE READS over the live
+  // I00-I05 + D02 documents (procurement_open_commitments, _match_status, _spend_summary,
+  // _supplier_scorecard, _requisition_pipeline, _grir_clearing, _landed_cost_variance, _po_cycle,
+  // _anomalies, _po_history). Owns no table and writes nothing: every figure is a pure projection of
+  // the live po_line counters, the I04 three_way_match trail, the I00 requisitions, the I03 vouchers
+  // and (for the scorecard) I05's own read, recomputed on each call. Reads gate on read_master_data
+  // (the D02/I01/I02 purchasing read domain), the I05 posture. Defined in
+  // `./procurement-analytics-actions.ts` and spread in as one line, the same shape every sibling uses.
+  ...procurementAnalyticsActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+  // J07, inventory agent tools & alerts (Wave 13, inventory, the TERMINAL leaf): ten PURE READS over
+  // the whole J00-J06 cluster (inventory_stock_position, _low_stock, _valuation_status,
+  // _movement_history, _anomalies, _cycle_count_status, _lot_trace, _slow_movers, _alerts,
+  // _reorder_candidates). Owns no table and writes nothing (P5, §H-STOCK-AUDIT): on-hand is always
+  // SUM(stock_movement.qty) and every figure is derived on the spot from the append-only J02 ledger
+  // and the J03/J06 valuation reads, reusing inventoryValuationPreview / _Report / inventoryMovement
+  // List / inventoryStocktakeList. Reads gate on read_master_data (the J00-J06 inventory read domain),
+  // the I05/I06 posture. Defined in `./inventory-agent-actions.ts` and spread in as one line.
+  ...inventoryAgentActions({ ctxAction, ctxSchema, STR, INT, BOOL }),
+
+  // G17, in-product guidance. Two workspace-free READS over the authored Begriffe corpus (the
+  // wording of record for GUI and agent alike), spread in as one line, the same shape every sibling
+  // uses. `depsAction` rides along because the corpus is not tenant data: giving these verbs a
+  // workspaceId would imply the explanation of a statutory election can differ per workspace, the
+  // one property that must never exist (see ./guidance-actions.ts). G17 mints no write verb, no
+  // table and no route, which is what keeps the product-tour genre unbuildable.
+  ...guidanceActions({ depsAction, depsSchema, STR }),
+
+  // M00, packaged local delivery. ONE workspace-free READ, `delivery_status`, describing the running
+  // process (mode, version, schema generation, bound host/port, whether the Studio is served, the
+  // scheduler tick), spread in as one line, the same shape every sibling uses. `depsAction` because
+  // it precedes any workspace: it reports the process, not tenant data (see ./delivery-actions.ts).
+  // M00 mints no write verb of its own: `till up` is a process launch, not a ledger action, and the
+  // scheduler reuses G01's `run_due_automations` unchanged.
+  ...deliveryActions({ depsAction, depsSchema }),
+  // M02, the §I sync/publish contract (D106): two owner dials + four consumer reads. All six are ctx
+  // verbs (workspace-scoped, §H-TENANT). The inbound lane is existing verbs, so nothing new here posts.
+  ...syncActions({ ctxAction, ctxSchema, STR, INT }),
+  // M03, deployment journeys: the Move record's resume-pointer pair (get_move_state /
+  // advance_move_step), the G03 onboarding-pointer shape verbatim: workspace-scoped bookkeeping,
+  // never a gate on any verb. Every other action on the M03 surfaces reuses an existing verb
+  // (create_backup, archive_workspace, trial_balance), so nothing else registers here.
+  ...moveActions({ ctxAction, ctxSchema, STR, BOOL, INT }),
+
+  // N00, the environment landscape (D126, host-level).
+  // The `env_*` family (Phase A): list/status/current reads and switch/create/reset/delete writes over
+  // the tamper-evident, audited control file. Host-level, but ctx verbs so `landscape.manage` /
+  // `landscape.read` resolve against the caller's workspace (managing the landscape is an owner act);
+  // the ops work on the control file, not the ledger. Every write is P8-staged and host-idempotent.
+  // policy=copy and copy-policy reset are Phase B. Defined in `./env-actions.ts` and spread in as one
+  // line, the same shape every sibling uses.
+  ...envActions({ ctxAction, ctxSchema, STR, BOOL, INT }),
+
+  // N02, chat Belege: receipts from a chat land as Belege in one act (D183). `files_drop_link` mints the
+  // one-time link a person redeems in the Studio (never through a tool), and `belegeingang_status` reads
+  // the watched folder's last scan. The `sourcePath` and `attach` halves ride on existing verbs.
+  ...chatBelegeActions({ ctxAction, ctxSchema, STR }),
+];
+
+/**
+ * A35/G16: stamp the consequence sentence onto the money-path verbs, once, at load. The map lives in
+ * `src/core/agent/dialMap.ts` beside the dial map it annotates; a name that resolves to no action
+ * THROWS here, so the map cannot rot into decoration when a verb is renamed.
+ */
+for (const [name, consequence] of Object.entries(CONSEQUENCE_FOR_ACTION)) {
+  const action = ACTIONS.find((a) => a.name === name);
+  if (action === undefined) {
+    throw new Error(`CONSEQUENCE_FOR_ACTION names '${name}', which is not a registered verb.`);
+  }
+  action.consequence = consequence;
+}
+
+/**
+ * N01 US-N01.8: every write the agent dial can govern declares `agentReason`, the agent's one sentence on
+ * why it proposes the act, stored on the Vorschlag and shown quoted in Pendenzen. Transport-only: never an
+ * argument of the act (`TRANSPORT_ONLY_FIELDS`, the idempotency hash skips it) and never read by a verb.
+ * Declared here once, from the dial map, so a verb the dial starts to govern declares it with no edit; the
+ * transport checks the length (`agent-gate.ts`, at most 500 characters).
+ */
+for (const action of ACTIONS) {
+  if (action.kind !== 'write' || dialCapabilitiesForVerb(action.name).length === 0) continue;
+  if ('agentReason' in action.inputSchema.properties) continue;
+  action.inputSchema.properties = { ...action.inputSchema.properties, agentReason: { type: 'string', maxLength: 500 } };
+}
+
+/**
+ * The whole tool surface as catalog rows for `get_api_catalog` (G04.4). Resolved lazily (called per
+ * request, never at module load) so `ACTIONS` is fully constructed before it is read, and it reads
+ * the SAME registry the P4 parity check reads, so the catalog can never drift from the live surface.
+ */
+function buildCatalogActions(): CatalogAction[] {
+  return ACTIONS.map((a) => ({
+    name: a.name,
+    kind: a.kind,
+    summary: a.summary,
+    // A35 (critic F11): the catalog is the second machine consumer of the consequence sentence.
+    ...(a.consequence === undefined ? {} : { consequence: a.consequence }),
+    inputSchema: a.inputSchema,
+    capabilities: requiredCapabilitiesFor(a.name, {}),
+  }));
+}
+
+/**
+ * D159/D160: the writes that do not carry both a reversibility class and a consequence tag. Every write
+ * registered through `ctxAction` / `depsAction` has both by construction (the kind type requires them and
+ * `splitActionKind` throws otherwise); this catches an `ActionDef` assembled any other way.
+ */
+export function listUnclassifiedWrites(actions: readonly ActionDef[] = ACTIONS): string[] {
+  return actions
+    .filter((a) => a.kind === 'write' && (a.reversibility === undefined || a.consequenceTag === undefined))
+    .map((a) => a.name);
+}
+
+/**
+ * D159.3: no write without a class and a tag, asserted once at load over `actions`; it throws, naming every
+ * offender. A read must carry neither. Exported so the suite can prove it bites on a hand-built action.
+ */
+export function assertEveryWriteIsClassified(actions: readonly ActionDef[]): void {
+  const unclassified = listUnclassifiedWrites(actions);
+  const taggedReads = actions
+    .filter((a) => a.kind === 'read' && (a.reversibility !== undefined || a.consequenceTag !== undefined))
+    .map((a) => a.name);
+  const problems = [
+    ...unclassified.map((n) => `${n}: a write without its reversibility class and consequence tag ('write:<class>:<tag>')`),
+    ...taggedReads.map((n) => `${n}: a read carries no reversibility class or consequence tag`),
+  ];
+  if (problems.length > 0) throw new Error(`Unclassified actions (D159/D160):\n  ${problems.join('\n  ')}`);
+}
+
+assertEveryWriteIsClassified(ACTIONS);
+
+/**
+ * D159: the way-back map (`src/core/agent/wayBack.ts`) names only registered writes, at load, the
+ * `CONSEQUENCE_FOR_ACTION` shape above: a renamed verb throws here rather than leaving a dead entry.
+ */
+{
+  const problems = wayBackProblems(ACTIONS);
+  if (problems.length > 0) throw new Error(`WAY_BACK is inconsistent with the registry (D159):\n  ${problems.join('\n  ')}`);
+}
+
+/**
+ * A24's fail-closed check, run once at module load, over EVERY verb rather than only the writes.
+ *
+ * This is the line that makes "you cannot un-gate posting" structural rather than a convention. A
+ * capability that appends a verb to `ACTIONS` and does not declare its gate in
+ * `CAPABILITY_FOR_ACTION` cannot import this module at all: the MCP server, the REST twins, the
+ * Studio bridge and every root suite fail here, at start-up, with the verb named.
+ *
+ * IT COVERS READS AS OF D50, and that is the whole point of touching it. The old call filtered to
+ * `kind === 'write'`, so the guard could not see the forty-nine ungated reads and was silent about
+ * the exact defect the wave critic reproduced. A24 is referenced by 74 of 90 specs: a read appended
+ * by a capability that never opens this file has to fail loudly here rather than quietly serve the
+ * ledger to a non-member.
+ *
+ * `reachesTheGate` is a ctx verb, identified the way every caller identifies one: a `depsAction` is
+ * pre-workspace and carries no `workspaceId`, so a capability declared on it could never be
+ * enforced, and the guard refuses that as its third check.
+ */
+assertEveryActionIsGated(
+  ACTIONS.map((a) => ({
+    name: a.name,
+    kind: a.kind,
+    reachesTheGate: a.inputSchema.required.includes('workspaceId'),
+  })),
+);
+
+/**
+ * G01's load-time handshake, the same shape as the line above it.
+ *
+ * The set of verbs a rule may name as its action IS the write half of this array, so G01 keeps no
+ * allow-list of its own and a verb registered next year is a legal action the day it lands. The
+ * dependency has to run api -> core to stay acyclic (`core/automation/` must never import this file),
+ * which is why the set is handed over rather than imported. Until this line runs, G01 answers
+ * `automation_unavailable` rather than pretending no verb is a write.
+ */
+registerWriteActions(ACTIONS.filter((a) => a.kind === 'write').map((a) => a.name));
+
+/**
+ * G02's load-time handshake, the same shape as the two lines above it, and the backbone of P3's
+ * no-second-posting-path guarantee.
+ *
+ * The reserved money-path names a plugin manifest may never register or shadow ARE the A02 journal
+ * front door plus the A14 settlement half's write verbs, single-sourced from the registry's OWN
+ * action definitions (the A02 named consts and the captured `a14PaymentActions` group) rather than a
+ * hand-copied literal that could drift. The full core tool-name set (for `capability_name_conflict`)
+ * is every `ACTIONS` name. Both are handed to `core/plugins` here, api -> core, so the engine never
+ * imports this file (acyclic), exactly like G01's `registerWriteActions` above.
+ */
+const MONEY_PATH_WRITE_TOOLS: readonly string[] = [
+  postEntryAction.name,
+  reverseEntryAction.name,
+  saveDraftAction.name,
+  // `delete_draft` is the one A02 write still defined inline in the list (its verb declares no
+  // payload, so it is not hoisted to a const); named as a literal and drift-guarded just below.
+  'delete_draft',
+  ...a14PaymentActions.filter((a) => a.kind === 'write').map((a) => a.name),
+];
+// Drift guard: every reserved name MUST be a registered WRITE. If A02 or A14 renames a verb, this
+// throws at load with the name, so the single source cannot silently lose a money-path tool.
+for (const name of MONEY_PATH_WRITE_TOOLS) {
+  const action = ACTIONS.find((a) => a.name === name);
+  if (action === undefined || action.kind !== 'write') {
+    throw new Error(
+      `G02 reserved money-path tool '${name}' is not a registered write action: the P3 single source has drifted.`,
+    );
+  }
+}
+registerMoneyPathTools(MONEY_PATH_WRITE_TOOLS);
+registerCoreToolNames(ACTIONS.map((a) => a.name));
+registerDispatcherTools(ACTIONS.filter((a) => a.dispatches === true).map((a) => a.name));
+
+/**
+ * `get_document` with the A11 `include` extension. Reads the base document (A10), then attaches the
+ * QR-bill payload (`qr`) and/or the rendered PDF (`pdf`) for an invoice when requested. Unknown include
+ * keys are ignored; a QR/PDF resolution error rides as `{ qr|pdf: { error } }` so a partial read never
+ * fails the whole document read.
+ */
+function getDocumentWithIncludes(ctx: WorkspaceContext, input: ActionInput): Result {
+  const base = getDocument(ctx, as(input));
+  if (!base.ok) return base;
+  const include = Array.isArray(input.include) ? (input.include as string[]) : [];
+  if (include.length === 0) return base;
+  const extra: Record<string, unknown> = {};
+  const documentId = typeof input.documentId === 'string' ? input.documentId : '';
+  if (include.includes('qr')) {
+    const qr = buildQrBill(ctx, documentId);
+    extra.qr = qr.ok ? qr.qr : qr;
+  }
+  if (include.includes('pdf')) {
+    // A13: a Gutschrift renders its own artifact (no QR-bill payment part); everything else keeps
+    // the invoice renderer, whose own type guard answers for quotes and orders.
+    const type = (base.document as { type?: string }).type;
+    const pdf = type === 'credit_note' ? renderCreditNotePdf(ctx, documentId) : renderInvoicePdf(ctx, documentId);
+    extra.pdf = pdf.ok ? pdf.pdf : pdf;
+  }
+  return { ...base, ...extra };
+}
+
+/** Look up an action by its tool name, or `undefined`. */
+// N01 US-N01.5: every verb declares its free-text fields from its own schema (a plain-string `reason`;
+// one with an `enum` is a closed code), once, at load.
+for (const action of ACTIONS) declareVerbFreeText(action.name, action.inputSchema.properties);
+
+export function getAction(name: string): ActionDef | undefined {
+  return ACTIONS.find((a) => a.name === name);
+}

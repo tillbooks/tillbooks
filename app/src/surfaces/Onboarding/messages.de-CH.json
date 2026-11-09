@@ -1,0 +1,51 @@
+{
+  "nav": {
+    "onboarding": "Erste Schritte"
+  },
+  "onboarding": {
+    "title": "Erste Schritte",
+    "intro": "Wähle, wie du beginnst. Du kannst später wechseln, hier wird nichts festgelegt.",
+    "resume": "Dort weitermachen, wo du aufgehört hast",
+    "resumeStep": "Weiter bei: {step}",
+    "step": {
+      "company": "Firma",
+      "plan": "Übernahmeplan"
+    },
+    "demoBusy": "Demo wird erstellt",
+    "pathChoice": {
+      "fresh": "Neu einrichten",
+      "freshBody": "Deine eigene Buchhaltung Schritt für Schritt aufsetzen: Firma, Geschäftsjahr, MWST und dein Zahlungsprofil.",
+      "import": "Aus bexio oder CSV übernehmen",
+      "importBody": "Deine bestehende Buchhaltung mit der Datenübernahme migrieren: Exportdateien rein, Probelauf, Eröffnungsprüfung, dann produktiv gehen.",
+      "importNeedsWorkspace": "Eine Übernahme braucht zuerst den Arbeitsbereich: in der Einrichtung anlegen, danach übernimmt die Datenübernahme.",
+      "demo": "Demo ausprobieren",
+      "demoBody": "TILL mit Beispieldaten erkunden: echte Kontakte, Artikel und gestellte Rechnungen, jederzeit löschbar."
+    },
+    "err": {
+      "generic": "Das hat nicht geklappt. Versuch es nochmals oder richte neu ein."
+    }
+  },
+  "demo": {
+    "banner": {
+      "title": "Du erkundest einen Demo-Arbeitsbereich",
+      "startReal": "Eigene Bücher starten",
+      "more": "Mehr",
+      "discard": "Demo löschen",
+      "confirmDiscard": "Demo-Arbeitsbereich mit allem Inhalt löschen? Das lässt sich nicht rückgängig machen.",
+      "keep": "Behalten",
+      "needsManageSettings": "Zum Löschen der Demo brauchst du das Recht «Einstellungen verwalten»."
+    },
+    "err": {
+      "notADemo": "Dieser Arbeitsbereich ist keine Demo und kann so nicht gelöscht werden.",
+      "generic": "Die Demo konnte nicht gelöscht werden. Versuch es nochmals."
+    }
+  },
+  "help": {
+    "Onboarding": {
+      "title": "Erste Schritte",
+      "body": "Drei Wege in deine Buchhaltung: neu beginnen, aus einem bestehenden System übernehmen oder zuerst eine Demo ansehen. Jeder Weg führt auf die normalen Oberflächen des Produkts; dieser Einstieg merkt sich nur, wo du stehst, und entscheidet nichts für dich. Du kannst ihn jederzeit verlassen und später weitermachen.",
+      "concepts": [],
+      "docsPath": "quickstart"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+/* N02 (D183, critic round 2): the Belege on a Vorschlag card. Quiet, under the line, tokens only. */
+
+.vorschlag-belege {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin: var(--t-space-1) 0 0;
+}
+
+.vorschlag-belege-head {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.vorschlag-belege-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vorschlag-beleg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+}
+
+.vorschlag-beleg-thumb {
+  max-height: 4rem;
+  max-width: 6rem;
+  border-radius: var(--t-radius-sm);
+}
+
+.vorschlag-beleg-note {
+  color: var(--t-text-dim);
+}

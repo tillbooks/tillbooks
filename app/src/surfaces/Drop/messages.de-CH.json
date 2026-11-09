@@ -1,0 +1,80 @@
+{
+  "drop": {
+    "eyebrow": "Beleg ablegen",
+    "title": "Beleg zu einer Buchung ablegen",
+    "loading": "Der Link wird geprüft.",
+    "kind": {
+      "journal_entry": "Buchung",
+      "vendor_bill": "Lieferantenrechnung",
+      "bank_txn": "Bankbewegung",
+      "drafted_action": "Vorschlag"
+    },
+    "holder": {
+      "journal_entry": "bei einer Buchung",
+      "vendor_bill": "bei einer Lieferantenrechnung",
+      "bank_txn": "bei einer Bankbewegung",
+      "expense_claim": "bei einer Spesenabrechnung",
+      "document": "bei einem Dokument",
+      "payment": "bei einer Zahlung",
+      "drafted_action": "bei einem anderen Vorschlag, der noch wartet"
+    },
+    "ready": {
+      "lead": "Lege die Quittung oder Rechnung hier ab. Sie wird an diese Buchung angehängt und gesetzlich aufbewahrt.",
+      "leadProposal": "Lege den Beleg hier ab. Er wird mit der Buchung verknüpft, sobald du den Vorschlag genehmigst.",
+      "prompt": "Beleg hierher ziehen",
+      "hint": "PDF, JPEG, PNG, HEIC oder WebP, bis 25 MB"
+    },
+    "uploading": "{name} wird hochgeladen.",
+    "uploadingLabel": "Hochladen",
+    "problem": {
+      "wrong_type": "Das ist kein PDF und kein Bild. Wähle einen Beleg als PDF, JPEG, PNG, HEIC oder WebP.",
+      "too_large": "Die Datei ist grösser als 25 MB. Wähle eine kleinere Datei.",
+      "failed": "Das Hochladen hat nicht geklappt. Versuch es nochmals.",
+      "duplicate": "Diesen Beleg hat TILL schon. Er wurde nicht nochmals angehängt.",
+      "duplicateAt": "Diesen Beleg hat TILL schon, {holder}. Er wurde nicht nochmals angehängt."
+    },
+    "done": {
+      "title": "Angehängt an {target}.",
+      "titleProposal": "Am Vorschlag abgelegt.",
+      "pending": "Der Beleg wird mit der Buchung verknüpft, sobald du den Vorschlag genehmigst. Lehnst du ihn ab, wird der Beleg gelöscht.",
+      "duplicate": "TILL hatte diesen Beleg schon gespeichert. Er ist jetzt auch hier angehängt.",
+      "toTarget": "Zur Buchung",
+      "toProposals": "Zu den Vorschlägen"
+    },
+    "unpaired": {
+      "title": "Dieser Browser ist nicht mit TILL verbunden.",
+      "body": "Öffne den Link in TILL oder in dem Browser, in dem TILL schon läuft. Der Link bleibt gültig, bis er benutzt wird oder abläuft.",
+      "open": "In TILL öffnen",
+      "copy": "Link kopieren",
+      "copied": "Link kopiert"
+    },
+    "unknown": {
+      "title": "Diesen Link kennt TILL nicht."
+    },
+    "expired": {
+      "title": "Dieser Link ist abgelaufen."
+    },
+    "used": {
+      "title": "Dieser Link wurde schon benutzt.",
+      "body": "Jeder Link nimmt genau einen Beleg an. Für einen weiteren Beleg bitte deinen Agenten um einen neuen Link."
+    },
+    "fresh": "Bitte deinen Agenten um einen neuen Link für diese Buchung.",
+    "denied": {
+      "title": "Dir fehlt das Recht dazu.",
+      "body": "Um einen Beleg anzuhängen, brauchst du das Recht, Dateien abzulegen und diese Buchung zu bearbeiten."
+    },
+    "transport": {
+      "title": "TILL antwortet gerade nicht.",
+      "body": "Prüfe, ob TILL läuft, und versuch es nochmals."
+    },
+    "retry": "Nochmals versuchen"
+  },
+  "help": {
+    "Drop": {
+      "title": "Beleg ablegen",
+      "body": "Diese Seite öffnet ein einmaliger Link, den dein Agent für eine Buchung erstellt hat. Lege genau einen Beleg ab, als PDF oder Bild. TILL hängt ihn an die Buchung und bewahrt ihn gesetzlich auf.\n\nGehört der Link zu einem Vorschlag, wartet der Beleg, bis du den Vorschlag genehmigst. Lehnst du ihn ab, wird der Beleg gelöscht.\n\nJeder Link gilt einmal und läuft nach der eingestellten Zeit ab. Einen neuen Link erstellt dein Agent.",
+      "concepts": [],
+      "docsPath": "mcp/run-inside-agent"
+    }
+  }
+}

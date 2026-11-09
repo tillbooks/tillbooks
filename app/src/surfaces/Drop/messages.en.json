@@ -1,0 +1,80 @@
+{
+  "drop": {
+    "eyebrow": "Drop a receipt",
+    "title": "Drop a receipt onto a booking",
+    "loading": "Checking the link.",
+    "kind": {
+      "journal_entry": "Entry",
+      "vendor_bill": "Supplier invoice",
+      "bank_txn": "Bank transaction",
+      "drafted_action": "Proposal"
+    },
+    "holder": {
+      "journal_entry": "on an entry",
+      "vendor_bill": "on a supplier invoice",
+      "bank_txn": "on a bank transaction",
+      "expense_claim": "on an expense claim",
+      "document": "on a document",
+      "payment": "on a payment",
+      "drafted_action": "on another proposal that is still waiting"
+    },
+    "ready": {
+      "lead": "Drop the receipt or invoice here. It is attached to this booking and kept as the law requires.",
+      "leadProposal": "Drop the receipt here. It is linked to the booking once you approve the proposal.",
+      "prompt": "Drag the receipt here",
+      "hint": "PDF, JPEG, PNG, HEIC or WebP, up to 25 MB"
+    },
+    "uploading": "Uploading {name}.",
+    "uploadingLabel": "Uploading",
+    "problem": {
+      "wrong_type": "This is not a PDF or an image. Choose a receipt as PDF, JPEG, PNG, HEIC or WebP.",
+      "too_large": "The file is larger than 25 MB. Choose a smaller file.",
+      "failed": "The upload did not work. Try again.",
+      "duplicate": "TILL already holds this receipt. It was not attached again.",
+      "duplicateAt": "TILL already holds this receipt, {holder}. It was not attached again."
+    },
+    "done": {
+      "title": "Attached to {target}.",
+      "titleProposal": "Filed with the proposal.",
+      "pending": "The receipt is linked to the booking once you approve the proposal. If you reject it, the receipt is deleted.",
+      "duplicate": "TILL had already stored this receipt. It is now attached here as well.",
+      "toTarget": "Open the booking",
+      "toProposals": "Open the proposals"
+    },
+    "unpaired": {
+      "title": "This browser is not connected to TILL.",
+      "body": "Open the link in TILL, or in the browser where TILL is already running. The link stays valid until it is used or expires.",
+      "open": "Open in TILL",
+      "copy": "Copy link",
+      "copied": "Link copied"
+    },
+    "unknown": {
+      "title": "TILL does not know this link."
+    },
+    "expired": {
+      "title": "This link has expired."
+    },
+    "used": {
+      "title": "This link was already used.",
+      "body": "Each link takes exactly one receipt. For another one, ask your agent for a new link."
+    },
+    "fresh": "Ask your agent for a new link for this booking.",
+    "denied": {
+      "title": "You do not have the right to do this.",
+      "body": "Attaching a receipt needs the right to file documents and to edit this booking."
+    },
+    "transport": {
+      "title": "TILL is not answering right now.",
+      "body": "Check that TILL is running, then try again."
+    },
+    "retry": "Try again"
+  },
+  "help": {
+    "Drop": {
+      "title": "Drop a receipt",
+      "body": "A one-time link your agent made for a booking opens this page. Drop exactly one receipt, as a PDF or an image. TILL attaches it to the booking and keeps it as the law requires.\n\nIf the link belongs to a proposal, the receipt waits until you approve it. If you reject the proposal, the receipt is deleted.\n\nEach link works once and expires after the time set in the settings. Your agent makes a new one.",
+      "concepts": [],
+      "docsPath": "mcp/run-inside-agent"
+    }
+  }
+}

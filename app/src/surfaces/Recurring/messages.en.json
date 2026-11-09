@@ -1,0 +1,123 @@
+{
+  "nav": {
+    "recurring": "Recurring"
+  },
+  "recurring": {
+    "title": "Recurring invoices",
+    "lede": "Recurring invoices, set up once: TILL creates each due period as a draft for review, or issues it automatically if you chose that.",
+    "noWorkspaceHint": "Open a set of books first, then you will see its recurring invoices here.",
+    "needsPermission": "This needs the “Issue” permission.",
+    "new": "New schedule",
+    "saved": "The schedule is saved.",
+    "paused": "The schedule is paused.",
+    "resumed": "The schedule is running again.",
+    "endedNow": "The schedule has ended. Generated invoices are kept.",
+    "customerGone": "Customer removed",
+    "autoIssueBadge": "Auto",
+    "savedView": "View",
+    "savedViewDefault": "All schedules",
+    "savedViewPersonal": "My views",
+    "savedViewShared": "Shared views",
+    "customDaysShort": "every {n} days",
+    "tick": {
+      "now": "Run now",
+      "done": "Done. New invoices: {n}.",
+      "nothingDue": "Done. Nothing was due."
+    },
+    "empty": {
+      "title": "No schedules yet",
+      "hint": "A schedule produces a recurring invoice by itself: a retainer, a subscription, a maintenance fee. Create the first one with “New schedule”."
+    },
+    "col": {
+      "name": "Name",
+      "customer": "Customer",
+      "interval": "Cadence",
+      "amount": "Amount (net)",
+      "nextRun": "Next invoice",
+      "status": "Status",
+      "controls": "Controls",
+      "period": "Period",
+      "outcome": "Outcome",
+      "document": "Document"
+    },
+    "interval": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "yearly": "Yearly",
+      "custom": "Custom cadence"
+    },
+    "status": {
+      "active": "Active",
+      "paused": "Paused",
+      "ended": "Ended"
+    },
+    "action": {
+      "edit": "Edit",
+      "pause": "Pause",
+      "resume": "Resume",
+      "end": "End"
+    },
+    "outcome": {
+      "drafted": "Draft created",
+      "issued": "Invoice issued",
+      "discarded": "Period discarded",
+      "skipped_locked": "Skipped, period locked",
+      "failed": "Failed"
+    },
+    "history": {
+      "title": "Generated invoices",
+      "empty": "This schedule has not generated an invoice yet. The next run creates the first one.",
+      "draft": "Open draft",
+      "skippedHint": "A waiting draft is yours: issue it by hand or discard it. Either way the schedule carries on by itself, and a discarded period is never billed again.",
+      "close": "Close"
+    },
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "e.g. Consulting Muster AG",
+      "customer": "Customer",
+      "customerNone": "Choose a customer …",
+      "positions": "Positions",
+      "lineDescription": "Description",
+      "lineDescriptionPlaceholder": "Blank means the series name",
+      "lineQuantity": "Quantity",
+      "linePrice": "Price (CHF)",
+      "lineVat": "VAT code",
+      "lineRemove": "Remove",
+      "lineAdd": "Add position",
+      "interval": "Cadence",
+      "customDays": "Every how many days?",
+      "anchorDate": "First invoice on",
+      "endDate": "Ends on (optional)",
+      "maxOccurrences": "At most this many invoices (optional)",
+      "dueDays": "Payable within days (optional)",
+      "autoIssue": "Issue automatically",
+      "autoIssueHint": "Unchecked, each due period creates a draft for review. Checked, TILL issues the invoice immediately: sequential number, VAT and posting exactly as for a hand-issued invoice.",
+      "autoIssueConfirmTitle": "Turn on automatic issuing",
+      "autoIssueConfirm": "Issue automatically? From the next run on, TILL issues and posts every due invoice of this schedule without asking: sequential number, VAT and ledger entry, with nobody reviewing it first.",
+      "autoIssueConfirmAction": "Issue automatically",
+      "autoIssueConfirmCancel": "Keep creating drafts",
+      "notes": "Notes",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "error": {
+      "needs_customer": "Choose a customer first.",
+      "needs_positions": "The schedule needs at least one position with a valid price.",
+      "end_before_anchor": "The end date is before the first invoice. Choose an end date after the start.",
+      "schedule_ended": "This schedule has ended and cannot be changed. Create a new one if needed.",
+      "not_found": "This schedule no longer exists.",
+      "invalid_input": "One of the inputs is invalid. Check the cadence and the dates.",
+      "as_of_in_future": "A date in the future cannot be run.",
+      "period_locked": "The target period is locked. The draft is kept and will be issued once the period is unlocked.",
+      "illegal_transition": "This period's document is in a different state than the schedule expects. Open it from the history."
+    }
+  },
+  "help": {
+    "Recurring": {
+      "title": "Recurring invoices",
+      "body": "A recurring schedule is the standing instruction to produce one invoice per period. Here you set rhythm, duration and content, and pause or resume schedules.\n\nThe run log links each generated invoice to its schedule, so you can read for each schedule what every period produced. By default a run produces a draft for review, not an unattended posting.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

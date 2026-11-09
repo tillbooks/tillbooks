@@ -1,0 +1,91 @@
+/* Tabs (D118 B2, K-11 D137). One WAI-ARIA tablist treatment. Only --t-* tokens. The active tab is a
+   tinted pill (--t-accent-soft ground, accent ink), never a left/bottom accent bar (the bar is
+   retired by the design law); the strip is closed by one hairline under the pills. */
+
+.tabs-list {
+  display: flex;
+  gap: var(--t-space-0-5);
+  padding-bottom: var(--t-space-0-5);
+  border-bottom: 1px solid var(--t-border);
+  margin-bottom: var(--t-space-2);
+}
+
+/* A tab is a quiet button: the control height of the density band (36px Komfortabel, 32px Kompakt),
+   body type at 500, dim ink at rest and a neutral background step on hover. The transparent 1px
+   border is where the focus cue lands (K-10): the ring turns it brass without moving the label. */
+.tabs-tab {
+  display: inline-flex;
+  align-items: center;
+  height: var(--t-control-h);
+  padding: 0 var(--t-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    color var(--t-motion-hover) var(--t-ease-out),
+    border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.tabs-tab:hover {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+}
+
+/* The active tab takes the tinted accent-soft pill and accent ink: the selected item is one of the
+   three things the accent is for. It holds on hover, so the pointer never un-selects it visually. */
+.tabs-tab--active,
+.tabs-tab--active:hover {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+/* The focus cue, stated here rather than inherited, so no state rule of this file can outrank it:
+   the transparent border turns brass and the soft halo sits outside it. Never removed. */
+.tabs-tab:focus-visible {
+  outline: none;
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+}
+
+/* A focusable panel gets the same ring when reached by keyboard, but no persistent border. */
+.tabs-panel:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+}
+
+/* Vertical: the list is a column of the same pills beside its panel (a category or report list).
+   No hairline under it: the column's own edge and the gap separate it from the panel. */
+.tabs--vertical {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-3);
+}
+
+.tabs--vertical > .tabs-list {
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+  padding-bottom: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+.tabs--vertical .tabs-tab {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.tabs--vertical > .tabs-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+}

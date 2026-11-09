@@ -1,0 +1,72 @@
+{
+  "nav": {
+    "inventoryAdjustments": "Bestandeskorrekturen"
+  },
+  "adjustments": {
+    "title": "Bestandeskorrekturen",
+    "new": "Neue Korrektur",
+    "post": "Korrektur buchen",
+    "reverse": "Stornieren",
+    "reversed": "Storniert",
+    "close": "Schliessen",
+    "search": "Korrektur suchen",
+    "searchPlaceholder": "Artikel, Lagerort oder Grund",
+    "clear": "Zurücksetzen",
+    "noWorkspace": "Wähle einen Arbeitsbereich, um Bestandeskorrekturen zu buchen.",
+    "noReasonsHint": "Lege zuerst mindestens einen Korrekturgrund an, bevor du eine Korrektur buchst.",
+    "col": {
+      "date": "Datum",
+      "item": "Artikel",
+      "location": "Lagerort",
+      "qty": "Menge",
+      "reason": "Grund",
+      "note": "Notiz",
+      "actions": "Aktionen",
+      "state": "Status"
+    },
+    "form": {
+      "title": "Neue Korrektur",
+      "choose": "Auswählen...",
+      "item": "Artikel",
+      "location": "Lagerort",
+      "qty": "Mengenänderung",
+      "qtyHint": "Vorzeichen: ein positiver Wert bucht Bestand zu, ein negativer bucht ab.",
+      "reason": "Grund",
+      "noteRequiredHint": "Dieser Grund verlangt eine Notiz.",
+      "note": "Notiz",
+      "unitCost": "Stückkosten (Rappen, optional)",
+      "date": "Wirksames Datum"
+    },
+    "reverseForm": {
+      "title": "Korrektur stornieren",
+      "reason": "Stornogrund",
+      "note": "Notiz",
+      "confirm": "Storno buchen"
+    },
+    "empty": {
+      "title": "Noch keine Korrekturen",
+      "hint": "Buche eine begründete Korrektur, um Schwund, Beschädigung, gefundenen Bestand oder eine Berichtigung zu erfassen."
+    },
+    "error": {
+      "transport": "Die Korrekturen konnten nicht geladen werden."
+    },
+    "errors": {
+      "reason_inactive": "Dieser Korrekturgrund ist archiviert. Wähle einen aktiven Grund.",
+      "no_active_reasons": "Es gibt keine aktiven Korrekturgründe. Lege zuerst einen an.",
+      "note_required": "Dieser Grund verlangt eine Notiz.",
+      "insufficient_stock": "Nicht genug Bestand für diese Abbuchung vorhanden.",
+      "invalid_qty": "Gib eine Menge ungleich null ein.",
+      "period_locked": "Diese Periode ist gesperrt. Wähle ein offenes wirksames Datum.",
+      "already_reversed": "Diese Korrektur wurde bereits storniert."
+    },
+    "rowActions": "Aktionen für die Korrektur von {item}"
+  },
+  "help": {
+    "Adjustments": {
+      "title": "Bestandeskorrekturen",
+      "body": "Bestandeskorrekturen sind begründete manuelle Anpassungen des Lagerbestands: Bruch, Schwund, Fund oder Zählfehler.\n\nJede Korrektur trägt einen Korrekturgrund und wird als eigene Lagerbewegung verbucht; der Bestand selbst wird nie direkt überschrieben. Eine falsche Korrektur hebst du mit einer Gegenkorrektur auf, die auf das Original verweist.\n\nWer wann was warum angepasst hat, bleibt nachvollziehbar.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

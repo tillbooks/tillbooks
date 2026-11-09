@@ -1,0 +1,14 @@
+/* F-05, the daily doors: three ordinary header actions on the home. They ride the shared .btn
+   treatment (one primary, one secondary, a ghost), so nothing here restates a colour or a size;
+   the group only lays them out on the grid and wraps on a narrow header. */
+.home-doors {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+/* A failed demo mint reads below the doors, full width, with the shared banner's retry. */
+.home-doors-error {
+  flex: 1 0 100%;
+}

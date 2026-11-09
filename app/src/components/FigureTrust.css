@@ -1,0 +1,52 @@
+/* A41.3: a receipt's figure trust, a glyph plus words, and "Zahlen bestätigen" beside it. */
+.figure-trust {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.figure-trust__mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.figure-trust[data-trust='confirmed'] .figure-trust__mark,
+.figure-trust[data-trust='qr'] .figure-trust__mark {
+  color: var(--t-text);
+}
+
+/* One labelled element per field: label dim, value in ink; the list wraps, never one joined string. */
+.figure-trust__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--t-space-2);
+  margin: 0;
+  flex-basis: 100%;
+}
+
+.figure-trust__field {
+  display: inline-flex;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.figure-trust__field dt {
+  color: var(--t-text-dim);
+}
+
+.figure-trust__field dd {
+  margin: 0;
+  color: var(--t-text);
+  overflow-wrap: anywhere;
+}
+
+/* Security review: a value never takes its direction from its neighbours or reorders them. */
+.figure-trust__value {
+  unicode-bidi: isolate;
+}

@@ -1,0 +1,22 @@
+name: Question
+description: Ask how TILL works or how to do something with it.
+title: "[question] "
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: >-
+        What you want to know or do. If it is about a screen or a command, say which
+        one and which version you run (`till --version`). Leave amounts, names, IBANs
+        and account numbers from your books out of a public issue.
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you tried
+      description: Anything you already looked at or tried, so the answer can start from there.
+    validations:
+      required: false

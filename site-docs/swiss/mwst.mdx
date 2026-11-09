@@ -1,0 +1,37 @@
+---
+title: "MWST"
+description: "Swiss VAT rates and the MWST-Abrechnung."
+---
+
+TILL handles Swiss MWST at the rates in force since 1 January 2024:
+
+| Rate | Applies to |
+| --- | --- |
+| 8.1% | The standard rate (Normalsatz) |
+| 3.8% | Accommodation (Sondersatz für Beherbergung) |
+| 2.6% | The reduced rate (reduzierter Satz), for food, books, medicine and similar |
+
+## Abrechnung
+
+TILL prepares the MWST-Abrechnung from the ledger rather than from a separate tally, so the return
+and the books cannot disagree. It handles the effective method and the Saldosteuersatz method, on
+agreed consideration (vereinbarte Entgelte). A checklist per MWST period lists what to check before
+you file.
+
+TILL does not compute the Abrechnung on received consideration (vereinnahmte Entgelte) yet. If you
+account for MWST that way, TILL refuses the period rather than hand you figures on the wrong basis.
+
+## Filing
+
+TILL writes the Abrechnung as an eCH-0217 file (version 2.0.0), the XML format the ESTV ePortal
+imports. You upload that file in the ePortal, check the figures there, and submit. TILL does not file
+for you.
+
+On the Saldosteuersatz method, record the Tätigkeitscodes the ESTV approved for you (you find them in
+the ePortal under «Abrechnungsmodalitäten»). Without them TILL does not write the file, because the
+ESTV accepts only approved codes; you then enter the figures in the ePortal by hand.
+
+<Note>
+  Public beta. Compare the figures TILL prepares with your own before you file, and keep your old
+  system running until they match.
+</Note>

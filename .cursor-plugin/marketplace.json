@@ -1,0 +1,17 @@
+{
+  "name": "tillbooks",
+  "owner": {
+    "name": "Nomadik GmbH",
+    "email": "hello@tillbooks.ch"
+  },
+  "metadata": {
+    "description": "TILL, the open-source Swiss ERP for SMEs, as a Cursor plugin."
+  },
+  "plugins": [
+    {
+      "name": "tillbooks",
+      "source": "plugins/tillbooks",
+      "description": "TILL as a local MCP server: Swiss books, MWST, sales and purchasing in one SQLite file on your own machine."
+    }
+  ]
+}

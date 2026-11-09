@@ -1,0 +1,124 @@
+/* B01, the Zeit surface: the timer strip, the timesheet table, the period controls, the Tarife card.
+   Tokens only, one accent; a state is the shared Status word, never colour alone.
+
+   Round 2 (D137): the controls are the shared `.field` (K-15; the one descendant rule that dressed
+   bare inputs here is gone), every row verb sits in the row's overflow and the entry editor stands
+   under the sheet instead of inside a cell (K-21), states are Status words (K-22), and sizes and
+   gaps are tokens (K-37). */
+
+.time {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-4);
+}
+
+/* The page header is the shared SurfaceHeader (D118 B2); the saved-view picker rides in its actions
+   slot, so only the picker's own inline layout stays here. */
+.time-view-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.time-capture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.time-timer {
+  display: flex;
+  align-items: end;
+  gap: var(--t-space-3);
+  flex-wrap: wrap;
+}
+
+.time-timer--running {
+  align-items: center;
+}
+
+.time-timer-label {
+  font-weight: 600;
+}
+
+.time-editor {
+  display: flex;
+  align-items: end;
+  gap: var(--t-space-3);
+  flex-wrap: wrap;
+}
+
+.time-editor-actions {
+  display: inline-flex;
+  gap: var(--t-space-1);
+}
+
+.time-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.time-field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 44px;
+}
+
+/* D116: a checkbox is a standalone control, so its label row is a 44px tap target and the box itself
+   is sized up from the native 16px. The brand accent carries the checked state. */
+.time-field--check input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--t-accent);
+}
+
+.time-totals {
+  display: flex;
+  gap: var(--t-space-4);
+}
+
+/* The timesheet and Tarife tables are the shared DataTable (D118 B2): frame overflow, sticky header,
+   density-aware rows, money right-alignment, the row overflow and the current-row pill live there.
+   The grouped Unverrechnet tree (Unbilled.tsx) is not a flat DataTable, so it keeps its own table
+   styling in Unbilled.css. */
+
+/* A note beside the project reads dim, never faded by opacity (K-36). */
+.time-notes {
+  color: var(--t-text-dim);
+}
+
+.time-actions {
+  display: flex;
+  gap: var(--t-space-0-5);
+  flex-wrap: wrap;
+}
+
+.time-period {
+  display: flex;
+  align-items: end;
+  gap: var(--t-space-3);
+  flex-wrap: wrap;
+}
+
+.time-rates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.time-rates-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.time-rates-empty {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.time-hint {
+  margin: 0;
+}

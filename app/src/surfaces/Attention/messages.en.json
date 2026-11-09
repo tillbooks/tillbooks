@@ -1,0 +1,332 @@
+{
+  "nav": {
+    "attention": "Attention"
+  },
+  "attention": {
+    "title": "Attention",
+    "loading": "Loading what is waiting for you",
+    "retry": "Try again",
+    "refresh": "Refresh",
+    "stand": "As of {time}",
+    "incomplete": "incomplete",
+    "error": {
+      "total": "The attention hub could not be loaded.",
+      "more": "The next rows could not be loaded. Try again."
+    },
+    "padlock": {
+      "title": "Nothing to show you here",
+      "body": "You do not hold the read rights for any of the work queues, so there is nothing to list. Ask a workspace owner to grant you one.",
+      "ask": "Ask a question"
+    },
+    "empty": {
+      "title": "Nothing is waiting for you.",
+      "hint": "Whatever needs a decision from you appears here.",
+      "action": "Go to the overview"
+    },
+    "area": {
+      "bank": "Bank",
+      "sales": "Sales",
+      "system": "System",
+      "accounting": "Accounting"
+    },
+    "new": "new",
+    "providerFailed": "{queue} could not be loaded.",
+    "urgency": {
+      "overdue": "overdue",
+      "due": "due",
+      "open": "open"
+    },
+    "queue": {
+      "qrMatch": "Reconciliation",
+      "dunningRun": "Dunning",
+      "reviewFlag": "Flags",
+      "agentActionBank": "The agent's bank proposals",
+      "autopilot": "Autopilot"
+    },
+    "queueLabel": {
+      "qr_match": "Reconciliation",
+      "dunning_run": "Dunning",
+      "agent_action": "Proposals",
+      "agent_action_bank": "Bank proposals",
+      "review_flag": "Flags",
+      "checklist_items_due": "Checklists",
+      "bank_keys_review": "Bank keys",
+      "bank_activation": "Bank activation",
+      "bank_fetch_failed": "Bank fetch",
+      "bank_statement_gap": "Statement gaps",
+      "bank_lines_waiting": "Bank lines",
+      "autopilot": "Autopilot"
+    },
+    "collapsedWith": "also in {queue}",
+    "overflow": {
+      "label": "Actions for {title}",
+      "copyRef": "Copy reference",
+      "createTask": "Create a task",
+      "open": "Open"
+    },
+    "remainder": {
+      "title": "{count} more in {queue}",
+      "open": "Open"
+    },
+    "item": {
+      "bankLines": {
+        "title": {
+          "one": "1 bank line to book",
+          "other": "{count} bank lines to book"
+        },
+        "subtitle": "{bank}"
+      },
+      "qrMatch": {
+        "title": "Payment without a match",
+        "subtitle": "{bank}"
+      },
+      "dunningRun": {
+        "title": "Reminder run ready to issue",
+        "subtitle": "{count} invoices · {date}",
+        "subtitleOne": "1 invoice · {date}"
+      },
+      "reviewFlag": {
+        "title": "Entry flagged",
+        "subtitle": "{description} · {date}",
+        "reason": "Flagged by {reviewer}: {reason}",
+        "reasonByAgent": "Flagged by the agent: {reason}",
+        "reasonByStudio": "Flagged in the Studio: {reason}",
+        "reasonByUnknown": "Flagged: {reason}",
+        "reasonSelf": "Flagged by you: {reason}"
+      },
+      "autobookDigest": {
+        "title": "Booked automatically ({count})",
+        "subtitle": "{date}, {notBooked} left for you",
+        "line": "{counterparty}, rule {rule}",
+        "undone": "Undone",
+        "notBooked": "Not automatic",
+        "reason": {
+          "outranked": "something else matches this line first",
+          "not_sure": "the rule is not sure about this line",
+          "currency": "another currency than the ceiling",
+          "over_ceiling": "above the amount ceiling",
+          "period_locked": "the period is closed",
+          "refused": "the booking was refused",
+          "granter_lost_capability": "the person who switched it on can no longer post"
+        },
+        "waitingTitle": "Waits for its receipt ({count})",
+        "waiting": "Waits for its receipt",
+        "openLine": "Open bank line",
+        "waitReason": {
+          "no_beleg": "no receipt assigned",
+          "beleg_changed": "the assigned receipt changed",
+          "beleg_amount_differs": "the amount differs from the receipt",
+          "beleg_vat_differs": "the VAT differs from the receipt",
+          "beleg_in_use": "the receipt already evidences another booking, so book the line yourself",
+          "belege_not_readable": "you cannot see the receipts"
+        }
+      },
+      "scheduleNote": {
+        "title": {
+          "skipped": "Recurring entry {label} {period} did not run",
+          "proposed": "Recurring entry {label} {period} waits for you"
+        },
+        "subtitle": "Due {date}",
+        "reason": {
+          "catch_up": "a missed period is proposed, not posted",
+          "no_post_right": "the person who set it can no longer post, so it is proposed",
+          "vorlage_changed": "the template changed, so it is proposed until you confirm it again",
+          "vorlage_cleared": "the template was deleted",
+          "period_locked": "the period is closed",
+          "invalid": "the template could not book"
+        }
+      }
+    },
+    "events": {
+      "title": "Events",
+      "showAll": "Show all",
+      "collapse": "Show less",
+      "loading": "Loading",
+      "error": "Events could not be loaded.",
+      "empty": "No notifications yet."
+    },
+    "rail": {
+      "loading": "Attention count is loading",
+      "error": "The attention count could not be loaded",
+      "count": "{count} waiting"
+    },
+    "act": {
+      "openReconciliation": "Open in reconciliation",
+      "openDunning": "Open reminder run",
+      "openEntry": "Open entry",
+      "resolveFlag": "Approve as reviewed",
+      "issueDunningRun": "Issue reminder run",
+      "suggested": "Suggested: {number}",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "Why are you rejecting it?",
+      "rejectConfirm": "Yes, reject",
+      "rejectKeep": "Keep",
+      "busy": "Running",
+      "dismissFeedback": "Dismiss",
+      "taskCreated": "Task created.",
+      "done": {
+        "apply": "Payment applied and posted.",
+        "dismiss": "Filed: not a customer payment.",
+        "approve": "Proposal approved and executed.",
+        "approve_allow": "Proposal approved. The agent will run this kind directly from now on.",
+        "reject": "Proposal rejected. Nothing was posted.",
+        "resolve": "Flag resolved, entry approved.",
+        "issue": "Reminder run issued.",
+        "confirm_gap": "Confirmed: nothing is missing in this gap.",
+        "seen": "Marked as seen.",
+        "undo": "Booking undone: a reversing entry was posted and the line is open again.",
+        "autobook_off": "Automatic booking is off for this rule."
+      },
+      "error": {
+        "generic": "That did not work. The row stays: try again or open the page it belongs to.",
+        "period_locked": "The period is locked: nothing can be posted there any more.",
+        "permission_denied": "You do not have the right for this.",
+        "cannot_self_approve": "Your own proposal needs a second person to approve it.",
+        "already_applied": "This payment has been matched in the meantime.",
+        "already_paid": "This invoice is already settled.",
+        "currency_mismatch": "The currencies differ: record the payment with a conversion under Payments.",
+        "already_executed": "This proposal has been executed in the meantime.",
+        "not_found": "This row no longer exists. The list reloads.",
+        "gap_not_chained": "There is money in this gap that is not in the books yet. It cannot be confirmed: import the missing statements.",
+        "gap_not_found": "This gap has been closed in the meantime. The list reloads.",
+        "human_only": "A person confirms this, not the agent.",
+        "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on. It cannot be confirmed: import the missing statements.",
+        "receipt_already_booked": "The receipt is already booked. Approve this line on its own and give the reason for the second booking.",
+        "holders_changed": "Not carried out: the receipt was booked elsewhere in the meantime. The line now shows where."
+      },
+      "checkInBank": "Check in the bank",
+      "assign": "Assign",
+      "assignPartial": "Assign in part",
+      "importStatement": "Import statement",
+      "importStatements": "Import statements",
+      "importStatementParts": "Import missing parts",
+      "reimportStatement": "Re-import statement",
+      "seen": "Seen",
+      "undo": "Undo",
+      "autobookOff": "Automatic off"
+    },
+    "grouping": {
+      "label": "Grouping",
+      "byArea": "By area",
+      "byKind": "By kind"
+    },
+    "kind": {
+      "approve": "Approve",
+      "do": "To do",
+      "note": "Notes"
+    },
+    "section": {
+      "more": "Show {count} more"
+    },
+    "row": {
+      "dueOn": "due {date}",
+      "overdueSince": "overdue since {date}",
+      "checklistTitle": "{template} {period}: {title}"
+    },
+    "vorschlag": {
+      "stale": "Changed since the proposal, can no longer be approved",
+      "target": {
+        "ignore": "Not booked",
+        "openItem": "Open item",
+        "existingEntry": "Existing entry",
+        "paymentBatch": "Payment order",
+        "rule": "Booking rule"
+      },
+      "staleShort": "Changed since the proposal",
+      "titleWith": "{counterparty} · {thing}",
+      "scheduledByAgent": "Recurring entry set up by the agent"
+    },
+    "batch": {
+      "label": "Approve proposals together",
+      "selectAll": "Select all proposals",
+      "selectRow": "Select {title}",
+      "approveSelected": "Approve selected ({count})",
+      "approveAll": "Approve all ({count})",
+      "waiting": "Waiting",
+      "running": "Approving",
+      "ok": "Approved",
+      "notOffered": "Cannot be approved here.",
+      "doneAll": "{count} approved.",
+      "doneSome": "{ok} approved, {refused} not approved.",
+      "refusedLine": "{title}: {reason}",
+      "confirm": {
+        "title": "Approve {count} proposals?",
+        "each": "Each proposal runs on its own, as with its own button. One that changed since the proposal does not run and stays in the list.",
+        "yes": "Approve {count}",
+        "close": "Close",
+        "in": "In {amount}",
+        "out": "Out {amount}",
+        "withoutAmount": "Plus {count} without an amount."
+      },
+      "selectShown": "Select all shown proposals",
+      "approveShown": "Approve shown ({count})",
+      "approvedLine": "{title}: approved",
+      "openEntry": "Open entry",
+      "info": {
+        "label": "What approving does",
+        "summary": "{count} proposals, {amounts}",
+        "summaryOne": "1 proposal, {amounts}",
+        "summaryNoAmount": "{count} proposals",
+        "none": "Nothing selected yet."
+      },
+      "title": "Proposals"
+    },
+    "group": {
+      "payments": "{count} unassigned payments",
+      "hide": "Hide",
+      "assign": "Assign payments",
+      "info": "Payments typed in by hand that no invoice claims yet. Assign each to an invoice or set it aside."
+    },
+    "dunning": {
+      "confirm": {
+        "title": "Issue the reminder run?",
+        "letters": "{count} reminders",
+        "lettersOne": "1 reminder",
+        "invoices": "{count} invoices",
+        "invoicesOne": "1 invoice",
+        "fees": "Fees {amounts}",
+        "noFees": "No fees: nothing is booked.",
+        "needsPost": "The fees are booked, which needs the right to post.",
+        "loading": "Reading the run.",
+        "failed": "The run could not be read. You can issue it in Dunning.",
+        "cancel": "Cancel",
+        "yes": "Issue reminder run",
+        "close": "Close"
+      }
+    },
+    "gap": {
+      "one": "Statement {range} missing",
+      "many": "Statements {range} missing",
+      "unknownOne": "A statement may be missing after statement {after}",
+      "unknownMany": "Statements may be missing after statement {after}",
+      "incomplete": "Statement {incomplete} incomplete",
+      "conflicting": "Statement {conflicting} twice",
+      "since": "since {date}",
+      "twoBalances": "2 balances",
+      "partsMissing": "parts missing"
+    },
+    "ruleProposed": {
+      "title": "Propose a rule: {counterparty}, booked the same way {repeats}×",
+      "backtest": "Since {date}: {hits} lines, {identical} booked exactly like this",
+      "create": "Create rule",
+      "adjust": "Adjust",
+      "dismiss": "Don't propose",
+      "evidence": "Booked the same way",
+      "evidenceValue": "{date}, {amount}"
+    },
+    "autobookOffer": {
+      "title": "Rule {counterparty}: booked unchanged {count}×. Book automatically from now on?",
+      "meta": "Up to {ceiling} per line, only in {currency}",
+      "grant": "Book automatically",
+      "dismiss": "Not now"
+    }
+  },
+  "help": {
+    "Attention": {
+      "title": "Attention",
+      "body": "Pendenzen shows everything that waits for a decision from you, complete and in sections: by area (the bank first) or by kind (approve, to do, notes). The section counts add up to the number in the menu.\n\nEvery row has one button for the next step; other options sit under ⋯, and the (i) says why the row waits and what the step does.\n\nYou can select the agent's bank proposals and approve them together. Each runs on its own, as with its own button.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

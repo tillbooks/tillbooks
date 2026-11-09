@@ -1,0 +1,24 @@
+{
+  "period": {
+    "start": "2026-01-01",
+    "end": "2026-03-31"
+  },
+  "baseCurrency": "CHF",
+  "groupBy": "kmu",
+  "rows": [],
+  "groups": [],
+  "totals": {
+    "openingMinor": 0,
+    "debitMinor": 0,
+    "creditMinor": 0,
+    "closingMinor": 0
+  },
+  "noActivity": true,
+  "reconciles": true,
+  "reconciliation": {
+    "debitEqualsCredit": true,
+    "closingTiesToLedger": true,
+    "everyAccountRenderedOnce": true
+  },
+  "ok": true
+}

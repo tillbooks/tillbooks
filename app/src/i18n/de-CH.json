@@ -1,0 +1,700 @@
+{
+  "identity": {
+    "signed_in_as": "Angemeldet als {subject}",
+    "local_session": "Lokale Sitzung",
+    "not_a_member": {
+      "title": "Du bist angemeldet, aber hier kein Mitglied",
+      "body": "Du bist angemeldet als {subject}, aber in keinem Arbeitsbereich hier Mitglied. Bitte eine Inhaberin oder einen Inhaber um eine Einladung."
+    },
+    "error": {
+      "title": "Anmeldung erforderlich",
+      "missing_subject": "Deine Installation verlangt eine Anmeldung, und diese Anfrage kam ohne bestätigte Identität an.",
+      "retry_hint": "Melde dich beim Proxy deiner Installation an und versuche es dann hier erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "invite": {
+      "subject_mismatch": "Diese Einladung war an eine andere Person gerichtet als die, mit der du angemeldet bist."
+    },
+    "redeem": {
+      "lead": "Hast du eine Einladung?",
+      "label": "Einladungscode oder -link",
+      "action": "Einlösen",
+      "error": {
+        "invite_expired": "Diese Einladung ist abgelaufen. Bitte die Inhaberin oder den Inhaber um eine neue Einladung.",
+        "invite_subject_mismatch": "Diese Einladung wurde für eine andere Adresse ausgestellt. Du bist angemeldet als {subject}: bitte um eine Einladung genau für diese Adresse.",
+        "invalid": "Dieser Code ist ungültig."
+      }
+    },
+    "details": {
+      "title": "Sitzungsdetails",
+      "subject": "Angemeldete Identität",
+      "role": "Rolle",
+      "source": "Identitätsquelle",
+      "source_served": "Von deiner Installation bestätigt"
+    },
+    "role": {
+      "owner": "Eigentümer",
+      "viewer": "Nur lesen",
+      "bookkeeper": "Buchhaltung",
+      "treuhaender": "Treuhänder",
+      "agent": "Agent"
+    }
+  },
+  "data": {
+    "title": "Daten & Sicherung",
+    "intro": "Deine Bücher gehören dir. Exportiere den ganzen Arbeitsbereich in ein offenes Format, sichere ihn oder stelle eine Sicherung auf diesem Gerät wieder her.",
+    "denied": {
+      "body": "Dafür brauchst du das Recht «{right}»."
+    },
+    "action": {
+      "export": "Arbeitsbereich exportieren",
+      "backup": "Jetzt sichern",
+      "verify": "Prüfen",
+      "restore": "In neuen Arbeitsbereich wiederherstellen",
+      "delete": "Löschen"
+    },
+    "col": {
+      "kind": "Art",
+      "created": "Erstellt",
+      "size": "Grösse",
+      "status": "Status",
+      "actor": "Von"
+    },
+    "kind": {
+      "export": "Export",
+      "backup": "Sicherung"
+    },
+    "status": {
+      "complete": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
+    "history": {
+      "empty": "Noch keine Sicherungen. Sichere jetzt, um ein Sicherheitsnetz zu schaffen."
+    },
+    "export": {
+      "empty": "Der Arbeitsbereich enthält noch keine Daten."
+    },
+    "restore": {
+      "title": "Wiederherstellen",
+      "hint": "Prüfe eine Sicherungsdatei und stelle sie in einem neuen Arbeitsbereich wieder her. Wiederherstellen überschreibt nie einen bestehenden Arbeitsbereich.",
+      "source": "Pfad zur Sicherung oder zum Export",
+      "confirm": "Diese Sicherung in einem neuen Arbeitsbereich wiederherstellen? Deine bestehenden Arbeitsbereiche bleiben unberührt.",
+      "defaultName": "Wiederhergestellter Arbeitsbereich",
+      "close": "Schliessen",
+      "portalLinks": {
+        "one": "Wiederhergestellt. {count} Portal-Link bleibt zu, bis du ihn wieder freigibst: Öffne beim Kontakt den Portal-Zugang und aktiviere ihn, wenn du ihn noch willst.",
+        "other": "Wiederhergestellt. {count} Portal-Links bleiben zu, bis du sie wieder freigibst: Öffne beim Kontakt den Portal-Zugang und aktiviere jeden, den du noch willst."
+      },
+      "continue": "Weiter"
+    },
+    "verify": {
+      "result": "Gültig. {entries} verbuchte Einträge, ausgeglichen {balance}."
+    },
+    "catalog": {
+      "link": "API-Katalog",
+      "result": "{count} Werkzeuge, je mit ihrer REST-Route."
+    },
+    "field": {
+      "entity_kind": {
+        "backup": "Sicherung"
+      }
+    },
+    "error": {
+      "backup_corrupt": "Diese Datei ist beschädigt und kann nicht wiederhergestellt werden. Wähle eine andere Datei.",
+      "incompatible_schema_version": "Diese Sicherung stammt aus einer inkompatiblen TILL-Version und kann nicht wiederhergestellt werden.",
+      "restore_invariant_failed": "Die Sicherung hat eine Konsistenzprüfung nicht bestanden und wurde nicht wiederhergestellt. Es wurde nichts verändert.",
+      "restore_invariant_reason": {
+        "unbalanced_entry": "Die Sicherung enthält eine Buchung, bei der Soll und Haben nicht übereinstimmen. Sie wurde nicht wiederhergestellt, es wurde nichts verändert.",
+        "foreign_reference": "Die Sicherung verweist auf Daten eines anderen Arbeitsbereichs in diesem Buch. Sie wurde nicht wiederhergestellt, es wurde nichts verändert. Prüfe, woher die Datei stammt.",
+        "constraint_violation": "Die Sicherung verletzt eine Regel dieses Buchs, zum Beispiel einen eindeutigen Schlüssel, der hier schon vergeben ist. Sie wurde nicht wiederhergestellt, es wurde nichts verändert.",
+        "ambiguous_reference": "Ein Wert in der Sicherung passt auf mehrere Datensätze, darum kann TILL ihn nicht eindeutig zuordnen. Sie wurde nicht wiederhergestellt, es wurde nichts verändert.",
+        "referential_integrity": "Die Sicherung verweist auf Datensätze, die sie selbst nicht enthält. Sie wurde nicht wiederhergestellt, es wurde nichts verändert."
+      },
+      "export_destination_unwritable": "Der Export konnte nicht geschrieben werden. Schaffe Speicherplatz und versuche es erneut.",
+      "unrestorable_format": "Ein Export (.tillexport) ist keine Wiederherstellungsquelle. Verwende eine .tillbackup-Datei."
+    }
+  },
+  "app": {
+    "title": "TILL Studio"
+  },
+  "nav": {
+    "label": "Hauptnavigation",
+    "setup": "Einrichtung",
+    "operations": "Betrieb",
+    "accounts": "Konten",
+    "journal": "Journal",
+    "periods": "Perioden",
+    "vat": "MWST-Einstellungen",
+    "contacts": "Kontakte",
+    "items": "Artikel",
+    "customization": "Anpassung",
+    "members": "Zugriff",
+    "group": {
+      "masterData": "Stammdaten",
+      "accounting": "Buchhaltung",
+      "berichte": "Berichte",
+      "einstellungen": "Einstellungen"
+    },
+    "parent": {
+      "lager": "Lager",
+      "anlagen": "Anlagen"
+    },
+    "favourites": {
+      "label": "Favoriten",
+      "pin": "{name} zu den Favoriten hinzufügen",
+      "unpin": "{name} aus den Favoriten entfernen",
+      "renameField": "Neuer Name für {name}",
+      "saveFailed": "Deine Favoriten konnten nicht gespeichert werden. Sie gelten bis zum Neuladen.",
+      "more": "{name}: verschieben, umbenennen oder entfernen",
+      "renameItem": "Umbenennen",
+      "removeItem": "Entfernen"
+    },
+    "resize": {
+      "label": "Navigationsbreite anpassen"
+    },
+    "collapse": "Navigation einklappen",
+    "expand": "Navigation ausklappen",
+    "agent": "Agent",
+    "sections": {
+      "menu": "Menü"
+    },
+    "customise": {
+      "open": "Menü anpassen",
+      "title": "Menü anpassen",
+      "done": "Fertig",
+      "reset": "Zurücksetzen",
+      "hint": "Ziehen oder mit ⋯ verschieben. Ohne Häkchen ist die Seite ausgeblendet, die Suche findet sie weiter.",
+      "top": "Ohne Gruppe",
+      "show": "{name} im Menü zeigen",
+      "more": "{name} verschieben",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "moveTo": "Verschieben nach …",
+      "moveToLabel": "{name} verschieben nach",
+      "moveToPlaceholder": "Ziel wählen",
+      "cancelMove": "Abbrechen",
+      "empty": "Leer",
+      "saveFailed": "Konnte nicht gespeichert werden. Die Änderung gilt bis zum Neuladen.",
+      "announce": {
+        "moved": "{name} verschoben",
+        "movedUp": "{name} nach oben verschoben",
+        "movedDown": "{name} nach unten verschoben",
+        "movedTo": "{name} nach {target} verschoben",
+        "hidden": "{name} ausgeblendet",
+        "shown": "{name} eingeblendet",
+        "reset": "Menü auf den Standard zurückgesetzt"
+      }
+    }
+  },
+  "theme": {
+    "toggle": "Design wechseln"
+  },
+  "density": {
+    "toDense": "Kompakte Ansicht",
+    "toComfortable": "Komfortable Ansicht"
+  },
+  "workspace": {
+    "switcher": {
+      "trigger": "Arbeitsbereich wechseln: {name}",
+      "triggerUnnamed": "Arbeitsbereich wechseln",
+      "new": "Neuer Arbeitsbereich",
+      "loadFailed": "Die Liste der Arbeitsbereiche konnte nicht geladen werden.",
+      "waiting": "{count} Pendenzen"
+    }
+  },
+  "help": {
+    "leavesDevice": "öffnet eine Seite im Internet, dafür brauchst du eine Verbindung",
+    "term": "Begriff {term}",
+    "articles": "Rechtsgrundlagen",
+    "seeAlso": "Verwandte Begriffe",
+    "docs": "Dokumentation öffnen",
+    "surface": "Hilfe zu {title}"
+  },
+  "copy": {
+    "action": "Kopieren",
+    "copied": "Kopiert",
+    "failed": "Kopieren geht hier nicht"
+  },
+  "states": {
+    "loading": {
+      "label": "Wird geladen"
+    },
+    "empty": {
+      "title": "Noch nichts vorhanden",
+      "hint": "Lege den ersten Eintrag an, um zu beginnen.",
+      "filteredTitle": "Keine Treffer.",
+      "filteredHint": "Der Filter blendet alle Einträge aus.",
+      "clearFilter": "Filter zurücksetzen"
+    },
+    "error": {
+      "title": "Aktion fehlgeschlagen",
+      "retry": "Erneut versuchen",
+      "readTitle": "Laden fehlgeschlagen"
+    },
+    "permission": {
+      "title": "Kein Zugriff",
+      "body": "Dir fehlt das nötige Recht für diese Ansicht."
+    },
+    "placeholder": {
+      "hint": "Diese Ansicht kommt mit Modul 1."
+    },
+    "noWorkspace": {
+      "title": "Kein Arbeitsbereich vorhanden",
+      "body": "Richte zuerst einen Arbeitsbereich ein, dann steht dir diese Ansicht offen.",
+      "action": "Arbeitsbereich einrichten"
+    }
+  },
+  "feedback": {
+    "open": "Rückmeldung senden",
+    "title": "Rückmeldung senden",
+    "kind": {
+      "label": "Worum geht es?",
+      "bug": "Etwas funktioniert nicht",
+      "idea": "Eine Idee",
+      "question": "Eine Frage"
+    },
+    "field": {
+      "subject": {
+        "label": "Betreff",
+        "required": "Bitte gib einen kurzen Betreff an.",
+        "too_long": "Bitte höchstens 200 Zeichen."
+      },
+      "message": {
+        "label": "Was ist passiert, und was hast du erwartet?",
+        "required": "Bitte beschreibe, was passiert ist.",
+        "too_long": "Bitte höchstens 4000 Zeichen."
+      }
+    },
+    "diagnostics": {
+      "include": "Die unten gezeigten Fehlerdetails mitsenden",
+      "none": "Nichts zum Mitsenden.",
+      "turn_on": "Fehler ab jetzt aufzeichnen",
+      "denied": "Du hast keine Berechtigung, aufgezeichnete Fehler zu lesen, daher können keine mitgesendet werden. Den Bericht kannst du trotzdem verfassen.",
+      "preview": "Was der Bericht enthalten würde"
+    },
+    "recipient": {
+      "notice": "Der Bericht geht an hello@tillbooks.ch. Wir löschen ihn innerhalb von 12 Monaten, und du kannst uns bitten, ihn früher zu löschen."
+    },
+    "action": {
+      "open_mail": "Im Mail-Programm öffnen",
+      "copy": "Bericht kopieren",
+      "copy_path": "Dateipfad kopieren",
+      "cancel": "Abbrechen",
+      "close": "Schliessen"
+    },
+    "copy": {
+      "clipboard_note": "Beim Kopieren liegt der Bericht in der Zwischenablage, die manche Systeme mit deinen anderen Geräten abgleichen.",
+      "done": "Kopiert."
+    },
+    "saved": {
+      "title": "Bericht gespeichert",
+      "body": "TILL hat den Bericht gespeichert und an dein Mail-Programm übergeben. Prüfe, ob es sich geöffnet hat, und sende ihn.",
+      "truncated": "Dein Text ist länger, als ein E-Mail-Link fassen kann, daher ist nur ein Teil vorausgefüllt. Kopiere den Bericht, um den ganzen Text zu erhalten.",
+      "no_mail_app": "Wenn sich nichts geöffnet hat, ist auf diesem Computer kein Mail-Programm eingerichtet. Kopiere den Bericht und sende ihn selbst an hello@tillbooks.ch.",
+      "path": "Gespeichert unter"
+    },
+    "crash_path": {
+      "not_saved": "TILL konnte den eigenen Hintergrunddienst nicht erreichen, daher wurde dieser Bericht nicht gespeichert. Kopiere ihn, bevor du dies schliesst."
+    }
+  },
+  "crash": {
+    "title": "Dieser Bildschirm funktioniert nicht mehr",
+    "body": "Neu laden ist unbedenklich. TILL speichert nur, wenn du eine Aktion bestätigst.",
+    "action": {
+      "reload": "Neu laden",
+      "report": "Diesen Fehler melden"
+    }
+  },
+  "errors": {
+    "report_this": "Diesen Fehler melden",
+    "invalid_input": "Eine Eingabe war ungültig. Bitte prüfe die Felder und versuche es erneut.",
+    "account_in_use": "Dieses Bankkonto wird verwendet, darum ist diese Änderung nicht möglich: Ein Eröffnungssaldo ist darauf gebucht, oder ein Zahlungslauf im Entwurf oder generiert (noch nicht bezahlt) nennt seine IBAN. Hat sich die IBAN wirklich geändert, verwirf diesen Zahlungslauf oder markiere ihn zuerst als bezahlt. Es wurde nichts geändert.",
+    "creditor_name_missing": "Ein Lieferant hat keinen Namen, und eine Zahlungsdatei kann den Empfänger nicht mit einer internen ID benennen. Gib dem Lieferanten unter Kontakte einen Namen. Steht die Rechnung schon in einem Entwurf eines Zahlungslaufs, verwirf diesen Entwurf zuerst und nimm die Rechnung dann erneut in einen Zahlungslauf. Es wurde nichts geändert.",
+    "workspace_not_found": "Der gewählte Arbeitsbereich wurde nicht gefunden.",
+    "workspace_archived": "Dieses Hauptbuch ist stillgelegt und schreibgeschützt. Es wurde nichts geändert. Wieder aktivierbar über die Mandatsliste.",
+    "unknown_action": "Diese Aktion ist der Anwendung nicht bekannt.",
+    "permission_denied": "Dir fehlt das nötige Recht für diese Aktion. Es wurde nichts geändert.",
+    "forbidden": "Deine Rolle darf diese Aktion nicht ausführen. Es wurde nichts geändert.",
+    "unexpected_error": "In TILL selbst ist etwas schiefgelaufen. Es wurde nichts geändert. Versuche es erneut und melde es, wenn es wieder passiert.",
+    "unexpected_error_partial": "In TILL selbst ist etwas schiefgelaufen, nachdem ein Teil dieser Aktion schon gespeichert war. Den Rest hat TILL nicht gespeichert. Prüfe das Ergebnis und melde es, wenn es wieder passiert.",
+    "store_busy": "Der Ledger war belegt und konnte das nicht annehmen. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+    "store_busy_partial": "Der Ledger war belegt, nachdem TILL einen Teil dieser Aktion schon gespeichert hatte. Den Rest hat TILL nicht gespeichert. Prüfe das Ergebnis, bevor du es erneut versuchst.",
+    "schema_newer_than_runtime": "Diese Datenbank wurde von einem neueren TILL geschrieben. Aktualisiere TILL und versuche es erneut. Die Datei wurde nicht verändert.",
+    "schema_newer_than_runtime_partial": "Ein neueres TILL hat diese Datenbank verändert, während die Aktion lief. Bis dahin hatte dieses TILL einen Teil der Aktion gespeichert, den Rest nicht. Aktualisiere TILL und prüfe dann das Ergebnis, bevor du es erneut versuchst.",
+    "schema_newer_than_runtime_saved": "Diese Aktion ist gespeichert. Gleich danach hat ein neueres TILL die Datenbank aktualisiert, darum stimmt die Anzeige hier vielleicht nicht mehr. Aktualisiere TILL, bevor du weiterarbeitest. Wiederhole die Aktion nicht, sonst entsteht sie doppelt.",
+    "transport_error": "TILL konnte den Ledger-Dienst nicht erreichen. Es wurde nichts geändert. Prüfe, ob er läuft, und versuche es erneut.",
+    "fallback": "Die Aktion konnte nicht abgeschlossen werden. Bitte versuche es erneut oder prüfe die Eingaben.",
+    "open_documents": "Dieser Kontakt hat noch offene Belege. Schliesse oder storniere sie zuerst.",
+    "self_merge": "Ein Kontakt kann nicht mit sich selbst zusammengeführt werden.",
+    "invalid_scope": "Die Freigabe muss sich auf Datensätze dieses Kontakts beziehen.",
+    "grant_denied": "Dieser Link ist nicht mehr gültig.",
+    "expiry_in_past": "Das Ablaufdatum muss in der Zukunft liegen.",
+    "contact_not_found": "Dieser Kontakt wurde nicht gefunden.",
+    "grant_revoked": "Dieser Portal-Zugang wurde bereits widerrufen.",
+    "grant_expired": "Dieser Portal-Zugang ist abgelaufen.",
+    "target_merged": "Dieser Zielkontakt wurde selbst schon zusammengeführt. Wähle den bestehenden Kontakt.",
+    "already_merged": "Dieser Kontakt wurde bereits zusammengeführt.",
+    "too_many_tags": "Zu viele Tags an diesem Kontakt. Höchstens 50 sind möglich.",
+    "tag_too_long": "Dieses Tag ist zu lang. Höchstens 40 Zeichen sind möglich.",
+    "invalid_country": "Das Land ist der zweistellige Ländercode, den eine QR-Rechnung braucht, zum Beispiel CH. Es wurde nichts geändert.",
+    "field_too_long": "Ein Feld ist länger, als eine QR-Rechnung erlaubt. Kürze es bitte. Es wurde nichts geändert.",
+    "iban_not_ch_li": "Eine QR-Rechnung braucht eine IBAN, die mit CH oder LI beginnt. Es wurde nichts geändert.",
+    "occurred_in_future": "Eine Aktivität kann nicht in der Zukunft liegen.",
+    "invalid_activity_kind": "Diese Aktivitätsart ist nicht bekannt.",
+    "invalid_import_format": "Die Datei konnte nicht gelesen werden. Prüfe die Kopfzeile und die erste fehlerhafte Zeile.",
+    "read_fallback": "Die Daten konnten nicht geladen werden. Versuche es erneut."
+  },
+  "shell": {
+    "skipToContent": "Zum Inhalt springen",
+    "deeplink": {
+      "notFound": "Dieser Link zeigt auf einen Arbeitsbereich, den es nicht gibt oder der nicht dir gehört.",
+      "pick": "Wähle einen Arbeitsbereich"
+    },
+    "notFound": {
+      "title": "Diese Adresse gibt es nicht.",
+      "body": "Unter dieser Adresse liegt kein Bildschirm. Vielleicht ist der Link veraltet oder vertippt.",
+      "toOverview": "Zur Übersicht"
+    },
+    "nav": {
+      "more": "Navigation",
+      "close": "Menü schliessen"
+    },
+    "agent": {
+      "pending": "{count} warten auf Freigabe",
+      "label": "Agent"
+    },
+    "slotError": "Dieser Teil konnte nicht geladen werden.",
+    "status": {
+      "local": "Lokal",
+      "label": "Umgebung: {face}, {name}. {egress}",
+      "labelNoFace": "Umgebung: {name}. {egress}",
+      "labelLocal": "{egress}. Umgebung und Ansicht"
+    }
+  },
+  "shortcut": {
+    "title": "Tastenkürzel",
+    "palette": "Befehlspalette öffnen",
+    "help": "Tastenkürzel anzeigen",
+    "escape": "Overlay schliessen",
+    "group": {
+      "global": "Überall",
+      "chord": "Zu einem Bildschirm",
+      "overlay": "In einem Overlay"
+    }
+  },
+  "palette": {
+    "aria": "Bildschirme, Datensätze und Aktionen durchsuchen",
+    "legend": "Enter zum Ausführen, Esc zum Schliessen",
+    "resultCount": "Ergebnisse: {count}",
+    "trigger": "Suchen",
+    "section": {
+      "recent": "Zuletzt",
+      "favourites": "Favoriten",
+      "nav": "Navigation",
+      "actions": "Aktionen",
+      "actionsHere": "Aktionen hier",
+      "records": "Datensätze",
+      "concepts": "Begriffe"
+    },
+    "kind": {
+      "open": "öffnen",
+      "run": "ausführen"
+    },
+    "openItemsOf": "Offene Posten von {name}: {total}",
+    "empty": "Nichts hier, das du öffnen oder ausführen kannst.",
+    "searchAll": "In allen Daten suchen",
+    "showAll": "Alle Treffer",
+    "overflow": "{count} weitere in der Suche",
+    "denied": "Benötigt: {capability}",
+    "deniedGoto": "Wer hat das",
+    "remedy": "{surface} öffnen",
+    "running": "Wird ausgeführt",
+    "resultLink": "{surface} öffnen",
+    "concepts": {
+      "narrow": "Mehr Begriffe: Suchbegriff eingrenzen"
+    },
+    "ask": "Frag den Agenten: „{query}“",
+    "askKind": "fragen",
+    "askSection": "Frag den Agenten",
+    "askNoRuntime": "Keine lokale Agent-Laufzeit konfiguriert.",
+    "askFailed": "Der Agent konnte gerade nicht antworten."
+  },
+  "provenance": {
+    "byAgent": "Erfasst durch den Agenten",
+    "byActor": "Erfasst durch {actor}",
+    "byStudio": "Erfasst im Studio",
+    "byImport": "Importiert",
+    "byUnknown": "Erfasst",
+    "trace": "Spur ansehen"
+  },
+  "command": {
+    "post_entry": {
+      "label": "Buchung erfassen",
+      "aliases": "Neue Buchung, Buchen"
+    },
+    "reverse_entry": {
+      "label": "Buchung stornieren"
+    },
+    "import_camt": {
+      "label": "Kontoauszug importieren",
+      "aliases": "camt, Bankauszug, Kontoauszug einlesen"
+    },
+    "book_bank_line": {
+      "label": "Bankzeilen buchen",
+      "aliases": "Bank, Abgleich, Bankabgleich, Bankzeile"
+    },
+    "record_payment": {
+      "label": "Zahlung erfassen",
+      "aliases": "Zahlung buchen"
+    },
+    "issue_invoice": {
+      "label": "Rechnung ausstellen"
+    },
+    "create_document": {
+      "label": "Beleg erstellen",
+      "aliases": "Neuer Beleg"
+    },
+    "send_invoice": {
+      "label": "Rechnung senden"
+    },
+    "create_contact": {
+      "label": "Kontakt anlegen",
+      "aliases": "Neuer Kontakt"
+    },
+    "create_item": {
+      "label": "Artikel anlegen",
+      "aliases": "Neuer Artikel"
+    },
+    "propose_dunning_run": {
+      "label": "Mahnlauf vorschlagen"
+    },
+    "quotes_create": {
+      "label": "Offerte erstellen",
+      "aliases": "Offerte anlegen, Neue Offerte"
+    },
+    "sales_order_create": {
+      "label": "Auftrag erfassen",
+      "aliases": "Neuer Auftrag"
+    },
+    "requisition_upsert": {
+      "label": "Bestellanforderung erfassen",
+      "aliases": "Neue Anforderung"
+    },
+    "export_journal": {
+      "label": "Journal exportieren"
+    },
+    "egress_self_test": {
+      "label": "Verbindungstest ausführen"
+    },
+    "detect_anomalies": {
+      "label": "Auffälligkeiten prüfen"
+    }
+  },
+  "sync": {
+    "title": "Sync & Hosting",
+    "dial": {
+      "label": "Ledger-Stream publizieren",
+      "on": "Publizieren ein",
+      "off": "Publizieren aus",
+      "denied": "Nur wer das Recht zur Sync-Verwaltung hat, kann das ändern."
+    },
+    "state": {
+      "off": {
+        "body": "Publizieren ist aus. TILL publiziert keinen Ledger-Stream; nichts aus deinen Büchern verlässt diese App."
+      },
+      "on": {
+        "body": "Publizieren ist ein. Der Ledger-Stream steht autorisierten Lesern bereit. TILL verbindet sich von sich aus mit nichts."
+      }
+    },
+    "contract": {
+      "version": "Vertragsversion"
+    },
+    "stream": {
+      "head": "Stream-Head"
+    },
+    "epoch": {
+      "label": "Epoche",
+      "reset_hint": "Nach einer Wiederherstellung ändert sich die Epoche. Ein Konsument mit altem Cursor wird zum Zurücksetzen aufgefordert, statt still eine abgezweigte Historie zu lesen.",
+      "help_label": "Hilfe zur Epoche"
+    },
+    "consumer": {
+      "title": "Konsumenten",
+      "none": "Auf dieser Installation ist kein Konsumenten-Status verfügbar. Der Rückstand wird aus dem Cursor berechnet, den ein Konsument beim Lesen präsentiert.",
+      "lag": "{consumer}: {lag} Ereignisse Rückstand"
+    },
+    "exit": {
+      "title": "Dein Ausstieg, jederzeit",
+      "body": "Deine Bücher gehören dir: Backup und Export stehen jederzeit bereit, auch beim Verlassen des gehosteten Angebots.",
+      "link": "Daten & Sicherung öffnen"
+    },
+    "tier": {
+      "note": "Das Managed-Angebot ist ein separates, gehostetes Angebot. Diese Installation läuft lokal: Publizieren einschalten macht den Stream hier lesbar und verbindet sich von sich aus mit nichts."
+    },
+    "denied": {
+      "body": "Du hast keine Berechtigung, den Sync-Status zu sehen."
+    },
+    "trust": {
+      "publishing": "Publizieren ein: der Ledger-Stream steht autorisierten Lesern bereit."
+    }
+  },
+  "agent": {
+    "verb": {
+      "post_entry": "Buchung erfassen",
+      "reverse_entry": "Buchung stornieren",
+      "issue_invoice": "Rechnung ausstellen",
+      "issue_credit_note": "Gutschrift ausstellen",
+      "send_invoice": "Rechnung senden",
+      "propose_dunning_run": "Mahnlauf vorschlagen",
+      "issue_dunning_run": "Mahnlauf ausstellen",
+      "dunning_fee_reverse": "Mahngebühren stornieren",
+      "send_dunning_run": "Mahnlauf senden",
+      "record_payment": "Zahlung erfassen",
+      "allocate_payment": "Zahlung zuordnen",
+      "reverse_payment": "Zahlung stornieren",
+      "vat_mark_filed": "MWST-Abrechnung als eingereicht markieren",
+      "checklist_item_complete": "Checklisten-Schritt abschliessen",
+      "define_field": "Feld anlegen",
+      "install_plugin": "Plugin installieren",
+      "mark_batch_paid": "Zahlungslauf als bezahlt markieren",
+      "payment_batch_transmit": "Zahlungslauf an die Bank übermitteln",
+      "apply_qr_match": "QR-Zahlung übernehmen",
+      "override_qr_match": "Zuordnung der QR-Zahlung korrigieren",
+      "confirm_match": "Bankabgleich bestätigen",
+      "expense_claim_reimburse": "Spesen auszahlen",
+      "create_entry_for_txn": "Banktransaktion buchen",
+      "wage_journal_post": "Lohnjournal buchen",
+      "wage_journal_reverse": "Lohnjournal stornieren",
+      "post_vendor_bill": "Lieferantenrechnung buchen",
+      "post_fx_revaluation": "Fremdwährungen neu bewerten",
+      "fx_revaluation_reverse": "Fremdwährungsbewertung stornieren",
+      "vat_settlement_preview": "MWST-Saldierung anzeigen",
+      "vat_settlement_post": "MWST-Konten saldieren",
+      "vat_settlement_reverse": "MWST-Saldierung stornieren",
+      "vat_settlement_list": "MWST-Saldierungen auflisten",
+      "vat_annual_reconciliation": "MWST-Jahresabstimmung",
+      "accrual_post": "Abgrenzung buchen",
+      "accrual_reverse": "Abgrenzung stornieren",
+      "provision_post": "Rückstellung bilden",
+      "provision_release": "Rückstellung auflösen",
+      "provision_reverse": "Rückstellung stornieren",
+      "provision_release_reverse": "Auflösung stornieren",
+      "expense_claim_approve": "Spesen genehmigen",
+      "expense_claim_reverse": "Spesenabrechnung stornieren",
+      "asset_acquire": "Anlage aktivieren",
+      "asset_add_capitalisation": "Anschaffungskosten nachaktivieren",
+      "asset_depreciation_run_post": "Abschreibungslauf buchen",
+      "asset_depreciation_run_reverse": "Abschreibungslauf stornieren",
+      "asset_dispose": "Anlagenabgang buchen",
+      "asset_transaction_reverse": "Anlagenbuchung stornieren",
+      "inventory_valuation_post": "Lagerbewertung buchen",
+      "inventory_valuation_reverse": "Lagerbewertung stornieren",
+      "landed_cost_allocate_confirm": "Bezugskosten verteilen und buchen",
+      "landed_cost_reverse": "Bezugskostenverteilung stornieren",
+      "close_year": "Geschäftsjahr abschliessen",
+      "lock_period": "Periode sperren",
+      "close_month": "Monat abschliessen",
+      "reopen_month": "Monat wieder öffnen",
+      "unlock_period": "Periode entsperren",
+      "go_productive": "Arbeitsbereich produktiv schalten",
+      "import_open_items": "Offene Posten übernehmen",
+      "book_bank_line": "Bankzeile buchen",
+      "ignore_bank_line": "Bankzeile ignorieren",
+      "set_bank_standard": "Bank-Standard setzen",
+      "clear_bank_standard": "Bank-Standard entfernen",
+      "reopen_bank_line": "Bankzeile stornieren und wieder öffnen"
+    }
+  },
+  "fileDrop": {
+    "choose": "Datei wählen",
+    "chooseMany": "Dateien wählen",
+    "prompt": "Datei hierher ziehen",
+    "promptMany": "Dateien hierher ziehen"
+  },
+  "dataTable": {
+    "actions": "Aktionen"
+  },
+  "seat": {
+    "studio": "Studio auf diesem Gerät",
+    "agent": "MCP-Agent",
+    "local": "Diese Installation",
+    "person": "Person {n}",
+    "unknown": "Unbekannte Person"
+  },
+  "taxCode": {
+    "none": "Ohne MWST",
+    "noneMeta": "nicht steuerbar, zum Beispiel Lohn, Gebühr oder Übertrag",
+    "search": "Code, Satz oder Name, zum Beispiel 8.1 oder Bezug",
+    "searchShort": "Satz oder Name",
+    "noMatch": "Kein MWST-Code passt.",
+    "group": {
+      "current": "Aktuell",
+      "in": "Passend für Eingänge",
+      "out": "Passend für Ausgänge",
+      "all": "MWST-Codes",
+      "other": "Weitere Codes"
+    },
+    "kind": {
+      "output": "Umsatzsteuer",
+      "input": "Vorsteuer",
+      "reverse_charge": "Bezugsteuer",
+      "import": "Einfuhrsteuer",
+      "zero": "Befreit",
+      "exempt": "Ausgenommen",
+      "none": "Ohne MWST"
+    },
+    "rated": "{kind} {rate} %",
+    "hint": {
+      "material": "Material, Waren, Dienstleistungen",
+      "operating": "Betriebsaufwand, Investitionen",
+      "normal": "Normalsatz",
+      "reduced": "reduziert",
+      "accommodation": "Beherbergung",
+      "operatingShort": "Betrieb"
+    },
+    "ratedFamily": "{name} ({family})"
+  },
+  "picker": {
+    "hint": "Pfeiltasten wählen · Enter übernimmt · Esc schliesst"
+  },
+  "belegPreview": {
+    "title": "Beleg",
+    "files": "Belege dieser Buchung",
+    "unnamed": "Beleg ohne Namen",
+    "none": "Noch kein Beleg.",
+    "dropPrompt": "PDF oder Foto hierher ziehen",
+    "choose": "Beleg wählen",
+    "loading": "{name} wird geladen.",
+    "alt": "Beleg {name}",
+    "openTab": "Im neuen Tab öffnen",
+    "download": "Herunterladen",
+    "fallbackPdf": "Hier zeigt das Gerät nur die erste Seite. Öffne den Beleg im neuen Tab oder lade ihn herunter.",
+    "fallbackType": "Für diesen Dateityp gibt es keine Vorschau.",
+    "error": {
+      "title": "Der Beleg lässt sich nicht anzeigen",
+      "integrity": "Die gespeicherten Bytes passen nicht mehr zu ihrer Prüfsumme. TILL zeigt die Datei nicht an.",
+      "tooLarge": "Die Datei ist zu gross für die Vorschau.",
+      "unreadable": "Die Datei liess sich nicht lesen.",
+      "downloadRefused": "Auch der Download wurde verweigert. Das Original bleibt unverändert archiviert."
+    }
+  },
+  "figureTrust": {
+    "confirmed": "Zahlen bestätigt",
+    "qr": "Zahlen aus dem QR-Code",
+    "agentRead": "Vom Agent gelesen, nicht bestätigt",
+    "unconfirmed": "Zahlen nicht bestätigt",
+    "confirm": "Zahlen bestätigen",
+    "changed": "Die Zahlen haben sich geändert. Prüf sie und bestätige nochmals.",
+    "field": {
+      "amount": "Betrag",
+      "currency": "Währung",
+      "vat_amount": "MWST",
+      "vendor_name": "Lieferant",
+      "iban": "IBAN",
+      "vendor_uid": "UID",
+      "invoice_date": "Rechnung vom",
+      "due_date": "fällig",
+      "reference": "Referenz"
+    },
+    "unshowable": "Ein Feld lässt sich nicht genau so zeigen, wie es gespeichert ist (verborgene Zeichen oder ein ungültiger Betrag). Korrigiere es im Belegeingang, dann bestätige."
+  }
+}

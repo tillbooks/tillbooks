@@ -1,0 +1,107 @@
+/* D178 point 7, Meine Einstellungen: one panel per area, plain rows (DESIGN.md: no pills, one accent). */
+.my-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.my-settings-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  max-width: 28rem;
+}
+
+.my-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.my-settings-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+}
+
+.my-settings-group-title {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+  margin: 0;
+}
+
+.my-settings-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.my-settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: var(--t-space-2) 0;
+  border-top: 1px solid var(--t-border);
+}
+
+.my-settings-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.my-settings-label {
+  font-weight: 600;
+}
+
+.my-settings-description,
+.my-settings-meta {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.my-settings-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+.my-settings-control {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.my-settings-typed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.my-settings-json {
+  display: flex;
+  flex-direction: column;
+}
+
+.my-settings-json-hint {
+  color: var(--t-text-dim);
+}
+
+/* A stored value that no longer fits; the default applies. */
+.my-settings-stale {
+  margin: 0;
+  color: var(--t-warn);
+}
+
+.my-settings-error {
+  flex-basis: 100%;
+  margin: 0;
+}

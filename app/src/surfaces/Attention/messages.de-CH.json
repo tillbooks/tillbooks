@@ -1,0 +1,332 @@
+{
+  "nav": {
+    "attention": "Pendenzen"
+  },
+  "attention": {
+    "title": "Pendenzen",
+    "loading": "Deine Pendenzen werden geladen",
+    "retry": "Erneut versuchen",
+    "refresh": "Aktualisieren",
+    "stand": "Stand {time}",
+    "incomplete": "unvollständig",
+    "error": {
+      "total": "Die Pendenzen konnten nicht geladen werden.",
+      "more": "Die nächsten Zeilen konnten nicht geladen werden. Versuch es noch einmal."
+    },
+    "padlock": {
+      "title": "Hier gibt es nichts zu zeigen",
+      "body": "Du hast für keine der Arbeitslisten eine Leseberechtigung, darum steht hier nichts. Bitte eine Besitzerin des Workspace, dir eine zu geben.",
+      "ask": "Frage stellen"
+    },
+    "empty": {
+      "title": "Nichts wartet auf dich.",
+      "hint": "Was eine Entscheidung von dir braucht, erscheint hier.",
+      "action": "Zur Übersicht"
+    },
+    "area": {
+      "bank": "Bank",
+      "sales": "Verkauf",
+      "system": "System",
+      "accounting": "Buchhaltung"
+    },
+    "new": "neu",
+    "providerFailed": "{queue} konnte nicht geladen werden.",
+    "urgency": {
+      "overdue": "überfällig",
+      "due": "fällig",
+      "open": "offen"
+    },
+    "queue": {
+      "qrMatch": "Abgleich",
+      "dunningRun": "Mahnwesen",
+      "reviewFlag": "Markierungen",
+      "agentActionBank": "Bank-Vorschläge des Agenten",
+      "autopilot": "Automatik"
+    },
+    "queueLabel": {
+      "qr_match": "Abgleich",
+      "dunning_run": "Mahnwesen",
+      "agent_action": "Vorschläge",
+      "agent_action_bank": "Bank-Vorschläge",
+      "review_flag": "Markierungen",
+      "checklist_items_due": "Checklisten",
+      "bank_keys_review": "Bankschlüssel",
+      "bank_activation": "Bank-Freischaltung",
+      "bank_fetch_failed": "Bankabruf",
+      "bank_statement_gap": "Auszugslücken",
+      "bank_lines_waiting": "Bankbuchungen",
+      "autopilot": "Automatik"
+    },
+    "collapsedWith": "auch in {queue}",
+    "overflow": {
+      "label": "Aktionen für {title}",
+      "copyRef": "Referenz kopieren",
+      "createTask": "Aufgabe erstellen",
+      "open": "Öffnen"
+    },
+    "remainder": {
+      "title": "{count} weitere in {queue}",
+      "open": "Öffnen"
+    },
+    "item": {
+      "bankLines": {
+        "title": {
+          "one": "1 Bankzeile zu buchen",
+          "other": "{count} Bankzeilen zu buchen"
+        },
+        "subtitle": "{bank}"
+      },
+      "qrMatch": {
+        "title": "Zahlung ohne Zuordnung",
+        "subtitle": "{bank}"
+      },
+      "dunningRun": {
+        "title": "Mahnlauf bereit zum Ausstellen",
+        "subtitle": "{count} Rechnungen · {date}",
+        "subtitleOne": "1 Rechnung · {date}"
+      },
+      "reviewFlag": {
+        "title": "Buchung beanstandet",
+        "subtitle": "{description} · {date}",
+        "reason": "Markiert von {reviewer}: {reason}",
+        "reasonByAgent": "Markiert durch den Agenten: {reason}",
+        "reasonByStudio": "Markiert im Studio: {reason}",
+        "reasonByUnknown": "Markiert: {reason}",
+        "reasonSelf": "Von dir markiert: {reason}"
+      },
+      "autobookDigest": {
+        "title": "Automatisch gebucht ({count})",
+        "subtitle": "{date}, {notBooked} für dich offen",
+        "line": "{counterparty}, Regel {rule}",
+        "undone": "Rückgängig gemacht",
+        "notBooked": "Nicht automatisch",
+        "reason": {
+          "outranked": "etwas anderes passt zuerst auf diese Zeile",
+          "not_sure": "die Regel ist bei dieser Zeile nicht sicher",
+          "currency": "eine andere Währung als die Obergrenze",
+          "over_ceiling": "über der Obergrenze",
+          "period_locked": "die Periode ist abgeschlossen",
+          "refused": "die Buchung wurde abgelehnt",
+          "granter_lost_capability": "wer sie eingeschaltet hat, darf nicht mehr buchen"
+        },
+        "waitingTitle": "Wartet auf Beleg ({count})",
+        "waiting": "Wartet auf Beleg",
+        "openLine": "Bankzeile öffnen",
+        "waitReason": {
+          "no_beleg": "kein Beleg zugeordnet",
+          "beleg_changed": "der zugeordnete Beleg hat sich geändert",
+          "beleg_amount_differs": "der Betrag weicht vom Beleg ab",
+          "beleg_vat_differs": "die MWST weicht vom Beleg ab",
+          "beleg_in_use": "der Beleg belegt schon eine andere Buchung, buche die Zeile selbst",
+          "belege_not_readable": "die Belege siehst du nicht"
+        }
+      },
+      "scheduleNote": {
+        "title": {
+          "skipped": "Dauerbuchung {label} {period} ist nicht gelaufen",
+          "proposed": "Dauerbuchung {label} {period} wartet auf dich"
+        },
+        "subtitle": "Fällig am {date}",
+        "reason": {
+          "catch_up": "eine verpasste Periode wird vorgeschlagen, nicht gebucht",
+          "no_post_right": "wer sie eingerichtet hat, darf nicht mehr buchen, darum ein Vorschlag",
+          "vorlage_changed": "die Vorlage hat sich geändert, darum ein Vorschlag, bis du sie neu bestätigst",
+          "vorlage_cleared": "die Vorlage wurde gelöscht",
+          "period_locked": "die Periode ist abgeschlossen",
+          "invalid": "die Vorlage konnte nicht buchen"
+        }
+      }
+    },
+    "events": {
+      "title": "Ereignisse",
+      "showAll": "Alle anzeigen",
+      "collapse": "Weniger anzeigen",
+      "loading": "Wird geladen",
+      "error": "Ereignisse konnten nicht geladen werden.",
+      "empty": "Noch keine Benachrichtigungen."
+    },
+    "rail": {
+      "loading": "Anzahl Pendenzen wird geladen",
+      "error": "Die Anzahl Pendenzen konnte nicht geladen werden",
+      "count": "{count} offen"
+    },
+    "act": {
+      "openReconciliation": "Im Abgleich öffnen",
+      "openDunning": "Mahnlauf öffnen",
+      "openEntry": "Buchung öffnen",
+      "resolveFlag": "Als geprüft freigeben",
+      "issueDunningRun": "Mahnlauf ausstellen",
+      "suggested": "Vorschlag: {number}",
+      "reasonLabel": "Grund",
+      "reasonPlaceholder": "Warum lehnst du ab?",
+      "rejectConfirm": "Ja, ablehnen",
+      "rejectKeep": "Behalten",
+      "busy": "Wird ausgeführt",
+      "dismissFeedback": "Ausblenden",
+      "taskCreated": "Aufgabe erstellt.",
+      "done": {
+        "apply": "Zahlung übernommen und gebucht.",
+        "dismiss": "Abgelegt: keine Kundenzahlung.",
+        "approve": "Vorschlag genehmigt und ausgeführt.",
+        "approve_allow": "Vorschlag genehmigt. Diese Art führt der Agent künftig direkt aus.",
+        "reject": "Vorschlag abgelehnt. Gebucht wurde nichts.",
+        "resolve": "Markierung erledigt, Buchung freigegeben.",
+        "issue": "Mahnlauf ausgestellt.",
+        "confirm_gap": "Bestätigt: in dieser Lücke fehlt nichts.",
+        "seen": "Als gesehen markiert.",
+        "undo": "Buchung rückgängig gemacht: eine Korrekturbuchung ist gebucht, die Zeile ist wieder offen.",
+        "autobook_off": "Die Automatik ist für diese Regel aus."
+      },
+      "error": {
+        "generic": "Das hat nicht geklappt. Die Zeile bleibt stehen: versuche es noch einmal oder öffne die Seite, zu der sie gehört.",
+        "period_locked": "Die Periode ist gesperrt: dort kann nichts mehr gebucht werden.",
+        "permission_denied": "Dafür fehlt dir die Berechtigung.",
+        "cannot_self_approve": "Der eigene Vorschlag braucht eine zweite Person zur Freigabe.",
+        "already_applied": "Diese Zahlung wurde inzwischen zugeordnet.",
+        "already_paid": "Diese Rechnung ist bereits beglichen.",
+        "currency_mismatch": "Die Währungen stimmen nicht überein: erfasse die Zahlung mit Umrechnung unter Zahlungen.",
+        "already_executed": "Dieser Vorschlag wurde inzwischen ausgeführt.",
+        "not_found": "Diese Zeile gibt es nicht mehr. Die Liste wird neu geladen.",
+        "gap_not_chained": "In dieser Lücke steht Geld, das noch nicht im Buch ist. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge.",
+        "gap_not_found": "Diese Lücke ist inzwischen geschlossen. Die Liste wird neu geladen.",
+        "human_only": "Das bestätigt eine Person, nicht der Agent.",
+        "gap_has_waiting_statement": "In dieser Lücke wartet ein Auszug, der nicht anschliesst. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge.",
+        "receipt_already_booked": "Der Beleg ist bereits gebucht. Genehmige diese Zeile einzeln und gib den Grund für die zweite Buchung an.",
+        "holders_changed": "Nicht ausgeführt: Der Beleg wurde inzwischen anderswo gebucht. Die Zeile zeigt jetzt, wo."
+      },
+      "checkInBank": "In der Bank prüfen",
+      "assign": "Zuordnen",
+      "assignPartial": "Teilweise zuordnen",
+      "importStatement": "Auszug importieren",
+      "importStatements": "Auszüge importieren",
+      "importStatementParts": "Fehlende Teile importieren",
+      "reimportStatement": "Auszug neu importieren",
+      "seen": "Gesehen",
+      "undo": "Rückgängig",
+      "autobookOff": "Automatik aus"
+    },
+    "grouping": {
+      "label": "Gruppierung",
+      "byArea": "Nach Bereich",
+      "byKind": "Nach Art"
+    },
+    "kind": {
+      "approve": "Genehmigen",
+      "do": "Erledigen",
+      "note": "Hinweise"
+    },
+    "section": {
+      "more": "Weitere {count} anzeigen"
+    },
+    "row": {
+      "dueOn": "fällig {date}",
+      "overdueSince": "überfällig seit {date}",
+      "checklistTitle": "{template} {period}: {title}"
+    },
+    "vorschlag": {
+      "stale": "Seit dem Vorschlag geändert, nicht mehr genehmigbar",
+      "target": {
+        "ignore": "Nicht buchen",
+        "openItem": "Offener Posten",
+        "existingEntry": "Bestehende Buchung",
+        "paymentBatch": "Zahlungsauftrag",
+        "rule": "Buchungsregel"
+      },
+      "staleShort": "Seit dem Vorschlag geändert",
+      "titleWith": "{counterparty} · {thing}",
+      "scheduledByAgent": "Dauerbuchung, vom Agenten eingerichtet"
+    },
+    "batch": {
+      "label": "Vorschläge gemeinsam genehmigen",
+      "selectAll": "Alle Vorschläge auswählen",
+      "selectRow": "{title} auswählen",
+      "approveSelected": "Ausgewählte genehmigen ({count})",
+      "approveAll": "Alle genehmigen ({count})",
+      "waiting": "Wartet",
+      "running": "Wird genehmigt",
+      "ok": "Genehmigt",
+      "notOffered": "Hier nicht genehmigbar.",
+      "doneAll": "{count} genehmigt.",
+      "doneSome": "{ok} genehmigt, {refused} nicht genehmigt.",
+      "refusedLine": "{title}: {reason}",
+      "confirm": {
+        "title": "{count} Vorschläge genehmigen?",
+        "each": "Jeder Vorschlag läuft einzeln, wie mit seinem eigenen Knopf. Einer, der sich seit dem Vorschlag geändert hat, läuft nicht und bleibt in der Liste.",
+        "yes": "{count} genehmigen",
+        "close": "Schliessen",
+        "in": "Eingang {amount}",
+        "out": "Ausgang {amount}",
+        "withoutAmount": "Dazu {count} ohne Betrag."
+      },
+      "selectShown": "Alle angezeigten Vorschläge auswählen",
+      "approveShown": "Angezeigte genehmigen ({count})",
+      "approvedLine": "{title}: genehmigt",
+      "openEntry": "Buchung öffnen",
+      "info": {
+        "label": "Was Genehmigen bewirkt",
+        "summary": "{count} Vorschläge, {amounts}",
+        "summaryOne": "1 Vorschlag, {amounts}",
+        "summaryNoAmount": "{count} Vorschläge",
+        "none": "Noch nichts ausgewählt."
+      },
+      "title": "Vorschläge"
+    },
+    "group": {
+      "payments": "{count} Zahlungen ohne Zuordnung",
+      "hide": "Ausblenden",
+      "assign": "Zahlungen zuordnen",
+      "info": "Von Hand erfasste Zahlungen, die noch keiner Rechnung gehören. Ordne jede einer Rechnung zu oder lege sie ab."
+    },
+    "dunning": {
+      "confirm": {
+        "title": "Mahnlauf ausstellen?",
+        "letters": "{count} Mahnungen",
+        "lettersOne": "1 Mahnung",
+        "invoices": "{count} Rechnungen",
+        "invoicesOne": "1 Rechnung",
+        "fees": "Gebühren {amounts}",
+        "noFees": "Keine Gebühren: gebucht wird nichts.",
+        "needsPost": "Die Gebühren werden gebucht. Dazu braucht es das Recht zu buchen.",
+        "loading": "Der Lauf wird gelesen.",
+        "failed": "Der Lauf konnte nicht gelesen werden. Ausstellen geht im Mahnwesen.",
+        "cancel": "Abbrechen",
+        "yes": "Mahnlauf ausstellen",
+        "close": "Schliessen"
+      }
+    },
+    "gap": {
+      "one": "Auszug {range} fehlt",
+      "many": "Auszüge {range} fehlen",
+      "unknownOne": "Nach Auszug {after} fehlt vielleicht ein Auszug",
+      "unknownMany": "Nach Auszug {after} fehlen vielleicht Auszüge",
+      "incomplete": "Auszug {incomplete} unvollständig",
+      "conflicting": "Auszug {conflicting} doppelt",
+      "since": "seit {date}",
+      "twoBalances": "2 Salden",
+      "partsMissing": "Teile fehlen"
+    },
+    "ruleProposed": {
+      "title": "Regel vorschlagen: {counterparty}, {repeats}× gleich gebucht",
+      "backtest": "Seit {date}: {hits} Zeilen, {identical} genau so gebucht",
+      "create": "Regel anlegen",
+      "adjust": "Anpassen",
+      "dismiss": "Nicht vorschlagen",
+      "evidence": "Gleich gebucht",
+      "evidenceValue": "{date}, {amount}"
+    },
+    "autobookOffer": {
+      "title": "Regel {counterparty}: {count}× unverändert gebucht. Künftig automatisch buchen?",
+      "meta": "Bis {ceiling} pro Zeile, nur in {currency}",
+      "grant": "Künftig automatisch",
+      "dismiss": "Nicht jetzt"
+    }
+  },
+  "help": {
+    "Attention": {
+      "title": "Pendenzen",
+      "body": "Pendenzen zeigt alles, was auf eine Entscheidung von dir wartet, vollständig und in Abschnitten: nach Bereich (die Bank zuerst) oder nach Art (Genehmigen, Erledigen, Hinweise). Die Zahlen der Abschnitte ergeben zusammen die Zahl im Menü.\n\nJede Zeile hat einen Knopf für den nächsten Schritt; weitere Möglichkeiten stehen unter ⋯, und das (i) sagt, warum die Zeile wartet und was der Schritt bewirkt.\n\nBank-Vorschläge des Agenten kannst du auswählen und gemeinsam genehmigen. Jeder läuft einzeln, wie mit seinem eigenen Knopf.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

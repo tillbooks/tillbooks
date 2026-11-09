@@ -1,0 +1,16 @@
+/**
+ * N01 US-N01.8: the agent's reason under a Vorschlag's title. Quiet: dim ink at the meta size, no box,
+ * no accent; at most two lines (the whole sentence is the title attribute).
+ */
+.vorschlag-line-reason {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  min-width: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  overflow-wrap: anywhere;
+}

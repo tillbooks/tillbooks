@@ -1,0 +1,100 @@
+{
+  "nav": {
+    "inventoryAlerts": "Stock & alerts"
+  },
+  "inventory": {
+    "alerts": {
+      "title": "Stock & alerts",
+      "subtitle": "One read-only view over the whole inventory: alerts, stock position, low stock, valuation drift, slow movers, cycle counts and reorder candidates, each a single structured call.",
+      "reportsLabel": "Reports",
+      "noWorkspace": "Pick a client to see the inventory alerts.",
+      "emptyTitle": "Nothing to show",
+      "emptyHint": "No matching inventory data for this report and filter.",
+      "asOf": "As of",
+      "since": "Since",
+      "yes": "Yes",
+      "no": "No",
+      "report": {
+        "alerts": "Alerts",
+        "stockPosition": "Stock position",
+        "lowStock": "Low stock",
+        "reorderCandidates": "Reorder candidates",
+        "slowMovers": "Slow movers",
+        "anomalies": "Anomalies",
+        "valuationStatus": "Valuation status",
+        "cycleCounts": "Cycle counts"
+      },
+      "severity": {
+        "critical": "Critical",
+        "warning": "Warning",
+        "info": "Info"
+      },
+      "type": {
+        "negative_stock": "Negative stock",
+        "large_issue": "Large issue",
+        "large_adjustment": "Large adjustment",
+        "unlinked_high_value_issue": "Unlinked high-value issue",
+        "valuation_drift": "Valuation drift",
+        "open_stocktake_overdue": "Overdue stocktake",
+        "lot_near_expiry": "Lot near expiry",
+        "low_stock": "Low stock"
+      },
+      "headline": {
+        "lot_expired": "Lot expired"
+      },
+      "action": {
+        "investigate_movements": "Investigate movements",
+        "review_adjustment": "Review adjustment",
+        "review_issue": "Review issue",
+        "link_source_document": "Link source document",
+        "run_valuation": "Run valuation",
+        "complete_stocktake": "Complete stocktake",
+        "review_lot": "Review lot",
+        "create_requisition": "Create requisition"
+      },
+      "col": {
+        "severity": "Severity",
+        "type": "Type",
+        "title": "Title",
+        "summary": "Summary",
+        "action": "Suggested action",
+        "item": "Item",
+        "sku": "SKU",
+        "location": "Location",
+        "qty": "Qty",
+        "value": "Value",
+        "currentQty": "On hand",
+        "reorderPoint": "Reorder point",
+        "shortfall": "Shortfall",
+        "suggestedQty": "Suggested qty",
+        "daysOfCover": "Days of cover",
+        "daysIdle": "Days idle",
+        "status": "Status",
+        "currentValue": "Current value",
+        "lastPosted": "Last posted",
+        "drift": "Drift",
+        "driftPct": "Drift %",
+        "session": "Session",
+        "freezeAt": "Frozen at",
+        "uncounted": "Uncounted",
+        "overdue": "Overdue"
+      },
+      "total": {
+        "critical": "Critical",
+        "warning": "Warning",
+        "info": "Info",
+        "positions": "Positions",
+        "qty": "Total qty",
+        "value": "Total value"
+      }
+    }
+  },
+  "help": {
+    "InventoryAlerts": {
+      "title": "Stock & alerts",
+      "body": "Stock and alerts is the read-only lens over the whole warehouse: a report picker covering alerts, stock position, low stock, reorder candidates, slow movers, anomalies and the state of valuation and counts. Every figure arrives fully computed from the engine; the surface itself calculates nothing. Nothing is changed here; acting happens on the individual inventory surfaces.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

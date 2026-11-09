@@ -1,0 +1,75 @@
+{
+  "nav": {
+    "threeWayMatch": "Abgleich-Ausnahmen"
+  },
+  "procurement": {
+    "match": {
+      "title": "Dreiwegabgleich",
+      "exceptions": "Abgleich-Ausnahmen",
+      "detailLabel": "Abgleich-Detail",
+      "linesCaption": "Dreiwegabgleich Position für Position",
+      "close": "Schliessen",
+      "cancel": "Abbrechen",
+      "noWorkspace": "Wähle einen Mandanten, um die Abgleich-Ausnahmen zu sehen.",
+      "empty": "Keine passende Bestellung oder kein Wareneingang für diese Rechnung.",
+      "emptyTitle": "Keine offenen Ausnahmen.",
+      "emptyHint": "Jede gebuchte Rechnung mit passender Bestellung ist innerhalb der Toleranz oder bereits abgeglichen.",
+      "review": "Prüfen",
+      "confirm": "Abgleich bestätigen",
+      "confirmTitle": "Diese Rechnung zur Zahlung freigeben?",
+      "confirmBody": "Der Abgleich liegt innerhalb der Toleranz. Wird er erfasst, ist die Rechnung zur Zahlung freigegeben; die hier gezeigten Zahlen bleiben am Vorgang.",
+      "releaseConfirm": "Zur Zahlung freigeben",
+      "override": "Übersteuern",
+      "overrideConfirm": "Mit Begründung übersteuern",
+      "overrideTitle": "Abweichung übersteuern?",
+      "overrideBody": "Die Abweichung liegt ausserhalb der Toleranz. Eine Übersteuerung ist endgültig, gibt die Rechnung zur Zahlung frei und bleibt mit deiner Begründung am Vorgang.",
+      "reason": "Begründung",
+      "reasonRequired": "Eine Begründung mit mindestens fünf Zeichen ist erforderlich.",
+      "expected": "Erwartet",
+      "billed": "Verrechnet",
+      "valueVar": "Wertabweichung",
+      "status": {
+        "matched": "Abgeglichen",
+        "partial": "Teilweise",
+        "overridden": "Übersteuert",
+        "variance": "Abweichung",
+        "reversed": "Storniert",
+        "nothing_received": "Nichts erhalten",
+        "no_candidate_po": "Keine passende Bestellung"
+      },
+      "done": {
+        "matched": "Abgleich erfasst. Die Rechnung ist zur Zahlung freigegeben.",
+        "overridden": "Übersteuerung mit deiner Begründung erfasst."
+      },
+      "col": {
+        "item": "Artikel",
+        "ordered": "Bestellt",
+        "received": "Erhalten",
+        "alreadyBilled": "Bereits verrechnet",
+        "thisBill": "Diese Rechnung",
+        "qtyVar": "Mengenabw.",
+        "status": "Status",
+        "total": "Total",
+        "supplier": "Lieferant",
+        "atRisk": "Risiko",
+        "age": "Alter (Tage)"
+      },
+      "error": {
+        "no_candidate_po": "Keine passende Bestellung für diese Rechnung.",
+        "nothing_received": "Es wurde noch nichts erhalten, es gibt nichts zu verrechnen.",
+        "bill_not_convertible": "Diese Fremdwährungsrechnung hat noch keinen CHF-Wert: zuerst buchen.",
+        "out_of_tolerance": "Die Abweichung liegt ausserhalb der Toleranz. Mit Begründung übersteuern.",
+        "match_already_exists": "Diese Rechnung hat bereits einen aktiven Abgleich.",
+        "reason_required": "Eine Begründung mit mindestens fünf Zeichen ist erforderlich."
+      }
+    }
+  },
+  "help": {
+    "ThreeWayMatch": {
+      "title": "Abgleich-Ausnahmen",
+      "body": "Lieferantenrechnungen, deren Drei-Wege-Abgleich nicht aufgeht: Bestellt, geliefert und verrechnet stimmen nicht überein, oder es ist gar nichts eingegangen.\n\nDie Liste zeigt die offenen Ausnahmen mit Lieferant, betroffenem Betrag und Alter. Öffne eine Zeile für den Vergleich Position für Position.\n\nDu bestätigst den Abgleich, wenn die Abweichung erklärbar ist, oder übersteuerst ihn mit einer Begründung. Beides bleibt am Vorgang dokumentiert.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

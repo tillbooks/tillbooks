@@ -1,0 +1,33 @@
+/* N02 R1: the confirmation of a second booking of a receipt (BookAgain.tsx). */
+.book-again-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.book-again-form p {
+  margin: 0;
+}
+
+.book-again-form label {
+  font-weight: 500;
+}
+
+.book-again-holders {
+  margin: 0;
+  padding-left: var(--t-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.book-again-id {
+  margin-left: var(--t-space-2);
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+}
+
+.book-again-error {
+  color: var(--t-danger);
+}

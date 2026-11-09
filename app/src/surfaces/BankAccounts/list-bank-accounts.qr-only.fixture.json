@@ -1,0 +1,20 @@
+{
+  "bankAccounts": [
+    {
+      "id": "bank_1",
+      "name": "PostFinance QR",
+      "iban": "CH4431999123000889012",
+      "isQrIban": true,
+      "receiveOnly": true,
+      "currency": "CHF",
+      "ledgerAccountId": "acc_2",
+      "ledgerAccountNumber": "1020",
+      "openingBalanceMinor": null,
+      "openingBalanceDate": null,
+      "openingEntryId": null,
+      "archived": false,
+      "createdAt": "2026-07-19T00:00:00.000Z"
+    }
+  ],
+  "ok": true
+}

@@ -1,0 +1,244 @@
+/**
+ * The Vorschlag line (D167): one row, the mark, the verb in words over its one key figure, the (i),
+ * a secondary Genehmigen and a quiet ⋯. No card, no panel, no accent: a list spends none. Details,
+ * the reject reason and the grant confirm open beneath the row, indented under the title.
+ */
+
+.vorschlag-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) 0;
+  border-bottom: 1px solid var(--t-border);
+  container: vorschlag-row / inline-size;
+}
+
+/* D178: the five named slots Pendenzen's every row shares (`Attention.css`, `.att-row-line`): the mark (with
+   Pendenzen's batch box before it), the text, the (i), the one action, the ⋯. */
+.vorschlag-line-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas: 'glyph text info action more';
+  align-items: center;
+  column-gap: var(--t-space-1);
+  row-gap: var(--t-space-0-5);
+  min-height: 44px;
+}
+
+.vorschlag-line-lead {
+  grid-area: glyph;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.vorschlag-line-tip {
+  grid-area: info;
+}
+
+.vorschlag-line-more {
+  grid-area: more;
+}
+
+/* Pendenzen (compact): the reason a line can no longer be approved is a slot of the row, under the text. */
+.vorschlag-line-row--status {
+  grid-template-areas:
+    'glyph text info action more'
+    '. status status status status';
+}
+
+.vorschlag-line-row > .vorschlag-line-status {
+  grid-area: status;
+  margin-left: 0;
+}
+
+/* Narrow: the action and the ⋯ take a second line, the action under the title. */
+@container vorschlag-row (max-width: 560px) {
+  .vorschlag-line-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'glyph text info'
+      '. action more';
+  }
+
+  /* The reason before the one way on: title, meta, why, then the button. */
+  .vorschlag-line-row--status {
+    grid-template-areas:
+      'glyph text info'
+      '. status status'
+      '. action more';
+  }
+
+  .vorschlag-line-actions {
+    justify-self: start;
+  }
+}
+
+.vorschlag-line-mark {
+  color: var(--t-text-dim);
+}
+
+.vorschlag-line-text {
+  grid-area: text;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  container: vorschlag-line / inline-size;
+}
+
+/* The title is the disclosure control for Details: plain text weight 500, no button chrome. */
+.vorschlag-line-title {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 500;
+  color: var(--t-text);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--t-radius-sm);
+}
+
+.vorschlag-line-title:hover {
+  text-decoration: none;
+  color: var(--t-text);
+}
+
+/* One line, never wrapping. The meta line itself does NOT clip (a clip would hide the essentials'
+   tooltip bubble above it): the essentials are the one item that shrinks, cut by their own ellipsis. */
+.vorschlag-line-meta {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  white-space: nowrap;
+}
+
+.vorschlag-line-meta > * {
+  flex: 0 0 auto;
+}
+
+.vorschlag-line-meta > .tooltip-wrap,
+.vorschlag-line-meta > .vorschlag-line-figure {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The verb and "Vorschlag des Agenten" give way long before the essentials: the ◇ already says who
+   proposed it, and the total and the accounts are what a person must read before Genehmigen. */
+.vorschlag-line-meta > .vorschlag-line-verb,
+.vorschlag-line-meta > .vorschlag-line-origin {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A line too narrow for the whole sentence keeps the essentials whole and drops the soft words, never a
+   stub like "Buchung e…": what is cut is the part Details already says. */
+@container vorschlag-line (max-width: 760px) {
+  .vorschlag-line-meta[data-figure] > .vorschlag-line-soft {
+    display: none;
+  }
+}
+
+/* The essentials (D162 point 1) cut with an ellipsis; the full text is the tooltip. */
+.vorschlag-line-figure {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--t-radius-sm);
+}
+
+.vorschlag-line-figure:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+}
+
+.vorschlag-line-actions {
+  grid-area: action;
+  display: flex;
+  align-items: center;
+}
+
+.vorschlag-line-hint {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* D178: "Geändert" sits where Genehmigen would be; the sentence why is behind the (i). */
+/* /agent: the changed sentence under the line, indented under the title (critic N4 L4). */
+.vorschlag-line-changed {
+  margin-left: var(--t-space-3);
+}
+
+/* D178, Pendenzen: a refused or no-longer-approvable line says so under its title, aligned with it. */
+.vorschlag-line-status {
+  margin-left: var(--t-space-3);
+}
+
+.vorschlag-line .vorschlag-readback,
+.vorschlag-line .vorschlag-confirm,
+.trace-details {
+  margin: 0 0 0 var(--t-space-3);
+}
+
+.vorschlag-readback {
+  display: grid;
+  gap: 2px;
+}
+
+.vorschlag-readback-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 160px) minmax(0, 1fr);
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.vorschlag-readback-row dt {
+  color: var(--t-text-dim);
+}
+
+.vorschlag-readback-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.vorschlag-confirm p {
+  margin: 0 0 var(--t-space-1);
+}
+
+.vorschlag-confirm textarea {
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: var(--t-space-1);
+}
+
+.vorschlag-confirm-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.vorschlag-reason {
+  display: block;
+  margin: 0 0 2px;
+}
+
+.vorschlag-reason-label {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}

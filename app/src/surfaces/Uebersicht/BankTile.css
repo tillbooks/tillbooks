@@ -1,0 +1,72 @@
+/* D178 point 12: the bank action as a tile among the key figures, or as a card above them. One figure
+   and a real button; quiet when nothing is open. */
+
+.uebersicht-bank {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+  height: 100%;
+}
+
+.uebersicht-bank__head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 400;
+}
+
+.uebersicht-bank__figure {
+  margin: 0;
+  font-size: var(--t-font-xl);
+  line-height: var(--t-lh-xl);
+  font-weight: 600;
+}
+
+/* Quiet: nothing waits, so the figure steps back and nothing carries a status colour. */
+.uebersicht-bank:not(.is-waiting) .uebersicht-bank__figure {
+  color: var(--t-text-dim);
+}
+
+.uebersicht-bank .uebersicht-asof {
+  margin: 0;
+}
+
+.uebersicht-bank__action {
+  align-self: flex-start;
+  margin-top: var(--t-space-1);
+}
+
+/* The quiet "Zur Bank": a ghost button whose label lines up with the figure above it (its own inline
+   padding is given back, so the word starts where "0 offen" starts). */
+.uebersicht-bank__action.btn--ghost {
+  margin-left: calc(-1 * var(--t-space-2));
+}
+
+/* The card: the same facts in one row above the controls, the button right after the figure (never
+   stranded at the far edge with an empty middle), and a full step of room before the period control. */
+.uebersicht-bank--card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-3);
+  margin: var(--t-space-2) 0 var(--t-space-2);
+  padding: var(--t-space-2) var(--t-space-3);
+  box-shadow: var(--t-shadow-control);
+}
+
+.uebersicht-bank--card .uebersicht-bank__action {
+  margin: 0;
+  align-self: center;
+}
+
+.uebersicht-bank--card .uebersicht-bank__action.btn--ghost {
+  margin: 0;
+}

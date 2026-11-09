@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FIXTURE (SYNTHETIC): a camt.053.001.08 on a CHF account with one collective debit whose transaction
+  details are in EUR (EUR payments from a CHF account, the case A39 L7 (b) books as ONE line of the
+  booking amount), beside an ordinary credit and a well-formed CHF collective debit. Every reference,
+  party and amount is invented; the account IBAN is the published PostFinance sample.
+
+    booking 1: a CHF debit of 950.00 with two EUR details of 500.00 each (one CHF line, key asr:MIX-1)
+    booking 2: a CHF credit of 120.00
+    booking 3: a CHF debit of 300.00 with two CHF details of 100.00 and 200.00 (two lines)
+  Opening 10000.00, closing 8870.00.
+
+  (Elements are named in prose without angle brackets on purpose: the regex parser scans the whole
+  payload, so a tag token inside this comment would be read as a real element.)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+<BkToCstmrStmt>
+<GrpHdr><MsgId>MIXED-CCY-MSG-1</MsgId><CreDtTm>2026-09-30T23:10:00</CreDtTm></GrpHdr>
+<Stmt>
+<Id>MIXED-CCY-STMT-1</Id>
+<ElctrncSeqNb>1</ElctrncSeqNb>
+<FrToDt><FrDtTm>2026-09-30T00:00:00</FrDtTm><ToDtTm>2026-09-30T23:59:59</ToDtTm></FrToDt>
+<Acct><Id><IBAN>CH9300762011623852957</IBAN></Id></Acct>
+<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">10000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">8870.00</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+<Ntry>
+<Amt Ccy="CHF">950.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>MIX-1</AcctSvcrRef>
+<NtryDtls>
+<Btch><PmtInfId>PRUN-EUR</PmtInfId><NbOfTxs>2</NbOfTxs></Btch>
+<TxDtls><Refs><AcctSvcrRef>MIX-1-A</AcctSvcrRef></Refs><Amt Ccy="EUR">500.00</Amt><CdtDbtInd>DBIT</CdtDbtInd></TxDtls>
+<TxDtls><Refs><AcctSvcrRef>MIX-1-B</AcctSvcrRef></Refs><Amt Ccy="EUR">500.00</Amt><CdtDbtInd>DBIT</CdtDbtInd></TxDtls>
+</NtryDtls>
+</Ntry>
+<Ntry>
+<Amt Ccy="CHF">120.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>MIX-2</AcctSvcrRef>
+</Ntry>
+<Ntry>
+<Amt Ccy="CHF">300.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>MIX-3</AcctSvcrRef>
+<NtryDtls>
+<TxDtls><Refs><AcctSvcrRef>MIX-3-A</AcctSvcrRef></Refs><Amt Ccy="CHF">100.00</Amt><CdtDbtInd>DBIT</CdtDbtInd></TxDtls>
+<TxDtls><Refs><AcctSvcrRef>MIX-3-B</AcctSvcrRef></Refs><Amt Ccy="CHF">200.00</Amt><CdtDbtInd>DBIT</CdtDbtInd></TxDtls>
+</NtryDtls>
+</Ntry>
+</Stmt>
+</BkToCstmrStmt>
+</Document>

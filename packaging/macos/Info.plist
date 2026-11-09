@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Info.plist for TILL.app (D166: the native window). build-macos.sh substitutes __VERSION__. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>TILL</string>
+  <key>CFBundleDisplayName</key>
+  <string>TILL</string>
+  <key>CFBundleIdentifier</key>
+  <string>ch.tillbooks.studio</string>
+  <key>CFBundleVersion</key>
+  <string>__VERSION__</string>
+  <key>CFBundleShortVersionString</key>
+  <string>__VERSION__</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleExecutable</key>
+  <string>TILL</string>
+  <key>CFBundleIconFile</key>
+  <string>TILL</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSHumanReadableCopyright</key>
+  <string>Nomadik GmbH. MIT-licensed.</string>
+  <!-- The Studio is served over loopback HTTP; NSAllowsLocalNetworking permits http://127.0.0.1
+       without weakening App Transport Security for anything else. -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key>
+    <true/>
+  </dict>
+</dict>
+</plist>

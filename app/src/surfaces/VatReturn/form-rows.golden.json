@@ -1,0 +1,171 @@
+{
+ "healthy": {
+  "payable": [
+   "Zu bezahlender BetragCHF 1'596.20"
+  ],
+  "rows": [
+   "Ziff. | Bezeichnung | Umsatz CHF | Steuer CHF",
+   "200 | Total der vereinbarten bzw. vereinnahmten Entgelte, inkl. optierte Leistungen, Entgelte aus Übertragungen im Meldeverfahren sowie aus Leistungen im Ausland (weltweiter Umsatz)Buchungen zu Ziffer 200 anzeigen | CHF 48'200.00 | –",
+   "205 | In Ziffer 200 enthaltene Entgelte aus von der Steuer ausgenommenen Leistungen (Art. 21), für welche nach Art. 22 optiert wird | – | –",
+   "Abzüge",
+   "220 | Von der Steuer befreite Leistungen (u.a. Exporte, Art. 23), von der Steuer befreite Leistungen an begünstigte Einrichtungen und Personen (Art. 107 Abs. 1 Bst. a)Buchungen zu Ziffer 220 anzeigen | CHF 2'000.00 | –",
+   "221 | Leistungen im Ausland (Ort der Leistung im Ausland) | – | –",
+   "225 | Übertragung im Meldeverfahren (Art. 38, bitte zusätzlich Form. 764 einreichen) | – | –",
+   "230 | Von der Steuer ausgenommene Inlandleistungen (Art. 21), für die nicht nach Art. 22 optiert wird | – | –",
+   "235 | Entgeltsminderungen wie Skonti, Rabatte usw. | – | –",
+   "280 | Diverses (z.B. Wert des Bodens, Ankaufspreise Margenbesteuerung) | – | –",
+   "289 | Total Ziff. 220 bis 280Buchungen zu Ziffer 289 anzeigen | CHF 2'000.00 | –",
+   "299 | Steuerbarer Gesamtumsatz (Ziff. 200 abzüglich Ziff. 289)Buchungen zu Ziffer 299 anzeigen | CHF 46'200.00 | –",
+   "303 | Normal 8,1% (ab 01.01.2024)Buchungen zu Ziffer 303 anzeigen | CHF 44'000.00 | CHF 3'564.00",
+   "313 | Reduziert 2,6% (ab 01.01.2024)Buchungen zu Ziffer 313 anzeigen | CHF 2'200.00 | CHF 57.20",
+   "343 | Beherbergung 3,8% (ab 01.01.2024) | – | –",
+   "383 | Bezugsteuer (ab 01.01.2024)Buchungen zu Ziffer 383 anzeigen | CHF 1'000.00 | CHF 81.00",
+   "399 | Total geschuldete Steuer | – | CHF 3'702.20",
+   "400 | Vorsteuer auf Material- und DienstleistungsaufwandBuchungen zu Ziffer 400 anzeigen | CHF 22'000.00 | CHF 1'782.00",
+   "405 | Vorsteuer auf Investitionen und übrigem BetriebsaufwandBuchungen zu Ziffer 405 anzeigen | CHF 4'000.00 | CHF 324.00",
+   "410 | Einlageentsteuerung (Art. 32, bitte detaillierte Aufstellung beilegen) | – | –",
+   "415 | Vorsteuerkorrekturen: gemischte Verwendung (Art. 30), Eigenverbrauch (Art. 31) | – | –",
+   "420 | Vorsteuerkürzungen: Nicht-Entgelte wie Subventionen, Tourismusabgaben (Art. 33 Abs. 2) | – | –",
+   "479 | Total Ziff. 400 bis 420 | – | CHF 2'106.00",
+   "500 | Zu bezahlender Betrag | – | CHF 1'596.20",
+   "510 | Guthaben der steuerpflichtigen Person | – | –",
+   "900 | Andere Mittelflüsse (Art. 18 Abs. 2): Subventionen, durch Kurvereine eingenommene Tourismusabgaben, Entsorgungs- und Wasserwerkbeiträge (Bst. a-c) | – | –",
+   "910 | Andere Mittelflüsse (Art. 18 Abs. 2): Spenden, Dividenden, Schadenersatz usw. (Bst. d-l) | – | –"
+  ]
+ },
+ "drift": {
+  "payable": [
+   "Zu bezahlender BetragCHF 1'596.20"
+  ],
+  "rows": [
+   "Ziff. | Bezeichnung | Umsatz CHF | Steuer CHF",
+   "200 | Total der vereinbarten bzw. vereinnahmten Entgelte, inkl. optierte Leistungen, Entgelte aus Übertragungen im Meldeverfahren sowie aus Leistungen im Ausland (weltweiter Umsatz)Buchungen zu Ziffer 200 anzeigen | CHF 48'200.00 | –",
+   "205 | In Ziffer 200 enthaltene Entgelte aus von der Steuer ausgenommenen Leistungen (Art. 21), für welche nach Art. 22 optiert wird | – | –",
+   "Abzüge",
+   "220 | Von der Steuer befreite Leistungen (u.a. Exporte, Art. 23), von der Steuer befreite Leistungen an begünstigte Einrichtungen und Personen (Art. 107 Abs. 1 Bst. a)Buchungen zu Ziffer 220 anzeigen | CHF 2'000.00 | –",
+   "221 | Leistungen im Ausland (Ort der Leistung im Ausland) | – | –",
+   "225 | Übertragung im Meldeverfahren (Art. 38, bitte zusätzlich Form. 764 einreichen) | – | –",
+   "230 | Von der Steuer ausgenommene Inlandleistungen (Art. 21), für die nicht nach Art. 22 optiert wird | – | –",
+   "235 | Entgeltsminderungen wie Skonti, Rabatte usw. | – | –",
+   "280 | Diverses (z.B. Wert des Bodens, Ankaufspreise Margenbesteuerung) | – | –",
+   "289 | Total Ziff. 220 bis 280Buchungen zu Ziffer 289 anzeigen | CHF 2'000.00 | –",
+   "299 | Steuerbarer Gesamtumsatz (Ziff. 200 abzüglich Ziff. 289)Buchungen zu Ziffer 299 anzeigen | CHF 46'200.00 | –",
+   "303 | Normal 8,1% (ab 01.01.2024)Buchungen zu Ziffer 303 anzeigen | CHF 44'000.00 | CHF 3'564.00",
+   "313 | Reduziert 2,6% (ab 01.01.2024)Buchungen zu Ziffer 313 anzeigen | CHF 2'200.00 | CHF 57.20",
+   "343 | Beherbergung 3,8% (ab 01.01.2024) | – | –",
+   "383 | Bezugsteuer (ab 01.01.2024)Buchungen zu Ziffer 383 anzeigen | CHF 1'000.00 | CHF 81.00",
+   "399 | Total geschuldete Steuer | – | CHF 3'702.20",
+   "400 | Vorsteuer auf Material- und DienstleistungsaufwandBuchungen zu Ziffer 400 anzeigen | CHF 22'000.00 | CHF 1'782.00",
+   "405 | Vorsteuer auf Investitionen und übrigem BetriebsaufwandBuchungen zu Ziffer 405 anzeigen | CHF 4'000.00 | CHF 324.00",
+   "410 | Einlageentsteuerung (Art. 32, bitte detaillierte Aufstellung beilegen) | – | –",
+   "415 | Vorsteuerkorrekturen: gemischte Verwendung (Art. 30), Eigenverbrauch (Art. 31) | – | –",
+   "420 | Vorsteuerkürzungen: Nicht-Entgelte wie Subventionen, Tourismusabgaben (Art. 33 Abs. 2) | – | –",
+   "479 | Total Ziff. 400 bis 420 | – | CHF 2'106.00",
+   "500 | Zu bezahlender Betrag | – | CHF 1'596.20",
+   "510 | Guthaben der steuerpflichtigen Person | – | –",
+   "900 | Andere Mittelflüsse (Art. 18 Abs. 2): Subventionen, durch Kurvereine eingenommene Tourismusabgaben, Entsorgungs- und Wasserwerkbeiträge (Bst. a-c) | – | –",
+   "910 | Andere Mittelflüsse (Art. 18 Abs. 2): Spenden, Dividenden, Schadenersatz usw. (Bst. d-l) | – | –"
+  ]
+ },
+ "empty": {
+  "payable": [
+   "Zu bezahlender BetragCHF 0.00"
+  ],
+  "rows": [
+   "Ziff. | Bezeichnung | Umsatz CHF | Steuer CHF",
+   "200 | Total der vereinbarten bzw. vereinnahmten Entgelte, inkl. optierte Leistungen, Entgelte aus Übertragungen im Meldeverfahren sowie aus Leistungen im Ausland (weltweiter Umsatz) | CHF 0.00 | –",
+   "205 | In Ziffer 200 enthaltene Entgelte aus von der Steuer ausgenommenen Leistungen (Art. 21), für welche nach Art. 22 optiert wird | – | –",
+   "Abzüge",
+   "220 | Von der Steuer befreite Leistungen (u.a. Exporte, Art. 23), von der Steuer befreite Leistungen an begünstigte Einrichtungen und Personen (Art. 107 Abs. 1 Bst. a) | – | –",
+   "221 | Leistungen im Ausland (Ort der Leistung im Ausland) | – | –",
+   "225 | Übertragung im Meldeverfahren (Art. 38, bitte zusätzlich Form. 764 einreichen) | – | –",
+   "230 | Von der Steuer ausgenommene Inlandleistungen (Art. 21), für die nicht nach Art. 22 optiert wird | – | –",
+   "235 | Entgeltsminderungen wie Skonti, Rabatte usw. | – | –",
+   "280 | Diverses (z.B. Wert des Bodens, Ankaufspreise Margenbesteuerung) | – | –",
+   "289 | Total Ziff. 220 bis 280 | CHF 0.00 | –",
+   "299 | Steuerbarer Gesamtumsatz (Ziff. 200 abzüglich Ziff. 289) | CHF 0.00 | –",
+   "303 | Normal 8,1% (ab 01.01.2024) | – | –",
+   "313 | Reduziert 2,6% (ab 01.01.2024) | – | –",
+   "343 | Beherbergung 3,8% (ab 01.01.2024) | – | –",
+   "383 | Bezugsteuer (ab 01.01.2024) | – | –",
+   "399 | Total geschuldete Steuer | – | CHF 0.00",
+   "400 | Vorsteuer auf Material- und Dienstleistungsaufwand | – | –",
+   "405 | Vorsteuer auf Investitionen und übrigem Betriebsaufwand | – | –",
+   "410 | Einlageentsteuerung (Art. 32, bitte detaillierte Aufstellung beilegen) | – | –",
+   "415 | Vorsteuerkorrekturen: gemischte Verwendung (Art. 30), Eigenverbrauch (Art. 31) | – | –",
+   "420 | Vorsteuerkürzungen: Nicht-Entgelte wie Subventionen, Tourismusabgaben (Art. 33 Abs. 2) | – | –",
+   "479 | Total Ziff. 400 bis 420 | – | CHF 0.00",
+   "500 | Zu bezahlender Betrag | – | CHF 0.00",
+   "510 | Guthaben der steuerpflichtigen Person | – | –",
+   "900 | Andere Mittelflüsse (Art. 18 Abs. 2): Subventionen, durch Kurvereine eingenommene Tourismusabgaben, Entsorgungs- und Wasserwerkbeiträge (Bst. a-c) | – | –",
+   "910 | Andere Mittelflüsse (Art. 18 Abs. 2): Spenden, Dividenden, Schadenersatz usw. (Bst. d-l) | – | –"
+  ]
+ },
+ "filed": {
+  "payable": [
+   "Zu bezahlender BetragCHF 1'596.20"
+  ],
+  "rows": [
+   "Ziff. | Bezeichnung | Umsatz CHF | Steuer CHF",
+   "200 | Total der vereinbarten bzw. vereinnahmten Entgelte, inkl. optierte Leistungen, Entgelte aus Übertragungen im Meldeverfahren sowie aus Leistungen im Ausland (weltweiter Umsatz)Buchungen zu Ziffer 200 anzeigen | CHF 48'200.00 | –",
+   "205 | In Ziffer 200 enthaltene Entgelte aus von der Steuer ausgenommenen Leistungen (Art. 21), für welche nach Art. 22 optiert wird | – | –",
+   "Abzüge",
+   "220 | Von der Steuer befreite Leistungen (u.a. Exporte, Art. 23), von der Steuer befreite Leistungen an begünstigte Einrichtungen und Personen (Art. 107 Abs. 1 Bst. a)Buchungen zu Ziffer 220 anzeigen | CHF 2'000.00 | –",
+   "221 | Leistungen im Ausland (Ort der Leistung im Ausland) | – | –",
+   "225 | Übertragung im Meldeverfahren (Art. 38, bitte zusätzlich Form. 764 einreichen) | – | –",
+   "230 | Von der Steuer ausgenommene Inlandleistungen (Art. 21), für die nicht nach Art. 22 optiert wird | – | –",
+   "235 | Entgeltsminderungen wie Skonti, Rabatte usw. | – | –",
+   "280 | Diverses (z.B. Wert des Bodens, Ankaufspreise Margenbesteuerung) | – | –",
+   "289 | Total Ziff. 220 bis 280Buchungen zu Ziffer 289 anzeigen | CHF 2'000.00 | –",
+   "299 | Steuerbarer Gesamtumsatz (Ziff. 200 abzüglich Ziff. 289)Buchungen zu Ziffer 299 anzeigen | CHF 46'200.00 | –",
+   "303 | Normal 8,1% (ab 01.01.2024)Buchungen zu Ziffer 303 anzeigen | CHF 44'000.00 | CHF 3'564.00",
+   "313 | Reduziert 2,6% (ab 01.01.2024)Buchungen zu Ziffer 313 anzeigen | CHF 2'200.00 | CHF 57.20",
+   "343 | Beherbergung 3,8% (ab 01.01.2024) | – | –",
+   "383 | Bezugsteuer (ab 01.01.2024)Buchungen zu Ziffer 383 anzeigen | CHF 1'000.00 | CHF 81.00",
+   "399 | Total geschuldete Steuer | – | CHF 3'702.20",
+   "400 | Vorsteuer auf Material- und DienstleistungsaufwandBuchungen zu Ziffer 400 anzeigen | CHF 22'000.00 | CHF 1'782.00",
+   "405 | Vorsteuer auf Investitionen und übrigem BetriebsaufwandBuchungen zu Ziffer 405 anzeigen | CHF 4'000.00 | CHF 324.00",
+   "410 | Einlageentsteuerung (Art. 32, bitte detaillierte Aufstellung beilegen) | – | –",
+   "415 | Vorsteuerkorrekturen: gemischte Verwendung (Art. 30), Eigenverbrauch (Art. 31) | – | –",
+   "420 | Vorsteuerkürzungen: Nicht-Entgelte wie Subventionen, Tourismusabgaben (Art. 33 Abs. 2) | – | –",
+   "479 | Total Ziff. 400 bis 420 | – | CHF 2'106.00",
+   "500 | Zu bezahlender Betrag | – | CHF 1'596.20",
+   "510 | Guthaben der steuerpflichtigen Person | – | –",
+   "900 | Andere Mittelflüsse (Art. 18 Abs. 2): Subventionen, durch Kurvereine eingenommene Tourismusabgaben, Entsorgungs- und Wasserwerkbeiträge (Bst. a-c) | – | –",
+   "910 | Andere Mittelflüsse (Art. 18 Abs. 2): Spenden, Dividenden, Schadenersatz usw. (Bst. d-l) | – | –"
+  ]
+ },
+ "saldo": {
+  "payable": [
+   "Zu bezahlender BetragCHF 3'088.91"
+  ],
+  "rows": [
+   "Ziff. | Bezeichnung | Umsatz CHF | Steuer CHF",
+   "200 | Total der vereinbarten bzw. vereinnahmten Entgelte, inkl. Entgelte aus Übertragungen im Meldeverfahren sowie aus Leistungen im Ausland (weltweiter Umsatz)Buchungen zu Ziffer 200 anzeigen | CHF 49'821.20 | –",
+   "Abzüge",
+   "220 | Von der Steuer befreite Leistungen (u.a. Exporte, Art. 23), von der Steuer befreite Leistungen an begünstigte Einrichtungen und Personen (Art. 107 Abs. 1 Bst. a) | – | –",
+   "221 | Leistungen im Ausland (Ort der Leistung im Ausland) | – | –",
+   "225 | Übertragung im Meldeverfahren (Art. 38, bitte zusätzlich Form. 764 einreichen) | – | –",
+   "230 | Von der Steuer ausgenommene Inlandleistungen (Art. 21), für die nicht nach Art. 22 optiert wird | – | –",
+   "235 | Entgeltsminderungen wie Skonti, Rabatte usw. | – | –",
+   "280 | Diverses (z.B. Wert des Bodens) | – | –",
+   "289 | Total Ziff. 220 bis 280 | CHF 0.00 | –",
+   "299 | Steuerbarer Gesamtumsatz (Ziff. 200 abzüglich Ziff. 289)Buchungen zu Ziffer 299 anzeigen | CHF 49'821.20 | –",
+   "323 | Saldosteuersatz Leistungen ab 01.01.2024Buchungen zu Ziffer 323 anzeigen | CHF 49'821.20 | CHF 3'088.91",
+   "383 | Bezugsteuer (ab 01.01.2024) | – | –",
+   "399 | Total geschuldete Steuer | – | CHF 3'088.91",
+   "470 | Steueranrechnung gemäss Formular Nr. 1050 | – | –",
+   "471 | Steueranrechnung gemäss Formular Nr. 1055, 1056 | – | –",
+   "479 | Total Ziff. 470 bis 471 | – | –",
+   "500 | Zu bezahlender Betrag | – | CHF 3'088.91",
+   "510 | Guthaben der steuerpflichtigen Person | – | –",
+   "900 | Andere Mittelflüsse (Art. 18 Abs. 2): Subventionen, durch Kurvereine eingenommene Tourismusabgaben, Entsorgungs- und Wasserwerkbeiträge (Bst. a-c) | – | –",
+   "910 | Andere Mittelflüsse (Art. 18 Abs. 2): Spenden, Dividenden, Schadenersatz usw. (Bst. d-l) | – | –"
+  ]
+ },
+ "saldo-split": {
+  "payable": [],
+  "rows": [],
+  "refusal": "Umsatz pro Tätigkeit fehltFür diesen Arbeitsbereich sind 2 Saldosteuersätze hinterlegt. Jeder Satz gehört zu einer Geschäftstätigkeit, und die Mehrwertsteuerverordnung verlangt, dass du den Ertrag pro Satz separat verbuchst (MWSTV Art. 84 Abs. 3). In TILL sagt bisher keine Buchung, zu welcher Tätigkeit sie gehört. TILL kann den Umsatz darum nicht aufteilen und die Abrechnung nicht berechnen.1. Satz: 6.2 Prozent2. Satz: 5.3 ProzentMWST-Einstellungen öffnen"
+ }
+}

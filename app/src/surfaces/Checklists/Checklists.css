@@ -1,0 +1,368 @@
+/* G22 Checklisten: the run list and the run detail. One accent (the next item and the primary action). */
+
+.checklists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.chk-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.chk-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.chk-group-title {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  margin: 0;
+  color: var(--t-text);
+}
+
+.chk-group summary.chk-group-title {
+  cursor: pointer;
+  color: var(--t-text-dim);
+}
+
+.chk-group-empty {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.chk-runs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.chk-run-link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1) var(--t-space-3);
+  align-items: baseline;
+  padding: var(--t-space-2) var(--t-space-3);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+/* A card row is chrome: its hover is the soft fill, never an underline (A2). */
+.chk-run-link:hover {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+.chk-run-link:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+}
+
+.chk-run-title {
+  font-weight: 500;
+}
+
+.chk-run-range,
+.chk-run-status,
+.chk-run-progress {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chk-run-progress {
+  margin-left: auto;
+}
+
+.chk-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.chk-detail-period {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chk-detail-status {
+  color: var(--t-text);
+}
+
+.chk-detail-abandoned,
+.chk-detail-done {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.chk-journey {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.chk-check-glyph {
+  display: inline-flex;
+   color: var(--t-text-dim);
+   cursor: help;
+}
+
+.chk-check-glyph:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.chk-disabled-reason {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.chk-detail-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.chk-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.chk-dialog-form label {
+  font-weight: 500;
+}
+
+.chk-dialog-template {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.chk-consequence {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.chk-dialog-error {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-danger);
+}
+
+/* Leg 2 (D129, design A): the row bodies that open inline under an open row. */
+
+.chk-detail-counts,
+.chk-detail-provenance {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.chk-detail-provenance {
+  margin: 0;
+}
+
+.chk-run-auto {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.chk-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  margin-top: var(--t-space-2);
+  padding: var(--t-space-2) var(--t-space-3);
+  border-left: 2px solid var(--t-border);
+}
+
+.chk-body-actions,
+.chk-act {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  align-items: center;
+}
+
+.chk-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.chk-choice legend {
+  font-weight: 500;
+  margin-bottom: var(--t-space-1);
+}
+
+.chk-choice-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--t-space-2);
+  align-items: baseline;
+  padding: var(--t-space-1) 0;
+}
+
+.chk-choice-input {
+  margin: 0;
+}
+
+.chk-choice-label {
+  font-weight: 500;
+}
+
+.chk-choice-consequence {
+  grid-column: 2;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.chk-choice-source,
+.chk-provenance,
+.chk-preview-empty,
+.chk-posting-posted,
+.chk-posting-will,
+.chk-validation-reason,
+.chk-validation-source,
+.chk-validation-list {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.chk-table-frame {
+  max-height: 24rem;
+  overflow: auto;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+}
+
+.chk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.chk-table th,
+.chk-table td {
+  padding: var(--t-space-1) var(--t-space-2);
+  text-align: left;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.chk-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--t-bg-elev);
+  font-weight: 500;
+}
+
+.chk-table tfoot th,
+.chk-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  background: var(--t-bg-elev);
+  font-weight: 600;
+  border-bottom: 0;
+}
+
+.chk-table .t-num {
+  text-align: right;
+}
+
+.chk-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--t-space-1) var(--t-space-3);
+  margin: 0;
+}
+
+.chk-figure {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.chk-figure dt {
+  color: var(--t-text-dim);
+}
+
+.chk-figure dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.chk-validation-word {
+  margin: 0;
+  font-weight: 500;
+}
+
+.chk-validation-word[data-result='fail'] {
+  color: var(--t-danger);
+}
+
+.chk-validation-word[data-result='unavailable'] {
+  color: var(--t-text-dim);
+}
+
+.chk-validation-hint {
+  font-weight: 400;
+  color: var(--t-text-dim);
+}
+
+.chk-formula summary {
+  cursor: pointer;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.chk-formula p {
+  margin: var(--t-space-1) 0 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.chk-consequence--seal {
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+.chk-dialog-lead {
+  color: var(--t-text);
+}

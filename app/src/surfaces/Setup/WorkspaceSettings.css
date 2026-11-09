@@ -1,0 +1,58 @@
+/* D172, the Einstellungen section: plain rows grouped by owning capability (DESIGN.md: one panel, no pills). */
+.ws-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.ws-settings-group-title {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+  margin: 0;
+}
+
+.ws-settings-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ws-settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  padding: var(--t-space-1) 0;
+  border-top: 1px solid var(--t-border);
+}
+
+.ws-settings-text,
+.ws-settings-value {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.ws-settings-current {
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-settings-default {
+  color: var(--t-text-dim);
+}
+
+.ws-settings-help {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+/* Critic D172 r1: a stored value that no longer fits; the default applies. */
+.ws-settings-stale {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--t-warn);
+}

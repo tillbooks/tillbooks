@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FIXTURE (SYNTHETIC): a camt.053.001.08 whose collective bookings repeat one AcctSvcrRef across their
+  transaction details, the deviation A39 L7 (a) tolerates (SPS 2025 wants a unique reference per
+  transaction; a bank may still give every payment of one collective debit the booking's own reference).
+  Every reference, party and amount is invented; the account IBAN is the published PostFinance sample.
+
+    booking 1: one debit of 900.00, three details of 300.00, each with the reference COLL-R
+               (the parser keys them asr:COLL-R, asr:COLL-R#1, asr:COLL-R#2)
+    booking 2: one debit of 600.00, three details with the references RS-R, RS-S, RS-R
+               (keyed asr:RS-R, asr:RS-S, asr:RS-R#1)
+    booking 3: a single debit of 50.00 whose own reference is COLL-R, already stored from booking 1
+               (skipped as duplicate_entry)
+  Opening 10000.00, closing 8450.00.
+
+  (Elements are named in prose without angle brackets on purpose: the regex parser scans the whole
+  payload, so a tag token inside this comment would be read as a real element.)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+<BkToCstmrStmt>
+<GrpHdr><MsgId>SHARED-REF-MSG-1</MsgId><CreDtTm>2026-09-30T23:10:00</CreDtTm></GrpHdr>
+<Stmt>
+<Id>SHARED-REF-STMT-1</Id>
+<ElctrncSeqNb>1</ElctrncSeqNb>
+<FrToDt><FrDtTm>2026-09-30T00:00:00</FrDtTm><ToDtTm>2026-09-30T23:59:59</ToDtTm></FrToDt>
+<Acct><Id><IBAN>CH9300762011623852957</IBAN></Id></Acct>
+<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">10000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">8450.00</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+<Ntry>
+<Amt Ccy="CHF">900.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>COLL-R</AcctSvcrRef>
+<NtryDtls>
+<Btch><PmtInfId>PRUN-A</PmtInfId><NbOfTxs>3</NbOfTxs></Btch>
+<TxDtls><Refs><AcctSvcrRef>COLL-R</AcctSvcrRef><EndToEndId>E2E-A1</EndToEndId></Refs><Amt Ccy="CHF">300.00</Amt><CdtDbtInd>DBIT</CdtDbtInd></TxDtls>
+<TxDtls><Refs><AcctSvcrRef>COLL-R</AcctSvcrRef><EndToEndId>E2E-A2</EndToEndId></Refs><Amt Ccy="CHF">300.00</Amt><CdtDbtInd>DBIT</CdtDbtInd></TxDtls>
+<TxDtls><Refs><AcctSvcrRef>COLL-R</AcctSvcrRef><EndToEndId>E2E-A3</EndToEndId></Refs><Amt Ccy="CHF">300.00</Amt><CdtDbtInd>DBIT</CdtDbtInd></TxDtls>
+</NtryDtls>
+</Ntry>
+<Ntry>
+<Amt Ccy="CHF">600.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>COLL-RS</AcctSvcrRef>
+<NtryDtls>
+<Btch><PmtInfId>PRUN-B</PmtInfId><NbOfTxs>3</NbOfTxs></Btch>
+<TxDtls><Refs><AcctSvcrRef>RS-R</AcctSvcrRef></Refs><Amt Ccy="CHF">100.00</Amt><CdtDbtInd>DBIT</CdtDbtInd></TxDtls>
+<TxDtls><Refs><AcctSvcrRef>RS-S</AcctSvcrRef></Refs><Amt Ccy="CHF">200.00</Amt><CdtDbtInd>DBIT</CdtDbtInd></TxDtls>
+<TxDtls><Refs><AcctSvcrRef>RS-R</AcctSvcrRef></Refs><Amt Ccy="CHF">300.00</Amt><CdtDbtInd>DBIT</CdtDbtInd></TxDtls>
+</NtryDtls>
+</Ntry>
+<Ntry>
+<Amt Ccy="CHF">50.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><RvslInd>false</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+<BookgDt><Dt>2026-09-30</Dt></BookgDt><ValDt><Dt>2026-09-30</Dt></ValDt>
+<AcctSvcrRef>COLL-R</AcctSvcrRef>
+</Ntry>
+</Stmt>
+</BkToCstmrStmt>
+</Document>

@@ -1,0 +1,15 @@
+{
+  "boundariesDays": [
+    30,
+    60,
+    90
+  ],
+  "configured": false,
+  "bucketKeys": [
+    "0-30",
+    "31-60",
+    "61-90",
+    "90+"
+  ],
+  "ok": true
+}

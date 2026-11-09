@@ -1,0 +1,47 @@
+{
+  "vat": {
+    "line": {
+      "code": "VAT code",
+      "none": "No VAT",
+      "net": "Net",
+      "tax": "VAT",
+      "gross": "Gross",
+      "assessedTax": "Assessed tax",
+      "reverseCharge": "Reverse charge",
+      "import": "Import VAT",
+      "reverseChargePreview": "Books output and input VAT of {amount} each",
+      "exemptNoDeduction": "Exempt (no input deduction)",
+      "zeroRated": "Zero-rated export"
+    },
+    "group": {
+      "output": "Output VAT",
+      "input": "Input VAT",
+      "special": "Special",
+      "exempt": "Exempt"
+    },
+    "doc": {
+      "summary": "VAT summary",
+      "perRate": "Per rate",
+      "base": "Base",
+      "totalTax": "Total VAT",
+      "noVat": "No VAT on this document"
+    },
+    "error": {
+      "unknownCode": "Unknown VAT code.",
+      "archivedCode": "Code archived, choose another.",
+      "vatAccountTag": "Tag the revenue or expense line, not the VAT account itself."
+    },
+    "needsConfig": "VAT is not set up for this workspace yet.",
+    "needsConfigCta": "Set up VAT"
+  },
+  "help": {
+    "Vat": {
+      "title": "VAT summary",
+      "body": "The VAT summary of a document: per rate the base and the tax on it, then the total. The total is the sum of the per-line taxes and therefore agrees with them exactly. Amounts appear in the document's own currency. Special cases such as reverse charge or import carry their badge; a document without VAT says so explicitly.",
+      "concepts": [
+        "vorsteuer"
+      ],
+      "docsPath": "swiss/mwst"
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "fx": "FX"
+  },
+  "fx": {
+    "title": "Foreign exchange",
+    "subtitle": "Maintain exchange rates and revalue open foreign-currency positions at period end.",
+    "rates": "Exchange rates",
+    "currency": "Currency",
+    "rate": "Rate",
+    "date": "Valid from",
+    "source": "Source",
+    "addRate": "Add rate",
+    "adding": "Adding...",
+    "rateQuoteNote": "The rate is the price of one unit of the foreign currency in {base}.",
+    "needBookkeeperRates": "Recording a rate needs the bookkeeper role.",
+    "ratesEmpty": "No exchange rates yet",
+    "ratesEmptyHint": "Add one above to start revaluing foreign-currency positions.",
+    "ratesEmptyReadonly": "A bookkeeper adds the first rate.",
+    "sourceKind": {
+      "manual": "Manual",
+      "rate_api": "Rate feed"
+    },
+    "revaluation": "Period-end revaluation",
+    "periodEnd": "Period end",
+    "compute": "Compute",
+    "computing": "Computing...",
+    "account": "Account",
+    "fcAmount": "FC balance",
+    "bookValue": "Book value",
+    "revalued": "At closing rate",
+    "diff": "Unrealised",
+    "kind": {
+      "bank": "Bank",
+      "debtor": "Receivable",
+      "creditor": "Payable"
+    },
+    "totalUnrealised": "Total unrealised",
+    "gainLabel": "Unrealised gain",
+    "lossLabel": "Unrealised loss",
+    "needsRate": "A closing rate is missing",
+    "needsRateItem": "{currency} has an open position but no closing rate.",
+    "needsRateLatest": "Latest rate on file: {date}.",
+    "needsRateBody": "Add a closing rate for {currencies}, then compute again.",
+    "revalEmpty": "Nothing to revalue",
+    "revalEmptyHint": "No open foreign-currency position at this period end.",
+    "post": "Post revaluation",
+    "posting": "Posting...",
+    "needBookkeeper": "Posting the revaluation needs the bookkeeper role.",
+    "reversesNote": "Posts dated the period end and reverses on {date}.",
+    "postedConfirm": "Posted. Reverses on {date}.",
+    "postedNothing": "Nothing to post: every position already sits at the closing rate.",
+    "periodLocked": "The period is locked",
+    "periodLockedBody": "The target period is closed, so nothing was posted. Reopen it to revalue.",
+    "periodLockedCta": "Open periods",
+    "alreadyPosted": "Already revalued",
+    "alreadyPostedBody": "This period end has already been revalued. Reversing and revaluing again is a period-lock action.",
+    "needsAccount": "The difference account is missing",
+    "needsAccountBody": "Account {number} for unrealised currency differences is not in the chart. Seed the chart of accounts first.",
+    "addRateFor": "Add rate for {currency}"
+  },
+  "help": {
+    "Fx": {
+      "title": "Foreign exchange",
+      "body": "Foreign exchange maintains the rate register and the period-end revaluation. A rate is always recorded as a new dated row, never edited.\n\nThe revaluation computes the unrealised gain or loss on open positions at the closing rate, shows it as a preview first and posts only after your confirmation.\n\nForeign amounts print in their own currency, book values in the workspace base currency.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

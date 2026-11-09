@@ -1,0 +1,134 @@
+/* A41.5: the Beleg preview. One surface layer: the page sits on the soft ground, no box around the section. */
+
+.beleg-preview {
+  display: grid;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.beleg-preview__head {
+  display: grid;
+  gap: 2px;
+}
+
+.beleg-preview__title {
+  margin: 0;
+  font-size: var(--t-font-md);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.beleg-preview__note {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.beleg-preview__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-0-5);
+}
+
+.beleg-preview__tab {
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.beleg-preview__tab[aria-pressed='true'] {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+}
+
+/* The page: A4's 1 : 1.414 while it loads and for a PDF; an image keeps its own shape. */
+.beleg-preview__page {
+  display: grid;
+  place-items: start center;
+  padding: var(--t-space-1);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-md);
+  min-width: 0;
+}
+
+.beleg-preview__frame,
+.beleg-preview__skeleton {
+  width: 100%;
+  aspect-ratio: 1 / 1.414;
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+}
+
+.beleg-preview__image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--t-radius-sm);
+}
+
+.beleg-preview--compact .beleg-preview__frame,
+.beleg-preview--compact .beleg-preview__skeleton {
+  aspect-ratio: auto;
+  height: min(60vh, 480px);
+}
+
+.beleg-preview--compact .beleg-preview__image {
+  max-height: min(60vh, 480px);
+  width: auto;
+}
+
+.beleg-preview__skeleton {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 8%;
+  box-sizing: border-box;
+}
+
+.beleg-preview__skeleton i {
+  display: block;
+  height: 10px;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.beleg-preview__state {
+  display: grid;
+  justify-items: start;
+  gap: var(--t-space-1);
+  width: 100%;
+  padding: var(--t-space-3) var(--t-space-2);
+  box-sizing: border-box;
+}
+
+.beleg-preview__state-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--t-text);
+  overflow-wrap: anywhere;
+}
+
+.beleg-preview__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.beleg-preview__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.beleg-preview__open {
+  flex: 0 0 auto;
+  font-size: var(--t-font-sm);
+}

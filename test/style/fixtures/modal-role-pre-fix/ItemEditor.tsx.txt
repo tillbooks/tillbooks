@@ -1,0 +1,319 @@
+/**
+ * ItemEditor, the create/edit overlay for a single item (spec A09 §6, US-A09.2).
+ *
+ * Collects name, default unit price (typed in CHF, stored as integer Rappen via P2), currency, a
+ * default VAT code (from the A05 `tax_code` enum), a revenue account (restricted to income accounts
+ * from A01), and a free unit label. Create calls `create_item`; edit calls `update_item` with a
+ * patch. The two money-path rejections, `invalid_revenue_account` and `unknown_tax_code`, surface
+ * inline on their field, never as a raw stack trace (spec §6 error state).
+ */
+import { useId, useState } from 'react';
+
+import { useClient } from '../../lib/client-context';
+import { isErr } from '../../lib/client';
+import { useT } from '../../i18n';
+import { ErrorBanner } from '../../components/states';
+import type { Err } from '../../lib/client';
+import {
+  CURRENCIES,
+  idemKey,
+  isIncomeAccount,
+  minorToInput,
+  parseAmountToMinor,
+  type Account,
+  type Item,
+  type VatCode,
+} from './model';
+
+export interface ItemEditorProps {
+  mode: 'create' | 'edit';
+  workspaceId: string;
+  accounts: Account[];
+  vatCodes: VatCode[];
+  /** The item being edited. Ignored in create mode. */
+  item?: Item;
+  /**
+   * The workspace base currency (`get_company_profile`), which preselects the picker for a NEW item.
+   *
+   * Not a display default: this form sends `currency` explicitly on every create, so whatever is
+   * preselected is what lands in the row. A literal 'CHF' here wrote francs into every item a
+   * EUR-based workspace created without touching the picker, and the label on that row was then
+   * perfectly honest and still wrong. `createItem` resolves an unnamed currency to
+   * `baseCurrencyOf(ctx)`; this makes the GUI agree with the engine instead of overriding it.
+   *
+   * An EDITED item keeps its own currency: re-denominating an existing price to the workspace
+   * default would silently change what the item costs.
+   */
+  baseCurrency: string;
+  onClose: () => void;
+  /** Called after a successful write so the list can reload. */
+  onSaved: () => void;
+}
+
+export function ItemEditor({
+  mode,
+  workspaceId,
+  accounts,
+  vatCodes,
+  item,
+  baseCurrency,
+  onClose,
+  onSaved,
+}: ItemEditorProps) {
+  const t = useT();
+  const client = useClient();
+  const titleId = useId();
+
+  const [name, setName] = useState(item?.name ?? '');
+  const [price, setPrice] = useState(
+    item !== undefined ? minorToInput(item.defaultUnitPriceMinor) : '',
+  );
+  const [currency, setCurrency] = useState(item?.currency ?? baseCurrency);
+  const [taxCode, setTaxCode] = useState(item?.defaultTaxCode ?? '');
+  const [revenueAccountId, setRevenueAccountId] = useState(item?.revenueAccountId ?? '');
+  const [unit, setUnit] = useState(item?.unit ?? '');
+
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const [taxError, setTaxError] = useState<string | null>(null);
+  const [revenueError, setRevenueError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<Err | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const incomeAccounts = accounts.filter(isIncomeAccount);
+
+  async function handleSave() {
+    setNameError(null);
+    setPriceError(null);
+    setTaxError(null);
+    setRevenueError(null);
+    setFormError(null);
+
+    const trimmedName = name.trim();
+    const priceMinor = parseAmountToMinor(price);
+    let invalid = false;
+    if (trimmedName === '') {
+      setNameError(t('item.nameRequired'));
+      invalid = true;
+    }
+    if (priceMinor === null) {
+      setPriceError(t('item.priceRequired'));
+      invalid = true;
+    }
+    if (invalid || priceMinor === null) return;
+
+    setSaving(true);
+
+    if (mode === 'create') {
+      const resp = await client.call('create_item', {
+        workspaceId,
+        name: trimmedName,
+        defaultUnitPriceMinor: priceMinor,
+        currency,
+        defaultTaxCode: taxCode === '' ? undefined : taxCode,
+        revenueAccountId: revenueAccountId === '' ? undefined : revenueAccountId,
+        unit: unit.trim() === '' ? undefined : unit.trim(),
+        idempotencyKey: idemKey('item'),
+      });
+      if (isErr(resp.body)) {
+        finishError(resp.body);
+        return;
+      }
+    } else {
+      const itemId = item?.id;
+      if (itemId === undefined) {
+        setSaving(false);
+        return;
+      }
+      const resp = await client.call('update_item', {
+        workspaceId,
+        itemId,
+        patch: {
+          name: trimmedName,
+          defaultUnitPriceMinor: priceMinor,
+          currency,
+          defaultTaxCode: taxCode === '' ? null : taxCode,
+          revenueAccountId: revenueAccountId === '' ? null : revenueAccountId,
+          unit: unit.trim() === '' ? null : unit.trim(),
+        },
+      });
+      if (isErr(resp.body)) {
+        finishError(resp.body);
+        return;
+      }
+    }
+
+    setSaving(false);
+    onSaved();
+    onClose();
+  }
+
+  function finishError(err: Err) {
+    setSaving(false);
+    if (err.error === 'invalid_revenue_account') {
+      setRevenueError(t('item.invalidRevenueAccount'));
+    } else if (err.error === 'unknown_tax_code') {
+      setTaxError(t('item.unknownTaxCode'));
+    } else {
+      setFormError(err);
+    }
+  }
+
+  return (
+    <div className="item-drawer-overlay" role="presentation" onClick={onClose}>
+      <aside
+        className="item-drawer panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="item-drawer-head panel-head">
+          <h2 id={titleId} className="item-drawer-title">
+            {mode === 'create' ? t('item.new') : t('item.editTitle')}
+          </h2>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>
+            {t('item.close')}
+          </button>
+        </div>
+
+        <div className="item-drawer-body">
+          {formError !== null && <ErrorBanner error={formError} />}
+
+          <div className="item-field">
+            <label className="item-field-inner">
+              <span className="item-field-label">{t('item.name')}</span>
+              <input
+                className="item-input"
+                value={name}
+                aria-invalid={nameError !== null}
+                aria-describedby={nameError !== null ? `${titleId}-name-err` : undefined}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </label>
+            {nameError !== null && (
+              <span id={`${titleId}-name-err`} className="item-field-error" role="alert">
+                {nameError}
+              </span>
+            )}
+          </div>
+
+          <div className="item-row2">
+            <div className="item-field">
+              <label className="item-field-inner">
+                <span className="item-field-label">{t('item.unitPrice')}</span>
+                <input
+                  className="item-input item-num"
+                  value={price}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  aria-invalid={priceError !== null}
+                  aria-describedby={priceError !== null ? `${titleId}-price-err` : undefined}
+                  onChange={(event) => setPrice(event.target.value)}
+                />
+              </label>
+              {priceError !== null && (
+                <span id={`${titleId}-price-err`} className="item-field-error" role="alert">
+                  {priceError}
+                </span>
+              )}
+            </div>
+
+            <div className="item-field">
+              <label className="item-field-inner">
+                <span className="item-field-label">{t('item.currency')}</span>
+                <select
+                  className="item-input"
+                  value={currency ?? baseCurrency}
+                  onChange={(event) => setCurrency(event.target.value)}
+                >
+                  {CURRENCIES.map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="item-field">
+            <label className="item-field-inner">
+              <span className="item-field-label">{t('item.taxCode')}</span>
+              <select
+                className="item-input"
+                value={taxCode ?? ''}
+                aria-invalid={taxError !== null}
+                aria-describedby={taxError !== null ? `${titleId}-tax-err` : undefined}
+                onChange={(event) => setTaxCode(event.target.value)}
+              >
+                <option value="">{t('item.taxNone')}</option>
+                {vatCodes.map((code) => (
+                  <option key={code.code} value={code.code}>
+                    {code.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {taxError !== null && (
+              <span id={`${titleId}-tax-err`} className="item-field-error" role="alert">
+                {taxError}
+              </span>
+            )}
+          </div>
+
+          <div className="item-field">
+            <label className="item-field-inner">
+              <span className="item-field-label">{t('item.revenueAccount')}</span>
+              <select
+                className="item-input"
+                value={revenueAccountId ?? ''}
+                aria-invalid={revenueError !== null}
+                aria-describedby={revenueError !== null ? `${titleId}-rev-err` : undefined}
+                onChange={(event) => setRevenueAccountId(event.target.value)}
+              >
+                <option value="">{t('item.revenueNone')}</option>
+                {incomeAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.number} {account.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {revenueError !== null && (
+              <span id={`${titleId}-rev-err`} className="item-field-error" role="alert">
+                {revenueError}
+              </span>
+            )}
+          </div>
+
+          <div className="item-field">
+            <label className="item-field-inner">
+              <span className="item-field-label">{t('item.unit')}</span>
+              <input
+                className="item-input"
+                value={unit ?? ''}
+                placeholder={t('item.unitExample')}
+                onChange={(event) => setUnit(event.target.value)}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="item-drawer-foot">
+          <button type="button" className="btn btn--secondary" onClick={onClose}>
+            {t('item.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={saving}
+            onClick={handleSave}
+          >
+            {t('item.save')}
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}

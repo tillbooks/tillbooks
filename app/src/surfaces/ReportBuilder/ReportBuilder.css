@@ -1,0 +1,68 @@
+/* F01 Berichte. The list table, the page header and the dialog chrome are the shared primitives
+   (DataTable, SurfaceHeader, Modal) now; what remains here is genuinely F01-specific. */
+.reportbuilder {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+/* The dialog form body: a quiet vertical stack, since the Modal owns the panel chrome. */
+.rb-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+/* A second line in a list cell: the retention note, the delivery note, a Status. Dim, never faded
+   (K-36), and never a badge (K-22). */
+.rb-note {
+  display: block;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+.rb-confirm-body {
+  margin: 0;
+}
+.rb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.rb-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: 0.75rem;
+}
+.rb-columns-group {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+  color: var(--t-text-dim);
+}
+.rb-preview {
+  overflow-x: auto;
+}
+.rb-preview table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.rb-preview th,
+.rb-preview td {
+  border: 1px solid var(--t-border);
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+}
+.rb-preview-count {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+.rb-error {
+  color: var(--t-danger);
+}
+.rb-cloud {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}

@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "writingStyle": "Schreibstil"
+  },
+  "voice": {
+    "panel": {
+      "title": "Schreibstil"
+    },
+    "loading": "Schreibstil wird geladen…",
+    "empty": "Noch kein Schreibstil gelernt.",
+    "emptyHint": "TILL lernt ihn aus den Nachrichten, die du bereits gesendet hast.",
+    "emptyAction": "Zur Korrespondenz",
+    "action": {
+      "build": "Schreibstil lernen",
+      "rebuild": "Neu lernen"
+    },
+    "account": {
+      "label": "Mail-Konto",
+      "missing": "Verbinde zuerst einen lokalen Mail-Speicher auf der Korrespondenz-Seite. TILL lernt deinen Stil aus Nachrichten, die du bereits gesendet hast."
+    },
+    "field": {
+      "exemplars": "Verwendete Beispiele",
+      "built_at": "Gelernt am",
+      "greeting": "Begrüssung",
+      "signOff": "Grussformel",
+      "formality": "Anrede",
+      "meanSentenceWords": "Durchschnittliche Satzlänge",
+      "meanSentenceWordsValue": "{n} Wörter",
+      "languageMix": "Sprachmix",
+      "languageMixValue": "{de}% Deutsch, {en}% Englisch",
+      "model": "Gelernt mit"
+    },
+    "stale": "Deine gesendeten Nachrichten haben sich seit dem Lernen geändert.",
+    "corpus": {
+      "note": "TILL liest deine gesendeten Nachrichten auf diesem Mac. Gespeichert wird das Gelernte, nicht eine Kopie deiner Nachrichten."
+    },
+    "documents": {
+      "title": "Eigene Dokumente hinzufügen",
+      "note": "Optional: Wähle Dokumente aus deinen Dateien, damit auch dein berufliches Register gelernt wird.",
+      "empty": "Noch keine Textdokumente in deinen Dateien."
+    },
+    "error": {
+      "corpus_too_small": "TILL braucht mindestens {need} gesendete Nachrichten, um deinen Schreibstil zu lernen. Gefunden: {have}.",
+      "unknown_document": "Dieses Dokument wurde nicht gefunden.",
+      "transport": "Der Schreibstil konnte nicht geladen werden.",
+      "permissionDenied": {
+        "read": "Du hast keine Berechtigung, den Schreibstil zu sehen.",
+        "write": "Du hast keine Berechtigung, den Schreibstil zu ändern."
+      }
+    }
+  },
+  "runtime": {
+    "status": {
+      "title": "Entwurfs-Engine",
+      "ready": "Läuft auf diesem Mac",
+      "absent": "Nicht installiert",
+      "model": "Modell",
+      "device": "Gerät",
+      "reason": "Letztes Laden fehlgeschlagen: {reason}"
+    },
+    "error": {
+      "needs_local_runtime": "Die lokale Entwurfs-Engine ist nicht installiert. TILL verwendet stattdessen kein Cloud-Modell.",
+      "needs_model_selection": "Wähle zuerst ein Modell.",
+      "unknown_model_ref": "Dieses Modell ist nicht in der Liste der installierten Engine. Deine bisherige Wahl bleibt bestehen.",
+      "insufficient_ram": "Benötigt {need} GB RAM. Dein Mac hat {have} GB."
+    },
+    "picker": {
+      "title": "Modell",
+      "recommended": "Empfohlen für deinen Mac",
+      "ram": "Benötigt {gb} GB RAM",
+      "download": "Einmaliger Download: {size}",
+      "licence": "Lizenz",
+      "german": "Deutsch",
+      "unmeasured": "nicht gemessen",
+      "confirm": "Dieses Modell verwenden",
+      "selected": "Gewählt: {model}",
+      "advanced": "Erweitert",
+      "byo": "Eigene Modelldatei verwenden (.gguf)",
+      "byo_note": "Für ein eigenes Modell gibt es keinen Support, und wir versprechen nichts über die Entwürfe, die es schreibt.",
+      "byo_confirm": "Diese Datei verwenden",
+      "updates": "Neue Modelle kommen, wenn du die Entwurfs-Engine aktualisierst. TILL sucht nicht online danach."
+    },
+    "download": {
+      "once": "Dies wird einmal heruntergeladen. Danach verbindet sich die Engine nie wieder."
+    }
+  },
+  "help": {
+    "WritingStyle": {
+      "title": "Schreibstil",
+      "body": "Wie TILL für dich schreibt: das Stilprofil, gelernt aus deinen gesendeten Mails auf diesem Rechner, und die Wahl des lokalen Sprachmodells. Gespeichert wird das Gelernte, nie eine Kopie deiner Mails. Ohne installierte lokale Laufzeit sagt die Seite das offen, und es wird kein Cloud-Modell ersatzweise verwendet. Neue Modelle kommen mit Updates, nie über eine Online-Abfrage.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

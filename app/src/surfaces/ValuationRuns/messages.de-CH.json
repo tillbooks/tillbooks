@@ -1,0 +1,88 @@
+{
+  "nav": {
+    "inventoryValuationRuns": "Bewertungsläufe"
+  },
+  "invRun": {
+    "title": "Bestandesbewertung und Abstimmung",
+    "noWorkspace": "Wähle einen Mandanten, um dessen Warenbestand zu bewerten und mit dem Hauptbuch abzustimmen.",
+    "reverseReason": "Storniert aus der Ansicht Bewertungsläufe",
+    "newRun": "Neuer Lauf",
+    "reverse": "Stornieren",
+    "asOf": "Stichtag",
+    "period": "Periode",
+    "calculate": "Berechnen",
+    "compute": "Berechnen",
+    "cancel": "Abbrechen",
+    "close": "Schliessen",
+    "post": "Ins Hauptbuch buchen",
+    "runCheck": "Abstimmung durchführen",
+    "proposedTotal": "Vorgeschlagener Warenwert:",
+    "proposedDelta": "Zu buchende Anpassung:",
+    "confirmPostTitle": "Bestand ins Hauptbuch buchen?",
+    "confirmPostBody": "Damit wird die Anpassungsbuchung ins Hauptbuch gebucht. Die Buchung ist nach dem Buchen unveränderlich und lässt sich nur durch eine Stornobuchung rückgängig machen.",
+    "caption": {
+      "runs": "Bewertungsläufe",
+      "lines": "Vorgeschlagene Bewertungszeilen",
+      "report": "Warenwert je Bestandeskonto",
+      "recon": "Abstimmung je Bestandeskonto"
+    },
+    "tab": {
+      "runs": "Läufe",
+      "report": "Bericht",
+      "reconciliation": "Abstimmung"
+    },
+    "empty": {
+      "title": "Noch keine Bewertungsläufe",
+      "hint": "Erstelle einen Lauf, um den Bestand auf einen Stichtag zu bewerten und in die Bilanz zu buchen."
+    },
+    "report": {
+      "title": "Bewertungsbericht",
+      "hint": "Stichtag wählen und den aktuellen Warenwert berechnen, gruppiert nach Bestandeskonto.",
+      "total": "Gesamter Warenwert:"
+    },
+    "recon": {
+      "title": "Abstimmung",
+      "hint": "Periode wählen und prüfen, ob die Bewertung des Nebenbuchs mit dem Hauptbuch übereinstimmt."
+    },
+    "col": {
+      "asOf": "Stichtag",
+      "method": "Methode",
+      "status": "Status",
+      "total": "Wert",
+      "delta": "Differenz",
+      "actions": "Aktionen",
+      "item": "Artikel",
+      "qty": "Menge",
+      "unitCost": "Stückkosten",
+      "value": "Wert",
+      "account": "Bestandeskonto",
+      "lines": "Zeilen",
+      "subLedger": "Nebenbuch",
+      "glBalance": "Hauptbuchsaldo"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "posted": "Gebucht",
+      "reversed": "Storniert"
+    },
+    "reconStatus": {
+      "balanced": "Abgestimmt",
+      "drift": "Abweichung",
+      "unposted": "Nicht gebucht"
+    },
+    "method": {
+      "weighted_average": "Gewichteter Durchschnitt",
+      "fifo": "FIFO",
+      "standard_cost": "Standardkosten"
+    },
+    "rowActions": "Aktionen für den Lauf per {asOf}"
+  },
+  "help": {
+    "ValuationRuns": {
+      "title": "Bestandesbewertung und Abstimmung",
+      "body": "Hier wird das Lager bewertet, in die Bücher gebucht und gegen das Hauptbuch abgestimmt. Ein Lauf: Stichtag wählen, berechnen, die Zeilen und die vorgeschlagene Anpassungsbuchung prüfen, dann buchen oder rückbuchen.\n\nDer Bericht zeigt die massgebende Bewertung zum Stichtag je Sachkonto, direkt aus der Engine gelesen.\n\nDie Abstimmung stellt Nebenbuch und Hauptbuch gegenüber und benennt jede Abweichung. Dieselbe Prüfung läuft beim Periodenabschluss.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

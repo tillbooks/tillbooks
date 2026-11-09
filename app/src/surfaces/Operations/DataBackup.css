@@ -1,0 +1,75 @@
+/**
+ * G04 Data & Backup panel. Reuses the Setup panels' rhythm (`.diag-*` prose/subtitle), the shared
+ * button + surface tokens, and the shared DataTable for the backup history; only the restore and
+ * catalog rows carry panel-specific styling here. One accent, per brand/DESIGN.md.
+ */
+
+.data-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  padding: var(--t-space-4);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.data-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+.data-empty {
+  margin: 0;
+}
+
+/* The backup history table and its numeric column now come from the shared DataTable primitive
+   (D118 B2); the per-panel `.data-history` / `.data-num` styling it duplicated is deleted. */
+
+.data-restore,
+.data-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding-top: var(--t-space-3);
+  border-top: 1px solid var(--t-border);
+}
+
+.data-catalog {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.data-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  max-width: 40rem;
+}
+
+.data-verify {
+  margin: 0;
+}
+
+/* The row's own verify (F-06, J7.1): the control and its answer stack in the cell, the answer in
+   prose ink, so a checked row reads its result where the act happened. */
+.data-row-verify {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+}
+
+.data-row-verify-result {
+  margin: 0;
+  max-width: 28rem;
+  white-space: normal;
+}

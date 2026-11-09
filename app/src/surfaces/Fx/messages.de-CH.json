@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "fx": "Fremdwährung"
+  },
+  "fx": {
+    "title": "Fremdwährung",
+    "subtitle": "Wechselkurse pflegen und offene Fremdwährungspositionen per Periodenende neu bewerten.",
+    "rates": "Wechselkurse",
+    "currency": "Währung",
+    "rate": "Kurs",
+    "date": "Gültig ab",
+    "source": "Quelle",
+    "addRate": "Kurs erfassen",
+    "adding": "Wird erfasst...",
+    "rateQuoteNote": "Der Kurs ist der Preis einer Einheit der Fremdwährung in {base}.",
+    "needBookkeeperRates": "Zum Erfassen eines Kurses braucht es die Buchhalter-Rolle.",
+    "ratesEmpty": "Noch keine Wechselkurse",
+    "ratesEmptyHint": "Oben einen Kurs erfassen, um Fremdwährungspositionen neu zu bewerten.",
+    "ratesEmptyReadonly": "Den ersten Kurs erfasst eine Buchhalterin.",
+    "sourceKind": {
+      "manual": "Manuell",
+      "rate_api": "Kurs-Feed"
+    },
+    "revaluation": "Neubewertung per Periodenende",
+    "periodEnd": "Periodenende",
+    "compute": "Berechnen",
+    "computing": "Wird berechnet...",
+    "account": "Konto",
+    "fcAmount": "FW-Saldo",
+    "bookValue": "Buchwert",
+    "revalued": "Zum Stichtagskurs",
+    "diff": "Unrealisiert",
+    "kind": {
+      "bank": "Bank",
+      "debtor": "Forderung",
+      "creditor": "Verbindlichkeit"
+    },
+    "totalUnrealised": "Total unrealisiert",
+    "gainLabel": "Unrealisierter Gewinn",
+    "lossLabel": "Unrealisierter Verlust",
+    "needsRate": "Ein Stichtagskurs fehlt",
+    "needsRateItem": "{currency} hat eine offene Position, aber keinen Stichtagskurs.",
+    "needsRateLatest": "Letzter erfasster Kurs: {date}.",
+    "needsRateBody": "Einen Stichtagskurs für {currencies} erfassen, dann erneut berechnen.",
+    "revalEmpty": "Nichts neu zu bewerten",
+    "revalEmptyHint": "Per diesem Periodenende gibt es keine offene Fremdwährungsposition.",
+    "post": "Neubewertung buchen",
+    "posting": "Wird gebucht...",
+    "needBookkeeper": "Zum Buchen der Neubewertung braucht es die Buchhalter-Rolle.",
+    "reversesNote": "Wird per Periodenende gebucht und storniert am {date}.",
+    "postedConfirm": "Gebucht. Storniert am {date}.",
+    "postedNothing": "Nichts zu buchen: Jede Position steht bereits zum Stichtagskurs.",
+    "periodLocked": "Die Periode ist gesperrt",
+    "periodLockedBody": "Die Zielperiode ist geschlossen, es wurde nichts gebucht. Zum Neubewerten wieder öffnen.",
+    "periodLockedCta": "Perioden öffnen",
+    "alreadyPosted": "Bereits neu bewertet",
+    "alreadyPostedBody": "Dieses Periodenende wurde bereits neu bewertet. Stornieren und erneut bewerten ist eine Periodensperr-Aktion.",
+    "needsAccount": "Das Differenzkonto fehlt",
+    "needsAccountBody": "Konto {number} für unrealisierte Kursdifferenzen fehlt im Kontenplan. Zuerst den Kontenplan aufsetzen.",
+    "addRateFor": "Kurs für {currency} erfassen"
+  },
+  "help": {
+    "Fx": {
+      "title": "Fremdwährung",
+      "body": "Fremdwährung führt das Kursregister und die Neubewertung zum Periodenende. Ein Kurs wird immer als neue datierte Zeile erfasst, nie überschrieben.\n\nDie Neubewertung berechnet den unrealisierten Kursgewinn oder Kursverlust der offenen Positionen zum Stichtagskurs, zeigt ihn zuerst als Vorschau und verbucht erst nach deiner Bestätigung.\n\nFremdwährungsbeträge stehen in ihrer Währung, Buchwerte in der Basiswährung des Arbeitsbereichs.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

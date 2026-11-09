@@ -1,0 +1,320 @@
+/*
+ * A17 Kreditoren styling.
+ *
+ * Every value is a token. Spacing is the 8-pt grid, with 4px reserved for the optical nudges the
+ * design law permits (a hairline offset), never for layout rhythm. Type sizes are the written scale
+ * (K-37): a step and its line height, never a literal.
+ *
+ * THE ACCENT BUDGET ON THIS SURFACE IS TWO: the focus ring (inherited from global.css) and ONE
+ * accent-filled primary action, which is "Rechnung erfassen". The drawer's Buchen replaces it while
+ * the drawer is open, not adds to it, because the list's button is behind a scrim and unreachable.
+ *
+ * MONEY CARRIES NO COLOUR. An open payable reads positive (K-39, D137), as on the Übersicht and in
+ * the payment run: the figure is what is owed, and a minus is left to a real credit (an overpaid bill,
+ * a credit note, a reversal), in the TEXT, so a grayscale printout (a real Treuhänder artefact) reads
+ * exactly what the screen reads. A filled danger row per line would make the hue mean "this is a
+ * bill" instead of "look at this", which is exactly the inflation DESIGN.md forbids. Tabular figures
+ * and `nowrap` come from the shared money cell (DataTable `numeric`, K-18).
+ *
+ * THE ONE COLOURED THING is the reconciliation mismatch line, which is the only genuinely urgent state
+ * on the surface (one line with its (i) since D152, the /open-items pattern). A passing reconciliation gets no band and no colour at all: an all-clear that gets a
+ * colour makes that colour the background and dulls the real warning.
+ *
+ * A VOIDED ROW IS DIM INK AND NOT STRUCK THROUGH. Strike-through on a table row is unreadable at 14px
+ * and says "deleted", which is the one thing a reversed bill is not: the row and its reversing entry
+ * both survive, on purpose (OR 957a). Its status word ("Storniert") says why it is dim.
+ */
+
+.bills {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The open-total line under the SurfaceHeader. Tabular figures so the amount reads as money, not as
+   running text. The header chrome itself (title, help, primary action) is the shared SurfaceHeader. */
+.bills-total {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.bills-total--pending {
+  min-height: var(--t-lh-lg);
+}
+
+.bills-total-skeleton {
+  display: block;
+  width: 180px;
+  height: 16px;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+/* --- toolbar and filters ------------------------------------------------------------------------- */
+
+.bills-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  align-items: center;
+}
+
+.bills-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* --- the summary line: the open total, and the mismatch beside it (D152) ------------------------ */
+
+/* The total and the reconciliation statement share one line, as on the OP-Liste: one status, one place. */
+.bills-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--t-space-1) var(--t-space-3);
+}
+
+/* The mismatch is ONE line: the red is the glyph and the words, never a box or a tinted ground (the
+   /open-items pattern). The sentence that explains it sits behind the (i). */
+.bills-mismatch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-danger);
+}
+
+.bills-mismatch-glyph {
+  flex: none;
+}
+
+.bills-mismatch-title {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The 32px target (the D116 dense floor) overhangs the 20px line rather than growing it. */
+.bills-mismatch .btn--icon {
+  margin-block: calc(var(--t-space-0-5) * -1.5);
+  color: var(--t-text-dim);
+}
+
+/* The explanation is two sentences: wider than the 240px default so it reads in three lines. */
+.bills-mismatch .tooltip {
+  max-width: 360px;
+}
+
+/* --- the rows (the table frame, sticky header, overflow, opener and alignment are DataTable's) --- */
+
+/* A VOIDED ROW IS DIM INK AND NOT STRUCK THROUGH (see the header). Joined onto DataTable's base row
+   class via `rowClassName`. */
+.bills-row--void {
+  color: var(--t-text-dim);
+}
+
+/* A row is ONE line (D152): the Nummer and the Lieferant end in an ellipsis, the whole text in their
+   title, so a long reference no longer stands four lines tall. `width: 0; min-width: 100%` takes the
+   text out of the column's intrinsic width, so the column takes its share of the table and the text
+   clips inside it. */
+.bills-clip {
+  display: block;
+  width: 0;
+  min-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bills-nowrap {
+  white-space: nowrap;
+}
+
+/* The shared Status word, then the overdue note in dim ink: a number of days, never a chip (K-22). */
+.bills-status {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  white-space: nowrap;
+}
+
+.bills-overdue {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* --- the editor form (hosted in the shared DetailDrawer; the shell, scrim and animation are its) -- */
+
+.bill-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* Two short fields side by side (Datum and Nummer, Betrag and Brutto/Netto, MWST and Fällig), so the
+   paper bill reads top to bottom in four rows. One column on a phone. */
+.bill-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--t-space-2);
+  align-items: end;
+}
+
+@media (max-width: 480px) {
+  .bill-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* FLEXIBLE WIDTH, not fixed (P11): a German MWST-code label ("Vorsteuer Investitionen und übriger
+   Betriebsaufwand") runs far longer than its English twin, and a fixed column would clip it. The
+   controls are the shared `.field` and `Select` (K-15), so they follow the density toggle. */
+.bill-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.bill-field .field {
+  width: 100%;
+}
+
+/* What an empty field will store, said under it (a cleared Fällig). */
+.bill-hint {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* A field label with its (i) beside it. */
+.bill-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* Brutto/Netto sits beside the Betrag at the field's height; the question is the hidden legend. */
+.bill-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: var(--t-control-h);
+  margin: 0;
+  border: 0;
+  padding: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bill-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text);
+}
+
+/* "+ Kostenstelle", "+ Projekt", "+ Beleg": the optional fields, offered only where they apply. */
+.bill-adds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+/* The (i) is a quiet icon button that overhangs the line rather than growing it. */
+.bill-info {
+  margin-block: calc(var(--t-space-0-5) * -1.5);
+  color: var(--t-text-dim);
+}
+
+.bill-explain {
+  display: block;
+  max-width: 320px;
+}
+
+/* --- the posting split, one line ---------------------------------------------------------------- */
+
+.bill-split {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--t-space-0-5);
+  min-height: var(--t-lh-md);
+  margin: var(--t-space-2) 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.bill-split .t-money {
+  font-size: inherit;
+  color: var(--t-text);
+}
+
+/* IN FLIGHT THE FIGURES TURN DIM rather than presenting the previous answer as current. Dim ink, not
+   opacity (K-36): an opacity-dimmed figure composited under AA. */
+.bill-split--pending .t-money {
+  color: var(--t-text-dim);
+}
+
+/* A capture that already landed: one sentence and the door to that bill. */
+.bill-conflict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+  margin: 0 0 var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-md);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bill-conflict p {
+  margin: 0;
+}
+
+.bill-frozen {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.bill-frozen,
+.bill-cta {
+  margin: 0 0 var(--t-space-2);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* The A24 courtesy note above the write actions: the reason in words, text and not colour alone. */
+.bill-requires {
+  margin: var(--t-space-1) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* A money figure inside a sentence (the header total, the mismatch line) is `.t-money` for nowrap and
+   tabular figures, but it keeps the size of the sentence around it rather than the table type size. */
+.bills-total .t-money,
+.bills-mismatch .t-money {
+  font-size: inherit;
+}

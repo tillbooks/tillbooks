@@ -1,0 +1,51 @@
+{
+  "nav": {
+    "onboarding": "Getting started"
+  },
+  "onboarding": {
+    "title": "Getting started",
+    "intro": "Choose how to begin. You can switch paths later, nothing here is locked in.",
+    "resume": "Continue where you left off",
+    "resumeStep": "Continue at: {step}",
+    "step": {
+      "company": "Company",
+      "plan": "Migration plan"
+    },
+    "demoBusy": "Creating the demo",
+    "pathChoice": {
+      "fresh": "Start fresh",
+      "freshBody": "Set up your own books step by step: company, fiscal year, VAT, and your creditor profile.",
+      "import": "Import from bexio or CSV",
+      "importBody": "Bring your existing books across with the data migration: export files in, a dry run, a tie-out check, then go live.",
+      "importNeedsWorkspace": "An import needs the workspace shell first: create it in Setup, then the data migration takes over.",
+      "demo": "Try a demo workspace",
+      "demoBody": "Explore TILL with sample Swiss books: real contacts, items and issued invoices, disposable at any time."
+    },
+    "err": {
+      "generic": "That did not work. Try again, or start fresh instead."
+    }
+  },
+  "demo": {
+    "banner": {
+      "title": "You are exploring a demo workspace",
+      "startReal": "Start your own books",
+      "more": "More",
+      "discard": "Discard demo",
+      "confirmDiscard": "Delete the demo workspace and everything in it? This cannot be undone.",
+      "keep": "Keep it",
+      "needsManageSettings": "You need the manage settings right to discard a demo."
+    },
+    "err": {
+      "notADemo": "This workspace is not a demo, so it cannot be deleted this way.",
+      "generic": "The demo could not be discarded. Try again."
+    }
+  },
+  "help": {
+    "Onboarding": {
+      "title": "Getting started",
+      "body": "Three paths into your books: start fresh, take over from an existing system, or look at a demo first. Every path leads onto the product's ordinary surfaces; this entry point only remembers where you stand and decides nothing for you. You can leave it at any time and continue later.",
+      "concepts": [],
+      "docsPath": "quickstart"
+    }
+  }
+}

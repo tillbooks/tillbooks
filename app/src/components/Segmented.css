@@ -1,0 +1,78 @@
+/* Segmented (K-11, D137). Only --t-* tokens. A 32px --t-bg-soft track; the chosen segment is a
+   NEUTRAL raise (--t-bg-elev, the control shadow, a hairline), never the accent, so the accent stays
+   for the nav pill, the selected row and the one primary action. */
+
+.segmented {
+  display: inline-grid;
+  grid-auto-flow: column;
+  /* Equal widths: every segment takes the widest label's share, so choosing one never reshapes it. */
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  height: 32px;
+  padding: 2px;
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+}
+
+/* A segment is 28px inside the 2px track padding. Its hit area reaches the track's edges (the ::after
+   below), so the target is the full 32px band of D116 while the raise stays inset. The transparent
+   1px border is where the focus cue lands (K-10) and where the chosen hairline appears, so neither
+   moves the label. */
+.segmented-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 var(--t-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    color var(--t-motion-hover) var(--t-ease-out),
+    border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.segmented-option::after {
+  content: '';
+  position: absolute;
+  inset: -2px -1px;
+}
+
+.segmented-option:hover {
+  color: var(--t-text);
+}
+
+/* The chosen segment: the neutral raise. Ink goes to full --t-text; weight does not change, so the
+   label never shifts sideways. */
+.segmented-option[aria-checked='true'] {
+  background: var(--t-bg-elev);
+  border-color: var(--t-border);
+  box-shadow: var(--t-shadow-control);
+  color: var(--t-text);
+}
+
+/* Focus, stated here so the chosen segment's own border and shadow cannot outrank it: the border
+   turns brass and the soft halo layers outside the resting shadow (DESIGN.md, Accessibility). */
+.segmented-option:focus-visible {
+  outline: none;
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+}
+
+.segmented-option[aria-checked='true']:focus-visible {
+  box-shadow: var(--t-shadow-control), var(--t-focus-ring);
+}
+
+.segmented-option:disabled {
+  color: var(--t-text-faint);
+  cursor: default;
+}

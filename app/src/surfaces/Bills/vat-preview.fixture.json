@@ -1,0 +1,15 @@
+{
+  "netMinor": 100000,
+  "taxMinor": 8100,
+  "grossMinor": 108100,
+  "formLine": "400",
+  "kind": "input",
+  "deductible": true,
+  "rateBp": 810,
+  "trace": {
+    "taxCode": "VST-M",
+    "taxBaseMinor": 100000,
+    "taxAmountMinor": 8100
+  },
+  "ok": true
+}

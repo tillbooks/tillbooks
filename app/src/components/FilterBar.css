@@ -1,0 +1,39 @@
+/* FilterBar (D118 B2). The filter/search row above a DataTable. Only --t-* tokens. Replaces the
+   per-surface controls rows (contacts-controls, items-controls, journal-filters). */
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--t-space-2);
+}
+
+/* The search field takes the free width up to a readable cap, so it does not sprawl on a wide table
+   nor crowd the filters beside it. */
+.filter-bar-search {
+  display: block;
+  flex: 1 1 240px;
+  max-width: 360px;
+  min-width: 0;
+}
+
+/* The input is the shared `.field` control; its height follows the density token like every other
+   control, so the row tightens with the global toggle. */
+.filter-bar-input {
+  width: 100%;
+}
+
+/* The surface's own filters trail the search: selects, segmented toggles, checkboxes. */
+.filter-bar-slot {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+/* Clear sits at the end, quiet: it is a way back, not the thing the screen wants you to do. */
+.filter-bar-clear {
+  margin-left: auto;
+  flex: 0 0 auto;
+}

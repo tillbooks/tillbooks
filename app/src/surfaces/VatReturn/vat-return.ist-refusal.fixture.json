@@ -1,0 +1,7 @@
+{
+  "timing": "ist",
+  "reason": "ist_timing_not_implemented",
+  "hint": "Vereinnahmte Entgelte (MWSTG Art. 39 Abs. 2) recognise VAT on payment. A07 currently computes the vereinbarte (Soll) basis only.",
+  "ok": false,
+  "error": "unsupported"
+}

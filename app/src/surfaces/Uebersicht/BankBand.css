@@ -1,0 +1,427 @@
+/*
+ * D142 + D143, the Übersicht's "Bankeingang" band in its minimal form (mockup v3). One full-width
+ * panel on the elevated ground, no hairline (K-09); it spends no accent of its own: the numbers are ink,
+ * the facet icons are dim, and the only colour is the status dot (or the setup pips) beside the bank's
+ * short name, which is never the only carrier of meaning (the mark's aria-label and its card say it in
+ * words). Numbers are tabular.
+ */
+.bank-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--t-space-1) var(--t-space-2);
+  margin-top: var(--t-space-2);
+  padding: calc(var(--t-space-2) - 1px);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-band--muted {
+  color: var(--t-text-dim);
+  background: var(--t-bg-soft);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  justify-content: flex-start;
+}
+
+.bank-band--pending {
+  min-height: 4rem;
+  background: var(--t-bg-soft);
+  justify-content: flex-start;
+}
+
+.bank-band__skeleton-count {
+  display: block;
+  height: var(--t-lh-xl);
+  width: 5rem;
+}
+
+.bank-band__skeleton-facets {
+  display: flex;
+  gap: 14px;
+}
+
+.bank-band__skeleton-facets .skeleton {
+  display: block;
+  height: var(--t-lh-md);
+  width: 2.5rem;
+}
+
+.bank-band--empty {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.bank-band__empty-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+.bank-band__hint {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* --- left: caption, the big count, three icon facets ---------------------------------------------- */
+
+.bank-band__left {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--t-space-0-5) 14px;
+  min-width: 0;
+}
+
+.bank-band__caption {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 400;
+  color: var(--t-text-dim);
+}
+
+.bank-band__count {
+  font-size: var(--t-font-xl);
+  line-height: var(--t-lh-xl);
+  font-weight: 600;
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+/* A figure the re-read changed: the Commit moment's tint ALONE (D122 D-I). The shared stamp also lands
+   an element from above; a number that slid in would read as a roll, so the landing is dropped here and
+   only the accent-soft ground decays. Background only: the box, and with it the band, never moves. */
+.bank-band__count[data-just-committed],
+.bank-band__open[data-just-committed] {
+  border-radius: var(--t-radius-sm);
+  animation: motion-tint var(--t-motion-tint) var(--t-ease-out);
+}
+
+/* D150: the headline is the waiting lines with their words; the whole link answers the hover, never
+   one part of it (no partial underline). */
+.bank-band__headline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-0-5);
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+.bank-band__headline-label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.bank-band__headline:hover .bank-band__headline-label {
+  color: var(--t-text);
+}
+
+.bank-band__headline.is-calm {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.bank-band__open {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-band__open:hover {
+  color: var(--t-text);
+}
+
+.bank-mark__gap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+}
+
+.bank-band__facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bank-band__facet {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a.bank-band__facet:hover {
+  text-decoration: underline;
+}
+
+.bank-band__facet-icon {
+  flex: none;
+  color: var(--t-text-dim);
+}
+
+/* A facet at zero is still shown, and dimmed, and is no door. */
+.bank-band__facet.is-zero,
+.bank-band__facet.is-zero .bank-band__facet-icon {
+  color: var(--t-text-faint);
+}
+
+/* --- right: the bank's mark per channel, the refresh button --------------------------------------- */
+
+.bank-band__right {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.bank-mark {
+  position: relative;
+  display: inline-flex;
+  --lamp: var(--t-text-faint);
+}
+
+.bank-mark--warn {
+  --lamp: var(--t-warn);
+}
+
+.bank-mark--success {
+  --lamp: var(--t-success);
+}
+
+.bank-mark--danger {
+  --lamp: var(--t-danger);
+}
+
+.bank-mark--off {
+  --lamp: var(--t-text-faint);
+}
+
+.bank-mark__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px var(--t-space-1);
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  background: transparent;
+  color: var(--t-text);
+  font: inherit;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: default;
+}
+
+.bank-mark__trigger:hover,
+.bank-mark__trigger[aria-expanded='true'] {
+  background: var(--t-bg-soft);
+}
+
+.bank-mark__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--t-radius-full);
+  background: var(--lamp);
+  flex: none;
+}
+
+/* C1: the four setup pips, 7 px dots joined by 10 px hairlines. */
+.bank-mark__pips {
+  display: inline-flex;
+  align-items: center;
+}
+
+.bank-mark__pip-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.bank-mark__pip {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-border-strong);
+}
+
+.bank-mark__hair {
+  display: block;
+  width: 10px;
+  height: 1px;
+  background: var(--t-border-strong);
+}
+
+.bank-mark__pip.is-done,
+.bank-mark__hair.is-done {
+  background: var(--t-success);
+}
+
+.bank-mark__pip.is-now {
+  background: var(--t-warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-warn) 16%, transparent);
+}
+
+.bank-mark__pip.is-fault {
+  background: var(--t-danger);
+}
+
+/* The step in progress breathes on the loading loop (D155): a pending indicator, so it takes the one
+   loop the motion vocabulary allows, never a rhythm of its own. */
+@media (prefers-reduced-motion: no-preference) {
+  .bank-mark__pip.is-now {
+    animation: bank-mark-breathe var(--t-motion-loop) ease-in-out infinite;
+  }
+}
+
+@keyframes bank-mark-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--t-warn) 16%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--t-warn) 16%, transparent);
+  }
+}
+
+/* The card: the one overlay tier (K-28), elevated ground, one hairline, one shadow. */
+.bank-mark__card {
+  position: absolute;
+  top: calc(100% + var(--t-space-1));
+  right: 0;
+  z-index: var(--t-z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  width: min(340px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  box-shadow: var(--t-shadow-overlay);
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  text-align: left;
+}
+
+/* Critic F4: a hover bridge over the gap between the mark and the card, so the pointer never leaves the
+   mark on its way to the card's action. Part of the card, so it is inside the mark's hover area. */
+.bank-mark__card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(-1 * var(--t-space-1));
+  height: var(--t-space-1);
+}
+
+.bank-mark__card[hidden] {
+  display: none;
+}
+
+.bank-mark__state {
+  font-weight: 600;
+}
+
+.bank-mark__line {
+  margin: 0;
+}
+
+.bank-mark__meta {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-mark__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bank-mark__step {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-mark__step-mark {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-border-strong);
+}
+
+.bank-mark__step.is-done {
+  color: var(--t-text);
+}
+
+.bank-mark__step.is-done .bank-mark__step-mark {
+  background: var(--t-success);
+}
+
+.bank-mark__step.is-now {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-mark__step.is-now .bank-mark__step-mark {
+  background: var(--t-warn);
+}
+
+.bank-mark__step.is-fault .bank-mark__step-mark {
+  background: var(--t-danger);
+}
+
+.bank-mark__action {
+  align-self: flex-start;
+}
+
+.bank-band__refresh {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+/* Mobile: the right side drops under the counts, its card stays inside the viewport. */
+@media (max-width: 767px) {
+  .bank-band__right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .bank-mark__card {
+    left: 0;
+    right: auto;
+  }
+}

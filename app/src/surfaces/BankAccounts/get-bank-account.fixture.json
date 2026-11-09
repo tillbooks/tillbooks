@@ -1,0 +1,18 @@
+{
+  "bankAccount": {
+    "id": "bank_2",
+    "name": "Raiffeisen EUR",
+    "iban": "CH9300762011623852957",
+    "isQrIban": false,
+    "receiveOnly": false,
+    "currency": "EUR",
+    "ledgerAccountId": "acc_2",
+    "ledgerAccountNumber": "1020",
+    "openingBalanceMinor": null,
+    "openingBalanceDate": null,
+    "openingEntryId": null,
+    "archived": false,
+    "createdAt": "2026-07-19T00:00:00.000Z"
+  },
+  "ok": true
+}

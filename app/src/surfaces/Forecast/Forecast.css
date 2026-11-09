@@ -1,0 +1,127 @@
+/* C03 Prognose: one accent, tabular numerals on every figure, glyph+label states.
+
+   Round 2 (D137): the horizon is the shared Segmented (K-11); the exclusions are Status words and the
+   delta keeps its word, not a triangle (K-22); every figure outside a DataTable is `.t-money` or
+   `.t-num`, and the rules below only restore the display size over it; sizes and gaps are tokens
+   (K-37). */
+
+.forecast {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+/* The filter triplet (Gruppierung, Horizont, Periode) is genuinely surface-specific: a forecast lens
+   has no text search, so the shared FilterBar (search-first) does not fit. It sits under the shared
+   SurfaceHeader, which now carries the title, help and the always-on §3 disclaimer subtitle. */
+.forecast-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--t-space-3);
+}
+
+.forecast-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.forecast-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--t-space-4);
+  padding: var(--t-space-4);
+}
+
+.forecast-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.forecast-kpi-label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* A KPI is a display figure: the size here wins over the table size `.t-money`/`.t-num` carry. */
+.forecast-kpi .forecast-kpi-value {
+  font-size: var(--t-font-2xl);
+  line-height: var(--t-lh-2xl);
+  font-weight: 600;
+}
+
+.forecast-kpi-hint {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* The panel wraps a heading over a shared DataTable, which owns its own frame overflow, sticky header
+   and density-aware rows; the panel keeps only its padding. */
+.forecast-panel {
+  padding: var(--t-space-4);
+}
+
+/* The emphasised figure per table (the weighted pipeline total and each monthly forecast total) is
+   money, so it is plain ink, never the accent (DESIGN, the money semantics). Weight carries emphasis. */
+.forecast-total {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.forecast-read-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+}
+
+.forecast-excluded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: var(--t-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.forecast-vs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--t-space-4);
+  margin: 0;
+}
+
+.forecast-vs dt {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* The figures sit at the end of their cell, as they always have (alignment is part of the money). */
+.forecast-vs dd {
+  margin: var(--t-space-0-5) 0 0;
+  text-align: right;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+/* The figure in a vs-actual cell keeps the cell's display size over the table size of `.t-money`. */
+.forecast-vs .t-money {
+  font-size: inherit;
+}
+
+.forecast-delta-label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 400;
+}

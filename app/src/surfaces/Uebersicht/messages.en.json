@@ -1,0 +1,480 @@
+{
+  "nav": {
+    "overview": "Overview"
+  },
+  "dashboard": {
+    "attentionStrip": {
+      "loading": "Loading what is waiting for you",
+      "error": "The waiting-work count could not be loaded.",
+      "retry": "Try again",
+      "allClear": "Nothing is waiting for you right now.",
+      "count": "{count} waiting for you",
+      "countOne": "1 waiting for you",
+      "all": "All waiting work",
+      "more": "More on: {title}"
+    },
+    "mandates": {
+      "label": "Mandates",
+      "switchTo": "Switch to {name}",
+      "count": "{count} waiting",
+      "allClear": "nothing waiting",
+      "loading": "reading",
+      "error": "not read",
+      "retry": "Try again",
+      "showAll": "Show all {count} mandates"
+    },
+    "route": {
+      "title": "Overview"
+    },
+    "tile": {
+      "revenue": "Revenue",
+      "cash": "Cash",
+      "ar_aging": "Receivables due",
+      "ap_aging": "Payables due",
+      "utilisation": "Utilisation",
+      "project_margin": "Project margin",
+      "mwst_due": "VAT due",
+      "stock_value": "Stock value",
+      "bank_balance": "In the bank",
+      "free_cash": "Free cash",
+      "runway": "Runway",
+      "low_point": "30-day low",
+      "expense": "Expenses",
+      "result": "Result",
+      "margin": "Margin",
+      "revenue_ltm": "Turnover, 12 months",
+      "dso": "Customer payment time",
+      "top_customer": "Largest customer",
+      "auto_rate": "Booked by rules",
+      "receipt_rate": "Receipts complete"
+    },
+    "range": {
+      "label": "Range",
+      "month": "Month",
+      "quarter": "Quarter",
+      "year": "Year",
+      "custom": "Custom",
+      "from": "From",
+      "to": "To"
+    },
+    "trend": {
+      "label": "Trend versus the previous period: {value}"
+    },
+    "empty": {
+      "title": "No tiles yet.",
+      "hint": "As soon as you post, track or invoice, your key figures appear here.",
+      "ar": "No open invoices yet."
+    },
+    "error": {
+      "invalid_range": "End date is before start date.",
+      "read": "The figures could not be loaded."
+    },
+    "degraded": {
+      "needs_vat_config": "VAT not configured."
+    },
+    "more_tiles": "More tiles become available as modules are set up.",
+    "omitted_note": "Some tiles require additional permissions.",
+    "setup": {
+      "title": "Initial setup",
+      "lead": "Your books are still empty. These steps get you to your first posting.",
+      "dismiss": "Hide",
+      "done": "done",
+      "step": {
+        "profile": "Complete the company profile",
+        "vat": "Set up VAT",
+        "accounts": "Review the chart of accounts",
+        "contacts": "Create or import your first contact",
+        "items": "Create your first item",
+        "invoice": "Create your first invoice"
+      }
+    },
+    "view": {
+      "label": "View",
+      "default": "Default view",
+      "personalGroup": "My views",
+      "sharedGroup": "Shared views",
+      "name": "Name",
+      "shared": "Shared with the workspace",
+      "save_failed": "The view could not be saved.",
+      "customised": "Customised"
+    },
+    "edit": {
+      "customize": "Arrange the key figures and cards",
+      "done": "Stop arranging",
+      "widthFull": "{name}: full width",
+      "widthHalf": "{name}: half width",
+      "bankSize": "Resize: {name}",
+      "bankSizeTip": "Now: {place}",
+      "more": "More for {name}",
+      "moreTip": "Move {name}",
+      "forward": "Move forward",
+      "back": "Move back",
+      "hidden": "Hidden",
+      "tilesLabel": "Key figures",
+      "pageMore": "More for the overview",
+      "pageMoreTip": "Save as a view or restore the standard",
+      "saveView": "Save as a view",
+      "reset": "Restore the standard",
+      "saveConfirm": "Save the view",
+      "saveConfirmContext": "Under the name you typed",
+      "saveCancel": "Close without saving",
+      "undo": "Undo",
+      "undone": "Undone.",
+      "resetDone": "Standard restored.",
+      "viewApplied": "View “{name}” applied.",
+      "bankPlace": {
+        "tile": "Tile",
+        "card": "Card on top",
+        "bar": "Slim bar"
+      },
+      "announce": {
+        "start": "Arranging: drag the grip, or move with Alt and an arrow key. Every change is saved at once.",
+        "end": "Arranging finished.",
+        "moved": "{name} moved, place {position} of {count}.",
+        "hidden": "{name} hidden.",
+        "shown": "{name} shown.",
+        "full": "{name} now full width.",
+        "half": "{name} now half width.",
+        "bank": {
+          "tile": "Bank now as a tile.",
+          "card": "Bank now as a card on top.",
+          "bar": "Bank now as a slim bar."
+        }
+      },
+      "ghostName": "{name}, hidden",
+      "unavailable": "Unavailable",
+      "size": "Resize: {name}",
+      "double": "{name} now double width.",
+      "single": "{name} now single width.",
+      "comparePage": "Like the page"
+    },
+    "doors": {
+      "label": "Common actions",
+      "book": "Book",
+      "backup": "Back up",
+      "demo": "Try the demo",
+      "demoBusy": "Creating the demo"
+    },
+    "bankBand": {
+      "loading": "Loading the bank inbox",
+      "error": "The bank inbox could not be loaded.",
+      "retry": "Try again",
+      "caption": "Bank",
+      "bankFallback": "Bank",
+      "count": {
+        "one": "{count} open bank line",
+        "other": "{count} open bank lines"
+      },
+      "countTitle": "Open bank lines",
+      "facet": {
+        "needs": {
+          "one": "{count} needs you",
+          "other": "{count} need you"
+        },
+        "sure": {
+          "one": "{count} sure proposal",
+          "other": "{count} sure proposals"
+        },
+        "noReceipt": {
+          "one": "{count} without a receipt",
+          "other": "{count} without a receipt"
+        }
+      },
+      "facetTitle": {
+        "needs": "Need you",
+        "sure": "Sure proposals",
+        "noReceipt": "Without a receipt"
+      },
+      "lamp": {
+        "active": "{bank} active",
+        "running": "{bank}: fetching statements",
+        "waiting": "{bank}: waiting for activation",
+        "ready": "{bank}: review the keys",
+        "fault": "{bank}: fetch failed",
+        "off": "{bank}: automatic fetch off",
+        "serveOnly": "{bank}: no automatic fetch",
+        "keysChanged": "{bank}: bank keys changed",
+        "blocked": "{bank}: fetching blocked",
+        "jump": "{bank}: statements missing",
+        "inactive": "{bank}: not connected",
+        "checkFault": "{bank}: check failed",
+        "resend": "{bank}: resend INI and HIA"
+      },
+      "card": {
+        "active": "Statements arrive every morning at {time} by themselves. If TILL was closed at {time}, it fetches them when it starts.",
+        "letterFirst": "The keys exist, but INI and HIA have not been sent to {bank} yet. Send them on the bank accounts screen and post the signed INI letter.",
+        "waitingChecking": "TILL asks {bank} every morning at {time} whether the access is active. You need to do nothing.",
+        "waitingOff": "The daily check is off. Ask {bank} yourself on the bank accounts screen.",
+        "waitingServe": "TILL checks by itself only under till up. Ask {bank} yourself on the bank accounts screen.",
+        "ready": "{bank} activated the access. Compare the hashes shown once with the sheet from {bank}. TILL cannot do this for you: this comparison is what protects you from a fake bank.",
+        "readySince": "Activation seen {when}",
+        "lastCheck": "Last checked {when}",
+        "nextCheck": "next check {when}",
+        "legsUnconfirmed": "INI and HIA are not both confirmed by {bank} yet. Resend them on the bank accounts screen: TILL sends only what is missing. The daily check sends nothing.",
+        "checkUnreachable": "The last check with {bank} did not get through.",
+        "checkNoWire": "This TILL has no bank connection set up, so TILL cannot ask {bank}.",
+        "checkNoKeystore": "The key store is missing or damaged, so TILL cannot ask {bank}.",
+        "checkLocked": "The key store is locked, so TILL cannot ask {bank}.",
+        "lastAttempt": "Last attempt {when}",
+        "checkNotStarted": "The check with {bank} could not start."
+      },
+      "action": {
+        "compareKeys": "Compare the keys",
+        "resendLegs": "Resend"
+      },
+      "steps": {
+        "label": "Setup in four steps",
+        "letter": "Letter sent to {bank}",
+        "activate": "{bank} activates the access",
+        "compare": "Compare the keys once",
+        "daily": "Daily fetch running",
+        "state": {
+          "done": "done",
+          "now": "now",
+          "fault": "stuck",
+          "todo": "to do"
+        }
+      },
+      "facetsLabel": "Open bank lines by state",
+      "empty": {
+        "title": "No bank account yet.",
+        "hint": "Add your bank account and its open bank lines show up here.",
+        "action": "Add a bank account"
+      },
+      "fetch": {
+        "button": "Fetch now",
+        "buttonBusy": "Fetching",
+        "denied": "Only someone who may make payments can fetch statements.",
+        "running": "Fetching statements",
+        "runningHint": "You can keep working.",
+        "fetched": "Fetched {when}",
+        "fetchedAuto": "Fetched {when}, automatically",
+        "nothingNew": "Nothing new.",
+        "never": "Not fetched yet.",
+        "next": "Next automatic fetch: {when}",
+        "retryAt": "Next try: {when}",
+        "off": "The automatic fetch is off.",
+        "offLink": "Change",
+        "serveOnly": "TILL fetches automatically only under till up.",
+        "keysChanged": "The bank keys changed. Review them before the next fetch.",
+        "blocked": "Fetching is blocked.",
+        "manage": "Go to bank accounts",
+        "members": "Go to members",
+        "keystoreLocked": "The key store is locked, so TILL fetches no statements.",
+        "keystoreLockedAction": "Restart TILL with the key store passphrase. TILL does not try again on its own."
+      },
+      "jumpLink": "Go to {name}",
+      "when": {
+        "today": "today {time}",
+        "yesterday": "yesterday {time}",
+        "tomorrow": "tomorrow {time}",
+        "date": "on {date} at {time}"
+      },
+      "waiting": {
+        "one": "{count} bank line is waiting for you",
+        "other": "{count} bank lines are waiting for you"
+      },
+      "waitingLabel": {
+        "one": "bank line is waiting for you",
+        "other": "bank lines are waiting for you"
+      },
+      "nothingWaiting": "Nothing is waiting for you",
+      "openShort": "{count} open",
+      "withVorschlag": "{count} with a proposal"
+    },
+    "bank": {
+      "title": "Bank inbox",
+      "open": "{count} open",
+      "openOne": "1 open",
+      "toBank": "Go to bank",
+      "book": "Book bank lines"
+    },
+    "widget": {
+      "denied": "You lack the right to read these figures.",
+      "error": "This widget could not be loaded.",
+      "window": "{from} to {to}",
+      "amount": "Amount",
+      "month": "Month",
+      "asTable": "As a table",
+      "overdueSince": "overdue since {date}",
+      "dueOn": "due on {date}",
+      "name": {
+        "expense_donut": "Top expenses (ring)",
+        "money_in_out": "Money in and out",
+        "open_creditors": "Open payables",
+        "open_tasks": "Open tasks",
+        "cash_flow": "Cash flow",
+        "expense_bars": "Top expenses (bars)",
+        "revenue_months": "Turnover and expenses per month",
+        "balance_history": "Bank balance"
+      },
+      "expenses": {
+        "title": "Top expenses",
+        "empty": "No expenses yet.",
+        "emptyHint": "Once you book expenses, the largest show here.",
+        "rest": "Other",
+        "summary": "Expenses total {total}, the {count} largest accounts shown one by one",
+        "total": "Expenses",
+        "account": "Account",
+        "share": "Share",
+        "infoLabel": "How the top expenses are calculated",
+        "infoTitle": "Top expenses",
+        "info": "The ring shows the expense accounts debited more than credited in the period: {gross} together.",
+        "infoReductions": "Not in the ring are expense accounts with more credits, for example a stock change booked against material: {reductions} together. With them, the expenses in the income statement come to {net}."
+      },
+      "money": {
+        "title": "Money in and out",
+        "in": "Money in",
+        "out": "Money out",
+        "summary": "Money in {in}, money out {out} per month",
+        "noBank": "No bank account yet.",
+        "noBankHint": "With a bank account, this shows what comes in and goes out.",
+        "addBank": "Add bank account",
+        "empty": "No movements yet.",
+        "emptyHint": "Booked bank lines appear here.",
+        "toBank": "Go to bank"
+      },
+      "cashflow": {
+        "title": "Cash flow",
+        "summary": "Cash flow per month, net {net}",
+        "net": "Net"
+      },
+      "creditors": {
+        "title": "Open payables",
+        "empty": "No open payables.",
+        "emptyHint": "Supplier bills you capture show here until they are paid.",
+        "capture": "Capture a bill",
+        "unnamed": "No supplier",
+        "total": "Total open",
+        "all": "All {count} open"
+      },
+      "tasks": {
+        "title": "Open tasks",
+        "empty": "No open tasks.",
+        "emptyHint": "Tasks you give yourself or others show here.",
+        "create": "Add a task",
+        "today": "due today",
+        "all": "All {count} open"
+      },
+      "result": {
+        "title": "Turnover and expenses per month",
+        "revenue": "Turnover",
+        "expense": "Expenses",
+        "estimate": "estimated",
+        "previous": "Turnover previous year",
+        "summary": "Turnover {revenue}, expenses {expense} in twelve months."
+      },
+      "balance": {
+        "title": "Bank balance",
+        "bank": "Bank",
+        "booked": "Booked",
+        "summary": "At month end: latest bank {bank}, booked {booked}.",
+        "summaryNoBank": "At month end: latest booked {booked}, no statement."
+      },
+      "expensesBy": {
+        "label": "Group by",
+        "account": "Account",
+        "vendor": "Vendor",
+        "unattributed": "No vendor"
+      }
+    },
+    "tileTip": {
+      "free_cash": "Booked bank balance less payables less VAT owed. Unbooked bank lines count once booked; Saldo VAT paid before the settlement counts until it is settled.",
+      "runway": "Bank balance divided by the average monthly expense (last 6 months, configurable).",
+      "low_point": "Lowest balance of the next 30 days from the planned payments, starting from the booked balance.",
+      "margin": "Result divided by turnover.",
+      "revenue_ltm": "Turnover of the last twelve months.",
+      "dso": "Days from invoice to payment, average of the last twelve months.",
+      "top_customer": "The largest customer's share of the last twelve months' turnover.",
+      "auto_rate": "Share of bank lines a booking rule booked.",
+      "receipt_rate": "Share of expenses with a receipt.",
+      "bank_balance": "Closing balance of the latest statement. Without one (e.g. a CSV), the tile shows the booked balance.",
+      "revenue": "Booked net revenue. \"Estimated\": what the booking rules would book from open bank lines, net of VAT; payments of invoices do not count."
+    },
+    "compare": {
+      "label": "Comparison",
+      "previous_year": "Compare: previous year",
+      "previous_period": "Compare: previous period",
+      "none": "No comparison",
+      "short": {
+        "previous_year": "previous year",
+        "previous_period": "previous period"
+      },
+      "change": "{value} {against}",
+      "points": "{value} pts",
+      "aria": "{value} against {against}"
+    },
+    "unit": {
+      "months": "{value} months",
+      "days": "{value} days"
+    },
+    "estimate": {
+      "line": "+ {amount} estimated",
+      "tip": {
+        "one": "1 open bank line, net of VAT.",
+        "other": "{count} open bank lines, net of VAT."
+      }
+    },
+    "balance": {
+      "booked": "Booked",
+      "open": "Open",
+      "unexplained": "Unexplained",
+      "book": "Book bank lines",
+      "reconciled": "Reconciled",
+      "asOf": "As of {date}",
+      "account": "{name} ·· {last4}",
+      "reason": {
+        "no_statement": "No statement",
+        "no_balance": "No closing balance",
+        "currency_differs": "Other currency"
+      }
+    },
+    "detail": {
+      "bank": "Bank",
+      "payables": "Payables",
+      "vat": "VAT",
+      "monthly": "Expenses per month",
+      "months": "Average of {months} months",
+      "on": "on {date}",
+      "invoices": {
+        "one": "1 invoice",
+        "other": "{count} invoices"
+      },
+      "autopilot": "Autopilot",
+      "byRule": "Rule",
+      "decided": "Decided",
+      "missing": "Without receipt",
+      "previous": "{against} {amount}",
+      "bankBooked": "Bank, booked"
+    },
+    "library": {
+      "title": "Key figures",
+      "groups": {
+        "money": "Money",
+        "result": "Result",
+        "parties": "Customers and vendors",
+        "books": "Bookkeeping",
+        "operations": "Operations"
+      }
+    },
+    "settings": {
+      "open": "Choose key figures",
+      "back": "Back to the overview",
+      "about": "What is {name}?",
+      "compare": "Comparison: {name}",
+      "modes": {
+        "previous_year": "Previous year",
+        "previous_period": "Previous period",
+        "none": "No comparison"
+      }
+    }
+  },
+  "help": {
+    "Uebersicht": {
+      "title": "Overview",
+      "body": "Your key figures, each with its value, its date and a way into the screen behind it. A tile never shows a false zero.\n\nArrange key figures and cards here: drag the grip, move with Alt and an arrow key or through More, hide or show with the eye, widen with Resize. Every change is saved at once. The content in My settings sets which cards you start with.\n\nThe slim bar of the bank has three symbols: the person for lines that need you, the check mark for sure proposals, the crossed-out paperclip for lines without a receipt. The dot by your bank: green runs, orange waits, red failed, grey is off.",
+      "concepts": [],
+      "docsPath": "quickstart"
+    }
+  }
+}

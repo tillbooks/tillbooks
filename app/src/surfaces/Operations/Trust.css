@@ -1,0 +1,163 @@
+/**
+ * E07 Vertrauen panel. Prose the limits list must be READ, not skimmed, so it is capped near 72
+ * characters (brand/DESIGN.md). One accent, never spent here: the panel makes no promise, so it
+ * reaches for no go/safe colour.
+ */
+
+.trust {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 42rem;
+}
+
+.trust-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.trust-title {
+  margin: 0;
+}
+
+/* The (i) sits right after the state it explains; the one action closes the line on the right. */
+.trust-info {
+  display: inline-flex;
+  margin-left: calc(-1 * var(--t-space-1));
+}
+
+.trust-info-trigger {
+  color: var(--t-text-dim);
+}
+
+.trust-run {
+  margin-left: auto;
+}
+
+/* The (i) card (D152 rule 4): the shared tooltip, widened to a reading measure because it holds the
+   panel's whole explanation (scope, location, the wifi instruction, the limits, the model note). It
+   opens below the line and anchors to the trigger's LEFT edge, so it never runs off the column. */
+.trust-info .tooltip {
+  left: 0;
+  transform: none;
+  max-width: min(30rem, calc(100vw - 2 * var(--t-space-2)));
+}
+
+.trust-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.trust-card-para,
+.trust-card-title,
+.trust-limit {
+  display: block;
+}
+
+.trust-card-title {
+  margin-top: var(--t-space-0-5);
+  font-weight: 600;
+}
+
+.trust-limits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+/* The limits keep their list form inside the card, marked with a small drawn dot. */
+.trust-limit {
+  position: relative;
+  padding-left: var(--t-space-2);
+}
+
+.trust-limit::before {
+  content: '';
+  position: absolute;
+  left: var(--t-space-0-5);
+  top: 0.6em;
+  width: 4px;
+  height: 4px;
+  border-radius: var(--t-radius-full);
+  background: currentColor;
+}
+
+/* M02: the publishing-on availability line. Plain ink (not a status colour, not the accent): a
+   glyph + text sibling of the egress family, present only while the stream is published. */
+.trust-publishing {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  margin: 0;
+  color: var(--t-text);
+  max-width: 60ch;
+}
+
+.trust-publishing-glyph {
+  flex: 0 0 auto;
+   color: var(--t-text-dim);
+}
+
+.trust-passed {
+  color: var(--t-text);
+}
+
+.trust-note {
+  color: var(--t-text-dim);
+}
+
+.trust-violated {
+  border: 1px solid var(--t-danger);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-2);
+  color: var(--t-danger);
+}
+
+.trust-offenders {
+  margin: var(--t-space-1) 0;
+  padding-left: var(--t-space-3);
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* --- M03 journey (N4a): the data-location line ------------------------------------------------- */
+
+.trust-location {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+/* A long path breaks inside itself rather than pushing the links off the line. */
+.trust-location-value {
+  overflow-wrap: anywhere;
+}
+
+.trust-location-link {
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+.trust-location-link:hover {
+  text-decoration: underline;
+}
+
+/* The self-test's setup refusal (F-10, J7.6): one lead line, then one door per missing piece. */
+.trust-note-lead {
+  margin: 0 0 var(--t-space-1);
+}
+
+.trust-setup-list {
+  margin: 0;
+  padding-left: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}

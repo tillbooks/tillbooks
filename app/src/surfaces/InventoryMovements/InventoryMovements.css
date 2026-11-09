@@ -1,0 +1,144 @@
+/* J02, Inventory -> Movements. Item-centric master-detail split, one accent, glyph+label type badge.
+
+   D118 B2 (2026-08-24): the page header is the shared SurfaceHeader, the movement history the shared
+   DataTable, and both write overlays the shared DetailDrawer; the drawer form controls adopt the
+   shared `.field` class. The per-surface CSS that duplicated the header, the history table, the button
+   set, the drawer chrome and the field inputs has been deleted. What remains is genuinely this
+   surface's: the master-detail split, the item picker, the on-hand header, the policy toggle, the
+   type badge and the drawer field layout. No new colour token (design-canon): every value reuses a
+   --t- token.
+
+   Round 2 (D137): the panes are background steps without a hairline (K-09); an item is a list row
+   whose current one is the pill with `aria-current`, and its transparent border takes the token
+   focus cue, so the local focus rule is gone (K-10, K-17); the movement type is a word, not a
+   bordered badge (K-22); sizes and gaps are tokens (K-37). */
+
+.im {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.im-split {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .im-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A pane is the elevated panel on the page, never a hairline box (K-09). */
+.im-pane {
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  padding: var(--t-space-1);
+}
+
+.im-detail {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.im-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* An item is a 32px list row with a transparent 1px border, where the focus cue lands (K-10). */
+.im-list-item {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 var(--t-space-1);
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.im-list-item:hover {
+  background: var(--t-bg-soft);
+}
+
+/* The current item: the tinted accent pill, the one place the accent is spent in this pane. */
+.im-list-item[aria-current='true'] {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+.im-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.im-detail-title {
+  margin: 0;
+}
+
+.im-onhand {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.im-policy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+/* Signed quantity in the shared DataTable numeric column: incoming plain, outgoing dimmed. This is a
+   quantity ledger, not a money page, so the sign carries the meaning and the minus stays a quiet
+   fact rather than a red alarm. */
+.im-pos {
+  color: var(--t-text);
+}
+
+.im-neg {
+  color: var(--t-text-dim);
+}
+
+.im-muted {
+  color: var(--t-text-dim);
+}
+
+.im-hint {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* Drawer form field: label stacked over the shared `.field` control. The control styling and its
+   focus ring come from the global `.field` class, so this owns only the layout. */
+.im-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.im-field label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}

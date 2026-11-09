@@ -1,0 +1,91 @@
+/* FileDrop (K-13, D137). Only --t-* tokens. The real file input is clipped out of sight but stays
+   focusable; the visible `.btn--secondary` label draws the focus cue while the input holds focus. */
+
+.file-drop--button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+/* The zone: one dashed control boundary around the prompt and the button, the same density as a
+   form row. It is a real edge because it is a real target, which is the one case a hairline earns. */
+.file-drop--zone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+  padding: var(--t-space-2) var(--t-space-3);
+  border: 1px dashed var(--t-border-strong);
+  border-radius: var(--t-radius-md);
+  color: var(--t-text-dim);
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+/* A file held over the zone: the target is the thing in focus, so it takes the focus colours (the
+   brass edge and the soft tint), and the words stay the text ink. */
+.file-drop--zone[data-over] {
+  background: var(--t-accent-soft);
+  border-color: var(--t-focus-border);
+  border-style: solid;
+}
+
+.file-drop--zone[data-disabled] {
+  border-color: var(--t-border);
+}
+
+.file-drop-glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.file-drop-prompt {
+  color: var(--t-text);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.file-drop-hint {
+  flex-basis: 100%;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.file-drop--button .file-drop-hint {
+  flex-basis: auto;
+}
+
+/* The button is a label: `.btn--secondary` gives it the look, this gives it the pointer and keeps the
+   clipped input positioned inside it. */
+.file-drop-button {
+  position: relative;
+  cursor: pointer;
+}
+
+.file-drop-button.is-disabled {
+  color: var(--t-text-faint);
+  cursor: default;
+}
+
+/* Clipped, not removed: `display: none` would take the input out of the tab order and the
+   accessibility tree, which is the whole reason it is kept. */
+.file-drop-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The focus cue lands on the visible button while the hidden input holds keyboard focus. */
+.file-drop-button:has(.file-drop-input:focus-visible) {
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+}

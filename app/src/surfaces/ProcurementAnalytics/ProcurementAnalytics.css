@@ -1,0 +1,63 @@
+/* I06 Procurement Analytics: a dense report launcher. One accent, existing tokens, no new colours.
+
+   Round 2 (D137): no wrapper pad of its own (K-06, <main> carries the gutter); the report list is
+   the vertical Tabs (K-11); the period filter is two live `.field`s with no Run button (K-15, K-16);
+   the totals are a background step without a hairline (K-09); sizes are steps on the scale (K-37). */
+
+.procanalytics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.procanalytics__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  min-width: 0;
+}
+
+.procanalytics__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--t-space-3);
+}
+
+.procanalytics__filters label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* The totals strip: the elevated panel on the page, no hairline around it (K-09). */
+.procanalytics__totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-4);
+  padding: var(--t-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.procanalytics__total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.procanalytics__total-label {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.procanalytics__total-value {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-variant-numeric: tabular-nums;
+}

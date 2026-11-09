@@ -1,0 +1,106 @@
+{
+  "nav": {
+    "salesOrders": "Sales orders"
+  },
+  "so": {
+    "tab": {
+      "title": "Sales orders"
+    },
+    "loading": "Loading sales orders",
+    "empty": "No orders yet.",
+    "emptyBackorders": "No backorders.",
+    "invoiceLinked": "Linked invoices:",
+    "action": {
+      "new": "New order",
+      "confirm": "Confirm",
+      "deliver": "Create and ship delivery note",
+      "invoice": "Create invoice",
+      "cancel": "Cancel order",
+      "from_quote": "Convert to order",
+      "addLine": "Add line",
+      "removeLine": "Remove line"
+    },
+    "filter": {
+      "backorders": "Backorders only",
+      "clear": "Show all orders"
+    },
+    "badge": {
+      "backorder": "Backorder"
+    },
+    "field": {
+      "number": "Number",
+      "contact": "Customer",
+      "contactPick": "Pick a contact",
+      "status": "Status",
+      "lines": "Lines",
+      "item": "Item",
+      "freeText": "Free text",
+      "lineDesc": "Description",
+      "qty": "Quantity",
+      "price": "Unit price",
+      "ordered": "Ordered",
+      "delivered": "Delivered",
+      "invoiced": "Invoiced",
+      "location": "Location",
+      "locationPick": "Pick a location"
+    },
+    "status": {
+      "draft": "Draft",
+      "confirmed": "Confirmed",
+      "partially_delivered": "Partially delivered",
+      "delivered": "Delivered",
+      "invoiced": "Invoiced",
+      "cancelled": "Cancelled"
+    },
+    "notes": {
+      "title": "Delivery notes"
+    },
+    "editor": {
+      "save": "Save",
+      "discard": "Discard"
+    },
+    "drawer": {
+      "close": "Close"
+    },
+    "error": {
+      "transport": "Could not load the orders.",
+      "no_lines": "An order needs at least one line to confirm.",
+      "over_delivery": "The quantity exceeds the outstanding amount.",
+      "insufficient_stock": "Not enough stock on hand, check inventory.",
+      "has_deliveries": "Orders with issued delivery notes cannot be cancelled.",
+      "nothing_to_invoice": "Nothing delivered to invoice yet.",
+      "invalid_transition": "That step is not allowed from the current status.",
+      "not_issued": "Only issued delivery notes can be printed.",
+      "invalid_reference": "That reference does not exist.",
+      "unknown_item": "That item does not exist.",
+      "invalid_qty": "Enter a whole, positive quantity.",
+      "permissionDenied": {
+        "read": "You do not have permission to view sales orders.",
+        "write": "You do not have permission to change sales orders."
+      }
+    },
+    "unknownContact": "Unknown contact",
+    "unknownItem": "Unknown item",
+    "rowOpen": "Open order {row}",
+    "emptyHint": "Orders appear here once you create one or convert a quote.",
+    "emptyBackordersHint": "Every order is fully delivered."
+  },
+  "dn": {
+    "action": {
+      "render": "Print / download delivery note"
+    },
+    "filed": "Filed",
+    "status": {
+      "issued": "Issued",
+      "draft": "Draft"
+    }
+  },
+  "help": {
+    "SalesOrders": {
+      "title": "Sales orders",
+      "body": "The bridge from order through delivery to invoice. Confirming freezes the allocation and posts nothing. A delivery note is created and issued; only issuing moves stock. The invoice arises from it as a draft in the documents area, where it is reviewed and issued. Backorders have their own filter: ordered quantities not yet delivered.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "nav": {
+    "inbox": "Posteingang"
+  },
+  "notifications": {
+    "route": {
+      "title": "Posteingang"
+    },
+    "loading": "Benachrichtigungen werden geladen",
+    "unread": "{count} ungelesen",
+    "empty": "Noch keine Benachrichtigungen.",
+    "emptyHint": "Ereignisse aus Aufgaben, Rechnungen und Deals erscheinen hier.",
+    "section": {
+      "unread": "Ungelesen",
+      "read": "Gelesen",
+      "archive": "Archiv",
+      "empty": {
+        "unread": "Alles gelesen.",
+        "read": "Noch nichts gelesen.",
+        "archive": "Nichts archiviert."
+      }
+    },
+    "action": {
+      "markRead": "Als gelesen markieren",
+      "markAllRead": "Alle als gelesen markieren",
+      "archive": "Archivieren",
+      "openPrefs": "Benachrichtigungs-Einstellungen",
+      "closePrefs": "Benachrichtigungs-Einstellungen ausblenden"
+    },
+    "view": {
+      "label": "Ansicht",
+      "all": "Alle"
+    },
+    "status": {
+      "unread": "Ungelesen",
+      "read": "Gelesen",
+      "archived": "Archiviert"
+    },
+    "summary": {
+      "task_due": "Aufgabe fällig: {title}",
+      "invoice_issued": "Rechnung gestellt",
+      "invoice_sent": "Rechnung versendet",
+      "deal_stage_changed": "Deal in neue Phase verschoben",
+      "payment_recorded": "Zahlung erfasst"
+    },
+    "prefs": {
+      "title": "Benachrichtigungen",
+      "hint": "Wähle, welche Ereignisse dich erreichen, pro Kanal. Der Posteingang in der App liefert immer sofort.",
+      "channel": {
+        "inbox": "In der App",
+        "email": "E-Mail",
+        "push": "Push"
+      },
+      "digest": {
+        "instant": "Sofort",
+        "hourly": "Stündliche Zusammenfassung",
+        "daily": "Tägliche Zusammenfassung",
+        "weekly": "Wöchentliche Zusammenfassung"
+      },
+      "wildcard": "Alle Ereignisse",
+      "enabled": "Aktiv",
+      "override": {
+        "title": "Ausnahmen pro Ereignis",
+        "add": "Ausnahme hinzufügen",
+        "event": "Ereignis",
+        "pick": "Ereignis wählen",
+        "save": "Ausnahme speichern",
+        "none": "Noch keine Ausnahmen. Jedes Ereignis folgt den Standardwerten oben."
+      },
+      "connectEmail": "E-Mail-Zustellung verbinden",
+      "cloudTier": "E-Mail und Push verlassen das Gerät nur in der Cloud-Stufe. Bis dahin bleibt eine Zusammenfassung ein lokales Dokument.",
+      "saved": "Gespeichert."
+    },
+    "error": {
+      "transport": "Die Benachrichtigungen konnten nicht geladen werden.",
+      "forbidden": "Dieser Posteingang gehört einem anderen Benutzer.",
+      "notification_not_found": "Diese Benachrichtigung existiert nicht mehr oder ist archiviert.",
+      "invalid_channel": "Dieser Kanal ist nicht verfügbar.",
+      "inbox_is_always_instant": "Der Posteingang in der App liefert immer sofort.",
+      "unknown_event": "Dieses Ereignis existiert nicht.",
+      "permissionDenied": {
+        "read": "Dieser Posteingang konnte nicht gelesen werden."
+      }
+    }
+  },
+  "help": {
+    "Inbox": {
+      "title": "Posteingang",
+      "body": "Der Posteingang beantwortet, was sich geändert hat, während du weg warst: jede Benachrichtigung aus allen Bereichen, gruppiert nach ungelesen, gelesen und archiviert. Jede Zeile lässt sich als gelesen markieren oder archivieren. Hier stellst du auch ein, worüber du benachrichtigt wirst; diese Einstellungen gelten nur für dich, nicht für den ganzen Arbeitsbereich.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,144 @@
+/* D02 Einkauf. Minimal, composed from the shared button/token classes (spec §6: one route, no new token).
+
+   D118 B2 (2026-08-24): the page header is the shared SurfaceHeader, every list is the shared DataTable
+   (purchase orders, open quantities, supplier prices, the drawer line breakdown, the embedded match
+   panel), and the create form and order detail are the shared DetailDrawer.
+
+   Round 2 (D137): the tab strip is the shared Tabs in its shared-panel model (K-11), so the lazy
+   Scorecard stays lazy and the bespoke strip is gone; states are Status words (K-22); the inputs are
+   the shared `.field` (K-15); cards and panels are background steps without a hairline (K-09); sizes,
+   gaps and radii are tokens (K-37). What stays is the create/receipt/price form rhythm, the embedded
+   match panel and the I05 scorecard. */
+.po { display: flex; flex-direction: column; gap: var(--t-space-2); }
+
+.po-detail-status { display: inline-flex; align-items: center; gap: var(--t-space-1); flex-wrap: wrap; }
+
+/* The revision of an order: a quiet hairline tag, never a state and never the accent. */
+.po-tag {
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.po-expected {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* The purchase-order number in the shared DataTable list: mono, so numbers align by eye. */
+.po-code { font-family: var(--t-font-mono); font-weight: 600; white-space: nowrap; }
+
+/* Action row for the embedded match panel (BillMatchPanel), which is not hosted in a drawer. */
+.po-detail-actions { display: flex; gap: var(--t-space-1); flex-wrap: wrap; }
+
+/* Forms: the price quick-add card (inline, prices tab) and the create/receipt forms (drawer body).
+   A panel is the elevated step, never a hairline box (K-09). */
+.po-editor,
+.po-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+}
+.po-form { display: flex; flex-direction: column; gap: var(--t-space-2); }
+.po-field { display: flex; flex-direction: column; gap: var(--t-space-0-5); }
+.po-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  border: 0;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+  padding: var(--t-space-1) var(--t-space-2);
+  margin: 0;
+}
+.po-line-row { display: flex; gap: var(--t-space-1); align-items: center; }
+.po-receipt { margin-top: var(--t-space-2); }
+.po-receipts,
+.po-matches { margin-top: var(--t-space-2); }
+.po-match-panel {
+  padding: var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+/* I05, the Scorecard tab. A traffic light is a Status word: its glyph and its word, never colour alone. */
+.po-scorecard { display: flex; flex-direction: column; gap: var(--t-space-2); margin-top: var(--t-space-2); }
+.po-scorecard-controls { display: flex; gap: var(--t-space-2); flex-wrap: wrap; }
+.po-scorecard-card {
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+.po-scorecard-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--t-space-2); }
+.po-scorecard-head h3 { margin: 0; }
+.po-scorecard-overall { display: flex; align-items: baseline; gap: var(--t-space-1); }
+.po-scorecard-overall-value {
+  font-size: var(--t-font-2xl);
+  line-height: var(--t-lh-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.po-scorecard-delta {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+.po-scorecard-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--t-space-1);
+  margin: 0;
+}
+.po-scorecard-metric {
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1);
+  background: var(--t-bg-soft);
+}
+.po-scorecard-metric dt {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+  margin: 0 0 var(--t-space-0-5);
+}
+.po-scorecard-metric dd { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--t-space-1); }
+.po-scorecard-metric-value {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.po-scorecard-exceptions ul,
+.po-scorecard-alerts ul { margin: var(--t-space-0-5) 0 0; padding-left: var(--t-space-2); }
+.po-scorecard-alerts {
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+  padding: var(--t-space-1) var(--t-space-2);
+}
+.po-scorecard-rank--active { font-weight: 600; }
+
+/* A supplier's name in the ranking opens its scorecard: the row opener in the text ink at 500, its
+   hover the `link-inline` underline (K-12), never the accent at rest. */
+.po-linkish {
+  background: none;
+  border: 1px solid transparent;
+  padding: 0;
+  color: var(--t-text);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}

@@ -1,0 +1,54 @@
+/* J06, Inventory -> Bestandesbewertung & Abstimmung. The header, tab strip, tables, drawer and button
+   set come from the shared primitives (SurfaceHeader, Tabs, DataTable, DetailDrawer, Modal), so what
+   remains here is genuinely surface-specific: the pane/toolbar layout and the quiet total line. One
+   accent, no new colour token (design-canon). Drift is the one state that also carries weight,
+   because an unreconciled balance sheet is the thing this surface exists to catch.
+
+   Round 2 (D137): run and reconciliation states are Status words (a glyph and the word), so the
+   bordered, success- and danger-edged badges are gone (K-22); Stornieren sits in a posted run's
+   overflow (K-21); posting is the tinted money commit behind its confirm (K-08). */
+
+.valrun {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.valrun-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.valrun-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.valrun-draft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+/* Row-level state hooks passed to DataTable's `rowClassName`; the primitive ships no state CSS. */
+.valrun-row--reversed td,
+.valrun-row--reversed th {
+  color: var(--t-text-dim);
+}
+
+.valrun-row--drift td {
+  font-weight: 600;
+}
+
+.valrun-total {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.valrun-confirm-body {
+  margin: 0 0 var(--t-space-1);
+}

@@ -1,0 +1,359 @@
+/* Items surface styles (A09, D00). Tokens only, no hex, no new colours. 8-pt grid throughout.
+   Depth is a background step, never a border around a card, matching the shell (global.css).
+
+   D118 B2 (2026-08-23): the list table, the create/edit drawer, the page header, the search/controls
+   row and the Katalog/Preislisten tab strip are all shared primitives now (DataTable, DetailDrawer,
+   SurfaceHeader, FilterBar, Tabs). Round 2 (D137): the row opener, its overflow and the archived
+   Status word are DataTable's and Status's, the fields are the shared `.field`, and every size is a
+   step on the type scale. What remains is only what is genuinely Items-specific: the catalog cells,
+   the category list, the price-list rows and the editor form rhythm. */
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 960px;
+}
+
+/* Catalog cells. The list itself is the shared DataTable; these style the content inside its cells. */
+.item-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.item-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A variant is indented under its parent (the hierarchy DataTable renders as a flat, ordered list). */
+.item-name--variant {
+  padding-left: var(--t-space-3);
+}
+
+/* An archived row reads dim, never faint: the name and the price still have to be read, and the
+   archived Status word beside the name says why it is quiet (K-36). */
+.item-name--muted {
+  color: var(--t-text-dim);
+}
+
+/* Tabular figures so prices align on the decimal down the column: kept for the editor's money inputs.
+   The list price cell gets its tabular figures from the shared DataTable numeric column (`.t-num`). */
+.item-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* A money figure never wraps (K-18): the price in a price-list row keeps its currency beside it. */
+.item-price {
+  white-space: nowrap;
+}
+
+/* The tax code as its short rate ("8.1%"), the full name in the tooltip (K-19). */
+.item-tax {
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A category word on a row (a price list's scope, a resolved price's source): a quiet hairline pill,
+   a word the operator reads, never a state and never the accent. */
+.item-tag {
+  flex: 0 0 auto;
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.item-unit {
+  color: var(--t-text-dim);
+}
+
+/* The SKU is read to find a row, so it is dim, never faint (K-36). */
+.item-sku {
+  color: var(--t-text-dim);
+  margin-right: var(--t-space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The editor form (hosted inside the shared DetailDrawer): a column of fields on the 8-pt grid. */
+.item-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.item-field,
+.item-field-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.item-row2 {
+  display: flex;
+  gap: var(--t-space-2);
+}
+
+.item-row2 .item-field,
+.item-row2 > .item-field-inner {
+  flex: 1 1 0;
+}
+
+.item-field-label {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* A precondition or a note under a control: it carries meaning, so it reads dim (K-36). */
+.item-field-hint {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* A checkbox is a standalone control: its label row is a 44px tap target (D116) and the box itself is
+   sized up from the native 16px, which sat below even the 24px WCAG 2.2 AA floor. The brand accent
+   carries the checked state, matching the peer B01 (`/time`) convention rather than the UA blue. It is
+   used both in the editor form and in the FilterBar filters slot (Archivierte anzeigen). */
+.item-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 44px;
+}
+
+.item-checkbox input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--t-accent);
+}
+
+/* D00: the category list beside the catalog. Tokens only, no hex. */
+.items-layout {
+  display: flex;
+  gap: var(--t-space-2);
+  align-items: flex-start;
+}
+
+.items-sidebar {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--t-space-1);
+}
+
+.items-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  min-width: 0;
+}
+
+/* A category is a list row (K-11): a 32px quiet button, the hover a neutral step, and the current one
+   the tinted pill with `aria-current` (K-22), the same pill as the rail. The transparent 1px border is
+   where the focus cue lands (K-10). */
+.items-cat {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--t-space-1);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text-dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.items-cat:hover {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+}
+
+.items-cat--child {
+  padding-left: var(--t-space-3);
+}
+
+/*
+  A category row is the filter PLUS its maintenance menu, side by side. They are siblings because a
+  button inside a button is invalid HTML and the menu trigger is a button; the filter takes the slack
+  so the trigger sits at a stable right edge whatever the category is called.
+*/
+.items-cat-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.items-cat-entry .items-cat {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.items-cat--active,
+.items-cat--active:hover {
+  color: var(--t-accent);
+  background: var(--t-accent-soft);
+}
+
+.items-cat-add {
+  align-self: flex-start;
+  margin-top: var(--t-space-1);
+}
+
+/* Preislisten tab (PriceLists.tsx). Tokens only, no hex. */
+.pricelists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.pricelists-create,
+.pricelists-prices,
+.pricelists-resolve {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+}
+
+/* The section title inside a price-list panel. */
+.item-drawer-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+/* The price lists and a list's prices: rows on the table rhythm, no bullets. */
+.item-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--t-space-0-5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  min-height: var(--t-row-h);
+  padding: 0 var(--t-space-1);
+}
+
+/* A price list's name opens its prices: the row's opener in the text ink at 500, the current list the
+   tinted pill with `aria-current` (K-12, K-22). */
+.item-row-open {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--t-space-1);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--t-motion-hover) var(--t-ease-out),
+    color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.item-row-open:hover {
+  background: var(--t-bg-soft);
+}
+
+.item-row-open[aria-current='true'] {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+.item-row > .item-unit {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pricelists-result {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+}
+
+/*
+  A primary and the precondition it is waiting on (D15/C3). The reason sits BESIDE the control, not in
+  a tooltip: a disabled button whose explanation only appears on hover is unreachable by keyboard and
+  by touch, which is most of the people who would need it.
+*/
+.pricelists-action {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+/*
+  The in-app category name dialog (create/rename), the themed replacement for the former native
+  `window.prompt`. Items-local (D46: a broad shared modal would owe separate design review). One
+  overlay tier (K-28): the shared scrim and the overlay layer, never an opaque page of its own.
+*/
+.items-cat-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--t-z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--t-space-3);
+  background: var(--t-scrim);
+}
+
+.items-cat-dialog {
+  max-width: 400px;
+  width: 100%;
+  padding: var(--t-space-3);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-lg);
+  box-shadow: var(--t-shadow-overlay);
+}
+
+.items-cat-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.items-cat-dialog-title {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.items-cat-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+}

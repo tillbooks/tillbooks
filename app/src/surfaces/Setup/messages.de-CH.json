@@ -1,0 +1,176 @@
+{
+  "setup": {
+    "title": "Arbeitsbereich einrichten",
+    "emptyTitle": "Noch kein Arbeitsbereich.",
+    "emptyHint": "Lege deinen Arbeitsbereich an, um mit der Buchhaltung zu starten. Name genügt: Basiswährung (CHF) und Geschäftsjahr (01.01.) sind voreingestellt und später anpassbar.",
+    "createWorkspace": "Arbeitsbereich erstellen",
+    "name": "Firmenname",
+    "cancel": "Abbrechen",
+    "legalFormHint": "Aus dem Namen vorbelegt. Alles Weitere stellst du im Firmenprofil des neuen Arbeitsbereichs ein.",
+    "newTitle": "Neuer Arbeitsbereich",
+    "newHint": "Ein eigenes Buch neben deinen bestehenden: Name und Rechtsform genügen. Du bist darin als Inhaber eingetragen, die anderen Arbeitsbereiche bleiben unberührt."
+  },
+  "workspaces": {
+    "title": "Arbeitsbereiche",
+    "newWorkspace": "Neuer Arbeitsbereich",
+    "active": "Aktiv",
+    "open": "Arbeitsbereich {name} öffnen",
+    "empty": "Noch keine Arbeitsbereiche vorhanden."
+  },
+  "company": {
+    "title": "Firmenprofil",
+    "sections": {
+      "profile": "Firmenangaben",
+      "fiscal": "Geschäftsjahr und Währung",
+      "creditor": "Rechnungssteller (QR-Rechnung)",
+      "more": "Weitere Angaben"
+    },
+    "firstHour": {
+      "lead": "Rechtsform, MWST und die IBAN für deine Rechnungen: einmal angeben, einmal speichern. Basiswährung CHF und Geschäftsjahr ab 01.01. sind voreingestellt.",
+      "vatHint": "Effektiv und vereinbart (Soll) mit Quartalsabrechnung ist der übliche Fall. Die Steuercodes legt TILL beim Speichern an.",
+      "vatSetUp": "Unter MWST einrichten",
+      "vatChange": "Unter MWST ändern",
+      "addressLater": "Die Adresse brauchst du erst, wenn die erste QR-Rechnung rausgeht. Die IBAN speicherst du schon jetzt.",
+      "addressLead": "Name und strukturierte Adresse stehen auf der QR-Rechnung. Ohne Name gilt der Firmenname."
+    },
+    "vatChoice": {
+      "effektiv": "MWST-pflichtig, effektive Methode",
+      "saldo": "MWST-pflichtig, Saldosteuersatz",
+      "none": "Nicht MWST-pflichtig"
+    },
+    "legalForm": {
+      "label": "Rechtsform",
+      "einzelfirma": "Einzelfirma",
+      "gmbh": "Gesellschaft mit beschränkter Haftung (GmbH)",
+      "ag": "Aktiengesellschaft (AG)"
+    },
+    "baseCurrency": "Basiswährung",
+    "fiscalYearStart": "Geschäftsjahresbeginn",
+    "fiscalYearStartMonth": "Geschäftsjahresbeginn, Monat",
+    "fiscalYearStartDay": "Geschäftsjahresbeginn, Tag",
+    "vatMethod": {
+      "label": "MWST-Methode",
+      "effektiv": "Effektiv",
+      "saldo": "Saldosteuersatz",
+      "none": "Nicht MWST-pflichtig"
+    },
+    "vatTiming": {
+      "label": "MWST-Abrechnungsart",
+      "ist": "Vereinnahmt (Ist)",
+      "soll": "Vereinbart (Soll)"
+    },
+    "creditorName": "Name Rechnungssteller",
+    "creditorSummary": {
+      "line": "Rechnungssteller: {name} · {address}",
+      "sameName": "wie Firmenname",
+      "noAddress": "Adresse fehlt noch",
+      "incompleteAddress": "Adresse unvollständig"
+    },
+    "address": {
+      "label": "Adresse",
+      "street": "Strasse",
+      "buildingNo": "Haus-Nr.",
+      "zip": "PLZ",
+      "town": "Ort",
+      "country": "Land"
+    },
+    "iban": "IBAN für deine Rechnungen",
+    "ibanHelp": "Welche IBAN brauche ich?",
+    "ibanHint": "Beide Arten gehen. Eine QR-IBAN (QR-IID 30000 bis 31999) gibt deinen Rechnungen eine QRR-Referenz, eine gewöhnliche IBAN eine SCOR-Referenz.",
+    "uid": "UID",
+    "mwstNo": "MWST-Nummer",
+    "save": "Speichern",
+    "saved": "Gespeichert",
+    "saving": "Wird gespeichert",
+    "notSaved": "Nicht gespeichert: {parts}",
+    "parts": {
+      "identity": "Firmenangaben",
+      "uid": "UID",
+      "mwstNo": "MWST-Nummer",
+      "fiscal": "Geschäftsjahr und Währung",
+      "vat": "MWST",
+      "creditor": "Rechnungssteller",
+      "ebill": "eBill",
+      "terms": "Standard-Zahlungsfrist"
+    },
+    "infoLabel": "Mehr zu {topic}",
+    "locked": {
+      "note": "Gesperrt: in diesem Arbeitsbereich wurde bereits gebucht. Basiswährung und Geschäftsjahresbeginn liegen damit fest, denn die bestehenden Buchungen bauen auf ihnen auf."
+    },
+    "err": {
+      "invalidName": "Bitte einen Firmennamen eingeben.",
+      "invalidIban": "Das ist keine gültige IBAN. Bitte prüfe die Nummer: eine QR-IBAN und eine gewöhnliche IBAN sind hier beide richtig.",
+      "illegalCharacter": "In einem dieser Felder steht ein Zeichen, das eine QR-Rechnung nicht tragen kann, zum Beispiel ein Zeilenumbruch. Bitte Name und Adresse je auf einer Zeile halten.",
+      "needsStructuredAddress": "Bitte die vollständige, strukturierte Adresse angeben (Strasse, Haus-Nr., PLZ, Ort, Land).",
+      "invalidCountry": "Das Land ist der zweistellige Ländercode, den eine QR-Rechnung braucht, zum Beispiel CH, LI oder DE.",
+      "fieldTooLong": "Ein Feld ist länger, als eine QR-Rechnung erlaubt: Name und Strasse höchstens 70 Zeichen, Haus-Nr. und PLZ 16, Ort 35.",
+      "ibanNotChLi": "Eine QR-Rechnung braucht ein Schweizer oder Liechtensteiner Konto (eine IBAN, die mit CH oder LI beginnt). Diese IBAN ist gültig, aber auf sie lässt sich keine QR-Rechnung bezahlen.",
+      "needsEmptyLedger": "Geschäftsjahr und Währung lassen sich nicht mehr ändern, sobald Buchungen vorhanden sind.",
+      "invalidUid": "Die UID hat die Form CHE-123.456.789.",
+      "invalidMwstNo": "Die MWST-Nummer hat die Form CHE-123.456.789 MWST.",
+      "invalidLegalForm": "Diese Rechtsform kennt TILL nicht.",
+      "vatFailed": "Die MWST liess sich nicht einrichten. Die übrigen Angaben sind gespeichert; richte die MWST unter MWST ein.",
+      "cannotClear": {
+        "creditorName": "Den Namen des Rechnungsstellers kannst du hier nicht leeren. Trag den Firmennamen ein oder behalte den bisherigen Namen.",
+        "iban": "Die IBAN lässt sich hier nicht entfernen. Trag eine andere IBAN ein oder behalte die bisherige.",
+        "uid": "Die UID lässt sich hier nicht entfernen. Trag die richtige UID ein oder behalte die bisherige.",
+        "mwstNo": "Die MWST-Nummer lässt sich hier nicht entfernen. Trag die richtige Nummer ein oder behalte die bisherige."
+      },
+      "invalidPaymentTermsDays": "Die Standard-Zahlungsfrist ist eine ganze Zahl von Tagen, von 0 bis 365."
+    },
+    "customFields": {
+      "title": "Eigene Felder"
+    },
+    "terms": {
+      "label": "Standard-Zahlungsfrist (Tage)",
+      "placeholder": "keine",
+      "info": "Gilt für Kunden und Lieferanten ohne eigene Zahlungsfrist: ihre Rechnungen sind so viele Tage nach dem Rechnungsdatum fällig. 0 heisst sofort. Leer lassen: fällig am Rechnungsdatum."
+    }
+  },
+  "ebillConfig": {
+    "title": "eBill",
+    "enrollmentExplainer": "Die Anmeldung als Rechnungssteller erfolgt bei einem zertifizierten Netzwerkpartner, nicht in TILL. Nach der Anmeldung trägst du hier die eBill-Biller-ID ein, die dir der Partner ausgestellt hat.",
+    "partnerListLink": "Zertifizierte Netzwerkpartner (ebill.ch)",
+    "billerPid": "eBill-Biller-ID",
+    "invalidBillerPid": "Die eBill-Biller-ID besteht aus 41 gefolgt von 15 Ziffern.",
+    "connectorTopic": "eBill-Konnektor",
+    "connectorAbsent": "Kein eBill-Konnektor konfiguriert",
+    "connectorAbsentDetail": "Das Vorbereiten von Nutzlasten funktioniert offline; für die Übermittlung wird der Cloud-Konnektor benötigt, der separat aktiviert wird."
+  },
+  "help": {
+    "Setup": {
+      "title": "Einrichtung",
+      "body": "Die Grundlagen dieses Arbeitsbereichs: das Firmenprofil mit Name, Adresse, UID, Währung und Geschäftsjahr sowie die Verwaltung deiner Arbeitsbereiche.\n\nBeim ersten Start führt dich die Seite durch das Anlegen des Arbeitsbereichs; danach bearbeitest du hier das Profil. Sobald gebucht wurde, liegen Währung und Geschäftsjahresbeginn fest, denn die bestehenden Buchungen bauen darauf auf.\n\nDie betrieblichen Bereiche wie Datensicherung, Vertrauen und Diagnose findest du unter Betrieb.",
+      "concepts": [],
+      "docsPath": "quickstart"
+    }
+  },
+  "workspaceSettings": {
+    "title": "Einstellungen",
+    "yes": "Ja",
+    "no": "Nein",
+    "unit": {
+      "days": "{n} Tage",
+      "items": "{n} Einträge",
+      "percent": "{n} %"
+    },
+    "defaultIs": "Standard: {value}",
+    "isDefault": "Standard",
+    "editTitle": "Ändern: {setting}",
+    "cancel": "Abbrechen",
+    "reset": "Auf Standard zurücksetzen ({value})",
+    "save": "Speichern",
+    "consequence": "Die Änderung gilt ab der nächsten Aktion für alle in diesem Arbeitsbereich und wird mit Begründung im Verlauf der Einstellung festgehalten.",
+    "value": "Wert",
+    "bounds": "Von {min} bis {max}. Standard: {value}.",
+    "reason": "Begründung (Pflicht)",
+    "refusal": {
+      "unknown_setting": "Diese Einstellung kennt diese TILL-Version nicht.",
+      "invalid_setting_value": "Dieser Wert liegt ausserhalb dessen, was die Einstellung erlaubt.",
+      "reason_required": "Bitte gib einen Grund für die Änderung an.",
+      "belegnummer_display_clash": "Mit dieser Änderung könnte eine spätere Belegnummer {display} wiederholen, die schon vergeben ist. Wähle ein anderes Präfix, eine andere Startnummer oder eine andere Nummerierung.",
+      "belegnummer_prefix_invalid": "Ein Präfix ist leer oder hat bis zu 12 Zeichen aus {characters}, beginnt mit einem Buchstaben oder einer Ziffer und endet nicht mit einer Ziffer."
+    },
+    "stale": "Der gespeicherte Wert {stored} passt nicht mehr, der Standard ({value}) gilt. Ändere oder setze ihn zurück."
+  }
+}

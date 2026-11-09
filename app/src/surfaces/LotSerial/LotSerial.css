@@ -1,0 +1,177 @@
+/* J01, Inventory -> Lot & Serial Tracking. Item-centric master-detail split, one accent, glyph+label
+   status. No new colour token (design-canon): every value reuses a --t- token.
+
+   D118 B2 (2026-08-24): the page header is the shared SurfaceHeader, the Lots and Serials detail
+   tables the shared DataTable, and both create overlays the shared DetailDrawer. The per-surface CSS
+   that duplicated the tables (and their header, cells and numeric alignment), the drawer chrome and
+   the button set has been deleted; what remains is genuinely LotSerial-specific: the master-detail
+   split, the item navigation list, the mode selector and the drawer form layout.
+
+   Round 2 (D137): the panes are background steps without a hairline (K-09); an item is a list row
+   whose current one is the pill with `aria-current` (K-17); a lot's or serial's state is a Status
+   word and the tracking mode a quiet tag (K-22); the status changes and the archive sit in the row's
+   overflow (K-21); an archived row reads dim, never opacity-faded (K-36); the drawer fields are the
+   shared `.field` (K-15); sizes and gaps are tokens (K-37). */
+
+.ls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.ls-split {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .ls-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A pane is the elevated panel on the page, never a hairline box (K-09). */
+.ls-pane {
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  padding: var(--t-space-1);
+}
+
+.ls-detail {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The item navigation list (the master pane): a single-column pick-one list, not a tabular grid, so
+   it stays bespoke rather than adopting DataTable. */
+.ls-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* An item is a 32px list row with a transparent 1px border, where the focus cue lands (K-10); the
+   current one is the tinted pill (K-17). */
+.ls-list-item {
+  width: 100%;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: 0 var(--t-space-1);
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.ls-list-item:hover {
+  background: var(--t-bg-soft);
+}
+
+.ls-list-item[aria-current='true'] {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+.ls-item-name {
+  flex: 1;
+}
+
+.ls-mode {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.ls-detail-title {
+  margin: 0;
+  flex: 1;
+}
+
+.ls-field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text-dim);
+}
+
+.ls-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.ls-subhead {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.ls-h3 {
+  margin: 0;
+  flex: 1;
+}
+
+/* A monospace code cell (lot number, serial number) inside the shared DataTable. */
+.ls-code {
+  font-family: var(--t-font-mono);
+  white-space: nowrap;
+}
+
+/* The item's tracking mode: a category, so a quiet hairline pill in dim ink, never a state. */
+.ls-tag {
+  flex: 0 0 auto;
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  font-size: var(--t-font-sm);
+  line-height: 20px;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+/* An archived lot or serial reads dim down the whole row, its Status word saying why (K-36). */
+.ls-archived td,
+.ls-archived th {
+  color: var(--t-text-dim);
+}
+
+.ls-muted {
+  color: var(--t-text-dim);
+}
+
+.ls-hint {
+  margin: var(--t-space-0-5) 0 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* Drawer form fields the DetailDrawer body hosts: a label over the shared `.field` (K-15). */
+.ls-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.ls-field label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}

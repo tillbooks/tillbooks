@@ -1,0 +1,93 @@
+{
+  "nav": {
+    "hausbuch": "House book"
+  },
+  "hausbuch": {
+    "title": "House book",
+    "subtitle": "Your house rules: agents read them first and follow them.",
+    "loading": "Loading the house rules…",
+    "denied": "The house book needs the right to read master data.",
+    "readOnly": "You can read the house rules. Changing them needs the right to manage settings.",
+    "notes": "House rules",
+    "add": "Add a note",
+    "empty": {
+      "title": "No house rules yet.",
+      "hint": "Agents propose some, or you write the first one."
+    },
+    "group": {
+      "workspace": "Whole workspace",
+      "account": "Accounts",
+      "counterparty": "Counterparties",
+      "topic": "Topics"
+    },
+    "scope": {
+      "workspace": "Whole workspace",
+      "account": "Account",
+      "counterparty": "Counterparty",
+      "topic": "Topic"
+    },
+    "col": {
+      "note": "House rule",
+      "scope": "Applies to",
+      "changed": "Changed",
+      "actions": "Actions"
+    },
+    "changedBy": "{who}, {date}",
+    "actor": {
+      "agent": "Agent",
+      "studio": "Studio"
+    },
+    "more": "More for “{text}”",
+    "archive": "Archive",
+    "archived": "Archived: “{text}”. Agents no longer read it.",
+    "undo": "Undo",
+    "withheld": "{count} house rules about counterparties are hidden from you, because you lack the right to read the bank.",
+    "preview": "What agents see",
+    "previewHint": "The brief an agent reads first: how many entries each section carries.",
+    "previewLoading": "Loading the brief…",
+    "section": {
+      "accounts": "Accounts",
+      "vatCodes": "VAT codes",
+      "bankAccounts": "Bank accounts",
+      "rules": "Booking rules and templates",
+      "notes": "House rules",
+      "counts": "Open Pendenzen"
+    },
+    "none": "none",
+    "omitted": "Not in the brief without the read right: {sections}.",
+    "size": "Size: about {tokens} tokens.",
+    "dialog": {
+      "addTitle": "Add a note",
+      "editTitle": "Edit house rule",
+      "cancel": "Cancel",
+      "save": "Save",
+      "text": "House rule",
+      "count": "{used} of {max} characters",
+      "kind": "Applies to",
+      "ref": {
+        "account": "Account",
+        "counterparty": "Counterparty",
+        "topic": "Topic"
+      },
+      "refHint": {
+        "account": "The account number, for example 6500.",
+        "counterparty": "The IBAN or the name, as the bank statement shows it.",
+        "topic": "A short keyword, for example VAT or expenses."
+      }
+    },
+    "refusal": {
+      "scope_not_found": "That account does not exist. Check the account number. Nothing was saved.",
+      "invalid_input": "That entry does not fit. A house rule has 1 to 500 characters, a topic at most 40. Nothing was saved.",
+      "not_found": "This house rule no longer exists. Reload the page. Nothing was changed.",
+      "permission_denied": "You lack the right to manage settings for this. Nothing was changed."
+    }
+  },
+  "help": {
+    "Hausbuch": {
+      "title": "House book",
+      "body": "The house book holds the rules your workspace books by: how a particular counterparty is booked, for example, or what happens with VAT. Every agent reads them first and follows them. A house rule never books anything itself, it is a hint. When an agent writes a house rule, it waits in Pendenzen for your approval. Under What agents see you find what an agent learns about your books first.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

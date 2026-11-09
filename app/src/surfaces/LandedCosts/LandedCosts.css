@@ -1,0 +1,36 @@
+/* I03 Landed Costs surface. The list table, the page header, the detail panel and the button set are
+   the shared primitives now (DataTable, SurfaceHeader, DetailDrawer, Modal, .btn), so their bespoke
+   CSS is gone. What remains is genuinely surface-specific: the create form grid, the reversed-row
+   dim (the DataTable rowClassName hook), and the journal-entry caption in the drawer foot. No new
+   colour tokens (design canon).
+
+   Round 2 (D137): the create form is the elevated step without a hairline (K-09); a reversed voucher
+   and the journal caption read dim, never opacity-faded (K-36); the state is a Status word (K-22);
+   sizes, gaps and radii are tokens (K-37). */
+.landed-costs { display: flex; flex-direction: column; gap: var(--t-space-2); }
+.lc-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--t-space-2);
+  padding: var(--t-space-2);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+}
+.lc-form label,
+.lc-form .lc-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+/* A reversed voucher reads as spent: dim, its Status word carrying the state (never colour alone).
+   Joined onto the base row class by the DataTable rowClassName hook. */
+.lc-row--reversed td,
+.lc-row--reversed th { color: var(--t-text-dim); }
+.lc-journal {
+  margin-inline-end: auto;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}

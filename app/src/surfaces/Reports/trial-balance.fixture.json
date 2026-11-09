@@ -1,0 +1,334 @@
+{
+  "period": {
+    "start": "2026-01-01",
+    "end": "2026-03-31"
+  },
+  "baseCurrency": "CHF",
+  "groupBy": "kmu",
+  "rows": [
+    {
+      "account": {
+        "id": "acc_1",
+        "number": "1000",
+        "name": "Kassenbestand",
+        "type": "asset"
+      },
+      "kmuClass": "1",
+      "openingMinor": 500000,
+      "debitMinor": 0,
+      "creditMinor": 0,
+      "closingMinor": 500000
+    },
+    {
+      "account": {
+        "id": "acc_2",
+        "number": "1020",
+        "name": "Bankkonto",
+        "type": "asset"
+      },
+      "kmuClass": "1",
+      "openingMinor": 2000000,
+      "debitMinor": 540500,
+      "creditMinor": 745000,
+      "closingMinor": 1795500
+    },
+    {
+      "account": {
+        "id": "acc_4",
+        "number": "1100",
+        "name": "Forderungen aus Lieferungen und Leistungen",
+        "type": "asset"
+      },
+      "kmuClass": "1",
+      "openingMinor": 0,
+      "debitMinor": 1081000,
+      "creditMinor": 30000,
+      "closingMinor": 1051000
+    },
+    {
+      "account": {
+        "id": "acc_11",
+        "number": "1500",
+        "name": "Maschinen und Produktionsanlagen",
+        "type": "asset"
+      },
+      "kmuClass": "1",
+      "openingMinor": 1200000,
+      "debitMinor": 0,
+      "creditMinor": 200000,
+      "closingMinor": 1000000
+    },
+    {
+      "account": {
+        "id": "acc_15",
+        "number": "2000",
+        "name": "Verbindlichkeiten aus Lieferungen und Leistungen",
+        "type": "liability"
+      },
+      "kmuClass": "2",
+      "openingMinor": -700000,
+      "debitMinor": 15000,
+      "creditMinor": 0,
+      "closingMinor": -685000
+    },
+    {
+      "account": {
+        "id": "acc_17",
+        "number": "2200",
+        "name": "Geschuldete MWST auf Erlösen",
+        "type": "liability"
+      },
+      "kmuClass": "2",
+      "openingMinor": 0,
+      "debitMinor": 0,
+      "creditMinor": 121500,
+      "closingMinor": -121500
+    },
+    {
+      "account": {
+        "id": "acc_22",
+        "number": "2400",
+        "name": "Langfristige Bankschulden",
+        "type": "liability"
+      },
+      "kmuClass": "2",
+      "openingMinor": -1000000,
+      "debitMinor": 0,
+      "creditMinor": 0,
+      "closingMinor": -1000000
+    },
+    {
+      "account": {
+        "id": "acc_25",
+        "number": "2800",
+        "name": "Grund-, Gesellschafter- oder Stiftungskapital",
+        "type": "equity"
+      },
+      "kmuClass": "2",
+      "openingMinor": -2000000,
+      "debitMinor": 0,
+      "creditMinor": 0,
+      "closingMinor": -2000000
+    },
+    {
+      "account": {
+        "id": "acc_30",
+        "number": "3200",
+        "name": "Erlöse aus Handelswaren",
+        "type": "income"
+      },
+      "kmuClass": "3",
+      "openingMinor": 0,
+      "debitMinor": 0,
+      "creditMinor": 500000,
+      "closingMinor": -500000
+    },
+    {
+      "account": {
+        "id": "acc_31",
+        "number": "3400",
+        "name": "Erlöse aus Dienstleistungen",
+        "type": "income"
+      },
+      "kmuClass": "3",
+      "openingMinor": 0,
+      "debitMinor": 0,
+      "creditMinor": 1000000,
+      "closingMinor": -1000000
+    },
+    {
+      "account": {
+        "id": "acc_33",
+        "number": "3800",
+        "name": "Rabatte, Skonti und Gutschriften",
+        "type": "income"
+      },
+      "kmuClass": "3",
+      "openingMinor": 0,
+      "debitMinor": 30000,
+      "creditMinor": 0,
+      "closingMinor": 30000
+    },
+    {
+      "account": {
+        "id": "acc_40",
+        "number": "4900",
+        "name": "Erhaltene Rabatte und Skonti",
+        "type": "expense"
+      },
+      "kmuClass": "4",
+      "openingMinor": 0,
+      "debitMinor": 0,
+      "creditMinor": 15000,
+      "closingMinor": -15000
+    },
+    {
+      "account": {
+        "id": "acc_42",
+        "number": "5000",
+        "name": "Löhne und Gehälter",
+        "type": "expense"
+      },
+      "kmuClass": "5",
+      "openingMinor": 0,
+      "debitMinor": 600000,
+      "creditMinor": 0,
+      "closingMinor": 600000
+    },
+    {
+      "account": {
+        "id": "acc_50",
+        "number": "6500",
+        "name": "Verwaltungs- und Bürokosten",
+        "type": "expense"
+      },
+      "kmuClass": "6",
+      "openingMinor": 0,
+      "debitMinor": 120000,
+      "creditMinor": 0,
+      "closingMinor": 120000
+    },
+    {
+      "account": {
+        "id": "acc_54",
+        "number": "6800",
+        "name": "Abschreibungen und Wertberichtigungen auf Positionen des Anlagevermögens",
+        "type": "expense"
+      },
+      "kmuClass": "6",
+      "openingMinor": 0,
+      "debitMinor": 200000,
+      "creditMinor": 0,
+      "closingMinor": 200000
+    },
+    {
+      "account": {
+        "id": "acc_55",
+        "number": "6900",
+        "name": "Finanzaufwand",
+        "type": "expense"
+      },
+      "kmuClass": "6",
+      "openingMinor": 0,
+      "debitMinor": 25000,
+      "creditMinor": 0,
+      "closingMinor": 25000
+    }
+  ],
+  "groups": [
+    {
+      "key": "1",
+      "labels": {
+        "de": "Aktiven",
+        "fr": "Actifs",
+        "it": "Attivi",
+        "en": "Assets"
+      },
+      "accounts": [
+        "1000",
+        "1020",
+        "1100",
+        "1500"
+      ],
+      "debitMinor": 1621500,
+      "creditMinor": 975000,
+      "closingMinor": 4346500
+    },
+    {
+      "key": "2",
+      "labels": {
+        "de": "Passiven",
+        "fr": "Passifs",
+        "it": "Passivi",
+        "en": "Liabilities and equity"
+      },
+      "accounts": [
+        "2000",
+        "2200",
+        "2400",
+        "2800"
+      ],
+      "debitMinor": 15000,
+      "creditMinor": 121500,
+      "closingMinor": -3806500
+    },
+    {
+      "key": "3",
+      "labels": {
+        "de": "Betrieblicher Ertrag",
+        "fr": "Produits d'exploitation",
+        "it": "Ricavi d'esercizio",
+        "en": "Operating income"
+      },
+      "accounts": [
+        "3200",
+        "3400",
+        "3800"
+      ],
+      "debitMinor": 30000,
+      "creditMinor": 1500000,
+      "closingMinor": -1470000
+    },
+    {
+      "key": "4",
+      "labels": {
+        "de": "Materialaufwand",
+        "fr": "Charges de matériel",
+        "it": "Costi per il materiale",
+        "en": "Material expenses"
+      },
+      "accounts": [
+        "4900"
+      ],
+      "debitMinor": 0,
+      "creditMinor": 15000,
+      "closingMinor": -15000
+    },
+    {
+      "key": "5",
+      "labels": {
+        "de": "Personalaufwand",
+        "fr": "Charges de personnel",
+        "it": "Costi per il personale",
+        "en": "Personnel expenses"
+      },
+      "accounts": [
+        "5000"
+      ],
+      "debitMinor": 600000,
+      "creditMinor": 0,
+      "closingMinor": 600000
+    },
+    {
+      "key": "6",
+      "labels": {
+        "de": "Übriger betrieblicher Aufwand",
+        "fr": "Autres charges d'exploitation",
+        "it": "Altri costi d'esercizio",
+        "en": "Other operating expenses"
+      },
+      "accounts": [
+        "6500",
+        "6800",
+        "6900"
+      ],
+      "debitMinor": 345000,
+      "creditMinor": 0,
+      "closingMinor": 345000
+    }
+  ],
+  "totals": {
+    "openingMinor": 0,
+    "debitMinor": 2611500,
+    "creditMinor": 2611500,
+    "closingMinor": 0
+  },
+  "noActivity": false,
+  "reconciles": true,
+  "reconciliation": {
+    "debitEqualsCredit": true,
+    "closingTiesToLedger": true,
+    "everyAccountRenderedOnce": true
+  },
+  "ok": true
+}

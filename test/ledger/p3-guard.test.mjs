@@ -1,0 +1,69 @@
+// @ts-check
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import * as ledger from '../../dist/core/ledger/index.js';
+
+// Pattern P3: A02 is the single posting path. Every later spec's "delegates to A02" claim relies on
+// there being no second writer of journal_entry / journal_line. This guard fails if a future edit
+// leaks a raw entry writer (e.g. writePostedEntry) into the public ledger surface, or renames a verb.
+test('P3 guard: the ledger exposes exactly its intended verbs, no raw writer', () => {
+  const expected = [
+    // A02, the single posting path and its reads.
+    'deleteDraft',
+    'getEntry',
+    // A02 §4b (D178 point 2): the Belegnummer inspection read. It writes nothing; numbers are assigned
+    // only inside postEntry's own transaction, so no numbering writer is public either.
+    'journalNumberingPlan',
+    'listJournal',
+    'postEntry',
+    'reverseEntry',
+    'saveDraft',
+    // A03, audit trail & period locks (verbs, read models, and the port factories that wire them).
+    'appendAuditLog',
+    'assertPeriodOpen',
+    'fiscalYearOf',
+    'getAuditLog',
+    'hardCloseYear',
+    'ledgerPorts',
+    'listPeriodLocks',
+    'lockPeriod',
+    'makeAuditPort',
+    'makePeriodPort',
+    'reopenMonth',
+    'softCloseMonth',
+    'unlockPeriod',
+    // A04, opening balances. All four go THROUGH postEntry: `setOpeningBalances` builds lines and
+    // hands them over, `importMigration` delegates to `setOpeningBalances`, and neither touches
+    // journal_entry / journal_line directly. `parseSwissAmount` writes nothing at all.
+    'getOpeningBalances',
+    'importMigration',
+    'parseSwissAmount',
+    // D158: the verb's own checks with nothing written, which the dial seam runs before it drafts an
+    // agent's opening position. It shares `setOpeningBalances`'s plan and never reaches postEntry.
+    'prevalidateImportMigration',
+    'prevalidateOpeningBalances',
+    'setOpeningBalances',
+    // N01 US-N01.3 (D158): post_entry's own checks with nothing written, the pre-write half `postEntry`
+    // itself runs (`previewPostingLines`); it never writes.
+    'prevalidatePostEntry',
+    // N01 US-N01.1: A04's id-first, workspace-fenced account resolver, read by the registry's input
+    // boundary. A read: it writes nothing.
+    'resolveAccountReference',
+  ].sort();
+  const exportedFns = Object.keys(ledger)
+    .filter((k) => typeof ledger[k] === 'function')
+    .sort();
+  assert.deepEqual(exportedFns, expected);
+  // The raw journal writers must never be public: A03's year-close posts THROUGH A02 postEntry (P3),
+  // it does not open a second writer of journal_entry / journal_line.
+  //
+  // The directive below is not a suppression, it is the SECOND guard, and it is strictly the earlier
+  // of the two. Reading a member the module does not export is a type error, so `@ts-expect-error` is
+  // required for this line to compile TODAY. The moment anyone adds `writePostedEntry` to the public
+  // surface the read becomes legal, the directive becomes UNUSED, and `tsc` fails the build with
+  // TS2578 before the suite is ever run. Removing the directive to "clean up" therefore breaks the
+  // build immediately: that is the intended behaviour, not a snag.
+  // @ts-expect-error `writePostedEntry` is not exported, and the day it is, this line stops erroring
+  assert.equal(ledger.writePostedEntry, undefined, 'the raw entry writer must never be public');
+});

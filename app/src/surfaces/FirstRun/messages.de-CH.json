@@ -1,0 +1,124 @@
+{
+  "nav": {
+    "firstRun": "Erster Start"
+  },
+  "firstrun": {
+    "title": "Richte dein Hauptbuch ein",
+    "lead": "TILL hat auf diesem Gerät kein Hauptbuch gefunden. Wähle eine Tür: es wird nichts angelegt, bis du es tust.",
+    "lead_existing_one": "Auf diesem Gerät gibt es bereits ein Hauptbuch. Diese Türen legen ein weiteres an; deine bestehenden Bücher bleiben unberührt.",
+    "lead_existing_many": "Auf diesem Gerät gibt es bereits {count} Hauptbücher. Diese Türen legen ein weiteres an; deine bestehenden Bücher bleiben unberührt.",
+    "existing": {
+      "overview": "Zur Übersicht"
+    },
+    "create": {
+      "label": "Neues Hauptbuch anlegen",
+      "label_existing": "Ein weiteres Hauptbuch anlegen",
+      "hint": "Beginne frische Bücher mit dem Schweizer KMU-Kontenplan.",
+      "name_label": "Firmenname",
+      "name_placeholder": "Acme GmbH",
+      "action": "Hauptbuch anlegen",
+      "busy": "Wird angelegt..."
+    },
+    "restore": {
+      "label": "Backup wiederherstellen",
+      "hint": "Lade eine .tillbackup-Datei. Die IDs werden in einen neuen Arbeitsbereich neu vergeben; nichts wird überschrieben.",
+      "expects": "Diese Installation erwartet Schema-Generation {generation}.",
+      "pick_label": "Sicherungen auf diesem Gerät ({count})",
+      "pick_row": "{date}: Generation {generation}, {entries} Buchungen",
+      "pick_incompatible": "Generation {generation} passt nicht zu dieser Installation. Installiere das passende Release und stelle sie dort wieder her.",
+      "pick_other": "Anderer Pfad",
+      "verified": "Geprüft: Generation {generation}, {entries} Buchungen, ausgeglichen. Wird wiederhergestellt.",
+      "source_label": "Backup-Datei",
+      "source_placeholder": "/pfad/zu/backup.tillbackup",
+      "name_label": "Name des neuen Arbeitsbereichs (optional)",
+      "name_default": "Wiederhergestelltes Hauptbuch",
+      "action": "Backup wiederherstellen",
+      "busy": "Wird wiederhergestellt..."
+    },
+    "adopt": {
+      "label": "Bestehende Datenbank übernehmen",
+      "hint": "Hast du schon ein TILL-Hauptbuch auf diesem Gerät? Wähle die Datei, und TILL öffnet sie. Kopiert oder verschoben wird sie nie.",
+      "pick": "Datei wählen …",
+      "picked": "Gewählt: {name}",
+      "path_label": "Pfad zum Hauptbuch",
+      "path_placeholder": "/Users/du/Dokumente/till.db",
+      "path_hint": "Im Finder: Datei mit der rechten Maustaste anklicken, die Wahltaste (⌥) halten und «Als Pfadname kopieren» wählen.",
+      "action": "Übernehmen",
+      "busy": "Wird geprüft …",
+      "opening_title": "TILL öffnet dein Hauptbuch …",
+      "opening_body": "TILL startet dafür kurz neu. Das dauert nur einen Moment.",
+      "opening_agents": "Agenten, die schon verbunden sind, sehen das neue Hauptbuch, sobald sie neu starten.",
+      "error": {
+        "book_path_pinned": "Diese Installation legt ihr Hauptbuch selbst fest. Hier lässt es sich nicht wechseln.",
+        "book_path_not_absolute": "Gib den vollständigen Pfad an, er beginnt mit einem /.",
+        "book_not_found": "Unter diesem Pfad liegt keine Datei. Prüfe den Pfad und versuche es noch einmal.",
+        "book_unreadable": "TILL darf diese Datei nicht lesen und schreiben. Prüfe die Berechtigung und versuche es noch einmal.",
+        "not_a_till_database": "Diese Datei ist kein TILL-Hauptbuch. Sie blieb unberührt. Wähle eine andere.",
+        "book_already_open": "Dieses Hauptbuch ist bereits geöffnet.",
+        "book_not_saved": "TILL konnte sich das Hauptbuch nicht merken. Es wurde nichts verändert. Versuche es noch einmal.",
+        "book_not_forgotten": "TILL konnte das Hauptbuch nicht vergessen. Es wurde nichts verändert. Versuche es noch einmal.",
+        "restart_unavailable": "Diese Installation kann ihr Hauptbuch nicht selbst wechseln. Es wurde nichts verändert.",
+        "fallback": "Das hat nicht geklappt. Es wurde nichts verändert. Versuche es noch einmal."
+      }
+    },
+    "unavailable": {
+      "title": "Dein übernommenes Hauptbuch ist nicht erreichbar",
+      "missing": "TILL findet die Datei nicht mehr: {path}. Vielleicht wurde sie verschoben, oder das Laufwerk ist nicht verbunden.",
+      "unopenable": "TILL kann die Datei nicht öffnen: {path}. Vielleicht fehlt die Berechtigung, oder sie ist kein TILL-Hauptbuch mehr.",
+      "nothing_written": "TILL hat nichts verändert und nirgends ein neues Hauptbuch angelegt. Wähle, wie es weitergeht.",
+      "retry": "Erneut versuchen",
+      "choose_other": "Anderes Hauptbuch wählen",
+      "forget": "Vergessen und neu beginnen",
+      "forget_confirm": "TILL vergisst nur, wo dieses Hauptbuch liegt. Die Datei {path} bleibt, wie sie ist, und du kannst sie später wieder übernehmen. Danach öffnet TILL das Standard-Hauptbuch dieses Geräts.",
+      "forget_yes": "Vergessen",
+      "forget_no": "Abbrechen",
+      "forgetting_title": "TILL beginnt neu …"
+    },
+    "error": {
+      "generic": "Das hat nicht geklappt: {code}.",
+      "not_a_till_database": "Diese Datei ist keine TILL-Datenbank. Die Datei blieb unberührt. Wähle eine andere.",
+      "schema_newer_than_runtime": "Diese Datenbank wurde von einem neueren TILL geschrieben. Aktualisiere TILL und versuche es erneut. Die Datei wurde nicht verändert.",
+      "incompatible_schema_version": "Dieses Backup stammt aus Schema-Generation {backup}; diese Installation läuft auf Generation {runtime}. Installiere das aktuelle Release, stelle das Backup dort wieder her und aktualisiere danach in deinem eigenen Rhythmus. Das Backup blieb unberührt.",
+      "unrestorable_format": "Ein Export (.tillexport) ist keine Wiederherstellungsquelle. Wähle eine .tillbackup-Datei.",
+      "unbalanced": "Geprüft, aber nicht ausgeglichen: Generation {generation}, {entries} Buchungen. TILL stellt sie nicht wieder her. Wähle eine andere Sicherung."
+    },
+    "demo": {
+      "lead": "Lieber erst mit Beispieldaten anschauen?",
+      "action": "Demo ausprobieren",
+      "busy": "Demo wird erstellt",
+      "hint": "Ein Demo-Arbeitsbereich mit Beispielbuchungen. Du kannst ihn später löschen."
+    }
+  },
+  "runtime": {
+    "loading": "Laufzeit wird gelesen...",
+    "mode": {
+      "label": "Läuft als: {mode}",
+      "up": "till up (Studio, REST und MCP in einem Prozess)",
+      "mcp": "till mcp (Agent über stdio)",
+      "serve": "till serve (MCP über HTTP)",
+      "agent_session": "Agent-Sitzung (in der Agent-Laufzeit)"
+    },
+    "scheduler": {
+      "armed": "Scheduler an, noch kein Tick.",
+      "last_tick": "Scheduler an, letzter Tick {at}.",
+      "off": "Scheduler aus (wiederkehrende Kadenzen laufen nur, während till up läuft)."
+    },
+    "residency": {
+      "caveat": "Diese Sitzung läuft in einer Cloud-Umgebung: deine Bücher liegen währenddessen nicht nur auf deinem Gerät. Sichere sie am Ende der Sitzung und trage die Datei hinaus."
+    }
+  },
+  "help": {
+    "FirstRun": {
+      "title": "Erster Start",
+      "body": "Das ist der erste Bildschirm, wenn TILL keinen Arbeitsbereich geöffnet hat. Du wählst eine von drei Türen: einen neuen Arbeitsbereich erstellen, einen aus einer Sicherung wiederherstellen oder ein TILL-Hauptbuch übernehmen, das auf diesem Gerät schon liegt. Beim Übernehmen startet TILL kurz neu und öffnet dann dieses Hauptbuch; die Datei bleibt, wo sie ist. Nichts entsteht im Stillen, denn jede Tür bestätigt, bevor sie schreibt, und bis du eine wählst, gibt es noch keine Bücher. Ist ein übernommenes Hauptbuch nicht erreichbar, sagt dir dieser Bildschirm das und bietet an, es erneut zu versuchen, ein anderes zu wählen oder es zu vergessen.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  },
+  "journey": {
+    "_block": "M03 journey (N4a)",
+    "residency": {
+      "lead": "Deine Bücher sind eine einzelne Datei auf diesem Gerät. Nichts wird gesendet. Verschlüsselung übernimmt das Betriebssystem (FileVault)."
+    }
+  }
+}

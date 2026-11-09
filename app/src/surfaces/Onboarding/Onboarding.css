@@ -1,0 +1,129 @@
+/* G03 Onboarding: the first-run path choice, on the canonical design tokens.
+ *
+ * Separation comes from the elevation step (`--t-bg` page -> `--t-bg-elev` panel) and spacing, NOT
+ * from a border around every card (DESIGN.md forbidden list). The single accent is not spent on the
+ * three equal path actions: a genuine three-way fork has no one primary, so each path is a
+ * `--secondary` control and the accent stays in reserve for the resume affordance. */
+
+.onboarding {
+  max-width: 64rem;
+}
+
+.onboarding-intro {
+  margin: var(--t-space-1) 0 0;
+  max-width: 60ch;
+  color: var(--t-text-dim);
+}
+
+/* ── Loading: a skeleton that traces the real path-choice layout, never one block ── */
+.onboarding-skeleton {
+  margin-top: var(--t-space-3);
+}
+
+/* ── The resume affordance: a bounded strip carrying the one accent primary on this surface ── */
+.onboarding-resume {
+  margin: var(--t-space-2) 0 0;
+  color: var(--t-text);
+}
+
+/* ── The path choice ── */
+.onboarding-paths {
+  list-style: none;
+  margin: var(--t-space-3) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--t-space-2);
+}
+
+.onboarding-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-3);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+}
+
+.onboarding-card h2 {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+.onboarding-card p {
+  margin: 0;
+  flex: 1;
+  color: var(--t-text-dim);
+  line-height: 1.5;
+}
+
+/* The path action is the card's own full-width control; a first-run CTA is a standalone primary
+  tier, so it clears 44px (D116) rather than the dense-row band. */
+.onboarding-card .btn {
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--t-space-1);
+}
+
+/* ── The demo banner (D89 WorkspaceModeBanner call site).
+ * Styled self-contained here so it is correct wherever the Shell mounts it, without depending on
+ * another surface's stylesheet being loaded. Onboarding.css always loads with DemoBanner.
+ *
+ * The two-class selector is deliberate: the shared `.workspace-mode-banner` rule currently lives in
+ * Migration.css on undefined tokens (a cross-surface defect flagged separately), and at equal
+ * single-class specificity whichever sheet loads last would win. `.workspace-mode-banner.demo-banner`
+ * outranks it, so the banner keeps its opaque ground and hairline regardless of load order. ── */
+.demo-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+  padding: var(--t-space-1) var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  margin-bottom: var(--t-space-2);
+}
+
+.workspace-mode-banner.demo-banner {
+  border: 1px solid var(--t-border);
+  background: var(--t-bg-elev);
+}
+
+.demo-banner .workspace-mode-glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.demo-banner .workspace-mode-text {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.demo-banner-overflow summary {
+  cursor: pointer;
+}
+
+.demo-banner-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+/* The disabled discard names the missing right in visible text (never a `title` tooltip, never
+  colour alone): a lock glyph plus the capability sentence. */
+.demo-banner-denied {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.demo-banner-error {
+  flex-basis: 100%;
+  margin: var(--t-space-0-5) 0 0;
+  color: var(--t-danger);
+}

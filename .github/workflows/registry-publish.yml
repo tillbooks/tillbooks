@@ -1,0 +1,73 @@
+name: publish mcp registry
+
+# Update TILL's entry in the Official MCP Registry (registry.modelcontextprotocol.io) when a GitHub
+# Release is published, or on a manual dispatch. It never runs on a normal push, so the registry
+# entry only moves on an explicit release, the same owner-gated posture as the npm publish.
+#
+# Run it AFTER `npm publish`: the registry checks that the npm package named in server.json exists at
+# that version and that its package.json carries the matching `mcpName`, and refuses the publish
+# otherwise. A release published before the npm upload therefore fails here; dispatch it again by
+# hand once npm serves the version.
+#
+# Auth is GitHub Actions OIDC (`mcp-publisher login github-oidc`): the workflow's repository identity
+# (tillbooks/tillbooks) maps to the io.github.tillbooks/* namespace, so no secret, no interactive
+# device-code flow and no personal account is involved. It needs `id-token: write`.
+#
+# This file is written in the private workshop (tillbooks/site) and ships to the public repo through
+# ops/publish-oss.mjs. Actions is disabled on the workshop, and the job is guarded to the public
+# repository anyway, so it stays inert anywhere else.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.repository == 'tillbooks/tillbooks'
+    env:
+      # Pin the publisher CLI so a registry-tooling release can never silently change what this
+      # workflow executes. Bump deliberately (latest release on 05.11.2026: v1.8.7).
+      MCP_PUBLISHER_VERSION: v1.8.7
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install mcp-publisher (pinned)
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+          ./mcp-publisher --version
+      - name: Verify server.json matches package.json
+        run: |
+          srv="$(node -p "require('./server.json').version")"
+          srvpkg="$(node -p "require('./server.json').packages[0].version")"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$srv" != "$pkg" ] || [ "$srvpkg" != "$pkg" ]; then
+            echo "server.json version ($srv, package $srvpkg) does not match package.json ($pkg)." >&2
+            exit 1
+          fi
+          desc="$(node -p "require('./server.json').description.length")"
+          if [ "$desc" -gt 100 ]; then
+            echo "server.json description is $desc characters; the registry allows 100." >&2
+            exit 1
+          fi
+      - name: Verify npm serves this version
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          if ! npm view "tillbooks@${pkg}" version >/dev/null 2>&1; then
+            echo "npm does not serve tillbooks@${pkg} yet. Publish to npm first, then dispatch this workflow." >&2
+            exit 1
+          fi
+      - name: Validate + publish server.json
+        run: |
+          ./mcp-publisher validate
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+      - name: Show the registry entry
+        run: |
+          curl -fsS 'https://registry.modelcontextprotocol.io/v0/servers?search=tillbooks' \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{for(const e of JSON.parse(s).servers){const m=(e._meta||{})['io.modelcontextprotocol.registry/official']||{};console.log(e.server.name, e.server.version, 'isLatest=' + m.isLatest)}})"

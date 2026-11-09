@@ -1,0 +1,460 @@
+{
+  "nav": {
+    "bankAccounts": "Bank accounts"
+  },
+  "bank": {
+    "title": "Bank accounts",
+    "loading": "Loading bank accounts",
+    "add": "Add account",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "name": "Name",
+    "currency": "Currency",
+    "qrIbanChip": "QR-IBAN, incoming only",
+    "rowOpen": "Edit bank account {name}",
+    "rowActionsFor": "Actions for {name}",
+    "showArchived": "Show archived",
+    "archive": "Archive",
+    "unarchive": "Restore",
+    "archivedDone": "\"{name}\" is archived.",
+    "iban": {
+      "label": "IBAN",
+      "copy": "Copy the IBAN of {name}"
+    },
+    "ledgerAccount": {
+      "label": "Linked account",
+      "choose": "Pick an account",
+      "unknown": "no account",
+      "foreignHint": "For a foreign-currency account you would normally add its own chart account, for example 1021 Bankkonto EUR."
+    },
+    "status": {
+      "archived": "Archived"
+    },
+    "editor": {
+      "title": {
+        "create": "Register a bank account",
+        "edit": "Edit bank account",
+        "opening": "Opening balance"
+      }
+    },
+    "step": {
+      "label": "Steps",
+      "account": "Account",
+      "openingBalance": "Opening balance"
+    },
+    "openingBalance": {
+      "label": "Opening balance",
+      "date": "Date",
+      "none": "not set",
+      "zeroNoEntry": "{amount}, no entry",
+      "zeroHint": "At 0.00 nothing is posted. The account still counts as registered.",
+      "post": "Post",
+      "later": "Later",
+      "record": "Record the opening balance",
+      "consequence": "After this you cannot import an opening balance for this account without reversing this entry first.",
+      "preview": {
+        "label": "This will post",
+        "pending": "calculating",
+        "converted": "converted at the rate {rate}",
+        "contra": "Contra account 9100 Eröffnungsbilanz"
+      }
+    },
+    "fxRate": {
+      "label": "Rate {currency} to {base}",
+      "resolved": "Rate of {date}, source {source}.",
+      "typed": "You entered this rate yourself.",
+      "typeIt": "No rate is recorded for this date. Enter it here.",
+      "remember": "Remember this rate",
+      "notStored": {
+        "text": "The balance is posted. The rate was not stored.",
+        "conflict": "A rate of {stored} is already recorded for this date, and a posted line may depend on it. Record a correction under a different date.",
+        "denied": "You do not have permission to record rates.",
+        "close": "Done"
+      }
+    },
+    "qrIban": {
+      "explainer": "This is a QR-IBAN. It can only receive payments. For payments you initiate you also need a plain IBAN.",
+      "incomplete": {
+        "text": "You have a QR-IBAN but no plain IBAN. Payments you initiate need a plain IBAN.",
+        "action": "Register a plain IBAN",
+        "dismiss": "Do not show again"
+      },
+      "help": {
+        "label": "Help on the IBAN",
+        "title": "QR-IBAN or plain IBAN"
+      }
+    },
+    "empty": {
+      "list": {
+        "title": "No bank accounts yet.",
+        "hint": "Register each one here with its IBAN and the chart account it books to.",
+        "action": "Add account"
+      },
+      "noAssetAccounts": {
+        "text": "Your chart has no asset accounts yet. A bank account needs one.",
+        "action": "Open the chart"
+      }
+    },
+    "error": {
+      "transport": "Bank accounts could not be loaded.",
+      "chart": "The chart of accounts could not be loaded.",
+      "amount": "Enter an amount, for example 12'500.00.",
+      "invalidIban": {
+        "structure": "This IBAN does not have the right length or shape.",
+        "missing": "Enter the IBAN of this account."
+      },
+      "duplicateIban": {
+        "text": "This IBAN is already registered as \"{name}\".",
+        "unknown": "another account"
+      },
+      "needsLedgerAccount": "Pick the chart account this bank account books to.",
+      "needsAccount9100": {
+        "missing": "Account 9100 Eröffnungsbilanz is missing from your chart. Without it you cannot post the balance.",
+        "missingDetail": "TILL will add it to your chart as \"9100 Eröffnungsbilanz\", type equity. Nothing else changes.",
+        "missingAction": "Create account 9100",
+        "archived": "Account 9100 Eröffnungsbilanz is archived. Reactivate it, then you can post the balance.",
+        "archivedDetail": "The account stays exactly as it is. It only becomes active again.",
+        "archivedAction": "Reactivate account 9100",
+        "working": "creating",
+        "reactivating": "reactivating",
+        "duplicate": "Account 9100 already exists. Reload the page.",
+        "failed": "Account 9100 could not be created.",
+        "denied": "You do not have permission to create accounts. Ask someone who does to add 9100 Eröffnungsbilanz.",
+        "toChart": "Open the chart"
+      },
+      "notFound": {
+        "text": "This bank account no longer exists.",
+        "action": "Back to the list"
+      },
+      "periodLocked": {
+        "text": "Period {period} is locked. Post the balance on another date, or open the period.",
+        "action": "Open periods",
+        "unnamed": "this date"
+      },
+      "needsFxRate": "No rate is recorded for {currency} on {date}. Enter the rate here.",
+      "openingBalanceAlreadySet": "This account already has a posted opening balance. A correction is a reversing entry in the journal.",
+      "accountInUse": "Locked since the opening balance was posted. You can still change the name.",
+      "permissionDenied": {
+        "write": "You do not have permission to register bank accounts.",
+        "read": "You do not have permission to view bank accounts.",
+        "post": "You do not have permission to post the opening balance."
+      }
+    }
+  },
+  "channel": {
+    "title": "Bank channel",
+    "empty": "No EBICS channel yet. Connect one so TILL fetches the bank's day-end statements itself: your bank must offer EBICS, and the import by hand stays available either way.",
+    "filePathNote": "Importing statements by hand is always available, with or without a channel. You upload payment files in e-banking and release them there.",
+    "connect": "Connect a channel",
+    "locked": "Managing a bank channel needs the payment capability.",
+    "kind": {
+      "ebics": "EBICS",
+      "blink": "bLink"
+    },
+    "managed": {
+      "connect": "Connect via bLink",
+      "formIntro": "With bLink you grant consent inside your own e-banking, no paper letter.",
+      "bankRef": "Your bank (bLink reference)",
+      "scopePss": "Also allow payment submission (PSS)",
+      "reconnect": "Reconnect"
+    },
+    "consent": {
+      "pending": "Waiting for your bank",
+      "waitingBank": "Your bank's login will open so you can grant consent there.",
+      "resume": "Resume consent",
+      "revoked": "Consent was revoked at your bank. Reconnect to grant it again.",
+      "expires": "Consent expires",
+      "scopeMissing": "This connection has no payment consent. Reconnect with PSS to submit payments."
+    },
+    "formatUnsupported": "This bank delivers only JSON over bLink. The file-based rails remain the floor.",
+    "cloudTier": {
+      "title": "Managed connectivity",
+      "explainer": "Managed bLink connectivity is an optional tier your owner enables. EBICS and file import keep working without it.",
+      "suspended": "The managed connectivity vendor account has lapsed. Your EBICS and file rails are unaffected."
+    },
+    "releaseNoteBlink": "Submitted over bLink. Release the payment in your own e-banking.",
+    "sharedWith": "Routed accounts",
+    "lastSync": "Last fetched",
+    "sync": "Fetch statements",
+    "orderLog": "Order log",
+    "unmatchedAccount": "Statement for an unrouted account (route it, then sync again)",
+    "transmitInDoubt": "An upload's outcome is unknown: retransmission is blocked until the bank's protocol answers.",
+    "pendingRelease": "Awaiting bank release",
+    "rejectedReason": "Bank rejected",
+    "bankKeysChanged": "ZKB's keys have changed. Fetching is on hold until you have compared the new keys with ZKB's \"EBICS Verbindungsparameter\" sheet and confirmed them.",
+    "routeAccount": "Route an account...",
+    "routeAccountLabel": "Account to route",
+    "disconnectRetire": "Retire",
+    "disconnectBlock": "Block",
+    "disconnectBlockConfirm": "Really block this channel? TILL then fetches nothing more. To block it at ZKB: by phone.",
+    "disconnectRetireConfirm": "Really retire this connection? The bank feed is closed for good.",
+    "disconnectConfirm": "Confirm",
+    "disconnectCancel": "Cancel",
+    "wizard": {
+      "accessData": "EBICS access data from your bank contract",
+      "confirmKeys": "Compare and confirm the bank keys",
+      "hostUrl": "Host URL",
+      "hostId": "Host ID",
+      "partnerId": "Partner ID",
+      "userId": "User ID"
+    },
+    "orderType": {
+      "ini": "Key initialisation",
+      "hia": "Identification keys",
+      "hpb": "Bank keys fetched",
+      "btd": "Download",
+      "btu": "Upload",
+      "hac": "Order status fetched",
+      "spr": "Access suspended",
+      "hev": "Version check"
+    },
+    "orderKind": {
+      "consent": "Consent",
+      "statusReport": "Status report",
+      "statements": "Statements",
+      "transmit": "Transmission"
+    },
+    "orderStatus": {
+      "ok": "Succeeded",
+      "failed": "Failed",
+      "bankRejected": "Rejected by the bank",
+      "pendingRelease": "Awaiting release",
+      "intent": "Queued"
+    },
+    "error": {
+      "generic": "Something went wrong. Nothing on the money path was changed."
+    },
+    "notice": {
+      "noEbicsOffer": "This bank offers no EBICS. Use the file-based import and upload path instead.",
+      "needsBankTransport": "Keys were generated and the INI letter filed locally. Sending them to the bank needs a wired EBICS transport.",
+      "channelUnreachable": "The bank could not be reached. The last sync stays visible; retry is the one action.",
+      "bankKeysMismatch": "The bank keys did not match. This is a hard stop, never auto-accepted.",
+      "needsConfirmation": "This is a deliberate act and needs your confirmation.",
+      "permissionDenied": "You do not hold the capability for this action.",
+      "cloudTier": "Managed bLink connectivity is an optional tier your owner enables. EBICS and file import keep working without it.",
+      "consentRevoked": "Consent was revoked at your bank. Reconnect to grant it again.",
+      "consentScopeMissing": "This connection has no payment consent. Reconnect with PSS to submit payments.",
+      "formatUnsupported": "This bank delivers only JSON over bLink. The file-based rails remain the floor.",
+      "cloudTierSuspended": "The managed connectivity vendor account has lapsed. Your EBICS and file rails are unaffected.",
+      "alreadyTransmitted": "This batch is already in flight over another rail.",
+      "unsupportedEbicsVersion": "This bank host does not offer EBICS 3.0 (H005). TILL uses H005 only, so nothing was created.",
+      "liveConnectionExists": "This EBICS subscriber already fetches in another workspace of this database. Two feeds would split the statements.",
+      "camt054LinesRefused": "This account holds bookings from camt.054. It cannot run over EBICS, because the camt.053 lines would double them.",
+      "trialWorkspaceRefused": "A sandbox or demo workspace never connects to a real bank.",
+      "untrustedResponse": "An answer from ZKB could not be verified. Nothing was taken over and nothing was receipted. Import the day from e-banking and call ZKB if it happens again.",
+      "commitFailed": "The fetched data could not be saved. ZKB offers it again at the next fetch.",
+      "keystoreChangedElsewhere": "The key file was changed outside this session. TILL does not overwrite it: restart TILL.",
+      "keystoreLocked": "The key store is locked: the passphrase was not entered in this session.",
+      "keystoreUnavailable": "The key file is missing or damaged.",
+      "pendingBankActivation": "ZKB has not enabled access yet. Try again after their confirmation.",
+      "channelBlocked": "This channel is blocked. TILL fetches nothing.",
+      "noRoutedAccount": "No account is routed over this channel.",
+      "bankKeysChanged": "ZKB uses new keys, so fetching is on hold. Fetch the new bank keys below, compare them with ZKB's sheet and confirm them.",
+      "channelRetired": "This channel is retired.",
+      "unsupportedDateRange": "A date range is not fetched: a missing day comes by hand from e-banking.",
+      "initRefused": "ZKB refused INI and HIA with 091002. That means: the partner ID or user ID is wrong, EBICS 3.0 (H005) is not enabled for your agreement, or the subscriber is already initialised. Only ZKB can tell these apart and reset them: call them.",
+      "certificateRefused": "ZKB refused a certificate (code {code}). Retire the channel and connect again: TILL creates new keys and a new INI letter.",
+      "keyExchangeRefused": "ZKB refused the key exchange. Nothing was confirmed.",
+      "syncInProgress": "A fetch for this connection is marked running since {started}. If none is running any more, TILL frees the mark at {frees}.",
+      "autoSyncNoActor": "The automatic fetch did not run: neither the person who set it up nor the owner may fetch statements. Give one of them back the right to make payments, or set up the fetch as someone who has it.",
+      "autoSyncNoActorUnset": "The automatic fetch did not run: nobody has set it up, so TILL fetches as the owner, and the owner may not fetch statements. Give the owner back the right to make payments, or set up the fetch as someone who has it.",
+      "autoSyncNoActorOwner": "The automatic fetch did not run: the owner set it up, so TILL fetches as the owner, and the owner may not fetch statements. Give the owner back the right to make payments, or set up the fetch as someone who has it.",
+      "autoSyncNoActorAgent": "The automatic fetch did not run: an agent set it up, and TILL runs what an agent sets up as the owner. The owner may not fetch statements. Give the owner back the right to make payments, or set up the fetch as someone who has it."
+    },
+    "state": {
+      "draft": "Draft",
+      "keysGenerated": "Keys generated",
+      "iniSent": "INI sent",
+      "pendingBankActivation": "Waiting on the bank",
+      "active": "Active",
+      "bankKeysChanged": "Bank keys changed",
+      "blocked": "Blocked",
+      "retired": "Retired",
+      "consentPending": "Waiting for your bank",
+      "consentRevoked": "Consent revoked",
+      "suspended": "Vendor account suspended"
+    },
+    "bankPicker": {
+      "label": "Bank",
+      "empty": "Bank not found. Enter the EBICS access data below by hand.",
+      "feeUnverified": "Unverified fee"
+    },
+    "keystore": {
+      "title": "Key storage",
+      "kind": {
+        "file": "file, passphrase-encrypted",
+        "keychain": "system keychain",
+        "memory": "memory only"
+      },
+      "locked": "Locked: the passphrase was not entered this session.",
+      "unlock": "Unlock",
+      "unavailable": "The key file is missing or corrupt. Re-initialise the connection (the bank contract is unaffected), or restore the file from backup.",
+      "notPersistent": "This key storage does not survive a restart. The keys must be generated again if the app restarts before you connect a persistent store."
+    },
+    "blockLocal": "TILL sends nothing more. To block it at ZKB: by phone.",
+    "blockExit": "To unblock, fetch the bank keys, compare them with ZKB's sheet and confirm them.",
+    "ebankingPickup": "While TILL fetches the statements, do not download them in e-banking with \"All data not yet retrieved\", or they will be missing here.",
+    "iniSent": "INI and HIA are on their way, but ZKB has not confirmed both yet. Send again: TILL sends only what is still missing, with the same keys.",
+    "resend": "Send again",
+    "letterWaiting": "Waiting for ZKB. Sign the INI letter (filed under Documents) and post it to ZKB. Once ZKB has enabled access, fetch the bank keys here.",
+    "initRefused": "ZKB refused INI and HIA with 091002. That means: the partner ID or user ID is wrong, EBICS 3.0 (H005) is not enabled for your agreement, or the subscriber is already initialised. Only ZKB can tell these apart and reset them: call them.",
+    "certificateRefused": "ZKB refused a certificate (code {code}). Retire the channel and connect again: TILL creates new keys and a new INI letter.",
+    "keyExchangeRefused": "ZKB answered the key exchange with code {code}. Nothing was confirmed.",
+    "pendingTitle": "Waiting statements",
+    "newest": "Newest statement in the books: no. {n}/{year} of {date}, closing balance {amount}",
+    "noStatement": "No day-end statement in the books yet. The first fetched statement starts the feed.",
+    "downloadRefused": {
+      "notGranted": "ZKB does not allow fetching the statements (camt.053 version 08) for your agreement (code {code}). Ask ZKB to enable it.",
+      "busy": "ZKB is busy right now (code {code}). Fetch the statements again later.",
+      "tooLarge": "The statements are too large to fetch (code {code}). Download this day in e-banking and import it by hand.",
+      "other": "ZKB refused the fetch with code {code}. Nothing was changed."
+    },
+    "feed": {
+      "overlapRefused": "Statement {n}/{year} of {date} overlaps statement {m}/{year} in the books. Nothing was imported.",
+      "beforeFeedStart": "Statement {n}/{year} is older than the first statement in the books.",
+      "gapRefused": "Statement {n} does not follow statement {m}. Import the missing day-end statement from e-banking, then fetch again.",
+      "numberJump": "Statement {n} came after statement {m}. Missing numbers: {skipped}. Import those statements by hand if they exist.",
+      "notDayEnd": "This is not a day-end statement (the number or the closing balance is missing). Import that day's day-end statement from e-banking.",
+      "multipage": "Statement {n} is split over several files. TILL does not read those yet: import it from e-banking.",
+      "camt054Lines": "This account holds bookings from camt.054. It cannot run over EBICS, because the camt.053 lines would double them.",
+      "unmatchedAccount": "Statement for IBAN {iban}, which belongs to no routed account. Route the account, then fetch again.",
+      "readyToImport": "Statement {n} fits now: the next fetch imports it."
+    },
+    "keyReview": {
+      "fetch": "Fetch and compare the bank keys",
+      "fetching": "Fetching the bank keys…",
+      "intro": "Compare every byte pair with the \"H005 mit Zertifikat\" row of the current edition of ZKB's \"EBICS Verbindungsparameter\" sheet (8 pairs per line, as there). Confirm only when all of them match.",
+      "purpose": {
+        "authentication": "Authentication (X002)",
+        "encryption": "Encryption (E002)"
+      },
+      "certificateHash": "Certificate, SHA-256",
+      "keyHash": "Public key, SHA-256",
+      "fingerprint": "Key fingerprint (SPKI), SHA-256. ZKB's sheet may print another value: confirm only if this one is on it.",
+      "matches": "These values match ZKB's \"EBICS Verbindungsparameter\" sheet",
+      "confirm": "Confirm the bank keys",
+      "confirming": "Confirming…",
+      "cancel": "Cancel",
+      "retry": "Try again",
+      "close": "Close",
+      "confirmed": "Bank keys confirmed. The channel is active.",
+      "mismatch": "ZKB now sends other keys than the ones you checked, so nothing was confirmed. Compare with the current edition of the sheet and call ZKB before you try again.",
+      "needsTransport": "Fetching the bank keys needs a configured EBICS transport."
+    },
+    "auto": {
+      "title": "Automatic fetch",
+      "daily": "Fetch automatically every day",
+      "time": "At",
+      "save": "Save",
+      "saving": "Saving",
+      "denied": "Only someone who may make payments can change the automatic fetch.",
+      "upOnly": "TILL fetches automatically while it runs under till up. If TILL was not open at that time, the fetch follows as soon as it starts.",
+      "next": "Next automatic fetch: {when}",
+      "lastOk": "Last automatic fetch: {when}",
+      "lastFailed": "Last automatic fetch: {when}. {reason}",
+      "summaryDaily": "Automatically every day at {time}",
+      "summaryOff": "Automatic fetch is off",
+      "summaryNext": "next fetch {when}",
+      "dueNow": "still open today, follows shortly",
+      "change": "Change",
+      "done": "Done"
+    },
+    "addAnother": "Connect another bank channel",
+    "addEbics": "Connect via EBICS",
+    "details": "Details and management",
+    "detailsBank": "Bank",
+    "detailsEbanking": "eBanking",
+    "keysConfirmedShort": "Bank keys confirmed",
+    "returnCode": {
+      "090005": "The bank has no new statements (code 090005).",
+      "090003": "Fetching statements is not enabled for your contract (code 090003). Ask the bank to enable it.",
+      "091005": "The bank does not allow this fetch for your subscriber (code 091005). Ask the bank to enable it.",
+      "091006": "The bank does not allow this fetch for your subscriber (code 091006). Ask the bank to enable it.",
+      "091008": "The bank reports a problem with its keys (code 091008). Compare the bank keys under Bank accounts.",
+      "091117": "The statements are too large to fetch (code 091117). Download these days in e-banking and import them here.",
+      "091119": "The bank is busy right now (code 091119). TILL tries again later.",
+      "other": "The bank reports code {code}.",
+      "unreachable": "The bank did not answer ({reason})."
+    }
+  },
+  "help": {
+    "BankAccounts": {
+      "title": "Bank accounts",
+      "body": "The register of your bank accounts with IBAN, QR-IBAN and opening balance. A QR-IBAN can only receive payments; outgoing payments need an ordinary IBAN in the register as well, and the surface points it out when one is missing. Here you also manage the EBICS channel and archive accounts that are no longer in use.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  },
+  "attention": {
+    "queue": {
+      "bankKeysReview": "Bank: compare the keys",
+      "bankActivation": "Bank: activation",
+      "bankStatementGap": "Bank: statements missing",
+      "bankFetchFailed": "Bank: fetch failed"
+    },
+    "item": {
+      "bankKeysReview": {
+        "title": "{bank} activated the access: compare the keys",
+        "subtitle": "Compare the hashes once with the bank's sheet."
+      },
+      "bankActivation": {
+        "sendLegs": {
+          "title": "Send INI and HIA to {bank}",
+          "subtitle": "On the bank accounts screen. Then sign the INI letter and post it."
+        },
+        "resendLegs": {
+          "title": "Resend INI and HIA to {bank}",
+          "subtitle": "{bank} has not confirmed both yet. TILL sends only what is missing. The signed INI letter goes by post."
+        },
+        "signLetter": {
+          "title": "Sign the INI letter for {bank}",
+          "subtitle": "Already posted? Then TILL waits for the activation. Last checked with {bank}: {lastCheckAt}.",
+          "subtitleNoCheck": "Already posted? Then TILL waits for {bank} to activate the access."
+        }
+      },
+      "bankStatementGap": {
+        "titleManyDays": "{bank}: statements {range} are missing ({fromDate} to {toDate})",
+        "titleManyDay": "{bank}: statements {range} are missing ({fromDate})",
+        "titleOneDays": "{bank}: statement {range} is missing ({fromDate} to {toDate})",
+        "titleOneDay": "{bank}: statement {range} is missing ({fromDate})",
+        "subtitleChained": "The balance of statement {after} carries exactly into statement {before}: no money is missing. The numbers in between are probably days without bookings, or bookings that cancel out.",
+        "subtitleUnchained": "The missing statements hold {differenceMinor} that is not in the books yet. Import them from e-banking.",
+        "subtitlePending": "Statement {before} is waiting: the missing statements before it hold {differenceMinor} that is not in the books yet.",
+        "subtitleWaitingInside": "Statement {waiting} is waiting inside this gap and does not follow on: {differenceMinor} is not in the books yet. Import the missing statements.",
+        "titleUnknownDays": "{bank}: statements may be missing after statement {after} ({fromDate} to {toDate})",
+        "titleUnknownDay": "{bank}: a statement may be missing after statement {after} ({fromDate})",
+        "subtitleIncomplete": "Statement {incomplete} is split across several files and not complete in the books. Whether money is missing, TILL can say once every part is imported.",
+        "titleIncomplete": "{bank}: statement {incomplete} is not complete in the books",
+        "titleConflicting": "{bank}: statement {conflicting} is in the books twice, with different balances",
+        "subtitleConflicting": "The bank delivered statement {conflicting} twice, with different balances. Whether money is missing cannot be said this way: check both copies under Bank.",
+        "confirmationVoid": "This gap had been confirmed as complete. That confirmation no longer holds."
+      },
+      "bankFetchFailed": {
+        "title": "{bank}: the automatic fetch failed",
+        "notGranted": "The bank does not allow the fetch (code {code}). Ask the bank to enable it, then fetch by hand under Bank accounts.",
+        "busy": "The bank was busy at every attempt today (code {code}). Fetch the statements by hand later under Bank accounts.",
+        "tooLarge": "The statements are too large to fetch (code {code}). Download the days in e-banking and import them under Bank accounts.",
+        "refused": "The bank refused the fetch (code {code}). Open Bank accounts and fetch again.",
+        "unreachable": "The bank did not answer at any attempt today ({code}). Check the internet connection and fetch by hand under Bank accounts.",
+        "keystore": "The keystore was locked. Restart TILL with the password, then it fetches the statements.",
+        "noActor": "Nobody with the right to manage payments can run the fetch. Check the roles under Members.",
+        "noWire": "TILL ran without a bank connection. Start TILL with «till up», then it fetches the statements.",
+        "keysChanged": "The bank keys have changed. Compare them under Bank accounts before fetching again.",
+        "untrusted": "The bank's answer could not be verified. Download the day in e-banking and import it. If it happens again, call the bank.",
+        "local": "The fetch could not finish on this device. Fetch the statements by hand under Bank accounts.",
+        "other": "The fetch ended with {code}. Open Bank accounts and fetch again."
+      }
+    },
+    "act": {
+      "compareBankKeys": "Compare the keys",
+      "openBankAccounts": "Open bank accounts",
+      "closeGap": "Close the gap",
+      "confirmGap": "Nothing is missing, confirm",
+      "confirmGapConfirm": "Yes, nothing is missing",
+      "confirmGapReason": "How do you know nothing is missing?",
+      "closeGaps": "Close gaps"
+    }
+  }
+}

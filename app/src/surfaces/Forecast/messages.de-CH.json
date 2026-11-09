@@ -1,0 +1,92 @@
+{
+  "nav": {
+    "forecast": "Prognose"
+  },
+  "forecast": {
+    "route": {
+      "title": "Prognose"
+    },
+    "loading": "Prognose wird geladen",
+    "disclaimer": "Prognose, keine Buchhaltungszahl.",
+    "empty": "Keine offenen Deals.",
+    "emptyHint": "Lege Deals in der Pipeline an, dann erscheint hier die gewichtete Prognose.",
+    "emptyCta": "Zur Pipeline",
+    "denied": "Keine Berechtigung für Berichte.",
+    "group": {
+      "label": "Gruppierung",
+      "stage": "Phase",
+      "month": "Monat",
+      "quarter": "Quartal",
+      "custom": "Nach Feld gruppieren"
+    },
+    "horizon": {
+      "label": "Horizont",
+      "months": "{count} Monate"
+    },
+    "period": {
+      "label": "Zeitraum"
+    },
+    "pipelineTable": {
+      "title": "Gewichtete Pipeline",
+      "col": {
+        "group": "Gruppe",
+        "count": "Deals",
+        "value": "Wert (CHF)",
+        "weighted": "Gewichtet (CHF)"
+      },
+      "total": "Total"
+    },
+    "bucket": {
+      "no_date": "Ohne Abschlussdatum",
+      "none": "Ohne Wert"
+    },
+    "kpi": {
+      "title": "Verkaufskennzahlen",
+      "conversion": "Abschlussquote",
+      "avg_deal": "Ø Dealgrösse",
+      "cycle": "Ø Verkaufszyklus (Tage)",
+      "no_sample": "Zu wenig Daten",
+      "window": "Letzte 12 Monate"
+    },
+    "revenue": {
+      "title": "Umsatzprognose",
+      "col": {
+        "period": "Periode",
+        "weighted": "Gewichtet offen",
+        "wonUninvoiced": "Gewonnen, noch nicht fakturiert",
+        "openQuotes": "Offene Offerten (ohne Deal)",
+        "total": "Total"
+      }
+    },
+    "excluded": {
+      "fx": "Ausgeschlossen: fehlender Wechselkurs"
+    },
+    "vsActual": {
+      "title": "Prognose vs. Ist",
+      "actual": "Ist (A08, netto)",
+      "pipeline": "Pipeline (gewonnen)",
+      "delta": "Abweichung",
+      "over": "über Pipeline",
+      "under": "unter Pipeline",
+      "even": "keine Abweichung",
+      "wonNotInvoiced": "Gewonnen, noch nicht fakturiert",
+      "invoicedWithoutDeal": "Fakturiert ohne Deal"
+    },
+    "error": {
+      "invalid_horizon": "Ungültiger Horizont: erlaubt sind 1 bis 24 Monate.",
+      "invalid_range": "Ungültiger Zeitraum: das Von-Datum muss vor dem Bis-Datum liegen.",
+      "invalid_group_by": "Ungültige Gruppierung: wähle Phase, Monat, Quartal oder ein registriertes Feld.",
+      "invalid_period": "Ungültige Periode: erlaubt sind JJJJ, JJJJ-MM oder JJJJ-Qn.",
+      "not_found": "Diese Pipeline gibt es nicht. Setze den Filter zurück.",
+      "reset": "Zurücksetzen"
+    }
+  },
+  "help": {
+    "Forecast": {
+      "title": "Prognose",
+      "body": "Die Prognose ist eine reine Lesesicht über deine Pipeline: gewichtete Werte je Phase oder Zeitraum, Verkaufskennzahlen und der Umsatzausblick je Monat, aufgeschlüsselt nach Herkunft. Eine Prognose ist keine Buchhaltungszahl; nur die Ist-Spalte im Vergleich stammt aus verbuchtem Ertrag. Reichen die Daten für eine Kennzahl nicht, zeigt sie einen Strich statt einer erfundenen Null.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

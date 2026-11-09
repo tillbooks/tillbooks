@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "quotes": "Quotes"
+  },
+  "quotes": {
+    "route": {
+      "title": "Quotes"
+    },
+    "loading": "Loading quotes",
+    "empty": "No quotes yet.",
+    "tab": {
+      "title": "Quotes"
+    },
+    "action": {
+      "create": "New quote",
+      "send": "Send",
+      "mark_accepted": "Mark as accepted",
+      "decline": "Decline",
+      "revise": "Revise",
+      "convert_order": "Convert to order",
+      "convert_invoice": "Convert to invoice",
+      "to_sales_order": "Create sales order",
+      "addLine": "Add line",
+      "removeLine": "Remove line"
+    },
+    "field": {
+      "contact": "Customer",
+      "contactPick": "Pick a contact",
+      "valid_until": "Valid until",
+      "total": "Total",
+      "status": "Status",
+      "number": "Number",
+      "versions": "Versions",
+      "lineDesc": "Description",
+      "linePrice": "Unit price"
+    },
+    "status": {
+      "draft": "Draft",
+      "issued": "Issued",
+      "sent": "Sent",
+      "accepted": "Accepted",
+      "declined": "Declined",
+      "converted": "Converted",
+      "expired": "Expired",
+      "superseded": "Superseded"
+    },
+    "savedView": "Saved view",
+    "view": {
+      "all": "All open"
+    },
+    "filter": {
+      "showSuperseded": "Show superseded"
+    },
+    "drawer": {
+      "close": "Close"
+    },
+    "editor": {
+      "save": "Save",
+      "discard": "Discard"
+    },
+    "send": {
+      "cloud_note": "Artifact created. Sending is a cloud feature; download the PDF or copy the accept link.",
+      "copyLink": "Copy accept link"
+    },
+    "decline": {
+      "reason": "Decline reason"
+    },
+    "empty_hint": "Quotes appear here once you create the first one.",
+    "error": {
+      "validity_in_past": "The validity date is in the past.",
+      "no_lines": "Add at least one line before sending.",
+      "quote_expired": "This quote has expired; request a new offer.",
+      "edit_draft_instead": "Drafts are edited directly, not revised.",
+      "invalid_token": "The accept link is invalid or has already been used.",
+      "illegal_transition": "That step is not possible in the current status.",
+      "invalid_reference": "The chosen contact does not exist.",
+      "transport": "The quotes could not be loaded.",
+      "permissionDenied": {
+        "read": "You do not have permission to view quotes.",
+        "write": "You do not have permission to make this change."
+      }
+    },
+    "unknownContact": "Unknown contact",
+    "rowOpen": "Open quote {row}",
+    "rowOpenDraft": "Open quote draft"
+  },
+  "help": {
+    "Quotes": {
+      "title": "Quotes",
+      "body": "Your quotes with their lifecycle: create, send, accept or decline, revise, convert into an invoice.\n\nSending mints the number, the document and an accept link; nothing is transmitted locally, you get the link to pass on. A revision becomes a new version while the old one remains.\n\nNothing ever posts here: even converting only creates an invoice draft.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,63 @@
+/**
+ * E07 trust indicator. Glyph + label, never colour alone; the Brass accent is never spent here (a
+ * permanent accent badge would burn the one go/safe signal). `local` and `unknown` are calm ink;
+ * only `violated` reaches for the danger colour, and always WITH the ✕ glyph and the label beside it.
+ * The glyphs themselves are FIXED by spec §6b; only their size sits on the type scale (K-37).
+ */
+
+/* The transparent 1px border is the focus cue's landing place (K-10); the -1px margin keeps the
+   indicator exactly the size it was without one. */
+.egress-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: -1px;
+  font: inherit;
+  color: var(--t-text);
+  background: none;
+  border: 1px solid transparent;
+  padding: 0;
+}
+
+button.egress-indicator {
+  cursor: pointer;
+  border-radius: var(--t-radius-sm);
+}
+
+button.egress-indicator:focus-visible {
+  /* The one place the accent is allowed: a focus ring is not a standing badge. */
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+  border-color: var(--t-focus-border);
+}
+
+.egress-indicator-glyph {
+  font-size: var(--t-font-xs);
+  line-height: var(--t-lh-xs);
+}
+
+.egress-indicator--local .egress-indicator-glyph {
+  color: var(--t-text);
+}
+
+.egress-indicator--unknown {
+  color: var(--t-text-dim);
+}
+
+.egress-indicator--unknown .egress-indicator-glyph {
+  color: var(--t-text-dim);
+}
+
+.egress-indicator--violated {
+  color: var(--t-danger);
+}
+
+.egress-indicator--violated .egress-indicator-glyph {
+  color: var(--t-danger);
+  font-size: var(--t-font-md);
+}
+
+.egress-indicator-label {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}

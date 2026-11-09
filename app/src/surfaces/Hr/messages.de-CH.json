@@ -1,0 +1,194 @@
+{
+  "nav": {
+    "personal": "Personal"
+  },
+  "hr": {
+    "route": {
+      "title": "Personal"
+    },
+    "tab": {
+      "employees": "Mitarbeitende",
+      "absences": "Abwesenheiten",
+      "claims": "Spesen",
+      "lohn": "Lohn"
+    },
+    "noWorkspace": "Wähle einen Mandanten, um das Team zu sehen.",
+    "denied": {
+      "title": "Kein Zugriff",
+      "body": "Du hast keine Berechtigung, Personaldaten zu sehen."
+    },
+    "action": {
+      "add": "Mitarbeitende hinzufügen",
+      "save": "Speichern",
+      "cancel": "Abbrechen"
+    },
+    "employee": {
+      "name": "Name",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "pct": "Beschäftigungsgrad",
+      "startsOn": "Eintrittsdatum",
+      "ahv": "AHV-Nr.",
+      "ahv_restricted": "AHV-Nr. (zugriffsbeschränkt)"
+    },
+    "absence": {
+      "kind": {
+        "vacation": "Ferien",
+        "sick": "Krankheit",
+        "other": "Andere"
+      },
+      "col": {
+        "kind": "Art",
+        "period": "Zeitraum"
+      },
+      "cancelled": "Storniert"
+    },
+    "claim": {
+      "title": "Abrechnung",
+      "status": "Status",
+      "total": "Total",
+      "readonly": "Du kannst Abrechnungen ansehen, aber nicht erstellen oder genehmigen."
+    },
+    "empty": {
+      "employees": "Noch keine Mitarbeitenden.",
+      "absences": "Keine Abwesenheiten in diesem Zeitraum.",
+      "claims": "Noch keine Spesenabrechnungen."
+    },
+    "error": {
+      "load": "Die Liste konnte nicht geladen werden.",
+      "forbidden": "Das ist dir nicht erlaubt.",
+      "permission_denied": "Das ist dir nicht erlaubt.",
+      "invalid_pct": "Der Beschäftigungsgrad muss eine ganze Zahl zwischen 1 und 100 sein.",
+      "invalid_dates": "Das Enddatum liegt vor dem Startdatum.",
+      "self_approval": "Eigene Spesen können nicht selbst genehmigt werden.",
+      "period_locked": "Die Periode ist gesperrt; die Rückerstattung kann nicht gebucht werden.",
+      "invalid_transition": "Diese Abrechnung ist nicht im passenden Status dafür.",
+      "receipt_required": "Für Positionen über CHF 50 ist ein Beleg erforderlich.",
+      "empty_claim": "Vor dem Einreichen mindestens eine Position erfassen.",
+      "needs_employee_contact": "Verknüpfe zuerst einen Kontakt (Lieferantenrolle) mit der Person.",
+      "reason_required": "Für eine Ablehnung oder Stornierung ist ein Grund erforderlich.",
+      "claim_reimbursed": "Diese Abrechnung ist bereits ausbezahlt. Du musst zuerst die Auszahlung stornieren (unter Zahlungen), dann die Abrechnung.",
+      "already_reversed": "Diese Abrechnung ist bereits storniert."
+    }
+  },
+  "spesen": {
+    "status": {
+      "draft": "Entwurf",
+      "submitted": "Eingereicht",
+      "approved": "Genehmigt",
+      "reimbursed": "Erstattet",
+      "rejected": "Abgelehnt",
+      "cancelled": "Verworfen",
+      "reversed": "Storniert"
+    },
+    "action": {
+      "approve": "Genehmigen & buchen",
+      "reject": "Ablehnen",
+      "reimburse": "Rückerstattung vorbereiten",
+      "reverse": "Stornieren"
+    },
+    "reverseDialog": {
+      "title": "Spesenabrechnung «{title}» stornieren?",
+      "body": "TILL bucht eine Korrekturbuchung, die die Genehmigung aufhebt. Die ursprüngliche Buchung bleibt sichtbar, die Abrechnung wird als storniert abgeschlossen. Für eine korrigierte Abrechnung erfasst du eine neue.",
+      "reason": "Grund",
+      "cancel": "Abbrechen",
+      "confirm": "Abrechnung stornieren"
+    },
+    "reject": {
+      "default": "Bitte den fehlenden Beleg nachreichen."
+    },
+    "rowActions": "Aktionen für Spesen {title}"
+  },
+  "payroll": {
+    "oss": {
+      "note": "Die Datei bleibt auf diesem Gerät. TILL übermittelt nichts an Lohnanbieter."
+    },
+    "export": {
+      "title": "Übergabe",
+      "cta": "Übergabe exportieren",
+      "first": "Erstexport, vollständiger Bestand.",
+      "mutations": "Änderungen seit letzter Übergabe: {count}",
+      "withAhv": "AHV-Nummern enthalten",
+      "noAhv": "Ohne AHV-Nummern erstellt (Berechtigung fehlt)"
+    },
+    "import": {
+      "title": "Lohnbuchung",
+      "date": "Buchungsdatum",
+      "cta": "Lohndatei hochladen",
+      "post": "Buchen",
+      "supplementary": "Nachtragsbuchung (neben dem stehenden Lohnjournal des Monats)",
+      "supplementaryReason": "Grund der Nachtragsbuchung",
+      "warnStanding": "Für {month} steht bereits ein Lohnjournal. Prüfe, ob diese Buchung es ergänzt oder ersetzt; ein ersetztes stornierst du unten im Verlauf.",
+      "postedWithWarning": "Gebucht. Für {month} steht nun mehr als ein Lohnjournal."
+    },
+    "preview": {
+      "account": "Konto",
+      "debit": "Soll",
+      "credit": "Haben"
+    },
+    "history": {
+      "title": "Verlauf",
+      "empty": "Noch keine Übergaben.",
+      "type": "Art",
+      "date": "Datum",
+      "detail": "Detail",
+      "posted": "Gebuchte Buchung {entry}",
+      "kind": {
+        "export": "Export",
+        "posting": "Buchung"
+      },
+      "reversed": "Storniert",
+      "rowActions": "Aktionen für die Lohnbuchung vom {date}"
+    },
+    "reverse": {
+      "action": "Stornieren",
+      "title": "Lohnjournal vom {date} stornieren?",
+      "body": "TILL bucht eine Korrekturbuchung, die dieses Lohnjournal aufhebt. Die ursprüngliche Buchung bleibt sichtbar. Lohnzahlungen, Meldungen an AHV, BVG und Quellensteuer sowie Lohnausweise laufen ausserhalb von TILL und bleiben, wie sie sind: Korrigiere sie in deiner Lohnbuchhaltung und lade danach das korrigierte Lohnjournal hoch.",
+      "reason": "Grund",
+      "cancel": "Abbrechen",
+      "confirm": "Lohnjournal stornieren",
+      "done": "Das Lohnjournal ist storniert.",
+      "err": {
+        "already_reversed": "Dieses Lohnjournal ist bereits storniert.",
+        "owned_by": "Eine Bankzeile hält dieses Lohnjournal. Öffne zuerst die Bankzeile unter Bank wieder, dann stornierst du das Lohnjournal.",
+        "period_locked": "Die heutige Periode ist gesperrt, die Korrekturbuchung kann nicht gebucht werden.",
+        "reason_required": "Für eine Stornierung ist ein Grund erforderlich.",
+        "not_found": "Dieses Lohnjournal gibt es in diesem Mandanten nicht mehr.",
+        "permission_denied": "Das darfst du nicht."
+      }
+    },
+    "requiresManage": "Erfordert Personalverwaltung.",
+    "requiresPost": "Erfordert Buchhaltung.",
+    "err": {
+      "load": "Der Verlauf konnte nicht geladen werden.",
+      "month_already_posted": "Für diesen Monat ist bereits ein Lohnjournal gebucht. Storniere es zuerst unten im Verlauf und buche danach das korrigierte.",
+      "no_employees": "Noch keine Mitarbeitenden.",
+      "unbalanced": "Soll und Haben weichen voneinander ab.",
+      "period_locked": "Die Periode ist gesperrt; die Lohnbuchung kann nicht gebucht werden.",
+      "unknown_account": "Eine Zeile nennt ein Konto, das nicht im Kontenplan ist.",
+      "missing_columns": "Der Datei fehlen account_number, debit_rappen oder credit_rappen.",
+      "unsupported_currency": "Eine Lohnbuchung wird in CHF gebucht; entferne die Währungsspalte.",
+      "invalid_amount": "Ein Betrag ist kein ganzzahliger Rappen-Wert.",
+      "forbidden": "Das darfst du nicht.",
+      "permission_denied": "Das darfst du nicht.",
+      "reason_required": "Für diese Buchung ist ein Grund erforderlich."
+    },
+    "runKind": {
+      "label": "Lohnlauf",
+      "regular": "Regulär",
+      "bonus": "Bonus",
+      "thirteenth": "13. Monatslohn",
+      "correction": "Korrektur",
+      "reason": "Grund für diesen Lohnlauf",
+      "reasonOptional": "Grund für diesen Lohnlauf (optional)"
+    }
+  },
+  "help": {
+    "Hr": {
+      "title": "Personal",
+      "body": "Personal bündelt drei Abläufe: Mitarbeitende, Abwesenheiten und Spesen. Personendaten sind besonders geschützt: Die AHV-Nummer wird maskiert angezeigt, und wer keine Personalrechte hat, sieht nur die eigenen Einträge. Eine Spese kann nie von der Person freigegeben werden, die sie eingereicht hat. Die Lohnabrechnung selbst findet ausserhalb von TILL statt; hier entsteht die Übergabe dafür.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

@@ -1,0 +1,107 @@
+/* B03, the Projekterfolg panel: rides the Projects detail panel, one accent, tabular money.
+
+   Round 2 (D137): the basis and drill toggles are the shared Segmented, so the bespoke segment
+   buttons are gone (K-11); the drill is the shared DataTable (K-34); the margin figure reads in ink,
+   the accent belongs to actions and selection, never to a value; sizes, gaps and radii are tokens
+   (K-37). The section keeps its one hairline above it: it is a section rule inside the drawer, not a
+   pane frame. */
+
+.costing {
+  margin-top: var(--t-space-6);
+  padding-top: var(--t-space-4);
+  border-top: 1px solid var(--t-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.costing-head,
+.costing-drill-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.costing-title {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.costing-subtitle {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+.costing-figures {
+  display: grid;
+  /* F1: a track is never narrower than a whole figure. At 9rem a seven-digit negative margin in the
+     600 weight ("CHF -1'234'567.89") ran past its track into the neighbour; 20ch of the figure's own
+     font holds it, and auto-fit drops to fewer columns before a figure is squeezed. */
+  grid-template-columns: repeat(auto-fit, minmax(max(9rem, 20ch), 1fr));
+  gap: var(--t-space-2);
+  margin: 0;
+}
+
+.costing-figures dt {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* The headline figures keep the body size and weight: `.t-money` brings the tabular numerals and the
+   no-wrap, this rule keeps them readable as figures rather than table cells. */
+.costing-figures dd {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+}
+
+.costing-breakdown {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.costing-breakdown div {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.costing-breakdown dt {
+  color: var(--t-text-dim);
+}
+
+.costing-breakdown dd {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.costing-hint,
+.costing-drill-empty,
+.costing-empty {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.costing-over {
+  margin: 0;
+}
+
+.costing-budget,
+.costing-drill {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}

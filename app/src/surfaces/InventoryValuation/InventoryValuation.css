@@ -1,0 +1,197 @@
+/* J03, Inventory -> Bewertung. One accent, no new colour token (design-canon); every tag is a word in
+   a quiet hairline pill rather than a colour, so it survives a monochrome or high-contrast render.
+
+   Round 2 (D137): the panels and panes are background steps without a hairline (K-09); an item is a
+   list row whose current one is the pill with `aria-current` (K-17); the reason callout loses its
+   side bar for a background step (K-24); sizes and gaps are tokens (K-37).
+
+   D118 B2 (2026-08-24): the three tables (methods, cost layers, method history) are the shared
+   DataTable, the page header the shared SurfaceHeader, the default-change overlay the shared
+   DetailDrawer, and the buttons and form fields the global .btn / .form-row / .field-hint primitives.
+   The per-surface CSS that duplicated the table (frame, header, rows, numeric cell), the page header,
+   the drawer chrome, the button set and the form-field stack has been deleted. What remains is
+   genuinely Bewertung-specific: the panels, the master-detail split and its item picker, the figure
+   grid, the method-registry description cell, the bordered badge, the two inline toggles, the muted
+   default-in-force note and the reason/warning callout. */
+
+.iv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* The workspace total valuation figure, verb-provided (inventory_valuation_preview totalValueMinor),
+   pinned to the right of the SurfaceHeader row. Never a client sum. */
+.iv-total {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A panel is the elevated step on the page, never a hairline box (K-09). */
+.iv-panel {
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.iv-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.iv-panel-title {
+  margin: 0;
+  flex: 1;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.iv-sub {
+  margin: var(--t-space-1) 0 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.iv-split {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: var(--t-space-2);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .iv-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A pane inside a panel is the soft step, never a hairline box (K-09). */
+.iv-pane {
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-soft);
+  padding: var(--t-space-1);
+}
+
+.iv-detail {
+  padding: var(--t-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.iv-detail-title {
+  margin: 0;
+}
+
+.iv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* An item is a 32px list row with a transparent 1px border, where the focus cue lands (K-10); the
+   current one is the tinted pill (K-17). */
+.iv-list-item {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 var(--t-space-1);
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.iv-list-item:hover {
+  background: var(--t-bg-elev);
+}
+
+.iv-list-item[aria-current='true'] {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+.iv-controls {
+  display: flex;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.iv-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--t-space-1);
+  margin: 0;
+}
+
+.iv-figures dt {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.iv-figures dd {
+  margin: 2px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The method-registry description cell in the shared methods DataTable: dimmed and width-capped so a
+   long sentence does not push the toggle and default columns off the edge. */
+.iv-desc {
+  color: var(--t-text-dim);
+  max-width: 32rem;
+}
+
+/* A property of a row (the default method, a forced revaluation, the cost source): a quiet hairline
+   pill in dim ink, never a state and never the accent (K-22). */
+.iv-tag {
+  display: inline-block;
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  font-size: var(--t-font-sm);
+  line-height: 20px;
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.iv-toggle {
+  display: inline-flex;
+  align-items: center;
+}
+
+.iv-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+.iv-muted {
+  color: var(--t-text-dim);
+}
+
+/* The reason or warning under the figures: a background step, never a bar on its side (K-24). */
+.iv-reason {
+  margin: 0;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}

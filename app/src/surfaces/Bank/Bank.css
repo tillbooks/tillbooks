@@ -1,0 +1,3692 @@
+/* A2, the bank inbox (`/bank`), in B2 "Eine Zeile Kontext" (the owner's pick of 01.10.2026). Only
+   --t-* tokens, both themes through them. The shapes: the page ground, ONE elevated panel (the list),
+   hairlines only where a boundary helps (the table rules, the inputs). One accent, spent on the
+   selected row, focus and the row's money commit; the one solid primary lives in the surface header.
+   D177: the selected line's Details sit in a side panel beside the table (from 1180 px), else a drawer.
+   D178 N2 (A39 §18): the panel is the closable detail area, docked right or at the bottom, and the page
+   never scrolls: the list and the area each own their scroll. */
+
+/* D178 N2 (A39 §18.3): the page takes exactly the height <main> leaves (`usePageFit` sets it), so <main>
+   never scrolls on /bank. The header, the balance line and the toolbar keep their height; the workspace
+   below them takes the rest. (The D167 clearance for a floating agent toggle went with that toggle.) */
+.bank {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.bank > :not(.bank-workspace) {
+  flex: 0 0 auto;
+}
+
+/* The section's own gap spaces the blocks; the header's margin would double it. */
+.bank > .surface-header {
+  margin-bottom: 0;
+}
+
+.bank-account-filter {
+  min-width: 160px;
+  max-width: 240px;
+}
+
+/* D116: a standalone or primary control is at least 44px. The header actions, the panel's commits,
+   the dialog commits and the recovery buttons all carry this; controls inside a dense row stay in
+   the 32px band. */
+.bank-touch {
+  height: 44px;
+  min-height: 44px;
+}
+
+/* --- the trust lines -------------------------------------------------------------------------- */
+
+.bank-trusts {
+  display: flex;
+  flex-direction: column;
+}
+
+/* One line per Bankkonto: the glyph, the one number, the (i). No box: it is a fact, not a panel.
+   Every line is the (i)'s height, whether it carries one or not, so the lines keep one rhythm. */
+.bank-trust {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+  min-height: 32px;
+}
+
+.bank-trust__headline {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 500;
+}
+
+/* The line's own words only: a summary card inside the line colours each account by its own tone. */
+.bank-trust[data-tone='difference'] > .bank-trust__headline .bank-trust__words {
+  color: var(--t-warn);
+}
+
+.bank-trust__card-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.bank-trust__glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.bank-trust__glyph--ok {
+  color: var(--t-success);
+}
+
+.bank-trust__glyph--warn {
+  color: var(--t-warn);
+}
+
+.bank-trust__account {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-trust__figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--t-space-1);
+  row-gap: 0;
+  margin: 0;
+  line-height: var(--t-lh-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-trust__term {
+  color: var(--t-text-dim);
+}
+
+.bank-trust__amount {
+  color: var(--t-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bank-trust__op {
+  color: var(--t-text-dim);
+  padding: 0 var(--t-space-0-5);
+}
+
+.bank-trust__op--warn,
+.bank-trust__term--warn,
+.bank-trust__amount--warn {
+  color: var(--t-warn);
+}
+
+.bank-trust__hint {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-trust__open {
+  align-self: flex-start;
+}
+
+/* The lean card (owner, 18.10.2026): the identity as a sum read top to bottom, figures right-aligned in
+   tabular numerals, the total under a hairline, the difference in the warn ink. */
+.bank-trust__sum {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 16rem;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--t-lh-body);
+}
+
+.bank-trust__sum th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--t-text-dim);
+  padding: 0 var(--t-space-2) 0 0;
+}
+
+.bank-trust__sum td {
+  text-align: right;
+  white-space: nowrap;
+  color: var(--t-text);
+}
+
+.bank-trust__row--warn th,
+.bank-trust__row--warn td {
+  color: var(--t-warn);
+}
+
+.bank-trust__row--total th,
+.bank-trust__row--total td {
+  border-top: 1px solid var(--t-border);
+  padding-top: var(--t-space-0-5);
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-trust__asof {
+  caption-side: top;
+  text-align: left;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  padding-bottom: var(--t-space-0-5);
+}
+
+.bank-trust__link {
+  all: unset;
+  cursor: pointer;
+  color: var(--t-text-dim);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.bank-trust__link:focus-visible {
+  box-shadow: var(--t-focus-ring);
+  border-radius: var(--t-radius-sm);
+}
+
+.bank-trust__gaps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+}
+
+/* D152: several accounts in view. The summary card is a list of one fact per account; each row opens
+   that account's own words under it, the rest stay one line each. */
+.bank-trust-sum__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bank-trust-sum__fact {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 32px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-trust-sum__toggle {
+  width: 100%;
+  padding: 0 var(--t-space-1);
+  margin: 0 calc(-1 * var(--t-space-1));
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  background: transparent;
+  color: var(--t-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bank-trust-sum__toggle:hover {
+  background: var(--t-bg-soft);
+}
+
+/* The summary card is wider than one account's, so each account's name and figure read on one line;
+   where the width still runs out the figure moves under the name whole, never cutting either. */
+.bank-trust-sum__info .bank-info__card {
+  width: min(520px, calc(100vw - var(--t-space-4)));
+}
+
+.bank-trust-sum__fact {
+  flex-wrap: wrap;
+  column-gap: var(--t-space-1);
+  row-gap: 0;
+}
+
+.bank-trust-sum__fact > .bank-trust__account,
+.bank-trust-sum__fact > .bank-trust__words {
+  white-space: nowrap;
+}
+
+.bank-trust-sum__row[data-tone='difference'] .bank-trust__words {
+  color: var(--t-warn);
+}
+
+.bank-trust-sum__caret {
+  margin-left: auto;
+  color: var(--t-text-dim);
+  transition: transform var(--t-motion-hover) var(--t-ease-out);
+}
+
+.bank-trust-sum__toggle[aria-expanded='true'] .bank-trust-sum__caret {
+  transform: rotate(180deg);
+}
+
+.bank-trust-sum__details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) 0 var(--t-space-2) calc(16px + var(--t-space-1));
+}
+
+.bank-trust-sum__details[hidden] {
+  display: none;
+}
+
+/* --- the toolbar -------------------------------------------------------------------------------- */
+
+/* ONE row: the tabs, then the facets, the direction, the account and the search at the far end. It
+   wraps only when the width runs out. */
+.bank-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+}
+
+.bank-toolbar__tools {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+/* D167 polish 2: the one calm status line. It sits on the toolbar's own line and never changes its
+   height (one line, cut with an ellipsis, its full text announced), so the table never moves. No
+   colour: a small act that went as asked is not an attention item. */
+.bank-status {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  min-width: 0;
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  white-space: nowrap;
+}
+
+.bank-status__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bank-status__action {
+  flex: 0 0 auto;
+}
+
+.bank-direction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* A pressed direction is a chosen facet: the accent-soft pill with accent ink, as the chips. */
+.bank-direction__toggle[aria-pressed='true'] {
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+}
+
+/* The search: a compact field box with the glyph, the input borderless within (its label is for
+   assistive tech). The box takes the focus cue while the input holds focus. */
+.bank-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  height: var(--t-control-h);
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+  color: var(--t-text-dim);
+  cursor: text;
+  transition: border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.bank-search:focus-within {
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+}
+
+.bank-search__glyph {
+  flex: 0 0 auto;
+}
+
+/* The editors' search (the link chooser) keeps its visible label inside the box. */
+.bank-search__label {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 500;
+}
+
+.bank-search__input {
+  flex: 1 1 auto;
+  width: 96px;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--t-text);
+  font: inherit;
+  font-size: var(--t-font-body);
+  outline: none;
+}
+
+.bank-search__input:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.bank-search__input::placeholder {
+  color: var(--t-text-faint);
+}
+
+/* --- the list ------------------------------------------------------------------------------------ */
+
+/* The list owns its scroll (A39 §18.3): a wheel at its end never scrolls the page or the area. */
+.bank-list {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* The list takes the focus when the detail area closes on a line no longer in view: no ring on the panel. */
+.bank-list:focus {
+  outline: none;
+}
+
+.bank-list > .state-panel,
+.bank-list > .error-banner,
+.bank-list > [role='status'] {
+  margin: 0;
+}
+
+.bank-first {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding-bottom: var(--t-space-3);
+}
+
+.bank-first .file-drop--zone {
+  margin: 0 var(--t-space-3);
+}
+
+/* --- the table: one row per line, one baseline, the density's row height ------------------------ */
+
+.bank-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+/*
+ * D177 point 7: the column widths are the person's (`columns.ts`): the defaults, the minimums and the
+ * remembered widths arrive as each <col>'s inline width. The ACCOUNT column has none: it takes the rest,
+ * so it grows with the window and with every column the person narrows. The defaults keep the D167
+ * no-sideways-scroll rule at 1280 px (`Bank.test.tsx` sums them).
+ */
+
+/* The header cell a handle sits in: the handle hangs on its right edge. */
+.bank-table th.bank-col-head--resizable {
+  position: relative;
+}
+
+/* The drag handle: an invisible 12px strip over the cell's right edge that shows a hairline on hover
+   and focus, so the header stays one quiet band (no box, no glyph) until the person reaches for it. */
+.bank-col-resize {
+  position: absolute;
+  inset-block: 0;
+  right: -6px;
+  z-index: 1;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.bank-col-resize::after {
+  content: '';
+  position: absolute;
+  inset-block: 25%;
+  left: 5px;
+  width: 2px;
+  border-radius: var(--t-radius-full);
+  background: transparent;
+}
+
+.bank-col-resize:hover::after,
+.bank-col-resize:focus-visible::after {
+  background: var(--t-border-strong);
+}
+
+.bank-col-resize:focus-visible {
+  outline: none;
+}
+
+.bank-col-resize:focus-visible::after {
+  background: var(--t-accent);
+}
+
+.bank-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: var(--t-z-sticky);
+}
+
+.bank-table th {
+  height: var(--t-row-head-h);
+  padding: 0 var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  background: var(--t-bg-elev);
+}
+
+.bank-table th:first-child {
+  padding-left: var(--t-space-2);
+  border-top-left-radius: var(--t-radius-md);
+}
+
+.bank-table th:last-child {
+  border-top-right-radius: var(--t-radius-md);
+}
+
+.bank-col-head--num {
+  text-align: right;
+}
+
+.bank-table th.bank-col-head--num {
+  text-align: right;
+}
+
+.bank-table th.bank-col-head--center {
+  text-align: center;
+}
+
+.bank-cell {
+  height: var(--t-row-h);
+  padding: 0 var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: middle;
+  line-height: var(--t-lh-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+/* The pick column: the house check-cell (a 32px target in the dense band, the native box inside),
+   centred; the date after it keeps the ordinary cell padding. */
+.bank-table th.bank-col-head--pick,
+.bank-cell--pick {
+  padding: 0 0 0 var(--t-space-1);
+  text-align: center;
+  overflow: visible;
+}
+
+.bank-cell--pick + .bank-cell--date {
+  padding-left: var(--t-space-1);
+}
+
+.bank-cell--date {
+  padding-left: var(--t-space-2);
+  /* The date is short and fixed ("05.10."): a slim right edge keeps it whole in the 64px column. */
+  padding-right: var(--t-space-0-5);
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-row {
+  cursor: pointer;
+}
+
+/* The row itself is focusable (Enter or Space selects it): the focus cue is the accent edge on the
+   row's first cell, inset, so the 36px band does not grow. */
+.bank-row:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.bank-row:focus-visible > .bank-cell:first-child {
+  box-shadow: inset 2px 0 0 var(--t-focus-border);
+}
+
+/* A file dragged over the row: the line it will be attached to. */
+.bank-row[data-drop='true'] .bank-cell {
+  background: var(--t-accent-soft);
+}
+
+.bank-row:hover .bank-cell {
+  background: var(--t-bg-soft);
+}
+
+/* The selected row: the accent-soft ground (a selected item is one of the accent's three jobs). */
+.bank-row[data-selected='true'] .bank-cell {
+  background: var(--t-accent-soft);
+}
+
+.bank-table tbody > tr:last-child > td {
+  border-bottom-color: transparent;
+}
+
+/* A line that arrived with the latest import keeps this dot; the Commit moment's decaying tint lands on
+   it once, through `data-just-committed` (motion.css, D122 D-I). */
+.bank-row[data-fresh='true'] .bank-cell--date::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--t-space-0-5);
+  vertical-align: middle;
+  border-radius: var(--t-radius-full);
+  background: var(--t-accent);
+}
+
+.bank-party {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+/*
+ * The counterparty wins the width. The cell's words sit on one flex line and give way in order: the
+ * Bankkonto tag first (to an ellipsis), then the detail, and the name last of all.
+ */
+.bank-party-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  min-width: 0;
+  container-type: inline-size;
+}
+
+/* The memo goes whole, never cut to a stray letter ("Übertrag Sparkonto E"): it shows only where the
+   cell has room for the name and a readable part of it. */
+@container (max-width: 220px) {
+  .bank-party-line > .bank-detail {
+    display: none;
+  }
+}
+
+.bank-party-line > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The name never shrinks (a flex share, however small, cuts a fraction of a pixel and the ellipsis then
+ * eats whole letters: measured in the browser). Only a name wider than the whole cell is cut.
+ */
+.bank-party {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.bank-detail {
+  flex: 0 1 auto;
+  min-width: 6ch;
+  color: var(--t-text-dim);
+}
+
+/* Which Bankkonto, while several share the list: small and dim, after the name, the first thing cut. */
+.bank-account-tag {
+  flex: 0 10000 auto;
+  min-width: 2ch;
+  max-width: 120px;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-cell--target,
+.bank-cell--vat,
+.bank-cell--clip {
+  overflow: visible;
+}
+
+/* D167: the account field and its ☆ on one line. The field takes ALL the room left of a fixed star slot
+   (basis 0, not its content), so every row's field ends at the same x whatever its text says, and a row
+   without a star keeps the empty slot. */
+.bank-target {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  width: 100%;
+  min-width: 0;
+}
+
+.bank-target > .tooltip-wrap,
+.bank-target > .picker-trigger,
+.bank-target > .picker-field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.bank-target > .tooltip-wrap > .picker-field,
+.bank-target > .tooltip-wrap > .picker-trigger {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* D178 N2: the row's ★ left for its Mehr, so the split rows' spacer for it takes no room either and the
+   position's account field lines up with the row's. */
+.bank-star-slot {
+  display: none;
+}
+
+/* The prefill's source (D167 pick 2A): ONE small glyph in the dim ink before the account, which keeps
+   the normal ink. All three (★ ↻ ◇) are ink: the accent is for posting clicks (D137), and a filled ★
+   against an outline ☆ already carries the state (D167 polish 5). */
+.bank-src {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+/* ☆ / ★: a 32px square in the dense band, its pointer target reaching 44px. */
+.bank-star,
+.bank-clip {
+  position: relative;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  color: var(--t-text-faint);
+}
+
+.bank-star::after,
+.bank-clip::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.bank-star:hover:not(:disabled),
+.bank-clip:hover:not(:disabled) {
+  color: var(--t-text);
+}
+
+.bank-star--on {
+  color: var(--t-text);
+}
+
+/*
+ * D167 polish 4 (Hick, at most seven controls per row at rest): with a pointer that hovers, the EMPTY ☆
+ * and the row's pick box show on the row under the pointer, on a row that holds focus (so a keyboard
+ * person always sees what they reach), on the selected or picked row, and on every row once a pick is
+ * under way. A filled ★ always shows: it is a state. The header's pick box stays, so picking can start.
+ * Opacity, not display: the controls keep their place and stay in the tab order.
+ */
+@media (hover: hover) {
+  .bank-table:not([data-picking='true']) .bank-row:not(:hover):not(:focus-within):not([data-selected='true']):not([data-picked='true']) .bank-star:not(.bank-star--on),
+  .bank-table:not([data-picking='true']) .bank-row:not(:hover):not(:focus-within):not([data-selected='true']):not([data-picked='true']) .bank-cell--pick .check-cell {
+    opacity: 0;
+  }
+}
+
+.bank-star-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* The ★'s disclosure: the overlay ground, one hairline, one shadow, opening from the star's right edge. */
+.bank-standard-pop {
+  position: absolute;
+  top: calc(100% + var(--t-space-0-5));
+  right: 0;
+  z-index: var(--t-z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  width: 280px;
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  box-shadow: var(--t-shadow-overlay);
+  white-space: normal;
+  cursor: default;
+}
+
+.bank-standard-pop__title {
+  margin: 0;
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-standard-pop__body {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-standard-pop__actions {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* The paperclip: dim at 0, the text ink and the count above 0 (D167 item 7). */
+.bank-cell--clip {
+  padding-inline: var(--t-space-0-5);
+  text-align: center;
+}
+
+.bank-clip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: auto;
+  min-width: 32px;
+}
+
+.bank-clip--has {
+  color: var(--t-text);
+}
+
+/* D167 polish 10: a booked line without its Beleg says so on the clip itself (the D142 "Ohne Beleg"
+   facet), in the text ink with a small mark, so the Gebucht row stays one line. */
+.bank-clip--missing {
+  color: var(--t-text);
+}
+
+.bank-clip--missing::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-text-dim);
+}
+
+.bank-clip__count {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+}
+
+/* A locked MWST field (no account yet, or an account where no code applies): the field's shape with a
+   dashed edge and no caret, its words dim, its reason a tooltip. It is focusable, so the reason is
+   reachable. Locked reads at a glance against the editable field beside it, which keeps its solid edge. */
+.bank-picker--locked.picker-trigger,
+.bank-picker--locked.picker-trigger:hover:not(:disabled) {
+  border: 1px dashed var(--t-border);
+  background: transparent;
+  color: var(--t-text-dim);
+  cursor: not-allowed;
+}
+
+.bank-picker--locked .picker-trigger__name {
+  color: var(--t-text-dim);
+}
+
+.bank-picker.picker-trigger {
+  height: 32px;
+  max-width: 100%;
+}
+
+/* MWST is a field like the account's (D167 point 5): the same edge, height and caret, its value in words
+   in the normal ink ("Vorsteuer 8.1 %", "Ohne MWST"). It fills its column, so every row's field ends at
+   the same x. The statutory label and the code are in its tooltip and accessible name. */
+.bank-picker--vat.picker-trigger {
+  width: 100%;
+}
+
+.bank-picker--vat .picker-trigger__name {
+  font-weight: 400;
+}
+
+.bank-cell--vat .tooltip-wrap {
+  width: 100%;
+  container-type: inline-size;
+}
+
+/* The Betriebsaufwand family tag ("(Betrieb)") yields first, so a narrow column never cuts the rate. It
+   stays in the field's tooltip and accessible name, and in the picker's hint. */
+@container (max-width: 180px) {
+  .bank-picker--vat .picker-trigger__family {
+    display: none;
+  }
+}
+
+.bank-cell--vat .tooltip-wrap,
+.bank-target .tooltip-wrap,
+.bank-vat-tip {
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* A line with no target: the picker IS the call to action, so it keeps its edge. */
+.bank-picker--empty .picker-trigger__placeholder {
+  color: var(--t-text);
+}
+
+.bank-picker--target .bank-cert {
+  flex: 0 0 auto;
+}
+
+.picker-trigger__code {
+  flex: 0 0 auto;
+  color: var(--t-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.picker-trigger__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--t-text);
+}
+
+.picker-trigger__placeholder {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--t-text-dim);
+}
+
+.bank-vat-info {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* The certainty mark: a glyph plus (in the panel) its word; colour only on sure (the go-signal) and
+   check (look before booking), never alone. */
+.bank-cert {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text-dim);
+}
+
+.bank-cert[data-certainty='sure'] {
+  color: var(--t-success);
+}
+
+.bank-cert[data-certainty='check'] {
+  /* D177: a proposal to look at draws in ink, never the warn colour (the red "!" is gone). */
+  color: var(--t-text);
+}
+
+.bank-cert__word {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+/* D144: the AI disclosure beside a model's suggestion. Text ink in a hairline box, no colour of its
+   own: the check mark beside it already says "look before booking". */
+.bank-ai-tag {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 600;
+}
+
+.bank-cell--amount {
+  text-align: right;
+}
+
+.bank-amount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.bank-amount__sign {
+  color: var(--t-danger);
+}
+
+.bank-amount__currency {
+  margin-right: var(--t-space-0-5);
+  color: var(--t-text-dim);
+  font-weight: 400;
+}
+
+.bank-cell--actions {
+  padding-right: var(--t-space-1);
+  overflow: visible;
+}
+
+/* D167: a tooltip in the row's right-edge cells opens from the trigger's RIGHT edge (the Journal
+   paperclip's rule): centred, the hidden bubble hung past the table's edge and widened the list into a
+   sideways scroll. */
+.bank-cell--actions .tooltip,
+.bank-cell--clip .tooltip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.bank-row__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--t-space-0-5);
+}
+
+.bank-row__book {
+  min-width: 72px;
+  padding-inline: var(--t-space-1);
+}
+
+/* A control in the row is a 32px control (K-14); in Kompakt's 32px row its block margin gives the 1px
+   rule back, so the row stays the token's height and never grows to its tallest control (K-20). */
+.bank-row .picker-trigger,
+.bank-row .bank-row__actions {
+  margin-block: -1px;
+}
+
+/* The row's overflow keeps its 32px square in the dense band. */
+.bank-row .overflow-menu-trigger {
+  width: 32px;
+  height: 32px;
+}
+
+.bank-cell--summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bank-state {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.bank-state__word {
+  flex: 0 0 auto;
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+/* The one line a Gebucht row says (D167 polish 10) ends in an ellipsis where the cell runs short, never a
+   hard cut; the Details panel says it in full. */
+.bank-state__summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--t-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.bank-section-title {
+  margin: 0;
+  padding: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+}
+
+/* The commit: the secondary edge in the text ink at 600, full width in the panel (the one
+   solid primary is the header's, so this stays secondary and still reads as THE action). */
+.bank-commit {
+  flex: 1 1 auto;
+  border-color: var(--t-text-dim);
+}
+
+/* --- the Soll/Haben lines --------------------------------------------------------------------- */
+
+.bank-legs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.bank-legs__subtitle,
+.bank-legs__note {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-legs__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-legs__table th {
+  padding: 0 0 var(--t-space-0-5);
+  border-bottom: 1px solid var(--t-border);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  text-align: left;
+}
+
+.bank-legs__table td {
+  padding: 2px 0;
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: top;
+}
+
+.bank-legs__table th:first-child,
+.bank-legs__table td:first-child {
+  width: auto;
+}
+
+.bank-legs__num {
+  width: 84px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-legs__table th.bank-legs__num {
+  text-align: right;
+}
+
+/* One line per leg: the number and the name, the name cut with an ellipsis (the full label is the
+   cell's title), so the Soll and Haben figures stay on the leg's own baseline. */
+.bank-legs__account {
+  padding-right: var(--t-space-1);
+  color: var(--t-text);
+  /* D177: the panel never cuts an account's name; it wraps. */
+  overflow-wrap: anywhere;
+}
+
+/* --- the comparison, the batch, the refusal ----------------------------------------------------- */
+
+.bank-refusal {
+  display: flex;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-radius: var(--t-radius-md);
+  background: var(--t-danger-soft);
+}
+
+.bank-refusal__glyph {
+  flex: 0 0 auto;
+  color: var(--t-danger);
+}
+
+.bank-refusal__content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.bank-refusal__title {
+  margin: 0;
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-refusal__body {
+  margin: 0;
+  color: var(--t-text);
+}
+
+.bank-refusal__action {
+  margin-top: var(--t-space-1);
+}
+
+/* --- the modes (split, match, ignore, reopen) --------------------------------------------------- */
+
+.bank-mode {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.bank-mode__title {
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+.bank-mode__lead,
+.bank-mode__note {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.bank-mode__warn {
+  margin: 0;
+  color: var(--t-warn);
+}
+
+.bank-mode__consequence {
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-mode__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+.bank-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.bank-field--grow {
+  flex: 1 1 auto;
+}
+
+.bank-field--amount {
+  flex: 0 0 116px;
+}
+
+.bank-field__label {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+}
+
+/* Form controls in the panel are standalone controls: 44px (D116). */
+.bank-mode .field,
+.bank-mode .picker-trigger,
+.bank-import .select-trigger {
+  height: 44px;
+  min-height: 44px;
+}
+
+.bank-mode textarea.field,
+.bank-textarea {
+  height: auto;
+  min-height: 64px;
+  resize: vertical;
+}
+
+.bank-money-input {
+  text-align: right;
+}
+
+.bank-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.bank-fieldset > legend {
+  margin-bottom: var(--t-space-0-5);
+  padding: 0;
+}
+
+.bank-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A choice is a whole 44px row: the native radio stays the control, the label is its target. */
+.bank-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 44px;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.bank-choice:hover {
+  background: var(--t-bg-soft);
+}
+
+.bank-choice[data-checked='true'] {
+  background: var(--t-accent-soft);
+}
+
+.bank-choice[data-taken='true'] {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.bank-choice > input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.bank-choice__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bank-choice__title {
+  color: var(--t-text);
+  overflow-wrap: anywhere;
+}
+
+.bank-choice__meta {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-choice__amount {
+  flex: 0 0 auto;
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bank-split__meta {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+.bank-split__bank {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-split__bank-amount {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-split__legs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bank-split__leg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) var(--t-space-1) var(--t-space-2);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.bank-split__leg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bank-split__leg-title {
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+}
+
+.bank-split__leg-row {
+  display: flex;
+  gap: var(--t-space-1);
+  align-items: flex-end;
+}
+
+.bank-split__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+}
+
+.bank-split__rest {
+  margin: 0;
+  color: var(--t-text-dim);
+  text-align: right;
+}
+
+/* UX judge round 2, item 3: the warn ink only for a real warning, more distributed than the line holds. */
+.bank-split__rest[data-over='true'] {
+  color: var(--t-warn);
+}
+
+.bank-link__lists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.bank-link .bank-search {
+  height: 44px;
+}
+
+.bank-ignore__private {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  padding: var(--t-space-2);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+}
+
+.bank-ignore__private p {
+  margin: 0;
+}
+
+/* --- the agent's Vorschlag on the line ---------------------------------------------------------- */
+
+/* In the Details panel: one line, the kicker, the sentence and the decision. */
+.bank-vorschlag {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-0-5) var(--t-space-2);
+}
+
+.bank-vorschlag__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  margin: 0;
+  min-width: 0;
+}
+
+.bank-vorschlag__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.bank-vorschlag__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-vorschlag__date {
+  color: var(--t-text-dim);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.bank-vorschlag__sentence {
+  margin: 0;
+  color: var(--t-text);
+}
+
+.bank-vorschlag__reject {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  flex-basis: 100%;
+  max-width: 560px;
+}
+
+/* --- the import dialog ------------------------------------------------------------------------ */
+
+.bank-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  min-width: 0;
+}
+
+.bank-import__account {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  min-height: 44px;
+  align-items: center;
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-import__iban {
+  color: var(--t-text-dim);
+  font-weight: 400;
+}
+
+.bank-import__match {
+  margin: 0;
+  color: var(--t-text);
+}
+
+.bank-ack {
+  margin: 0;
+}
+
+/* The notice's follow-up ("Nur neue zeigen", "Rückgängig") is a button of its own size,
+   under the message, never a bar across the notice. */
+.bank-ack .action-feedback__body > .btn {
+  align-self: flex-start;
+  margin-top: var(--t-space-1);
+}
+
+/* An ignored line's reason follows its state word after a quiet dot ("Ignoriert · Privat"). */
+.bank-state[data-state='ignored'] .bank-state__summary::before {
+  content: '·';
+  margin-right: var(--t-space-0-5);
+}
+
+/* --- the bulk bar ------------------------------------------------------------------------------- */
+
+/* What happens to the picked lines: a band above the table, the count first, the actions at the
+   standalone size (they are not row controls), the note on what stays behind last. */
+.bank-pickbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+  background: var(--t-bg-soft);
+  border-top-left-radius: var(--t-radius-md);
+  border-top-right-radius: var(--t-radius-md);
+}
+
+.bank-pickbar__count {
+  margin: 0;
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-pickbar__note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.bank-pickbar__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.bank-pickbar__field .bank-field__label {
+  margin: 0;
+}
+
+/* A deep link to a line this book does not hold says so, in place of a selection (critic M4). */
+.bank-link-missing {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* D142: the line's receipts on its row: the paperclip with its count, or the words "Ohne Beleg" on a
+   line booked to accounts without one. Dim ink, never the accent and never a colour alone. */
+.bank-receipts {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin-left: var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+/* --- the (i) card ------------------------------------------------------------------------------- */
+
+.bank-info {
+  position: relative;
+  display: inline-flex;
+}
+
+.bank-info__trigger {
+  color: var(--t-text-dim);
+}
+
+/* One overlay tier (K-28): the elevated ground, one hairline, one shadow, the popover radius. */
+.bank-info__card {
+  position: absolute;
+  top: calc(100% + var(--t-space-1));
+  left: 0;
+  z-index: var(--t-z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  width: min(440px, calc(100vw - var(--t-space-4)));
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  box-shadow: var(--t-shadow-overlay);
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 400;
+  text-align: left;
+}
+
+/* A hover bridge over the gap, so the pointer never leaves the card's wrap on the way to it. */
+.bank-info__card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(-1 * var(--t-space-1));
+  height: var(--t-space-1);
+}
+
+.bank-info__card[hidden] {
+  display: none;
+}
+
+/* --- the header's statement menu ------------------------------------------------------------------ */
+
+.bank-menu__trigger {
+  gap: var(--t-space-1);
+}
+
+.bank-menu__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bank-menu__list {
+  min-width: 240px;
+}
+
+.bank-menu__caption {
+  margin: 0;
+  padding: var(--t-space-1) var(--t-space-1) var(--t-space-0-5);
+  border-top: 1px solid var(--t-border);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- loading ------------------------------------------------------------------------------------ */
+
+/* The list's own shape (K-34): the head strip and the rows at the height the real rows take. */
+.bank-skeleton[data-pending] {
+  visibility: hidden;
+}
+
+.bank-skeleton__head {
+  height: var(--t-row-head-h);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.bank-skeleton__row {
+  display: flex;
+  align-items: center;
+  height: var(--t-row-h);
+  padding: 0 var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.bank-skeleton__bar {
+  width: 100%;
+  height: var(--t-space-2);
+}
+
+/* A36 §4.7 (D150): the gap repair dialog. One column, the warning in the warn ink, the results list
+   tabular so the statement numbers line up. */
+.gap-repair {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  min-width: 0;
+}
+
+.gap-repair p {
+  margin: 0;
+}
+
+.gap-repair__why,
+.gap-repair__lead {
+  color: var(--t-text);
+  line-height: var(--t-lh-body);
+}
+
+.gap-repair__steps {
+  margin: 0;
+  padding-left: var(--t-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.gap-repair__warn {
+  color: var(--t-warn);
+}
+
+.gap-repair__denied,
+.gap-repair__status {
+  color: var(--t-text-dim);
+}
+
+.gap-repair__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-variant-numeric: tabular-nums;
+}
+
+.gap-repair__result.is-refused {
+  color: var(--t-danger);
+}
+
+.gap-repair__result.is-already_imported {
+  color: var(--t-text-dim);
+}
+
+/* A20 §12: the gap fill's plan, one stretch per item: its name, its counts, one line per end. The
+   danger tint of a refused stretch stays on its sentence only; the facts read in ink. */
+.bank-fill__range {
+  display: flex;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.bank-fill__name {
+  margin: 0;
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.bank-fill__facts,
+.bank-fill__tie {
+  margin: 0;
+  color: var(--t-text);
+}
+
+.bank-fill__why {
+  margin: 0;
+  color: var(--t-danger);
+}
+
+.gap-repair__list .bank-fill__name + .bank-fill__facts {
+  color: var(--t-text-dim);
+}
+
+.gap-repair__error {
+  color: var(--t-danger);
+}
+
+.gap-repair__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding-top: var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+}
+
+.gap-repair__confirm .btn {
+  align-self: flex-start;
+}
+
+/* D167: the toolbar's one Filter menu: a quiet trigger; a checked item carries its check glyph. */
+.bank-menu__check {
+  display: inline-flex;
+  width: 16px;
+  margin-right: var(--t-space-0-5);
+  color: var(--t-text);
+}
+
+/* --- D175 Buchungsregeln ------------------------------------------------------------------------------ */
+
+/* The amounts a rule asks for: each a labelled money field in the amount area, the line's amount under
+   them. Only a rule row grows; every other row keeps its one line. */
+.bank-asks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--t-space-0-5);
+  margin-bottom: var(--t-space-0-5);
+}
+
+.bank-ask {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  width: 100%;
+}
+
+.bank-ask__label {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  white-space: nowrap;
+}
+
+.bank-ask__input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* UX judge round 2, item 3: "Rest wäre 0.00" once, one quiet line at the field, never the warn ink. */
+.bank-ask__note {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  white-space: normal;
+}
+
+/* The ☆ form: the ★ disclosure's ground, wide enough for a field and a radio list. */
+.bank-standard-pop--form {
+  width: 360px;
+  max-width: calc(100vw - 2 * var(--t-space-2));
+}
+
+.bank-rule-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.bank-rule-form__text {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.bank-rule-form__text .field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bank-rule-form__hint,
+.bank-rule-form__via,
+.bank-split__via-hint {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-rule-form__legs {
+  gap: var(--t-space-1);
+}
+
+.bank-rule-form__leg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.bank-rule-form__choice {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 32px;
+  color: var(--t-text);
+  cursor: pointer;
+}
+
+.bank-rule-form__leg-vat,
+.bank-rule-form__leg-meta {
+  color: var(--t-text-dim);
+}
+
+.bank-rule-form__leg-meta {
+  margin-left: auto;
+  font-size: var(--t-font-sm);
+}
+
+.bank-rule-form__leg-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-0-5);
+}
+
+.bank-rule-form__ask {
+  padding-left: var(--t-space-3);
+}
+
+.bank-rule-form__blocker {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+/* Aufteilen: the quiet link to a Durchlaufkonto, then its one picker. */
+.bank-split__via-link {
+  align-self: flex-start;
+}
+
+.bank-split__via {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--t-space-1);
+}
+
+.bank-split__star {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* The rules sheet: one scannable list, separated by space and a row rule, never boxes. */
+.bank-rules-link {
+  white-space: nowrap;
+}
+
+.bank-rules__lead,
+.bank-rules__empty {
+  margin: 0 0 var(--t-space-2);
+  color: var(--t-text-dim);
+}
+
+.bank-rules__status {
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-rules__status:empty {
+  display: none;
+}
+
+.bank-rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bank-rules__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--t-space-1) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.bank-rules__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+}
+
+/* A group's head: its title with the (i) beside it, a button at the far end. */
+.bank-rules__head--group {
+  justify-content: flex-start;
+  gap: var(--t-space-0-5);
+}
+
+.bank-rules__head--group > .btn {
+  margin-left: auto;
+}
+
+.bank-rules__name {
+  margin: 0;
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-rules__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.bank-rules__match,
+.bank-rules__route,
+.bank-rules__invalid {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-rules__match {
+  color: var(--t-text-dim);
+}
+
+.bank-rules__route,
+.bank-rules__invalid {
+  color: var(--t-text);
+}
+
+.bank-rules__invalid-word {
+  color: var(--t-warn);
+  font-weight: 600;
+}
+
+/* N03 (D183): a rule's track record under its name, and the health flag that opens its form. */
+.bank-rules__stats {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-rules__health {
+  margin: 0;
+  justify-self: start;
+  color: var(--t-warn);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+/* N03: "Testen" sits beside Speichern; its answer is one line under them. */
+.bank-rule-form__tested {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-rule-form__tested:empty {
+  display: none;
+}
+
+.bank-rules__editor {
+  padding: var(--t-space-1) 0;
+}
+
+/* --- D176 Vorlagen, "Nicht buchen", the next step ----------------------------------------------------- */
+
+/* The sheet's two groups, "Bankzeilen" and "Vorlagen": a quiet heading each, the lists as before. */
+.bank-rules__group {
+  margin-bottom: var(--t-space-2);
+}
+
+.bank-rules__group-title {
+  margin: 0 0 var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 600;
+}
+
+/* A Vorlage's leg: its position, then Soll or Haben as a segmented choice. */
+.bank-rule-form__leg-pos {
+  color: var(--t-text-dim);
+}
+
+.bank-rule-form__side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bank-rule-form__add {
+  align-self: flex-start;
+}
+
+/* The decided row's next step: one quiet link after the summary. */
+.bank-state__next {
+  margin-left: var(--t-space-1);
+  white-space: nowrap;
+}
+
+/* Critic D176-C2: a name another Vorlage holds, said at the name field, "Ersetzen" beside it. */
+.bank-rule-form__taken {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.bank-rule-form__taken .bank-mode__warn {
+  margin: 0;
+}
+
+/* --- D177: the workspace, the Details panel, the split rows, the row's × ---------------------------- */
+
+/* The table and, beside it, the selected line's Details: one grid, the panel sticky in its column. */
+/* D178 N2 (A39 §18.2, §18.3): the workspace under the toolbar takes the rest of the page. At rest the
+   list alone; with a line selected, the list, the divider and the detail area, docked right or at the
+   bottom, the area's size the person's (`--bank-area-size`, from `useDetailLayout`). Each cell owns its
+   scroll; the grid itself never scrolls. */
+.bank-workspace {
+  /* The area's size, set inline by the layout from the person's preference; the default docked width. */
+  --bank-area-size: 360px;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.bank-workspace[data-dock='right'] {
+  grid-template-columns: minmax(0, 1fr) 8px var(--bank-area-size);
+}
+
+.bank-workspace[data-dock='bottom'] {
+  /* B5 judge: the list shrinks to its rows and the area takes the spare height, never less than its size. */
+  grid-template-rows: auto 8px minmax(var(--bank-area-size), 1fr);
+}
+
+/* The detail area: one panel, its header, its scrolling middle and its pinned footer (A39 §18.6). */
+.bank-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-md);
+}
+
+.bank-area[data-dock='right'] {
+  animation: motion-reveal-right var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.bank-area[data-dock='bottom'] {
+  animation: motion-reveal-up var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.bank-area[data-dragging='true'] {
+  opacity: 0.72;
+}
+
+/* The header is chrome: the grip (pointer only), the dock control, Schliessen. It is the drag handle. */
+.bank-area__head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) var(--t-space-1) var(--t-space-1) var(--t-space-2);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.bank-area[data-dragging='true'] .bank-area__head {
+  cursor: grabbing;
+}
+
+.bank-area__grip {
+  display: inline-flex;
+  color: var(--t-text-faint);
+}
+
+.bank-area__dock {
+  margin-left: auto;
+  cursor: default;
+}
+
+.bank-area__close {
+  cursor: pointer;
+}
+
+.bank-area__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 var(--t-space-2);
+}
+
+.bank-area__foot {
+  flex: 0 0 auto;
+}
+
+/* The scrolling middle owns its scroll: no chaining into the page or the list (A39 §18.3). */
+.bank-area__scroll {
+  overscroll-behavior: contain;
+}
+
+/* D178 point 9, focus view docked at the bottom: the facts and the booking side by side (bexio's layout). */
+.bank-area__scroll[data-layout='beside'] {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr);
+  align-items: start;
+  column-gap: var(--t-space-3);
+}
+
+.bank-area__booking {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+/* In the drawer the drawer's body is the one scroll owner: no second scroll, the footer sticks at its end. */
+.bank-area--drawer .bank-area__scroll {
+  overflow: visible;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.bank-area--drawer .bank-area__foot {
+  position: sticky;
+  bottom: calc(-1 * var(--t-space-3));
+  z-index: var(--t-z-sticky);
+  background: var(--t-bg-elev);
+}
+
+/* The divider: an 8px strip between the list and the area, a hairline on hover, focus and drag; its
+   pointer target reaches 32px on a touch screen. The keys are the WAI-ARIA window splitter's. */
+.bank-divider {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  touch-action: none;
+}
+
+.bank-divider[data-edge='right'] {
+  cursor: col-resize;
+}
+
+.bank-divider[data-edge='bottom'] {
+  cursor: row-resize;
+}
+
+.bank-divider::after {
+  content: '';
+  position: absolute;
+  background: transparent;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.bank-divider[data-edge='right']::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+}
+
+.bank-divider[data-edge='bottom']::after {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.bank-divider:hover::after,
+.bank-divider[data-dragging='true']::after {
+  background: var(--t-border-strong);
+}
+
+.bank-divider:focus-visible::after {
+  background: var(--t-accent);
+}
+
+.bank-divider[data-dragging='true']::after {
+  transition: none;
+}
+
+@media (pointer: coarse) {
+  .bank-divider::before {
+    content: '';
+    position: absolute;
+  }
+  .bank-divider[data-edge='right']::before {
+    inset: 0 -12px;
+  }
+  .bank-divider[data-edge='bottom']::before {
+    inset: -12px 0;
+  }
+}
+
+/* The drop preview of a header drag: the half of the workspace the area would dock in, as a dashed edge
+   in the focus ink (where the act lands), no fill over the content. */
+.bank-dock-preview {
+  position: absolute;
+  z-index: var(--t-z-raised);
+  pointer-events: none;
+  border: 2px dashed var(--t-accent);
+  border-radius: var(--t-radius-md);
+}
+
+.bank-dock-preview[data-edge='bottom'] {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40%;
+}
+
+.bank-dock-preview[data-edge='right'] {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 40%;
+}
+
+/* D177 (UX judge, item 2): the title on top, the middle scrolls, the foot (icon actions, Buchen) stays. */
+.bank-panel__body {
+  display: flex;
+  flex-direction: column;
+  /* D177 final judge, FAIL 3: 8px, the form's own field rhythm, so a Bondigoo payout's seven lines fit
+     at 1280x800. */
+  gap: var(--t-space-1);
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.bank-panel__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room under the last line, so at the end of the scroll no text sits on the foot's hairline (LOW f). */
+  padding-bottom: var(--t-space-3);
+}
+
+/* D177 final judge, FAIL 3, and polish 2: content continues below the sticky foot. Two quiet cues, only
+   while there is more to scroll to: the last 32px of the visible middle fade out (a mask: only its alpha
+   counts, so any opaque token draws it, both themes), and the foot's hairline steps up to the strong
+   border, the edge content passes under. No shadow: depth stays the background step (DESIGN.md). */
+.bank-panel__scroll[data-more='true'] {
+  -webkit-mask-image: linear-gradient(to bottom, var(--t-bg-elev) calc(100% - var(--t-space-4)), transparent calc(100% - var(--t-space-0-5)));
+  mask-image: linear-gradient(to bottom, var(--t-bg-elev) calc(100% - var(--t-space-4)), transparent calc(100% - var(--t-space-0-5)));
+}
+
+.bank-panel__body:has(.bank-panel__scroll[data-more='true']) .bank-panel__foot {
+  border-top-color: var(--t-border-strong);
+}
+
+.bank-panel__foot {
+  flex: 0 0 auto;
+  padding: var(--t-space-1) 0 var(--t-space-2);
+  border-top: 1px solid var(--t-border);
+  background: var(--t-bg-elev);
+}
+
+.bank-panel__title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: var(--t-font-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bank-panel__amount {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-panel__line {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.bank-panel__amounts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.bank-panel__amount-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--t-space-1);
+}
+
+.bank-panel__amount-row > .bank-field {
+  flex: 1 1 auto;
+}
+
+.bank-panel__computed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-height: var(--t-control-h);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.bank-panel__case {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.bank-panel__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.bank-panel__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.bank-panel__book {
+  min-height: 44px;
+}
+
+.bank-panel__editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.bank-panel__who {
+  display: flex;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+  color: var(--t-text-dim);
+}
+
+/* Woher: ONE line. The glyph in the dim ink, the name a quiet link, the switcher at the end. */
+.bank-woher {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  min-width: 0;
+}
+
+.bank-woher__glyph {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.bank-woher__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-woher__tip {
+  white-space: pre-line;
+}
+
+.bank-woher__switch {
+  margin-left: auto;
+}
+
+/* D178 N2 (A39 §18.4): the facts card at the top of the area: the title (the counterparty, the signed
+   amount), then one line per fact, a calm glyph and the value, never cut. A hairline under it sets the
+   line as the bank delivered it apart from the booking below. */
+.bank-facts-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) 0 var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+  margin-bottom: var(--t-space-1);
+}
+
+.bank-area__scroll[data-layout='beside'] > .bank-facts-card {
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+.bank-facts__title .bank-amount__sign {
+  color: var(--t-danger);
+}
+
+.bank-facts__list {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: var(--t-space-0-5) var(--t-space-1);
+  align-items: baseline;
+  margin: 0;
+}
+
+.bank-facts__row {
+  display: contents;
+}
+
+.bank-facts__row dt {
+  display: inline-flex;
+  align-self: start;
+  padding-top: 2px;
+  color: var(--t-text-dim);
+}
+
+.bank-facts__row dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bank-fact__tag,
+.bank-fact__dim {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.bank-fact__sep {
+  color: var(--t-text-faint);
+}
+
+/* MWST on a rule or a split row: a short summary that opens the Details. */
+.bank-vat-summary {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--t-text);
+}
+
+/* The split's position rows: the row's own columns, a quiet ground under the line they split. */
+.bank-split-row > .bank-cell {
+  background: var(--t-bg-soft);
+}
+
+.bank-split-row__label {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.bank-split-row__amount {
+  width: 100%;
+  text-align: right;
+}
+
+.bank-split-row__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.bank-split-row--foot .bank-split__rest {
+  display: block;
+  text-align: right;
+  font-size: var(--t-font-sm);
+}
+
+/*
+ * D178 N2 (A39 §18.5): the row's Mehr rests hidden with a hovering pointer and shows on hover, on focus
+ * within the row and on the selected row; on touch (no hover) it always shows. Opacity, not display: it
+ * keeps its place and stays in the tab order, so the keyboard always reaches it. The decided row's Mehr
+ * is the same control.
+ */
+@media (hover: hover) {
+  .bank-row:not(:hover):not(:focus-within):not([data-selected='true']) .bank-row-menu {
+    opacity: 0;
+  }
+}
+
+.bank-row-menu .overflow-menu-trigger {
+  color: var(--t-text-dim);
+}
+
+/* D177: the panel's case controls and one-line facts (the retired strip's, renamed). */
+.bank-panel__choices {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.bank-panel__choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.bank-panel__reason,
+.bank-panel__satz,
+.bank-panel__bills {
+  color: var(--t-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-panel__warn {
+  color: var(--t-warn);
+}
+
+.bank-panel__decision {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+}
+
+/* --- D177 UX judge: nothing cut mid-glyph, one × per meaning, quiet transit legs ------------------- */
+
+/* The control columns (pick, paperclip, Buchen, the ×) need no reading room: 4 px each side. */
+.bank-table th.bank-col-head--pick,
+.bank-table th.bank-col-head--clip,
+.bank-table th.bank-col-head--book,
+.bank-table th.bank-col-head--ignore,
+.bank-cell--pick,
+.bank-cell--clip,
+.bank-cell--book,
+.bank-cell--ignore {
+  padding-inline: 4px;
+}
+
+.bank-cell--vat {
+  padding-inline: var(--t-space-1);
+}
+
+.bank-cell--date {
+  white-space: nowrap;
+}
+
+.bank-cell--ignore {
+  text-align: center;
+}
+
+/* The counterparty flexes and cuts with an ellipsis; its whole name is its tooltip. */
+.bank-cell--party > .tooltip-wrap {
+  display: block;
+  min-width: 0;
+}
+
+/* An account's number never shrinks; its name takes what is left and ends in an ellipsis. */
+.bank-cell--target .picker-trigger__code {
+  flex: 0 0 auto;
+}
+
+/* A field's value ends in an ellipsis, never a letter cut in half. */
+.bank-cell--target .picker-trigger__name,
+.bank-cell--vat .picker-trigger__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The MWST summary on a rule or split row: a value (D178 N2), left-aligned, cut with an ellipsis where the
+   column runs short; a click on it is a click on the row. */
+.bank-vat-summary {
+  display: block;
+  padding: 0 var(--t-space-1);
+  text-align: left;
+}
+
+/* A Buchen that cannot book (aria-disabled, so its reason stays reachable). UX judge round 2, item 10:
+   plainly not an enabled secondary either: no fill and no edge of its own, the faint ink of a disabled
+   control (K-36), a dashed hairline, and the not-allowed cursor. */
+.bank-row__book[aria-disabled='true'],
+.bank-panel__book[aria-disabled='true'],
+.bank-row__book[aria-disabled='true']:hover,
+.bank-panel__book[aria-disabled='true']:hover {
+  background: transparent;
+  color: var(--t-text-faint);
+  border-color: var(--t-border);
+  border-style: dashed;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* The posting preview (UX judge round 2, item 2): Soll and Haben as narrow as their figures, so the
+   account's name has the room; a name longer still wraps to a second line, never a third. */
+.bank-legs__col-num {
+  width: 56px;
+}
+
+.bank-legs__table td.bank-legs__account {
+  white-space: normal;
+}
+
+.bank-legs__account > .tooltip-wrap {
+  display: block;
+  min-width: 0;
+}
+
+.bank-legs__name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+/* The owner's Durchlaufkonto lines (D177): visible, quieter than the legs that matter. */
+.bank-legs__table tr[data-transit='true'] td {
+  color: var(--t-text-dim);
+}
+
+/* Woher: the rule's name as a chip in the theme's soft ground (both themes), the glyph with its tooltip. */
+.bank-woher__name.link-inline,
+.bank-woher__name {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px var(--t-space-1);
+  border: 0;
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+.bank-woher__glyph {
+  display: inline-flex;
+  color: var(--t-text-dim);
+}
+
+/* The split's position rows on the table's grid. */
+.bank-split-row .bank-target .bank-picker--vat {
+  flex: 0 0 96px;
+}
+
+.bank-split-row__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--t-space-2);
+}
+
+/* UX judge round 2, item 12: "Über Durchlaufkonto buchen" and "Aufteilen beenden" are labelled quiet
+   link buttons: the link's own ink and underline, 32px tall to hit. */
+.bank-split__via-link.link-inline,
+.bank-split__cancel.link-inline {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  white-space: nowrap;
+}
+
+/* What is left, under Betrag: right-aligned with the amounts; a longer phrase grows leftwards. */
+.bank-split-row--foot .bank-cell--amount {
+  overflow: visible;
+}
+
+.bank-split-row--foot .bank-split__rest {
+  display: flex;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+/* The rule form's Speichern stays in view while the form scrolls, flush with its scroll region's edge,
+   above a hairline (UX judge round 2, item 8) so what scrolls under it never reads as cut. */
+.bank-rule-form__foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-block: var(--t-space-1);
+  border-top: 1px solid var(--t-border);
+  background: var(--t-bg-elev);
+}
+
+/* UX judge round 2, item 8: the title with its X; two groups, "Erkennung" and "Buchung". */
+.bank-rule-form__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+}
+
+.bank-rule-form__group {
+  gap: var(--t-space-1);
+  padding-top: var(--t-space-1);
+  border-top: 1px solid var(--t-border);
+}
+
+.bank-rule-form__group > legend.bank-rule-form__group-title {
+  float: left;
+  width: 100%;
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-sm);
+  font-weight: 600;
+  line-height: var(--t-lh-sm);
+}
+
+.bank-rule-form__label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* A leg: its account and the rest radio on one line, its details behind a disclosure. */
+.bank-rule-form__leg {
+  padding: var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.bank-rule-form__leg[data-rest='true'] {
+  border-color: var(--t-border-strong);
+  background: var(--t-bg-soft);
+}
+
+.bank-rule-form__leg-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.bank-rule-form__leg-head > .bank-rule-form__leg-account,
+.bank-rule-form__leg-head > .picker-field,
+.bank-rule-form__leg-head > .bank-rule-form__leg-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bank-rule-form__choice {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.bank-rule-form__choice[data-checked='true'] {
+  font-weight: 600;
+}
+
+.bank-rule-form__leg-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 32px;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  cursor: pointer;
+}
+
+/* The disclosure's own chevron: right when shut, down when open (the flex summary drops the marker). */
+.bank-rule-form__leg-summary::-webkit-details-marker {
+  display: none;
+}
+
+.bank-rule-form__leg-summary::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--t-motion-hover) var(--t-ease-out);
+}
+
+.bank-rule-form__leg-more[open] > .bank-rule-form__leg-summary::before {
+  transform: rotate(45deg);
+}
+
+.bank-rule-form__leg-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding-top: var(--t-space-0-5);
+}
+
+.bank-rule-form__leg-body .bank-rule-form__ask {
+  padding-left: 0;
+}
+
+.bank-rule-form__remove {
+  align-self: flex-start;
+}
+
+.drawer-body .bank-rule-form__foot {
+  bottom: calc(-1 * var(--t-space-3));
+  padding-bottom: var(--t-space-3);
+}
+
+.bank-panel__scroll .bank-rule-form__foot {
+  bottom: calc(-1 * var(--t-space-2));
+  padding-bottom: var(--t-space-2);
+}
+
+/* The split's tools under Datum and Gegenpartei. */
+.bank-split-row__tools-cell {
+  padding-inline: var(--t-space-1);
+}
+
+/* The panel's title: two lines at most (a line without a name is titled by its booking text, which the
+   facts below give in full). */
+.bank-panel__party {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Woher: the chip keeps its words unless the line is really too short. */
+.bank-woher > .tooltip-wrap {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.bank-woher .bank-woher__name {
+  max-width: none;
+}
+
+/* UX judge round 2, item 2: the Buchungstext grows with its text, one line at rest. */
+textarea.field.bank-panel__text-input {
+  min-height: var(--t-control-h);
+  padding-block: calc((var(--t-control-h) - 2px - var(--t-lh-md)) / 2);
+  overflow: hidden;
+  line-height: var(--t-lh-md);
+  resize: none;
+}
+
+/* UX judge round 2, item 9: "berechnen" is a real 32px ghost button beside "von dir". */
+.bank-panel__recompute.btn {
+  min-width: 32px;
+}
+
+/* D177 final judge, FAIL 3: in the panel the preview's title sits close to its table, so the seven lines
+   of a Bondigoo payout fit at 1280x800. */
+.bank-panel .bank-legs {
+  gap: var(--t-space-0-5);
+}
+
+/* D177 final judge, LOW d: a rule's booking in short lines, one per leg, under its recognition line. */
+.bank-rules__route-line {
+  display: block;
+}
+
+/* --- D178 point 19: a line flagged as a possible duplicate ------------------------------------------ */
+
+/* The row's one warn glyph before the counterparty: status is glyph plus words (its accessible name). */
+.bank-dup-mark {
+  display: inline-flex;
+  vertical-align: text-bottom;
+  margin-right: var(--t-space-0-5);
+  color: var(--t-warn);
+}
+
+.bank-dup-mark__word {
+  margin-left: 4px;
+  font-size: var(--t-font-sm);
+  font-weight: 600;
+}
+
+/* B5 judge: the mark and its word keep their width and the party line takes the rest. The line is an
+   inline-size container, so it must be GIVEN a width (a shrink-to-fit wrapper left it a few pixels: "H.."). */
+.bank-cell--party:has(.bank-dup-mark) {
+  white-space: nowrap;
+}
+
+.bank-cell--party:has(.bank-dup-mark) > .bank-dup-mark {
+  float: left;
+  margin-right: var(--t-space-1);
+}
+
+.bank-cell--party:has(.bank-dup-mark) > .tooltip-wrap {
+  display: block;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* The question under the facts card: the candidates one line each, then the two answers. */
+.bank-dup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding-bottom: var(--t-space-2);
+  margin-bottom: var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.bank-dup__title {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-weight: 600;
+}
+
+.bank-dup__glyph {
+  color: var(--t-warn);
+}
+
+.bank-dup__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bank-dup__candidate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--t-space-1);
+}
+
+.bank-dup__why {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.bank-dup__answers {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* A text link that is a <button> in the detail area (the facts card's Belege, a candidate's "Zeigen",
+   the private-payment offer): no user-agent button face, the link's own ink in both themes. */
+.bank-area button.link-inline {
+  padding: 0;
+  background: none;
+  color: var(--t-accent);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* --- D178 N3 (A39 §20.4): the list bar: direction, Zeitraum, the honest count and its pages ------------ */
+.bank-listbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+}
+
+.bank-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.bank-period__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.bank-period__label {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.bank-period__input {
+  width: auto;
+  min-width: 0;
+}
+
+.bank-period__why {
+  color: var(--t-danger);
+  font-size: var(--t-font-sm);
+}
+
+.bank-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin-left: auto;
+}
+
+.bank-count__text {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  white-space: nowrap;
+}
+
+.bank-count__pages {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* --- D178 N3 (A39 §20): the booking modes, the panes, the footer's figures, the focus bar ------------- */
+.bank-workspace[data-list='hidden'] > .bank-list,
+.bank-workspace[data-list='hidden'] > .bank-divider {
+  display: none;
+}
+
+.bank-workspace[data-list='hidden'][data-dock='right'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.bank-workspace[data-list='hidden'][data-dock='bottom'] {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.bank-focusbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) 0 0;
+}
+
+.bank-focusbar__steps {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.bank-focusbar__place {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  white-space: nowrap;
+}
+
+.bank-focusbar__hide {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+}
+
+.bank-modes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.bank-modes__switch {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.bank-modes__pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.bank-docs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.bank-docs__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bank-doc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-0-5) var(--t-space-1);
+  padding: var(--t-space-0-5) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.bank-doc__pick {
+  display: inline-flex;
+  flex: 1 1 200px;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.bank-doc__code {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bank-doc__name {
+  color: var(--t-text-dim);
+  overflow-wrap: anywhere;
+}
+
+.bank-doc__open {
+  margin-left: auto;
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-doc__amount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+}
+
+.bank-doc__input {
+  width: 128px;
+  text-align: right;
+}
+
+.bank-doc__after {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.bank-panel__muted {
+  color: var(--t-text-dim);
+}
+
+.bank-kontakt,
+.bank-zuordnen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.bank-fx {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.bank-fx__warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.bank-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-0-5) var(--t-space-2);
+  margin: 0 0 0 auto;
+}
+
+.bank-figures__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-0-5);
+}
+
+.bank-figures__item dt {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.bank-figures__item dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-figures[data-deviation='true'] [data-figure='deviation'] dd {
+  color: var(--t-warn);
+  font-weight: 600;
+}
+
+/* The pane's pickers fill their field's width (a row's picker is the table cell's). */
+.bank-pane-picker {
+  width: 100%;
+}
+
+/* --- B5 judge round (D178 N3) -------------------------------------------------------------------------- */
+
+/* A disabled Buchen says why, in one line beside it. */
+.bank-foot__why {
+  flex: 1 1 160px;
+  min-width: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  text-align: right;
+}
+
+/* Focus at the bottom: the facts stay in view beside the booking while the booking scrolls (FX: the
+   amount, the rate and the fee beside the tick). */
+.bank-area__scroll[data-layout='beside'] > .bank-facts-card {
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+.bank-fx__facts {
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-sm);
+}
+
+/* The consequence on one line; the whole sentence is the (i)'s tooltip. */
+.bank-fx__consequence {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  min-width: 0;
+}
+
+.bank-fx__sentence {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Phone width: the toolbar wraps instead of squeezing the Filter, the direction labels wrap inside their
+   segments, and each line is a card (date, Gegenpartei, amount) that opens the drawer. */
+@media (max-width: 767px) {
+  .bank-toolbar__tools {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .bank-direction {
+    width: 100%;
+    height: auto;
+  }
+
+  .bank-direction .segmented-option {
+    padding: 4px;
+    font-size: var(--t-font-sm);
+    white-space: normal;
+    text-align: center;
+  }
+
+  .bank-count {
+    margin-left: 0;
+  }
+
+  .bank-table,
+  .bank-table > tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .bank-table > colgroup,
+  .bank-table > thead,
+  .bank-table tr.bank-split-row {
+    display: none;
+  }
+
+  .bank-table tr.bank-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--t-space-1);
+    min-height: 44px;
+    padding: var(--t-space-0-5) var(--t-space-1);
+    border-bottom: 1px solid var(--t-border);
+    cursor: pointer;
+  }
+
+  .bank-table tr.bank-row > td {
+    display: none;
+    border: 0;
+    padding: 0;
+  }
+
+  .bank-table tr.bank-row > td.bank-cell--date,
+  .bank-table tr.bank-row > td.bank-cell--party,
+  .bank-table tr.bank-row > td.bank-cell--amount {
+    display: block;
+    min-width: 0;
+  }
+
+  .bank-table tr.bank-row > td.bank-cell--party {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+/* N00 (US-N00.4): the counterparty's house rule under the facts card: plain text, no box, one quiet link. */
+.bank-house-rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) 0;
+}
+
+.bank-house-rule__title {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+  margin: 0;
+}
+
+.bank-house-rule__text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.bank-house-rule__link {
+  align-self: flex-start;
+}
+
+/* N04: a rule's autopilot chip and switch, and a Vorlage's "Wiederholen" section. */
+.bank-rules__auto {
+  font-size: var(--t-font-sm, inherit);
+  color: var(--t-text-dim);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  padding: 0 var(--t-space-1);
+  white-space: nowrap;
+}
+.bank-rules__autoswitch,
+.bank-rules__schedule {
+  display: grid;
+  gap: var(--t-space-1);
+  margin-block-end: var(--t-space-2);
+}
+.bank-rules__autoswitch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+.bank-rules__autoswitch-hint,
+.bank-rules__schedule-next {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+.bank-rules__schedule-title {
+  margin: 0;
+  font-size: var(--t-font-md, inherit);
+}
+.bank-rules__schedule-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  align-items: end;
+}
+.bank-rules__schedule-form label {
+  display: grid;
+  gap: var(--t-space-1);
+}
+.bank-rules__schedule-mode {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  gap: var(--t-space-2);
+}
+.bank-rules__schedule-acts {
+  display: flex;
+  gap: var(--t-space-1);
+}
+
+/* A41.1 (D184): a line without its receipt that a captured receipt fits: the clip carries "+1" in words
+   (tooltip and label), in the text ink, never the accent and never colour alone. */
+.bank-clip--match {
+  color: var(--t-text);
+}
+
+/* A41.2: the engine's own word on an agent's proposal, under its sentence. */
+.bank-evidence {
+  display: grid;
+  gap: var(--t-space-0-5);
+}
+
+.bank-evidence__certainty {
+  font-weight: 500;
+}
+
+/* A41.7: an ask-first question, inline (never a dialog): the question, its choices, Speichern. */
+.bank-askfirst {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.bank-askfirst__question {
+  padding: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.bank-askfirst__choices {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-3);
+}
+
+.bank-askfirst__choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.bank-askfirst__own {
+  width: 6ch;
+}
+
+.bank-askfirst__error {
+  color: var(--t-text);
+}
+
+/* --- A41.5 (D184 point 7): the "Sicherheit" column and the row's ✓ (Freigeben) ------------------- */
+
+/* Three dots and a word or two; the reason is the tooltip. Glyph plus words, never colour alone: only a
+   `check` line colours its one dot (the approved artifact: "Nur hier hat die Zeile Farbe"). */
+.bank-cell--conf {
+  padding-inline: var(--t-space-1);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.bank-table th.bank-col-head--conf {
+  padding-inline: var(--t-space-1);
+}
+
+.bank-conf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  border-radius: var(--t-radius-sm);
+}
+
+.bank-conf__dots {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.bank-conf__dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-border);
+}
+
+.bank-conf__dot--on {
+  background: var(--t-text-dim);
+}
+
+.bank-conf__words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bank-conf[data-confidence='check'] {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.bank-conf[data-confidence='check'] .bank-conf__dot--on {
+  background: var(--t-warn);
+}
+
+/* The ✓: a quiet 32px icon at rest in the column's 44px, the accent only on hover and focus (a posting
+   click, D137). A `check` line's ✓ has a dashed edge: it books too, but says "look first". The hit area
+   reaches 44px around the glyph (WCAG 2.5.8; DESIGN.md "Icon vocabulary"). */
+.bank-row__approve-slot {
+  display: inline-flex;
+}
+
+.bank-row .bank-row__approve {
+  position: relative;
+  min-width: 0;
+  padding-inline: 0;
+  border: 1px solid var(--t-border-strong);
+  color: var(--t-text);
+}
+
+.bank-row .bank-row__approve::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.bank-row .bank-row__approve[data-certainty='check'] {
+  border-style: dashed;
+}
+
+/* A41.3: an assigned receipt's clip carries a solid hairline (its words are the name and the tooltip). */
+.bank-clip--assigned {
+  border: 1px solid var(--t-border-strong);
+}
+
+/* A41.3 follow-ups: a new version left on the line waits for "Zuordnen": a dashed hairline (it waits), the words
+   in the name and the tooltip, never the accent and never colour alone. */
+.bank-clip--new-version {
+  border: 1px dashed var(--t-border-strong);
+  color: var(--t-text);
+}
+
+/* A41.3/A41.5: the review view's Beleg, its figure trust and its one act (Zuordnen or Lösen). */
+.bank-review {
+  display: grid;
+  gap: var(--t-space-1);
+}
+
+.bank-review__trust {
+  display: grid;
+  gap: var(--t-space-0-5);
+}
+
+.bank-review__acts {
+  display: flex;
+  gap: var(--t-space-1);
+  margin: 0;
+}
+
+/* The rule-offer banner (A41.5): one sentence, one action, "Nicht jetzt"; a soft band, no box. */
+.bank-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-bottom: 1px solid var(--t-border);
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+}
+
+.bank-offer > svg {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.bank-offer__text {
+  flex: 1 1 24ch;
+  margin: 0;
+  min-width: 0;
+}
+
+.bank-offer__actions {
+  display: inline-flex;
+  gap: var(--t-space-1);
+  margin-inline-start: auto;
+}
+
+.bank-row .bank-row__approve:not([aria-disabled='true']):hover,
+.bank-row .bank-row__approve:not([aria-disabled='true']):focus-visible {
+  border-color: var(--t-accent);
+  color: var(--t-accent);
+}

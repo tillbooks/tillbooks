@@ -1,0 +1,55 @@
+{
+  "nav": {
+    "mySettings": "Meine Einstellungen"
+  },
+  "mySettings": {
+    "title": "Meine Einstellungen",
+    "subtitle": "Gilt nur für dich und folgt dir in jeden Browser. Für alle anderen bleibt TILL, wie es ist.",
+    "loading": "Deine Einstellungen werden geladen…",
+    "search": {
+      "label": "Einstellungen durchsuchen",
+      "placeholder": "Zum Beispiel Farbschema"
+    },
+    "empty": {
+      "title": "Noch keine persönlichen Einstellungen.",
+      "hint": "Sie erscheinen hier, sobald ein Bereich eine anbietet.",
+      "action": "Einstellungen des Arbeitsbereichs öffnen"
+    },
+    "filtered": {
+      "title": "Keine Einstellung passt zu «{query}».",
+      "hint": "Versuche ein anderes Wort oder setze den Filter zurück."
+    },
+    "scope": {
+      "person": "Gilt in jedem Arbeitsbereich.",
+      "workspace": "Gilt nur in diesem Arbeitsbereich."
+    },
+    "isDefault": "Standard",
+    "defaultIs": "Standard: {value}",
+    "stale": "Der gespeicherte Wert passt nicht mehr, deshalb gilt der Standard.",
+    "reset": "Zurücksetzen",
+    "resetKey": "{setting} zurücksetzen",
+    "resetGroup": "Alle zurücksetzen",
+    "resetGroupContext": "{area}: alle zurücksetzen",
+    "yes": "Ja",
+    "no": "Nein",
+    "bounds": "Von {min} bis {max}",
+    "json": {
+      "default": "Standard",
+      "custom": "Angepasst",
+      "hint": "Ändern kannst du sie dort, wo sie gilt."
+    },
+    "refusal": {
+      "unknown_pref": "Diese Einstellung kennt TILL nicht mehr. Lade die Seite neu. Es wurde nichts geändert.",
+      "invalid_pref_value": "Dieser Wert passt nicht zu dieser Einstellung. Es wurde nichts geändert.",
+      "capability_forbidden": "Deine Einstellungen kannst nur du selbst ändern. Es wurde nichts geändert."
+    }
+  },
+  "help": {
+    "MySettings": {
+      "title": "Meine Einstellungen",
+      "body": "Hier stellst du ein, wie TILL für dich aussieht: das Farbschema, die Dichte und was weitere Bereiche später anbieten. Deine Wahl gilt nur für dich und folgt dir in jeden Browser, weil TILL sie bei deinen Büchern speichert und nicht im Browser. Eine Änderung gilt sofort. Zurücksetzen bringt eine Einstellung oder eine ganze Gruppe zum Standard zurück. Wie sich der Arbeitsbereich für alle verhält, regeln die Einstellungen unter Einrichtung.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

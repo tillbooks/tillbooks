@@ -1,0 +1,460 @@
+{
+  "nav": {
+    "bankAccounts": "Bankkonten"
+  },
+  "bank": {
+    "title": "Bankkonten",
+    "loading": "Bankkonten werden geladen",
+    "add": "Konto hinzufügen",
+    "edit": "Bearbeiten",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schliessen",
+    "name": "Name",
+    "currency": "Währung",
+    "qrIbanChip": "QR-IBAN, nur Eingang",
+    "rowOpen": "Bankkonto {name} bearbeiten",
+    "rowActionsFor": "Aktionen für {name}",
+    "showArchived": "Archivierte anzeigen",
+    "archive": "Archivieren",
+    "unarchive": "Wiederherstellen",
+    "archivedDone": "«{name}» ist archiviert.",
+    "iban": {
+      "label": "IBAN",
+      "copy": "IBAN von {name} kopieren"
+    },
+    "ledgerAccount": {
+      "label": "Verknüpftes Konto",
+      "choose": "Konto wählen",
+      "unknown": "kein Konto",
+      "foreignHint": "Für ein Fremdwährungskonto legst du üblicherweise ein eigenes Konto an, zum Beispiel 1021 Bankkonto EUR."
+    },
+    "status": {
+      "archived": "Archiviert"
+    },
+    "editor": {
+      "title": {
+        "create": "Bankkonto erfassen",
+        "edit": "Bankkonto bearbeiten",
+        "opening": "Eröffnungssaldo"
+      }
+    },
+    "step": {
+      "label": "Schritte",
+      "account": "Konto",
+      "openingBalance": "Eröffnungssaldo"
+    },
+    "openingBalance": {
+      "label": "Eröffnungssaldo",
+      "date": "Datum",
+      "none": "noch keiner",
+      "zeroNoEntry": "{amount}, keine Buchung",
+      "zeroHint": "Bei 0.00 wird nichts gebucht. Das Konto gilt trotzdem als erfasst.",
+      "post": "Buchen",
+      "later": "Später",
+      "record": "Eröffnungssaldo erfassen",
+      "consequence": "Danach kannst du für dieses Konto keine Eröffnungsbilanz mehr importieren, ohne diese Buchung zuerst zu stornieren.",
+      "preview": {
+        "label": "Gebucht wird",
+        "pending": "wird berechnet",
+        "converted": "umgerechnet zum Kurs {rate}",
+        "contra": "Gegenkonto 9100 Eröffnungsbilanz"
+      }
+    },
+    "fxRate": {
+      "label": "Kurs {currency} zu {base}",
+      "resolved": "Kurs vom {date}, Quelle {source}.",
+      "typed": "Diesen Kurs hast du selber eingetragen.",
+      "typeIt": "Für dieses Datum ist kein Kurs hinterlegt. Trag ihn hier ein.",
+      "remember": "Kurs merken",
+      "notStored": {
+        "text": "Der Saldo ist gebucht. Der Kurs wurde nicht gespeichert.",
+        "conflict": "Für dieses Datum ist schon der Kurs {stored} hinterlegt, und eine gebuchte Zeile kann daran hängen. Trag eine Korrektur auf ein anderes Datum ein.",
+        "denied": "Dir fehlt die Berechtigung, Kurse zu erfassen.",
+        "close": "Fertig"
+      }
+    },
+    "qrIban": {
+      "explainer": "Das ist eine QR-IBAN. Sie kann nur Zahlungen empfangen. Für Zahlungen, die du auslöst, brauchst du zusätzlich eine normale IBAN.",
+      "incomplete": {
+        "text": "Du hast eine QR-IBAN, aber keine normale IBAN. Zahlungen, die du auslöst, brauchen eine normale IBAN.",
+        "action": "Normale IBAN erfassen",
+        "dismiss": "Nicht mehr anzeigen"
+      },
+      "help": {
+        "label": "Hilfe zur IBAN",
+        "title": "QR-IBAN oder normale IBAN"
+      }
+    },
+    "empty": {
+      "list": {
+        "title": "Noch keine Bankkonten erfasst.",
+        "hint": "Hier erfasst du jedes Konto mit seiner IBAN und dem Konto aus deinem Kontenplan, auf das es bucht.",
+        "action": "Konto hinzufügen"
+      },
+      "noAssetAccounts": {
+        "text": "Dein Kontenplan hat noch keine Aktivkonten. Ein Bankkonto braucht eines.",
+        "action": "Kontenplan öffnen"
+      }
+    },
+    "error": {
+      "transport": "Bankkonten konnten nicht geladen werden.",
+      "chart": "Der Kontenplan konnte nicht geladen werden.",
+      "amount": "Trag einen Betrag ein, zum Beispiel 12'500.00.",
+      "invalidIban": {
+        "structure": "Diese IBAN hat nicht die richtige Länge oder Form.",
+        "missing": "Trag die IBAN dieses Kontos ein."
+      },
+      "duplicateIban": {
+        "text": "Diese IBAN ist schon als «{name}» erfasst.",
+        "unknown": "einem anderen Konto"
+      },
+      "needsLedgerAccount": "Wähl das Konto aus deinem Kontenplan, auf das dieses Bankkonto bucht.",
+      "needsAccount9100": {
+        "missing": "In deinem Kontenplan fehlt das Konto 9100 Eröffnungsbilanz. Ohne dieses Konto lässt sich der Saldo nicht buchen.",
+        "missingDetail": "TILL legt es als «9100 Eröffnungsbilanz», Typ Eigenkapital, in deinem Kontenplan an. Sonst ändert sich nichts.",
+        "missingAction": "Konto 9100 anlegen",
+        "archived": "Das Konto 9100 Eröffnungsbilanz ist archiviert. Aktivier es wieder, dann kannst du den Saldo buchen.",
+        "archivedDetail": "Das Konto bleibt, wie es ist. Es wird nur wieder aktiv.",
+        "archivedAction": "Konto 9100 wieder aktivieren",
+        "working": "wird angelegt",
+        "reactivating": "wird aktiviert",
+        "duplicate": "Das Konto 9100 gibt es schon. Lad die Seite neu.",
+        "failed": "Das Konto 9100 konnte nicht angelegt werden.",
+        "denied": "Dir fehlt die Berechtigung, Konten anzulegen. Bitte jemanden mit dieser Berechtigung, 9100 Eröffnungsbilanz zu erfassen.",
+        "toChart": "Kontenplan öffnen"
+      },
+      "notFound": {
+        "text": "Dieses Bankkonto gibt es nicht mehr.",
+        "action": "Zur Liste"
+      },
+      "periodLocked": {
+        "text": "Die Periode {period} ist gesperrt. Buch den Saldo auf ein anderes Datum oder öffne die Periode.",
+        "action": "Perioden öffnen",
+        "unnamed": "dieses Datums"
+      },
+      "needsFxRate": "Für {currency} auf den {date} ist kein Kurs hinterlegt. Trag den Kurs hier ein.",
+      "openingBalanceAlreadySet": "Für dieses Konto ist schon ein Eröffnungssaldo gebucht. Eine Korrektur ist eine Stornobuchung im Journal.",
+      "accountInUse": "Gesperrt, seit der Eröffnungssaldo gebucht ist. Den Namen kannst du weiterhin ändern.",
+      "permissionDenied": {
+        "write": "Dir fehlt die Berechtigung, Bankkonten zu erfassen.",
+        "read": "Dir fehlt die Berechtigung, Bankkonten zu sehen.",
+        "post": "Dir fehlt die Berechtigung, den Eröffnungssaldo zu buchen."
+      }
+    }
+  },
+  "channel": {
+    "title": "Bankkanal",
+    "empty": "Noch kein EBICS-Kanal. Verbinde einen, damit TILL die Tagesauszüge der Bank selbst abruft: deine Bank muss EBICS anbieten, und der Import von Hand bleibt in jedem Fall bestehen.",
+    "filePathNote": "Der Import der Kontoauszüge von Hand bleibt immer verfügbar, mit oder ohne Kanal. Zahlungsdateien lädst du im eBanking hoch und gibst sie dort frei.",
+    "connect": "Kanal verbinden",
+    "locked": "Das Verwalten eines Bankkanals benötigt die Zahlungsberechtigung.",
+    "kind": {
+      "ebics": "EBICS",
+      "blink": "bLink"
+    },
+    "managed": {
+      "connect": "Über bLink verbinden",
+      "formIntro": "Über bLink erteilst du die Zustimmung direkt in deinem E-Banking, ohne Papierbrief.",
+      "bankRef": "Deine Bank (bLink-Referenz)",
+      "scopePss": "Auch Zahlungsübermittlung erlauben (PSS)",
+      "reconnect": "Neu verbinden"
+    },
+    "consent": {
+      "pending": "Wartet auf deine Bank",
+      "waitingBank": "Das Login deiner Bank öffnet sich, damit du dort die Zustimmung erteilst.",
+      "resume": "Zustimmung fortsetzen",
+      "revoked": "Die Zustimmung wurde bei deiner Bank widerrufen. Verbinde neu, um sie erneut zu erteilen.",
+      "expires": "Zustimmung läuft ab",
+      "scopeMissing": "Diese Verbindung hat keine Zahlungszustimmung. Verbinde neu mit PSS, um Zahlungen zu übermitteln."
+    },
+    "formatUnsupported": "Diese Bank liefert über bLink nur JSON. Die dateibasierten Wege bleiben die Grundlage.",
+    "cloudTier": {
+      "title": "Verwaltete Anbindung",
+      "explainer": "Die verwaltete bLink-Anbindung ist eine optionale Stufe, die dein Eigentümer freischaltet. EBICS und Datei-Import funktionieren auch ohne sie.",
+      "suspended": "Das Anbieterkonto der verwalteten Anbindung ist abgelaufen. Deine EBICS- und Datei-Wege sind nicht betroffen."
+    },
+    "releaseNoteBlink": "Über bLink übermittelt. Gib die Zahlung in deinem eigenen E-Banking frei.",
+    "sharedWith": "Zugeordnete Konten",
+    "lastSync": "Zuletzt abgerufen",
+    "sync": "Kontoauszüge abrufen",
+    "orderLog": "Auftragsprotokoll",
+    "unmatchedAccount": "Auszug für ein nicht zugeordnetes Konto (zuordnen und erneut synchronisieren)",
+    "transmitInDoubt": "Der Ausgang einer Übermittlung ist unbekannt: eine erneute Übertragung ist gesperrt, bis das Bankprotokoll antwortet.",
+    "pendingRelease": "Wartet auf Freigabe der Bank",
+    "rejectedReason": "Von der Bank abgelehnt",
+    "bankKeysChanged": "Die Schlüssel der ZKB haben sich geändert. Der Abruf ruht, bis du die neuen Schlüssel mit dem Blatt «EBICS Verbindungsparameter» der ZKB verglichen und bestätigt hast.",
+    "routeAccount": "Konto zuordnen...",
+    "routeAccountLabel": "Konto für die Zuordnung",
+    "disconnectRetire": "Stilllegen",
+    "disconnectBlock": "Sperren",
+    "disconnectBlockConfirm": "Diesen Kanal wirklich sperren? TILL ruft dann nichts mehr ab. Sperren bei der ZKB: per Telefon.",
+    "disconnectRetireConfirm": "Diese Verbindung wirklich stilllegen? Der Bankkanal wird dauerhaft beendet.",
+    "disconnectConfirm": "Bestätigen",
+    "disconnectCancel": "Abbrechen",
+    "wizard": {
+      "accessData": "EBICS-Zugangsdaten aus deinem Bankvertrag",
+      "confirmKeys": "Bankschlüssel vergleichen und bestätigen",
+      "hostUrl": "Host-URL",
+      "hostId": "Host-ID",
+      "partnerId": "Partner-ID",
+      "userId": "User-ID"
+    },
+    "orderType": {
+      "ini": "Schlüssel-Initialisierung",
+      "hia": "Identifikationsschlüssel",
+      "hpb": "Bankschlüssel abgeholt",
+      "btd": "Download",
+      "btu": "Upload",
+      "hac": "Auftragsstatus abgeholt",
+      "spr": "Zugang gesperrt",
+      "hev": "Versionsabfrage"
+    },
+    "orderKind": {
+      "consent": "Zustimmung",
+      "statusReport": "Statusmeldung",
+      "statements": "Kontoauszüge",
+      "transmit": "Übermittlung"
+    },
+    "orderStatus": {
+      "ok": "Erfolgreich",
+      "failed": "Fehlgeschlagen",
+      "bankRejected": "Von der Bank abgelehnt",
+      "pendingRelease": "Wartet auf Freigabe",
+      "intent": "Vorgemerkt"
+    },
+    "error": {
+      "generic": "Etwas ist schiefgelaufen. Auf dem Geldpfad wurde nichts geändert."
+    },
+    "notice": {
+      "noEbicsOffer": "Diese Bank bietet kein EBICS an. Nutze stattdessen den dateibasierten Import- und Upload-Weg.",
+      "needsBankTransport": "Schlüssel wurden erzeugt und der INI-Brief lokal abgelegt. Das Senden an die Bank benötigt einen eingerichteten EBICS-Transport.",
+      "channelUnreachable": "Die Bank war nicht erreichbar. Die letzte Synchronisation bleibt sichtbar; erneut versuchen ist die einzige Aktion.",
+      "bankKeysMismatch": "Die Bankschlüssel stimmten nicht überein. Das ist ein harter Stopp, nie automatisch akzeptiert.",
+      "needsConfirmation": "Dies ist eine bewusste Handlung und benötigt deine Bestätigung.",
+      "permissionDenied": "Dir fehlt die Berechtigung für diese Aktion.",
+      "cloudTier": "Die verwaltete bLink-Anbindung ist eine optionale Stufe, die dein Eigentümer freischaltet. EBICS und Datei-Import funktionieren auch ohne sie.",
+      "consentRevoked": "Die Zustimmung wurde bei deiner Bank widerrufen. Verbinde neu, um sie erneut zu erteilen.",
+      "consentScopeMissing": "Diese Verbindung hat keine Zahlungszustimmung. Verbinde neu mit PSS, um Zahlungen zu übermitteln.",
+      "formatUnsupported": "Diese Bank liefert über bLink nur JSON. Die dateibasierten Wege bleiben die Grundlage.",
+      "cloudTierSuspended": "Das Anbieterkonto der verwalteten Anbindung ist abgelaufen. Deine EBICS- und Datei-Wege sind nicht betroffen.",
+      "alreadyTransmitted": "Dieser Stapel ist bereits über einen anderen Weg unterwegs.",
+      "unsupportedEbicsVersion": "Dieser Bankrechner bietet EBICS 3.0 (H005) nicht an. TILL verwendet nur H005, deshalb wurde nichts erzeugt.",
+      "liveConnectionExists": "Dieser EBICS-Teilnehmer ruft bereits in einem anderen Mandanten dieser Datenbank ab. Zwei Abrufe würden die Auszüge aufteilen.",
+      "camt054LinesRefused": "Dieses Konto enthält Buchungen aus camt.054. Es kann nicht über EBICS laufen, weil die camt.053-Zeilen sie verdoppeln würden.",
+      "trialWorkspaceRefused": "Ein Testmandant oder eine Demo verbindet sich nie mit einer echten Bank.",
+      "untrustedResponse": "Eine Antwort der ZKB liess sich nicht prüfen. Nichts wurde übernommen und nichts quittiert. Importiere den Tag aus dem eBanking und ruf die ZKB an, falls es wieder passiert.",
+      "commitFailed": "Die abgerufenen Daten liessen sich nicht speichern. Die ZKB bietet sie beim nächsten Abruf erneut an.",
+      "keystoreChangedElsewhere": "Die Schlüsseldatei wurde ausserhalb dieser Sitzung geändert. TILL überschreibt sie nicht: starte TILL neu.",
+      "keystoreLocked": "Die Schlüsselablage ist gesperrt: die Passphrase wurde in dieser Sitzung nicht eingegeben.",
+      "keystoreUnavailable": "Die Schlüsseldatei fehlt oder ist beschädigt.",
+      "pendingBankActivation": "Die ZKB hat den Zugang noch nicht freigeschaltet. Versuche es nach ihrer Bestätigung erneut.",
+      "channelBlocked": "Dieser Kanal ist gesperrt. TILL ruft nichts ab.",
+      "noRoutedAccount": "Diesem Kanal ist kein Konto zugeordnet.",
+      "bankKeysChanged": "Die ZKB verwendet neue Schlüssel, deshalb ruht der Abruf. Ruf unten die neuen Bankschlüssel ab, vergleiche sie mit dem Blatt der ZKB und bestätige sie.",
+      "channelRetired": "Dieser Kanal ist stillgelegt.",
+      "unsupportedDateRange": "Ein Zeitraum wird nicht abgerufen: ein fehlender Tag kommt von Hand aus dem eBanking.",
+      "initRefused": "Die ZKB hat INI und HIA mit 091002 abgelehnt. Das heisst: Partner-ID oder User-ID stimmt nicht, EBICS 3.0 (H005) ist für deinen Vertrag nicht freigeschaltet, oder der Teilnehmer ist schon initialisiert. Nur die ZKB kann das unterscheiden und zurücksetzen: ruf sie an.",
+      "certificateRefused": "Die ZKB hat ein Zertifikat abgelehnt (Code {code}). Leg den Kanal still und verbinde neu: TILL erzeugt neue Schlüssel und einen neuen INI-Brief.",
+      "keyExchangeRefused": "Die ZKB hat den Schlüsselaustausch abgelehnt. Nichts wurde bestätigt.",
+      "syncInProgress": "Für diese Verbindung ist seit {started} ein Abruf als laufend markiert. Läuft keiner mehr, gibt TILL die Markierung um {frees} frei.",
+      "autoSyncNoActor": "Der automatische Abruf lief nicht: Weder die Person, die den Abruf eingestellt hat, noch der Inhaber darf Kontoauszüge abrufen. Gib einer von beiden das Recht für Zahlungen zurück oder stelle den Abruf als eine Person ein, die es hat.",
+      "autoSyncNoActorUnset": "Der automatische Abruf lief nicht: Niemand hat ihn eingestellt, darum ruft TILL als Inhaber ab, und der Inhaber darf keine Kontoauszüge abrufen. Gib dem Inhaber das Recht für Zahlungen zurück oder stelle den Abruf als eine Person ein, die es hat.",
+      "autoSyncNoActorOwner": "Der automatische Abruf lief nicht: Der Inhaber hat ihn eingestellt, darum ruft TILL als Inhaber ab, und der Inhaber darf keine Kontoauszüge abrufen. Gib dem Inhaber das Recht für Zahlungen zurück oder stelle den Abruf als eine Person ein, die es hat.",
+      "autoSyncNoActorAgent": "Der automatische Abruf lief nicht: Ein Agent hat ihn eingestellt, und was ein Agent einstellt, ruft TILL als Inhaber ab. Der Inhaber darf keine Kontoauszüge abrufen. Gib dem Inhaber das Recht für Zahlungen zurück oder stelle den Abruf als eine Person ein, die es hat."
+    },
+    "state": {
+      "draft": "Entwurf",
+      "keysGenerated": "Schlüssel erzeugt",
+      "iniSent": "INI gesendet",
+      "pendingBankActivation": "Wartet auf die Bank",
+      "active": "Aktiv",
+      "bankKeysChanged": "Bankschlüssel geändert",
+      "blocked": "Gesperrt",
+      "retired": "Stillgelegt",
+      "consentPending": "Wartet auf deine Bank",
+      "consentRevoked": "Zustimmung widerrufen",
+      "suspended": "Anbieterkonto ausgesetzt"
+    },
+    "bankPicker": {
+      "label": "Bank",
+      "empty": "Bank nicht gefunden. Trag die EBICS-Zugangsdaten unten von Hand ein.",
+      "feeUnverified": "Ungeprüfte Gebühr"
+    },
+    "keystore": {
+      "title": "Schlüsselablage",
+      "kind": {
+        "file": "Datei, passphrase-verschlüsselt",
+        "keychain": "System-Schlüsselbund",
+        "memory": "nur im Arbeitsspeicher"
+      },
+      "locked": "Gesperrt: die Passphrase wurde in dieser Sitzung nicht eingegeben.",
+      "unlock": "Entsperren",
+      "unavailable": "Die Schlüsseldatei fehlt oder ist beschädigt. Initialisiere die Verbindung neu (der Bankvertrag ist davon nicht betroffen), oder stelle die Datei aus einer Sicherung wieder her.",
+      "notPersistent": "Diese Schlüsselablage übersteht keinen Neustart. Die Schlüssel müssen neu erzeugt werden, falls die App neu startet, bevor du eine dauerhafte Ablage verbindest."
+    },
+    "blockLocal": "TILL sendet nichts mehr. Sperren bei der ZKB: per Telefon.",
+    "blockExit": "Zum Entsperren rufst du die Bankschlüssel ab, vergleichst sie mit dem Blatt der ZKB und bestätigst sie.",
+    "ebankingPickup": "Solange TILL die Auszüge abruft, lade sie im eBanking nicht mit «Alle nicht abgeholten Daten» herunter, sonst fehlen sie hier.",
+    "iniSent": "INI und HIA sind unterwegs, aber noch nicht beide von der ZKB bestätigt. Sende erneut: TILL schickt nur, was noch fehlt, mit denselben Schlüsseln.",
+    "resend": "Erneut senden",
+    "letterWaiting": "Wartet auf die ZKB. Unterschreibe den INI-Brief (unter Dokumente abgelegt) und schick ihn per Post an die ZKB. Wenn die ZKB den Zugang freigeschaltet hat, rufst du hier die Bankschlüssel ab.",
+    "initRefused": "Die ZKB hat INI und HIA mit 091002 abgelehnt. Das heisst: Partner-ID oder User-ID stimmt nicht, EBICS 3.0 (H005) ist für deinen Vertrag nicht freigeschaltet, oder der Teilnehmer ist schon initialisiert. Nur die ZKB kann das unterscheiden und zurücksetzen: ruf sie an.",
+    "certificateRefused": "Die ZKB hat ein Zertifikat abgelehnt (Code {code}). Leg den Kanal still und verbinde neu: TILL erzeugt neue Schlüssel und einen neuen INI-Brief.",
+    "keyExchangeRefused": "Die ZKB hat den Schlüsselaustausch mit dem Code {code} beantwortet. Nichts wurde bestätigt.",
+    "pendingTitle": "Wartende Auszüge",
+    "newest": "Neuester Auszug im Buch: Nr. {n}/{year} vom {date}, Schlusssaldo {amount}",
+    "noStatement": "Noch kein Tagesauszug im Buch. Der erste abgerufene Auszug startet den Abruf.",
+    "downloadRefused": {
+      "notGranted": "Die ZKB gibt den Abruf der Auszüge (camt.053 Version 08) für deinen Vertrag nicht frei (Code {code}). Bitte die ZKB, ihn freizuschalten.",
+      "busy": "Die ZKB ist gerade ausgelastet (Code {code}). Ruf die Auszüge später erneut ab.",
+      "tooLarge": "Die Auszüge sind zu gross für den Abruf (Code {code}). Lade diesen Tag im eBanking herunter und importiere ihn von Hand.",
+      "other": "Die ZKB hat den Abruf mit dem Code {code} abgelehnt. Nichts wurde geändert."
+    },
+    "feed": {
+      "overlapRefused": "Auszug {n}/{year} vom {date} überschneidet sich mit Auszug {m}/{year} im Buch. Nichts wurde importiert.",
+      "beforeFeedStart": "Auszug {n}/{year} liegt vor dem ersten Auszug im Buch.",
+      "gapRefused": "Auszug {n} schliesst nicht an Auszug {m} an. Importiere den fehlenden Tagesauszug aus dem eBanking, dann ruf erneut ab.",
+      "numberJump": "Nach Auszug {m} kam Auszug {n}. Fehlende Nummern: {skipped}. Importiere diese Auszüge von Hand, falls es sie gibt.",
+      "notDayEnd": "Das ist kein Tagesauszug (Nummer oder Schlusssaldo fehlt). Importiere den Tagesauszug dieses Tages aus dem eBanking.",
+      "multipage": "Auszug {n} ist auf mehrere Dateien verteilt. TILL liest solche Auszüge noch nicht: importiere ihn aus dem eBanking.",
+      "camt054Lines": "Dieses Konto enthält Buchungen aus camt.054. Es kann nicht über EBICS laufen, weil die camt.053-Zeilen sie verdoppeln würden.",
+      "unmatchedAccount": "Auszug für die IBAN {iban}, die keinem zugeordneten Konto gehört. Ordne das Konto zu, dann ruf erneut ab.",
+      "readyToImport": "Auszug {n} passt jetzt: der nächste Abruf importiert ihn."
+    },
+    "keyReview": {
+      "fetch": "Bankschlüssel abrufen und vergleichen",
+      "fetching": "Bankschlüssel werden abgerufen…",
+      "intro": "Vergleiche jedes Bytepaar mit der Zeile «H005 mit Zertifikat» der aktuellen Ausgabe des Blatts «EBICS Verbindungsparameter» der ZKB (8 Paare pro Zeile, wie dort). Bestätige erst, wenn alle übereinstimmen.",
+      "purpose": {
+        "authentication": "Authentifikation (X002)",
+        "encryption": "Verschlüsselung (E002)"
+      },
+      "certificateHash": "Zertifikat, SHA-256",
+      "keyHash": "Öffentlicher Schlüssel, SHA-256",
+      "fingerprint": "Schlüssel-Fingerabdruck (SPKI), SHA-256. Das Blatt der ZKB druckt möglicherweise einen anderen Wert: bestätige nur, wenn dieser dort steht.",
+      "matches": "Diese Werte stimmen mit dem Blatt «EBICS Verbindungsparameter» der ZKB überein",
+      "confirm": "Bankschlüssel bestätigen",
+      "confirming": "Wird bestätigt…",
+      "cancel": "Abbrechen",
+      "retry": "Erneut versuchen",
+      "close": "Schliessen",
+      "confirmed": "Bankschlüssel bestätigt. Der Kanal ist aktiv.",
+      "mismatch": "Die ZKB sendet jetzt andere Schlüssel als die, die du geprüft hast. Deshalb wurde nichts bestätigt. Vergleiche mit der aktuellen Ausgabe des Blatts und ruf die ZKB an, bevor du es erneut versuchst.",
+      "needsTransport": "Zum Abrufen der Bankschlüssel braucht es einen eingerichteten EBICS-Transport."
+    },
+    "auto": {
+      "title": "Automatischer Abruf",
+      "daily": "Täglich automatisch abrufen",
+      "time": "Um",
+      "save": "Speichern",
+      "saving": "Wird gespeichert",
+      "denied": "Den automatischen Abruf ändern darf nur, wer Zahlungen ausführen darf.",
+      "upOnly": "TILL ruft automatisch ab, solange es mit till up läuft. War TILL zur Zeit nicht offen, folgt der Abruf, sobald es startet.",
+      "next": "Nächster automatischer Abruf: {when}",
+      "lastOk": "Letzter automatischer Abruf: {when}",
+      "lastFailed": "Letzter automatischer Abruf: {when}. {reason}",
+      "summaryDaily": "Automatisch täglich um {time}",
+      "summaryOff": "Automatischer Abruf ist aus",
+      "summaryNext": "nächster Abruf {when}",
+      "dueNow": "heute noch offen, folgt gleich",
+      "change": "Ändern",
+      "done": "Fertig"
+    },
+    "addAnother": "Weiteren Bankkanal verbinden",
+    "addEbics": "Per EBICS verbinden",
+    "details": "Details und Verwaltung",
+    "detailsBank": "Bank",
+    "detailsEbanking": "eBanking",
+    "keysConfirmedShort": "Bankschlüssel bestätigt",
+    "returnCode": {
+      "090005": "Die Bank hat keine neuen Auszüge (Code 090005).",
+      "090003": "Der Abruf der Auszüge ist für deinen Vertrag nicht freigeschaltet (Code 090003). Bitte die Bank, ihn freizuschalten.",
+      "091005": "Die Bank erlaubt diesen Abruf für deinen Teilnehmer nicht (Code 091005). Bitte die Bank, ihn freizuschalten.",
+      "091006": "Die Bank erlaubt diesen Abruf für deinen Teilnehmer nicht (Code 091006). Bitte die Bank, ihn freizuschalten.",
+      "091008": "Die Bank meldet ein Problem mit ihren Schlüsseln (Code 091008). Vergleiche die Bankschlüssel unter Bankkonten.",
+      "091117": "Die Auszüge sind zu gross für den Abruf (Code 091117). Lade diese Tage im eBanking herunter und importiere sie hier.",
+      "091119": "Die Bank ist gerade ausgelastet (Code 091119). TILL versucht es später erneut.",
+      "other": "Die Bank meldet Code {code}.",
+      "unreachable": "Die Bank hat nicht geantwortet ({reason})."
+    }
+  },
+  "help": {
+    "BankAccounts": {
+      "title": "Bankkonten",
+      "body": "Das Register deiner Bankkonten mit IBAN, QR-IBAN und Eröffnungssaldo. Eine QR-IBAN kann nur Zahlungen empfangen; für ausgehende Zahlungen braucht das Register zusätzlich eine normale IBAN, und die Oberfläche weist darauf hin, wenn sie fehlt. Hier verwaltest du auch den EBICS-Kanal und archivierst Konten, die nicht mehr gebraucht werden.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  },
+  "attention": {
+    "queue": {
+      "bankKeysReview": "Bank: Schlüssel vergleichen",
+      "bankActivation": "Bank: Freischaltung",
+      "bankStatementGap": "Bank: Auszüge fehlen",
+      "bankFetchFailed": "Bank: Abruf fehlgeschlagen"
+    },
+    "item": {
+      "bankKeysReview": {
+        "title": "{bank} hat freigeschaltet: Schlüssel vergleichen",
+        "subtitle": "Vergleiche die Hashwerte einmal mit dem Blatt der Bank."
+      },
+      "bankActivation": {
+        "sendLegs": {
+          "title": "Sende INI und HIA an die {bank}",
+          "subtitle": "Unter Bankkonten. Danach unterschreibst du den INI-Brief und schickst ihn per Post."
+        },
+        "resendLegs": {
+          "title": "Sende INI und HIA erneut an die {bank}",
+          "subtitle": "Die {bank} hat noch nicht beide bestätigt. TILL sendet nur, was fehlt. Der INI-Brief geht unterschrieben per Post."
+        },
+        "signLetter": {
+          "title": "Unterschreibe den INI-Brief für die {bank}",
+          "subtitle": "Schon unterwegs? Dann wartet TILL auf die Freischaltung. Zuletzt bei der {bank} nachgefragt: {lastCheckAt}.",
+          "subtitleNoCheck": "Schon unterwegs? Dann wartet TILL auf die Freischaltung durch die {bank}."
+        }
+      },
+      "bankStatementGap": {
+        "titleManyDays": "{bank}: Auszüge {range} fehlen ({fromDate} bis {toDate})",
+        "titleManyDay": "{bank}: Auszüge {range} fehlen ({fromDate})",
+        "titleOneDays": "{bank}: Auszug {range} fehlt ({fromDate} bis {toDate})",
+        "titleOneDay": "{bank}: Auszug {range} fehlt ({fromDate})",
+        "subtitleChained": "Der Saldo von Auszug {after} geht genau in Auszug {before} über: es fehlt kein Geld. Die Nummern dazwischen sind wahrscheinlich Tage ohne Buchung oder Buchungen, die sich aufheben.",
+        "subtitleUnchained": "In den fehlenden Auszügen stehen {differenceMinor}, die noch nicht im Buch sind. Importiere sie aus dem eBanking.",
+        "subtitlePending": "Auszug {before} wartet: in den fehlenden Auszügen davor stehen {differenceMinor}, die noch nicht im Buch sind.",
+        "subtitleWaitingInside": "Auszug {waiting} wartet in dieser Lücke und schliesst nicht an: es stehen {differenceMinor}, die noch nicht im Buch sind. Importiere die fehlenden Auszüge.",
+        "titleUnknownDays": "{bank}: nach Auszug {after} fehlen vielleicht Auszüge ({fromDate} bis {toDate})",
+        "titleUnknownDay": "{bank}: nach Auszug {after} fehlt vielleicht ein Auszug ({fromDate})",
+        "subtitleIncomplete": "Auszug {incomplete} ist auf mehrere Dateien verteilt und im Buch nicht vollständig. Ob Geld fehlt, sagt TILL erst, wenn alle Teile importiert sind.",
+        "titleIncomplete": "{bank}: Auszug {incomplete} ist im Buch nicht vollständig",
+        "titleConflicting": "{bank}: Auszug {conflicting} liegt zweimal mit verschiedenen Salden im Buch",
+        "subtitleConflicting": "Die Bank hat Auszug {conflicting} zweimal geliefert, mit verschiedenen Salden. Ob Geld fehlt, lässt sich so nicht sagen: prüfe die beiden Kopien unter Bank.",
+        "confirmationVoid": "Diese Lücke war als vollständig bestätigt. Die Bestätigung gilt nicht mehr."
+      },
+      "bankFetchFailed": {
+        "title": "{bank}: der automatische Abruf ist fehlgeschlagen",
+        "notGranted": "Die Bank gibt den Abruf nicht frei (Code {code}). Bitte die Bank, ihn freizuschalten, und ruf dann unter Bankkonten von Hand ab.",
+        "busy": "Die Bank war heute bei jedem Versuch ausgelastet (Code {code}). Ruf die Auszüge später unter Bankkonten von Hand ab.",
+        "tooLarge": "Die Auszüge sind zu gross für den Abruf (Code {code}). Lade die Tage im eBanking herunter und importiere sie unter Bankkonten.",
+        "refused": "Die Bank hat den Abruf abgelehnt (Code {code}). Öffne die Bankkonten und ruf erneut ab.",
+        "unreachable": "Die Bank hat heute bei keinem Versuch geantwortet ({code}). Prüfe die Internetverbindung und ruf unter Bankkonten von Hand ab.",
+        "keystore": "Der Schlüsselspeicher war gesperrt. Starte TILL mit dem Passwort neu, dann ruft es die Auszüge ab.",
+        "noActor": "Niemand mit dem Recht, Zahlungen zu verwalten, kann den Abruf ausführen. Prüfe die Rollen unter Mitglieder.",
+        "noWire": "TILL lief ohne Bankverbindung. Starte TILL mit «till up», dann ruft es die Auszüge ab.",
+        "keysChanged": "Die Bankschlüssel haben sich geändert. Vergleiche sie unter Bankkonten, bevor wieder abgerufen wird.",
+        "untrusted": "Die Antwort der Bank liess sich nicht prüfen. Lade den Tag im eBanking herunter und importiere ihn. Wiederholt es sich, ruf die Bank an.",
+        "local": "Der Abruf konnte auf diesem Gerät nicht fertig werden. Ruf die Auszüge unter Bankkonten von Hand ab.",
+        "other": "Der Abruf endete mit {code}. Öffne die Bankkonten und ruf erneut ab."
+      }
+    },
+    "act": {
+      "compareBankKeys": "Schlüssel vergleichen",
+      "openBankAccounts": "Bankkonten öffnen",
+      "closeGap": "Lücke schliessen",
+      "confirmGap": "Nichts fehlt, bestätigen",
+      "confirmGapConfirm": "Ja, nichts fehlt",
+      "confirmGapReason": "Woran siehst du, dass nichts fehlt?",
+      "closeGaps": "Lücken schliessen"
+    }
+  }
+}

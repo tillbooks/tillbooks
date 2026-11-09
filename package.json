@@ -1,0 +1,90 @@
+{
+  "name": "tillbooks",
+  "version": "1.0.0-beta.2",
+  "mcpName": "io.github.tillbooks/tillbooks",
+  "description": "Agent-first open-source ERP for Swiss SMEs: 852 MCP tools, one local file. Sales, purchasing, payments, stock, projects, books and MWST; your agent runs it, the Studio shows what it did. MIT licensed.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nomadik GmbH",
+  "homepage": "https://tillbooks.ch",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tillbooks/tillbooks.git"
+  },
+  "bin": {
+    "till": "bin/till.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "accounting",
+    "swiss",
+    "switzerland",
+    "bookkeeping",
+    "mcp",
+    "mcp-server",
+    "agent",
+    "agent-native",
+    "local-first",
+    "self-hosted",
+    "open-source",
+    "double-entry",
+    "ledger",
+    "qr-bill",
+    "qr-rechnung",
+    "mwst",
+    "vat",
+    "iso20022",
+    "kmu",
+    "bexio-alternative",
+    "erp"
+  ],
+  "files": [
+    "bin/",
+    "dist/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && npm run build && node scripts/vendor-studio.mjs --build",
+    "setup": "npm ci && npm --prefix app ci",
+    "build:studio": "npm --prefix app run build",
+    "build:all": "npm run build && npm run build:studio",
+    "vendor:studio": "node scripts/vendor-studio.mjs",
+    "verify:pack": "node scripts/verify-packed-studio.mjs",
+    "typecheck": "npm run typecheck:src && npm run typecheck:test",
+    "typecheck:src": "tsc -p tsconfig.json --noEmit",
+    "typecheck:test": "npm run build && tsc -p tsconfig.test.json",
+    "pretest": "npm run build",
+    "test": "TILL_SUPPORT_DIR=$PWD/.tmp-support node scripts/run-node-tests.mjs",
+    "check:style": "node scripts/check-style.mjs",
+    "check": "npm run typecheck && npm run check:style && npm test",
+    "gate": "node scripts/pre-push-gate.mjs --with-lock npm run gate:unlocked",
+    "gate:unlocked": "npm run check && npm run gate:studio",
+    "postgate": "node scripts/pre-push-gate.mjs --record gate",
+    "gate:plan": "node scripts/pre-push-gate.mjs --plan",
+    "gate:status": "node scripts/pre-push-gate.mjs --status",
+    "gate:studio": "cd app && npm run build && npx vitest run --maxWorkers=4",
+    "seed:demo": "npm run build && TILL_DB_PATH=$HOME/.till/till-demo.db node scripts/seed-demo-rich.mjs",
+    "seed:demo:reset": "npm run build && TILL_DB_PATH=$HOME/.till/till-demo.db node scripts/seed-demo-rich.mjs --reset",
+    "seed:kaizen": "npm run build && TILL_DB_PATH=$HOME/.till/till-kaizen-golden.db TILL_SEED_TODAY=$(date +%F) node scripts/seed-demo-rich.mjs --reset",
+    "seed:kaizen:restore": "sh -c 'rm -f \"$HOME/.till/till-kaizen.db\" \"$HOME/.till/till-kaizen.db-wal\" \"$HOME/.till/till-kaizen.db-shm\" && cp \"$HOME/.till/till-kaizen-golden.db\" \"$HOME/.till/till-kaizen.db\" && for s in -wal -shm; do if [ -f \"$HOME/.till/till-kaizen-golden.db$s\" ]; then cp \"$HOME/.till/till-kaizen-golden.db$s\" \"$HOME/.till/till-kaizen.db$s\"; fi; done'",
+    "shots:marketing": "node scripts/marketing-screenshots.mjs",
+    "shots:variants": "node scripts/marketing-variants.mjs",
+    "extract:btc": "node scripts/extract-btc.mjs",
+    "build:mcpb": "node scripts/build-mcpb.mjs",
+    "build:mac:release": "packaging/macos/build-release.sh"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.6",
+    "jsqr": "^1.4.0",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "better-sqlite3": "^13.0.3"
+  }
+}

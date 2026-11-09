@@ -1,0 +1,78 @@
+{
+  "docTemplate": {
+    "title": "Templates",
+    "lede": "Shape how your invoices, credit notes, quotes and reminders look: logo, footer and language. The Swiss QR payment part, the VAT statement and all legally required content stay unchanged under every template.",
+    "loading": "Loading templates…",
+    "new": "New",
+    "name": "Name",
+    "statusCol": "Status",
+    "actionsCol": "Actions",
+    "listCaption": "Templates of this document kind",
+    "logo": "Logo",
+    "uploadLogo": "Upload logo",
+    "logoCurrent": "A logo is on file.",
+    "logoNote": "PNG or JPG, at most 2 MB. The logo is filed locally and never leaves this device.",
+    "columns": "Optional columns",
+    "columnsNote": "Non-statutory extra columns only. Description, quantity, price, VAT and totals are always included.",
+    "column": {
+      "discount": "Discount",
+      "sku": "Item number",
+      "project": "Project reference",
+      "unit": "Unit"
+    },
+    "footer": "Footer",
+    "footerFor": "Footer ({locale})",
+    "languageMode": {
+      "label": "Language",
+      "fixed": "Fixed language",
+      "perContactLang": "Contact's language"
+    },
+    "fixedLocale": "Default language",
+    "setDefault": "Set as default",
+    "default": "Default",
+    "archive": "Archive",
+    "archived": "Archived",
+    "archivedRefusal": "An archived template cannot become the default.",
+    "invalidColumns": "Only the offered extra columns are allowed.",
+    "preview": "Preview",
+    "previewAria": "Preview of the rendered document",
+    "previewHint": "Select a template to see the preview.",
+    "previewLocale": "Rendered in {locale}.",
+    "previewFallback": "The PDF preview cannot be shown here.",
+    "samplePreview": "Sample preview with example data: not a real, payable document.",
+    "empty": "No templates yet.",
+    "emptyHint": "Until the first template, TILL uses its built-in standard layout.",
+    "needsValidLogoFile": "The logo must be an image file (PNG/JPG) under 2 MB. The template was not saved.",
+    "needsPermission": "Changing templates requires administrator rights.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "permissionDenied": {
+      "read": "You do not have permission to see this workspace's templates."
+    },
+    "kind": {
+      "invoice": "Invoice",
+      "creditNote": "Credit note",
+      "quote": "Quote",
+      "dunningRun": "Reminder"
+    },
+    "localeName": {
+      "de-CH": "German",
+      "en": "English",
+      "fr-CH": "French",
+      "it-CH": "Italian"
+    },
+    "rowActions": "Actions for {name}",
+    "create": "Create a template"
+  },
+  "nav": {
+    "documentTemplates": "Templates"
+  },
+  "help": {
+    "DocumentTemplates": {
+      "title": "Templates",
+      "body": "Templates decide how your documents look: logo, colours, type and layout, per document kind, with a preview beside the editor. A template changes presentation only. The QR payment part, the VAT amounts and the required content come from the document itself and pass through every template unchanged. The preview renders in the language the recipient will see.",
+      "concepts": [],
+      "docsPath": "swiss/qr-bill"
+    }
+  }
+}

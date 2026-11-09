@@ -1,0 +1,553 @@
+/* Contacts surface styles (A09). Tokens only, no hex, no new colours. 8-pt grid throughout.
+   Depth is one border plus a background step, never a shadow, matching the shell (global.css). */
+
+.contacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  max-width: 1040px;
+}
+
+/* --- DataTable cell styling (D118 B2) ---------------------------------------------------------
+   The list itself is the shared DataTable (frame overflow, sticky header, density, the five
+   states, the row opener, the overflow and the selection pill). What remains here is only the
+   CRM-specific CELL content: the glyph column, the dim support columns and the archived row. */
+
+/* The type column: the role glyph and the kind glyph side by side, each with a screen-reader label. */
+.ct-typecell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.ct-role,
+.ct-kind {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+/* The name cell: the contact's name, and the archived Status word when the row is archived. */
+.ct-namecell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+/* A dim support column (town, VAT number): meaning-bearing but quieter than the name beside it. */
+.ct-cell-dim {
+  color: var(--t-text-dim);
+}
+
+/* An archived row reads dim, and says so in words (the Status beside the name): dim, never faint,
+   because the row still carries meaning a person reads (K-36). The merge selection is DataTable's
+   own pill (K-24), so no surface rule paints it. */
+.contacts-row--archived td,
+.contacts-row--archived th {
+  color: var(--t-text-dim);
+}
+
+/* Fields. The editor and drawer forms are hand-rolled inside the shared DetailDrawer/Modal shells,
+   so their field styling stays here; only the drawer/modal chrome moved to the primitives. The
+   body wrappers keep the 8-pt vertical rhythm the old drawer body used to provide. */
+.ct-editor-form,
+.ct-merge-body,
+.ct-import-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.ct-field,
+.ct-field-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.ct-field-row {
+  display: flex;
+  gap: var(--t-space-2);
+}
+
+.ct-field-row .ct-field {
+  flex: 1 1 0;
+}
+
+.ct-field-inline {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ct-field-label {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+/* The inputs are the shared `.field` (K-15); a field beside a button in a row takes the width. */
+.ct-field-row > .field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ct-textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.ct-field-hint {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.ct-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+/* Address block. */
+.ct-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  margin: 0;
+  padding: var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+}
+
+.ct-address-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--t-space-1) var(--t-space-2);
+}
+
+.ct-address-grid .ct-street,
+.ct-address-grid .ct-address-city {
+  grid-column: 1 / -1;
+}
+
+/* --- C00, the CRM extension: kind, chips, bulk bar, drawer tabs, timeline, diff ----------------
+   The drawer/modal chrome (overlay, panel, head, body, foot) now lives in the shared DetailDrawer
+   and Modal primitives; what remains here is CRM-specific content. Tokens only, no hex, no new
+   colour, 8-pt grid, and depth is a border plus a background step rather than a shadow. */
+
+.ct-kind-mark {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+/* Tag chips: a segment on a contact. A tag is a word the operator wrote, not a state, so it is a
+   quiet hairline pill in dim ink, the resting shape of the FilterChips facet above the list. */
+.ct-chips,
+.ct-row-segments {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ct-chip {
+  display: inline-block;
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+/* The merge bulk bar, present only while something is selected. */
+.ct-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-code);
+}
+
+.ct-bulk-count {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* The drawer's tab strip is the shared Tabs (K-11); this is the one shared panel's inner rhythm. */
+.ct-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.ct-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding-top: var(--t-space-1);
+  border-top: 1px solid var(--t-border);
+}
+
+.ct-subsection-title {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+  margin: 0;
+}
+
+/* F03 vendor portal section: one section, a grants list and the "Sichtbar für Lieferant" preview. */
+.ct-portal-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+.ct-portal-grants {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+.ct-portal-grant {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+.ct-grant-expiry {
+  color: var(--t-text-dim);
+  margin-left: auto;
+}
+.ct-portal-preview {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+.ct-portal-preview li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  font-variant-numeric: tabular-nums;
+}
+.ct-empty-hint {
+  color: var(--t-text-dim);
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* The Stammdaten fact list: label above value, two columns on a wide drawer. */
+.ct-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--t-space-0-5) var(--t-space-2);
+  margin: 0;
+}
+
+.ct-facts dt {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.ct-facts dd {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.ct-people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* The OP5 timeline. Glyph and label together on every row, newest first. */
+.ct-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-timeline-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.ct-timeline-row:last-child {
+  border-bottom: 0;
+}
+
+.ct-timeline-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.ct-timeline-kind-label {
+  white-space: nowrap;
+}
+
+.ct-timeline-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  overflow-wrap: anywhere;
+}
+
+/* The date carries meaning, so it reads dim, never faint (K-36). */
+.ct-timeline-when {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+/* The merge survivor picker and diff, hosted inside the shared Modal. The Modal owns the centred
+   panel, its scrim and scroll; what remains here is the radio list and the field-diff table. */
+.ct-radio {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: var(--t-space-0-5) 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.ct-diff {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.ct-diff th,
+.ct-diff td {
+  text-align: left;
+  padding: var(--t-space-0-5) var(--t-space-1);
+  border-bottom: 1px solid var(--t-border);
+}
+
+/* A table head is 12px/500 dim, never bold and dim (K-23). */
+.ct-diff thead th {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+}
+
+/* The value the merge discards still has to be read to be judged: dim, never faint (K-36). */
+.ct-diff-old {
+  color: var(--t-text-dim);
+  text-decoration: line-through;
+}
+
+/* The typed-confirm block for Anonymisieren, and the import review. */
+.ct-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  width: 100%;
+}
+
+.ct-confirm-text {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.ct-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.ct-import-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.ct-warn-text {
+  margin: 0;
+  color: var(--t-warn);
+}
+
+/* E06 consent: one checkbox row, label beside the box, keyboard-reachable as one control. */
+.ct-consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--t-space-1);
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* E03, the per-contact task list. Leads the Verlauf tab; elevated row panels, glyph+label status,
+   one accent held in reserve. Depth comes from the background step, never a border on every card. */
+.ct-tasks {
+  gap: var(--t-space-1);
+}
+
+.ct-tasks-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.ct-tasks-head .ct-subsection-title {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+}
+
+/* A count is read, so it is dim, never faint (K-36). */
+.ct-tasks-count {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-dim);
+}
+
+.ct-tasks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.ct-task-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-elev);
+  border-radius: var(--t-radius-sm);
+}
+
+.ct-task-main {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+/* The task's Status word (K-22) holds its place; the title beside it takes the rest. */
+.ct-task-status {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.ct-task-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  overflow-wrap: anywhere;
+}
+
+.ct-task-badge {
+  flex: 0 0 auto;
+  padding: 0 var(--t-space-1);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  font-size: var(--t-font-sm);
+  line-height: 20px;
+  color: var(--t-text-dim);
+}
+
+.ct-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-0-5) var(--t-space-2);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  /* --t-text-dim, not faint: the due/reminder dates carry meaning, so they must clear AA 4.5:1 on
+     the row's --t-bg-elev in BOTH themes (dim does, faint's ~3.5:1 in light does not). */
+  color: var(--t-text-dim);
+}
+
+.ct-task-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-0-5);
+}
+
+/* The portal grant rows: the Status word, the expiry, the one row action. */
+.ct-portal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.ct-portal-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.ct-portal-expiry,
+.ct-portal-hosting {
+  color: var(--t-text-dim);
+}
+
+.ct-task-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-sm);
+}
+
+.ct-task-editor-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.ct-task-editor-actions {
+  display: flex;
+  gap: var(--t-space-1);
+}

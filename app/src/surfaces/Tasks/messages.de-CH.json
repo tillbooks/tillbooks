@@ -1,0 +1,92 @@
+{
+  "nav": {
+    "tasks": "Aufgaben"
+  },
+  "tasks": {
+    "route": {
+      "title": "Aufgaben"
+    },
+    "loading": "Aufgaben werden geladen",
+    "empty": "Noch keine Aufgaben.",
+    "emptyHint": "Aufgaben entstehen hier oder aus Rechnungen, Deals und Automatisierungen.",
+    "rowActions": "Aktionen für {title}",
+    "section": {
+      "empty": {
+        "overdue": "Nichts überfällig.",
+        "today": "Heute ist nichts fällig.",
+        "upcoming": "Nichts geplant.",
+        "done": "Noch nichts erledigt."
+      }
+    },
+    "action": {
+      "create": "Aufgabe anlegen",
+      "edit": "Bearbeiten",
+      "complete": "Erledigen",
+      "snooze": "Zurückstellen",
+      "cancel": "Aufgabe abbrechen"
+    },
+    "bucket": {
+      "overdue": "Überfällig",
+      "today": "Heute fällig",
+      "upcoming": "Demnächst",
+      "done": "Erledigt"
+    },
+    "status": {
+      "open": "Offen",
+      "doing": "In Arbeit",
+      "done": "Erledigt",
+      "cancelled": "Abgebrochen"
+    },
+    "field": {
+      "due": "Fällig am",
+      "reminder": "Erinnerung",
+      "assignee": "Zuständig",
+      "title": "Titel",
+      "recurrence": "Wiederholungsregel"
+    },
+    "recurring": {
+      "badge": "Wiederkehrend",
+      "series_ended": "Serie beendet."
+    },
+    "snoozed": "zurückgestellt bis {until}",
+    "snooze": {
+      "label": "Zurückstellen: {title}",
+      "until": "Zurückstellen bis"
+    },
+    "editor": {
+      "label": "Bearbeiten: {title}",
+      "createTitle": "Neue Aufgabe",
+      "close": "Schliessen",
+      "save": "Speichern",
+      "discard": "Verwerfen"
+    },
+    "view": {
+      "label": "Gespeicherte Ansicht",
+      "all": "Alle Aufgaben"
+    },
+    "notice": {
+      "dismiss": "Ausblenden"
+    },
+    "error": {
+      "transport": "Die Aufgaben konnten nicht geladen werden.",
+      "reminder_in_past": "Die Erinnerung liegt in der Vergangenheit.",
+      "reminder_after_due": "Erinnerung liegt nach dem Fälligkeitsdatum.",
+      "snooze_in_past": "Der Zurückstellzeitpunkt liegt in der Vergangenheit.",
+      "recurrence_invalid": "Diese Wiederholungsregel ist ungültig.",
+      "task_not_open": "Diese Aufgabe ist bereits abgeschlossen.",
+      "invalid_status_transition": "Dieser Statuswechsel ist nicht möglich.",
+      "permissionDenied": {
+        "read": "Dir fehlt das Recht, die Aufgaben zu sehen.",
+        "write": "Dir fehlt das nötige Recht. Es wurde nichts geändert."
+      }
+    }
+  },
+  "help": {
+    "Tasks": {
+      "title": "Aufgaben",
+      "body": "Alles, was fällig ist, an einem Ort: Aufgaben aus allen Bereichen, gruppiert nach überfällig, heute fällig, demnächst und erledigt. Die Zuordnung zur Gruppe rechnet die Engine beim Lesen aus; diese Seite gruppiert nur. Auf jeder Zeile lässt sich die Aufgabe direkt bearbeiten, abhaken, zurückstellen oder abbrechen. Wem eine Aufgabe zugewiesen ist, darf sie immer abschliessen.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

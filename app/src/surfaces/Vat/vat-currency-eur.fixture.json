@@ -1,0 +1,13 @@
+{
+  "_": "A11-G2. The two VAT figures a EUR invoice really carries, and they are different numbers. Pinned to the live engine by test/vat/vat-currency-fixture.test.mjs, which posts this exact invoice and reads every value below back out of the posted journal_line rows in SQLite. Nothing here is a literal somebody typed: the day the ledger converts differently, that test goes red before the Studio can ship a stale number.",
+  "documentId": "doc_fx_1",
+  "currency": "EUR",
+  "baseCurrency": "CHF",
+  "fxRate": "0.9412",
+  "vatAccount": "2200",
+  "netMinor": 150000,
+  "transactionTaxMinor": 12150,
+  "baseTaxMinor": 11436,
+  "transactionTotalMinor": 162150,
+  "baseTotalMinor": 152616
+}

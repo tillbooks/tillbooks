@@ -1,0 +1,64 @@
+/* J05, Inventory -> Adjustments / Bestandeskorrekturen. One accent, signed quantity as sign+glyph.
+
+   D118 Phase 2 (2026-08-24): the ledger is the shared DataTable, the page header the shared
+   SurfaceHeader, the create form the shared DetailDrawer, the reverse confirm the shared Modal and the
+   search row the shared FilterBar. The per-surface CSS that duplicated the list table (and its rows,
+   header and hover), the drawer chrome and the button set has been deleted; what remains is genuinely
+   Adjustments-specific: the signed-quantity weight, the reversed-row state, the reason badge and the
+   drawer/modal form fields. No new colour token (design-canon): every value reuses a --t- token.
+
+   Round 2 (D137): Stornieren sits in the row's overflow and a reversed row says so as a Status word
+   (K-21, K-22); the reason code is quiet mono text, not a bordered badge; sizes and gaps are tokens
+   (K-37). */
+
+.adj {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* Signed quantity: the sign is the glyph (never colour alone, WCAG 2.2 AA). The DataTable numeric
+   column already right-aligns it with tabular figures; this only carries the weight. */
+.adj-qty {
+  font-weight: 600;
+}
+
+/* A reversed adjustment reads dimmed and struck through down the whole row. Joined onto the shared
+   row class via DataTable's rowClassName hook. */
+.data-table-row.adj-row--reversed td {
+  color: var(--t-text-dim);
+  text-decoration: line-through;
+}
+
+/* The reason code beside its name: quiet mono text, the name carries the meaning. */
+.adj-code {
+  font-family: var(--t-font-mono);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}
+
+.adj-note {
+  display: inline-block;
+  max-width: 18rem;
+  white-space: pre-wrap;
+}
+
+/* Drawer and modal form fields. */
+.adj-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+}
+
+.adj-field label {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.adj-hint {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
+}

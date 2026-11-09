@@ -1,0 +1,93 @@
+{
+  "nav": {
+    "hausbuch": "Hausbuch"
+  },
+  "hausbuch": {
+    "title": "Hausbuch",
+    "subtitle": "Deine Hausregeln: Agenten lesen sie als Erstes und halten sich daran.",
+    "loading": "Hausregeln werden geladen…",
+    "denied": "Für das Hausbuch brauchst du das Recht, Stammdaten zu lesen.",
+    "readOnly": "Du kannst die Hausregeln lesen. Ändern braucht das Recht, Einstellungen zu verwalten.",
+    "notes": "Hausregeln",
+    "add": "Notiz hinzufügen",
+    "empty": {
+      "title": "Noch keine Hausregeln.",
+      "hint": "Agenten schlagen welche vor, oder du schreibst die erste."
+    },
+    "group": {
+      "workspace": "Ganzer Arbeitsbereich",
+      "account": "Konten",
+      "counterparty": "Zahlungspartner",
+      "topic": "Themen"
+    },
+    "scope": {
+      "workspace": "Ganzer Arbeitsbereich",
+      "account": "Konto",
+      "counterparty": "Zahlungspartner",
+      "topic": "Thema"
+    },
+    "col": {
+      "note": "Hausregel",
+      "scope": "Gilt für",
+      "changed": "Geändert",
+      "actions": "Aktionen"
+    },
+    "changedBy": "{who}, {date}",
+    "actor": {
+      "agent": "Agent",
+      "studio": "Studio"
+    },
+    "more": "Mehr zu «{text}»",
+    "archive": "Archivieren",
+    "archived": "Archiviert: «{text}». Agenten lesen sie nicht mehr.",
+    "undo": "Rückgängig",
+    "withheld": "{count} Hausregeln zu Zahlungspartnern siehst du nicht, weil dir das Recht fehlt, die Bank zu lesen.",
+    "preview": "Was Agenten sehen",
+    "previewHint": "Das Briefing, das ein Agent als Erstes liest: so viele Einträge pro Abschnitt.",
+    "previewLoading": "Das Briefing wird geladen…",
+    "section": {
+      "accounts": "Konten",
+      "vatCodes": "MWST-Codes",
+      "bankAccounts": "Bankkonten",
+      "rules": "Buchungsregeln und Vorlagen",
+      "notes": "Hausregeln",
+      "counts": "Offene Pendenzen"
+    },
+    "none": "keine",
+    "omitted": "Ohne Leserecht nicht im Briefing: {sections}.",
+    "size": "Umfang: etwa {tokens} Tokens.",
+    "dialog": {
+      "addTitle": "Notiz hinzufügen",
+      "editTitle": "Hausregel bearbeiten",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "text": "Hausregel",
+      "count": "{used} von {max} Zeichen",
+      "kind": "Gilt für",
+      "ref": {
+        "account": "Konto",
+        "counterparty": "Zahlungspartner",
+        "topic": "Thema"
+      },
+      "refHint": {
+        "account": "Die Kontonummer, zum Beispiel 6500.",
+        "counterparty": "Die IBAN oder der Name, so wie er auf dem Kontoauszug steht.",
+        "topic": "Ein kurzes Stichwort, zum Beispiel MWST oder Spesen."
+      }
+    },
+    "refusal": {
+      "scope_not_found": "Dieses Konto gibt es nicht. Prüfe die Kontonummer. Es wurde nichts gespeichert.",
+      "invalid_input": "Diese Angabe passt nicht. Eine Hausregel hat 1 bis 500 Zeichen, ein Thema höchstens 40. Es wurde nichts gespeichert.",
+      "not_found": "Diese Hausregel gibt es nicht mehr. Lade die Seite neu. Es wurde nichts geändert.",
+      "permission_denied": "Dafür fehlt dir das Recht, Einstellungen zu verwalten. Es wurde nichts geändert."
+    }
+  },
+  "help": {
+    "Hausbuch": {
+      "title": "Hausbuch",
+      "body": "Im Hausbuch stehen die Regeln, nach denen in deinem Arbeitsbereich gebucht wird: zum Beispiel wie ein bestimmter Zahlungspartner gebucht wird oder was mit der MWST passiert. Jeder Agent liest sie als Erstes und hält sich daran. Eine Hausregel bucht nie etwas selbst, sie ist ein Hinweis. Schreibt ein Agent eine Hausregel, wartet sie in den Pendenzen auf deine Freigabe. Unter Was Agenten sehen siehst du, was ein Agent über deine Bücher zuerst erfährt.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}
